@@ -39,9 +39,6 @@
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
-  "bundledDependencies": [
-    "tsx"
-  ],
   "optionalDependencies": {
     "@img/sharp-darwin-arm64": "^0.33.5",
     "@img/sharp-linux-arm": "^0.33.5",
@@ -102,5 +99,17 @@
     "doc": "docs",
     "test": "test"
   },
-  "keywords": ["cli", "ai", "assistant", "agent", "kode", "shareai", "terminal", "command-line"]
+  "keywords": [
+    "cli",
+    "ai",
+    "assistant",
+    "agent",
+    "kode",
+    "shareai",
+    "terminal",
+    "command-line"
+  ],
+  "bundledDependencies": [
+    "tsx"
+  ]
 }
