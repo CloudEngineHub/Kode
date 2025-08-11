@@ -4,8 +4,11 @@ import * as path from 'path'
 import { homedir } from 'os'
 import { logError } from '../utils/log'
 import { existsSync, unlinkSync } from 'fs'
+import { CONFIG_BASE_DIR } from '../constants/product'
 
-const STATSIG_DIR = path.join(homedir(), '.claude', 'statsig')
+// Support both KODE_CONFIG_DIR and CLAUDE_CONFIG_DIR environment variables
+const CONFIG_DIR = process.env.KODE_CONFIG_DIR ?? process.env.CLAUDE_CONFIG_DIR ?? path.join(homedir(), CONFIG_BASE_DIR)
+const STATSIG_DIR = path.join(CONFIG_DIR, 'statsig')
 
 // Ensure the directory exists
 try {

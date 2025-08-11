@@ -19,13 +19,13 @@ import { lastX } from './utils/generators'
 import { getGitEmail } from './utils/user'
 import { PROJECT_FILE } from './constants/product'
 /**
- * Find all CONTEXT.md and CLAUDE.md files in the current working directory
+ * Find all KODE.md and CLAUDE.md files in the current working directory
  */
 export async function getClaudeFiles(): Promise<string | null> {
   const abortController = new AbortController()
   const timeout = setTimeout(() => abortController.abort(), 3000)
   try {
-    // Search for both CONTEXT.md and CLAUDE.md files
+    // Search for both KODE.md and CLAUDE.md files
     const [codeContextFiles, claudeFiles] = await Promise.all([
       ripGrep(
         ['--files', '--glob', join('**', '*', PROJECT_FILE)],
@@ -46,7 +46,7 @@ export async function getClaudeFiles(): Promise<string | null> {
 
     // Add instructions for additional project files
     const fileTypes = []
-    if (codeContextFiles.length > 0) fileTypes.push('CONTEXT.md')
+    if (codeContextFiles.length > 0) fileTypes.push('KODE.md')
     if (claudeFiles.length > 0) fileTypes.push('CLAUDE.md')
 
     return `NOTE: Additional project documentation files (${fileTypes.join(', ')}) were found. When working in these directories, make sure to read and follow the instructions in the corresponding files:\n${allFiles
@@ -97,21 +97,21 @@ export const getReadme = memoize(async (): Promise<string | null> => {
 })
 
 /**
- * Get project documentation content (CONTEXT.md and CLAUDE.md)
+ * Get project documentation content (KODE.md and CLAUDE.md)
  */
 export const getProjectDocs = memoize(async (): Promise<string | null> => {
   try {
     const cwd = getCwd()
-    const codeContextPath = join(cwd, 'CONTEXT.md')
+    const codeContextPath = join(cwd, 'KODE.md')
     const claudePath = join(cwd, 'CLAUDE.md')
 
     const docs = []
 
-    // Try to read CONTEXT.md
+    // Try to read KODE.md
     if (existsSync(codeContextPath)) {
       try {
         const content = await readFile(codeContextPath, 'utf-8')
-        docs.push(`# CONTEXT.md\n\n${content}`)
+        docs.push(`# KODE.md\n\n${content}`)
       } catch (e) {
         logError(e)
       }
