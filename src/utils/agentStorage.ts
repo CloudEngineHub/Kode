@@ -6,14 +6,14 @@ import { randomUUID } from 'crypto'
 /**
  * Agent Storage Utilities
  * Provides file-based state isolation for different agents
- * Based on Agent Kode's Agent ID architecture
+ * Based on Kode's Agent ID architecture
  */
 
 /**
- * Get the agentkode config directory
+ * Get the kode config directory
  */
 function getConfigDirectory(): string {
-  return process.env.ANYKODE_CONFIG_DIR ?? join(homedir(), '.agentkode')
+  return process.env.KODE_CONFIG_DIR ?? process.env.ANYKODE_CONFIG_DIR ?? join(homedir(), '.kode')
 }
 
 /**
@@ -27,14 +27,14 @@ function getSessionId(): string {
 /**
  * Generate agent-specific file path
  * Pattern: ${sessionId}-agent-${agentId}.json
- * Stored in ~/.agentkode/ directory
+ * Stored in ~/.kode/ directory
  */
 export function getAgentFilePath(agentId: string): string {
   const sessionId = getSessionId()
   const filename = `${sessionId}-agent-${agentId}.json`
   const configDir = getConfigDirectory()
 
-  // Ensure agentkode config directory exists
+  // Ensure kode config directory exists
   if (!existsSync(configDir)) {
     mkdirSync(configDir, { recursive: true })
   }

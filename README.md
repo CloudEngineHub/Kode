@@ -1,113 +1,246 @@
-# Kode With Agent
+# Kode - AI Assistant for Your Terminal
 
-You can see this as open-cc for everyone, agent-system design is in [./system-design.md](./system-design.md)
+[![npm version](https://badge.fury.io/js/@shareai-lab%2Fkode.svg)](https://www.npmjs.com/package/@shareai-lab/kode)
+[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
+
+[中文文档](README.zh-CN.md) | [Contributing](CONTRIBUTING.md) | [Documentation](docs/)
+
+Kode is a powerful AI assistant that lives in your terminal. It can understand your codebase, edit files, run commands, and handle entire workflows for you.
 
 ## Features
 
-- 🛠️ **Code Analysis & Fixes** - Analyzes and improves your codebase
-- 📖 **Code Explanation** - Explains complex functions and logic
-- 🧪 **Test Execution** - Runs tests and shell commands
-- 🔧 **Workflow Automation** - Handles entire development workflows
-- 🤖 **Multi-Model Support** - Works with any OpenAI-compatible API
-- 🎯 **Many Built-in Tools** - File operations, shell execution, notebooks, and more
-- 💾 **Smart Checkpoints** - Intelligent project state management and recovery
-- 🌿 **Worktree Workflows** - Isolated development environments for features
+- 🤖 **AI-Powered Assistance** - Uses advanced AI models to understand and respond to your requests
+- 🔄 **Multi-Model Collaboration** - Flexibly switch and combine multiple AI models to leverage their unique strengths
+- 📝 **Code Editing** - Directly edit files with intelligent suggestions and improvements
+- 🔍 **Codebase Understanding** - Analyzes your project structure and code relationships
+- 🚀 **Command Execution** - Run shell commands and see results in real-time
+- 🛠️ **Workflow Automation** - Handle complex development tasks with simple prompts
+- 🎨 **Interactive UI** - Beautiful terminal interface with syntax highlighting
+- 🔌 **Tool System** - Extensible architecture with specialized tools for different tasks
+- 💾 **Context Management** - Smart context handling to maintain conversation continuity
 
 ## Installation
 
 ```bash
-# not relased, i am on the plane with very poor network, if the plane can not land, anyone see this help me make this agent-system more strong.
+npm install -g @shareai-lab/kode
 ```
 
-## Quick Start
+After installation, you can use any of these commands:
+- `kode` - Primary command
+- `kwa` - Kode With Agent (alternative)
+- `kd` - Ultra-short alias
 
-1. **Model Setup**: Use the onboarding flow or `/model` command to configure your AI provider
-2. **Custom Models**: If your model isn't listed, manually configure it via `/config`
-3. **OpenAI-Compatible**: Works with any OpenAI-style endpoint (Ollama, OpenRouter, etc.)
+## Usage
 
-## MCP Server Integration
+### Interactive Mode
+Start an interactive session:
+```bash
+kode
+# or
+kwa
+# or
+kd
+```
 
-Use Agent Kode as a Model Context Protocol server with Claude Desktop:
+### Non-Interactive Mode
+Get a quick response:
+```bash
+kode -p "explain this function" main.js
+# or
+kwa -p "explain this function" main.js
+```
 
-1. Find the full path: `which kode`
-2. Add to Claude Desktop config:
-```json
+### Commands
+
+- `/help` - Show available commands
+- `/model` - Change AI model settings
+- `/config` - Open configuration panel
+- `/cost` - Show token usage and costs
+- `/clear` - Clear conversation history
+- `/init` - Initialize project context
+
+## Multi-Model Intelligent Collaboration
+
+Unlike official Claude which supports only a single model, Kode implements **true multi-model collaboration**, allowing you to fully leverage the unique strengths of different AI models.
+
+### 🏗️ Core Technical Architecture
+
+#### 1. **ModelManager Multi-Model Manager**
+We designed a unified `ModelManager` system that supports:
+- **Model Profiles**: Each model has an independent configuration file containing API endpoints, authentication, context window size, cost parameters, etc.
+- **Model Pointers**: Users can configure default models for different purposes in the `/model` command:
+  - `main`: Default model for main Agent
+  - `task`: Default model for SubAgent
+  - `reasoning`: Reserved for future ThinkTool usage
+  - `quick`: Fast model for simple NLP tasks (security identification, title generation, etc.)
+- **Dynamic Model Switching**: Support runtime model switching without restarting sessions, maintaining context continuity
+
+#### 2. **TaskTool Intelligent Task Distribution**
+Our specially designed `TaskTool` (Architect tool) implements:
+- **Subagent Mechanism**: Can launch multiple sub-agents to process tasks in parallel
+- **Model Parameter Passing**: Users can specify which model SubAgents should use in their requests
+- **Default Model Configuration**: SubAgents use the model configured by the `task` pointer by default
+
+#### 3. **AskExpertModel Expert Consultation Tool**
+We specially designed the `AskExpertModel` tool:
+- **Expert Model Invocation**: Allows temporarily calling specific expert models to solve difficult problems during conversations
+- **Model Isolation Execution**: Expert model responses are processed independently without affecting the main conversation flow
+- **Knowledge Integration**: Integrates expert model insights into the current task
+
+#### 🎯 Flexible Model Switching
+- **Tab Key Quick Switch**: Press Tab in the input box to quickly switch the model for the current conversation
+- **`/model` Command**: Use `/model` command to configure and manage multiple model profiles, set default models for different purposes
+- **User Control**: Users can specify specific models for task processing at any time
+
+#### 🔄 Intelligent Work Allocation Strategy
+
+**Architecture Design Phase**
+- Use **o3 model** or **GPT-5 model** to explore system architecture and formulate sharp and clear technical solutions
+- These models excel in abstract thinking and system design
+
+**Solution Refinement Phase**
+- Use **gemini model** to deeply explore production environment design details
+- Leverage its deep accumulation in practical engineering and balanced reasoning capabilities
+
+**Code Implementation Phase**
+- Use **Qwen Coder model**, **Kimi k2 model**, **GLM-4.5 model**, or **Claude Sonnet 4 model** for specific code writing
+- These models have strong performance in code generation, file editing, and engineering implementation
+- Support parallel processing of multiple coding tasks through subagents
+
+**Problem Solving**
+- When encountering complex problems, consult expert models like **o3 model**, **Claude Opus 4.1 model**, or **Grok 4 model**
+- Obtain deep technical insights and innovative solutions
+
+#### 💡 Practical Application Scenarios
+
+```bash
+# Example 1: Architecture Design
+"Use o3 model to help me design a high-concurrency message queue system architecture"
+
+# Example 2: Multi-Model Collaboration
+"First use GPT-5 model to analyze the root cause of this performance issue, then use Claude Sonnet 4 model to write optimization code"
+
+# Example 3: Parallel Task Processing
+"Use Qwen Coder model as subagent to refactor these three modules simultaneously"
+
+# Example 4: Expert Consultation
+"This memory leak issue is tricky, ask Claude Opus 4.1 model separately for solutions"
+
+# Example 5: Code Review
+"Have Kimi k2 model review the code quality of this PR"
+
+# Example 6: Complex Reasoning
+"Use Grok 4 model to help me derive the time complexity of this algorithm"
+
+# Example 7: Solution Design
+"Have GLM-4.5 model design a microservice decomposition plan"
+```
+
+### 🛠️ Key Implementation Mechanisms
+
+#### **Configuration System**
+```typescript
+// Example of multi-model configuration support
 {
-  "mcpServers": {
-    "agent-kode": {
-      "command": "/path/to/kode",
-      "args": ["mcp", "serve"]
-    }
+  "modelProfiles": {
+    "o3": { "provider": "openai", "model": "o3", "apiKey": "..." },
+    "claude4": { "provider": "anthropic", "model": "claude-sonnet-4", "apiKey": "..." },
+    "qwen": { "provider": "alibaba", "model": "qwen-coder", "apiKey": "..." }
+  },
+  "modelPointers": {
+    "main": "claude4",      // Main conversation model
+    "task": "qwen",         // Task execution model
+    "reasoning": "o3",      // Reasoning model
+    "quick": "glm-4.5"      // Quick response model
   }
 }
 ```
 
+#### **Cost Tracking System**
+- **Usage Statistics**: Use `/cost` command to view token usage and costs for each model
+- **Multi-Model Cost Comparison**: Track usage costs of different models in real-time
+- **History Records**: Save cost data for each session
+
+#### **Context Manager**
+- **Context Inheritance**: Maintain conversation continuity when switching models
+- **Context Window Adaptation**: Automatically adjust based on different models' context window sizes
+- **Session State Preservation**: Ensure information consistency during multi-model collaboration
+
+### 🚀 Advantages of Multi-Model Collaboration
+
+1. **Maximized Efficiency**: Each task is handled by the most suitable model
+2. **Cost Optimization**: Use lightweight models for simple tasks, powerful models for complex tasks
+3. **Parallel Processing**: Multiple models can work on different subtasks simultaneously
+4. **Flexible Switching**: Switch models based on task requirements without restarting sessions
+5. **Leveraging Strengths**: Combine advantages of different models for optimal overall results
+
+### 📊 Comparison with Official Implementation
+
+| Feature | Kode | Official Claude |
+|---------|------|-----------------|
+| Number of Supported Models | Unlimited, configurable for any model | Only supports single Claude model |
+| Model Switching | ✅ Tab key quick switch | ❌ Requires session restart |
+| Parallel Processing | ✅ Multiple SubAgents work in parallel | ❌ Single-threaded processing |
+| Cost Tracking | ✅ Separate statistics for multiple models | ❌ Single model cost |
+| Task Model Configuration | ✅ Different default models for different purposes | ❌ Same model for all tasks |
+| Expert Consultation | ✅ AskExpertModel tool | ❌ Not supported |
+
+This multi-model collaboration capability makes Kode a true **AI Development Workbench**, not just a single AI assistant.
+
 ## Development
 
+Kode is built with modern tools and requires [Bun](https://bun.sh) for development.
+
+### Install Bun
+
 ```bash
-# Install dependencies
-pnpm install
+# macOS/Linux
+curl -fsSL https://bun.sh/install | bash
 
-# Run in development mode
-pnpm run dev
-
-# Build for production
-pnpm run build
-
-# Debug with verbose logging
-NODE_ENV=development pnpm run dev --verbose --debug
+# Windows
+powershell -c "irm bun.sh/install.ps1 | iex"
 ```
 
-## Architecture
+### Setup Development Environment
 
-- **React/Ink** - Terminal UI framework
-- **18 Core Tools** - File operations, shell execution, AI workflows, checkpoints
-- **Multi-Provider** - Anthropic Claude, OpenAI, custom endpoints
-- **TypeScript** - Full type safety throughout
-- **MCP Compatible** - Model Context Protocol integration
-- **Smart Workflows** - Checkpoint system and worktree management
+```bash
+# Clone the repository
+git clone https://github.com/shareAI-lab/kode.git
+cd kode
 
-## Advanced Workflows
+# Install dependencies
+bun install
 
-Agent Kode provides sophisticated development workflow management:
+# Run in development mode
+bun run dev
+```
 
-### 🎯 Checkpoint System
-Intelligent project state management with automatic analysis and recovery:
-- **`/checkpoint-save`** - Smart analysis and state preservation
-- **`/checkpoint-restore`** - Natural language version recovery
+### Build
 
-### 🌿 Worktree Development
-Isolated development environments for feature work:
-- **`/worktree-create`** - Task-driven environment creation
-- **`/worktree-review`** - Comprehensive code quality assessment
-- **`/worktree-merge`** - Safe integration with quality gates
+```bash
+bun run build
+```
 
-📚 **[Complete Workflow Documentation](docs/commands/README.md)**
+### Testing
 
-## Bug Reports
+```bash
+# Run tests
+bun test
 
-Submit bugs directly from the app using `/bug` - it will open GitHub with pre-filled information.
+# Test the CLI
+./cli.js --help
+```
 
-## Privacy & Data
+## Contributing
 
-- **No telemetry** - No backend servers except your chosen AI providers
-- **Local processing** - All data stays on your machine
-- **Open source** - Full transparency in code and data handling
-
-## Repository
-
-- **Homepage**: [https://github.com/shareAI-lab/agent-kode](https://github.com/shareAI-lab/agent-kode)
-- **Issues**: [https://github.com/shareAI-lab/agent-kode/issues](https://github.com/shareAI-lab/agent-kode/issues)
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
 ## License
 
-See [LICENSE.md](LICENSE.md) for details.
+ISC License - see [LICENSE](LICENSE) for details.
 
----
+## Support
 
-**⚠️ Use at your own risk** - This tool executes code and commands on your system.
-
-## Thanks
-- some code from @dnakov 's anonkode
-- some ui learn from gemini-cli
-- some system design learn from claude code
+- 📚 [Documentation](docs/)
+- 🐛 [Report Issues](https://github.com/shareAI-lab/kode/issues)
+- 💬 [Discussions](https://github.com/shareAI-lab/kode/discussions)
