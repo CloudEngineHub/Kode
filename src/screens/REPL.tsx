@@ -392,7 +392,7 @@ export function REPL({
     }
 
     // If this was a Koding request and we got an assistant message back,
-    // save it to CONTEXT.md (and CLAUDE.md if exists)
+    // save it to KODE.md (and CLAUDE.md if exists)
     if (
       isKodingRequest &&
       lastAssistantMessage &&
@@ -407,7 +407,7 @@ export function REPL({
                 .map(block => (block.type === 'text' ? block.text : ''))
                 .join('\n')
 
-        // Add the content to CONTEXT.md (and CLAUDE.md if exists)
+        // Add the content to KODE.md (and CLAUDE.md if exists)
         if (content && content.trim().length > 0) {
           handleHashCommand(content)
         }

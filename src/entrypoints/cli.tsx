@@ -1157,7 +1157,7 @@ ${commandList}`,
     process.exit(0)
   }
 
-  // New command name to match Agent Kode
+  // New command name to match Kode
   mcp
     .command('reset-project-choices')
     .description(
