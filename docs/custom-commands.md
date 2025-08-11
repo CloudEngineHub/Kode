@@ -2,14 +2,20 @@
 
 ## Overview
 
-Agent-Kode supports custom slash commands through Markdown files placed in `.claude/commands/` directories. This feature allows you to create reusable prompts and workflows tailored to your specific needs.
+Kode supports custom slash commands through Markdown files placed in `.claude/commands/` or `.kode/commands/` directories. This feature allows you to create reusable prompts and workflows tailored to your specific needs.
 
 ## Directory Structure
 
-Custom commands are loaded from two locations:
+Custom commands are loaded from multiple locations (both .claude and .kode directories are supported):
 
-- **Global commands**: `~/.claude/commands/` - Available in all projects
-- **Project commands**: `./.claude/commands/` - Specific to the current project
+- **Global commands**: 
+  - `~/.claude/commands/` - Available in all projects
+  - `~/.kode/commands/` - Available in all projects
+- **Project commands**: 
+  - `./.claude/commands/` - Specific to the current project
+  - `./.kode/commands/` - Specific to the current project
+
+Note: Both .claude and .kode directories work identically for backward compatibility.
 
 ## Command File Format
 
@@ -47,29 +53,29 @@ You can reference arguments using {arg1} and {arg2} placeholders.
 
 ### 1. Simple Command
 
-**File**: `~/.claude/commands/checkpoint.md`
+**File**: `~/.claude/commands/status.md` or `~/.kode/commands/status.md`
 
 ```markdown
 ---
-name: checkpoint
-description: Create a development checkpoint
-aliases: [cp, save]
+name: status
+description: Show project status
+aliases: [st, info]
 ---
 
-Create a comprehensive development checkpoint including:
+Provide a comprehensive project status including:
 - Current git status and recent commits
 - Modified files summary
 - Test results and build status
 - Development environment state
 
-Please analyze the current state and provide a structured checkpoint report.
+Please analyze the current state and provide a structured status report.
 ```
 
-**Usage**: `/checkpoint` or `/cp` or `/save`
+**Usage**: `/status` or `/st` or `/info`
 
 ### 2. Parameterized Command
 
-**File**: `./.claude/commands/deploy.md`
+**File**: `./.claude/commands/deploy.md` or `./.kode/commands/deploy.md`
 
 ```markdown
 ---
@@ -105,7 +111,7 @@ Please provide environment-specific recommendations and validate the deployment 
 
 ### 3. Security Audit Command
 
-**File**: `~/.claude/commands/security.md`
+**File**: `~/.claude/commands/security.md` or `~/.kode/commands/security.md`
 
 ```markdown
 ---
@@ -209,7 +215,7 @@ hidden: true  # Won't appear in /help output
 ### Commands Not Loading
 1. Check file extension is `.md`
 2. Verify frontmatter syntax (YAML format)
-3. Ensure directories exist: `~/.claude/commands/` or `./.claude/commands/`
+3. Ensure directories exist: `~/.claude/commands/`, `~/.kode/commands/`, `./.claude/commands/`, or `./.kode/commands/`
 4. Check file permissions
 
 ### Syntax Errors
@@ -223,7 +229,7 @@ hidden: true  # Won't appear in /help output
 - Large numbers of commands may affect startup time
 - Use `enabled: false` to temporarily disable commands
 
-## Integration with Agent-Kode
+## Integration with Kode
 
 Custom commands integrate seamlessly with the existing command system:
 

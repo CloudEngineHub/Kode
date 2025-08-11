@@ -9,6 +9,7 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 .pnpm-debug.log*
+KODE.md
 
 # Caches
 
@@ -173,8 +174,21 @@ dist
 
 # Finder (MacOS) folder config
 .DS_Store
-source-maps/
+# Build artifacts
+cli.js
+.npmrc
+
+# Lock files
+bun.lock
+bun.lockb
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Old build artifacts
 cli.mjs
+cli.mjs.map
+source-maps/
 
 # Claude project instructions
 CLAUDE.md

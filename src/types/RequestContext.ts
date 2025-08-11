@@ -1,5 +1,5 @@
 // Request Context for perfect state isolation
-// Based on official Agent Kode patterns
+// Based on official Kode patterns
 
 export interface RequestContext {
   id: string

@@ -361,9 +361,10 @@ function createCustomCommand(
 
   // Determine scope based on directory location
   // This follows the same pattern as Claude Desktop's command system
-  const userCommandsDir = join(homedir(), '.claude', 'commands')
+  const userClaudeDir = join(homedir(), '.claude', 'commands')
+  const userKodeDir = join(homedir(), '.kode', 'commands')
   const scope: 'user' | 'project' =
-    baseDir === userCommandsDir ? 'user' : 'project'
+    (baseDir === userClaudeDir || baseDir === userKodeDir) ? 'user' : 'project'
   const prefix = scope === 'user' ? 'user' : 'project'
 
   // Create proper command name with prefix and namespace
@@ -483,8 +484,11 @@ function createCustomCommand(
  */
 export const loadCustomCommands = memoize(
   async (): Promise<CustomCommandWithScope[]> => {
-    const userCommandsDir = join(homedir(), '.claude', 'commands')
-    const projectCommandsDir = join(getCwd(), '.claude', 'commands')
+    // Support both .claude and .kode directories
+    const userClaudeDir = join(homedir(), '.claude', 'commands')
+    const projectClaudeDir = join(getCwd(), '.claude', 'commands')
+    const userKodeDir = join(homedir(), '.kode', 'commands')
+    const projectKodeDir = join(getCwd(), '.kode', 'commands')
 
     // Set up abort controller for timeout handling
     const abortController = new AbortController()
@@ -493,25 +497,42 @@ export const loadCustomCommands = memoize(
     try {
       const startTime = Date.now()
 
-      // Scan both directories for .md files concurrently
+      // Scan all four directories for .md files concurrently
       // This pattern matches the async loading used elsewhere in the project
-      const [projectFiles, userFiles] = await Promise.all([
-        existsSync(projectCommandsDir)
+      const [projectClaudeFiles, userClaudeFiles, projectKodeFiles, userKodeFiles] = await Promise.all([
+        existsSync(projectClaudeDir)
           ? scanMarkdownFiles(
               ['--files', '--hidden', '--glob', '*.md'], // Legacy args for ripgrep compatibility
-              projectCommandsDir,
+              projectClaudeDir,
               abortController.signal,
             )
           : Promise.resolve([]),
-        existsSync(userCommandsDir)
+        existsSync(userClaudeDir)
           ? scanMarkdownFiles(
               ['--files', '--glob', '*.md'], // Legacy args for ripgrep compatibility
-              userCommandsDir,
+              userClaudeDir,
+              abortController.signal,
+            )
+          : Promise.resolve([]),
+        existsSync(projectKodeDir)
+          ? scanMarkdownFiles(
+              ['--files', '--hidden', '--glob', '*.md'], // Legacy args for ripgrep compatibility
+              projectKodeDir,
+              abortController.signal,
+            )
+          : Promise.resolve([]),
+        existsSync(userKodeDir)
+          ? scanMarkdownFiles(
+              ['--files', '--glob', '*.md'], // Legacy args for ripgrep compatibility
+              userKodeDir,
               abortController.signal,
             )
           : Promise.resolve([]),
       ])
 
+      // Combine files with priority: project > user, kode > claude
+      const projectFiles = [...projectKodeFiles, ...projectClaudeFiles]
+      const userFiles = [...userKodeFiles, ...userClaudeFiles]
       const allFiles = [...projectFiles, ...userFiles]
       const duration = Date.now() - startTime
 
@@ -533,11 +554,13 @@ export const loadCustomCommands = memoize(
           const content = readFileSync(filePath, { encoding: 'utf-8' })
           const { frontmatter, content: commandContent } =
             parseFrontmatter(content)
+          // Determine which base directory this file is from
+          const baseDir = filePath.includes('.kode/commands') ? projectKodeDir : projectClaudeDir
           const command = createCustomCommand(
             frontmatter,
             commandContent,
             filePath,
-            projectCommandsDir,
+            baseDir,
           )
 
           if (command) {
@@ -554,11 +577,13 @@ export const loadCustomCommands = memoize(
           const content = readFileSync(filePath, { encoding: 'utf-8' })
           const { frontmatter, content: commandContent } =
             parseFrontmatter(content)
+          // Determine which base directory this file is from
+          const baseDir = filePath.includes('.kode/commands') ? userKodeDir : userClaudeDir
           const command = createCustomCommand(
             frontmatter,
             commandContent,
             filePath,
-            userCommandsDir,
+            baseDir,
           )
 
           if (command) {
@@ -592,12 +617,14 @@ export const loadCustomCommands = memoize(
   // This ensures cache invalidation when directories change
   () => {
     const cwd = getCwd()
-    const userDir = join(homedir(), '.claude', 'commands')
-    const projectDir = join(cwd, '.claude', 'commands')
+    const userClaudeDir = join(homedir(), '.claude', 'commands')
+    const projectClaudeDir = join(cwd, '.claude', 'commands')
+    const userKodeDir = join(homedir(), '.kode', 'commands')
+    const projectKodeDir = join(cwd, '.kode', 'commands')
 
     // Create cache key that includes directory existence and timestamp
     // This provides reasonable cache invalidation without excessive file system checks
-    return `${cwd}:${existsSync(userDir)}:${existsSync(projectDir)}:${Math.floor(Date.now() / 60000)}`
+    return `${cwd}:${existsSync(userClaudeDir)}:${existsSync(projectClaudeDir)}:${existsSync(userKodeDir)}:${existsSync(projectKodeDir)}:${Math.floor(Date.now() / 60000)}`
   },
 )
 
@@ -628,12 +655,16 @@ export const reloadCustomCommands = (): void => {
  * @returns Object containing user and project command directory paths
  */
 export function getCustomCommandDirectories(): {
-  user: string
-  project: string
+  userClaude: string
+  projectClaude: string
+  userKode: string
+  projectKode: string
 } {
   return {
-    user: join(homedir(), '.claude', 'commands'),
-    project: join(getCwd(), '.claude', 'commands'),
+    userClaude: join(homedir(), '.claude', 'commands'),
+    projectClaude: join(getCwd(), '.claude', 'commands'),
+    userKode: join(homedir(), '.kode', 'commands'),
+    projectKode: join(getCwd(), '.kode', 'commands'),
   }
 }
 
@@ -647,6 +678,6 @@ export function getCustomCommandDirectories(): {
  * @returns boolean - True if at least one command directory exists
  */
 export function hasCustomCommands(): boolean {
-  const { user, project } = getCustomCommandDirectories()
-  return existsSync(user) || existsSync(project)
+  const { userClaude, projectClaude, userKode, projectKode } = getCustomCommandDirectories()
+  return existsSync(userClaude) || existsSync(projectClaude) || existsSync(userKode) || existsSync(projectKode)
 }

@@ -4,11 +4,13 @@ import { join } from 'path'
 import { homedir } from 'os'
 import { CONFIG_BASE_DIR, CONFIG_FILE } from '../constants/product'
 // Base directory for all Any kode data files (except config.json for backwards compatibility)
+// Support both KODE_CONFIG_DIR and CLAUDE_CONFIG_DIR for compatibility
 export const CLAUDE_BASE_DIR =
-  process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), CONFIG_BASE_DIR)
+  process.env.KODE_CONFIG_DIR ?? process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), CONFIG_BASE_DIR)
 
 // Config and data paths
-export const GLOBAL_CLAUDE_FILE = process.env.CLAUDE_CONFIG_DIR
+// Support both KODE_CONFIG_DIR and CLAUDE_CONFIG_DIR environment variables
+export const GLOBAL_CLAUDE_FILE = (process.env.KODE_CONFIG_DIR || process.env.CLAUDE_CONFIG_DIR)
   ? join(CLAUDE_BASE_DIR, 'config.json')
   : join(homedir(), CONFIG_FILE)
 export const MEMORY_DIR = join(CLAUDE_BASE_DIR, 'memory')
