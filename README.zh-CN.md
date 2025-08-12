@@ -50,6 +50,52 @@ kode -p "解释这个函数" main.js
 kwa -p "解释这个函数" main.js
 ```
 
+### Docker 使用说明
+ 
+```bash
+# 克隆仓库
+git clone https://github.com/shareAI-lab/Kode.git
+cd Kode
+
+# 本地构建镜像
+docker build -t Kode .
+
+# 在你的项目目录中运行
+cd your-project
+docker run -it --rm \
+  -v $(pwd):/workspace \
+  -v ~/.kode:/root/.kode \
+  -v ~/.kode.json:/root/.kode.json \
+  -w /workspace \
+  Kode
+```
+
+#### Docker 配置详情
+
+该 Docker 配置包含以下内容：
+
+* **卷挂载（Volume Mounts）**：
+
+  * `$(pwd):/workspace` - 挂载当前项目目录
+  * `~/.kode:/root/.kode` - 在运行间保留 anon-kode 配置目录
+  * `~/.kode.json:/root/.kode.json` - 在运行间保留 anon-kode 全局配置文件
+
+* **工作目录**：容器内工作目录设置为 `/workspace`
+
+* **交互模式**：使用 `-it` 标志以交互式终端方式运行
+
+* **清理**：使用 `--rm` 在退出后自动删除容器
+
+**注意**：
+Anon Kode 同时使用 `~/.kode` 目录（存放额外数据，如内存文件）和 `~/.kode.json` 文件（全局配置）。
+
+第一次运行 Docker 命令时会构建镜像，之后的运行会使用缓存镜像以加快启动速度。
+
+你可以通过引导流程（onboarding）来设置模型，或使用 `/model` 命令。
+如果在列表中没有你想要的模型，可以在 `/config` 中手动设置。
+只要你有一个 OpenAI 风格的 API 端点，就可以正常使用。
+
+
 ### 常用命令
 
 - `/help` - 显示可用命令
