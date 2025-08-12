@@ -77,8 +77,8 @@ docker run -it --rm \
 * **卷挂载（Volume Mounts）**：
 
   * `$(pwd):/workspace` - 挂载当前项目目录
-  * `~/.kode:/root/.kode` - 在运行间保留 anon-kode 配置目录
-  * `~/.kode.json:/root/.kode.json` - 在运行间保留 anon-kode 全局配置文件
+  * `~/.kode:/root/.kode` - 在运行间保留 kode 配置目录
+  * `~/.kode.json:/root/.kode.json` - 在运行间保留 kode 全局配置文件
 
 * **工作目录**：容器内工作目录设置为 `/workspace`
 
@@ -87,7 +87,7 @@ docker run -it --rm \
 * **清理**：使用 `--rm` 在退出后自动删除容器
 
 **注意**：
-Anon Kode 同时使用 `~/.kode` 目录（存放额外数据，如内存文件）和 `~/.kode.json` 文件（全局配置）。
+Kode 同时使用 `~/.kode` 目录（存放额外数据，如内存文件）和 `~/.kode.json` 文件（全局配置）。
 
 第一次运行 Docker 命令时会构建镜像，之后的运行会使用缓存镜像以加快启动速度。
 
