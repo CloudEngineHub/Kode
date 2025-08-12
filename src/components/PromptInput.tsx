@@ -96,7 +96,6 @@ type Props = {
   ) => void
   readFileTimestamps: { [filename: string]: number }
   abortController: AbortController | null
-  setAbortController: (abortController: AbortController | null) => void
   onModelChange?: () => void
 }
 
@@ -479,7 +478,7 @@ function PromptInput({
 
   // 🔧 Fix: Track model ID changes to detect external config updates
   const modelManager = getModelManager()
-  const currentModelId = modelManager.getModel('main')?.id || null
+  const currentModelId = (modelManager.getModel('main') as any)?.id || null
 
   const modelInfo = useMemo(() => {
     // Force fresh ModelManager instance to detect config changes
@@ -491,7 +490,7 @@ function PromptInput({
 
     return {
       name: currentModel.modelName, // 🔧 Fix: Use actual model name, not display name
-      id: currentModel.id, // 添加模型ID用于调试
+      id: (currentModel as any).id, // 添加模型ID用于调试
       provider: currentModel.provider, // 添加提供商信息
       contextLength: currentModel.contextLength,
       currentTokens: tokenUsage,
@@ -600,7 +599,7 @@ function PromptInput({
               </>
             )}
           </Box>
-          <SentryErrorBoundary>
+          <SentryErrorBoundary children={
             <Box justifyContent="flex-end" gap={1}>
               {!autoUpdaterResult &&
                 !isAutoUpdating &&
@@ -622,7 +621,7 @@ function PromptInput({
                 onChangeIsUpdating={setIsAutoUpdating}
               /> */}
             </Box>
-          </SentryErrorBoundary>
+          } />
         </Box>
       )}
       {suggestions.length > 0 && (
@@ -684,7 +683,7 @@ function PromptInput({
               )
             })}
           </Box>
-          <SentryErrorBoundary>
+          <SentryErrorBoundary children={
             <Box justifyContent="flex-end" gap={1}>
               <TokenWarning tokenUsage={countTokens(messages)} />
               <AutoUpdater
@@ -695,7 +694,7 @@ function PromptInput({
                 onChangeIsUpdating={setIsAutoUpdating}
               />
             </Box>
-          </SentryErrorBoundary>
+          } />
         </Box>
       )}
     </Box>

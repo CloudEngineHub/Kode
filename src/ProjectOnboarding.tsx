@@ -87,6 +87,7 @@ export default function ProjectOnboarding({
       {showOnboarding && (
         <>
           <Text color={theme.secondaryText}>Tips for getting started:</Text>
+          {/* @ts-expect-error - OrderedList children prop issue */}
           <OrderedList>
             {/* Collect all the items that should be displayed */}
             {(() => {
@@ -94,51 +95,66 @@ export default function ProjectOnboarding({
 
               if (isWorkspaceDirEmpty) {
                 items.push(
-                  <OrderedList.Item key="workspace">
-                    <Text color={theme.secondaryText}>
-                      Ask {PRODUCT_NAME} to create a new app or clone a
-                      repository.
-                    </Text>
-                  </OrderedList.Item>,
+                  <React.Fragment key="workspace">
+                    {/* @ts-expect-error - OrderedList.Item children prop issue */}
+                    <OrderedList.Item>
+                      <Text color={theme.secondaryText}>
+                        Ask {PRODUCT_NAME} to create a new app or clone a
+                        repository.
+                      </Text>
+                    </OrderedList.Item>
+                  </React.Fragment>,
                 )
               }
               if (needsClaudeMd) {
                 items.push(
-                  <OrderedList.Item key="claudemd">
-                    <Text color={theme.secondaryText}>
-                      Run <Text color={theme.text}>/init</Text> to create
+                  <React.Fragment key="claudemd">
+                    {/* @ts-expect-error - OrderedList.Item children prop issue */}
+                    <OrderedList.Item>
+                      <Text color={theme.secondaryText}>
+                        Run <Text color={theme.text}>/init</Text> to create
                       a&nbsp;
                       {PROJECT_FILE} file with instructions for {PRODUCT_NAME}.
                     </Text>
-                  </OrderedList.Item>,
+                    </OrderedList.Item>
+                  </React.Fragment>,
                 )
               }
 
               if (showTerminalTip) {
                 items.push(
-                  <OrderedList.Item key="terminal">
-                    <Text color={theme.secondaryText}>
-                      Run <Text color={theme.text}>/terminal-setup</Text>
-                      <Text bold={false}> to set up terminal integration</Text>
-                    </Text>
-                  </OrderedList.Item>,
+                  <React.Fragment key="terminal">
+                    {/* @ts-expect-error - OrderedList.Item children prop issue */}
+                    <OrderedList.Item>
+                      <Text color={theme.secondaryText}>
+                        Run <Text color={theme.text}>/terminal-setup</Text>
+                        <Text bold={false}> to set up terminal integration</Text>
+                      </Text>
+                    </OrderedList.Item>
+                  </React.Fragment>,
                 )
               }
 
               items.push(
-                <OrderedList.Item key="questions">
-                  <Text color={theme.secondaryText}>
-                    Ask {PRODUCT_NAME} questions about your codebase.
-                  </Text>
-                </OrderedList.Item>,
+                <React.Fragment key="questions">
+                  {/* @ts-expect-error - OrderedList.Item children prop issue */}
+                  <OrderedList.Item>
+                    <Text color={theme.secondaryText}>
+                      Ask {PRODUCT_NAME} questions about your codebase.
+                    </Text>
+                  </OrderedList.Item>
+                </React.Fragment>,
               )
 
               items.push(
-                <OrderedList.Item key="changes">
-                  <Text color={theme.secondaryText}>
-                    Ask {PRODUCT_NAME} to implement changes to your codebase.
-                  </Text>
-                </OrderedList.Item>,
+                <React.Fragment key="changes">
+                  {/* @ts-expect-error - OrderedList.Item children prop issue */}
+                  <OrderedList.Item>
+                    <Text color={theme.secondaryText}>
+                      Ask {PRODUCT_NAME} to implement changes to your codebase.
+                    </Text>
+                  </OrderedList.Item>
+                </React.Fragment>,
               )
 
               return items
@@ -159,9 +175,11 @@ export default function ProjectOnboarding({
             </Box>
             <Box flexDirection="column" marginLeft={1}>
               {releaseNotesToShow.map((note, noteIndex) => (
-                <Text key={noteIndex} color={getTheme().secondaryText}>
-                  • {note}
-                </Text>
+                <React.Fragment key={noteIndex}>
+                  <Text color={getTheme().secondaryText}>
+                    • {note}
+                  </Text>
+                </React.Fragment>
               ))}
             </Box>
           </Box>

@@ -276,8 +276,8 @@ Usage: Provide detailed task description for autonomous execution. The agent wil
   needsPermissions() {
     return false
   },
-  renderResultForAssistant(data) {
-    return data
+  renderResultForAssistant(data: TextBlock[]) {
+    return data.map(block => block.type === 'text' ? block.text : '').join('\n')
   },
   renderToolUseMessage({ description, prompt, model_name }, { verbose }) {
     if (!description || !prompt) return null
@@ -299,7 +299,7 @@ Usage: Provide detailed task description for autonomous execution. The agent wil
             marginTop={1}
             paddingLeft={2}
             borderLeftStyle="single"
-            borderLeftColor={theme.border}
+            borderLeftColor={theme.secondaryBorder}
           >
             <Text color={theme.secondaryText}>{promptPreview}</Text>
           </Box>
@@ -312,7 +312,7 @@ Usage: Provide detailed task description for autonomous execution. The agent wil
   renderToolUseRejectedMessage() {
     return <FallbackToolUseRejectedMessage />
   },
-  renderToolResultMessage(content, { verbose }) {
+  renderToolResultMessage(content) {
     const theme = getTheme()
 
     if (Array.isArray(content)) {
@@ -351,23 +351,6 @@ Usage: Provide detailed task description for autonomous execution. The agent wil
               )}
             </Box>
           </Box>
-          {verbose && textBlocks.length > 0 && (
-            <Box
-              marginTop={1}
-              paddingLeft={4}
-              borderLeftStyle="single"
-              borderLeftColor={theme.border}
-            >
-              <Text color={theme.secondaryText}>
-                {textBlocks
-                  .slice(0, 2)
-                  .map(block => block.text)
-                  .join('\n')
-                  .substring(0, 200)}
-                {totalLength > 200 ? '...' : ''}
-              </Text>
-            </Box>
-          )}
         </Box>
       )
     }

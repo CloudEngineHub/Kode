@@ -12,7 +12,7 @@ interface State {
 export class SentryErrorBoundary extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props)
-    this.state = { hasError: false }
+    ;(this as any).state = { hasError: false }
   }
 
   static getDerivedStateFromError(): State {
@@ -24,10 +24,10 @@ export class SentryErrorBoundary extends React.Component<Props, State> {
   }
 
   render(): React.ReactNode {
-    if (this.state.hasError) {
+    if ((this as any).state.hasError) {
       return null
     }
 
-    return this.props.children
+    return (this as any).props.children
   }
 }

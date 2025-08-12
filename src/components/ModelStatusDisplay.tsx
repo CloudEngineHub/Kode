@@ -185,7 +185,7 @@ export function ModelStatusDisplay({ onClose }: Props): React.ReactNode {
         </Text>
         <Text color={theme.secondaryText}>
           {' '}
-          DefaultModelId: {config.defaultModelId || 'not set'}
+          DefaultModelId: {(config as any).defaultModelId || 'not set'}
         </Text>
         {config.modelPointers && (
           <>
@@ -195,10 +195,12 @@ export function ModelStatusDisplay({ onClose }: Props): React.ReactNode {
               {Object.keys(config.modelPointers).length > 0 ? 'Yes' : 'No'}
             </Text>
             {Object.entries(config.modelPointers).map(([pointer, modelId]) => (
-              <Text key={pointer} color={theme.secondaryText}>
-                {' '}
-                {pointer}: {modelId || 'not set'}
-              </Text>
+              <React.Fragment key={pointer}>
+                <Text color={theme.secondaryText}>
+                  {' '}
+                  {pointer}: {modelId || 'not set'}
+                </Text>
+              </React.Fragment>
             ))}
           </>
         )}

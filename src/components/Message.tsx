@@ -121,6 +121,7 @@ function UserMessage({
   options: {
     verbose: boolean
   }
+  key?: React.Key
 }): React.ReactNode {
   const { columns } = useTerminalSize()
   switch (param.type) {
@@ -176,6 +177,7 @@ function AssistantMessage({
   shouldAnimate: boolean
   shouldShowDot: boolean
   width?: number | string
+  key?: React.Key
 }): React.ReactNode {
   switch (param.type) {
     case 'tool_use':

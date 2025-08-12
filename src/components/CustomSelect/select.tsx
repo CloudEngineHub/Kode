@@ -4,7 +4,8 @@ import { SelectOption } from './select-option'
 import { type Theme } from './theme'
 import { useSelectState } from './use-select-state'
 import { useSelect } from './use-select'
-import { Option, useComponentTheme } from '@inkjs/ui'
+import { Option } from '@inkjs/ui'
+import { getTheme } from '../../utils/theme'
 
 export type OptionSubtree = {
   /**
@@ -94,7 +95,16 @@ export function Select({
 
   useSelect({ isDisabled, state })
 
-  const { styles } = useComponentTheme<Theme>('Select')
+  const appTheme = getTheme()
+  const styles = {
+    container: () => ({
+      flexDirection: 'column' as const,
+    }),
+    highlightedText: () => ({
+      color: appTheme.text,
+      backgroundColor: appTheme.warning,
+    }),
+  }
 
   return (
     <Box {...styles.container()}>
@@ -133,9 +143,8 @@ export function Select({
             isFocused={isFocused}
             isSelected={isSelected}
             smallPointer={smallPointer}
-          >
-            {label}
-          </SelectOption>
+            children={label}
+          />
         )
       })}
     </Box>

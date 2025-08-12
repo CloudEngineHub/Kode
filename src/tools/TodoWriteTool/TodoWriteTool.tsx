@@ -136,7 +136,7 @@ export const TodoWriteTool = {
   renderToolUseRejectedMessage() {
     return <FallbackToolUseRejectedMessage />
   },
-  renderToolResultMessage(output, { verbose }) {
+  renderToolResultMessage(output) {
     const isError = typeof output === 'string' && output.startsWith('Error')
 
     // If output contains todo data, render simple checkbox list
@@ -174,14 +174,15 @@ export const TodoWriteTool = {
                 const text_color = status_color_map[todo.status]
 
                 return (
-                  <Text
-                    key={todo.id || index}
-                    color={text_color}
-                    bold={todo.status !== 'pending'}
-                    strikethrough={todo.status === 'completed'}
-                  >
-                    {checkbox} {todo.content}
-                  </Text>
+                  <React.Fragment key={todo.id || index}>
+                    <Text
+                      color={text_color}
+                      bold={todo.status !== 'pending'}
+                      strikethrough={todo.status === 'completed'}
+                    >
+                      {checkbox} {todo.content}
+                    </Text>
+                  </React.Fragment>
                 )
               })}
             </Box>
@@ -263,7 +264,7 @@ export const TodoWriteTool = {
 
       yield {
         type: 'result',
-        data: resultData,
+        data: summary, // Return string instead of object to match interface
         resultForAssistant: summary,
       }
     } catch (error) {

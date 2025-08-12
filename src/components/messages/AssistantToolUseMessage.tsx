@@ -61,7 +61,7 @@ export function AssistantToolUseMessage({
     )
   }
 
-  const userFacingToolName = tool.userFacingName(param.input as never)
+  const userFacingToolName = tool.userFacingName()
   return (
     <Box
       flexDirection="row"

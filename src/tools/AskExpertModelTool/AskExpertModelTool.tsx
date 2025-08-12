@@ -166,7 +166,8 @@ IMPORTANT: Always use the precise model name the user requested. The tool will h
     return `${expert_model}, ${sessionDisplay}`
   },
 
-  renderToolResultMessage(content, { verbose }) {
+  renderToolResultMessage(content) {
+    const verbose = false // Set default value for verbose
     const theme = getTheme()
 
     if (typeof content === 'object' && content && 'expertAnswer' in content) {

@@ -30,6 +30,7 @@ export function OutputLine({
   lines: number
   verbose: boolean
   isError?: boolean
+  key?: React.Key
 }) {
   return (
     <Box justifyContent="space-between" width="100%">

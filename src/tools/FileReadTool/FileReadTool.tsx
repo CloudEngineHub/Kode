@@ -93,7 +93,8 @@ export const FileReadTool = {
       .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
       .join(', ')
   },
-  renderToolResultMessage(output, { verbose }) {
+  renderToolResultMessage(output) {
+    const verbose = false // Set default value for verbose
     // TODO: Render recursively
     switch (output.type) {
       case 'image':
