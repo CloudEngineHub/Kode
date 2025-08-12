@@ -58,7 +58,7 @@ git clone https://github.com/shareAI-lab/Kode.git
 cd Kode
 
 # 本地构建镜像
-docker build -t Kode .
+docker build --no-cache -t Kode .
 
 # 在你的项目目录中运行
 cd your-project
