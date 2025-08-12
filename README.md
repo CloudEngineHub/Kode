@@ -79,8 +79,8 @@ The Docker setup includes:
 
 - **Volume Mounts**:
   - `$(pwd):/workspace` - Mounts your current project directory
-  - `~/.kode:/root/.kode` - Preserves your anon-kode configuration directory between runs
-  - `~/.kode.json:/root/.kode.json` - Preserves your anon-kode global configuration file between runs
+  - `~/.kode:/root/.kode` - Preserves your kode configuration directory between runs
+  - `~/.kode.json:/root/.kode.json` - Preserves your kode global configuration file between runs
 
 - **Working Directory**: Set to `/workspace` inside the container
 
@@ -88,7 +88,7 @@ The Docker setup includes:
 
 - **Cleanup**: `--rm` flag removes the container after exit
 
-**Note**: Anon Kode uses both `~/.kode` directory for additional data (like memory files) and `~/.kode.json` file for global configuration.
+**Note**:  Kode uses both `~/.kode` directory for additional data (like memory files) and `~/.kode.json` file for global configuration.
 
 The first time you run the Docker command, it will build the image. Subsequent runs will use the cached image for faster startup.
 
