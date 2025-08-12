@@ -13,7 +13,8 @@ export default {
   userFacingName() {
     return 'resume'
   },
-  async call(onDone, { options: { commands, tools, verbose } }) {
+  async call(onDone, context) {
+    const { commands = [], tools = [], verbose = false } = context.options || {}
     const logs = await loadLogList(CACHE_PATHS.messages())
     render(
       <ResumeConversation

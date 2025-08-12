@@ -10,6 +10,7 @@ type Props = {
   dim: boolean
   width: number
   overrideTheme?: ThemeNames // custom theme for previews
+  key?: React.Key
 }
 
 export function StructuredDiff({
@@ -66,43 +67,48 @@ function formatDiff(
       switch (type) {
         case 'add':
           return (
-            <Text key={key}>
-              <LineNumber
-                i={lineIndex === 0 ? i : undefined}
-                width={maxWidth}
-              />
-              <Text
-                color={overrideTheme ? theme.text : undefined}
-                backgroundColor={
-                  dim ? theme.diff.addedDimmed : theme.diff.added
-                }
-                dimColor={dim}
-              >
-                {line}
+            <React.Fragment key={key}>
+              <Text>
+                <LineNumber
+                  i={lineIndex === 0 ? i : undefined}
+                  width={maxWidth}
+                />
+                <Text
+                  color={overrideTheme ? theme.text : undefined}
+                  backgroundColor={
+                    dim ? theme.diff.addedDimmed : theme.diff.added
+                  }
+                  dimColor={dim}
+                >
+                  {line}
+                </Text>
               </Text>
-            </Text>
+            </React.Fragment>
           )
         case 'remove':
           return (
-            <Text key={key}>
-              <LineNumber
-                i={lineIndex === 0 ? i : undefined}
-                width={maxWidth}
-              />
-              <Text
-                color={overrideTheme ? theme.text : undefined}
-                backgroundColor={
-                  dim ? theme.diff.removedDimmed : theme.diff.removed
-                }
-                dimColor={dim}
-              >
-                {line}
+            <React.Fragment key={key}>
+              <Text>
+                <LineNumber
+                  i={lineIndex === 0 ? i : undefined}
+                  width={maxWidth}
+                />
+                <Text
+                  color={overrideTheme ? theme.text : undefined}
+                  backgroundColor={
+                    dim ? theme.diff.removedDimmed : theme.diff.removed
+                  }
+                  dimColor={dim}
+                >
+                  {line}
+                </Text>
               </Text>
-            </Text>
+            </React.Fragment>
           )
         case 'nochange':
           return (
-            <Text key={key}>
+            <React.Fragment key={key}>
+              <Text>
               <LineNumber
                 i={lineIndex === 0 ? i : undefined}
                 width={maxWidth}
@@ -114,6 +120,7 @@ function formatDiff(
                 {line}
               </Text>
             </Text>
+            </React.Fragment>
           )
       }
     })

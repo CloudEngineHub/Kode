@@ -605,12 +605,13 @@ export function REPL({
   return (
     <PermissionProvider isBypassPermissionsModeAvailable={!safeMode}>
       <ModeIndicator />
-      <Static
-        key={`static-messages-${forkNumber}`}
-        items={messagesJSX.filter(_ => _.type === 'static')}
-      >
-        {_ => _.jsx}
-      </Static>
+      <React.Fragment key={`static-messages-${forkNumber}`}>
+        <Static
+          items={messagesJSX.filter(_ => _.type === 'static')}
+        >
+          {_ => _.jsx}
+        </Static>
+      </React.Fragment>
       {messagesJSX.filter(_ => _.type === 'transient').map(_ => _.jsx)}
       <Box
         borderColor="red"

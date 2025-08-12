@@ -67,6 +67,7 @@ export async function ask({
       abortController: new AbortController(),
       messageId: undefined,
       readFileTimestamps: {},
+      setToolJSX: () => {}, // No-op function for non-interactive use
     },
   )) {
     messages.push(m)

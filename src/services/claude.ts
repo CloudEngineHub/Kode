@@ -4,7 +4,7 @@ import { AnthropicBedrock } from '@anthropic-ai/bedrock-sdk'
 import { AnthropicVertex } from '@anthropic-ai/vertex-sdk'
 import type { BetaUsage } from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
 import chalk from 'chalk'
-import { createHash, randomUUID } from 'crypto'
+import { createHash, randomUUID, UUID } from 'crypto'
 import 'dotenv/config'
 
 import { addToTotalCost } from '../cost-tracker'
@@ -15,6 +15,7 @@ import {
   getAnthropicApiKey,
   getOrCreateUserID,
   getGlobalConfig,
+  ModelProfile,
 } from '../utils/config'
 import { getProjectDocs } from '../context'
 import { logError, SESSION_ID } from '../utils/log'
@@ -53,9 +54,14 @@ import OpenAI from 'openai'
 import type { ChatCompletionStream } from 'openai/lib/ChatCompletionStream'
 import { ContentBlock } from '@anthropic-ai/sdk/resources/messages/messages'
 import { nanoid } from 'nanoid'
-import { getCompletion, getCompletionWithProfile } from './openai'
+import { getCompletionWithProfile, getGPT5CompletionWithProfile } from './openai'
 import { getReasoningEffort } from '../utils/thinking'
 import { generateSystemReminders } from './systemReminder'
+
+// Helper function to check if a model is GPT-5
+function isGPT5Model(modelName: string): boolean {
+  return modelName.startsWith('gpt-5')
+}
 
 // Helper function to extract model configuration for debug logging
 function getModelConfigForDebug(model: string): {
@@ -1064,7 +1070,6 @@ export async function queryLLM(
 
   debugLogger.api('MODEL_RESOLVED', {
     inputParam: options.model,
-    resolvedModelName: modelProfile.modelName,
     resolvedModelName: resolvedModel,
     provider: modelProfile.provider,
     isPointer: ['main', 'task', 'reasoning', 'quick'].includes(options.model),
@@ -1078,7 +1083,7 @@ export async function queryLLM(
     toolCount: tools.length,
     model: resolvedModel,
     originalModelParam: options.model,
-    requestId: currentRequest?.id,
+    requestId: getCurrentRequest()?.id,
   })
 
   markPhase('LLM_CALL')
@@ -1099,7 +1104,7 @@ export async function queryLLM(
       costUSD: result.costUSD,
       durationMs: result.durationMs,
       responseLength: result.message.content?.length || 0,
-      requestId: currentRequest?.id,
+      requestId: getCurrentRequest()?.id,
     })
 
     return result
@@ -1255,7 +1260,7 @@ async function queryAnthropicNative(
     modelProfileBaseURL: modelProfile?.baseURL,
     modelProfileApiKeyExists: !!modelProfile?.apiKey,
     optionsModel: options?.model,
-    requestId: currentRequest?.id,
+    requestId: getCurrentRequest()?.id,
   })
 
   if (modelProfile) {
@@ -1296,7 +1301,7 @@ async function queryAnthropicNative(
       modelProfileExists: !!modelProfile,
       modelProfileModelName: modelProfile?.modelName,
       requestedModel: options?.model,
-      requestId: currentRequest?.id,
+      requestId: getCurrentRequest()?.id,
     }
     debugLogger.error('ANTHROPIC_FALLBACK_ERROR', errorDetails)
     throw new Error(
@@ -1335,7 +1340,7 @@ async function queryAnthropicNative(
         name: tool.name,
         description: tool.description,
         input_schema: zodToJsonSchema(tool.inputSchema),
-      }) as Anthropic.Beta.Tools.Tool,
+      }) as unknown as Anthropic.Beta.Messages.BetaTool,
   )
 
   const anthropicMessages = addCacheBreakpoints(messages)
@@ -1368,7 +1373,7 @@ async function queryAnthropicNative(
       }
 
       if (maxThinkingTokens > 0) {
-        params.extra_headers = {
+        ;(params as any).extra_headers = {
           'anthropic-beta': 'max-tokens-3-5-sonnet-2024-07-15',
         }
         ;(params as any).thinking = { max_tokens: maxThinkingTokens }
@@ -1403,7 +1408,7 @@ async function queryAnthropicNative(
           signal: signal // ← CRITICAL: Connect the AbortSignal to API call
         })
 
-        let finalResponse: Anthropic.Beta.Messages.Message | null = null
+        let finalResponse: any | null = null
         let messageStartEvent: any = null
         const contentBlocks: any[] = []
         let usage: any = null
@@ -1525,7 +1530,6 @@ async function queryAnthropicNative(
       },
       type: 'assistant',
       uuid: nanoid() as UUID,
-      ttftMs,
       durationMs,
       costUSD: 0, // Will be calculated below
     }
@@ -1552,7 +1556,6 @@ async function queryAnthropicNative(
         end: Date.now(),
       },
       apiFormat: 'anthropic',
-      modelConfig: getModelConfigForDebug(model),
     })
 
     // Calculate cost using native Anthropic usage data
@@ -1571,18 +1574,18 @@ async function queryAnthropicNative(
         (getModelInputTokenCostUSD(model) * 0.1) // Cache reads are 10% of input cost
 
     assistantMessage.costUSD = costUSD
-    addToTotalCost(costUSD)
+    addToTotalCost(costUSD, durationMs)
 
     logEvent('api_response_anthropic_native', {
       model,
-      input_tokens: inputTokens,
-      output_tokens: outputTokens,
-      cache_creation_input_tokens: cacheCreationInputTokens,
-      cache_read_input_tokens: cacheReadInputTokens,
-      cost_usd: costUSD,
-      duration_ms: durationMs,
-      ttft_ms: ttftMs,
-      attempt_number: attemptNumber,
+      input_tokens: String(inputTokens),
+      output_tokens: String(outputTokens),
+      cache_creation_input_tokens: String(cacheCreationInputTokens),
+      cache_read_input_tokens: String(cacheReadInputTokens),
+      cost_usd: String(costUSD),
+      duration_ms: String(durationMs),
+      ttft_ms: String(ttftMs),
+      attempt_number: String(attemptNumber),
     })
 
     return assistantMessage
@@ -1659,7 +1662,7 @@ async function queryOpenAI(
     modelProfileBaseURL: modelProfile?.baseURL,
     modelProfileApiKeyExists: !!modelProfile?.apiKey,
     optionsModel: options?.model,
-    requestId: currentRequest?.id,
+    requestId: getCurrentRequest()?.id,
   })
 
   if (modelProfile) {
@@ -1739,11 +1742,17 @@ async function queryOpenAI(
     response = await withRetry(async attempt => {
       attemptNumber = attempt
       start = Date.now()
+      // 🔥 GPT-5 Enhanced Parameter Construction
+      const maxTokens = getMaxTokensFromProfile(modelProfile)
+      const isGPT5 = isGPT5Model(model)
+      
       const opts: OpenAI.ChatCompletionCreateParams = {
         model,
-        max_tokens: getMaxTokensFromProfile(modelProfile),
+        // 🔧 Use correct parameter name based on model type
+        ...(isGPT5 ? { max_completion_tokens: maxTokens } : { max_tokens: maxTokens }),
         messages: [...openaiSystem, ...openaiMessages],
-        temperature: MAIN_QUERY_TEMPERATURE,
+        // 🔧 GPT-5 temperature constraint: only 1 or undefined
+        temperature: isGPT5 ? 1 : MAIN_QUERY_TEMPERATURE,
       }
       if (config.stream) {
         ;(opts as OpenAI.ChatCompletionCreateParams).stream = true
@@ -1772,10 +1781,14 @@ async function queryOpenAI(
           provider: modelProfile.provider,
           baseURL: modelProfile.baseURL,
           apiKeyExists: !!modelProfile.apiKey,
-          requestId: currentRequest?.id,
+          requestId: getCurrentRequest()?.id,
         })
 
-        const s = await getCompletionWithProfile(modelProfile, opts, 0, 10, signal) // 🔧 CRITICAL FIX: Pass AbortSignal to OpenAI calls
+        // Use enhanced GPT-5 function for GPT-5 models, fallback to regular function for others
+        const completionFunction = isGPT5Model(modelProfile.modelName) 
+          ? getGPT5CompletionWithProfile 
+          : getCompletionWithProfile
+        const s = await completionFunction(modelProfile, opts, 0, 10, signal) // 🔧 CRITICAL FIX: Pass AbortSignal to OpenAI calls
         let finalResponse
         if (opts.stream) {
           finalResponse = await handleMessageStream(s as ChatCompletionStream, signal) // 🔧 Pass AbortSignal to stream handler
@@ -1793,7 +1806,7 @@ async function queryOpenAI(
           modelNameExists: !!modelProfile?.modelName,
           fallbackModel: 'main',
           actualModel: model,
-          requestId: currentRequest?.id,
+          requestId: getCurrentRequest()?.id,
         })
 
         // 🚨 FALLBACK: 没有有效的ModelProfile时，应该抛出错误而不是使用遗留系统
@@ -1802,7 +1815,7 @@ async function queryOpenAI(
           modelProfileId: modelProfile?.modelName,
           modelNameExists: !!modelProfile?.modelName,
           requestedModel: model,
-          requestId: currentRequest?.id,
+          requestId: getCurrentRequest()?.id,
         }
         debugLogger.error('NO_VALID_MODEL_PROFILE', errorDetails)
         throw new Error(
@@ -1847,7 +1860,6 @@ async function queryOpenAI(
       end: Date.now(),
     },
     apiFormat: 'openai',
-    modelConfig: getModelConfigForDebug(model),
   })
 
   return {
@@ -1943,5 +1955,5 @@ export async function queryQuick({
     },
   ] as (UserMessage | AssistantMessage)[]
 
-  return queryModel('quick', messages, systemPrompt, 0, [], signal)
+  return queryModel('quick', messages, systemPrompt, signal)
 }

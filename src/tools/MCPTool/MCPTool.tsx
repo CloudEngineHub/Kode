@@ -52,7 +52,8 @@ export const MCPTool = {
   renderToolUseRejectedMessage() {
     return <FallbackToolUseRejectedMessage />
   },
-  renderToolResultMessage(output, { verbose }) {
+  renderToolResultMessage(output) {
+    const verbose = false // Set default value for verbose
     if (Array.isArray(output)) {
       return (
         <Box flexDirection="column">

@@ -2,7 +2,7 @@ import React from 'react'
 import { Box, Text } from 'ink'
 import { getGlobalConfig, saveGlobalConfig } from '../utils/config'
 import { getTheme } from '../utils/theme'
-import { Select } from '@inkjs/ui'
+import { Select } from './CustomSelect/select'
 import { useExitOnCtrlCD } from '../hooks/useExitOnCtrlCD'
 import chalk from 'chalk'
 

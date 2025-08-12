@@ -1,7 +1,7 @@
 import React from 'react'
 import { Box, Newline, Text, useInput } from 'ink'
 import { getTheme } from '../utils/theme'
-import { Select } from '@inkjs/ui'
+import { Select } from './CustomSelect/select'
 import { render } from 'ink'
 import { writeFileSync } from 'fs'
 import { ConfigParseError } from '../utils/errors'

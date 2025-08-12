@@ -1,6 +1,6 @@
 import React from 'react'
 import { Box, Text } from 'ink'
-import { Select } from '@inkjs/ui'
+import { Select } from './CustomSelect/select'
 import type { LogOption } from '../types/logs'
 import { getTheme } from '../utils/theme'
 import { useTerminalSize } from '../hooks/useTerminalSize'

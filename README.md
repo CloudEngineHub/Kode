@@ -239,6 +239,12 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 ISC License - see [LICENSE](LICENSE) for details.
 
+## Thanks
+
+- Some code from @dnakov's anonkode
+- Some UI learned from gemini-cli  
+- Some system design learned from claude code
+
 ## Support
 
 - 📚 [Documentation](docs/)

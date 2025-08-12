@@ -19,25 +19,25 @@ import { TodoWriteTool } from './tools/TodoWriteTool/TodoWriteTool'
 import { getMCPTools } from './services/mcpClient'
 import { memoize } from 'lodash-es'
 
-const ANT_ONLY_TOOLS = [MemoryReadTool, MemoryWriteTool]
+const ANT_ONLY_TOOLS = [MemoryReadTool as unknown as Tool, MemoryWriteTool as unknown as Tool]
 
 // Function to avoid circular dependencies that break bun
 export const getAllTools = (): Tool[] => {
   return [
-    TaskTool,
-    AskExpertModelTool,
-    BashTool,
-    GlobTool,
-    GrepTool,
-    LSTool,
-    FileReadTool,
-    FileEditTool,
-    MultiEditTool,
-    FileWriteTool,
-    NotebookReadTool,
-    NotebookEditTool,
-    ThinkTool,
-    TodoWriteTool,
+    TaskTool as unknown as Tool,
+    AskExpertModelTool as unknown as Tool,
+    BashTool as unknown as Tool,
+    GlobTool as unknown as Tool,
+    GrepTool as unknown as Tool,
+    LSTool as unknown as Tool,
+    FileReadTool as unknown as Tool,
+    FileEditTool as unknown as Tool,
+    MultiEditTool as unknown as Tool,
+    FileWriteTool as unknown as Tool,
+    NotebookReadTool as unknown as Tool,
+    NotebookEditTool as unknown as Tool,
+    ThinkTool as unknown as Tool,
+    TodoWriteTool as unknown as Tool,
     ...ANT_ONLY_TOOLS,
   ]
 }
@@ -48,7 +48,7 @@ export const getTools = memoize(
 
     // Only include Architect tool if enabled via config or CLI flag
     if (enableArchitect) {
-      tools.push(ArchitectTool)
+      tools.push(ArchitectTool as unknown as Tool)
     }
 
     const isEnabled = await Promise.all(tools.map(tool => tool.isEnabled()))

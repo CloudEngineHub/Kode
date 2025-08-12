@@ -1,6 +1,6 @@
 import { Box, Text } from 'ink'
 import React, { useMemo } from 'react'
-import { Select } from '@inkjs/ui'
+import { Select } from '../CustomSelect/select'
 import { getTheme } from '../../utils/theme'
 import {
   PermissionRequestTitle,
@@ -34,9 +34,7 @@ export function FallbackPermissionRequest({
   const theme = getTheme()
 
   // TODO: Avoid these special cases
-  const originalUserFacingName = toolUseConfirm.tool.userFacingName(
-    toolUseConfirm.input as never,
-  )
+  const originalUserFacingName = toolUseConfirm.tool.userFacingName()
   const userFacingName = originalUserFacingName.endsWith(' (MCP)')
     ? originalUserFacingName.slice(0, -6)
     : originalUserFacingName

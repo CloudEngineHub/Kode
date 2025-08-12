@@ -51,8 +51,8 @@ export function toolUseConfirmGetPrefix(
 ): string | null {
   return (
     (toolUseConfirm.commandPrefix &&
-      !toolUseConfirm.commandPrefix.commandInjectionDetected &&
-      toolUseConfirm.commandPrefix.commandPrefix) ||
+      !(toolUseConfirm.commandPrefix as any).commandInjectionDetected &&
+      (toolUseConfirm.commandPrefix as any).commandPrefix) ||
     null
   )
 }
@@ -84,9 +84,7 @@ export function PermissionRequest({
     }
   })
 
-  const toolName = toolUseConfirm.tool.userFacingName(
-    toolUseConfirm.input as never,
-  )
+  const toolName = toolUseConfirm.tool.userFacingName?.() || 'Tool'
   useNotifyAfterTimeout(
     `${PRODUCT_NAME} needs your permission to use ${toolName}`,
   )

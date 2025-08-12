@@ -48,13 +48,15 @@ import TextInput from './TextInput'
 import OpenAI from 'openai'
 import chalk from 'chalk'
 import { fetchAnthropicModels, verifyApiKey } from '../services/claude'
-import { fetchCustomModels } from '../services/openai'
+import { fetchCustomModels, getModelFeatures } from '../services/openai'
+import { testGPT5Connection, validateGPT5Config } from '../services/gpt5ConnectionTest'
 type Props = {
   onDone: () => void
   abortController?: AbortController
   targetPointer?: ModelPointerType // NEW: Target pointer for configuration
   isOnboarding?: boolean // NEW: Whether this is first-time setup
   onCancel?: () => void // NEW: Cancel callback (different from onDone)
+  skipModelType?: boolean // NEW: Skip model type selection
 }
 
 type ModelInfo = {
@@ -154,6 +156,7 @@ export function ModelSelector({
   targetPointer,
   isOnboarding = false,
   onCancel,
+  skipModelType = false,
 }: Props): React.ReactNode {
   const config = getGlobalConfig()
   const theme = getTheme()
@@ -1252,7 +1255,7 @@ export function ModelSelector({
       // Transform the response into our ModelInfo format
       const fetchedModels = []
       for (const model of response.data) {
-        const modelName = model.modelName || model.id || model.name || model.model || 'unknown'
+        const modelName = (model as any).modelName || (model as any).id || (model as any).name || (model as any).model || 'unknown'
         const modelInfo = models[selectedProvider as keyof typeof models]?.find(
           m => m.model === modelName,
         )
@@ -1477,7 +1480,42 @@ export function ModelSelector({
       ].includes(selectedProvider)
 
       if (isOpenAICompatible) {
-        // Define endpoints to try in order of preference
+        // 🔥 Use specialized GPT-5 connection test for GPT-5 models
+        const isGPT5 = selectedModel?.toLowerCase().includes('gpt-5')
+        
+        if (isGPT5) {
+          console.log(`🚀 Using specialized GPT-5 connection test for model: ${selectedModel}`)
+          
+          // Validate configuration first
+          const configValidation = validateGPT5Config({
+            model: selectedModel,
+            apiKey: apiKey,
+            baseURL: testBaseURL,
+            maxTokens: parseInt(maxTokens) || 8192,
+            provider: selectedProvider,
+          })
+          
+          if (!configValidation.valid) {
+            return {
+              success: false,
+              message: '❌ GPT-5 configuration validation failed',
+              details: configValidation.errors.join('\n'),
+            }
+          }
+          
+          // Use specialized GPT-5 test service
+          const gpt5Result = await testGPT5Connection({
+            model: selectedModel,
+            apiKey: apiKey,
+            baseURL: testBaseURL,
+            maxTokens: parseInt(maxTokens) || 8192,
+            provider: selectedProvider,
+          })
+          
+          return gpt5Result
+        }
+        
+        // For non-GPT-5 OpenAI-compatible models, use existing logic
         const endpointsToTry = []
 
         if (selectedProvider === 'minimax') {
@@ -1503,6 +1541,7 @@ export function ModelSelector({
               endpoint.path,
               endpoint.name,
             )
+            
             if (testResult.success) {
               return testResult
             }
@@ -1552,7 +1591,7 @@ export function ModelSelector({
     const testURL = `${baseURL.replace(/\/+$/, '')}${endpointPath}`
 
     // Create a test message that expects a specific response
-    const testPayload = {
+    const testPayload: any = {
       model: selectedModel,
       messages: [
         {
@@ -1564,6 +1603,24 @@ export function ModelSelector({
       max_tokens: Math.max(parseInt(maxTokens) || 8192, 8192), // Ensure minimum 8192 tokens for connection test
       temperature: 0,
       stream: false,
+    }
+
+    // GPT-5 parameter compatibility fix
+    if (selectedModel && selectedModel.toLowerCase().includes('gpt-5')) {
+      console.log(`Applying GPT-5 parameter fix for model: ${selectedModel}`)
+      
+      // GPT-5 requires max_completion_tokens instead of max_tokens
+      if (testPayload.max_tokens) {
+        testPayload.max_completion_tokens = testPayload.max_tokens
+        delete testPayload.max_tokens
+        console.log(`Transformed max_tokens → max_completion_tokens: ${testPayload.max_completion_tokens}`)
+      }
+      
+      // GPT-5 temperature handling - ensure it's 1 or undefined
+      if (testPayload.temperature !== undefined && testPayload.temperature !== 1) {
+        console.log(`Adjusting temperature from ${testPayload.temperature} to 1 for GPT-5`)
+        testPayload.temperature = 1
+      }
     }
 
     const headers: Record<string, string> = {
@@ -1634,6 +1691,123 @@ export function ModelSelector({
           message: `❌ ${endpointName} failed (${response.status})`,
           endpoint: endpointPath,
           details: `Error: ${errorMessage}`,
+        }
+      }
+    } catch (error) {
+      return {
+        success: false,
+        message: `❌ ${endpointName} connection failed`,
+        endpoint: endpointPath,
+        details: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+
+  async function testResponsesEndpoint(
+    baseURL: string,
+    endpointPath: string,
+    endpointName: string,
+  ): Promise<{
+    success: boolean
+    message: string
+    endpoint?: string
+    details?: string
+  }> {
+    const testURL = `${baseURL.replace(/\/+$/, '')}${endpointPath}`
+
+    // 🔧 Enhanced GPT-5 Responses API test payload
+    const testPayload: any = {
+      model: selectedModel,
+      input: [
+        {
+          role: 'user',
+          content:
+            'Please respond with exactly "YES" (in capital letters) to confirm this connection is working.',
+        },
+      ],
+      max_completion_tokens: Math.max(parseInt(maxTokens) || 8192, 8192),
+      temperature: 1, // GPT-5 only supports temperature=1
+      // 🚀 Add reasoning configuration for better GPT-5 performance
+      reasoning: {
+        effort: 'low', // Fast response for connection test
+      },
+    }
+
+    console.log(`🔧 Testing GPT-5 Responses API for model: ${selectedModel}`)
+    console.log(`🔧 Test URL: ${testURL}`)
+    console.log(`🔧 Test payload:`, JSON.stringify(testPayload, null, 2))
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    }
+
+    try {
+      const response = await fetch(testURL, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(testPayload),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log(
+          '[DEBUG] Responses API connection test response:',
+          JSON.stringify(data, null, 2),
+        )
+
+        // Extract content from Responses API format
+        let responseContent = ''
+        
+        if (data.output_text) {
+          responseContent = data.output_text
+        } else if (data.output) {
+          responseContent = typeof data.output === 'string' ? data.output : data.output.text || ''
+        }
+
+        console.log('[DEBUG] Extracted response content:', responseContent)
+
+        // Check if response contains "YES" (case insensitive)
+        const containsYes = responseContent.toLowerCase().includes('yes')
+
+        if (containsYes) {
+          return {
+            success: true,
+            message: `✅ Connection test passed with ${endpointName}`,
+            endpoint: endpointPath,
+            details: `GPT-5 responded correctly via Responses API: "${responseContent.trim()}"`,
+          }
+        } else {
+          return {
+            success: false,
+            message: `⚠️ ${endpointName} connected but model response unexpected`,
+            endpoint: endpointPath,
+            details: `Expected "YES" but got: "${responseContent.trim() || '(empty response)'}"`,
+          }
+        }
+      } else {
+        // 🔧 Enhanced error handling with detailed debugging
+        const errorData = await response.json().catch(() => null)
+        const errorMessage =
+          errorData?.error?.message || errorData?.message || response.statusText
+        
+        console.log(`🚨 GPT-5 Responses API Error (${response.status}):`, errorData)
+        
+        // 🔧 Provide specific guidance for common GPT-5 errors
+        let details = `Responses API Error: ${errorMessage}`
+        if (response.status === 400 && errorMessage.includes('max_tokens')) {
+          details += '\n🔧 Note: This appears to be a parameter compatibility issue. The fallback to Chat Completions should handle this.'
+        } else if (response.status === 404) {
+          details += '\n🔧 Note: Responses API endpoint may not be available for this model or provider.'
+        } else if (response.status === 401) {
+          details += '\n🔧 Note: API key authentication failed.'
+        }
+        
+        return {
+          success: false,
+          message: `❌ ${endpointName} failed (${response.status})`,
+          endpoint: endpointPath,
+          details: details,
         }
       }
     } catch (error) {
@@ -3181,28 +3355,32 @@ export function ModelSelector({
 
   // Render Provider Selection Screen
   return (
-    <ScreenContainer title="Provider Selection" exitState={exitState}>
-      <Box flexDirection="column" gap={1}>
-        <Text bold>
-          Select your preferred AI provider for this model profile:
-        </Text>
-        <Box flexDirection="column" width={70}>
-          <Text color={theme.secondaryText}>
-            Choose the provider you want to use for this model profile.
-            <Newline />
-            This will determine which models are available to you.
+    <ScreenContainer 
+      title="Provider Selection" 
+      exitState={exitState}
+      children={
+        <Box flexDirection="column" gap={1}>
+          <Text bold>
+            Select your preferred AI provider for this model profile:
           </Text>
-        </Box>
+          <Box flexDirection="column" width={70}>
+            <Text color={theme.secondaryText}>
+              Choose the provider you want to use for this model profile.
+              <Newline />
+              This will determine which models are available to you.
+            </Text>
+          </Box>
 
-        <Select options={providerOptions} onChange={handleProviderSelection} />
+          <Select options={providerOptions} onChange={handleProviderSelection} />
 
-        <Box marginTop={1}>
-          <Text dimColor>
-            You can change this later by running{' '}
-            <Text color={theme.suggestion}>/model</Text> again
-          </Text>
+          <Box marginTop={1}>
+            <Text dimColor>
+              You can change this later by running{' '}
+              <Text color={theme.suggestion}>/model</Text> again
+            </Text>
+          </Box>
         </Box>
-      </Box>
-    </ScreenContainer>
+      }
+    />
   )
 }
