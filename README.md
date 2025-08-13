@@ -61,7 +61,7 @@ git clone  https://github.com/shareAI-lab/Kode.git
 cd Kode
 
 # Build the image locally
-docker build -t Kode .
+docker build --no-cache -t Kode .
 
 # Run in your project directory
 cd your-project

@@ -50,21 +50,8 @@ WORKDIR /workspace
 # Create the entrypoint script directly in the container
 RUN cat << 'EOF' > /entrypoint.sh
 #!/bin/sh
-
-# Generate random workspace directory name with timestamp and random suffix
-WORKSPACE_DIR="/workspace_$(date +%s)_$(head /dev/urandom | tr -dc a-z0-9 | head -c 8)"
-
-# Create the workspace directory
-mkdir -p "$WORKSPACE_DIR"
-
-# Mount bind the random workspace to the default /workspace directory
-mount --bind "$WORKSPACE_DIR" /workspace
-
  
-# Change to the workspace directory
-cd "$WORKSPACE_DIR" || exit 1
-
-/root/.bun/bin/bun /app/cli.js "$@"
+/root/.bun/bin/bun /app/cli.js -c /workspace "$@"
 EOF
 
 RUN chmod +x /entrypoint.sh
