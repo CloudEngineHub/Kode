@@ -5,7 +5,7 @@ import * as React from 'react'
 import { type Message } from '../query'
 import { processUserInput } from '../utils/messages'
 import { useArrowKeyHistory } from '../hooks/useArrowKeyHistory'
-import { useSlashCommandTypeahead } from '../hooks/useSlashCommandTypeahead'
+import { useUnifiedCompletion } from '../hooks/useUnifiedCompletion'
 import { addToHistory } from '../history'
 import TextInput from './TextInput'
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
@@ -165,17 +165,19 @@ function PromptInput({
     [commands],
   )
 
+  // Unified completion system - one hook to rule them all (now with terminal behavior)
   const {
     suggestions,
-    selectedSuggestion,
-    updateSuggestions,
-    clearSuggestions,
-  } = useSlashCommandTypeahead({
-    commands,
+    selectedIndex,
+    isActive: completionActive,
+    emptyDirMessage,
+  } = useUnifiedCompletion({
+    input,
+    cursorOffset,
     onInputChange,
-    onSubmit,
     setCursorOffset,
-    currentInput: input,
+    commands,
+    onSubmit,
   })
 
   const onChange = useCallback(
@@ -188,10 +190,9 @@ function PromptInput({
         onModeChange('koding')
         return
       }
-      updateSuggestions(value)
       onInputChange(value)
     },
-    [onModeChange, onInputChange, updateSuggestions],
+    [onModeChange, onInputChange],
   )
 
   // Handle Tab key model switching with simple context check
@@ -237,15 +238,15 @@ function PromptInput({
     input,
   )
 
-  // Only use history navigation when there are 0 or 1 slash command suggestions
+  // Only use history navigation when there are no suggestions
   const handleHistoryUp = () => {
-    if (suggestions.length <= 1) {
+    if (!completionActive) {
       onHistoryUp()
     }
   }
 
   const handleHistoryDown = () => {
-    if (suggestions.length <= 1) {
+    if (!completionActive) {
       onHistoryDown()
     }
   }
@@ -353,7 +354,12 @@ function PromptInput({
     if (isLoading) {
       return
     }
-    if (suggestions.length > 0 && !isSubmittingSlashCommand) {
+    
+    // Handle Enter key when completions are active
+    // If there are suggestions showing, Enter should complete the selection, not send the message
+    if (suggestions.length > 0 && completionActive) {
+      // The completion is handled by useUnifiedCompletion hook
+      // Just return to prevent message sending
       return
     }
 
@@ -372,7 +378,7 @@ function PromptInput({
     }
     onInputChange('')
     onModeChange('prompt')
-    clearSuggestions()
+    // Suggestions are now handled by unified completion
     setPastedImage(null)
     setPastedText(null)
     onSubmitCountChange(_ => _ + 1)
@@ -460,12 +466,6 @@ function PromptInput({
     // Shift+Tab for mode cycling (matching original Claude Code implementation)
     if (key.shift && key.tab) {
       cycleMode()
-      return true // Explicitly handled
-    }
-
-    // Tab key for model switching (simple and non-conflicting)
-    if (key.tab && !key.shift) {
-      handleQuickModelSwitch()
       return true // Explicitly handled
     }
 
@@ -558,14 +558,22 @@ function PromptInput({
             onImagePaste={onImagePaste}
             columns={textInputColumns}
             isDimmed={isDisabled || isLoading}
-            disableCursorMovementForUpDownKeys={suggestions.length > 0}
+            disableCursorMovementForUpDownKeys={completionActive}
             cursorOffset={cursorOffset}
             onChangeCursorOffset={setCursorOffset}
             onPaste={onTextPaste}
+            onSpecialKey={(input, key) => {
+              // Handle Shift+M for model switching
+              if (key.shift && (input === 'M' || input === 'm')) {
+                handleQuickModelSwitch()
+                return true // Prevent the 'M' from being typed
+              }
+              return false
+            }}
           />
         </Box>
       </Box>
-      {suggestions.length === 0 && (
+      {!completionActive && suggestions.length === 0 && (
         <Box
           flexDirection="row"
           justifyContent="space-between"
@@ -594,7 +602,7 @@ function PromptInput({
                   · # for KODE.md
                 </Text>
                 <Text dimColor>
-                  · / for commands · tab to switch model · esc to undo
+                  · / for commands · shift+m to switch model · esc to undo
                 </Text>
               </>
             )}
@@ -624,6 +632,7 @@ function PromptInput({
           } />
         </Box>
       )}
+      {/* Unified completion suggestions */}
       {suggestions.length > 0 && (
         <Box
           flexDirection="row"
@@ -632,56 +641,104 @@ function PromptInput({
           paddingY={0}
         >
           <Box flexDirection="column">
-            {suggestions.map((suggestion, index) => {
-              const command = commands.find(
-                cmd => cmd.userFacingName() === suggestion.replace('/', ''),
-              )
+            {(() => {
+              // 微妙分割线方案
+              const commands = suggestions.filter(s => s.type === 'command')
+              const agents = suggestions.filter(s => s.type === 'agent')
+              const files = suggestions.filter(s => s.type === 'file')
+              
               return (
-                <Box
-                  key={suggestion}
-                  flexDirection={columns < 80 ? 'column' : 'row'}
-                >
-                  <Box width={columns < 80 ? undefined : commandWidth}>
-                    <Text
-                      color={
-                        index === selectedSuggestion
-                          ? theme.suggestion
-                          : undefined
-                      }
-                      dimColor={index !== selectedSuggestion}
-                    >
-                      /{suggestion}
-                      {command?.aliases && command.aliases.length > 0 && (
-                        <Text dimColor> ({command.aliases.join(', ')})</Text>
-                      )}
-                    </Text>
-                  </Box>
-                  {command && (
-                    <Box
-                      width={columns - (columns < 80 ? 4 : commandWidth + 4)}
-                      paddingLeft={columns < 80 ? 4 : 0}
-                    >
-                      <Text
-                        color={
-                          index === selectedSuggestion
-                            ? theme.suggestion
-                            : undefined
-                        }
-                        dimColor={index !== selectedSuggestion}
-                        wrap="wrap"
-                      >
-                        <Text dimColor={index !== selectedSuggestion}>
-                          {command.description}
-                          {command.type === 'prompt' && command.argNames?.length
-                            ? ` (arguments: ${command.argNames.join(', ')})`
-                            : null}
+                <>
+                  {/* Command区域 - Slash commands */}
+                  {commands.map((suggestion, index) => {
+                    const globalIndex = suggestions.findIndex(s => s.value === suggestion.value)
+                    const isSelected = globalIndex === selectedIndex
+                    
+                    return (
+                      <Box key={`command-${suggestion.value}`} flexDirection="row">
+                        <Text
+                          color={isSelected ? theme.suggestion : undefined}
+                          dimColor={!isSelected}
+                        >
+                          {isSelected ? '◆ ' : '  '}
+                          {suggestion.displayValue}
                         </Text>
-                      </Text>
+                      </Box>
+                    )
+                  })}
+                  
+                  {/* Agent区域 - 支持配置文件颜色 */}
+                  {agents.map((suggestion, index) => {
+                    const globalIndex = suggestions.findIndex(s => s.value === suggestion.value)
+                    const isSelected = globalIndex === selectedIndex
+                    
+                    // 获取agent配置的颜色
+                    const agentColor = suggestion.metadata?.color
+                    const displayColor = isSelected 
+                      ? theme.suggestion 
+                      : agentColor 
+                        ? agentColor 
+                        : undefined
+                    
+                    return (
+                      <Box key={`agent-${suggestion.value}`} flexDirection="row">
+                        <Text
+                          color={displayColor}
+                          dimColor={!isSelected && !agentColor}
+                        >
+                          {isSelected ? '◆ ' : '  '}
+                          {suggestion.displayValue}
+                        </Text>
+                      </Box>
+                    )
+                  })}
+                  
+                  {/* CYBER分割线 */}
+                  {agents.length > 0 && files.length > 0 && (
+                    <Box marginY={1}>
+                      <Text dimColor>{'──[[ RELATED FILES ]]' + '─'.repeat(45)}</Text>
                     </Box>
                   )}
-                </Box>
+                  
+                  {/* File区域 */}
+                  {files.map((suggestion, index) => {
+                    const globalIndex = suggestions.findIndex(s => s.value === suggestion.value)
+                    const isSelected = globalIndex === selectedIndex
+                    
+                    return (
+                      <Box key={`file-${suggestion.value}`} flexDirection="row">
+                        <Text
+                          color={isSelected ? theme.suggestion : undefined}
+                          dimColor={!isSelected}
+                        >
+                          {isSelected ? '◆ ' : '  '}
+                          {suggestion.displayValue}
+                        </Text>
+                      </Box>
+                    )
+                  })}
+                </>
               )
-            })}
+            })()}
+            
+            {/* 简洁操作提示框 */}
+            <Box marginTop={1} paddingX={3} borderStyle="round" borderColor="gray">
+              <Text dimColor={!emptyDirMessage} color={emptyDirMessage ? "yellow" : undefined}>
+                {emptyDirMessage || (() => {
+                  const selected = suggestions[selectedIndex]
+                  if (!selected) {
+                    return '↑↓ navigate • → accept • Tab cycle • Esc close'
+                  }
+                  if (selected?.value.endsWith('/')) {
+                    return '→ enter directory • ↑↓ navigate • Tab cycle • Esc close'
+                  } else if (selected?.type === 'agent') {
+                    return '→ select agent • ↑↓ navigate • Tab cycle • Esc close'
+                  } else {
+                    return '→ insert reference • ↑↓ navigate • Tab cycle • Esc close'
+                  }
+                })()}
+              </Text>
+            </Box>
           </Box>
           <SentryErrorBoundary children={
             <Box justifyContent="flex-end" gap={1}>

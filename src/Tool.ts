@@ -1,6 +1,9 @@
 import { z } from 'zod'
 import * as React from 'react'
 
+// DEPRECATED: Use domain/tool/Tool.interface.ts for new implementations
+// This interface will be maintained for compatibility during transition
+
 export type SetToolJSXFn = (jsx: {
   jsx: React.ReactNode | null
   shouldHidePromptInput: boolean

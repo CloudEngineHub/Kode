@@ -77,6 +77,7 @@ export async function executeBashCommands(content: string): Promise<string> {
  */
 export async function resolveFileReferences(content: string): Promise<string> {
   // Match patterns like @src/file.js or @path/to/file.txt
+  // But explicitly exclude @agent-xxx patterns
   const fileRefRegex = /@([a-zA-Z0-9/._-]+(?:\.[a-zA-Z0-9]+)?)/g
   const matches = [...content.matchAll(fileRefRegex)]
 
@@ -89,6 +90,11 @@ export async function resolveFileReferences(content: string): Promise<string> {
   for (const match of matches) {
     const fullMatch = match[0]
     const filePath = match[1]
+
+    // Skip agent mentions - these are handled by the mention processor
+    if (filePath.startsWith('agent-')) {
+      continue
+    }
 
     try {
       // Resolve relative to current working directory

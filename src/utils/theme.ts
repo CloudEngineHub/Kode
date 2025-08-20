@@ -13,6 +13,9 @@ export interface Theme {
   success: string
   error: string
   warning: string
+  // UI colors
+  primary: string
+  secondary: string
   diff: {
     added: string
     removed: string
@@ -33,6 +36,8 @@ const lightTheme: Theme = {
   success: '#2c7a39',
   error: '#ab2b3f',
   warning: '#966c1e',
+  primary: '#000',
+  secondary: '#666',
   diff: {
     added: '#69db7c',
     removed: '#ffa8b4',
@@ -53,6 +58,8 @@ const lightDaltonizedTheme: Theme = {
   success: '#006699', // Blue instead of green
   error: '#cc0000', // Pure red for better distinction
   warning: '#ff9900', // Orange adjusted for deuteranopia
+  primary: '#000',
+  secondary: '#666',
   diff: {
     added: '#99ccff', // Light blue instead of green
     removed: '#ffcccc', // Light red for better contrast
@@ -73,6 +80,8 @@ const darkTheme: Theme = {
   success: '#4eba65',
   error: '#ff6b80',
   warning: '#ffc107',
+  primary: '#fff',
+  secondary: '#999',
   diff: {
     added: '#225c2b',
     removed: '#7a2936',
@@ -93,6 +102,8 @@ const darkDaltonizedTheme: Theme = {
   success: '#3399ff', // Bright blue instead of green
   error: '#ff6666', // Bright red for better visibility
   warning: '#ffcc00', // Yellow-orange for deuteranopia
+  primary: '#fff',
+  secondary: '#999',
   diff: {
     added: '#004466', // Dark blue instead of green
     removed: '#660000', // Dark red for better contrast
