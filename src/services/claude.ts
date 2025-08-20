@@ -77,7 +77,7 @@ function getModelConfigForDebug(model: string): {
   const config = getGlobalConfig()
   const modelManager = getModelManager()
 
-  // 🔧 Fix: Use ModelManager to get the actual current model profile
+
   const modelProfile = modelManager.getModel('main')
 
   let apiKeyStatus: 'configured' | 'missing' | 'invalid' = 'missing'
@@ -85,7 +85,7 @@ function getModelConfigForDebug(model: string): {
   let maxTokens: number | undefined
   let reasoningEffort: string | undefined
 
-  // 🔧 Fix: Use ModelProfile configuration exclusively
+
   if (modelProfile) {
     apiKeyStatus = modelProfile.apiKey ? 'configured' : 'missing'
     baseURL = modelProfile.baseURL
@@ -316,7 +316,7 @@ async function withRetry<T>(
       ) {
         throw error
       }
-      // 🔧 CRITICAL FIX: Check abort signal BEFORE showing retry message
+
       if (options.signal?.aborted) {
         throw new Error('Request cancelled by user')
       }
@@ -435,7 +435,7 @@ export async function verifyApiKey(
         'Content-Type': 'application/json',
       }
 
-      // 🔧 Fix: Proper URL construction for verification
+
       if (!baseURL) {
         console.warn(
           'No baseURL provided for non-Anthropic provider verification',
@@ -643,7 +643,7 @@ function messageReducer(
 }
 async function handleMessageStream(
   stream: ChatCompletionStream,
-  signal?: AbortSignal, // 🔧 Add AbortSignal support to stream handler
+  signal?: AbortSignal,
 ): Promise<OpenAI.ChatCompletion> {
   const streamStartTime = Date.now()
   let ttftMs: number | undefined
@@ -659,7 +659,7 @@ async function handleMessageStream(
   let id, model, created, object, usage
   try {
     for await (const chunk of stream) {
-      // 🔧 CRITICAL FIX: Check abort signal in OpenAI streaming loop
+
       if (signal?.aborted) {
         debugLogger.flow('OPENAI_STREAM_ABORTED', { 
           chunkCount,
@@ -1055,7 +1055,7 @@ export async function queryLLM(
     prependCLISysprompt: boolean
   },
 ): Promise<AssistantMessage> {
-  // 🔧 统一的模型解析：支持指针、model ID 和真实模型名称
+
   const modelManager = getModelManager()
   const modelResolution = modelManager.resolveModelWithInfo(options.model)
 
@@ -1195,7 +1195,7 @@ async function queryLLMWithPromptCaching(
   const config = getGlobalConfig()
   const modelManager = getModelManager()
 
-  // 🔧 Fix: 使用传入的ModelProfile，而不是硬编码的'main'指针
+
   const modelProfile = options.modelProfile || modelManager.getModel('main')
   let provider: string
 
@@ -1244,7 +1244,7 @@ async function queryAnthropicNative(
   const config = getGlobalConfig()
   const modelManager = getModelManager()
 
-  // 🔧 Fix: 使用传入的ModelProfile，而不是硬编码的'main'指针
+
   const modelProfile = options?.modelProfile || modelManager.getModel('main')
   let anthropic: Anthropic | AnthropicBedrock | AnthropicVertex
   let model: string
@@ -1334,13 +1334,16 @@ async function queryAnthropicNative(
     }),
   )
 
-  const toolSchemas = tools.map(
-    tool =>
+  const toolSchemas = await Promise.all(
+    tools.map(async tool =>
       ({
         name: tool.name,
-        description: tool.description,
+        description: typeof tool.description === 'function' 
+          ? await tool.description() 
+          : tool.description,
         input_schema: zodToJsonSchema(tool.inputSchema),
       }) as unknown as Anthropic.Beta.Messages.BetaTool,
+    )
   )
 
   const anthropicMessages = addCacheBreakpoints(messages)
@@ -1400,7 +1403,7 @@ async function queryAnthropicNative(
       })
 
       if (config.stream) {
-        // 🔧 CRITICAL FIX: Connect AbortSignal to Anthropic API call
+
         const stream = await anthropic.beta.messages.create({
           ...params,
           stream: true,
@@ -1416,7 +1419,7 @@ async function queryAnthropicNative(
         let stopSequence: string | null = null
 
         for await (const event of stream) {
-          // 🔧 CRITICAL FIX: Check abort signal in streaming loop
+
           if (signal.aborted) {
             debugLogger.flow('STREAM_ABORTED', { 
               eventType: event.type,
@@ -1490,12 +1493,12 @@ async function queryAnthropicNative(
           modelProfileName: modelProfile?.name,
         })
 
-        // 🔧 CRITICAL FIX: Connect AbortSignal to non-streaming API call
+
         return await anthropic.beta.messages.create(params, {
           signal: signal // ← CRITICAL: Connect the AbortSignal to API call
         })
       }
-    }, { signal }) // 🔧 CRITICAL FIX: Pass AbortSignal to withRetry
+    }, { signal })
 
     const ttftMs = start - Date.now()
     const durationMs = Date.now() - startIncludingRetries
@@ -1647,7 +1650,7 @@ async function queryOpenAI(
   const config = getGlobalConfig()
   const modelManager = getModelManager()
 
-  // 🔧 Fix: 使用传入的ModelProfile，而不是硬编码的'main'指针
+
   const modelProfile = options?.modelProfile || modelManager.getModel('main')
   let model: string
 
@@ -1748,10 +1751,10 @@ async function queryOpenAI(
       
       const opts: OpenAI.ChatCompletionCreateParams = {
         model,
-        // 🔧 Use correct parameter name based on model type
+
         ...(isGPT5 ? { max_completion_tokens: maxTokens } : { max_tokens: maxTokens }),
         messages: [...openaiSystem, ...openaiMessages],
-        // 🔧 GPT-5 temperature constraint: only 1 or undefined
+
         temperature: isGPT5 ? 1 : MAIN_QUERY_TEMPERATURE,
       }
       if (config.stream) {
@@ -1773,7 +1776,7 @@ async function queryOpenAI(
         opts.reasoning_effort = reasoningEffort
       }
 
-      // 🔧 Fix: 如果有ModelProfile配置，直接使用它 (更宽松的条件)
+
       if (modelProfile && modelProfile.modelName) {
         debugLogger.api('USING_MODEL_PROFILE_PATH', {
           modelProfileName: modelProfile.modelName,
@@ -1788,10 +1791,10 @@ async function queryOpenAI(
         const completionFunction = isGPT5Model(modelProfile.modelName) 
           ? getGPT5CompletionWithProfile 
           : getCompletionWithProfile
-        const s = await completionFunction(modelProfile, opts, 0, 10, signal) // 🔧 CRITICAL FIX: Pass AbortSignal to OpenAI calls
+        const s = await completionFunction(modelProfile, opts, 0, 10, signal)
         let finalResponse
         if (opts.stream) {
-          finalResponse = await handleMessageStream(s as ChatCompletionStream, signal) // 🔧 Pass AbortSignal to stream handler
+          finalResponse = await handleMessageStream(s as ChatCompletionStream, signal)
         } else {
           finalResponse = s
         }
@@ -1822,7 +1825,7 @@ async function queryOpenAI(
           `No valid ModelProfile available for model: ${model}. Please configure model through /model command. Debug: ${JSON.stringify(errorDetails)}`,
         )
       }
-    }, { signal }) // 🔧 CRITICAL FIX: Pass AbortSignal to withRetry
+    }, { signal })
   } catch (error) {
     logError(error)
     return getAssistantMessageFromError(error)

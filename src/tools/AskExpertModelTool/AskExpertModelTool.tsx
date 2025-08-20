@@ -45,29 +45,32 @@ export type Out = {
 export const AskExpertModelTool = {
   name: 'AskExpertModel',
   async description() {
-    return 'Consults external AI models for specialized assistance and second opinions'
+    const modelManager = getModelManager()
+    const currentModel = modelManager.getModelName('main') || 'current model'
+    return `Consult with external AI models (currently running as ${currentModel})`
   },
   async prompt() {
-    return `Consults external AI models for specialized assistance and second opinions. Maintains conversation history through persistent sessions.
+    return `Ask a question to a specific external commercial AI model API.
 
-When to use AskExpertModel tool:
-- User explicitly requests a specific model ("use GPT-5 to...", "ask Claude about...", "consult Kimi for...")
-- User seeks second opinions or specialized model expertise  
-- User requests comparison between different model responses
-- Complex questions requiring specific model capabilities
+CRITICAL: Only use this tool when ALL these conditions are met:
+1. User's request contains the word "model" OR mentions a commercial AI service name
+2. User explicitly asks to "ask", "consult", or "query" an AI model
+3. The model name is a known commercial AI (GPT, Claude, Kimi, Gemini)
 
-When NOT to use AskExpertModel tool:
-- General questions that don't specify a particular model
-- Tasks better suited for current model capabilities
-- Simple queries not requiring external expertise
+Examples that SHOULD trigger this tool:
+- "ask GPT-5 model about..."
+- "consult the Claude model"
+- "what does Kimi model think"
 
-Usage notes:
-1. Use exact model names as specified by the user
-2. Sessions persist conversation context - use "new" for fresh conversations or provide existing session ID  
-3. External models operate independently without access to current project context
-4. Tool validates model availability and provides alternatives if model not found
+Examples that should NOT trigger this tool:
+- "use dao-qi-harmony-designer agent" (no "model" keyword, uses "agent")
+- "dao-qi-harmony-designer evaluate" (hyphenated name, not a commercial model)
+- "code-writer implement feature" (not asking a model)
 
-IMPORTANT: Always use the precise model name the user requested. The tool will handle model availability and provide guidance for unavailable models.`
+The expert_model parameter ONLY accepts:
+- OpenAI: gpt-4, gpt-5, o1-preview
+- Anthropic: claude-3-5-sonnet, claude-3-opus  
+- Others: kimi, gemini-pro, mixtral`
   },
   isReadOnly() {
     return true
@@ -89,7 +92,7 @@ IMPORTANT: Always use the precise model name the user requested. The tool will h
     question,
     expert_model,
     chat_session_id,
-  }): Promise<ValidationResult> {
+  }, context?: any): Promise<ValidationResult> {
     if (!question.trim()) {
       return { result: false, message: 'Question cannot be empty' }
     }
@@ -104,6 +107,35 @@ IMPORTANT: Always use the precise model name the user requested. The tool will h
         message:
           'Chat session ID must be specified (use "new" for new session)',
       }
+    }
+
+    // Check if trying to consult the same model we're currently running
+    try {
+      const modelManager = getModelManager()
+      
+      // Get current model based on context
+      let currentModel: string
+      if (context?.agentId && context?.options?.model) {
+        // In subagent context (Task tool)
+        currentModel = context.options.model
+      } else {
+        // In main agent context or after model switch
+        currentModel = modelManager.getModelName('main') || ''
+      }
+      
+      // Normalize model names for comparison
+      const normalizedExpert = expert_model.toLowerCase().replace(/[^a-z0-9]/g, '')
+      const normalizedCurrent = currentModel.toLowerCase().replace(/[^a-z0-9]/g, '')
+      
+      if (normalizedExpert === normalizedCurrent) {
+        return {
+          result: false,
+          message: `You are already running as ${currentModel}. Consulting the same model would be redundant. Please choose a different model or handle the task directly.`
+        }
+      }
+    } catch (e) {
+      // If we can't determine current model, allow the request
+      debugLogger('AskExpertModel', 'Could not determine current model:', e)
     }
 
     // Validate that the model exists and is available
@@ -142,65 +174,72 @@ IMPORTANT: Always use the precise model name the user requested. The tool will h
   ) {
     if (!question || !expert_model) return null
     const isNewSession = chat_session_id === 'new'
-    const sessionDisplay = isNewSession ? 'new session' : chat_session_id
+    const sessionDisplay = isNewSession ? 'new session' : `session ${chat_session_id.substring(0, 5)}...`
+    const theme = getTheme()
 
     if (verbose) {
-      const theme = getTheme()
       return (
         <Box flexDirection="column">
-          <Text bold color={theme.text}>{expert_model}, {sessionDisplay}</Text>
-          <Box
-            borderStyle="single"
-            borderColor="green"
-            paddingX={1}
-            paddingY={0}
-            marginTop={1}
-          >
+          <Text bold color="yellow">{expert_model}</Text>
+          <Text color={theme.secondaryText}>{sessionDisplay}</Text>
+          <Box marginTop={1}>
             <Text color={theme.text}>
-              {applyMarkdown(question)}
+              {question.length > 300 ? question.substring(0, 300) + '...' : question}
             </Text>
           </Box>
         </Box>
       )
     }
-    return `${expert_model}, ${sessionDisplay}`
+    return (
+      <Box flexDirection="column">
+        <Text bold color="yellow">{expert_model} </Text>
+        <Text color={theme.secondaryText} dimColor>({sessionDisplay})</Text>
+      </Box>
+    )
   },
 
   renderToolResultMessage(content) {
-    const verbose = false // Set default value for verbose
+    const verbose = true // Show more content
     const theme = getTheme()
 
     if (typeof content === 'object' && content && 'expertAnswer' in content) {
       const expertResult = content as Out
-      const isError = expertResult.expertAnswer.startsWith('❌')
+      const isError = expertResult.expertAnswer.startsWith('Error') || expertResult.expertAnswer.includes('failed')
       const isInterrupted = expertResult.chatSessionId === 'interrupted'
 
       if (isInterrupted) {
         return (
           <Box flexDirection="row">
-            <Text>&nbsp;&nbsp;⎿ &nbsp;</Text>
-            <Text color={theme.error}>[Expert consultation interrupted]</Text>
+            <Text color={theme.secondaryText}>Consultation interrupted</Text>
           </Box>
         )
       }
 
       const answerText = verbose 
         ? expertResult.expertAnswer.trim()
-        : expertResult.expertAnswer.length > 120
-          ? expertResult.expertAnswer.substring(0, 120) + '...'
+        : expertResult.expertAnswer.length > 500
+          ? expertResult.expertAnswer.substring(0, 500) + '...'
           : expertResult.expertAnswer.trim()
+
+      if (isError) {
+        return (
+          <Box flexDirection="column">
+            <Text color="red">{answerText}</Text>
+          </Box>
+        )
+      }
 
       return (
         <Box flexDirection="column">
-          <Box
-            borderStyle="single" 
-            borderColor="green" 
-            paddingX={1} 
-            paddingY={0}
-            marginTop={1}
-          >
-            <Text color={isError ? theme.error : theme.text}>
-              {isError ? answerText : applyMarkdown(answerText)}
+          <Text bold color={theme.text}>Response from {expertResult.expertModelName}:</Text>
+          <Box marginTop={1}>
+            <Text color={theme.text}>
+              {applyMarkdown(answerText)}
+            </Text>
+          </Box>
+          <Box marginTop={1}>
+            <Text color={theme.secondaryText} dimColor>
+              Session: {expertResult.chatSessionId.substring(0, 8)}
             </Text>
           </Box>
         </Box>
@@ -209,8 +248,7 @@ IMPORTANT: Always use the precise model name the user requested. The tool will h
 
     return (
       <Box flexDirection="row">
-        <Text>&nbsp;&nbsp;⎿ &nbsp;</Text>
-        <Text color={theme.secondaryText}>Expert consultation completed</Text>
+        <Text color={theme.secondaryText}>Consultation completed</Text>
       </Box>
     )
   },
@@ -315,6 +353,14 @@ ${output.expertAnswer}`
         return yield* this.handleInterrupt()
       }
 
+      // Yield progress message to show we're connecting
+      yield {
+        type: 'progress',
+        content: createAssistantMessage(
+          `Connecting to ${expertModel}... (timeout: 5 minutes)`
+        ),
+      }
+
       // Call model with comprehensive error handling and timeout
       let response
       try {
@@ -333,7 +379,7 @@ ${output.expertAnswer}`
         })
 
         // Create a timeout promise to prevent hanging
-        const timeoutMs = 60000 // 60 seconds timeout
+        const timeoutMs = 300000 // 300 seconds (5 minutes) timeout for external models
         const timeoutPromise = new Promise((_, reject) => {
           setTimeout(() => {
             reject(new Error(`Expert model query timed out after ${timeoutMs/1000}s`))
@@ -370,19 +416,25 @@ ${output.expertAnswer}`
 
         if (error.message?.includes('timed out')) {
           throw new Error(
-            `Expert model '${expertModel}' timed out. This often happens with slower APIs. Try again or use a different model.`,
+            `Expert model '${expertModel}' timed out after 5 minutes.\n\n` +
+            `Suggestions:\n` +
+            `  - The model might be experiencing high load\n` +
+            `  - Try a different model or retry later\n` +
+            `  - Consider breaking down your question into smaller parts`,
           )
         }
 
         if (error.message?.includes('rate limit')) {
           throw new Error(
-            'Rate limit exceeded for expert model. Please try again later.',
+            `Rate limit exceeded for ${expertModel}.\n\n` +
+            `Please wait a moment and try again, or use a different model.`,
           )
         }
 
         if (error.message?.includes('invalid api key')) {
           throw new Error(
-            'Invalid API key for expert model. Please check your configuration.',
+            `Invalid API key for ${expertModel}.\n\n` +
+            `Please check your model configuration with /model command.`,
           )
         }
 

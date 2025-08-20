@@ -185,6 +185,13 @@ async function setup(cwd: string, safeMode?: boolean): Promise<void> {
 
   // Always grant read permissions for original working dir
   grantReadPermissionForOriginalDir()
+  
+  // Start watching agent configuration files for changes
+  const { startAgentWatcher, clearAgentCache } = await import('../utils/agentLoader')
+  await startAgentWatcher(() => {
+    // Cache is already cleared in the watcher, just log
+    console.log('✅ Agent configurations hot-reloaded')
+  })
 
   // If --safe mode is enabled, prevent root/sudo usage for security
   if (safeMode) {

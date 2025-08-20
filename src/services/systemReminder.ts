@@ -82,15 +82,18 @@ class SystemReminderService {
       () => this.dispatchTodoEvent(agentId),
       () => this.dispatchSecurityEvent(),
       () => this.dispatchPerformanceEvent(),
+      () => this.getMentionReminders(), // Add mention reminders
     ]
 
     for (const generator of reminderGenerators) {
-      if (reminders.length >= 3) break // Limit concurrent reminders
+      if (reminders.length >= 5) break // Slightly increase limit to accommodate mentions
 
-      const reminder = generator()
-      if (reminder) {
-        reminders.push(reminder)
-        this.sessionState.reminderCount++
+      const result = generator()
+      if (result) {
+        // Handle both single reminders and arrays
+        const remindersToAdd = Array.isArray(result) ? result : [result]
+        reminders.push(...remindersToAdd)
+        this.sessionState.reminderCount += remindersToAdd.length
       }
     }
 
@@ -225,6 +228,38 @@ class SystemReminderService {
   }
 
   /**
+   * Retrieve cached mention reminders
+   * Returns recent mentions (within 5 seconds) that haven't expired
+   */
+  private getMentionReminders(): ReminderMessage[] {
+    const currentTime = Date.now()
+    const MENTION_FRESHNESS_WINDOW = 5000 // 5 seconds
+    const reminders: ReminderMessage[] = []
+
+    // Iterate through cached reminders looking for recent mentions
+    for (const [key, reminder] of this.reminderCache.entries()) {
+      if (
+        (reminder.type === 'agent_mention' || reminder.type === 'file_mention') &&
+        currentTime - reminder.timestamp <= MENTION_FRESHNESS_WINDOW
+      ) {
+        reminders.push(reminder)
+      }
+    }
+
+    // Clean up old mention reminders from cache
+    for (const [key, reminder] of this.reminderCache.entries()) {
+      if (
+        (reminder.type === 'agent_mention' || reminder.type === 'file_mention') &&
+        currentTime - reminder.timestamp > MENTION_FRESHNESS_WINDOW
+      ) {
+        this.reminderCache.delete(key)
+      }
+    }
+
+    return reminders
+  }
+
+  /**
    * Generate reminders for external file changes
    * Called when todo files are modified externally
    */
@@ -342,6 +377,48 @@ class SystemReminderService {
     // File edit events for freshness detection
     this.addEventListener('file:edited', context => {
       // File edit handling
+    })
+
+    // Agent mention events
+    this.addEventListener('agent:mentioned', context => {
+      const agentType = context.agentType
+      const reminderKey = `agent_mention_${agentType}_${context.timestamp}`
+      
+      if (!this.sessionState.remindersSent.has(reminderKey)) {
+        this.sessionState.remindersSent.add(reminderKey)
+        
+        // Store agent mention for later reminder generation
+        const reminder = this.createReminderMessage(
+          'agent_mention',
+          'task',
+          'high',
+          `The user mentioned @agent-${agentType}. You MUST use the Task tool with subagent_type="${agentType}" to delegate this task to the specified agent. Provide a detailed, self-contained task description that fully captures the user's intent for the ${agentType} agent to execute.`,
+          context.timestamp,
+        )
+        
+        this.reminderCache.set(reminderKey, reminder)
+      }
+    })
+
+    // File mention events
+    this.addEventListener('file:mentioned', context => {
+      const filePath = context.filePath
+      const reminderKey = `file_mention_${filePath}_${context.timestamp}`
+      
+      if (!this.sessionState.remindersSent.has(reminderKey)) {
+        this.sessionState.remindersSent.add(reminderKey)
+        
+        // Store file mention for later reminder generation
+        const reminder = this.createReminderMessage(
+          'file_mention',
+          'general',
+          'high',
+          `The user mentioned @${context.originalMention}. You MUST read the entire content of the file at path: ${filePath} using the Read tool to understand the full context before proceeding with the user's request.`,
+          context.timestamp,
+        )
+        
+        this.reminderCache.set(reminderKey, reminder)
+      }
     })
   }
 
