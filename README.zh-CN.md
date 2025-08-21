@@ -58,7 +58,7 @@ git clone https://github.com/shareAI-lab/Kode.git
 cd Kode
 
 # 本地构建镜像
-docker build --no-cache -t Kode .
+docker build --no-cache -t kode .
 
 # 在你的项目目录中运行
 cd your-project
@@ -67,7 +67,7 @@ docker run -it --rm \
   -v ~/.kode:/root/.kode \
   -v ~/.kode.json:/root/.kode.json \
   -w /workspace \
-  Kode
+  kode
 ```
 
 #### Docker 配置详情
