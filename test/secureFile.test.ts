@@ -1,7 +1,7 @@
 import { describe, expect, test, beforeEach, afterEach } from '@jest/globals'
-import { SecureFileService, secureFileService } from '../src/utils/secureFile'
+import { SecureFileService } from '../src/utils/secureFile'
 import { existsSync, mkdirSync, writeFileSync, readFileSync, unlinkSync, rmdirSync } from 'node:fs'
-import { join, dirname } from 'node:path'
+import { join } from 'node:path'
 
 describe('SecureFileService', () => {
   let secureFileService: SecureFileService
