@@ -762,7 +762,7 @@ async function handleMessageStream(
   }
 }
 
-function convertOpenAIResponseToAnthropic(response: OpenAI.ChatCompletion) {
+function convertOpenAIResponseToAnthropic(response: OpenAI.ChatCompletion, tools?: Tool[]) {
   let contentBlocks: ContentBlock[] = []
   const message = response.choices?.[0]?.message
   if (!message) {
@@ -781,12 +781,12 @@ function convertOpenAIResponseToAnthropic(response: OpenAI.ChatCompletion) {
   if (message?.tool_calls) {
     for (const toolCall of message.tool_calls) {
       const tool = toolCall.function
-      const toolName = tool.name
+      const toolName = tool?.name
       let toolArgs = {}
       try {
-        toolArgs = JSON.parse(tool.arguments)
+        toolArgs = tool?.arguments ? JSON.parse(tool.arguments) : {}
       } catch (e) {
-        // console.log(e)
+        // Invalid JSON in tool arguments
       }
 
       contentBlocks.push({
@@ -830,6 +830,7 @@ function convertOpenAIResponseToAnthropic(response: OpenAI.ChatCompletion) {
     type: 'message',
     usage: response.usage,
   }
+
 
   return finalMessage
 }
@@ -1799,7 +1800,7 @@ async function queryOpenAI(
           finalResponse = s
         }
 
-        const r = convertOpenAIResponseToAnthropic(finalResponse)
+        const r = convertOpenAIResponseToAnthropic(finalResponse, tools)
         return r
       } else {
         // 🚨 警告：ModelProfile不可用，使用旧逻辑路径

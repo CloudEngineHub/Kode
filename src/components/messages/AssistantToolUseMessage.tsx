@@ -88,7 +88,7 @@ export function AssistantToolUseMessage({
               />
             ))}
           {tool.name === 'Task' && param.input ? (
-            <TaskToolMessage 
+            <TaskToolMessage
               agentType={(param.input as any).subagent_type || 'general-purpose'}
               bold={!isQueued}
             >

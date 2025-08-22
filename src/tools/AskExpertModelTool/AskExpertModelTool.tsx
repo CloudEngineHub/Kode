@@ -22,7 +22,9 @@ import { debug as debugLogger } from '../../utils/debugLogger'
 import { applyMarkdown } from '../../utils/markdown'
 
 export const inputSchema = z.strictObject({
-  question: z.string().describe('The question to ask the expert model'),
+  question: z.string().describe(
+    'COMPLETE SELF-CONTAINED QUESTION: Must include full background context, relevant details, and a clear independent question. The expert model will receive ONLY this content with no access to previous conversation or external context. Structure as: 1) Background/Context 2) Specific situation/problem 3) Clear question. Ensure the expert can fully understand and respond without needing additional information.'
+  ),
   expert_model: z
     .string()
     .describe(
@@ -45,32 +47,40 @@ export type Out = {
 export const AskExpertModelTool = {
   name: 'AskExpertModel',
   async description() {
-    const modelManager = getModelManager()
-    const currentModel = modelManager.getModelName('main') || 'current model'
-    return `Consult with external AI models (currently running as ${currentModel})`
+    return "Consult external AI models for expert opinions and analysis"
   },
   async prompt() {
-    return `Ask a question to a specific external commercial AI model API.
+    return `Ask a question to a specific external AI model for expert analysis.
 
-CRITICAL: Only use this tool when ALL these conditions are met:
-1. User's request contains the word "model" OR mentions a commercial AI service name
-2. User explicitly asks to "ask", "consult", or "query" an AI model
-3. The model name is a known commercial AI (GPT, Claude, Kimi, Gemini)
+This tool allows you to consult different AI models for their unique perspectives and expertise.
 
-Examples that SHOULD trigger this tool:
-- "ask GPT-5 model about..."
-- "consult the Claude model"
-- "what does Kimi model think"
+CRITICAL REQUIREMENT FOR QUESTION PARAMETER:
+The question MUST be completely self-contained and include:
+1. FULL BACKGROUND CONTEXT - All relevant information the expert needs
+2. SPECIFIC SITUATION - Clear description of the current scenario/problem
+3. INDEPENDENT QUESTION - What exactly you want the expert to analyze/answer
 
-Examples that should NOT trigger this tool:
-- "use dao-qi-harmony-designer agent" (no "model" keyword, uses "agent")
-- "dao-qi-harmony-designer evaluate" (hyphenated name, not a commercial model)
-- "code-writer implement feature" (not asking a model)
+The expert model receives ONLY your question content with NO access to:
+- Previous conversation history (unless using existing session)  
+- Current codebase or file context
+- User's current task or project details
 
-The expert_model parameter ONLY accepts:
+IMPORTANT: This tool is for asking questions to models, not for task execution.
+- Use when you need a specific model's opinion or analysis
+- Use when you want to compare different models' responses
+- Use the @ask-[model] format when available
+
+The expert_model parameter accepts:
 - OpenAI: gpt-4, gpt-5, o1-preview
 - Anthropic: claude-3-5-sonnet, claude-3-opus  
-- Others: kimi, gemini-pro, mixtral`
+- Others: kimi, gemini-pro, mixtral
+
+Example of well-structured question:
+"Background: I'm working on a React TypeScript application with performance issues. The app renders a large list of 10,000 items using a simple map() function, causing UI freezing.
+
+Current situation: Users report 3-5 second delays when scrolling through the list. The component re-renders the entire list on every state change.
+
+Question: What are the most effective React optimization techniques for handling large lists, and how should I prioritize implementing virtualization vs memoization vs other approaches?"`
   },
   isReadOnly() {
     return true
@@ -96,6 +106,7 @@ The expert_model parameter ONLY accepts:
     if (!question.trim()) {
       return { result: false, message: 'Question cannot be empty' }
     }
+
 
     if (!expert_model.trim()) {
       return { result: false, message: 'Expert model must be specified' }

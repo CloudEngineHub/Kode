@@ -57,7 +57,7 @@ interface CompleteContext {
   dependencies?: Dependencies
   
   // Documentation
-  contextFile?: string      // KODE.md content
+  contextFile?: string      // AGENTS.md content
   claudeFile?: string       // CLAUDE.md content
   readmeContent?: string    // README.md content
   
@@ -192,15 +192,15 @@ class ProjectAnalyzer {
 
 ## Context Files
 
-### KODE.md
+### AGENTS.md
 
 ```typescript
 class ContextFileLoader {
   private readonly CONTEXT_PATHS = [
-    'KODE.md',
-    '.claude/KODE.md',
-    'docs/KODE.md',
-    '.github/KODE.md'
+    'AGENTS.md',
+    '.claude/AGENTS.md',
+    'docs/AGENTS.md',
+    '.github/AGENTS.md'
   ]
   
   async loadContextFile(): Promise<string | null> {

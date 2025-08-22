@@ -11,6 +11,9 @@ import matter from 'gray-matter'
 import { getCwd } from './state'
 import { memoize } from 'lodash-es'
 
+// Track warned agents to avoid spam
+const warnedAgents = new Set<string>()
+
 export interface AgentConfig {
   agentType: string          // Agent identifier (matches subagent_type)
   whenToUse: string          // Description of when to use this agent  
@@ -18,7 +21,7 @@ export interface AgentConfig {
   systemPrompt: string       // System prompt content
   location: 'built-in' | 'user' | 'project'
   color?: string            // Optional UI color
-  model?: string           // Optional model override
+  model_name?: string       // Optional model override
 }
 
 // Built-in general-purpose agent as fallback
@@ -90,6 +93,13 @@ async function scanAgentDirectory(dirPath: string, location: 'user' | 'project')
           continue
         }
         
+        // Silently ignore deprecated 'model' field - no warnings by default
+        // Only warn if KODE_DEBUG_AGENTS environment variable is set
+        if (frontmatter.model && !frontmatter.model_name && !warnedAgents.has(frontmatter.name) && process.env.KODE_DEBUG_AGENTS) {
+          console.warn(`⚠️ Agent ${frontmatter.name}: 'model' field is deprecated and ignored. Use 'model_name' instead, or omit to use default 'task' model.`)
+          warnedAgents.add(frontmatter.name)
+        }
+        
         // Build agent config
         const agent: AgentConfig = {
           agentType: frontmatter.name,
@@ -98,7 +108,8 @@ async function scanAgentDirectory(dirPath: string, location: 'user' | 'project')
           systemPrompt: body.trim(),
           location,
           ...(frontmatter.color && { color: frontmatter.color }),
-          ...(frontmatter.model && { model: frontmatter.model })
+          // Only use model_name field, ignore deprecated 'model' field
+          ...(frontmatter.model_name && { model_name: frontmatter.model_name })
         }
         
         agents.push(agent)

@@ -180,6 +180,38 @@ function PromptInput({
     onSubmit,
   })
 
+  // Get theme early for memoized rendering
+  const theme = getTheme()
+
+  // Memoized completion suggestions rendering - after useUnifiedCompletion
+  const renderedSuggestions = useMemo(() => {
+    if (suggestions.length === 0) return null
+
+    return suggestions.map((suggestion, index) => {
+      const isSelected = index === selectedIndex
+      const isAgent = suggestion.type === 'agent'
+      
+      // Simple color logic without complex lookups
+      const displayColor = isSelected 
+        ? theme.suggestion 
+        : (isAgent && suggestion.metadata?.color)
+          ? suggestion.metadata.color
+          : undefined
+      
+      return (
+        <Box key={`${suggestion.type}-${suggestion.value}-${index}`} flexDirection="row">
+          <Text
+            color={displayColor}
+            dimColor={!isSelected && !displayColor}
+          >
+            {isSelected ? '◆ ' : '  '}
+            {suggestion.displayValue}
+          </Text>
+        </Box>
+      )
+    })
+  }, [suggestions, selectedIndex, theme.suggestion])
+
   const onChange = useCallback(
     (value: string) => {
       if (value.startsWith('!')) {
@@ -270,7 +302,7 @@ function PromptInput({
 
         // Create additional context to inform Claude this is for KODING.md
         const kodingContext =
-          'The user is using Koding mode. Format your response as a comprehensive, well-structured document suitable for adding to KODE.md. Use proper markdown formatting with headings, lists, code blocks, etc. The response should be complete and ready to add to KODE.md documentation.'
+          'The user is using Koding mode. Format your response as a comprehensive, well-structured document suitable for adding to AGENTS.md. Use proper markdown formatting with headings, lists, code blocks, etc. The response should be complete and ready to add to AGENTS.md documentation.'
 
         // Switch to prompt mode but tag the submission for later capture
         onModeChange('prompt')
@@ -326,7 +358,7 @@ function PromptInput({
       }
     }
 
-    // If in koding mode or input starts with '#', interpret it using AI before appending to KODE.md
+    // If in koding mode or input starts with '#', interpret it using AI before appending to AGENTS.md
     else if (mode === 'koding' || input.startsWith('#')) {
       try {
         // Strip the # if we're in koding mode and the user didn't type it (since it's implied)
@@ -474,7 +506,6 @@ function PromptInput({
 
   const textInputColumns = useTerminalSize().columns - 6
   const tokenUsage = useMemo(() => countTokens(messages), [messages])
-  const theme = getTheme()
 
   // 🔧 Fix: Track model ID changes to detect external config updates
   const modelManager = getModelManager()
@@ -599,7 +630,7 @@ function PromptInput({
                   color={mode === 'koding' ? theme.koding : undefined}
                   dimColor={mode !== 'koding'}
                 >
-                  · # for KODE.md
+                  · # for AGENTS.md
                 </Text>
                 <Text dimColor>
                   · / for commands · shift+m to switch model · esc to undo
@@ -632,7 +663,7 @@ function PromptInput({
           } />
         </Box>
       )}
-      {/* Unified completion suggestions */}
+      {/* Unified completion suggestions - optimized rendering */}
       {suggestions.length > 0 && (
         <Box
           flexDirection="row"
@@ -641,85 +672,7 @@ function PromptInput({
           paddingY={0}
         >
           <Box flexDirection="column">
-            {(() => {
-              // 微妙分割线方案
-              const commands = suggestions.filter(s => s.type === 'command')
-              const agents = suggestions.filter(s => s.type === 'agent')
-              const files = suggestions.filter(s => s.type === 'file')
-              
-              return (
-                <>
-                  {/* Command区域 - Slash commands */}
-                  {commands.map((suggestion, index) => {
-                    const globalIndex = suggestions.findIndex(s => s.value === suggestion.value)
-                    const isSelected = globalIndex === selectedIndex
-                    
-                    return (
-                      <Box key={`command-${suggestion.value}`} flexDirection="row">
-                        <Text
-                          color={isSelected ? theme.suggestion : undefined}
-                          dimColor={!isSelected}
-                        >
-                          {isSelected ? '◆ ' : '  '}
-                          {suggestion.displayValue}
-                        </Text>
-                      </Box>
-                    )
-                  })}
-                  
-                  {/* Agent区域 - 支持配置文件颜色 */}
-                  {agents.map((suggestion, index) => {
-                    const globalIndex = suggestions.findIndex(s => s.value === suggestion.value)
-                    const isSelected = globalIndex === selectedIndex
-                    
-                    // 获取agent配置的颜色
-                    const agentColor = suggestion.metadata?.color
-                    const displayColor = isSelected 
-                      ? theme.suggestion 
-                      : agentColor 
-                        ? agentColor 
-                        : undefined
-                    
-                    return (
-                      <Box key={`agent-${suggestion.value}`} flexDirection="row">
-                        <Text
-                          color={displayColor}
-                          dimColor={!isSelected && !agentColor}
-                        >
-                          {isSelected ? '◆ ' : '  '}
-                          {suggestion.displayValue}
-                        </Text>
-                      </Box>
-                    )
-                  })}
-                  
-                  {/* CYBER分割线 */}
-                  {agents.length > 0 && files.length > 0 && (
-                    <Box marginY={1}>
-                      <Text dimColor>{'──[[ RELATED FILES ]]' + '─'.repeat(45)}</Text>
-                    </Box>
-                  )}
-                  
-                  {/* File区域 */}
-                  {files.map((suggestion, index) => {
-                    const globalIndex = suggestions.findIndex(s => s.value === suggestion.value)
-                    const isSelected = globalIndex === selectedIndex
-                    
-                    return (
-                      <Box key={`file-${suggestion.value}`} flexDirection="row">
-                        <Text
-                          color={isSelected ? theme.suggestion : undefined}
-                          dimColor={!isSelected}
-                        >
-                          {isSelected ? '◆ ' : '  '}
-                          {suggestion.displayValue}
-                        </Text>
-                      </Box>
-                    )
-                  })}
-                </>
-              )
-            })()}
+            {renderedSuggestions}
             
             {/* 简洁操作提示框 */}
             <Box marginTop={1} paddingX={3} borderStyle="round" borderColor="gray">

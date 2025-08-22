@@ -2,22 +2,65 @@
 
 [![npm version](https://badge.fury.io/js/@shareai-lab%2Fkode.svg)](https://www.npmjs.com/package/@shareai-lab/kode)
 [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
+[![AGENTS.md](https://img.shields.io/badge/AGENTS.md-Compatible-brightgreen)](https://agents.md)
 
 [中文文档](README.zh-CN.md) | [Contributing](CONTRIBUTING.md) | [Documentation](docs/)
+
+## 🤝 AGENTS.md Standard Support
+
+**Kode proudly supports the [AGENTS.md standard protocol](https://agents.md) initiated by OpenAI** - a simple, open format for guiding programming agents that's used by 20k+ open source projects.
+
+### Full Compatibility with Multiple Standards
+
+- ✅ **AGENTS.md** - Native support for the OpenAI-initiated standard format
+- ✅ **CLAUDE.md** - Full backward compatibility with Claude Code configurations  
+- ✅ **Subagent System** - Advanced agent delegation and task orchestration
+- ✅ **Cross-platform** - Works with 20+ AI models and providers
+
+Use `# Your documentation request` to generate and maintain your AGENTS.md file automatically, while maintaining full compatibility with existing Claude Code workflows.
+
+## Overview
 
 Kode is a powerful AI assistant that lives in your terminal. It can understand your codebase, edit files, run commands, and handle entire workflows for you.
 
 ## Features
 
+### Core Capabilities
 - 🤖 **AI-Powered Assistance** - Uses advanced AI models to understand and respond to your requests
 - 🔄 **Multi-Model Collaboration** - Flexibly switch and combine multiple AI models to leverage their unique strengths
+- 🦜 **Expert Model Consultation** - Use `@ask-model-name` to consult specific AI models for specialized analysis
+- 👤 **Intelligent Agent System** - Use `@run-agent-name` to delegate tasks to specialized subagents
 - 📝 **Code Editing** - Directly edit files with intelligent suggestions and improvements
 - 🔍 **Codebase Understanding** - Analyzes your project structure and code relationships
 - 🚀 **Command Execution** - Run shell commands and see results in real-time
 - 🛠️ **Workflow Automation** - Handle complex development tasks with simple prompts
+
+### 🎯 Advanced Intelligent Completion System
+Our state-of-the-art completion system provides unparalleled coding assistance:
+
+#### Smart Fuzzy Matching
+- **Hyphen-Aware Matching** - Type `dao` to match `run-agent-dao-qi-harmony-designer`
+- **Abbreviation Support** - `dq` matches `dao-qi`, `nde` matches `node`
+- **Numeric Suffix Handling** - `py3` intelligently matches `python3`
+- **Multi-Algorithm Fusion** - Combines 7+ matching algorithms for best results
+
+#### Intelligent Context Detection
+- **No @ Required** - Type `gp5` directly to match `@ask-gpt-5`
+- **Auto-Prefix Addition** - Tab/Enter automatically adds `@` for agents and models
+- **Mixed Completion** - Seamlessly switch between commands, files, agents, and models
+- **Smart Prioritization** - Results ranked by relevance and usage frequency
+
+#### Unix Command Optimization
+- **500+ Common Commands** - Curated database of frequently used Unix/Linux commands
+- **System Intersection** - Only shows commands that actually exist on your system
+- **Priority Scoring** - Common commands appear first (git, npm, docker, etc.)
+- **Real-time Loading** - Dynamic command discovery from system PATH
+
+### User Experience
 - 🎨 **Interactive UI** - Beautiful terminal interface with syntax highlighting
 - 🔌 **Tool System** - Extensible architecture with specialized tools for different tasks
 - 💾 **Context Management** - Smart context handling to maintain conversation continuity
+- 📋 **AGENTS.md Integration** - Use `# documentation requests` to auto-generate and maintain project documentation
 
 ## Installation
 
@@ -49,6 +92,53 @@ kode -p "explain this function" main.js
 # or
 kwa -p "explain this function" main.js
 ```
+
+### Using the @ Mention System
+
+Kode supports a powerful @ mention system for intelligent completions:
+
+#### 🦜 Expert Model Consultation
+```bash
+# Consult specific AI models for expert opinions
+@ask-claude-sonnet-4 How should I optimize this React component for performance?
+@ask-gpt-5 What are the security implications of this authentication method?
+@ask-o1-preview Analyze the complexity of this algorithm
+```
+
+#### 👤 Specialized Agent Delegation  
+```bash
+# Delegate tasks to specialized subagents
+@run-agent-simplicity-auditor Review this code for over-engineering
+@run-agent-architect Design a microservices architecture for this system
+@run-agent-test-writer Create comprehensive tests for these modules
+```
+
+#### 📁 Smart File References
+```bash
+# Reference files and directories with auto-completion
+@src/components/Button.tsx
+@docs/api-reference.md
+@.env.example
+```
+
+The @ mention system provides intelligent completions as you type, showing available models, agents, and files.
+
+### AGENTS.md Documentation Mode
+
+Use the `#` prefix to generate and maintain your AGENTS.md documentation:
+
+```bash
+# Generate setup instructions
+# How do I set up the development environment?
+
+# Create testing documentation  
+# What are the testing procedures for this project?
+
+# Document deployment process
+# Explain the deployment pipeline and requirements
+```
+
+This mode automatically formats responses as structured documentation and appends them to your AGENTS.md file.
 
 ### Commands
 

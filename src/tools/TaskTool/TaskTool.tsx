@@ -39,7 +39,7 @@ const inputSchema = z.object({
     .string()
     .describe('A short (3-5 word) description of the task'),
   prompt: z.string().describe('The task for the agent to perform'),
-  model: z
+  model_name: z
     .string()
     .optional()
     .describe(
@@ -66,7 +66,7 @@ export const TaskTool = {
   inputSchema,
   
   async *call(
-    { description, prompt, model, subagent_type },
+    { description, prompt, model_name, subagent_type },
     {
       abortController,
       options: { safeMode = false, forkNumber, messageLogName, verbose },
@@ -80,7 +80,7 @@ export const TaskTool = {
     
     // Apply subagent configuration
     let effectivePrompt = prompt
-    let effectiveModel = model || 'task'
+    let effectiveModel = model_name || 'task'
     let toolFilter = null
     let temperature = undefined
     
@@ -106,11 +106,11 @@ export const TaskTool = {
         effectivePrompt = `${agentConfig.systemPrompt}\n\n${prompt}`
       }
       
-      // Apply model if not overridden by model parameter
-      if (!model && agentConfig.model) {
+      // Apply model if not overridden by model_name parameter
+      if (!model_name && agentConfig.model_name) {
         // Support inherit: keep pointer-based default
-        if (agentConfig.model !== 'inherit') {
-          effectiveModel = agentConfig.model as string
+        if (agentConfig.model_name !== 'inherit') {
+          effectiveModel = agentConfig.model_name as string
         }
       }
       
@@ -139,7 +139,7 @@ export const TaskTool = {
     // doesn't move around when messages start streaming back.
     yield {
       type: 'progress',
-      content: createAssistantMessage(chalk.dim('Initializing…')),
+      content: createAssistantMessage(chalk.dim(`[${agentType}] ${description}`)),
       normalizedMessages: normalizeMessages(messages),
       tools,
     }
@@ -208,22 +208,55 @@ export const TaskTool = {
       }
 
       const normalizedMessages = normalizeMessages(messages)
+      
+      // Process tool uses and text content for better visibility
       for (const content of message.message.content) {
-        if (content.type !== 'tool_use') {
-          continue
-        }
-
-        toolUseCount++
-        yield {
-          type: 'progress',
-          content: normalizedMessages.find(
+        if (content.type === 'text' && content.text && content.text !== INTERRUPT_MESSAGE) {
+          // Show agent's reasoning/responses
+          const preview = content.text.length > 200 ? content.text.substring(0, 200) + '...' : content.text
+          yield {
+            type: 'progress',
+            content: createAssistantMessage(`[${agentType}] ${preview}`),
+            normalizedMessages,
+            tools,
+          }
+        } else if (content.type === 'tool_use') {
+          toolUseCount++
+          
+          // Show which tool is being used with agent context
+          const toolMessage = normalizedMessages.find(
             _ =>
               _.type === 'assistant' &&
               _.message.content[0]?.type === 'tool_use' &&
               _.message.content[0].id === content.id,
-          ) as AssistantMessage,
-          normalizedMessages,
-          tools,
+          ) as AssistantMessage
+          
+          if (toolMessage) {
+            // Clone and modify the message to show agent context
+            const modifiedMessage = {
+              ...toolMessage,
+              message: {
+                ...toolMessage.message,
+                content: toolMessage.message.content.map(c => {
+                  if (c.type === 'tool_use' && c.id === content.id) {
+                    // Add agent context to tool name display
+                    return {
+                      ...c,
+                      name: c.name // Keep original name, UI will handle display
+                    }
+                  }
+                  return c
+                })
+              }
+            }
+            
+            yield {
+              type: 'progress',
+              content: modifiedMessage,
+              normalizedMessages,
+              tools,
+            }
+          }
         }
       }
     }
@@ -259,7 +292,7 @@ export const TaskTool = {
       ]
       yield {
         type: 'progress',
-        content: createAssistantMessage(`Done (${result.join(' · ')})`),
+        content: createAssistantMessage(`[${agentType}] Completed (${result.join(' · ')})`),
         normalizedMessages,
         tools,
       }
@@ -298,16 +331,16 @@ export const TaskTool = {
     }
 
     // Model validation - similar to Edit tool error handling
-    if (input.model) {
+    if (input.model_name) {
       const modelManager = getModelManager()
       const availableModels = modelManager.getAllAvailableModelNames()
 
-      if (!availableModels.includes(input.model)) {
+      if (!availableModels.includes(input.model_name)) {
         return {
           result: false,
-          message: `Model '${input.model}' does not exist. Available models: ${availableModels.join(', ')}`,
+          message: `Model '${input.model_name}' does not exist. Available models: ${availableModels.join(', ')}`,
           meta: {
-            model: input.model,
+            model_name: input.model_name,
             availableModels,
           },
         }
@@ -335,8 +368,9 @@ export const TaskTool = {
     return true
   },
   userFacingName(input?: any) {
-    // Return agent name if available, default to general-purpose
-    return input?.subagent_type || 'general-purpose'
+    // Return agent name with proper prefix
+    const agentType = input?.subagent_type || 'general-purpose'
+    return `agent-${agentType}`
   },
   needsPermissions() {
     return false
@@ -344,12 +378,13 @@ export const TaskTool = {
   renderResultForAssistant(data: TextBlock[]) {
     return data.map(block => block.type === 'text' ? block.text : '').join('\n')
   },
-  renderToolUseMessage({ description, prompt, model, subagent_type }, { verbose }) {
+  renderToolUseMessage({ description, prompt, model_name, subagent_type }, { verbose }) {
     if (!description || !prompt) return null
 
     const modelManager = getModelManager()
     const defaultTaskModel = modelManager.getModelName('task')
-    const actualModel = model || defaultTaskModel
+    const actualModel = model_name || defaultTaskModel
+    const agentType = subagent_type || 'general-purpose'
     const promptPreview =
       prompt.length > 80 ? prompt.substring(0, 80) + '...' : prompt
 
@@ -359,7 +394,7 @@ export const TaskTool = {
       return (
         <Box flexDirection="column">
           <Text>
-            {actualModel}: {description}
+            [{agentType}] {actualModel}: {description}
           </Text>
           <Box
             paddingLeft={2}
@@ -372,8 +407,8 @@ export const TaskTool = {
       )
     }
 
-    // Simple display: model and description
-    return `${actualModel}: ${description}`
+    // Simple display: agent type, model and description
+    return `[${agentType}] ${actualModel}: ${description}`
   },
   renderToolUseRejectedMessage() {
     return <FallbackToolUseRejectedMessage />

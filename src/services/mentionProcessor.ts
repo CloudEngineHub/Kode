@@ -26,9 +26,14 @@ export interface ProcessedMentions {
 }
 
 class MentionProcessorService {
-  // Separate patterns for agents and files to avoid conflicts
-  private agentPattern = /@(agent-[\w\-]+)/g
-  private filePattern = /@([a-zA-Z0-9/._-]+(?:\.[a-zA-Z0-9]+)?)/g
+  // Centralized mention patterns - single source of truth
+  private static readonly MENTION_PATTERNS = {
+    runAgent: /@(run-agent-[\w\-]+)/g,
+    agent: /@(agent-[\w\-]+)/g,  // Legacy support
+    askModel: /@(ask-[\w\-]+)/g,
+    file: /@([a-zA-Z0-9/._-]+(?:\.[a-zA-Z0-9]+)?)/g
+  } as const
+
   private agentCache: Map<string, boolean> = new Map()
   private lastAgentCheck: number = 0
   private CACHE_TTL = 60000 // 1 minute cache
@@ -45,44 +50,41 @@ class MentionProcessorService {
       hasFileMentions: false,
     }
 
-    // Process agent mentions first (more specific pattern)
-    const agentMatches = [...input.matchAll(this.agentPattern)]
-    
-    // Refresh agent cache if needed
-    if (agentMatches.length > 0) {
+    try {
+
+    // Process agent mentions with unified logic to eliminate code duplication
+    const agentMentions = this.extractAgentMentions(input)
+    if (agentMentions.length > 0) {
       await this.refreshAgentCache()
-    }
-    
-    for (const match of agentMatches) {
-      const agentMention = match[1] // e.g., "agent-simplicity-auditor"
-      const agentType = agentMention.replace(/^agent-/, '') // Remove prefix
       
-      // Check if this is a valid agent
-      if (this.agentCache.has(agentType)) {
-        result.agents.push({
-          type: 'agent',
-          mention: agentMention,
-          resolved: agentType,
-          exists: true,
-        })
-        result.hasAgentMentions = true
-        
-        // Emit agent mention event for system reminder to handle
-        emitReminderEvent('agent:mentioned', {
-          agentType: agentType,
-          originalMention: agentMention,
-          timestamp: Date.now(),
-        })
+      for (const { mention, agentType, isAskModel } of agentMentions) {
+        if (isAskModel || this.agentCache.has(agentType)) {
+          result.agents.push({
+            type: 'agent',
+            mention,
+            resolved: agentType,
+            exists: true,
+            metadata: isAskModel ? { type: 'ask-model' } : undefined
+          })
+          result.hasAgentMentions = true
+          
+          // Emit appropriate event based on mention type
+          this.emitAgentMentionEvent(mention, agentType, isAskModel)
+        }
       }
     }
+    
+    // No longer process @xxx format - treat as regular text (emails, etc.)
 
-    // Process file mentions (but exclude agent mentions)
-    const fileMatches = [...input.matchAll(this.filePattern)]
+    // Process file mentions (exclude agent and ask-model mentions)
+    const fileMatches = [...input.matchAll(MentionProcessorService.MENTION_PATTERNS.file)]
+    const processedAgentMentions = new Set(agentMentions.map(am => am.mention))
+    
     for (const match of fileMatches) {
       const mention = match[1]
       
-      // Skip if this is an agent mention (already processed)
-      if (mention.startsWith('agent-')) {
+      // Skip if this is an agent or ask-model mention (already processed)
+      if (mention.startsWith('run-agent-') || mention.startsWith('agent-') || mention.startsWith('ask-') || processedAgentMentions.has(mention)) {
         continue
       }
       
@@ -106,7 +108,21 @@ class MentionProcessorService {
       }
     }
 
-    return result
+      return result
+    } catch (error) {
+      console.warn('[MentionProcessor] Failed to process mentions:', {
+        input: input.substring(0, 100) + (input.length > 100 ? '...' : ''),
+        error: error instanceof Error ? error.message : error
+      })
+      
+      // Return empty result on error to maintain system stability
+      return {
+        agents: [],
+        files: [],
+        hasAgentMentions: false,
+        hasFileMentions: false,
+      }
+    }
   }
 
   // Removed identifyMention method as it's no longer needed with separate processing
@@ -115,9 +131,7 @@ class MentionProcessorService {
    * Resolve file path relative to current working directory
    */
   private resolveFilePath(mention: string): string {
-    if (mention.startsWith('/')) {
-      return mention
-    }
+    // Simple consistent logic: mention is always relative to current directory
     return resolve(getCwd(), mention)
   }
 
@@ -128,22 +142,108 @@ class MentionProcessorService {
   private async refreshAgentCache(): Promise<void> {
     const now = Date.now()
     if (now - this.lastAgentCheck < this.CACHE_TTL) {
-      return
+      return // Cache is still fresh
     }
 
     try {
       const agents = await getAvailableAgentTypes()
+      const previousCacheSize = this.agentCache.size
       this.agentCache.clear()
       
       for (const agent of agents) {
-        // Store only the agent type without prefix
+        // Store only the agent type without prefix for consistent lookup
         this.agentCache.set(agent.agentType, true)
       }
       
       this.lastAgentCheck = now
+      
+      // Log cache refresh for debugging mention resolution issues
+      if (agents.length !== previousCacheSize) {
+        console.log('[MentionProcessor] Agent cache refreshed:', {
+          agentCount: agents.length,
+          previousCacheSize,
+          cacheAge: now - this.lastAgentCheck
+        })
+      }
     } catch (error) {
-      console.warn('Failed to refresh agent cache:', error)
-      // Keep existing cache on error
+      console.warn('[MentionProcessor] Failed to refresh agent cache, keeping existing cache:', {
+        error: error instanceof Error ? error.message : error,
+        cacheSize: this.agentCache.size,
+        lastRefresh: new Date(this.lastAgentCheck).toISOString()
+      })
+      // Keep existing cache on error to maintain functionality
+    }
+  }
+
+  /**
+   * Extract agent mentions with unified pattern matching
+   * Consolidates run-agent, agent, and ask-model detection logic
+   */
+  private extractAgentMentions(input: string): Array<{ mention: string; agentType: string; isAskModel: boolean }> {
+    const mentions: Array<{ mention: string; agentType: string; isAskModel: boolean }> = []
+    
+    // Process @run-agent-xxx format (preferred)
+    const runAgentMatches = [...input.matchAll(MentionProcessorService.MENTION_PATTERNS.runAgent)]
+    for (const match of runAgentMatches) {
+      const mention = match[1]
+      const agentType = mention.replace(/^run-agent-/, '')
+      mentions.push({ mention, agentType, isAskModel: false })
+    }
+    
+    // Process @agent-xxx format (legacy)
+    const agentMatches = [...input.matchAll(MentionProcessorService.MENTION_PATTERNS.agent)]
+    for (const match of agentMatches) {
+      const mention = match[1]
+      const agentType = mention.replace(/^agent-/, '')
+      mentions.push({ mention, agentType, isAskModel: false })
+    }
+    
+    // Process @ask-model mentions
+    const askModelMatches = [...input.matchAll(MentionProcessorService.MENTION_PATTERNS.askModel)]
+    for (const match of askModelMatches) {
+      const mention = match[1]
+      mentions.push({ mention, agentType: mention, isAskModel: true })
+    }
+    
+    return mentions
+  }
+  
+  /**
+   * Emit agent mention event with proper typing
+   * Centralized event emission to ensure consistency
+   */
+  private emitAgentMentionEvent(mention: string, agentType: string, isAskModel: boolean): void {
+    try {
+      const eventData = {
+        originalMention: mention,
+        timestamp: Date.now(),
+      }
+
+      if (isAskModel) {
+        emitReminderEvent('ask-model:mentioned', {
+          ...eventData,
+          modelName: mention,
+        })
+      } else {
+        emitReminderEvent('agent:mentioned', {
+          ...eventData,
+          agentType,
+        })
+      }
+      
+      // Debug log for mention event emission tracking
+      console.log('[MentionProcessor] Emitted mention event:', {
+        type: isAskModel ? 'ask-model' : 'agent',
+        mention,
+        agentType: isAskModel ? undefined : agentType
+      })
+    } catch (error) {
+      console.error('[MentionProcessor] Failed to emit mention event:', {
+        mention,
+        agentType,
+        isAskModel,
+        error: error instanceof Error ? error.message : error
+      })
     }
   }
 

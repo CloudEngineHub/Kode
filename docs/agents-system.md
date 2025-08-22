@@ -4,11 +4,13 @@
 
 Kode's Agent system allows you to create specialized AI agents with predefined configurations, tools, and prompts. This enables more efficient task execution by using purpose-built agents for specific types of work.
 
+**New in this version**: Use `@run-agent-name` for intelligent delegation with auto-completion support.
+
 ## Features
 
 - **Dynamic Agent Loading**: Agents are loaded from configuration files at runtime
 - **Five-tier Priority System**: Built-in < .claude (user) < .kode (user) < .claude (project) < .kode (project)
-- **Hot Reload**: Configuration changes are detected and reloaded automatically
+- **Hot Reload**: Agent files monitored via Node.js fs.watch with cache invalidation
 - **Tool Restrictions**: Limit agents to specific tools for security and focus
 - **Model Selection**: Each agent can specify its preferred AI model
 - **Interactive Management**: Use `/agents` command for graphical management
@@ -17,20 +19,11 @@ Kode's Agent system allows you to create specialized AI agents with predefined c
 
 ### Using Pre-configured Agents
 
-Kode comes with several built-in agents:
+Kode has one built-in agent:
 
 ```bash
-# Use the search specialist for finding files
-kode "Find all TypeScript test files" --subagent-type search-specialist
-
-# Use the code writer for implementations
-kode "Implement a new user authentication feature" --subagent-type code-writer
-
-# Use the reviewer for code analysis
-kode "Review the changes in src/ for potential issues" --subagent-type reviewer
-
-# Use the architect for design decisions
-kode "Design a caching strategy for our API" --subagent-type architect
+@run-agent-general-purpose Find all TypeScript test files
+@run-agent-my-custom-agent Implement a new user authentication feature
 ```
 
 ### Managing Agents
@@ -65,11 +58,13 @@ Agents are defined as Markdown files with YAML frontmatter:
 name: agent-name
 description: "When to use this agent"
 tools: ["Tool1", "Tool2", "Tool3"]  # or "*" for all tools
-model: model-name  # optional
+model_name: model-name  # optional (preferred over deprecated 'model' field)
 ---
 
 System prompt content goes here...
 ```
+
+**Note**: Use `model_name` to specify the AI model. The deprecated `model` field is ignored.
 
 ### Configuration Locations
 
@@ -107,7 +102,7 @@ Create a file `~/.kode/agents/api-designer.md`:
 name: api-designer
 description: "Designs RESTful APIs and GraphQL schemas with best practices"
 tools: ["FileRead", "FileWrite", "Grep"]
-model: reasoning
+model_name: reasoning
 ---
 
 You are an API design specialist. Your expertise includes:
@@ -142,11 +137,8 @@ Design principles:
 
 ### Tool Restrictions
 
-Limit agents to specific tools for focused operation:
-
 ```yaml
-tools: ["FileRead", "Grep", "Glob"]  # Read-only agent
-tools: ["FileWrite", "FileEdit"]     # Write-only agent
+tools: ["FileRead", "Grep", "Glob"]  # Specific tools
 tools: ["*"]                         # All tools (default)
 ```
 
@@ -155,19 +147,11 @@ tools: ["*"]                         # All tools (default)
 Specify which AI model the agent should use:
 
 ```yaml
-model: quick      # Fast responses for simple tasks
-model: main       # Default model for general tasks
-model: reasoning  # Complex analysis and design
+model_name: quick      # Fast responses for simple tasks
+model_name: main       # Default model for general tasks  
+model_name: reasoning  # Complex analysis and design
 ```
 
-### Combining with Direct Model Selection
-
-You can override an agent's default model:
-
-```bash
-# Use reviewer agent but with a different model
-kode "Review this code" --subagent-type reviewer --model gpt-4
-```
 
 ## Available Built-in Agents
 
@@ -176,45 +160,16 @@ kode "Review this code" --subagent-type reviewer --model gpt-4
 - **Tools**: All tools
 - **Model**: task (default)
 
-### search-specialist
-- **Use for**: Finding files, searching code patterns
-- **Tools**: Grep, Glob, FileRead, LS
-- **Model**: quick
+Note: This is currently the only built-in agent. Create custom agents using the `/agents` command or by adding configuration files.
 
-### code-writer
-- **Use for**: Writing and modifying code
-- **Tools**: FileRead, FileWrite, FileEdit, MultiEdit, Bash
-- **Model**: main
+## Custom Agents
 
-### reviewer
-- **Use for**: Code review, quality analysis
-- **Tools**: FileRead, Grep, Glob
-- **Model**: reasoning
-
-### architect
-- **Use for**: System design, architecture decisions
-- **Tools**: FileRead, FileWrite, Grep, Glob
-- **Model**: reasoning
-
-## Project-specific Agents
-
-For project-specific agents, create them in `./.kode/agents/`:
+Create your own agents in the appropriate directory:
 
 ```bash
-mkdir -p .kode/agents
+mkdir -p .kode/agents    # Project-specific
+mkdir -p ~/.kode/agents  # User-wide
 ```
-
-Example project agents included:
-
-### test-writer
-- **Use for**: Writing comprehensive test suites
-- **Tools**: FileRead, FileWrite, FileEdit, Bash, Grep
-- **Model**: main
-
-### docs-writer
-- **Use for**: Creating and updating documentation
-- **Tools**: FileRead, FileWrite, FileEdit, Grep, Glob
-- **Model**: main
 
 ## Best Practices
 
@@ -259,7 +214,7 @@ The agent system is integrated with Kode's Task tool:
 await TaskTool.call({
   description: "Search for patterns",
   prompt: "Find all instances of TODO comments",
-  subagent_type: "search-specialist"
+  subagent_type: "general-purpose"
 })
 ```
 

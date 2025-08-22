@@ -470,11 +470,8 @@ function loadConfig(path: string): Config {
 ### 调试命令
 
 ```bash
-# 显示有效配置
-kode config list --effective
-
-# 验证配置
-kode config validate
+# 显示配置
+kode config list
 
 # 重置为默认值
 kode config reset
