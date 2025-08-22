@@ -106,6 +106,12 @@ export type Props = {
    * Whether to disable cursor movement for up/down arrow keys
    */
   readonly disableCursorMovementForUpDownKeys?: boolean
+  
+  /**
+   * Optional callback to handle special key combinations before input processing
+   * Return true to prevent default handling
+   */
+  readonly onSpecialKey?: (input: string, key: Key) => boolean
 
   readonly cursorOffset: number
 
@@ -136,6 +142,7 @@ export default function TextInput({
   onPaste,
   isDimmed = false,
   disableCursorMovementForUpDownKeys = false,
+  onSpecialKey,
   cursorOffset,
   onChangeCursorOffset,
 }: Props) {
@@ -186,6 +193,12 @@ export default function TextInput({
   }
 
   const wrappedOnInput = (input: string, key: Key): void => {
+    // Check for special key combinations first
+    if (onSpecialKey && onSpecialKey(input, key)) {
+      // Special key was handled, don't process further
+      return
+    }
+    
     // Special handling for backspace or delete
     if (
       key.backspace ||

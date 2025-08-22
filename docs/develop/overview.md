@@ -26,7 +26,7 @@ Unlike web-based AI assistants, Kode is built specifically for terminal workflow
 The AI automatically understands your project through:
 - Git status and recent commits
 - Directory structure analysis
-- KODE.md and CLAUDE.md project documentation
+- AGENTS.md and CLAUDE.md project documentation
 - Custom command definitions in .claude/commands/ and .kode/commands/
 - Previous conversation history and forked conversations
 

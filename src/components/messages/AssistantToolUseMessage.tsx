@@ -9,6 +9,7 @@ import { getTheme } from '../../utils/theme'
 import { BLACK_CIRCLE } from '../../constants/figures'
 import { ThinkTool } from '../../tools/ThinkTool/ThinkTool'
 import { AssistantThinkingMessage } from './AssistantThinkingMessage'
+import { TaskToolMessage } from './TaskToolMessage'
 
 type Props = {
   param: ToolUseBlockParam
@@ -61,7 +62,7 @@ export function AssistantToolUseMessage({
     )
   }
 
-  const userFacingToolName = tool.userFacingName()
+  const userFacingToolName = tool.userFacingName ? tool.userFacingName(param.input) : tool.name
   return (
     <Box
       flexDirection="row"
@@ -86,9 +87,18 @@ export function AssistantToolUseMessage({
                 isError={erroredToolUseIDs.has(param.id)}
               />
             ))}
-          <Text color={color} bold={!isQueued}>
-            {userFacingToolName}
-          </Text>
+          {tool.name === 'Task' && param.input ? (
+            <TaskToolMessage
+              agentType={(param.input as any).subagent_type || 'general-purpose'}
+              bold={!isQueued}
+            >
+              {userFacingToolName}
+            </TaskToolMessage>
+          ) : (
+            <Text color={color} bold={!isQueued}>
+              {userFacingToolName}
+            </Text>
+          )}
         </Box>
         <Box flexWrap="nowrap">
           {Object.keys(param.input as { [key: string]: unknown }).length > 0 &&

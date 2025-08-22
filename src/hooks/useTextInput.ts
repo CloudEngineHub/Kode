@@ -220,6 +220,10 @@ export function useTextInput({
   }
 
   function onInput(input: string, key: Key): void {
+    if (key.tab) {
+      return // Skip Tab key processing - let completion system handle it
+    }
+    
     // Direct handling for backspace or delete (which is being detected as delete)
     if (
       key.backspace ||
@@ -277,8 +281,7 @@ export function useTextInput({
         return handleMeta
       case key.return:
         return () => handleEnter(key)
-      case key.tab:
-        return () => {}
+      // Remove Tab handling - let completion system handle it
       case key.upArrow:
         return upOrHistoryUp
       case key.downArrow:
