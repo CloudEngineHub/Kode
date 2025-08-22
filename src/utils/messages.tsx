@@ -355,7 +355,7 @@ export async function processUserInput(
     if (input.includes('!`') || input.includes('@')) {
       try {
         // Import functions from customCommands service to avoid code duplication
-        const { executeBashCommands, resolveFileReferences } = await import(
+        const { executeBashCommands } = await import(
           '../services/customCommands'
         )
 
@@ -366,11 +366,12 @@ export async function processUserInput(
           processedInput = await executeBashCommands(processedInput)
         }
 
-        // Resolve file references if present
+        // Process mentions for system reminder integration
+        // Note: We don't call resolveFileReferences here anymore - 
+        // @file mentions should trigger Read tool usage via reminders, not embed content
         if (input.includes('@')) {
-          // Note: This function is not exported from customCommands.ts, so we need to expose it
-          // For now, we'll keep the local implementation until we refactor the service
-          processedInput = await resolveFileReferences(processedInput)
+          const { processMentions } = await import('../services/mentionProcessor')
+          await processMentions(input)
         }
       } catch (error) {
         console.warn('Dynamic content processing failed:', error)
