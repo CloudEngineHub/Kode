@@ -408,6 +408,7 @@ export async function* runToolUse(
     currentRequest?.id,
   )
 
+
   logEvent('tengu_tool_use_start', {
     toolName: toolUse.name,
     toolUseID: toolUse.id,

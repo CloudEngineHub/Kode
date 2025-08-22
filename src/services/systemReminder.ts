@@ -100,13 +100,13 @@ class SystemReminderService {
     // Log aggregated metrics instead of individual events for performance
     if (reminders.length > 0) {
       logEvent('system_reminder_batch', {
-        count: reminders.length,
+        count: reminders.length.toString(),
         types: reminders.map(r => r.type).join(','),
         priorities: reminders.map(r => r.priority).join(','),
         categories: reminders.map(r => r.category).join(','),
-        sessionCount: this.sessionState.reminderCount,
+        sessionCount: this.sessionState.reminderCount.toString(),
         agentId: agentId || 'default',
-        timestamp: currentTime,
+        timestamp: currentTime.toString(),
       })
     }
 
@@ -235,28 +235,33 @@ class SystemReminderService {
     const currentTime = Date.now()
     const MENTION_FRESHNESS_WINDOW = 5000 // 5 seconds
     const reminders: ReminderMessage[] = []
+    const expiredKeys: string[] = []
 
-    // Iterate through cached reminders looking for recent mentions
+    // Single pass through cache for both collection and cleanup identification
     for (const [key, reminder] of this.reminderCache.entries()) {
-      if (
-        (reminder.type === 'agent_mention' || reminder.type === 'file_mention') &&
-        currentTime - reminder.timestamp <= MENTION_FRESHNESS_WINDOW
-      ) {
-        reminders.push(reminder)
+      if (this.isMentionReminder(reminder)) {
+        const age = currentTime - reminder.timestamp
+        if (age <= MENTION_FRESHNESS_WINDOW) {
+          reminders.push(reminder)
+        } else {
+          expiredKeys.push(key)
+        }
       }
     }
 
-    // Clean up old mention reminders from cache
-    for (const [key, reminder] of this.reminderCache.entries()) {
-      if (
-        (reminder.type === 'agent_mention' || reminder.type === 'file_mention') &&
-        currentTime - reminder.timestamp > MENTION_FRESHNESS_WINDOW
-      ) {
-        this.reminderCache.delete(key)
-      }
-    }
+    // Clean up expired mention reminders in separate pass for performance
+    expiredKeys.forEach(key => this.reminderCache.delete(key))
 
     return reminders
+  }
+
+  /**
+   * Type guard for mention reminders - centralized type checking
+   * Eliminates hardcoded type strings scattered throughout the code
+   */
+  private isMentionReminder(reminder: ReminderMessage): boolean {
+    const mentionTypes = ['agent_mention', 'file_mention', 'ask_model_mention']
+    return mentionTypes.includes(reminder.type)
   }
 
   /**
@@ -337,9 +342,9 @@ class SystemReminderService {
       // Log session startup
       logEvent('system_reminder_session_startup', {
         agentId: context.agentId || 'default',
-        contextKeys: Object.keys(context.context || {}),
-        messageCount: context.messages || 0,
-        timestamp: context.timestamp,
+        contextKeys: Object.keys(context.context || {}).join(','),
+        messageCount: (context.messages || 0).toString(),
+        timestamp: context.timestamp.toString(),
       })
     })
 
@@ -379,46 +384,38 @@ class SystemReminderService {
       // File edit handling
     })
 
-    // Agent mention events
+    // Unified mention event handlers - eliminates code duplication
     this.addEventListener('agent:mentioned', context => {
-      const agentType = context.agentType
-      const reminderKey = `agent_mention_${agentType}_${context.timestamp}`
-      
-      if (!this.sessionState.remindersSent.has(reminderKey)) {
-        this.sessionState.remindersSent.add(reminderKey)
-        
-        // Store agent mention for later reminder generation
-        const reminder = this.createReminderMessage(
-          'agent_mention',
-          'task',
-          'high',
-          `The user mentioned @agent-${agentType}. You MUST use the Task tool with subagent_type="${agentType}" to delegate this task to the specified agent. Provide a detailed, self-contained task description that fully captures the user's intent for the ${agentType} agent to execute.`,
-          context.timestamp,
-        )
-        
-        this.reminderCache.set(reminderKey, reminder)
-      }
+      this.createMentionReminder({
+        type: 'agent_mention',
+        key: `agent_mention_${context.agentType}_${context.timestamp}`,
+        category: 'task',
+        priority: 'high',
+        content: `The user mentioned @${context.originalMention}. You MUST use the Task tool with subagent_type="${context.agentType}" to delegate this task to the specified agent. Provide a detailed, self-contained task description that fully captures the user's intent for the ${context.agentType} agent to execute.`,
+        timestamp: context.timestamp
+      })
     })
 
-    // File mention events
     this.addEventListener('file:mentioned', context => {
-      const filePath = context.filePath
-      const reminderKey = `file_mention_${filePath}_${context.timestamp}`
-      
-      if (!this.sessionState.remindersSent.has(reminderKey)) {
-        this.sessionState.remindersSent.add(reminderKey)
-        
-        // Store file mention for later reminder generation
-        const reminder = this.createReminderMessage(
-          'file_mention',
-          'general',
-          'high',
-          `The user mentioned @${context.originalMention}. You MUST read the entire content of the file at path: ${filePath} using the Read tool to understand the full context before proceeding with the user's request.`,
-          context.timestamp,
-        )
-        
-        this.reminderCache.set(reminderKey, reminder)
-      }
+      this.createMentionReminder({
+        type: 'file_mention',
+        key: `file_mention_${context.filePath}_${context.timestamp}`,
+        category: 'general',
+        priority: 'high',
+        content: `The user mentioned @${context.originalMention}. You MUST read the entire content of the file at path: ${context.filePath} using the Read tool to understand the full context before proceeding with the user's request.`,
+        timestamp: context.timestamp
+      })
+    })
+
+    this.addEventListener('ask-model:mentioned', context => {
+      this.createMentionReminder({
+        type: 'ask_model_mention',
+        key: `ask_model_mention_${context.modelName}_${context.timestamp}`,
+        category: 'task',
+        priority: 'high',
+        content: `The user mentioned @${context.modelName}. You MUST use the AskExpertModelTool to consult this specific model for expert opinions and analysis. Provide the user's question or context clearly to get the most relevant response from ${context.modelName}.`,
+        timestamp: context.timestamp
+      })
     })
   }
 
@@ -441,6 +438,33 @@ class SystemReminderService {
         console.error(`Error in event listener for ${event}:`, error)
       }
     })
+  }
+
+  /**
+   * Unified mention reminder creation - eliminates duplicate logic
+   * Centralizes reminder creation with consistent deduplication
+   */
+  private createMentionReminder(params: {
+    type: string
+    key: string
+    category: ReminderMessage['category']
+    priority: ReminderMessage['priority']
+    content: string
+    timestamp: number
+  }): void {
+    if (!this.sessionState.remindersSent.has(params.key)) {
+      this.sessionState.remindersSent.add(params.key)
+      
+      const reminder = this.createReminderMessage(
+        params.type,
+        params.category,
+        params.priority,
+        params.content,
+        params.timestamp
+      )
+      
+      this.reminderCache.set(params.key, reminder)
+    }
   }
 
   public resetSession(): void {

@@ -77,7 +77,8 @@ export async function executeBashCommands(content: string): Promise<string> {
  */
 export async function resolveFileReferences(content: string): Promise<string> {
   // Match patterns like @src/file.js or @path/to/file.txt
-  // But explicitly exclude @agent-xxx patterns
+  // Use consistent file mention pattern from mentionProcessor
+  // Exclude agent and ask-model patterns to avoid conflicts
   const fileRefRegex = /@([a-zA-Z0-9/._-]+(?:\.[a-zA-Z0-9]+)?)/g
   const matches = [...content.matchAll(fileRefRegex)]
 

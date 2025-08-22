@@ -470,11 +470,8 @@ Temporary for current session:
 ### Debug Commands
 
 ```bash
-# Show effective configuration
-kode config list --effective
-
-# Validate configuration
-kode config validate
+# Show configuration
+kode config list
 
 # Reset to defaults
 kode config reset

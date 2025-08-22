@@ -109,7 +109,7 @@ cli.tsx (入口点)
 ```
 用户提示
     ↓
-上下文注入 (KODE.md, git 状态等)
+上下文注入 (AGENTS.md, git 状态等)
     ↓
 模型选择 (基于上下文大小)
     ↓
@@ -218,7 +218,7 @@ interface Tool {
 
 ### 5. 上下文管理
 自动上下文注入：
-- 项目文件 (KODE.md, CLAUDE.md)
+- 项目文件 (AGENTS.md, CLAUDE.md)
 - Git 状态和最近的提交
 - 目录结构
 - 先前的对话历史

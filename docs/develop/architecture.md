@@ -109,7 +109,7 @@ cli.tsx (Entry Point)
 ```
 User Prompt
     ↓
-Context Injection (KODE.md, git status, etc.)
+Context Injection (AGENTS.md, git status, etc.)
     ↓
 Model Selection (based on context size)
     ↓
@@ -218,7 +218,7 @@ Multi-level permission system:
 
 ### 5. Context Management
 Automatic context injection:
-- Project files (KODE.md, CLAUDE.md)
+- Project files (AGENTS.md, CLAUDE.md)
 - Git status and recent commits
 - Directory structure
 - Previous conversation history

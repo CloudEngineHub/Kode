@@ -5,17 +5,23 @@ import { join, dirname, basename, resolve } from 'path'
 import { getCwd } from '../utils/state'
 import { getCommand } from '../commands'
 import { getActiveAgents } from '../utils/agentLoader'
+import { getModelManager } from '../utils/model'
 import { glob } from 'glob'
+import { matchCommands } from '../utils/fuzzyMatcher'
+import { getCommonSystemCommands, getCommandPriority } from '../utils/commonUnixCommands'
 import type { Command } from '../commands'
 
 // Unified suggestion type for all completion types
 export interface UnifiedSuggestion {
   value: string
   displayValue: string
-  type: 'command' | 'agent' | 'file'
+  type: 'command' | 'agent' | 'file' | 'ask'
   icon?: string
   score: number
   metadata?: any
+  // Clean type system for smart matching
+  isSmartMatch?: boolean  // Instead of magic string checking
+  originalContext?: 'mention' | 'file' | 'command'  // Track source context
 }
 
 interface CompletionContext {
@@ -101,7 +107,7 @@ export function useUnifiedCompletion({
   const activateCompletion = useCallback((suggestions: UnifiedSuggestion[], context: CompletionContext) => {
     setState(prev => ({
       ...prev,
-      suggestions: suggestions.sort((a, b) => b.score - a.score),
+      suggestions: suggestions, // Keep the order from generateSuggestions (already sorted with weights)
       selectedIndex: 0,
       isActive: true,
       context,
@@ -137,14 +143,26 @@ export function useUnifiedCompletion({
   const getWordAtCursor = useCallback((): CompletionContext | null => {
     if (!input) return null
     
-    // Find word boundaries - simple and clean
+    // IMPORTANT: Only match the word/prefix BEFORE the cursor
+    // Don't include text after cursor to avoid confusion
     let start = cursorOffset
-    let end = cursorOffset
     
-    while (start > 0 && !/\s/.test(input[start - 1])) start--
-    while (end < input.length && !/\s/.test(input[end])) end++
+    // Move start backwards to find word beginning
+    // Stop at whitespace or special boundaries
+    while (start > 0) {
+      const char = input[start - 1]
+      // Stop at whitespace
+      if (/\s/.test(char)) break
+      // Keep @ and / as part of the word if they're at the beginning
+      if ((char === '@' || char === '/') && start < cursorOffset) {
+        start--
+        break // Include the @ or / but stop there
+      }
+      start--
+    }
     
-    const word = input.slice(start, end)
+    // The word is from start to cursor position (not beyond)
+    const word = input.slice(start, cursorOffset)
     if (!word) return null
     
     // Priority-based type detection - no special cases needed
@@ -155,16 +173,25 @@ export function useUnifiedCompletion({
         type: isCommand ? 'command' : 'file',
         prefix: isCommand ? word.slice(1) : word,
         startPos: start,
-        endPos: end
+        endPos: cursorOffset // Use cursor position as end
       }
     }
     
     if (word.startsWith('@')) {
+      const content = word.slice(1) // Remove @
+      
+      // Check if this looks like an email (contains @ in the middle)
+      if (word.includes('@', 1)) {
+        // This looks like an email, treat as regular text
+        return null
+      }
+      
+      // Trigger completion for @mentions (agents, ask-models, files)
       return {
-        type: 'agent',
-        prefix: word.slice(1),
+        type: 'agent', // This will trigger mixed agent+file completion
+        prefix: content,
         startPos: start,
-        endPos: end
+        endPos: cursorOffset // Use cursor position as end
       }
     }
     
@@ -173,7 +200,7 @@ export function useUnifiedCompletion({
       type: 'file', 
       prefix: word,
       startPos: start,
-      endPos: end
+      endPos: cursorOffset // Use cursor position as end
     }
   }, [input, cursorOffset])
 
@@ -181,6 +208,67 @@ export function useUnifiedCompletion({
   const [systemCommands, setSystemCommands] = useState<string[]>([])
   const [isLoadingCommands, setIsLoadingCommands] = useState(false)
   
+  // Dynamic command classification based on intrinsic features
+  const classifyCommand = useCallback((cmd: string): 'core' | 'common' | 'dev' | 'system' => {
+    const lowerCmd = cmd.toLowerCase()
+    let score = 0
+    
+    // === FEATURE 1: Name Length & Complexity ===
+    // Short, simple names are usually core commands
+    if (cmd.length <= 4) score += 40
+    else if (cmd.length <= 6) score += 20
+    else if (cmd.length <= 8) score += 10
+    else if (cmd.length > 15) score -= 30 // Very long names are specialized
+    
+    // === FEATURE 2: Character Patterns ===
+    // Simple alphabetic names are more likely core
+    if (/^[a-z]+$/.test(lowerCmd)) score += 30
+    
+    // Mixed case, numbers, dots suggest specialized tools
+    if (/[A-Z]/.test(cmd)) score -= 15
+    if (/\d/.test(cmd)) score -= 20
+    if (cmd.includes('.')) score -= 25
+    if (cmd.includes('-')) score -= 10
+    if (cmd.includes('_')) score -= 15
+    
+    // === FEATURE 3: Linguistic Patterns ===
+    // Single, common English words
+    const commonWords = ['list', 'copy', 'move', 'find', 'print', 'show', 'edit', 'view']
+    if (commonWords.some(word => lowerCmd.includes(word.slice(0, 3)))) score += 25
+    
+    // Domain-specific prefixes/suffixes
+    const devPrefixes = ['git', 'npm', 'node', 'py', 'docker', 'kubectl']
+    if (devPrefixes.some(prefix => lowerCmd.startsWith(prefix))) score += 15
+    
+    // System/daemon indicators  
+    const systemIndicators = ['daemon', 'helper', 'responder', 'service', 'd$', 'ctl$']
+    if (systemIndicators.some(indicator => 
+      indicator.endsWith('$') ? lowerCmd.endsWith(indicator.slice(0, -1)) : lowerCmd.includes(indicator)
+    )) score -= 40
+    
+    // === FEATURE 4: File Extension Indicators ===
+    // Commands with extensions are usually scripts/specialized tools
+    if (/\.(pl|py|sh|rb|js)$/.test(lowerCmd)) score -= 35
+    
+    // === FEATURE 5: Path Location Heuristics ===
+    // Note: We don't have path info here, but can infer from name patterns
+    // Commands that look like they belong in /usr/local/bin or specialized dirs
+    const buildToolPatterns = ['bindep', 'render', 'mako', 'webpack', 'babel', 'eslint']
+    if (buildToolPatterns.some(pattern => lowerCmd.includes(pattern))) score -= 25
+    
+    // === FEATURE 6: Vowel/Consonant Patterns ===
+    // Unix commands often have abbreviated names with few vowels
+    const vowelRatio = (lowerCmd.match(/[aeiou]/g) || []).length / lowerCmd.length
+    if (vowelRatio < 0.2) score += 15 // Very few vowels (like 'ls', 'cp', 'mv')
+    if (vowelRatio > 0.5) score -= 10  // Too many vowels (usually full words)
+    
+    // === CLASSIFICATION BASED ON SCORE ===
+    if (score >= 50) return 'core'      // 50+: Core unix commands
+    if (score >= 20) return 'common'    // 20-49: Common dev tools  
+    if (score >= -10) return 'dev'      // -10-19: Specialized dev tools
+    return 'system'                     // <-10: System/edge commands
+  }, [])
+
   // Load system commands from PATH (like real terminal)
   const loadSystemCommands = useCallback(async () => {
     if (systemCommands.length > 0 || isLoadingCommands) return // Already loaded or loading
@@ -269,11 +357,17 @@ export function useUnifiedCompletion({
       }))
   }, [commands])
 
-  // Generate Unix command suggestions from system PATH
+  // Clean Unix command scoring using fuzzy matcher
+  const calculateUnixCommandScore = useCallback((cmd: string, prefix: string): number => {
+    const result = matchCommands([cmd], prefix)
+    return result.length > 0 ? result[0].score : 0
+  }, [])
+
+  // Clean Unix command suggestions using fuzzy matcher with common commands boost
   const generateUnixCommandSuggestions = useCallback((prefix: string): UnifiedSuggestion[] => {
     if (!prefix) return []
     
-    // If still loading commands, show loading indicator
+    // Loading state
     if (isLoadingCommands) {
       return [{
         value: 'loading...',
@@ -284,22 +378,79 @@ export function useUnifiedCompletion({
       }]
     }
     
-    const matchingCommands = systemCommands
-      .filter(cmd => cmd.toLowerCase().startsWith(prefix.toLowerCase()))
-      .slice(0, 20) // Limit to top 20 matches for performance
-      .map(cmd => ({
-        value: cmd,
-        displayValue: `◆ ${cmd}`, // 钻石符号表示系统命令
-        type: 'command' as const, // Correct type for system commands
-        score: 85 + (cmd === prefix ? 10 : 0), // Boost exact matches
-        metadata: { isUnixCommand: true }
-      }))
+    // IMPORTANT: Only use commands that exist on the system (intersection)
+    const commonCommands = getCommonSystemCommands(systemCommands)
     
-    return matchingCommands
+    // Deduplicate commands (in case of any duplicates)
+    const uniqueCommands = Array.from(new Set(commonCommands))
+    
+    // Use fuzzy matcher ONLY on the unique intersection
+    const matches = matchCommands(uniqueCommands, prefix)
+    
+    // Boost common commands
+    const boostedMatches = matches.map(match => {
+      const priority = getCommandPriority(match.command)
+      return {
+        ...match,
+        score: match.score + priority * 0.5 // Add priority boost
+      }
+    }).sort((a, b) => b.score - a.score)
+    
+    // Limit results intelligently
+    let results = boostedMatches.slice(0, 8)
+    
+    // If we have very high scores (900+), show fewer
+    const perfectMatches = boostedMatches.filter(m => m.score >= 900)
+    if (perfectMatches.length > 0 && perfectMatches.length <= 3) {
+      results = perfectMatches
+    }
+    // If we have good scores (100+), prefer them
+    else if (boostedMatches.length > 8) {
+      const goodMatches = boostedMatches.filter(m => m.score >= 100)
+      if (goodMatches.length <= 5) {
+        results = goodMatches
+      }
+    }
+    
+    return results.map(item => ({
+      value: item.command,
+      displayValue: `$ ${item.command}`,
+      type: 'command' as const,
+      score: item.score,
+      metadata: { isUnixCommand: true }
+    }))
   }, [systemCommands, isLoadingCommands])
 
   // Agent suggestions cache
   const [agentSuggestions, setAgentSuggestions] = useState<UnifiedSuggestion[]>([])
+  
+  // Model suggestions cache
+  const [modelSuggestions, setModelSuggestions] = useState<UnifiedSuggestion[]>([])
+  
+  // Load model suggestions
+  useEffect(() => {
+    try {
+      const modelManager = getModelManager()
+      const allModels = modelManager.getAllAvailableModelNames()
+      
+      const suggestions = allModels.map(modelId => {
+        // Professional and clear description for expert model consultation
+        return {
+          value: `ask-${modelId}`,
+          displayValue: `🦜 ask-${modelId} :: Consult ${modelId} for expert opinion and specialized analysis`,
+          type: 'ask' as const,
+          score: 90, // Higher than agents - put ask-models on top
+          metadata: { modelId },
+        }
+      })
+      
+      setModelSuggestions(suggestions)
+    } catch (error) {
+      console.warn('[useUnifiedCompletion] Failed to load models:', error)
+      // No fallback - rely on dynamic loading only
+      setModelSuggestions([])
+    }
+  }, [])
   
   // Load agent suggestions on mount
   useEffect(() => {
@@ -372,10 +523,10 @@ export function useUnifiedCompletion({
         }
         
         return {
-          value: config.agentType,
-          displayValue: `👤 agent-${config.agentType} :: ${shortDesc}`, // 人类图标 + agent前缀 + HACK双冒号
+          value: `run-agent-${config.agentType}`,
+          displayValue: `👤 run-agent-${config.agentType} :: ${shortDesc}`, // 人类图标 + run-agent前缀 + 简洁描述
           type: 'agent' as const,
-          score: 90,
+          score: 85, // Lower than ask-models
           metadata: config,
         }
       })
@@ -383,122 +534,194 @@ export function useUnifiedCompletion({
       setAgentSuggestions(suggestions)
     }).catch((error) => {
       console.warn('[useUnifiedCompletion] Failed to load agents:', error)
-      // Fallback to basic suggestions if agent loading fails
-      setAgentSuggestions([
-        {
-          value: 'general-purpose',
-          displayValue: '👤 agent-general-purpose :: General-purpose agent for researching complex questions, searching for code, and executing multi-step tasks', // 人类图标 + HACK风格
-          type: 'agent' as const,
-          score: 90,
-          metadata: { whenToUse: 'General-purpose agent for researching complex questions, searching for code, and executing multi-step tasks' }
-        }
-      ])
+      // No fallback - rely on dynamic loading only
+      setAgentSuggestions([])
     })
   }, [])
 
-  // Generate agent suggestions (sync)
-  const generateAgentSuggestions = useCallback((prefix: string): UnifiedSuggestion[] => {
-    // Process agent suggestions
+  // Generate agent and model suggestions using fuzzy matching
+  const generateMentionSuggestions = useCallback((prefix: string): UnifiedSuggestion[] => {
+    // Combine agent and model suggestions
+    const allSuggestions = [...agentSuggestions, ...modelSuggestions]
     
     if (!prefix) {
-      // Show all agents when prefix is empty (for single @)
-      // Return all agents when no prefix
-      return agentSuggestions
+      // Show all suggestions when prefix is empty (for single @)
+      return allSuggestions.sort((a, b) => {
+        // Ask models first (higher score), then agents
+        if (a.type === 'ask' && b.type === 'agent') return -1
+        if (a.type === 'agent' && b.type === 'ask') return 1
+        return b.score - a.score
+      })
     }
     
-    const filtered = agentSuggestions
-      .filter(suggestion => 
-        suggestion.value.toLowerCase().includes(prefix.toLowerCase())
-      )
-      .map(suggestion => ({
-        ...suggestion,
-        score: 90 - prefix.length + (suggestion.value.startsWith(prefix) ? 10 : 0)
-      }))
+    // Use fuzzy matching for intelligent completion
+    const candidates = allSuggestions.map(s => s.value)
+    const matches = matchCommands(candidates, prefix)
     
-    // Return filtered agents
-    return filtered
-  }, [agentSuggestions])
+    // Create result mapping with fuzzy scores
+    const fuzzyResults = matches
+      .map(match => {
+        const suggestion = allSuggestions.find(s => s.value === match.command)!
+        return {
+          ...suggestion,
+          score: match.score // Use fuzzy match score instead of simple scoring
+        }
+      })
+      .sort((a, b) => {
+        // Ask models first (for equal scores), then agents
+        if (a.type === 'ask' && b.type === 'agent') return -1
+        if (a.type === 'agent' && b.type === 'ask') return 1
+        return b.score - a.score
+      })
+    
+    return fuzzyResults
+  }, [agentSuggestions, modelSuggestions])
 
-  // Generate file AND unix command suggestions - 支持@引用路径
-  const generateFileSuggestions = useCallback((prefix: string): UnifiedSuggestion[] => {
-    // First try Unix commands (不包含在@引用中)
-    const unixSuggestions = generateUnixCommandSuggestions(prefix)
-    
-    // Then try file system
+  // Unix-style path completion - preserves user input semantics
+  const generateFileSuggestions = useCallback((prefix: string, isAtReference: boolean = false): UnifiedSuggestion[] => {
     try {
       const cwd = getCwd()
-      let searchPath = prefix || '.'
       
-      // 🚀 处理@引用的路径：如果prefix以@开头的路径，去掉@进行文件系统查找
-      let actualSearchPath = searchPath
-      if (searchPath.startsWith('@')) {
-        actualSearchPath = searchPath.slice(1) // 去掉@符号进行实际文件查找
+      // Parse user input preserving original format
+      const userPath = prefix || '.'
+      const isAbsolutePath = userPath.startsWith('/')
+      const isHomePath = userPath.startsWith('~')
+      
+      // Resolve search directory - but keep user's path format for output
+      let searchPath: string
+      if (isHomePath) {
+        searchPath = userPath.replace('~', process.env.HOME || '')
+      } else if (isAbsolutePath) {
+        searchPath = userPath
+      } else {
+        searchPath = resolve(cwd, userPath)
       }
       
-      // Expand ~ immediately
-      if (actualSearchPath.startsWith('~')) {
-        actualSearchPath = actualSearchPath.replace('~', process.env.HOME || '')
-      }
+      // Determine search directory and filename filter
+      const searchStat = existsSync(searchPath) ? statSync(searchPath) : null
+      const searchDir = searchStat?.isDirectory() ? searchPath : dirname(searchPath)
+      const nameFilter = searchStat?.isDirectory() ? '' : basename(searchPath)
       
-      const absolutePath = resolve(cwd, actualSearchPath)
-      const dir = existsSync(absolutePath) && statSync(absolutePath).isDirectory() 
-        ? absolutePath 
-        : dirname(absolutePath)
-      const filePrefix = existsSync(absolutePath) && statSync(absolutePath).isDirectory()
-        ? ''
-        : basename(absolutePath)
+      if (!existsSync(searchDir)) return []
       
-      if (!existsSync(dir)) return []
+      // Get directory entries with filter
+      const entries = readdirSync(searchDir)
+        .filter(entry => !nameFilter || entry.toLowerCase().startsWith(nameFilter.toLowerCase()))
+        .slice(0, 10)
       
-      const entries = readdirSync(dir)
-        .filter(entry => !filePrefix || entry.toLowerCase().startsWith(filePrefix.toLowerCase()))
-        .slice(0, 10) // Limit for performance
-      
-      const fileSuggestions = entries.map(entry => {
-        const fullPath = join(dir, entry)
-        const isDir = statSync(fullPath).isDirectory()
+      return entries.map(entry => {
+        const entryPath = join(searchDir, entry)
+        const isDir = statSync(entryPath).isDirectory()
         const icon = isDir ? '📁' : '📄'
         
-        // Simplified path generation logic - no special cases
+        // Unix-style path building - preserve user's original path format
         let value: string
-        const isAtReference = prefix.startsWith('@')
-        const pathPrefix = isAtReference ? prefix.slice(1) : prefix
         
-        if (pathPrefix.includes('/')) {
-          // Has path separator - build from directory structure
-          if (pathPrefix.endsWith('/') || (existsSync(absolutePath) && statSync(absolutePath).isDirectory() && basename(absolutePath) === basename(pathPrefix))) {
-            // Directory listing case
-            value = prefix + (prefix.endsWith('/') ? '' : '/') + entry + (isDir ? '/' : '')
+        if (userPath.includes('/')) {
+          // User typed path with separators - maintain structure
+          if (userPath.endsWith('/') || searchStat?.isDirectory()) {
+            // User is navigating into a directory
+            value = userPath.endsWith('/') 
+              ? userPath + entry + (isDir ? '/' : '')
+              : userPath + '/' + entry + (isDir ? '/' : '')
           } else {
-            // Partial filename completion
-            value = join(dirname(prefix), entry) + (isDir ? '/' : '')
+            // User is completing a filename - replace basename
+            const userDir = userPath.includes('/') ? userPath.substring(0, userPath.lastIndexOf('/')) : ''
+            value = userDir ? userDir + '/' + entry + (isDir ? '/' : '') : entry + (isDir ? '/' : '')
           }
         } else {
-          // Simple case - no path separator
-          const actualPrefix = isAtReference ? pathPrefix : prefix
-          if (existsSync(resolve(dir, actualPrefix)) && statSync(resolve(dir, actualPrefix)).isDirectory()) {
-            // Existing directory - list contents
-            value = prefix + '/' + entry + (isDir ? '/' : '')
+          // User typed simple name - check if it's an existing directory
+          if (searchStat?.isDirectory()) {
+            // Existing directory - navigate into it
+            value = userPath + '/' + entry + (isDir ? '/' : '')
           } else {
-            // File/directory at current level
-            value = (isAtReference ? '@' : '') + entry + (isDir ? '/' : '')
+            // Simple completion at current level
+            value = entry + (isDir ? '/' : '')
           }
         }
         
         return {
           value,
-          displayValue: `${icon} ${entry}${isDir ? '/' : ''}`, // 恢复实用图标
+          displayValue: `${icon} ${entry}${isDir ? '/' : ''}`,
           type: 'file' as const,
-          score: isDir ? 80 : 70, // Directories score higher
+          score: isDir ? 80 : 70,
         }
       })
-      
-      // Combine Unix commands and file suggestions
-      return [...unixSuggestions, ...fileSuggestions]
     } catch {
-      return unixSuggestions // At least return Unix commands if file system fails
+      return []
     }
-  }, [generateUnixCommandSuggestions])
+  }, [])
+
+  // Unified smart matching - single algorithm with different weights
+  const calculateMatchScore = useCallback((suggestion: UnifiedSuggestion, prefix: string): number => {
+    const lowerPrefix = prefix.toLowerCase()
+    const value = suggestion.value.toLowerCase()
+    const displayValue = suggestion.displayValue.toLowerCase()
+    
+    let matchFound = false
+    let score = 0
+    
+    // Check for actual matches first
+    if (value.startsWith(lowerPrefix)) {
+      matchFound = true
+      score = 100  // Highest priority
+    } else if (value.includes(lowerPrefix)) {
+      matchFound = true
+      score = 95  
+    } else if (displayValue.includes(lowerPrefix)) {
+      matchFound = true
+      score = 90
+    } else {
+      // Word boundary matching for compound names like "general" -> "run-agent-general-purpose"
+      const words = value.split(/[-_]/)
+      if (words.some(word => word.startsWith(lowerPrefix))) {
+        matchFound = true
+        score = 93
+      } else {
+        // Acronym matching (last resort)
+        const acronym = words.map(word => word[0]).join('')
+        if (acronym.startsWith(lowerPrefix)) {
+          matchFound = true
+          score = 88
+        }
+      }
+    }
+    
+    // Only return score if we found a match
+    if (!matchFound) return 0
+    
+    // Type preferences (small bonus)
+    if (suggestion.type === 'ask') score += 2
+    if (suggestion.type === 'agent') score += 1
+    
+    return score
+  }, [])
+
+  // Generate smart mention suggestions without data pollution
+  const generateSmartMentionSuggestions = useCallback((prefix: string, sourceContext: 'file' | 'agent' = 'file'): UnifiedSuggestion[] => {
+    if (!prefix || prefix.length < 2) return []
+    
+    const allSuggestions = [...agentSuggestions, ...modelSuggestions]
+    
+    return allSuggestions
+      .map(suggestion => {
+        const matchScore = calculateMatchScore(suggestion, prefix)
+        if (matchScore === 0) return null
+        
+        // Clean transformation without data pollution
+        return {
+          ...suggestion,
+          score: matchScore,
+          isSmartMatch: true,
+          originalContext: sourceContext,
+          // Only modify display for clarity, keep value clean
+          displayValue: `🎯 ${suggestion.displayValue}`
+        }
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5)
+  }, [agentSuggestions, modelSuggestions, calculateMatchScore])
 
   // Generate all suggestions based on context
   const generateSuggestions = useCallback((context: CompletionContext): UnifiedSuggestion[] => {
@@ -506,57 +729,87 @@ export function useUnifiedCompletion({
       case 'command':
         return generateCommandSuggestions(context.prefix)
       case 'agent': {
-        // 🚀 @ = 万能引用符！更优雅的分组显示
-        const agentSuggestions = generateAgentSuggestions(context.prefix)
-        const fileSuggestions = generateFileSuggestions(context.prefix)
-          .filter(suggestion => !suggestion.metadata?.isUnixCommand) // 排除unix命令，只保留文件
-          .map(suggestion => ({
-            ...suggestion,
-            // 文件建议保持原始displayValue，避免重复图标
-            type: 'file' as const,
-            score: suggestion.score - 10, // 代理优先级更高
+        // @ reference: combine mentions and files with clean priority
+        const mentionSuggestions = generateMentionSuggestions(context.prefix)
+        const fileSuggestions = generateFileSuggestions(context.prefix, true) // isAtReference=true
+        
+        // Apply weights for @ context (agents/models should be prioritized but files visible)
+        const weightedSuggestions = [
+          ...mentionSuggestions.map(s => ({
+            ...s,
+            // In @ context, agents/models get high priority
+            weightedScore: s.score + 150
+          })),
+          ...fileSuggestions.map(s => ({
+            ...s,
+            // Files get lower priority but still visible
+            weightedScore: s.score + 10 // Small boost to ensure visibility
+          }))
+        ]
+        
+        // Sort by weighted score - no artificial limits
+        return weightedSuggestions
+          .sort((a, b) => b.weightedScore - a.weightedScore)
+          .map(({ weightedScore, ...suggestion }) => suggestion)
+          // No limit or very generous limit (e.g., 30 items)
+      }
+      case 'file': {
+        // For normal input, try to match everything intelligently
+        const fileSuggestions = generateFileSuggestions(context.prefix, false)
+        const unixSuggestions = generateUnixCommandSuggestions(context.prefix)
+        
+        // IMPORTANT: Also try to match agents and models WITHOUT requiring @
+        // This enables smart matching for inputs like "gp5", "daoqi", etc.
+        const mentionMatches = generateMentionSuggestions(context.prefix)
+          .map(s => ({
+            ...s,
+            isSmartMatch: true,
+            // Show that @ will be added when selected
+            displayValue: `\u2192 ${s.displayValue}` // Arrow to indicate it will transform
           }))
         
-        // 🎨 优雅分组策略
-        let finalSuggestions: UnifiedSuggestion[] = []
+        // Apply source-based priority weights with special handling for exact matches
+        // Priority order: Exact Unix > Unix commands > agents/models > files
+        const weightedSuggestions = [
+          ...unixSuggestions.map(s => ({
+            ...s,
+            // Unix commands get boost, but exact matches get huge boost
+            sourceWeight: s.score >= 10000 ? 5000 : 200, // Exact match gets massive boost
+            weightedScore: s.score >= 10000 ? s.score + 5000 : s.score + 200
+          })),
+          ...mentionMatches.map(s => ({
+            ...s,
+            // Agents/models get medium priority boost (but less to avoid overriding exact Unix)
+            sourceWeight: 50,
+            weightedScore: s.score + 50
+          })),
+          ...fileSuggestions.map(s => ({
+            ...s,
+            // Files get no boost (baseline)
+            sourceWeight: 0,
+            weightedScore: s.score
+          }))
+        ]
         
-        if (!context.prefix) {
-          // 单独@符号：显示所有agents和files，简洁无标题
-          const topAgents = agentSuggestions // 显示所有代理
-          const topFiles = fileSuggestions   // 显示所有文件
-          
-          // 🎨 终极简洁：直接混合显示，代理优先
-          finalSuggestions = [...topAgents, ...topFiles]
-            .sort((a, b) => {
-              // 代理类型优先显示
-              if (a.type === 'agent' && b.type === 'file') return -1
-              if (a.type === 'file' && b.type === 'agent') return 1
-              return b.score - a.score
-            })
-        } else {
-          // 有前缀：按相关性混合显示，但代理优先，不限制数量
-          const relevantAgents = agentSuggestions // 显示所有匹配的代理
-          const relevantFiles = fileSuggestions   // 显示所有匹配的文件
-          
-          finalSuggestions = [...relevantAgents, ...relevantFiles]
-            .sort((a, b) => {
-              // 代理类型优先
-              if (a.type === 'agent' && b.type === 'file') return -1
-              if (a.type === 'file' && b.type === 'agent') return 1
-              return b.score - a.score
-            })
-        }
+        // Sort by weighted score and deduplicate
+        const seen = new Set<string>()
+        const deduplicatedResults = weightedSuggestions
+          .sort((a, b) => b.weightedScore - a.weightedScore)
+          .filter(item => {
+            // Filter out duplicates based on value
+            if (seen.has(item.value)) return false
+            seen.add(item.value)
+            return true
+          })
+          .map(({ weightedScore, sourceWeight, ...suggestion }) => suggestion) // Remove weight fields
+          // No limit - show all relevant matches
         
-        // Generated mixed suggestions for @ reference
-        
-        return finalSuggestions
+        return deduplicatedResults
       }
-      case 'file':
-        return generateFileSuggestions(context.prefix)
       default:
         return []
     }
-  }, [generateCommandSuggestions, generateAgentSuggestions, generateFileSuggestions])
+  }, [generateCommandSuggestions, generateMentionSuggestions, generateFileSuggestions, generateUnixCommandSuggestions, generateSmartMentionSuggestions])
 
 
   // Complete with a suggestion - 支持万能@引用 + slash命令自动执行
@@ -569,18 +822,30 @@ export function useUnifiedCompletion({
       // 🚀 万能@引用：根据建议类型决定补全格式
       if (suggestion.type === 'agent') {
         completion = `@${suggestion.value} ` // 代理补全
+      } else if (suggestion.type === 'ask') {
+        completion = `@${suggestion.value} ` // Ask模型补全
       } else {
-        completion = `@${suggestion.value} ` // 文件引用也用@
+        // File reference in @mention context - no space for directories to allow expansion
+        const isDirectory = suggestion.value.endsWith('/')
+        completion = `@${suggestion.value}${isDirectory ? '' : ' '}` // 文件夹不加空格，文件加空格
       }
     } else {
-      completion = suggestion.value // 普通文件补全
+      // Regular file completion OR smart mention matching
+      if (suggestion.isSmartMatch) {
+        // Smart mention - add @ prefix and space
+        completion = `@${suggestion.value} `
+      } else {
+        // Regular file completion - no space for directories to allow expansion
+        const isDirectory = suggestion.value.endsWith('/')
+        completion = suggestion.value + (isDirectory ? '' : ' ')
+      }
     }
     
     // Special handling for absolute paths in file completion
     // When completing an absolute path, we should replace the entire current word/path
     let actualEndPos: number
     
-    if (context.type === 'file' && suggestion.value.startsWith('/')) {
+    if (context.type === 'file' && suggestion.value.startsWith('/') && !suggestion.isSmartMatch) {
       // For absolute paths, find the end of the current path/word
       let end = context.startPos
       while (end < input.length && input[end] !== ' ' && input[end] !== '\n') {
@@ -626,7 +891,7 @@ export function useUnifiedCompletion({
     // If menu is already showing, cycle through suggestions
     if (state.isActive && state.suggestions.length > 0) {
       const nextIndex = (state.selectedIndex + 1) % state.suggestions.length
-      const preview = state.suggestions[nextIndex].value
+      const nextSuggestion = state.suggestions[nextIndex]
       
       if (state.context) {
         // Calculate proper word boundaries
@@ -635,6 +900,20 @@ export function useUnifiedCompletion({
         const actualEndPos = wordEnd === -1 
           ? input.length 
           : state.context.startPos + wordEnd
+        
+        // Apply appropriate prefix based on context type and suggestion type
+        let preview: string
+        if (state.context.type === 'command') {
+          preview = `/${nextSuggestion.value}`
+        } else if (state.context.type === 'agent') {
+          // For @mentions, always add @ prefix
+          preview = `@${nextSuggestion.value}`
+        } else if (nextSuggestion.isSmartMatch) {
+          // Smart match from normal input - add @ prefix
+          preview = `@${nextSuggestion.value}`
+        } else {
+          preview = nextSuggestion.value
+        }
         
         // Apply preview
         const newInput = input.slice(0, state.context.startPos) + 
@@ -667,27 +946,84 @@ export function useUnifiedCompletion({
       completeWith(currentSuggestions[0], context)
       return true
     } else {
-      // Check for common prefix
-      const commonPrefix = findCommonPrefix(currentSuggestions)
+      // Show menu and apply first suggestion
+      activateCompletion(currentSuggestions, context)
       
-      if (commonPrefix.length > context.prefix.length) {
-        partialComplete(commonPrefix, context)
-        return true
+      // Immediately apply first suggestion as preview
+      const firstSuggestion = currentSuggestions[0]
+      const currentWord = input.slice(context.startPos)
+      const wordEnd = currentWord.search(/\s/)
+      const actualEndPos = wordEnd === -1 
+        ? input.length 
+        : context.startPos + wordEnd
+        
+      let preview: string
+      if (context.type === 'command') {
+        preview = `/${firstSuggestion.value}`
+      } else if (context.type === 'agent') {
+        preview = `@${firstSuggestion.value}`
+      } else if (firstSuggestion.isSmartMatch) {
+        // Smart match from normal input - add @ prefix
+        preview = `@${firstSuggestion.value}`
       } else {
-        // Show menu
-        activateCompletion(currentSuggestions, context)
-        return true
+        preview = firstSuggestion.value
       }
+      
+      const newInput = input.slice(0, context.startPos) + 
+                       preview + 
+                       input.slice(actualEndPos)
+      
+      onInputChange(newInput)
+      setCursorOffset(context.startPos + preview.length)
+      
+      updateState({
+        preview: {
+          isActive: true,
+          originalInput: input,
+          wordRange: [context.startPos, context.startPos + preview.length]
+        }
+      })
+      
+      return true
     }
   })
 
   // Handle navigation keys - simplified and unified  
   useInput((_, key) => {
-    // Enter key - confirm selection
+    // Enter key - confirm selection and end completion (always add space)
     if (key.return && state.isActive && state.suggestions.length > 0) {
       const selectedSuggestion = state.suggestions[state.selectedIndex]
       if (selectedSuggestion && state.context) {
-        completeWith(selectedSuggestion, state.context)
+        // For Enter key, always add space even for directories to indicate completion end
+        let completion: string
+        
+        if (state.context.type === 'command') {
+          completion = `/${selectedSuggestion.value} `
+        } else if (state.context.type === 'agent') {
+          if (selectedSuggestion.type === 'agent') {
+            completion = `@${selectedSuggestion.value} `
+          } else if (selectedSuggestion.type === 'ask') {
+            completion = `@${selectedSuggestion.value} `
+          } else {
+            // File reference in @mention context - always add space on Enter
+            completion = `@${selectedSuggestion.value} `
+          }
+        } else if (selectedSuggestion.isSmartMatch) {
+          // Smart match from normal input - add @ prefix
+          completion = `@${selectedSuggestion.value} `
+        } else {
+          // Regular file completion - always add space on Enter
+          completion = selectedSuggestion.value + ' '
+        }
+        
+        // Apply completion with forced space
+        const currentWord = input.slice(state.context.startPos)
+        const nextSpaceIndex = currentWord.indexOf(' ')
+        const actualEndPos = nextSpaceIndex === -1 ? input.length : state.context.startPos + nextSpaceIndex
+        
+        const newInput = input.slice(0, state.context.startPos) + completion + input.slice(actualEndPos)
+        onInputChange(newInput)
+        setCursorOffset(state.context.startPos + completion.length)
       }
       resetCompletion()
       return true

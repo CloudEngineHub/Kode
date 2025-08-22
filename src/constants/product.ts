@@ -1,6 +1,6 @@
 export const PRODUCT_NAME = 'Kode'
 export const PRODUCT_URL = 'https://github.com/shareAI-lab/Anykode'
-export const PROJECT_FILE = 'KODE.md'
+export const PROJECT_FILE = 'AGENTS.md'
 export const PRODUCT_COMMAND = 'kode'
 export const CONFIG_BASE_DIR = '.kode'
 export const CONFIG_FILE = '.kode.json'

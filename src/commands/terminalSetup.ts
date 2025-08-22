@@ -52,17 +52,17 @@ export function isShiftEnterKeyBindingInstalled(): boolean {
 }
 
 export function handleHashCommand(interpreted: string): void {
-  // Appends the AI-interpreted content to both KODE.md and CLAUDE.md (if exists)
+  // Appends the AI-interpreted content to both AGENTS.md and CLAUDE.md (if exists)
   try {
     const cwd = process.cwd()
-    const codeContextPath = join(cwd, 'KODE.md')
+    const codeContextPath = join(cwd, 'AGENTS.md')
     const claudePath = join(cwd, 'CLAUDE.md')
 
     // Check which files exist and update them
     const filesToUpdate = []
 
-    // Always try to update KODE.md (create if not exists)
-    filesToUpdate.push({ path: codeContextPath, name: 'KODE.md' })
+    // Always try to update AGENTS.md (create if not exists)
+    filesToUpdate.push({ path: codeContextPath, name: 'AGENTS.md' })
 
     // Update CLAUDE.md only if it exists
     try {
