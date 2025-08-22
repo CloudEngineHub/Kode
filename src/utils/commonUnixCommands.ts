@@ -46,7 +46,7 @@ export const COMMON_UNIX_COMMANDS = [
   
   // Development Tools - Languages (60+)
   'gcc', 'g++', 'clang', 'clang++', 'make', 'cmake', 'autoconf', 'automake', 'libtool', 'pkg-config',
-  'python', 'python2', 'python3', 'pip', 'pip2', 'pip3', 'pipenv', 'poetry', 'virtualenv', 'pyenv',
+  'python3', 'pip', 'pip3', 'pipenv', 'poetry', 'virtualenv', 'pyenv',
   'node', 'npm', 'uv', 'npx', 'yarn', 'pnpm', 'nvm', 'volta', 'deno', 'bun', 'tsx',
   'ruby', 'gem', 'bundle', 'bundler', 'rake', 'rbenv', 'rvm', 'irb', 'pry', 'rails',
   'java', 'javac', 'jar', 'javadoc', 'maven', 'mvn', 'gradle', 'ant', 'kotlin', 'kotlinc',
@@ -136,4 +136,26 @@ export function getCommandPriority(command: string): number {
   const maxScore = 100
   const score = maxScore - (index / COMMON_UNIX_COMMANDS.length) * maxScore
   return Math.round(score)
+}
+
+/**
+ * Get essential fallback commands for when PATH is empty or unavailable
+ * These are the most basic commands that should always be available
+ */
+export function getEssentialCommands(): string[] {
+  return [
+    'ls', 'cd', 'pwd', 'cat', 'grep', 'find', 'which', 'man', 'cp', 'mv', 'rm', 'mkdir',
+    'touch', 'chmod', 'ps', 'top', 'kill', 'git', 'node', 'npm', 'python3',
+    'curl', 'wget', 'docker', 'vim', 'nano', 'echo', 'export', 'env', 'sudo'
+  ]
+}
+
+/**
+ * Get minimal fallback commands for error scenarios
+ * These are absolute minimum commands for basic functionality
+ */
+export function getMinimalFallbackCommands(): string[] {
+  return [
+    'ls', 'cd', 'pwd', 'cat', 'grep', 'find', 'git', 'node', 'npm', 'python3', 'vim', 'nano'
+  ]
 }
