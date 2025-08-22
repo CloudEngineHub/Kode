@@ -153,11 +153,55 @@ export function useUnifiedCompletion({
       const char = input[start - 1]
       // Stop at whitespace
       if (/\s/.test(char)) break
-      // Keep @ and / as part of the word if they're at the beginning
-      if ((char === '@' || char === '/') && start < cursorOffset) {
+      
+      // For @mentions, include @ and stop
+      if (char === '@' && start < cursorOffset) {
         start--
-        break // Include the @ or / but stop there
+        break
       }
+      
+      // For paths, be smarter about / handling
+      if (char === '/') {
+        // Look ahead to see what we've collected so far
+        const collectedSoFar = input.slice(start, cursorOffset)
+        
+        // If we already have a path component, this / is part of the path
+        if (collectedSoFar.includes('/') || collectedSoFar.includes('.')) {
+          start--
+          continue
+        }
+        
+        // Check if this is part of a path pattern like ./ or ../ or ~/
+        if (start > 1) {
+          const prevChar = input[start - 2]
+          if (prevChar === '.' || prevChar === '~') {
+            // It's part of ./ or ../ or ~/ - keep going
+            start--
+            continue
+          }
+        }
+        
+        // Check if this is a standalone / at the beginning (command)
+        if (start === 1 || (start > 1 && /\s/.test(input[start - 2]))) {
+          start--
+          break // It's a command slash
+        }
+        
+        // Otherwise treat as path separator
+        start--
+        continue
+      }
+      
+      // Special handling for dots in paths
+      if (char === '.' && start > 0) {
+        // Check if this might be start of ./ or ../
+        const nextChar = start < input.length ? input[start] : ''
+        if (nextChar === '/' || nextChar === '.') {
+          start--
+          continue // Part of a path pattern
+        }
+      }
+      
       start--
     }
     
@@ -1284,16 +1328,18 @@ export function useUnifiedCompletion({
         const prefix = context.prefix
         
         // Always trigger for clear path patterns
-        if (prefix.startsWith('/') || prefix.startsWith('~') || prefix.includes('/')) {
+        if (prefix.startsWith('./') || prefix.startsWith('../') || 
+            prefix.startsWith('/') || prefix.startsWith('~') || 
+            prefix.includes('/')) {
           return true
         }
         
-        // Only trigger for extensions with reasonable filename length
-        if (prefix.includes('.') && prefix.length >= 3) {
+        // Trigger for single dot followed by something (like .g for .gitignore)
+        if (prefix.startsWith('.') && prefix.length >= 2) {
           return true
         }
         
-        // Skip very short prefixes that are likely code (a.b, x.y)
+        // Skip very short prefixes that are likely code
         return false
       default:
         return false
