@@ -25,6 +25,11 @@ export interface ToolUseContext {
     kodingContext?: string
     isCustomCommand?: boolean
   }
+  // GPT-5 Responses API state management
+  responseState?: {
+    previousResponseId?: string
+    conversationId?: string
+  }
 }
 
 export interface ExtendedToolUseContext extends ToolUseContext {
