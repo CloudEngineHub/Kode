@@ -8,7 +8,12 @@ import { getActiveAgents } from '../utils/agentLoader'
 import { getModelManager } from '../utils/model'
 import { glob } from 'glob'
 import { matchCommands } from '../utils/fuzzyMatcher'
-import { getCommonSystemCommands, getCommandPriority } from '../utils/commonUnixCommands'
+import { 
+  getCommonSystemCommands, 
+  getCommandPriority,
+  getEssentialCommands,
+  getMinimalFallbackCommands 
+} from '../utils/commonUnixCommands'
 import type { Command } from '../commands'
 
 // Unified suggestion type for all completion types
@@ -323,15 +328,11 @@ export function useUnifiedCompletion({
       const pathDirs = (process.env.PATH || '').split(':').filter(Boolean)
       const commandSet = new Set<string>()
       
-      // Common fallback commands in case PATH is empty
-      const fallbackCommands = [
-        'ls', 'cd', 'pwd', 'cat', 'grep', 'find', 'which', 'man', 'cp', 'mv', 'rm', 'mkdir',
-        'touch', 'chmod', 'ps', 'top', 'kill', 'git', 'node', 'npm', 'python', 'python3',
-        'curl', 'wget', 'docker', 'vim', 'nano', 'echo', 'export', 'env', 'sudo'
-      ]
+      // Get essential commands from utils
+      const essentialCommands = getEssentialCommands()
       
-      // Add fallback commands first
-      fallbackCommands.forEach(cmd => commandSet.add(cmd))
+      // Add essential commands first
+      essentialCommands.forEach(cmd => commandSet.add(cmd))
       
       // Scan PATH directories for executables
       for (const dir of pathDirs) {
@@ -360,10 +361,8 @@ export function useUnifiedCompletion({
       setSystemCommands(commands)
     } catch (error) {
       console.warn('Failed to load system commands, using fallback:', error)
-      // Fallback to basic commands if system scan fails
-      setSystemCommands([
-        'ls', 'cd', 'pwd', 'cat', 'grep', 'find', 'git', 'node', 'npm', 'python', 'vim', 'nano'
-      ])
+      // Use minimal fallback commands from utils if system scan fails
+      setSystemCommands(getMinimalFallbackCommands())
     } finally {
       setIsLoadingCommands(false)
     }
