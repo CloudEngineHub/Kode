@@ -906,7 +906,7 @@ export function streamCompletion(
 /**
  * Call GPT-5 Responses API with proper parameter handling
  */
-async function callGPT5ResponsesAPI(
+export async function callGPT5ResponsesAPI(
   modelProfile: any,
   opts: any, // Using 'any' for Responses API params which differ from ChatCompletionCreateParams
   signal?: AbortSignal,

@@ -42,6 +42,10 @@ import {
 import { getModelManager } from '../utils/model'
 import { zodToJsonSchema } from 'zod-to-json-schema'
 import type { BetaMessageStream } from '@anthropic-ai/sdk/lib/BetaMessageStream.mjs'
+import { ModelAdapterFactory } from './modelAdapterFactory'
+import { UnifiedRequestParams } from '../types/modelCapabilities'
+import { responseStateManager, getConversationId } from './responseStateManager'
+import type { ToolUseContext } from '../Tool'
 import type {
   Message as APIMessage,
   MessageParam,
@@ -1053,6 +1057,7 @@ export async function queryLLM(
     safeMode: boolean
     model: string | import('../utils/config').ModelPointerType
     prependCLISysprompt: boolean
+    toolUseContext?: ToolUseContext
   },
 ): Promise<AssistantMessage> {
   // 🔧 统一的模型解析：支持指针、model ID 和真实模型名称
@@ -1068,11 +1073,25 @@ export async function queryLLM(
   const modelProfile = modelResolution.profile
   const resolvedModel = modelProfile.modelName
 
+  // Initialize response state if toolUseContext is provided
+  const toolUseContext = options.toolUseContext
+  if (toolUseContext && !toolUseContext.responseState) {
+    const conversationId = getConversationId(toolUseContext.agentId, toolUseContext.messageId)
+    const previousResponseId = responseStateManager.getPreviousResponseId(conversationId)
+    
+    toolUseContext.responseState = {
+      previousResponseId,
+      conversationId
+    }
+  }
+
   debugLogger.api('MODEL_RESOLVED', {
     inputParam: options.model,
     resolvedModelName: resolvedModel,
     provider: modelProfile.provider,
     isPointer: ['main', 'task', 'reasoning', 'quick'].includes(options.model),
+    hasResponseState: !!toolUseContext?.responseState,
+    conversationId: toolUseContext?.responseState?.conversationId,
     requestId: getCurrentRequest()?.id,
   })
 
@@ -1096,7 +1115,7 @@ export async function queryLLM(
         maxThinkingTokens,
         tools,
         signal,
-        { ...options, model: resolvedModel, modelProfile }, // Pass resolved ModelProfile
+        { ...options, model: resolvedModel, modelProfile, toolUseContext }, // Pass resolved ModelProfile and toolUseContext
       ),
     )
 
@@ -1106,6 +1125,20 @@ export async function queryLLM(
       responseLength: result.message.content?.length || 0,
       requestId: getCurrentRequest()?.id,
     })
+
+    // Update response state for GPT-5 Responses API continuation
+    if (toolUseContext?.responseState?.conversationId && result.responseId) {
+      responseStateManager.setPreviousResponseId(
+        toolUseContext.responseState.conversationId, 
+        result.responseId
+      )
+      
+      debugLogger.api('RESPONSE_STATE_UPDATED', {
+        conversationId: toolUseContext.responseState.conversationId,
+        responseId: result.responseId,
+        requestId: getCurrentRequest()?.id,
+      })
+    }
 
     return result
   } catch (error) {
@@ -1135,6 +1168,24 @@ export function formatSystemPromptWithContext(
   // 构建增强的系统提示 - 对齐官方 Claude Code 直接注入方式
   const enhancedPrompt = [...systemPrompt]
   let reminders = ''
+
+  // Step 0: Add GPT-5 Agent persistence support for coding tasks
+  const modelManager = getModelManager()
+  const modelProfile = modelManager.getModel('main')
+  if (modelProfile && isGPT5Model(modelProfile.modelName)) {
+    // Add coding-specific persistence instructions based on GPT-5 documentation
+    const persistencePrompts = [
+      "\n# Agent Persistence for Long-Running Coding Tasks",
+      "You are working on a coding project that may involve multiple steps and iterations. Please maintain context and continuity throughout the session:",
+      "- Remember architectural decisions and design patterns established earlier",
+      "- Keep track of file modifications and their relationships", 
+      "- Maintain awareness of the overall project structure and goals",
+      "- Reference previous implementations when making related changes",
+      "- Ensure consistency with existing code style and conventions",
+      "- Build incrementally on previous work rather than starting from scratch"
+    ]
+    enhancedPrompt.push(...persistencePrompts)
+  }
 
   // 只有当上下文存在时才处理
   const hasContext = Object.entries(context).length > 0
@@ -1190,10 +1241,12 @@ async function queryLLMWithPromptCaching(
     model: string
     prependCLISysprompt: boolean
     modelProfile?: ModelProfile | null
+    toolUseContext?: ToolUseContext
   },
 ): Promise<AssistantMessage> {
   const config = getGlobalConfig()
   const modelManager = getModelManager()
+  const toolUseContext = options.toolUseContext
 
   // 🔧 Fix: 使用传入的ModelProfile，而不是硬编码的'main'指针
   const modelProfile = options.modelProfile || modelManager.getModel('main')
@@ -1217,7 +1270,7 @@ async function queryLLMWithPromptCaching(
       maxThinkingTokens,
       tools,
       signal,
-      { ...options, modelProfile },
+      { ...options, modelProfile, toolUseContext },
     )
   }
 
@@ -1225,6 +1278,7 @@ async function queryLLMWithPromptCaching(
   return queryOpenAI(messages, systemPrompt, maxThinkingTokens, tools, signal, {
     ...options,
     modelProfile,
+    toolUseContext,
   })
 }
 
@@ -1239,10 +1293,12 @@ async function queryAnthropicNative(
     model: string
     prependCLISysprompt: boolean
     modelProfile?: ModelProfile | null
+    toolUseContext?: ToolUseContext
   },
 ): Promise<AssistantMessage> {
   const config = getGlobalConfig()
   const modelManager = getModelManager()
+  const toolUseContext = options?.toolUseContext
 
   // 🔧 Fix: 使用传入的ModelProfile，而不是硬编码的'main'指针
   const modelProfile = options?.modelProfile || modelManager.getModel('main')
@@ -1642,10 +1698,12 @@ async function queryOpenAI(
     model: string
     prependCLISysprompt: boolean
     modelProfile?: ModelProfile | null
+    toolUseContext?: ToolUseContext
   },
 ): Promise<AssistantMessage> {
   const config = getGlobalConfig()
   const modelManager = getModelManager()
+  const toolUseContext = options?.toolUseContext
 
   // 🔧 Fix: 使用传入的ModelProfile，而不是硬编码的'main'指针
   const modelProfile = options?.modelProfile || modelManager.getModel('main')
@@ -1784,20 +1842,82 @@ async function queryOpenAI(
           requestId: getCurrentRequest()?.id,
         })
 
-        // Use enhanced GPT-5 function for GPT-5 models, fallback to regular function for others
-        const completionFunction = isGPT5Model(modelProfile.modelName) 
-          ? getGPT5CompletionWithProfile 
-          : getCompletionWithProfile
-        const s = await completionFunction(modelProfile, opts, 0, 10, signal) // 🔧 CRITICAL FIX: Pass AbortSignal to OpenAI calls
-        let finalResponse
-        if (opts.stream) {
-          finalResponse = await handleMessageStream(s as ChatCompletionStream, signal) // 🔧 Pass AbortSignal to stream handler
+        // Enable new adapter system with environment variable
+        const USE_NEW_ADAPTER_SYSTEM = process.env.USE_NEW_ADAPTERS !== 'false'
+        
+        if (USE_NEW_ADAPTER_SYSTEM) {
+          // New adapter system
+          const adapter = ModelAdapterFactory.createAdapter(modelProfile)
+          
+          // Build unified request parameters
+          const unifiedParams: UnifiedRequestParams = {
+            messages: openaiMessages,
+            systemPrompt: openaiSystem.map(s => s.content as string),
+            tools: tools,
+            maxTokens: getMaxTokensFromProfile(modelProfile),
+            stream: config.stream,
+            reasoningEffort: reasoningEffort as any,
+            temperature: isGPT5Model(model) ? 1 : MAIN_QUERY_TEMPERATURE,
+            previousResponseId: toolUseContext?.responseState?.previousResponseId,
+            verbosity: 'high' // High verbosity for coding tasks
+          }
+          
+          // Create request using adapter
+          const request = adapter.createRequest(unifiedParams)
+          
+          // Determine which API to use
+          if (ModelAdapterFactory.shouldUseResponsesAPI(modelProfile)) {
+            // Use Responses API for GPT-5 and similar models
+            const { callGPT5ResponsesAPI } = await import('./openai')
+            const response = await callGPT5ResponsesAPI(modelProfile, request, signal)
+            const unifiedResponse = adapter.parseResponse(response)
+            
+            // Convert unified response back to Anthropic format
+            const apiMessage = {
+              role: 'assistant' as const,
+              content: unifiedResponse.content,
+              tool_calls: unifiedResponse.toolCalls,
+              usage: {
+                prompt_tokens: unifiedResponse.usage.promptTokens,
+                completion_tokens: unifiedResponse.usage.completionTokens,
+              }
+            }
+            const assistantMsg: AssistantMessage = {
+              type: 'assistant',
+              message: apiMessage as any,
+              costUSD: 0, // Will be calculated later
+              durationMs: Date.now() - start,
+              uuid: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}` as any,
+              responseId: unifiedResponse.responseId  // For state management
+            }
+            return assistantMsg
+          } else {
+            // Use existing Chat Completions flow
+            const s = await getCompletionWithProfile(modelProfile, request, 0, 10, signal)
+            let finalResponse
+            if (config.stream) {
+              finalResponse = await handleMessageStream(s as ChatCompletionStream, signal)
+            } else {
+              finalResponse = s
+            }
+            const r = convertOpenAIResponseToAnthropic(finalResponse)
+            return r
+          }
         } else {
-          finalResponse = s
+          // Legacy system (preserved for fallback)
+          const completionFunction = isGPT5Model(modelProfile.modelName) 
+            ? getGPT5CompletionWithProfile 
+            : getCompletionWithProfile
+          const s = await completionFunction(modelProfile, opts, 0, 10, signal)
+          let finalResponse
+          if (opts.stream) {
+            finalResponse = await handleMessageStream(s as ChatCompletionStream, signal)
+          } else {
+            finalResponse = s
+          }
+          const r = convertOpenAIResponseToAnthropic(finalResponse)
+          return r
         }
-
-        const r = convertOpenAIResponseToAnthropic(finalResponse)
-        return r
       } else {
         // 🚨 警告：ModelProfile不可用，使用旧逻辑路径
         debugLogger.api('USING_LEGACY_PATH', {

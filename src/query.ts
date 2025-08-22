@@ -80,6 +80,7 @@ export type AssistantMessage = {
   type: 'assistant'
   uuid: UUID
   isApiErrorMessage?: boolean
+  responseId?: string // For GPT-5 Responses API state management
 }
 
 export type BinaryFeedbackResult =
@@ -230,6 +231,7 @@ export async function* query(
         safeMode: toolUseContext.options.safeMode ?? false,
         model: toolUseContext.options.model || 'main',
         prependCLISysprompt: true,
+        toolUseContext: toolUseContext,
       },
     )
   }
