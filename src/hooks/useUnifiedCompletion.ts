@@ -598,16 +598,49 @@ export function useUnifiedCompletion({
       }
       
       // Determine search directory and filename filter
+      // If path ends with '/', treat it as directory navigation
+      const endsWithSlash = userPath.endsWith('/')
       const searchStat = existsSync(searchPath) ? statSync(searchPath) : null
-      const searchDir = searchStat?.isDirectory() ? searchPath : dirname(searchPath)
-      const nameFilter = searchStat?.isDirectory() ? '' : basename(searchPath)
+      
+      let searchDir: string
+      let nameFilter: string
+      
+      if (endsWithSlash || searchStat?.isDirectory()) {
+        // User is navigating into a directory or path ends with /
+        searchDir = searchPath
+        nameFilter = ''
+      } else {
+        // User might be typing a partial filename
+        searchDir = dirname(searchPath)
+        nameFilter = basename(searchPath)
+      }
       
       if (!existsSync(searchDir)) return []
       
       // Get directory entries with filter
+      const showHidden = nameFilter.startsWith('.') || userPath.includes('/.')
       const entries = readdirSync(searchDir)
-        .filter(entry => !nameFilter || entry.toLowerCase().startsWith(nameFilter.toLowerCase()))
-        .slice(0, 10)
+        .filter(entry => {
+          // Filter hidden files unless user explicitly wants them
+          if (!showHidden && entry.startsWith('.')) return false
+          // Filter by name if there's a filter
+          if (nameFilter && !entry.toLowerCase().startsWith(nameFilter.toLowerCase())) return false
+          return true
+        })
+        .sort((a, b) => {
+          // Sort directories first, then files
+          const aPath = join(searchDir, a)
+          const bPath = join(searchDir, b)
+          const aIsDir = statSync(aPath).isDirectory()
+          const bIsDir = statSync(bPath).isDirectory()
+          
+          if (aIsDir && !bIsDir) return -1
+          if (!aIsDir && bIsDir) return 1
+          
+          // Within same type, sort alphabetically
+          return a.toLowerCase().localeCompare(b.toLowerCase())
+        })
+        .slice(0, 25)  // Show more entries for better visibility
       
       return entries.map(entry => {
         const entryPath = join(searchDir, entry)
@@ -619,11 +652,12 @@ export function useUnifiedCompletion({
         
         if (userPath.includes('/')) {
           // User typed path with separators - maintain structure
-          if (userPath.endsWith('/') || searchStat?.isDirectory()) {
-            // User is navigating into a directory
-            value = userPath.endsWith('/') 
-              ? userPath + entry + (isDir ? '/' : '')
-              : userPath + '/' + entry + (isDir ? '/' : '')
+          if (endsWithSlash) {
+            // User explicitly ended with / - they're inside the directory
+            value = userPath + entry + (isDir ? '/' : '')
+          } else if (searchStat?.isDirectory()) {
+            // Path is a directory but doesn't end with / - add separator
+            value = userPath + '/' + entry + (isDir ? '/' : '')
           } else {
             // User is completing a filename - replace basename
             const userDir = userPath.includes('/') ? userPath.substring(0, userPath.lastIndexOf('/')) : ''
