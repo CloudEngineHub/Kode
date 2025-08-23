@@ -150,7 +150,7 @@ git clone https://github.com/shareAI-lab/Kode.git
 cd Kode
 
 # Build the image locally
-docker build --no-cache -t Kode .
+docker build --no-cache -t kode .
 
 # Run in your project directory
 cd your-project
@@ -159,7 +159,7 @@ docker run -it --rm \
   -v ~/.kode:/root/.kode \
   -v ~/.kode.json:/root/.kode.json \
   -w /workspace \
-  Kode
+  kode
 ```
 
 #### Docker Configuration Details
