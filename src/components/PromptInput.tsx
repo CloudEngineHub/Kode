@@ -493,6 +493,17 @@ function PromptInput({
       }
       return
     }
+    
+    // For koding mode, only exit when deleting the last character (which would be the '#' character)
+    if (mode === 'koding' && (key.backspace || key.delete)) {
+      // Check the current input state, not the inputChar parameter
+      // If current input is empty, we're about to delete the '#' character, so exit koding mode
+      if (input === '') {
+        onModeChange('prompt')
+      }
+      return
+    }
+    
     // For other modes, keep the original behavior
     if (inputChar === '' && (key.escape || key.backspace || key.delete)) {
       onModeChange('prompt')
