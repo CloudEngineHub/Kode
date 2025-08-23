@@ -1,10 +1,10 @@
-# Use Node.js 18 as base image
-FROM node:18-alpine AS base
+# Build stage
+FROM node:22-alpine AS builder
 
 # Configure Alpine to use China mirrors
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
 
-# Install dependencies needed for the build
+# Install build dependencies
 RUN apk add --no-cache \
     bash \
     git \
@@ -23,6 +23,7 @@ RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 # Install bun
 RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="/root/.bun/bin:$PATH"
+
 # Set working directory
 WORKDIR /app
 
@@ -34,20 +35,45 @@ RUN npm install -g pnpm && \
     pnpm config set registry https://registry.npmmirror.com/ && \
     pnpm install
 
-# Copy source code, excluding node_modules (handled by .dockerignore)
+# Copy source code
 COPY . .
+
 # Build the application
 RUN pnpm run build
 
 # Verify files exist after build
 RUN ls -la /app/
 
-# Also install tsx globally since it's needed at runtime
+# Runtime stage
+FROM node:22-alpine AS runtime
+
+# Configure Alpine to use China mirrors
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
+
+# Install only runtime dependencies
+RUN apk add --no-cache \
+    bash \
+    curl
+
+# Configure npm to use China registry
+RUN npm config set registry https://registry.npmmirror.com/
+
+# Install bun
+RUN curl -fsSL https://bun.sh/install | bash
+ENV PATH="/root/.bun/bin:$PATH"
+
+# Install tsx globally since it's needed at runtime
 RUN npm install -g tsx
 
-WORKDIR /workspace 
- 
-# Create the entrypoint script directly in the container
+# Create workspace directory
+WORKDIR /workspace
+
+# Copy built application from builder stage
+COPY --from=builder /app/cli.js /app/cli.js
+COPY --from=builder /app/package.json /app/package.json
+COPY --from=builder /app/node_modules /app/node_modules
+
+# Create the entrypoint script
 RUN cat << 'EOF' > /entrypoint.sh
 #!/bin/sh
  
