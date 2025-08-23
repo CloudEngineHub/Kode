@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Box, Text } from 'ink'
-import { Select } from '@inkjs/ui'
+import { Select } from '../components/CustomSelect/select'
 import TextInput from '../components/TextInput'
 import { SimpleSpinner } from '../components/Spinner'
 import { getTheme } from '../utils/theme'

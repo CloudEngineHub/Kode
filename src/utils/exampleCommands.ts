@@ -11,6 +11,7 @@ import { logError } from './log'
 import { memoize, sample } from 'lodash-es'
 import { promisify } from 'util'
 import { getIsGit } from './git'
+import { queryQuick } from '../services/claude'
 
 const execPromise = promisify(exec)
 

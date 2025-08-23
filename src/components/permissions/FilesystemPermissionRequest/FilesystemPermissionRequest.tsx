@@ -1,6 +1,6 @@
 import { Box, Text } from 'ink'
 import React, { useMemo } from 'react'
-import { Select } from '@inkjs/ui'
+import { Select } from '../../CustomSelect/select'
 import { getTheme } from '../../../utils/theme'
 import {
   PermissionRequestTitle,
@@ -133,9 +133,7 @@ function FilesystemPermissionRequestImpl({
   onDone,
   verbose,
 }: Props): React.ReactNode {
-  const userFacingName = toolUseConfirm.tool.userFacingName(
-    toolUseConfirm.input as never,
-  )
+  const userFacingName = toolUseConfirm.tool.userFacingName()
 
   const userFacingReadOrWrite = toolUseConfirm.tool.isReadOnly()
     ? 'Read'

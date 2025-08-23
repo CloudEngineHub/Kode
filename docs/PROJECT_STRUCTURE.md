@@ -30,7 +30,12 @@ Clean, modern TypeScript CLI project using Bun for development and building.
 │   ├── tools/           # AI tool implementations
 │   ├── services/        # Core services
 │   ├── hooks/           # React hooks
+│   │   └── useUnifiedCompletion.ts  # Advanced completion system
 │   ├── utils/           # Utility functions
+│   │   ├── advancedFuzzyMatcher.ts  # 7+ algorithm fuzzy matcher
+│   │   ├── fuzzyMatcher.ts          # Matcher integration layer
+│   │   ├── commonUnixCommands.ts    # 500+ command database
+│   │   └── agentLoader.ts           # Agent configuration loader
 │   └── constants/       # Constants and configurations
 │
 ├── docs/                # Documentation
@@ -45,7 +50,7 @@ Clean, modern TypeScript CLI project using Bun for development and building.
 ├── README.md            # English documentation
 ├── README.zh-CN.md      # Chinese documentation
 ├── PUBLISH.md           # Publishing guide
-├── KODE.md           # Project context (generated)
+├── AGENTS.md           # Project context (generated)
 └── system-design.md     # System architecture doc (Chinese)
 ```
 

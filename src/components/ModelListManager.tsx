@@ -173,14 +173,18 @@ export function ModelListManager({ onClose }: Props): React.ReactNode {
                   <>
                     <Text color={theme.secondaryText}>({item.provider})</Text>
                     {item.usedBy.length > 0 && (
-                      <Text color={theme.success} marginLeft={1}>
-                        [Active: {item.usedBy.join(', ')}]
-                      </Text>
+                      <Box marginLeft={1}>
+                        <Text color={theme.success}>
+                          [Active: {item.usedBy.join(', ')}]
+                        </Text>
+                      </Box>
                     )}
                     {item.usedBy.length === 0 && (
-                      <Text color={theme.secondaryText} marginLeft={1}>
-                        [Available]
-                      </Text>
+                      <Box marginLeft={1}>
+                        <Text color={theme.secondaryText}>
+                          [Available]
+                        </Text>
+                      </Box>
                     )}
                   </>
                 )}

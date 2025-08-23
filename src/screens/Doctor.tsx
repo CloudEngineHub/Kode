@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { Box, Text, useInput } from 'ink'
-import { Select } from '@inkjs/ui'
+import { Select } from '../components/CustomSelect/select'
 import { getTheme } from '../utils/theme'
 import { ConfigureNpmPrefix } from './ConfigureNpmPrefix.tsx'
 import { platform } from 'process'

@@ -4,7 +4,7 @@ import { AnthropicBedrock } from '@anthropic-ai/bedrock-sdk'
 import { AnthropicVertex } from '@anthropic-ai/vertex-sdk'
 import type { BetaUsage } from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
 import chalk from 'chalk'
-import { createHash, randomUUID } from 'crypto'
+import { createHash, randomUUID, UUID } from 'crypto'
 import 'dotenv/config'
 
 import { addToTotalCost } from '../cost-tracker'
@@ -15,6 +15,7 @@ import {
   getAnthropicApiKey,
   getOrCreateUserID,
   getGlobalConfig,
+  ModelProfile,
 } from '../utils/config'
 import { getProjectDocs } from '../context'
 import { logError, SESSION_ID } from '../utils/log'
@@ -41,6 +42,10 @@ import {
 import { getModelManager } from '../utils/model'
 import { zodToJsonSchema } from 'zod-to-json-schema'
 import type { BetaMessageStream } from '@anthropic-ai/sdk/lib/BetaMessageStream.mjs'
+import { ModelAdapterFactory } from './modelAdapterFactory'
+import { UnifiedRequestParams } from '../types/modelCapabilities'
+import { responseStateManager, getConversationId } from './responseStateManager'
+import type { ToolUseContext } from '../Tool'
 import type {
   Message as APIMessage,
   MessageParam,
@@ -53,9 +58,14 @@ import OpenAI from 'openai'
 import type { ChatCompletionStream } from 'openai/lib/ChatCompletionStream'
 import { ContentBlock } from '@anthropic-ai/sdk/resources/messages/messages'
 import { nanoid } from 'nanoid'
-import { getCompletion, getCompletionWithProfile } from './openai'
+import { getCompletionWithProfile, getGPT5CompletionWithProfile } from './openai'
 import { getReasoningEffort } from '../utils/thinking'
 import { generateSystemReminders } from './systemReminder'
+
+// Helper function to check if a model is GPT-5
+function isGPT5Model(modelName: string): boolean {
+  return modelName.startsWith('gpt-5')
+}
 
 // Helper function to extract model configuration for debug logging
 function getModelConfigForDebug(model: string): {
@@ -71,7 +81,7 @@ function getModelConfigForDebug(model: string): {
   const config = getGlobalConfig()
   const modelManager = getModelManager()
 
-  // 🔧 Fix: Use ModelManager to get the actual current model profile
+
   const modelProfile = modelManager.getModel('main')
 
   let apiKeyStatus: 'configured' | 'missing' | 'invalid' = 'missing'
@@ -79,7 +89,7 @@ function getModelConfigForDebug(model: string): {
   let maxTokens: number | undefined
   let reasoningEffort: string | undefined
 
-  // 🔧 Fix: Use ModelProfile configuration exclusively
+
   if (modelProfile) {
     apiKeyStatus = modelProfile.apiKey ? 'configured' : 'missing'
     baseURL = modelProfile.baseURL
@@ -310,7 +320,7 @@ async function withRetry<T>(
       ) {
         throw error
       }
-      // 🔧 CRITICAL FIX: Check abort signal BEFORE showing retry message
+
       if (options.signal?.aborted) {
         throw new Error('Request cancelled by user')
       }
@@ -429,7 +439,7 @@ export async function verifyApiKey(
         'Content-Type': 'application/json',
       }
 
-      // 🔧 Fix: Proper URL construction for verification
+
       if (!baseURL) {
         console.warn(
           'No baseURL provided for non-Anthropic provider verification',
@@ -637,7 +647,7 @@ function messageReducer(
 }
 async function handleMessageStream(
   stream: ChatCompletionStream,
-  signal?: AbortSignal, // 🔧 Add AbortSignal support to stream handler
+  signal?: AbortSignal,
 ): Promise<OpenAI.ChatCompletion> {
   const streamStartTime = Date.now()
   let ttftMs: number | undefined
@@ -653,7 +663,7 @@ async function handleMessageStream(
   let id, model, created, object, usage
   try {
     for await (const chunk of stream) {
-      // 🔧 CRITICAL FIX: Check abort signal in OpenAI streaming loop
+
       if (signal?.aborted) {
         debugLogger.flow('OPENAI_STREAM_ABORTED', { 
           chunkCount,
@@ -756,7 +766,7 @@ async function handleMessageStream(
   }
 }
 
-function convertOpenAIResponseToAnthropic(response: OpenAI.ChatCompletion) {
+function convertOpenAIResponseToAnthropic(response: OpenAI.ChatCompletion, tools?: Tool[]) {
   let contentBlocks: ContentBlock[] = []
   const message = response.choices?.[0]?.message
   if (!message) {
@@ -775,12 +785,12 @@ function convertOpenAIResponseToAnthropic(response: OpenAI.ChatCompletion) {
   if (message?.tool_calls) {
     for (const toolCall of message.tool_calls) {
       const tool = toolCall.function
-      const toolName = tool.name
+      const toolName = tool?.name
       let toolArgs = {}
       try {
-        toolArgs = JSON.parse(tool.arguments)
+        toolArgs = tool?.arguments ? JSON.parse(tool.arguments) : {}
       } catch (e) {
-        // console.log(e)
+        // Invalid JSON in tool arguments
       }
 
       contentBlocks.push({
@@ -824,6 +834,7 @@ function convertOpenAIResponseToAnthropic(response: OpenAI.ChatCompletion) {
     type: 'message',
     usage: response.usage,
   }
+
 
   return finalMessage
 }
@@ -1047,9 +1058,10 @@ export async function queryLLM(
     safeMode: boolean
     model: string | import('../utils/config').ModelPointerType
     prependCLISysprompt: boolean
+    toolUseContext?: ToolUseContext
   },
 ): Promise<AssistantMessage> {
-  // 🔧 统一的模型解析：支持指针、model ID 和真实模型名称
+
   const modelManager = getModelManager()
   const modelResolution = modelManager.resolveModelWithInfo(options.model)
 
@@ -1062,12 +1074,25 @@ export async function queryLLM(
   const modelProfile = modelResolution.profile
   const resolvedModel = modelProfile.modelName
 
+  // Initialize response state if toolUseContext is provided
+  const toolUseContext = options.toolUseContext
+  if (toolUseContext && !toolUseContext.responseState) {
+    const conversationId = getConversationId(toolUseContext.agentId, toolUseContext.messageId)
+    const previousResponseId = responseStateManager.getPreviousResponseId(conversationId)
+    
+    toolUseContext.responseState = {
+      previousResponseId,
+      conversationId
+    }
+  }
+
   debugLogger.api('MODEL_RESOLVED', {
     inputParam: options.model,
-    resolvedModelName: modelProfile.modelName,
     resolvedModelName: resolvedModel,
     provider: modelProfile.provider,
     isPointer: ['main', 'task', 'reasoning', 'quick'].includes(options.model),
+    hasResponseState: !!toolUseContext?.responseState,
+    conversationId: toolUseContext?.responseState?.conversationId,
     requestId: getCurrentRequest()?.id,
   })
 
@@ -1078,7 +1103,7 @@ export async function queryLLM(
     toolCount: tools.length,
     model: resolvedModel,
     originalModelParam: options.model,
-    requestId: currentRequest?.id,
+    requestId: getCurrentRequest()?.id,
   })
 
   markPhase('LLM_CALL')
@@ -1091,7 +1116,7 @@ export async function queryLLM(
         maxThinkingTokens,
         tools,
         signal,
-        { ...options, model: resolvedModel, modelProfile }, // Pass resolved ModelProfile
+        { ...options, model: resolvedModel, modelProfile, toolUseContext }, // Pass resolved ModelProfile and toolUseContext
       ),
     )
 
@@ -1099,8 +1124,22 @@ export async function queryLLM(
       costUSD: result.costUSD,
       durationMs: result.durationMs,
       responseLength: result.message.content?.length || 0,
-      requestId: currentRequest?.id,
+      requestId: getCurrentRequest()?.id,
     })
+
+    // Update response state for GPT-5 Responses API continuation
+    if (toolUseContext?.responseState?.conversationId && result.responseId) {
+      responseStateManager.setPreviousResponseId(
+        toolUseContext.responseState.conversationId, 
+        result.responseId
+      )
+      
+      debugLogger.api('RESPONSE_STATE_UPDATED', {
+        conversationId: toolUseContext.responseState.conversationId,
+        responseId: result.responseId,
+        requestId: getCurrentRequest()?.id,
+      })
+    }
 
     return result
   } catch (error) {
@@ -1130,6 +1169,24 @@ export function formatSystemPromptWithContext(
   // 构建增强的系统提示 - 对齐官方 Claude Code 直接注入方式
   const enhancedPrompt = [...systemPrompt]
   let reminders = ''
+
+  // Step 0: Add GPT-5 Agent persistence support for coding tasks
+  const modelManager = getModelManager()
+  const modelProfile = modelManager.getModel('main')
+  if (modelProfile && isGPT5Model(modelProfile.modelName)) {
+    // Add coding-specific persistence instructions based on GPT-5 documentation
+    const persistencePrompts = [
+      "\n# Agent Persistence for Long-Running Coding Tasks",
+      "You are working on a coding project that may involve multiple steps and iterations. Please maintain context and continuity throughout the session:",
+      "- Remember architectural decisions and design patterns established earlier",
+      "- Keep track of file modifications and their relationships", 
+      "- Maintain awareness of the overall project structure and goals",
+      "- Reference previous implementations when making related changes",
+      "- Ensure consistency with existing code style and conventions",
+      "- Build incrementally on previous work rather than starting from scratch"
+    ]
+    enhancedPrompt.push(...persistencePrompts)
+  }
 
   // 只有当上下文存在时才处理
   const hasContext = Object.entries(context).length > 0
@@ -1185,12 +1242,14 @@ async function queryLLMWithPromptCaching(
     model: string
     prependCLISysprompt: boolean
     modelProfile?: ModelProfile | null
+    toolUseContext?: ToolUseContext
   },
 ): Promise<AssistantMessage> {
   const config = getGlobalConfig()
   const modelManager = getModelManager()
+  const toolUseContext = options.toolUseContext
 
-  // 🔧 Fix: 使用传入的ModelProfile，而不是硬编码的'main'指针
+
   const modelProfile = options.modelProfile || modelManager.getModel('main')
   let provider: string
 
@@ -1212,7 +1271,7 @@ async function queryLLMWithPromptCaching(
       maxThinkingTokens,
       tools,
       signal,
-      { ...options, modelProfile },
+      { ...options, modelProfile, toolUseContext },
     )
   }
 
@@ -1220,6 +1279,7 @@ async function queryLLMWithPromptCaching(
   return queryOpenAI(messages, systemPrompt, maxThinkingTokens, tools, signal, {
     ...options,
     modelProfile,
+    toolUseContext,
   })
 }
 
@@ -1234,12 +1294,14 @@ async function queryAnthropicNative(
     model: string
     prependCLISysprompt: boolean
     modelProfile?: ModelProfile | null
+    toolUseContext?: ToolUseContext
   },
 ): Promise<AssistantMessage> {
   const config = getGlobalConfig()
   const modelManager = getModelManager()
+  const toolUseContext = options?.toolUseContext
 
-  // 🔧 Fix: 使用传入的ModelProfile，而不是硬编码的'main'指针
+
   const modelProfile = options?.modelProfile || modelManager.getModel('main')
   let anthropic: Anthropic | AnthropicBedrock | AnthropicVertex
   let model: string
@@ -1255,7 +1317,7 @@ async function queryAnthropicNative(
     modelProfileBaseURL: modelProfile?.baseURL,
     modelProfileApiKeyExists: !!modelProfile?.apiKey,
     optionsModel: options?.model,
-    requestId: currentRequest?.id,
+    requestId: getCurrentRequest()?.id,
   })
 
   if (modelProfile) {
@@ -1296,7 +1358,7 @@ async function queryAnthropicNative(
       modelProfileExists: !!modelProfile,
       modelProfileModelName: modelProfile?.modelName,
       requestedModel: options?.model,
-      requestId: currentRequest?.id,
+      requestId: getCurrentRequest()?.id,
     }
     debugLogger.error('ANTHROPIC_FALLBACK_ERROR', errorDetails)
     throw new Error(
@@ -1329,13 +1391,16 @@ async function queryAnthropicNative(
     }),
   )
 
-  const toolSchemas = tools.map(
-    tool =>
+  const toolSchemas = await Promise.all(
+    tools.map(async tool =>
       ({
         name: tool.name,
-        description: tool.description,
+        description: typeof tool.description === 'function' 
+          ? await tool.description() 
+          : tool.description,
         input_schema: zodToJsonSchema(tool.inputSchema),
-      }) as Anthropic.Beta.Tools.Tool,
+      }) as unknown as Anthropic.Beta.Messages.BetaTool,
+    )
   )
 
   const anthropicMessages = addCacheBreakpoints(messages)
@@ -1368,7 +1433,7 @@ async function queryAnthropicNative(
       }
 
       if (maxThinkingTokens > 0) {
-        params.extra_headers = {
+        ;(params as any).extra_headers = {
           'anthropic-beta': 'max-tokens-3-5-sonnet-2024-07-15',
         }
         ;(params as any).thinking = { max_tokens: maxThinkingTokens }
@@ -1395,7 +1460,7 @@ async function queryAnthropicNative(
       })
 
       if (config.stream) {
-        // 🔧 CRITICAL FIX: Connect AbortSignal to Anthropic API call
+
         const stream = await anthropic.beta.messages.create({
           ...params,
           stream: true,
@@ -1403,7 +1468,7 @@ async function queryAnthropicNative(
           signal: signal // ← CRITICAL: Connect the AbortSignal to API call
         })
 
-        let finalResponse: Anthropic.Beta.Messages.Message | null = null
+        let finalResponse: any | null = null
         let messageStartEvent: any = null
         const contentBlocks: any[] = []
         let usage: any = null
@@ -1411,7 +1476,7 @@ async function queryAnthropicNative(
         let stopSequence: string | null = null
 
         for await (const event of stream) {
-          // 🔧 CRITICAL FIX: Check abort signal in streaming loop
+
           if (signal.aborted) {
             debugLogger.flow('STREAM_ABORTED', { 
               eventType: event.type,
@@ -1485,12 +1550,12 @@ async function queryAnthropicNative(
           modelProfileName: modelProfile?.name,
         })
 
-        // 🔧 CRITICAL FIX: Connect AbortSignal to non-streaming API call
+
         return await anthropic.beta.messages.create(params, {
           signal: signal // ← CRITICAL: Connect the AbortSignal to API call
         })
       }
-    }, { signal }) // 🔧 CRITICAL FIX: Pass AbortSignal to withRetry
+    }, { signal })
 
     const ttftMs = start - Date.now()
     const durationMs = Date.now() - startIncludingRetries
@@ -1525,7 +1590,6 @@ async function queryAnthropicNative(
       },
       type: 'assistant',
       uuid: nanoid() as UUID,
-      ttftMs,
       durationMs,
       costUSD: 0, // Will be calculated below
     }
@@ -1552,7 +1616,6 @@ async function queryAnthropicNative(
         end: Date.now(),
       },
       apiFormat: 'anthropic',
-      modelConfig: getModelConfigForDebug(model),
     })
 
     // Calculate cost using native Anthropic usage data
@@ -1571,18 +1634,18 @@ async function queryAnthropicNative(
         (getModelInputTokenCostUSD(model) * 0.1) // Cache reads are 10% of input cost
 
     assistantMessage.costUSD = costUSD
-    addToTotalCost(costUSD)
+    addToTotalCost(costUSD, durationMs)
 
     logEvent('api_response_anthropic_native', {
       model,
-      input_tokens: inputTokens,
-      output_tokens: outputTokens,
-      cache_creation_input_tokens: cacheCreationInputTokens,
-      cache_read_input_tokens: cacheReadInputTokens,
-      cost_usd: costUSD,
-      duration_ms: durationMs,
-      ttft_ms: ttftMs,
-      attempt_number: attemptNumber,
+      input_tokens: String(inputTokens),
+      output_tokens: String(outputTokens),
+      cache_creation_input_tokens: String(cacheCreationInputTokens),
+      cache_read_input_tokens: String(cacheReadInputTokens),
+      cost_usd: String(costUSD),
+      duration_ms: String(durationMs),
+      ttft_ms: String(ttftMs),
+      attempt_number: String(attemptNumber),
     })
 
     return assistantMessage
@@ -1639,12 +1702,14 @@ async function queryOpenAI(
     model: string
     prependCLISysprompt: boolean
     modelProfile?: ModelProfile | null
+    toolUseContext?: ToolUseContext
   },
 ): Promise<AssistantMessage> {
   const config = getGlobalConfig()
   const modelManager = getModelManager()
+  const toolUseContext = options?.toolUseContext
 
-  // 🔧 Fix: 使用传入的ModelProfile，而不是硬编码的'main'指针
+
   const modelProfile = options?.modelProfile || modelManager.getModel('main')
   let model: string
 
@@ -1659,7 +1724,7 @@ async function queryOpenAI(
     modelProfileBaseURL: modelProfile?.baseURL,
     modelProfileApiKeyExists: !!modelProfile?.apiKey,
     optionsModel: options?.model,
-    requestId: currentRequest?.id,
+    requestId: getCurrentRequest()?.id,
   })
 
   if (modelProfile) {
@@ -1739,11 +1804,17 @@ async function queryOpenAI(
     response = await withRetry(async attempt => {
       attemptNumber = attempt
       start = Date.now()
+      // 🔥 GPT-5 Enhanced Parameter Construction
+      const maxTokens = getMaxTokensFromProfile(modelProfile)
+      const isGPT5 = isGPT5Model(model)
+      
       const opts: OpenAI.ChatCompletionCreateParams = {
         model,
-        max_tokens: getMaxTokensFromProfile(modelProfile),
+
+        ...(isGPT5 ? { max_completion_tokens: maxTokens } : { max_tokens: maxTokens }),
         messages: [...openaiSystem, ...openaiMessages],
-        temperature: MAIN_QUERY_TEMPERATURE,
+
+        temperature: isGPT5 ? 1 : MAIN_QUERY_TEMPERATURE,
       }
       if (config.stream) {
         ;(opts as OpenAI.ChatCompletionCreateParams).stream = true
@@ -1764,7 +1835,7 @@ async function queryOpenAI(
         opts.reasoning_effort = reasoningEffort
       }
 
-      // 🔧 Fix: 如果有ModelProfile配置，直接使用它 (更宽松的条件)
+
       if (modelProfile && modelProfile.modelName) {
         debugLogger.api('USING_MODEL_PROFILE_PATH', {
           modelProfileName: modelProfile.modelName,
@@ -1772,19 +1843,85 @@ async function queryOpenAI(
           provider: modelProfile.provider,
           baseURL: modelProfile.baseURL,
           apiKeyExists: !!modelProfile.apiKey,
-          requestId: currentRequest?.id,
+          requestId: getCurrentRequest()?.id,
         })
 
-        const s = await getCompletionWithProfile(modelProfile, opts, 0, 10, signal) // 🔧 CRITICAL FIX: Pass AbortSignal to OpenAI calls
-        let finalResponse
-        if (opts.stream) {
-          finalResponse = await handleMessageStream(s as ChatCompletionStream, signal) // 🔧 Pass AbortSignal to stream handler
+        // Enable new adapter system with environment variable
+        const USE_NEW_ADAPTER_SYSTEM = process.env.USE_NEW_ADAPTERS !== 'false'
+        
+        if (USE_NEW_ADAPTER_SYSTEM) {
+          // New adapter system
+          const adapter = ModelAdapterFactory.createAdapter(modelProfile)
+          
+          // Build unified request parameters
+          const unifiedParams: UnifiedRequestParams = {
+            messages: openaiMessages,
+            systemPrompt: openaiSystem.map(s => s.content as string),
+            tools: tools,
+            maxTokens: getMaxTokensFromProfile(modelProfile),
+            stream: config.stream,
+            reasoningEffort: reasoningEffort as any,
+            temperature: isGPT5Model(model) ? 1 : MAIN_QUERY_TEMPERATURE,
+            previousResponseId: toolUseContext?.responseState?.previousResponseId,
+            verbosity: 'high' // High verbosity for coding tasks
+          }
+          
+          // Create request using adapter
+          const request = adapter.createRequest(unifiedParams)
+          
+          // Determine which API to use
+          if (ModelAdapterFactory.shouldUseResponsesAPI(modelProfile)) {
+            // Use Responses API for GPT-5 and similar models
+            const { callGPT5ResponsesAPI } = await import('./openai')
+            const response = await callGPT5ResponsesAPI(modelProfile, request, signal)
+            const unifiedResponse = adapter.parseResponse(response)
+            
+            // Convert unified response back to Anthropic format
+            const apiMessage = {
+              role: 'assistant' as const,
+              content: unifiedResponse.content,
+              tool_calls: unifiedResponse.toolCalls,
+              usage: {
+                prompt_tokens: unifiedResponse.usage.promptTokens,
+                completion_tokens: unifiedResponse.usage.completionTokens,
+              }
+            }
+            const assistantMsg: AssistantMessage = {
+              type: 'assistant',
+              message: apiMessage as any,
+              costUSD: 0, // Will be calculated later
+              durationMs: Date.now() - start,
+              uuid: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}` as any,
+              responseId: unifiedResponse.responseId  // For state management
+            }
+            return assistantMsg
+          } else {
+            // Use existing Chat Completions flow
+            const s = await getCompletionWithProfile(modelProfile, request, 0, 10, signal)
+            let finalResponse
+            if (config.stream) {
+              finalResponse = await handleMessageStream(s as ChatCompletionStream, signal)
+            } else {
+              finalResponse = s
+            }
+            const r = convertOpenAIResponseToAnthropic(finalResponse, tools)
+            return r
+          }
         } else {
-          finalResponse = s
+          // Legacy system (preserved for fallback)
+          const completionFunction = isGPT5Model(modelProfile.modelName) 
+            ? getGPT5CompletionWithProfile 
+            : getCompletionWithProfile
+          const s = await completionFunction(modelProfile, opts, 0, 10, signal)
+          let finalResponse
+          if (opts.stream) {
+            finalResponse = await handleMessageStream(s as ChatCompletionStream, signal)
+          } else {
+            finalResponse = s
+          }
+          const r = convertOpenAIResponseToAnthropic(finalResponse, tools)
+          return r
         }
-
-        const r = convertOpenAIResponseToAnthropic(finalResponse)
-        return r
       } else {
         // 🚨 警告：ModelProfile不可用，使用旧逻辑路径
         debugLogger.api('USING_LEGACY_PATH', {
@@ -1793,7 +1930,7 @@ async function queryOpenAI(
           modelNameExists: !!modelProfile?.modelName,
           fallbackModel: 'main',
           actualModel: model,
-          requestId: currentRequest?.id,
+          requestId: getCurrentRequest()?.id,
         })
 
         // 🚨 FALLBACK: 没有有效的ModelProfile时，应该抛出错误而不是使用遗留系统
@@ -1802,14 +1939,14 @@ async function queryOpenAI(
           modelProfileId: modelProfile?.modelName,
           modelNameExists: !!modelProfile?.modelName,
           requestedModel: model,
-          requestId: currentRequest?.id,
+          requestId: getCurrentRequest()?.id,
         }
         debugLogger.error('NO_VALID_MODEL_PROFILE', errorDetails)
         throw new Error(
           `No valid ModelProfile available for model: ${model}. Please configure model through /model command. Debug: ${JSON.stringify(errorDetails)}`,
         )
       }
-    }, { signal }) // 🔧 CRITICAL FIX: Pass AbortSignal to withRetry
+    }, { signal })
   } catch (error) {
     logError(error)
     return getAssistantMessageFromError(error)
@@ -1847,7 +1984,6 @@ async function queryOpenAI(
       end: Date.now(),
     },
     apiFormat: 'openai',
-    modelConfig: getModelConfigForDebug(model),
   })
 
   return {
@@ -1943,5 +2079,5 @@ export async function queryQuick({
     },
   ] as (UserMessage | AssistantMessage)[]
 
-  return queryModel('quick', messages, systemPrompt, 0, [], signal)
+  return queryModel('quick', messages, systemPrompt, signal)
 }

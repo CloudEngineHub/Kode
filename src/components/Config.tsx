@@ -214,13 +214,17 @@ export function Config({ onClose }: Props): React.ReactNode {
           ) : (
             <Box flexDirection="column" marginLeft={2}>
               {activeProfiles.map(profile => (
-                <Text key={profile.modelName} color={theme.secondaryText}>
-                  • {profile.name} ({profile.provider})
-                </Text>
+                <React.Fragment key={profile.modelName}>
+                  <Text color={theme.secondaryText}>
+                    • {profile.name} ({profile.provider})
+                  </Text>
+                </React.Fragment>
               ))}
-              <Text color={theme.suggestion} marginTop={1}>
-                Use /model to manage model configurations
-              </Text>
+              <Box marginTop={1}>
+                <Text color={theme.suggestion}>
+                  Use /model to manage model configurations
+                </Text>
+              </Box>
             </Box>
           )}
         </Box>

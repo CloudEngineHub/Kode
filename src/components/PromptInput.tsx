@@ -5,7 +5,7 @@ import * as React from 'react'
 import { type Message } from '../query'
 import { processUserInput } from '../utils/messages'
 import { useArrowKeyHistory } from '../hooks/useArrowKeyHistory'
-import { useSlashCommandTypeahead } from '../hooks/useSlashCommandTypeahead'
+import { useUnifiedCompletion } from '../hooks/useUnifiedCompletion'
 import { addToHistory } from '../history'
 import TextInput from './TextInput'
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
@@ -96,7 +96,6 @@ type Props = {
   ) => void
   readFileTimestamps: { [filename: string]: number }
   abortController: AbortController | null
-  setAbortController: (abortController: AbortController | null) => void
   onModelChange?: () => void
 }
 
@@ -166,18 +165,52 @@ function PromptInput({
     [commands],
   )
 
+  // Unified completion system - one hook to rule them all (now with terminal behavior)
   const {
     suggestions,
-    selectedSuggestion,
-    updateSuggestions,
-    clearSuggestions,
-  } = useSlashCommandTypeahead({
-    commands,
+    selectedIndex,
+    isActive: completionActive,
+    emptyDirMessage,
+  } = useUnifiedCompletion({
+    input,
+    cursorOffset,
     onInputChange,
-    onSubmit,
     setCursorOffset,
-    currentInput: input,
+    commands,
+    onSubmit,
   })
+
+  // Get theme early for memoized rendering
+  const theme = getTheme()
+
+  // Memoized completion suggestions rendering - after useUnifiedCompletion
+  const renderedSuggestions = useMemo(() => {
+    if (suggestions.length === 0) return null
+
+    return suggestions.map((suggestion, index) => {
+      const isSelected = index === selectedIndex
+      const isAgent = suggestion.type === 'agent'
+      
+      // Simple color logic without complex lookups
+      const displayColor = isSelected 
+        ? theme.suggestion 
+        : (isAgent && suggestion.metadata?.color)
+          ? suggestion.metadata.color
+          : undefined
+      
+      return (
+        <Box key={`${suggestion.type}-${suggestion.value}-${index}`} flexDirection="row">
+          <Text
+            color={displayColor}
+            dimColor={!isSelected && !displayColor}
+          >
+            {isSelected ? '◆ ' : '  '}
+            {suggestion.displayValue}
+          </Text>
+        </Box>
+      )
+    })
+  }, [suggestions, selectedIndex, theme.suggestion])
 
   const onChange = useCallback(
     (value: string) => {
@@ -189,10 +222,9 @@ function PromptInput({
         onModeChange('koding')
         return
       }
-      updateSuggestions(value)
       onInputChange(value)
     },
-    [onModeChange, onInputChange, updateSuggestions],
+    [onModeChange, onInputChange],
   )
 
   // Handle Tab key model switching with simple context check
@@ -238,15 +270,15 @@ function PromptInput({
     input,
   )
 
-  // Only use history navigation when there are 0 or 1 slash command suggestions
+  // Only use history navigation when there are no suggestions
   const handleHistoryUp = () => {
-    if (suggestions.length <= 1) {
+    if (!completionActive) {
       onHistoryUp()
     }
   }
 
   const handleHistoryDown = () => {
-    if (suggestions.length <= 1) {
+    if (!completionActive) {
       onHistoryDown()
     }
   }
@@ -270,7 +302,7 @@ function PromptInput({
 
         // Create additional context to inform Claude this is for KODING.md
         const kodingContext =
-          'The user is using Koding mode. Format your response as a comprehensive, well-structured document suitable for adding to KODE.md. Use proper markdown formatting with headings, lists, code blocks, etc. The response should be complete and ready to add to KODE.md documentation.'
+          'The user is using Koding mode. Format your response as a comprehensive, well-structured document suitable for adding to AGENTS.md. Use proper markdown formatting with headings, lists, code blocks, etc. The response should be complete and ready to add to AGENTS.md documentation.'
 
         // Switch to prompt mode but tag the submission for later capture
         onModeChange('prompt')
@@ -326,7 +358,7 @@ function PromptInput({
       }
     }
 
-    // If in koding mode or input starts with '#', interpret it using AI before appending to KODE.md
+    // If in koding mode or input starts with '#', interpret it using AI before appending to AGENTS.md
     else if (mode === 'koding' || input.startsWith('#')) {
       try {
         // Strip the # if we're in koding mode and the user didn't type it (since it's implied)
@@ -354,7 +386,12 @@ function PromptInput({
     if (isLoading) {
       return
     }
-    if (suggestions.length > 0 && !isSubmittingSlashCommand) {
+    
+    // Handle Enter key when completions are active
+    // If there are suggestions showing, Enter should complete the selection, not send the message
+    if (suggestions.length > 0 && completionActive) {
+      // The completion is handled by useUnifiedCompletion hook
+      // Just return to prevent message sending
       return
     }
 
@@ -373,7 +410,7 @@ function PromptInput({
     }
     onInputChange('')
     onModeChange('prompt')
-    clearSuggestions()
+    // Suggestions are now handled by unified completion
     setPastedImage(null)
     setPastedText(null)
     onSubmitCountChange(_ => _ + 1)
@@ -474,22 +511,15 @@ function PromptInput({
       return true // Explicitly handled
     }
 
-    // Tab key for model switching (simple and non-conflicting)
-    if (key.tab && !key.shift) {
-      handleQuickModelSwitch()
-      return true // Explicitly handled
-    }
-
     return false // Not handled, allow other hooks
   })
 
   const textInputColumns = useTerminalSize().columns - 6
   const tokenUsage = useMemo(() => countTokens(messages), [messages])
-  const theme = getTheme()
 
   // 🔧 Fix: Track model ID changes to detect external config updates
   const modelManager = getModelManager()
-  const currentModelId = modelManager.getModel('main')?.id || null
+  const currentModelId = (modelManager.getModel('main') as any)?.id || null
 
   const modelInfo = useMemo(() => {
     // Force fresh ModelManager instance to detect config changes
@@ -501,7 +531,7 @@ function PromptInput({
 
     return {
       name: currentModel.modelName, // 🔧 Fix: Use actual model name, not display name
-      id: currentModel.id, // 添加模型ID用于调试
+      id: (currentModel as any).id, // 添加模型ID用于调试
       provider: currentModel.provider, // 添加提供商信息
       contextLength: currentModel.contextLength,
       currentTokens: tokenUsage,
@@ -569,14 +599,22 @@ function PromptInput({
             onImagePaste={onImagePaste}
             columns={textInputColumns}
             isDimmed={isDisabled || isLoading}
-            disableCursorMovementForUpDownKeys={suggestions.length > 0}
+            disableCursorMovementForUpDownKeys={completionActive}
             cursorOffset={cursorOffset}
             onChangeCursorOffset={setCursorOffset}
             onPaste={onTextPaste}
+            onSpecialKey={(input, key) => {
+              // Handle Shift+M for model switching
+              if (key.shift && (input === 'M' || input === 'm')) {
+                handleQuickModelSwitch()
+                return true // Prevent the 'M' from being typed
+              }
+              return false
+            }}
           />
         </Box>
       </Box>
-      {suggestions.length === 0 && (
+      {!completionActive && suggestions.length === 0 && (
         <Box
           flexDirection="row"
           justifyContent="space-between"
@@ -602,15 +640,15 @@ function PromptInput({
                   color={mode === 'koding' ? theme.koding : undefined}
                   dimColor={mode !== 'koding'}
                 >
-                  · # for KODE.md
+                  · # for AGENTS.md
                 </Text>
                 <Text dimColor>
-                  · / for commands · tab to switch model · esc to undo
+                  · / for commands · shift+m to switch model · esc to undo
                 </Text>
               </>
             )}
           </Box>
-          <SentryErrorBoundary>
+          <SentryErrorBoundary children={
             <Box justifyContent="flex-end" gap={1}>
               {!autoUpdaterResult &&
                 !isAutoUpdating &&
@@ -632,9 +670,10 @@ function PromptInput({
                 onChangeIsUpdating={setIsAutoUpdating}
               /> */}
             </Box>
-          </SentryErrorBoundary>
+          } />
         </Box>
       )}
+      {/* Unified completion suggestions - optimized rendering */}
       {suggestions.length > 0 && (
         <Box
           flexDirection="row"
@@ -643,58 +682,28 @@ function PromptInput({
           paddingY={0}
         >
           <Box flexDirection="column">
-            {suggestions.map((suggestion, index) => {
-              const command = commands.find(
-                cmd => cmd.userFacingName() === suggestion.replace('/', ''),
-              )
-              return (
-                <Box
-                  key={suggestion}
-                  flexDirection={columns < 80 ? 'column' : 'row'}
-                >
-                  <Box width={columns < 80 ? undefined : commandWidth}>
-                    <Text
-                      color={
-                        index === selectedSuggestion
-                          ? theme.suggestion
-                          : undefined
-                      }
-                      dimColor={index !== selectedSuggestion}
-                    >
-                      /{suggestion}
-                      {command?.aliases && command.aliases.length > 0 && (
-                        <Text dimColor> ({command.aliases.join(', ')})</Text>
-                      )}
-                    </Text>
-                  </Box>
-                  {command && (
-                    <Box
-                      width={columns - (columns < 80 ? 4 : commandWidth + 4)}
-                      paddingLeft={columns < 80 ? 4 : 0}
-                    >
-                      <Text
-                        color={
-                          index === selectedSuggestion
-                            ? theme.suggestion
-                            : undefined
-                        }
-                        dimColor={index !== selectedSuggestion}
-                        wrap="wrap"
-                      >
-                        <Text dimColor={index !== selectedSuggestion}>
-                          {command.description}
-                          {command.type === 'prompt' && command.argNames?.length
-                            ? ` (arguments: ${command.argNames.join(', ')})`
-                            : null}
-                        </Text>
-                      </Text>
-                    </Box>
-                  )}
-                </Box>
-              )
-            })}
+            {renderedSuggestions}
+            
+            {/* 简洁操作提示框 */}
+            <Box marginTop={1} paddingX={3} borderStyle="round" borderColor="gray">
+              <Text dimColor={!emptyDirMessage} color={emptyDirMessage ? "yellow" : undefined}>
+                {emptyDirMessage || (() => {
+                  const selected = suggestions[selectedIndex]
+                  if (!selected) {
+                    return '↑↓ navigate • → accept • Tab cycle • Esc close'
+                  }
+                  if (selected?.value.endsWith('/')) {
+                    return '→ enter directory • ↑↓ navigate • Tab cycle • Esc close'
+                  } else if (selected?.type === 'agent') {
+                    return '→ select agent • ↑↓ navigate • Tab cycle • Esc close'
+                  } else {
+                    return '→ insert reference • ↑↓ navigate • Tab cycle • Esc close'
+                  }
+                })()}
+              </Text>
+            </Box>
           </Box>
-          <SentryErrorBoundary>
+          <SentryErrorBoundary children={
             <Box justifyContent="flex-end" gap={1}>
               <TokenWarning tokenUsage={countTokens(messages)} />
               <AutoUpdater
@@ -705,7 +714,7 @@ function PromptInput({
                 onChangeIsUpdating={setIsAutoUpdating}
               />
             </Box>
-          </SentryErrorBoundary>
+          } />
         </Box>
       )}
     </Box>

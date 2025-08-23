@@ -379,9 +379,6 @@ interface PermissionRequest {
 
 2. **Investigation**
    ```bash
-   # Review audit logs
-   kode security audit --last 1h
-   
    # Check modified files
    git status
    git diff

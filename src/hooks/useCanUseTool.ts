@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import React, { useCallback } from 'react'
 import { hasPermissionsToUseTool } from '../permissions'
 import { logEvent } from '../services/statsig'
 import { BashTool, inputSchema } from '../tools/BashTool/BashTool'

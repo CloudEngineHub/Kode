@@ -331,7 +331,7 @@ export const getClients = memoize(async (): Promise<WrappedClient[]> => {
   return await Promise.all(
     Object.entries(allServers).map(async ([name, serverRef]) => {
       try {
-        const client = await connectToServer(name, serverRef)
+        const client = await connectToServer(name, serverRef as McpServerConfig)
         logEvent('tengu_mcp_server_connection_succeeded', {})
         return { name, client, type: 'connected' as const }
       } catch (error) {

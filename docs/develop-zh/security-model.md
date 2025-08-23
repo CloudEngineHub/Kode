@@ -379,9 +379,6 @@ interface PermissionRequest {
 
 2. **调查**
    ```bash
-   # 审查审计日志
-   kode security audit --last 1h
-   
    # 检查修改的文件
    git status
    git diff

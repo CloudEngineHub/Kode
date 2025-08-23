@@ -8,8 +8,8 @@ const help = {
   description: 'Show help and available commands',
   isEnabled: true,
   isHidden: false,
-  async call(onDone, { options: { commands } }) {
-    return <Help commands={commands} onClose={onDone} />
+  async call(onDone, context) {
+    return <Help commands={context.options?.commands || []} onClose={onDone} />
   },
   userFacingName() {
     return 'help'

@@ -26,7 +26,7 @@ Kode 中的所有内容都被抽象为"工具" - 一个自包含的功能单元�
 AI 自动通过以下方式理解您的项目：
 - Git 状态和最近的提交
 - 目录结构分析
-- KODE.md 和 CLAUDE.md 项目文档
+- AGENTS.md 和 CLAUDE.md 项目文档
 - .claude/commands/ 和 .kode/commands/ 中的自定义命令定义
 - 先前的对话历史和分叉对话
 

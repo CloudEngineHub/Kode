@@ -1,11 +1,42 @@
 import { z } from 'zod'
-import { UUID } from 'crypto'
 import * as React from 'react'
 
+// DEPRECATED: Use domain/tool/Tool.interface.ts for new implementations
+// This interface will be maintained for compatibility during transition
+
+export type SetToolJSXFn = (jsx: {
+  jsx: React.ReactNode | null
+  shouldHidePromptInput: boolean
+} | null) => void
+
 export interface ToolUseContext {
-  messageId: UUID
+  messageId: string | undefined
   agentId?: string
   safeMode?: boolean
+  abortController: AbortController
+  readFileTimestamps: { [filePath: string]: number }
+  options?: {
+    commands?: any[]
+    tools?: any[]
+    verbose?: boolean
+    slowAndCapableModel?: string
+    safeMode?: boolean
+    forkNumber?: number
+    messageLogName?: string
+    maxThinkingTokens?: any
+    isKodingRequest?: boolean
+    kodingContext?: string
+    isCustomCommand?: boolean
+  }
+  // GPT-5 Responses API state management
+  responseState?: {
+    previousResponseId?: string
+    conversationId?: string
+  }
+}
+
+export interface ExtendedToolUseContext extends ToolUseContext {
+  setToolJSX: SetToolJSXFn
 }
 
 export interface ValidationResult {
@@ -49,5 +80,3 @@ export interface Tool<
     unknown
   >
 }
-
-export type { ToolUseContext, ValidationResult }
