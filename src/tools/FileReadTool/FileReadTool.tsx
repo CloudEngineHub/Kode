@@ -1,8 +1,8 @@
 import { ImageBlockParam } from '@anthropic-ai/sdk/resources/index.mjs'
-import { existsSync, readFileSync, statSync } from 'fs'
+import { statSync } from 'node:fs'
 import { Box, Text } from 'ink'
-import * as path from 'path'
-import { extname, relative } from 'path'
+import * as path from 'node:path'
+import { extname, relative } from 'node:path'
 import * as React from 'react'
 import { z } from 'zod'
 import { FallbackToolUseRejectedMessage } from '../../components/FallbackToolUseRejectedMessage'
@@ -24,6 +24,7 @@ import {
 } from '../../services/fileFreshness'
 import { DESCRIPTION, PROMPT } from './prompt'
 import { hasReadPermission } from '../../utils/permissions/filesystem'
+import { secureFileService } from '../../utils/secureFile'
 
 const MAX_LINES_TO_RENDER = 5
 const MAX_OUTPUT_SIZE = 0.25 * 1024 * 1024 // 0.25MB in bytes
@@ -144,7 +145,9 @@ export const FileReadTool = {
   async validateInput({ file_path, offset, limit }) {
     const fullFilePath = normalizeFilePath(file_path)
 
-    if (!existsSync(fullFilePath)) {
+    // Use secure file service to check if file exists and get file info
+    const fileCheck = secureFileService.safeGetFileInfo(fullFilePath)
+    if (!fileCheck.success) {
       // Try to find a similar file with a different extension
       const similarFilename = findSimilarFile(fullFilePath)
       let message = 'File does not exist.'
@@ -160,8 +163,7 @@ export const FileReadTool = {
       }
     }
 
-    // Get file stats to check size
-    const stats = statSync(fullFilePath)
+    const stats = fileCheck.stats!
     const fileSize = stats.size
     const ext = path.extname(fullFilePath).toLowerCase()
 
@@ -316,7 +318,18 @@ async function readImage(
     const sharp = (
       (await import('sharp')) as unknown as { default: typeof import('sharp') }
     ).default
-    const image = sharp(readFileSync(filePath))
+    
+    // Use secure file service to read the file
+    const fileReadResult = secureFileService.safeReadFile(filePath, {
+      encoding: 'buffer' as BufferEncoding,
+      maxFileSize: MAX_IMAGE_SIZE
+    })
+    
+    if (!fileReadResult.success) {
+      throw new Error(`Failed to read image file: ${fileReadResult.error}`)
+    }
+    
+    const image = sharp(fileReadResult.content as Buffer)
     const metadata = await image.metadata()
 
     if (!metadata.width || !metadata.height) {
@@ -336,7 +349,17 @@ async function readImage(
       width <= MAX_WIDTH &&
       height <= MAX_HEIGHT
     ) {
-      return createImageResponse(readFileSync(filePath), ext)
+      // Use secure file service to read the file
+      const fileReadResult = secureFileService.safeReadFile(filePath, {
+        encoding: 'buffer' as BufferEncoding,
+        maxFileSize: MAX_IMAGE_SIZE
+      })
+      
+      if (!fileReadResult.success) {
+        throw new Error(`Failed to read image file: ${fileReadResult.error}`)
+      }
+      
+      return createImageResponse(fileReadResult.content as Buffer, ext)
     }
 
     if (width > MAX_WIDTH) {
@@ -367,6 +390,15 @@ async function readImage(
   } catch (e) {
     logError(e)
     // If any error occurs during processing, return original image
-    return createImageResponse(readFileSync(filePath), ext)
+    const fileReadResult = secureFileService.safeReadFile(filePath, {
+      encoding: 'buffer' as BufferEncoding,
+      maxFileSize: MAX_IMAGE_SIZE
+    })
+    
+    if (!fileReadResult.success) {
+      throw new Error(`Failed to read image file: ${fileReadResult.error}`)
+    }
+    
+    return createImageResponse(fileReadResult.content as Buffer, ext)
   }
 }
