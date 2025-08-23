@@ -2,7 +2,7 @@ import figures from 'figures'
 import { Box, Text } from 'ink'
 import React, { type ReactNode } from 'react'
 import { type Theme } from './theme'
-import { useComponentTheme } from '@inkjs/ui'
+import { getTheme } from '../../utils/theme'
 
 export type SelectOptionProps = {
   /**
@@ -24,6 +24,11 @@ export type SelectOptionProps = {
    * Option label.
    */
   readonly children: ReactNode
+
+  /**
+   * React key prop (handled internally by React)
+   */
+  readonly key?: React.Key
 }
 
 export function SelectOption({
@@ -31,8 +36,29 @@ export function SelectOption({
   isSelected,
   smallPointer,
   children,
+  ...props
 }: SelectOptionProps) {
-  const { styles } = useComponentTheme<Theme>('Select')
+  const appTheme = getTheme()
+  const styles = {
+    option: ({ isFocused }: { isFocused: boolean }) => ({
+      paddingLeft: 2,
+      paddingRight: 1,
+    }),
+    focusIndicator: () => ({
+      color: appTheme.claude,
+    }),
+    label: ({ isFocused, isSelected }: { isFocused: boolean; isSelected: boolean }) => ({
+      color: isSelected 
+        ? appTheme.success 
+        : isFocused 
+          ? appTheme.claude 
+          : appTheme.text,
+      bold: isSelected,
+    }),
+    selectedIndicator: () => ({
+      color: appTheme.success,
+    }),
+  }
 
   return (
     <Box {...styles.option({ isFocused })}>

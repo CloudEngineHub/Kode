@@ -47,10 +47,8 @@ export const FileEditTool = {
     return DESCRIPTION
   },
   inputSchema,
-  userFacingName({ old_string, new_string }) {
-    if (old_string === '') return 'Create'
-    if (new_string === '') return 'Delete'
-    return 'Update'
+  userFacingName() {
+    return 'Edit'
   },
   async isEnabled() {
     return true
@@ -67,7 +65,8 @@ export const FileEditTool = {
   renderToolUseMessage(input, { verbose }) {
     return `file_path: ${verbose ? input.file_path : relative(getCwd(), input.file_path)}`
   },
-  renderToolResultMessage({ filePath, structuredPatch }, { verbose }) {
+  renderToolResultMessage({ filePath, structuredPatch }) {
+    const verbose = false // Set default value for verbose
     return (
       <FileEditToolUpdatedMessage
         filePath={filePath}

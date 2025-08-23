@@ -7,6 +7,19 @@ import { PRODUCT_COMMAND } from '../constants/product'
 import { SESSION_ID } from './log'
 import type { Message } from '../types/conversation'
 
+// 调试日志级别
+export enum LogLevel {
+  TRACE = 'TRACE',
+  DEBUG = 'DEBUG',
+  INFO = 'INFO',
+  WARN = 'WARN',
+  ERROR = 'ERROR',
+  FLOW = 'FLOW',
+  API = 'API',
+  STATE = 'STATE',
+  REMINDER = 'REMINDER', // 新增：系统提醒事件
+}
+
 // 调试模式检测
 const isDebugMode = () =>
   process.argv.includes('--debug') || process.argv.includes('--debug-verbose')
@@ -67,19 +80,6 @@ function ensureDebugDir() {
   if (!existsSync(debugDir)) {
     mkdirSync(debugDir, { recursive: true })
   }
-}
-
-// 调试日志级别
-export enum LogLevel {
-  TRACE = 'TRACE',
-  DEBUG = 'DEBUG',
-  INFO = 'INFO',
-  WARN = 'WARN',
-  ERROR = 'ERROR',
-  FLOW = 'FLOW',
-  API = 'API',
-  STATE = 'STATE',
-  REMINDER = 'REMINDER', // 新增：系统提醒事件
 }
 
 // 日志条目接口

@@ -32,6 +32,7 @@ import {
   getConfigForCLI,
   listConfigForCLI,
   enableConfigs,
+  validateAndRepairAllGPT5Profiles,
 } from '../utils/config'
 import { cwd } from 'process'
 import { dateToFilename, logError, parseLogFilename } from '../utils/log'
@@ -40,7 +41,7 @@ import { Onboarding } from '../components/Onboarding'
 import { Doctor } from '../screens/Doctor'
 import { ApproveApiKey } from '../components/ApproveApiKey'
 import { TrustDialog } from '../components/TrustDialog'
-import { checkHasTrustDialogAccepted } from '../utils/config'
+import { checkHasTrustDialogAccepted, McpServerConfig } from '../utils/config'
 import { isDefaultSlowAndCapableModel } from '../utils/model'
 import { LogList } from '../screens/LogList'
 import { ResumeConversation } from '../screens/ResumeConversation'
@@ -184,6 +185,13 @@ async function setup(cwd: string, safeMode?: boolean): Promise<void> {
 
   // Always grant read permissions for original working dir
   grantReadPermissionForOriginalDir()
+  
+  // Start watching agent configuration files for changes
+  const { startAgentWatcher, clearAgentCache } = await import('../utils/agentLoader')
+  await startAgentWatcher(() => {
+    // Cache is already cleared in the watcher, just log
+    console.log('✅ Agent configurations hot-reloaded')
+  })
 
   // If --safe mode is enabled, prevent root/sudo usage for security
   if (safeMode) {
@@ -263,6 +271,17 @@ async function main() {
   // Validate configs are valid and enable configuration system
   try {
     enableConfigs()
+    
+    // 🔧 Validate and auto-repair GPT-5 model profiles
+    try {
+      const repairResult = validateAndRepairAllGPT5Profiles()
+      if (repairResult.repaired > 0) {
+        console.log(`🔧 Auto-repaired ${repairResult.repaired} GPT-5 model configurations`)
+      }
+    } catch (repairError) {
+      // Don't block startup if GPT-5 validation fails
+      console.warn('⚠️ GPT-5 configuration validation failed:', repairError)
+    }
   } catch (error: unknown) {
     if (error instanceof ConfigParseError) {
       // Show the invalid config dialog with the error object
@@ -274,10 +293,11 @@ async function main() {
   let inputPrompt = ''
   let renderContext: RenderOptions | undefined = {
     exitOnCtrlC: false,
+    // @ts-expect-error - onFlicker not in RenderOptions interface  
     onFlicker() {
       logEvent('tengu_flicker', {})
     },
-  }
+  } as any
 
   if (
     !process.stdin.isTTY &&
@@ -484,7 +504,7 @@ ${commandList}`,
     .action(async ({ cwd, global }) => {
       await setup(cwd, false)
       console.log(
-        JSON.stringify(listConfigForCLI((global as true) ?? false), null, 2),
+        JSON.stringify(listConfigForCLI(global ? (true as const) : (false as const)), null, 2),
       )
       process.exit(0)
     })

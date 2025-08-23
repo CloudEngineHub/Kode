@@ -38,35 +38,8 @@ export type Out = {
 
 export const BashTool = {
   name: 'Bash',
-  async description({ command }) {
-    try {
-      const result = await queryQuick({
-        systemPrompt: [
-          `You are a command description generator. Write a clear, concise description of what this command does in 5-10 words. Examples:
-
-          Input: ls
-          Output: Lists files in current directory
-
-          Input: git status
-          Output: Shows working tree status
-
-          Input: npm install
-          Output: Installs package dependencies
-
-          Input: mkdir foo
-          Output: Creates directory 'foo'`,
-        ],
-        userPrompt: `Describe this command: ${command}`,
-      })
-      const description =
-        result.message.content[0]?.type === 'text'
-          ? result.message.content[0].text
-          : null
-      return description || 'Executes a bash command'
-    } catch (error) {
-      logError(error)
-      return 'Executes a bash command'
-    }
+  async description() {
+    return 'Executes shell commands on your computer'
   },
   async prompt() {
     const config = getGlobalConfig()
@@ -149,8 +122,8 @@ export const BashTool = {
     return <FallbackToolUseRejectedMessage />
   },
 
-  renderToolResultMessage(content, { verbose }) {
-    return <BashToolResultMessage content={content} verbose={verbose} />
+  renderToolResultMessage(content) {
+    return <BashToolResultMessage content={content} verbose={false} />
   },
   renderResultForAssistant({ interrupted, stdout, stderr }) {
     let errorMessage = stderr.trim()

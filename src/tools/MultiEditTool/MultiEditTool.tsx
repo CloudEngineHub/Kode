@@ -58,8 +58,8 @@ export const MultiEditTool = {
     return PROMPT
   },
   inputSchema,
-  userFacingName({ edits }) {
-    return `Multi-Edit (${edits.length} changes)`
+  userFacingName() {
+    return 'Multi-Edit'
   },
   async isEnabled() {
     return true

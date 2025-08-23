@@ -20,7 +20,11 @@ export function AssistantLocalCommandOutputMessage({
   ].filter(Boolean)
 
   if (insides.length === 0) {
-    insides = [<Text key="0">(No output)</Text>]
+    insides = [
+      <React.Fragment key="0">
+        <Text>(No output)</Text>
+      </React.Fragment>
+    ]
   }
 
   return [

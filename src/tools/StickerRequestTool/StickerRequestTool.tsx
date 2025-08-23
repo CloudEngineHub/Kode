@@ -6,7 +6,7 @@ import { DESCRIPTION, PROMPT } from './prompt'
 import {
   StickerRequestForm,
   FormData,
-} from '../../components/StickerRequestForm.js'
+} from '../../components/StickerRequestForm'
 import { checkGate, logEvent } from '../../services/statsig'
 import { getTheme } from '../../utils/theme'
 

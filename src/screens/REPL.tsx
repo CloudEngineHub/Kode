@@ -181,7 +181,12 @@ export function REPL({
       // Tool use confirm handles the abort signal itself
       toolUseConfirm.onAbort()
     } else {
-      abortController?.abort()
+      // Wrap abort in try-catch to prevent error display on user interrupt
+      try {
+        abortController?.abort()
+      } catch (e) {
+        // Silently handle abort errors - this is expected behavior
+      }
     }
   }
 
@@ -392,7 +397,7 @@ export function REPL({
     }
 
     // If this was a Koding request and we got an assistant message back,
-    // save it to KODE.md (and CLAUDE.md if exists)
+    // save it to AGENTS.md (and CLAUDE.md if exists)
     if (
       isKodingRequest &&
       lastAssistantMessage &&
@@ -407,7 +412,7 @@ export function REPL({
                 .map(block => (block.type === 'text' ? block.text : ''))
                 .join('\n')
 
-        // Add the content to KODE.md (and CLAUDE.md if exists)
+        // Add the content to AGENTS.md (and CLAUDE.md if exists)
         if (content && content.trim().length > 0) {
           handleHashCommand(content)
         }
@@ -605,12 +610,13 @@ export function REPL({
   return (
     <PermissionProvider isBypassPermissionsModeAvailable={!safeMode}>
       <ModeIndicator />
-      <Static
-        key={`static-messages-${forkNumber}`}
-        items={messagesJSX.filter(_ => _.type === 'static')}
-      >
-        {_ => _.jsx}
-      </Static>
+      <React.Fragment key={`static-messages-${forkNumber}`}>
+        <Static
+          items={messagesJSX.filter(_ => _.type === 'static')}
+        >
+          {_ => _.jsx}
+        </Static>
+      </React.Fragment>
       {messagesJSX.filter(_ => _.type === 'transient').map(_ => _.jsx)}
       <Box
         borderColor="red"

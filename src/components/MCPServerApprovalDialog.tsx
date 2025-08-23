@@ -1,7 +1,7 @@
 import React from 'react'
 import { Box, Text, useInput } from 'ink'
 import { getTheme } from '../utils/theme'
-import { Select } from '@inkjs/ui'
+import { Select } from './CustomSelect/select'
 import {
   saveCurrentProjectConfig,
   getCurrentProjectConfig,

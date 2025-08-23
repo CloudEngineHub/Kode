@@ -175,10 +175,10 @@ export function Help({
                 Custom commands loaded from:
               </Text>
               <Text color={theme.secondaryText}>
-                • {getCustomCommandDirectories().user} (user: prefix)
+                • {getCustomCommandDirectories().userClaude} (user: prefix)
               </Text>
               <Text color={theme.secondaryText}>
-                • {getCustomCommandDirectories().project} (project: prefix)
+                • {getCustomCommandDirectories().projectClaude} (project: prefix)
               </Text>
               <Text color={theme.secondaryText}>
                 Use /refresh-commands to reload after changes
@@ -190,10 +190,10 @@ export function Help({
                 Create custom commands by adding .md files to:
               </Text>
               <Text color={theme.secondaryText}>
-                • {getCustomCommandDirectories().user} (user: prefix)
+                • {getCustomCommandDirectories().userClaude} (user: prefix)
               </Text>
               <Text color={theme.secondaryText}>
-                • {getCustomCommandDirectories().project} (project: prefix)
+                • {getCustomCommandDirectories().projectClaude} (project: prefix)
               </Text>
               <Text color={theme.secondaryText}>
                 Use /refresh-commands to reload after creation

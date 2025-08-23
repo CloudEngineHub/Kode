@@ -1,3 +1,4 @@
+import React from 'react'
 import bug from './commands/bug'
 import clear from './commands/clear'
 import compact from './commands/compact'
@@ -21,6 +22,7 @@ import review from './commands/review'
 import terminalSetup from './commands/terminalSetup'
 import { Tool, ToolUseContext } from './Tool'
 import resume from './commands/resume'
+import agents from './commands/agents'
 import { getMCPCommands } from './services/mcpClient'
 import { loadCustomCommands } from './services/customCommands'
 import type { MessageParam } from '@anthropic-ai/sdk/resources/index.mjs'
@@ -79,6 +81,7 @@ const INTERNAL_ONLY_COMMANDS = [ctx_viz, resume, listen]
 // Declared as a function so that we don't run this until getCommands is called,
 // since underlying functions read from config, which can't be read at module initialization time
 const COMMANDS = memoize((): Command[] => [
+  agents,
   clear,
   compact,
   config,

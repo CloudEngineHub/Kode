@@ -63,7 +63,8 @@ export const LSTool = {
   renderToolUseRejectedMessage() {
     return <FallbackToolUseRejectedMessage />
   },
-  renderToolResultMessage(content, { verbose }) {
+  renderToolResultMessage(content) {
+    const verbose = false // Set default value for verbose
     if (typeof content !== 'string') {
       return null
     }
@@ -81,7 +82,9 @@ export const LSTool = {
               .filter(_ => _.trim() !== '')
               .slice(0, verbose ? undefined : MAX_LINES)
               .map((_, i) => (
-                <Text key={i}>{_}</Text>
+                <React.Fragment key={i}>
+                  <Text>{_}</Text>
+                </React.Fragment>
               ))}
             {!verbose && result.split('\n').length > MAX_LINES && (
               <Text color={getTheme().secondaryText}>

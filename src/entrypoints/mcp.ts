@@ -37,14 +37,14 @@ const state: {
 const MCP_COMMANDS: Command[] = [review]
 
 const MCP_TOOLS: Tool[] = [
-  TaskTool,
-  BashTool,
-  FileEditTool,
-  FileReadTool,
-  GlobTool,
-  GrepTool,
-  FileWriteTool,
-  LSTool,
+  TaskTool as unknown as Tool,
+  BashTool as unknown as Tool,
+  FileEditTool as unknown as Tool,
+  FileReadTool as unknown as Tool,
+  GlobTool as unknown as Tool,
+  GrepTool as unknown as Tool,
+  FileWriteTool as unknown as Tool,
+  LSTool as unknown as Tool,
 ]
 
 export async function startMCPServer(cwd: string): Promise<void> {
@@ -63,7 +63,7 @@ export async function startMCPServer(cwd: string): Promise<void> {
 
   server.setRequestHandler(
     ListToolsRequestSchema,
-    async (): Promise<Zod.infer<typeof ListToolsResultSchema>> => {
+    async (): Promise<z.infer<typeof ListToolsResultSchema>> => {
       const tools = await Promise.all(
         MCP_TOOLS.map(async tool => ({
           ...tool,
@@ -80,7 +80,7 @@ export async function startMCPServer(cwd: string): Promise<void> {
 
   server.setRequestHandler(
     CallToolRequestSchema,
-    async (request): Promise<Zod.infer<typeof CallToolResultSchema>> => {
+    async (request): Promise<z.infer<typeof CallToolResultSchema>> => {
       const { name, arguments: args } = request.params
       const tool = MCP_TOOLS.find(_ => _.name === name)
       if (!tool) {

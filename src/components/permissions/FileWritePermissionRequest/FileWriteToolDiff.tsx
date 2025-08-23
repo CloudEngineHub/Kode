@@ -65,9 +65,11 @@ export function FileWriteToolDiff({
             />
           )),
           i => (
-            <Text color={getTheme().secondaryText} key={`ellipsis-${i}`}>
-              ...
-            </Text>
+            <React.Fragment key={`ellipsis-${i}`}>
+              <Text color={getTheme().secondaryText}>
+                ...
+              </Text>
+            </React.Fragment>
           ),
         )
       ) : (

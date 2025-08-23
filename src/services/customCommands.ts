@@ -21,7 +21,7 @@ const execFileAsync = promisify(execFile)
  * @param content - The custom command content to process
  * @returns Promise<string> - Content with bash commands replaced by their output
  */
-async function executeBashCommands(content: string): Promise<string> {
+export async function executeBashCommands(content: string): Promise<string> {
   // Match patterns like !`git status` or !`command here`
   const bashCommandRegex = /!\`([^`]+)\`/g
   const matches = [...content.matchAll(bashCommandRegex)]
@@ -75,8 +75,10 @@ async function executeBashCommands(content: string): Promise<string> {
  * @param content - The custom command content to process
  * @returns Promise<string> - Content with file references replaced by file contents
  */
-async function resolveFileReferences(content: string): Promise<string> {
+export async function resolveFileReferences(content: string): Promise<string> {
   // Match patterns like @src/file.js or @path/to/file.txt
+  // Use consistent file mention pattern from mentionProcessor
+  // Exclude agent and ask-model patterns to avoid conflicts
   const fileRefRegex = /@([a-zA-Z0-9/._-]+(?:\.[a-zA-Z0-9]+)?)/g
   const matches = [...content.matchAll(fileRefRegex)]
 
@@ -89,6 +91,11 @@ async function resolveFileReferences(content: string): Promise<string> {
   for (const match of matches) {
     const fullMatch = match[0]
     const filePath = match[1]
+
+    // Skip agent mentions - these are handled by the mention processor
+    if (filePath.startsWith('agent-')) {
+      continue
+    }
 
     try {
       // Resolve relative to current working directory
@@ -169,7 +176,27 @@ export interface CustomCommandFrontmatter {
  * This extends the base Command interface to include scope metadata
  * for distinguishing between user-level and project-level commands.
  */
-export interface CustomCommandWithScope extends Command {
+export interface CustomCommandWithScope {
+  /** Command type - matches PromptCommand */
+  type: 'prompt'
+  /** Command name */
+  name: string
+  /** Command description */
+  description: string
+  /** Whether command is enabled */
+  isEnabled: boolean
+  /** Whether command is hidden */
+  isHidden: boolean
+  /** Command aliases */
+  aliases?: string[]
+  /** Progress message */
+  progressMessage: string
+  /** Argument names for legacy support */
+  argNames?: string[]
+  /** User-facing name function */
+  userFacingName(): string
+  /** Prompt generation function */
+  getPromptForCommand(args: string): Promise<MessageParam[]>
   /** Scope indicates whether this is a user or project command */
   scope?: 'user' | 'project'
 }
@@ -239,8 +266,7 @@ export function parseFrontmatter(content: string): {
     // End array processing when we hit a new key
     if (inArray && trimmed.includes(':')) {
       if (currentKey) {
-        frontmatter[currentKey as keyof CustomCommandFrontmatter] =
-          arrayItems as any
+        ;(frontmatter as any)[currentKey] = arrayItems
       }
       inArray = false
       arrayItems = []
@@ -260,7 +286,7 @@ export function parseFrontmatter(content: string): {
         .split(',')
         .map(s => s.trim().replace(/['"]/g, ''))
         .filter(s => s.length > 0)
-      frontmatter[key as keyof CustomCommandFrontmatter] = items as any
+      ;(frontmatter as any)[key] = items
     }
     // Handle multi-line arrays (value is empty or [])
     else if (value === '' || value === '[]') {
@@ -270,22 +296,17 @@ export function parseFrontmatter(content: string): {
     }
     // Handle boolean values
     else if (value === 'true' || value === 'false') {
-      frontmatter[key as keyof CustomCommandFrontmatter] = (value ===
-        'true') as any
+      ;(frontmatter as any)[key] = value === 'true'
     }
     // Handle string values (remove quotes)
     else {
-      frontmatter[key as keyof CustomCommandFrontmatter] = value.replace(
-        /['"]/g,
-        '',
-      ) as any
+      ;(frontmatter as any)[key] = value.replace(/['"]/g, '')
     }
   }
 
   // Handle final array if we ended in array mode
   if (inArray && currentKey) {
-    frontmatter[currentKey as keyof CustomCommandFrontmatter] =
-      arrayItems as any
+    ;(frontmatter as any)[currentKey] = arrayItems
   }
 
   return { frontmatter, content: markdownContent }
@@ -539,10 +560,10 @@ export const loadCustomCommands = memoize(
       // Log performance metrics for monitoring
       // This follows the same pattern as other performance-sensitive operations
       logEvent('tengu_custom_command_scan', {
-        durationMs: duration,
-        projectFilesFound: projectFiles.length,
-        userFilesFound: userFiles.length,
-        totalFiles: allFiles.length,
+        durationMs: duration.toString(),
+        projectFilesFound: projectFiles.length.toString(),
+        userFilesFound: userFiles.length.toString(),
+        totalFiles: allFiles.length.toString(),
       })
 
       // Parse files and create command objects
@@ -599,10 +620,10 @@ export const loadCustomCommands = memoize(
 
       // Log loading results for debugging and monitoring
       logEvent('tengu_custom_commands_loaded', {
-        totalCommands: commands.length,
-        enabledCommands: enabledCommands.length,
-        userCommands: commands.filter(cmd => cmd.scope === 'user').length,
-        projectCommands: commands.filter(cmd => cmd.scope === 'project').length,
+        totalCommands: commands.length.toString(),
+        enabledCommands: enabledCommands.length.toString(),
+        userCommands: commands.filter(cmd => cmd.scope === 'user').length.toString(),
+        projectCommands: commands.filter(cmd => cmd.scope === 'project').length.toString(),
       })
 
       return enabledCommands

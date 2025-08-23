@@ -18,7 +18,7 @@ import {
   NotebookCellSourceOutput,
   NotebookCellOutput,
   NotebookCellType,
-} from '../../types/notebook.js'
+} from '../../types/notebook'
 import { formatOutput } from '../BashTool/utils'
 import { getCwd } from '../../utils/state'
 import { findSimilarFile } from '../../utils/file'
@@ -36,26 +36,6 @@ const inputSchema = z.strictObject({
 type In = typeof inputSchema
 type Out = NotebookCellSource[]
 
-function renderResultForAssistant(data: NotebookCellSource[]) {
-  const allResults = data.flatMap(getToolResultFromCell)
-
-  // Merge adjacent text blocks
-  return allResults.reduce<(TextBlockParam | ImageBlockParam)[]>(
-    (acc, curr) => {
-      if (acc.length === 0) return [curr]
-
-      const prev = acc[acc.length - 1]
-      if (prev && prev.type === 'text' && curr.type === 'text') {
-        // Merge the text blocks
-        prev.text += '\n' + curr.text
-        return acc
-      }
-
-      return [...acc, curr]
-    },
-    [],
-  )
-}
 
 export const NotebookReadTool = {
   name: 'ReadNotebook',
@@ -141,11 +121,23 @@ export const NotebookReadTool = {
 
     yield {
       type: 'result',
-      resultForAssistant: renderResultForAssistant(cells),
+      resultForAssistant: this.renderResultForAssistant(cells),
       data: cells,
     }
   },
-  renderResultForAssistant,
+  renderResultForAssistant(data: NotebookCellSource[]) {
+    // Convert the complex structure to a string representation for the assistant
+    return data.map((cell, index) => {
+      let content = `Cell ${index + 1} (${cell.cellType}):\n${cell.source}`
+      if (cell.outputs && cell.outputs.length > 0) {
+        const outputText = cell.outputs.map(output => output.text).filter(Boolean).join('\n')
+        if (outputText) {
+          content += `\nOutput:\n${outputText}`
+        }
+      }
+      return content
+    }).join('\n\n')
+  },
 } satisfies Tool<In, Out>
 
 function processOutputText(text: string | string[] | undefined): string {
