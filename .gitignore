@@ -9,7 +9,6 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 .pnpm-debug.log*
-AGENTS.md
 
 # Caches
 
@@ -189,6 +188,3 @@ pnpm-lock.yaml
 cli.mjs
 cli.mjs.map
 source-maps/
-
-# Claude project instructions
-CLAUDE.md
