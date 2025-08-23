@@ -64,6 +64,20 @@ Our state-of-the-art completion system provides unparalleled coding assistance:
 
 ## Installation
 
+### Recommended: Using Bun (Fastest)
+
+First install Bun if you haven't already:
+```bash
+curl -fsSL https://bun.sh/install | bash
+```
+
+Then install Kode:
+```bash
+bun add -g @shareai-lab/kode
+```
+
+### Alternative: Using npm
+
 ```bash
 npm install -g @shareai-lab/kode
 ```

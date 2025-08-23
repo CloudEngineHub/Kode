@@ -1,6 +1,6 @@
 {
   "name": "@shareai-lab/kode",
-  "version": "1.0.71",
+  "version": "1.0.73",
   "bin": {
     "kode": "cli.js",
     "kwa": "cli.js",
@@ -112,8 +112,5 @@
     "shareai",
     "terminal",
     "command-line"
-  ],
-  "bundledDependencies": [
-    "tsx"
   ]
 }
