@@ -140,6 +140,51 @@ Use the `#` prefix to generate and maintain your AGENTS.md documentation:
 
 This mode automatically formats responses as structured documentation and appends them to your AGENTS.md file.
 
+### Docker Usage
+
+#### Alternative: Build from local source
+
+```bash
+# Clone the repository
+git clone https://github.com/shareAI-lab/Kode.git
+cd Kode
+
+# Build the image locally
+docker build --no-cache -t Kode .
+
+# Run in your project directory
+cd your-project
+docker run -it --rm \
+  -v $(pwd):/workspace \
+  -v ~/.kode:/root/.kode \
+  -v ~/.kode.json:/root/.kode.json \
+  -w /workspace \
+  Kode
+```
+
+#### Docker Configuration Details
+
+The Docker setup includes:
+
+- **Volume Mounts**:
+  - `$(pwd):/workspace` - Mounts your current project directory
+  - `~/.kode:/root/.kode` - Preserves your kode configuration directory between runs
+  - `~/.kode.json:/root/.kode.json` - Preserves your kode global configuration file between runs
+
+- **Working Directory**: Set to `/workspace` inside the container
+
+- **Interactive Mode**: Uses `-it` flags for interactive terminal access
+
+- **Cleanup**: `--rm` flag removes the container after exit
+
+**Note**: Kode uses both `~/.kode` directory for additional data (like memory files) and `~/.kode.json` file for global configuration.
+
+The first time you run the Docker command, it will build the image. Subsequent runs will use the cached image for faster startup.
+
+You can use the onboarding to set up the model, or `/model`.
+If you don't see the models you want on the list, you can manually set them in `/config`
+As long as you have an openai-like endpoint, it should work.
+
 ### Commands
 
 - `/help` - Show available commands
