@@ -28,7 +28,7 @@ ENV PATH="/root/.bun/bin:$PATH"
 WORKDIR /app
 
 # Copy package files
-COPY package.json pnpm-lock.yaml ./
+COPY package.json ./
 
 # Install pnpm and dependencies
 RUN npm install -g pnpm && \
