@@ -89,6 +89,7 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "@types/jest": "^30.0.0",
     "@types/node": "^24.1.0",
     "bun-types": "latest",
     "prettier": "^3.6.2",
