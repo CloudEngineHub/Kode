@@ -960,7 +960,8 @@ export function useUnifiedCompletion({
 
   // Handle Tab key - simplified and unified
   useInput((input_str, key) => {
-    if (!key.tab || key.shift) return false
+    if (!key.tab) return false
+    if (key.shift) return false
     
     const context = getWordAtCursor()
     if (!context) return false

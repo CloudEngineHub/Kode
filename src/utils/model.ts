@@ -164,8 +164,9 @@ export class ModelManager {
     contextOverflow: boolean
     usagePercentage: number
   } {
-    const activeProfiles = this.modelProfiles.filter(p => p.isActive)
-    if (activeProfiles.length === 0) {
+    // Use ALL configured models, not just active ones
+    const allProfiles = this.getAllConfiguredModels()
+    if (allProfiles.length === 0) {
       return {
         success: false,
         modelName: null,
@@ -175,14 +176,10 @@ export class ModelManager {
       }
     }
 
-    // Sort by lastUsed (most recent first) then by createdAt
-    activeProfiles.sort((a, b) => {
-      const aLastUsed = a.lastUsed || 0
-      const bLastUsed = b.lastUsed || 0
-      if (aLastUsed !== bLastUsed) {
-        return bLastUsed - aLastUsed
-      }
-      return b.createdAt - a.createdAt
+    // Sort by createdAt for consistent cycling order (don't use lastUsed)
+    // Using lastUsed causes the order to change each time, preventing proper cycling
+    allProfiles.sort((a, b) => {
+      return a.createdAt - b.createdAt // Oldest first for consistent order
     })
 
     const currentMainModelName = this.config.modelPointers?.main
@@ -192,8 +189,11 @@ export class ModelManager {
     const previousModelName = currentModel?.name || null
 
     if (!currentMainModelName) {
-      // No current main model, select first active
-      const firstModel = activeProfiles[0]
+      // No current main model, select first available (activate if needed)
+      const firstModel = allProfiles[0]
+      if (!firstModel.isActive) {
+        firstModel.isActive = true
+      }
       this.setPointer('main', firstModel.modelName)
       this.updateLastUsed(firstModel.modelName)
 
@@ -210,13 +210,16 @@ export class ModelManager {
       }
     }
 
-    // Find current model index
-    const currentIndex = activeProfiles.findIndex(
+    // Find current model index in ALL models
+    const currentIndex = allProfiles.findIndex(
       p => p.modelName === currentMainModelName,
     )
     if (currentIndex === -1) {
-      // Current model not found, select first
-      const firstModel = activeProfiles[0]
+      // Current model not found, select first available (activate if needed)
+      const firstModel = allProfiles[0]
+      if (!firstModel.isActive) {
+        firstModel.isActive = true
+      }
       this.setPointer('main', firstModel.modelName)
       this.updateLastUsed(firstModel.modelName)
 
@@ -234,7 +237,7 @@ export class ModelManager {
     }
 
     // Check if only one model is available
-    if (activeProfiles.length === 1) {
+    if (allProfiles.length === 1) {
       return {
         success: false,
         modelName: null,
@@ -244,9 +247,15 @@ export class ModelManager {
       }
     }
 
-    // Get next model in cycle
-    const nextIndex = (currentIndex + 1) % activeProfiles.length
-    const nextModel = activeProfiles[nextIndex]
+    // Get next model in cycle (from ALL models)
+    const nextIndex = (currentIndex + 1) % allProfiles.length
+    const nextModel = allProfiles[nextIndex]
+    
+    // Activate the model if it's not already active
+    const wasInactive = !nextModel.isActive
+    if (!nextModel.isActive) {
+      nextModel.isActive = true
+    }
 
     // Analyze context compatibility for next model
     const analysis = this.analyzeContextCompatibility(
@@ -257,6 +266,11 @@ export class ModelManager {
     // Always switch to next model, but return context status
     this.setPointer('main', nextModel.modelName)
     this.updateLastUsed(nextModel.modelName)
+    
+    // Save configuration if we activated a new model
+    if (wasInactive) {
+      this.saveConfig()
+    }
 
     return {
       success: true,
@@ -278,29 +292,43 @@ export class ModelManager {
     blocked?: boolean
     message?: string
   } {
+    // Use the enhanced context check method for consistency
     const result = this.switchToNextModelWithContextCheck(currentContextTokens)
-
-    // Special case: only one model available
-    if (
-      !result.success &&
-      result.previousModelName &&
-      this.getAvailableModels().length === 1
-    ) {
-      return {
-        success: false,
-        modelName: null,
-        blocked: false,
-        message: `⚠️ Only one model configured (${result.previousModelName}). Use /model to add more models for switching.`,
+    
+    if (!result.success) {
+      const allModels = this.getAllConfiguredModels()
+      if (allModels.length === 0) {
+        return {
+          success: false,
+          modelName: null,
+          blocked: false,
+          message: '❌ No models configured. Use /model to add models.',
+        }
+      } else if (allModels.length === 1) {
+        return {
+          success: false,
+          modelName: null,
+          blocked: false,
+          message: `⚠️ Only one model configured (${allModels[0].modelName}). Use /model to add more models for switching.`,
+        }
       }
     }
-
+    
+    // Convert the detailed result to the simple interface
+    const currentModel = this.findModelProfile(this.config.modelPointers?.main)
+    const allModels = this.getAllConfiguredModels()
+    const currentIndex = allModels.findIndex(m => m.modelName === currentModel?.modelName)
+    const totalModels = allModels.length
+    
     return {
       success: result.success,
       modelName: result.modelName,
       blocked: result.contextOverflow,
-      message: result.contextOverflow
-        ? `Context usage: ${result.usagePercentage.toFixed(1)}%`
-        : undefined,
+      message: result.success
+        ? result.contextOverflow
+          ? `⚠️ Context usage: ${result.usagePercentage.toFixed(1)}% - ${result.modelName}`
+          : `✅ Switched to ${result.modelName} (${currentIndex + 1}/${totalModels})${currentModel?.provider ? ` [${currentModel.provider}]` : ''}`
+        : `❌ Failed to switch models`,
     }
   }
 
@@ -368,9 +396,9 @@ export class ModelManager {
     requiresCompression: boolean
     estimatedTokensAfterSwitch: number
   } {
-    const modelName = this.switchToNextModel(currentContextTokens)
+    const result = this.switchToNextModel(currentContextTokens)
 
-    if (!modelName) {
+    if (!result.success || !result.modelName) {
       return {
         modelName: null,
         contextAnalysis: null,
@@ -382,7 +410,7 @@ export class ModelManager {
     const newModel = this.getModel('main')
     if (!newModel) {
       return {
-        modelName,
+        modelName: result.modelName,
         contextAnalysis: null,
         requiresCompression: false,
         estimatedTokensAfterSwitch: currentContextTokens,
@@ -395,7 +423,7 @@ export class ModelManager {
     )
 
     return {
-      modelName,
+      modelName: result.modelName,
       contextAnalysis: analysis,
       requiresCompression: analysis.severity === 'critical',
       estimatedTokensAfterSwitch: currentContextTokens,
@@ -563,17 +591,67 @@ export class ModelManager {
   }
 
   /**
-   * Get all available models for pointer assignment
+   * Get all active models for pointer assignment
    */
   getAvailableModels(): ModelProfile[] {
     return this.modelProfiles.filter(p => p.isActive)
   }
 
   /**
-   * Get all available model names (modelName field)
+   * Get all configured models (both active and inactive) for switching
+   */
+  getAllConfiguredModels(): ModelProfile[] {
+    return this.modelProfiles
+  }
+
+  /**
+   * Get all available model names (modelName field) - active only
    */
   getAllAvailableModelNames(): string[] {
     return this.getAvailableModels().map(p => p.modelName)
+  }
+
+  /**
+   * Get all configured model names (both active and inactive)
+   */
+  getAllConfiguredModelNames(): string[] {
+    return this.getAllConfiguredModels().map(p => p.modelName)
+  }
+
+  /**
+   * Debug method to get detailed model switching information
+   */
+  getModelSwitchingDebugInfo(): {
+    totalModels: number
+    activeModels: number
+    inactiveModels: number
+    currentMainModel: string | null
+    availableModels: Array<{
+      name: string
+      modelName: string 
+      provider: string
+      isActive: boolean
+      lastUsed?: number
+    }>
+    modelPointers: Record<string, string | undefined>
+  } {
+    const availableModels = this.getAvailableModels()
+    const currentMainModelName = this.config.modelPointers?.main
+    
+    return {
+      totalModels: this.modelProfiles.length,
+      activeModels: availableModels.length,
+      inactiveModels: this.modelProfiles.length - availableModels.length,
+      currentMainModel: currentMainModelName || null,
+      availableModels: this.modelProfiles.map(p => ({
+        name: p.name,
+        modelName: p.modelName,
+        provider: p.provider,
+        isActive: p.isActive,
+        lastUsed: p.lastUsed,
+      })),
+      modelPointers: this.config.modelPointers || {},
+    }
   }
 
   /**

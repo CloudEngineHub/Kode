@@ -227,20 +227,22 @@ function PromptInput({
     [onModeChange, onInputChange],
   )
 
-  // Handle Tab key model switching with simple context check
+  // Handle Shift+M model switching with enhanced debugging
   const handleQuickModelSwitch = useCallback(async () => {
     const modelManager = getModelManager()
     const currentTokens = countTokens(messages)
 
+    // Get debug info for better error reporting
+    const debugInfo = modelManager.getModelSwitchingDebugInfo()
+    
     const switchResult = modelManager.switchToNextModel(currentTokens)
 
     if (switchResult.success && switchResult.modelName) {
-      // Successful switch
+      // Successful switch - use enhanced message from model manager
       onSubmitCountChange(prev => prev + 1)
-      const newModel = modelManager.getModel('main')
       setModelSwitchMessage({
         show: true,
-        text: `✅ Switched to ${switchResult.modelName} (${newModel?.provider || 'Unknown'} | Model: ${newModel?.modelName || 'N/A'})`,
+        text: switchResult.message || `✅ Switched to ${switchResult.modelName}`,
       })
       setTimeout(() => setModelSwitchMessage({ show: false }), 3000)
     } else if (switchResult.blocked && switchResult.message) {
@@ -251,14 +253,28 @@ function PromptInput({
       })
       setTimeout(() => setModelSwitchMessage({ show: false }), 5000)
     } else {
-      // No other models available or other error
+      // Enhanced error reporting with debug info  
+      let errorMessage = switchResult.message
+      
+      if (!errorMessage) {
+        if (debugInfo.totalModels === 0) {
+          errorMessage = '❌ No models configured. Use /model to add models.'
+        } else if (debugInfo.activeModels === 0) {
+          errorMessage = `❌ No active models (${debugInfo.totalModels} total, all inactive). Use /model to activate models.`
+        } else if (debugInfo.activeModels === 1) {
+          // Show ALL models including inactive ones for debugging
+          const allModelNames = debugInfo.availableModels.map(m => `${m.name}${m.isActive ? '' : ' (inactive)'}`).join(', ')
+          errorMessage = `⚠️ Only 1 active model out of ${debugInfo.totalModels} total models: ${allModelNames}. ALL configured models will be activated for switching.`
+        } else {
+          errorMessage = `❌ Model switching failed (${debugInfo.activeModels} active, ${debugInfo.totalModels} total models available)`
+        }
+      }
+      
       setModelSwitchMessage({
         show: true,
-        text:
-          switchResult.message ||
-          '⚠️ No other models configured. Use /model to add more models',
+        text: errorMessage,
       })
-      setTimeout(() => setModelSwitchMessage({ show: false }), 3000)
+      setTimeout(() => setModelSwitchMessage({ show: false }), 6000)
     }
   }, [onSubmitCountChange, messages])
 
@@ -525,6 +541,17 @@ function PromptInput({
     return false // Not handled, allow other hooks
   })
 
+  // Handle special key combinations before character input
+  const handleSpecialKey = useCallback((inputChar: string, key: any): boolean => {
+    // Shift+M for model switching - intercept before character input
+    if (key.shift && (inputChar === 'M' || inputChar === 'm')) {
+      handleQuickModelSwitch()
+      return true // Prevent character from being input
+    }
+    
+    return false // Not handled, allow normal processing
+  }, [handleQuickModelSwitch])
+
   const textInputColumns = useTerminalSize().columns - 6
   const tokenUsage = useMemo(() => countTokens(messages), [messages])
 
@@ -614,14 +641,7 @@ function PromptInput({
             cursorOffset={cursorOffset}
             onChangeCursorOffset={setCursorOffset}
             onPaste={onTextPaste}
-            onSpecialKey={(input, key) => {
-              // Handle Shift+M for model switching
-              if (key.shift && (input === 'M' || input === 'm')) {
-                handleQuickModelSwitch()
-                return true // Prevent the 'M' from being typed
-              }
-              return false
-            }}
+            onSpecialKey={handleSpecialKey}
           />
         </Box>
       </Box>

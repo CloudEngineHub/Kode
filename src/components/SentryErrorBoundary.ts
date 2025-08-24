@@ -20,6 +20,12 @@ export class SentryErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error): void {
+    // Don't report user-initiated cancellations to Sentry
+    if (error.name === 'AbortError' || 
+        error.message?.includes('abort') ||
+        error.message?.includes('The operation was aborted')) {
+      return
+    }
     captureException(error)
   }
 
