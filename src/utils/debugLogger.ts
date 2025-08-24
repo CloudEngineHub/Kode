@@ -471,7 +471,12 @@ export function logAPIError(context: {
   
   // 确保目录存在
   if (!existsSync(errorDir)) {
-    mkdirSync(errorDir, { recursive: true })
+    try {
+      mkdirSync(errorDir, { recursive: true })
+    } catch (err) {
+      console.error('Failed to create error log directory:', err)
+      return // Exit early if we can't create the directory
+    }
   }
   
   // 生成文件名
@@ -557,7 +562,7 @@ export function logAPIError(context: {
     }
     
     console.log()
-    console.log(chalk.dim(`  📁 Full log: ~/.kode/logs/error/api/${filename}`))
+    console.log(chalk.dim(`  📁 Full log: ${filepath}`))
     console.log(chalk.red('━'.repeat(60)))
     console.log()
   }
