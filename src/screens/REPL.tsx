@@ -171,22 +171,15 @@ export function REPL({
   }>({})
 
   const { status: apiKeyStatus, reverify } = useApiKeyVerification()
-  // 🔧 FIXED: Simple cancellation logic matching original claude-code
   function onCancel() {
     if (!isLoading) {
       return
     }
     setIsLoading(false)
     if (toolUseConfirm) {
-      // Tool use confirm handles the abort signal itself
       toolUseConfirm.onAbort()
-    } else {
-      // Wrap abort in try-catch to prevent error display on user interrupt
-      try {
-        abortController?.abort()
-      } catch (e) {
-        // Silently handle abort errors - this is expected behavior
-      }
+    } else if (abortController && !abortController.signal.aborted) {
+      abortController.abort()
     }
   }
 

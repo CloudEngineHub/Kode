@@ -664,7 +664,7 @@ export async function getCompletionWithProfile(
         )
       }
 
-      const stream = createStreamProcessor(response.body as any)
+      const stream = createStreamProcessor(response.body as any, signal)
       return stream
     }
 
@@ -815,6 +815,7 @@ export async function getCompletionWithProfile(
 
 export function createStreamProcessor(
   stream: any,
+  signal?: AbortSignal,
 ): AsyncGenerator<OpenAI.ChatCompletionChunk, void, unknown> {
   if (!stream) {
     throw new Error('Stream is null or undefined')
@@ -827,10 +828,19 @@ export function createStreamProcessor(
 
     try {
       while (true) {
+        // Check for cancellation before attempting to read
+        if (signal?.aborted) {
+          break
+        }
+
         let readResult
         try {
           readResult = await reader.read()
         } catch (e) {
+          // If signal is aborted, this is user cancellation - exit silently
+          if (signal?.aborted) {
+            break
+          }
           console.error('Error reading from stream:', e)
           break
         }
@@ -899,8 +909,9 @@ export function createStreamProcessor(
 
 export function streamCompletion(
   stream: any,
+  signal?: AbortSignal,
 ): AsyncGenerator<OpenAI.ChatCompletionChunk, void, unknown> {
-  return createStreamProcessor(stream)
+  return createStreamProcessor(stream, signal)
 }
 
 /**

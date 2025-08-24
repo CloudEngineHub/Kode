@@ -110,7 +110,7 @@ export const TodoWriteTool = {
   },
   inputSchema,
   userFacingName() {
-    return 'Write Todos'
+    return 'Update Todos'
   },
   async isEnabled() {
     return true
@@ -129,9 +129,8 @@ export const TodoWriteTool = {
     return 'Todos have been modified successfully. Ensure that you continue to use the todo list to track your progress. Please proceed with the current tasks if applicable'
   },
   renderToolUseMessage(input, { verbose }) {
-    // Return empty string to match reference implementation and avoid double rendering
-    // The tool result message will show the todo list
-    return ''
+    // Show a simple confirmation message when the tool is being used
+    return '{ params.todo }'
   },
   renderToolUseRejectedMessage() {
     return <FallbackToolUseRejectedMessage />
@@ -139,12 +138,23 @@ export const TodoWriteTool = {
   renderToolResultMessage(output) {
     const isError = typeof output === 'string' && output.startsWith('Error')
 
-    // If output contains todo data, render simple checkbox list
-    if (typeof output === 'object' && output && 'newTodos' in output) {
-      const { newTodos = [] } = output as any
+    // For non-error output, get current todos from storage and render them
+    if (!isError && typeof output === 'string') {
+      const currentTodos = getTodos()
+      
+      if (currentTodos.length === 0) {
+        return (
+          <Box flexDirection="column" width="100%">
+            <Box flexDirection="row">
+              <Text color="#6B7280">&nbsp;&nbsp;⎿ &nbsp;</Text>
+              <Text color="#9CA3AF">No todos currently</Text>
+            </Box>
+          </Box>
+        )
+      }
 
-      // sort: [completed, in_progress, pending]
-      newTodos.sort((a, b) => {
+      // Sort: [completed, in_progress, pending]
+      const sortedTodos = [...currentTodos].sort((a, b) => {
         const order = ['completed', 'in_progress', 'pending']
         return (
           order.indexOf(a.status) - order.indexOf(b.status) ||
@@ -152,41 +162,52 @@ export const TodoWriteTool = {
         )
       })
 
-      // Render each todo item with proper styling
+      // Find the next pending task (first pending task after sorting)
+      const nextPendingIndex = sortedTodos.findIndex(todo => todo.status === 'pending')
+
       return (
-        <Box justifyContent="space-between" overflowX="hidden" width="100%">
-          <Box flexDirection="row">
-            <Text>&nbsp;&nbsp;⎿ &nbsp;</Text>
-            <Box flexDirection="column">
-              {newTodos.map((todo: TodoItem, index: number) => {
-                const status_icon_map = {
-                  completed: '🟢',
-                  in_progress: '🟢',
-                  pending: '🟡',
-                }
-                const checkbox = status_icon_map[todo.status]
+        <Box flexDirection="column" width="100%">
+          {sortedTodos.map((todo: TodoItem, index: number) => {
+            // Determine checkbox symbol and colors
+            let checkbox: string
+            let textColor: string
+            let isBold = false
+            let isStrikethrough = false
 
-                const status_color_map = {
-                  completed: '#008000',
-                  in_progress: '#008000',
-                  pending: '#FFD700',
-                }
-                const text_color = status_color_map[todo.status]
+            if (todo.status === 'completed') {
+              checkbox = '☒'
+              textColor = '#6B7280' // Professional gray for completed
+              isStrikethrough = true
+            } else if (todo.status === 'in_progress') {
+              checkbox = '☐'
+              textColor = '#10B981' // Professional green for in progress
+              isBold = true
+            } else if (todo.status === 'pending') {
+              checkbox = '☐'
+              // Only the FIRST pending task gets purple highlight
+              if (index === nextPendingIndex) {
+                textColor = '#8B5CF6' // Professional purple for next pending
+                isBold = true
+              } else {
+                textColor = '#9CA3AF' // Muted gray for other pending
+              }
+            }
 
-                return (
-                  <React.Fragment key={todo.id || index}>
-                    <Text
-                      color={text_color}
-                      bold={todo.status !== 'pending'}
-                      strikethrough={todo.status === 'completed'}
-                    >
-                      {checkbox} {todo.content}
-                    </Text>
-                  </React.Fragment>
-                )
-              })}
-            </Box>
-          </Box>
+            return (
+              <Box key={todo.id || index} flexDirection="row" marginBottom={0}>
+                <Text color="#6B7280">&nbsp;&nbsp;⎿ &nbsp;</Text>
+                <Box flexDirection="row" flexGrow={1}>
+                  <Text color={textColor} bold={isBold} strikethrough={isStrikethrough}>
+                    {checkbox}
+                  </Text>
+                  <Text> </Text>
+                  <Text color={textColor} bold={isBold} strikethrough={isStrikethrough}>
+                    {todo.content}
+                  </Text>
+                </Box>
+              </Box>
+            )
+          })}
         </Box>
       )
     }
@@ -264,8 +285,10 @@ export const TodoWriteTool = {
 
       yield {
         type: 'result',
-        data: summary, // Return string instead of object to match interface
+        data: summary, // Return string to satisfy interface
         resultForAssistant: summary,
+        // Store todo data in a way accessible to the renderer
+        // We'll modify the renderToolResultMessage to get todos from storage
       }
     } catch (error) {
       const errorMessage =

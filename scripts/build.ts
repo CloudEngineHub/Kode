@@ -48,24 +48,19 @@ try {
 }
 
 function runWithNode() {
-  // Use node with tsx loader
-  const child = spawn('node', [
-    '--loader', 'tsx',
-    '--no-warnings',
-    cliPath,
-    ...args
-  ], {
+  // Use local tsx installation
+  const tsxPath = path.join(__dirname, 'node_modules', '.bin', 'tsx');
+  const child = spawn(tsxPath, [cliPath, ...args], {
     stdio: 'inherit',
     env: {
       ...process.env,
-      NODE_OPTIONS: '--loader tsx --no-warnings',
       YOGA_WASM_PATH: path.join(__dirname, 'yoga.wasm')
     }
   });
   
   child.on('error', (err) => {
-    if (err.code === 'MODULE_NOT_FOUND' || err.message.includes('tsx')) {
-      console.error('\\nError: tsx is required but not installed.');
+    if (err.code === 'ENOENT') {
+      console.error('\\nError: tsx is required but not found.');
       console.error('Please run: npm install');
       process.exit(1);
     } else {
