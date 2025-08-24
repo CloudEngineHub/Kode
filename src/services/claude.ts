@@ -1395,9 +1395,9 @@ async function queryAnthropicNative(
     tools.map(async tool =>
       ({
         name: tool.name,
-        description: await tool.prompt({
-          safeMode: options?.safeMode,
-        }),
+        description: typeof tool.description === 'function' 
+          ? await tool.description() 
+          : tool.description,
         input_schema: zodToJsonSchema(tool.inputSchema),
       }) as unknown as Anthropic.Beta.Messages.BetaTool,
     )
@@ -1744,7 +1744,7 @@ async function queryOpenAI(
         : '',
     })
 
-    systemPrompt = [getCLISyspromptPrefix(), ...systemPrompt]
+    systemPrompt = [getCLISyspromptPrefix() + systemPrompt] // some openai-like providers need the entire system prompt as a single block
   }
 
   const system: TextBlockParam[] = splitSysPromptPrefix(systemPrompt).map(

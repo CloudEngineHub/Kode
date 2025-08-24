@@ -3,7 +3,7 @@ import { getGlobalConfig, GlobalConfig } from '../utils/config'
 import { ProxyAgent, fetch, Response } from 'undici'
 import { setSessionState, getSessionState } from '../utils/sessionState'
 import { logEvent } from '../services/statsig'
-import { debug as debugLogger, getCurrentRequest } from '../utils/debugLogger'
+import { debug as debugLogger, getCurrentRequest, logAPIError } from '../utils/debugLogger'
 
 // Helper function to calculate retry delay with exponential backoff
 function getRetryDelay(attempt: number, retryAfter?: string | null): number {
@@ -637,9 +637,31 @@ export async function getCompletionWithProfile(
           
           // If no specific handler found, log the error for debugging
           console.log(`⚠️  Unhandled API error (${response.status}): ${errorMessage}`)
+          
+          // Log API error using unified logger
+          logAPIError({
+            model: opts.model,
+            endpoint: `${baseURL}${endpoint}`,
+            status: response.status,
+            error: errorMessage,
+            request: opts,
+            response: errorData,
+            provider: provider
+          })
         } catch (parseError) {
           // If we can't parse the error, fall back to generic retry
           console.log(`⚠️  Could not parse error response (${response.status})`)
+          
+          // Log parse error
+          logAPIError({
+            model: opts.model,
+            endpoint: `${baseURL}${endpoint}`,
+            status: response.status,
+            error: `Could not parse error response: ${parseError.message}`,
+            request: opts,
+            response: { parseError: parseError.message },
+            provider: provider
+          })
         }
         
         const delayMs = getRetryDelay(attempt)
