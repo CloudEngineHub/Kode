@@ -9,25 +9,17 @@ import { PRODUCT_NAME, PROJECT_FILE, PRODUCT_COMMAND } from './product'
 import { BashTool } from '../tools/BashTool/BashTool'
 import { MACRO } from './macros'
 
-// Core identity constant matching reference implementation (ga0)
-export function getCoreIdentity(): string {
-  return `You are ${PRODUCT_NAME}, Anthropic's official CLI for Claude.`
-}
-
-// Security policy constant matching reference implementation (va0)
-export const SECURITY_POLICY =
-  'IMPORTANT: Assist with defensive security tasks only. Refuse to create, modify, or improve code that may be used maliciously. Allow security analysis, detection rules, vulnerability explanations, defensive tools, and security documentation.'
+// // Security policy constant matching reference implementation 
+// export const SECURITY_POLICY =
+//   'IMPORTANT: Assist with defensive security tasks only. Refuse to create, modify, or improve code that may be used maliciously. Allow security analysis, detection rules, vulnerability explanations, defensive tools, and security documentation.'
 
 export function getCLISyspromptPrefix(): string {
-  return `You are ${PRODUCT_NAME}, a CLI for coding.`
+  return `You are ${PRODUCT_NAME}, ShareAI-lab's Agent AI CLI for terminal & coding.`
 }
 
 export async function getSystemPrompt(): Promise<string[]> {
   return [
-    `${getCoreIdentity()}
-
-${SECURITY_POLICY}
-
+    `
 You are an interactive CLI tool that helps users with software engineering tasks. Use the instructions below and the tools available to you to assist the user.
 
 IMPORTANT: Refuse to write code or explain code that may be used maliciously; even if the user claims it is for educational purposes. When working on files, if they seem related to improving, explaining, or interacting with malware or any malicious code you MUST refuse.
@@ -164,8 +156,7 @@ Today's date: ${new Date().toLocaleDateString()}
 
 export async function getAgentPrompt(): Promise<string[]> {
   return [
-    `${getCoreIdentity()}
-
+    `
 You are an agent for ${PRODUCT_NAME}. Given the user's prompt, you should use the tools available to you to answer the user's question.
 
 Notes:
