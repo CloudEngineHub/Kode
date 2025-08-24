@@ -1395,9 +1395,9 @@ async function queryAnthropicNative(
     tools.map(async tool =>
       ({
         name: tool.name,
-        description: typeof tool.description === 'function' 
-          ? await tool.description() 
-          : tool.description,
+        description: await tool.prompt({
+          safeMode: options?.safeMode,
+        }),
         input_schema: zodToJsonSchema(tool.inputSchema),
       }) as unknown as Anthropic.Beta.Messages.BetaTool,
     )
