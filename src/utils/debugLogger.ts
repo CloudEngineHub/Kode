@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, appendFileSync } from 'fs'
 import { join } from 'path'
+import { homedir } from 'os'
 import { randomUUID } from 'crypto'
 import chalk from 'chalk'
 import envPaths from 'env-paths'
@@ -60,14 +61,14 @@ const USER_FRIENDLY_LEVELS = new Set([
 const STARTUP_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-')
 const REQUEST_START_TIME = Date.now()
 
-// 路径配置
-const paths = envPaths(PRODUCT_COMMAND)
+// 路径配置 - 统一使用 ~/.kode 目录
+const KODE_DIR = join(homedir(), '.kode')
 function getProjectDir(cwd: string): string {
   return cwd.replace(/[^a-zA-Z0-9]/g, '-')
 }
 
 const DEBUG_PATHS = {
-  base: () => join(paths.cache, getProjectDir(process.cwd()), 'debug'),
+  base: () => join(KODE_DIR, getProjectDir(process.cwd()), 'debug'),
   detailed: () => join(DEBUG_PATHS.base(), `${STARTUP_TIMESTAMP}-detailed.log`),
   flow: () => join(DEBUG_PATHS.base(), `${STARTUP_TIMESTAMP}-flow.log`),
   api: () => join(DEBUG_PATHS.base(), `${STARTUP_TIMESTAMP}-api.log`),
@@ -467,7 +468,7 @@ export function logAPIError(context: {
   response?: any
   provider?: string
 }) {
-  const errorDir = join(paths.cache, getProjectDir(process.cwd()), 'logs', 'error', 'api')
+  const errorDir = join(KODE_DIR, 'logs', 'error', 'api')
   
   // 确保目录存在
   if (!existsSync(errorDir)) {
