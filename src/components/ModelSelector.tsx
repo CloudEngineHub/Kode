@@ -480,6 +480,7 @@ export function ModelSelector({
           'x-api-key': apiKey,
           'anthropic-version': '2023-06-01',
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
         },
       })
 
@@ -1846,7 +1847,7 @@ export function ModelSelector({
         }
 
         // Use the verifyApiKey function which uses the official Anthropic SDK
-        const isValid = await verifyApiKey(apiKey, testBaseURL)
+        const isValid = await verifyApiKey(apiKey, testBaseURL, selectedProvider)
 
         if (isValid) {
           return {
