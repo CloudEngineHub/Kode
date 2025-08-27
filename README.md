@@ -6,6 +6,9 @@
 
 [中文文档](README.zh-CN.md) | [Contributing](CONTRIBUTING.md) | [Documentation](docs/)
 
+
+<img width="606" height="303" alt="image" src="https://github.com/user-attachments/assets/6cf50553-aacd-4241-a579-6e935b6c62b5" />
+
 ## 🤝 AGENTS.md Standard Support
 
 **Kode proudly supports the [AGENTS.md standard protocol](https://agents.md) initiated by OpenAI** - a simple, open format for guiding programming agents that's used by 20k+ open source projects.
