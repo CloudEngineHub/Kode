@@ -72,6 +72,56 @@ function fileExists(p: string | undefined): p is string {
   return !!p && existsSync(p)
 }
 
+// Robust PATH splitter for Windows and POSIX
+function splitPathEntries(pathEnv: string, platform: NodeJS.Platform): string[] {
+  if (!pathEnv) return []
+
+  // POSIX: ':' is the separator
+  if (platform !== 'win32') {
+    return pathEnv
+      .split(':')
+      .map(s => s.trim().replace(/^"|"$/g, ''))
+      .filter(Boolean)
+  }
+
+  // Windows: primarily ';', but some environments may use ':'
+  // We must not split drive letters like 'C:\\' or 'D:foo\\bar'
+  const entries: string[] = []
+  let current = ''
+  const pushCurrent = () => {
+    const cleaned = current.trim().replace(/^"|"$/g, '')
+    if (cleaned) entries.push(cleaned)
+    current = ''
+  }
+
+  for (let i = 0; i < pathEnv.length; i++) {
+    const ch = pathEnv[i]
+
+    if (ch === ';') {
+      pushCurrent()
+      continue
+    }
+
+    if (ch === ':') {
+      const segmentLength = current.length
+      const firstChar = current[0]
+      const isDriveLetterPrefix = segmentLength === 1 && /[A-Za-z]/.test(firstChar || '')
+      // Treat ':' as separator only if it's NOT the drive letter colon
+      if (!isDriveLetterPrefix) {
+        pushCurrent()
+        continue
+      }
+    }
+
+    current += ch
+  }
+
+  // Flush the final segment
+  pushCurrent()
+
+  return entries
+}
+
 function detectShell(): DetectedShell {
   const isWin = process.platform === 'win32'
   if (!isWin) {
@@ -122,7 +172,7 @@ function detectShell(): DetectedShell {
 
   // 2.1) Search in PATH for bash.exe
   const pathEnv = process.env.PATH || process.env.Path || process.env.path || ''
-  const pathEntries = pathEnv.split(';').filter(Boolean)
+  const pathEntries = splitPathEntries(pathEnv, process.platform)
   for (const p of pathEntries) {
     const candidate = join(p, 'bash.exe')
     if (existsSync(candidate)) {
