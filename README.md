@@ -18,6 +18,10 @@
 
 This change reflects our belief that the future of software development is collaborative, open, and augmented by AI. By removing licensing barriers, we're empowering developers worldwide to build the next generation of AI-assisted tools and workflows. Let's build the future together! 🚀
 
+## 📢 Update Log
+
+**2025-08-29**: We've added Windows support! All Windows users can now run Kode using Git Bash, Unix subsystems, or WSL (Windows Subsystem for Linux) on their computers.
+
 
 <img width="606" height="303" alt="image" src="https://github.com/user-attachments/assets/6cf50553-aacd-4241-a579-6e935b6c62b5" />
 
