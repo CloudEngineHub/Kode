@@ -1471,6 +1471,7 @@ async function queryAnthropicNative(
         let finalResponse: any | null = null
         let messageStartEvent: any = null
         const contentBlocks: any[] = []
+        const inputJSONBuffers = new Map<number, string>()
         let usage: any = null
         let stopReason: string | null = null
         let stopSequence: string | null = null
@@ -1484,30 +1485,81 @@ async function queryAnthropicNative(
             })
             throw new Error('Request was cancelled')
           }
-          if (event.type === 'message_start') {
-            messageStartEvent = event
-            finalResponse = {
-              ...event.message,
-              content: [], // Will be populated from content blocks
-            }
-          } else if (event.type === 'content_block_start') {
-            contentBlocks[event.index] = { ...event.content_block }
-          } else if (event.type === 'content_block_delta') {
-            if (!contentBlocks[event.index]) {
-              contentBlocks[event.index] = {
-                type: event.delta.type === 'text_delta' ? 'text' : 'unknown',
-                text: '',
+          
+          switch (event.type) {
+            case 'message_start':
+              messageStartEvent = event
+              finalResponse = {
+                ...event.message,
+                content: [], // Will be populated from content blocks
               }
-            }
-            if (event.delta.type === 'text_delta') {
-              contentBlocks[event.index].text += event.delta.text
-            }
-          } else if (event.type === 'message_delta') {
-            if (event.delta.stop_reason) stopReason = event.delta.stop_reason
-            if (event.delta.stop_sequence)
-              stopSequence = event.delta.stop_sequence
-            if (event.usage) usage = { ...usage, ...event.usage }
-          } else if (event.type === 'message_stop') {
+              break
+              
+            case 'content_block_start':
+              contentBlocks[event.index] = { ...event.content_block }
+              // Initialize JSON buffer for tool_use blocks
+              if (event.content_block.type === 'tool_use') {
+                inputJSONBuffers.set(event.index, '')
+              }
+              break
+              
+            case 'content_block_delta':
+              const blockIndex = event.index
+              
+              // Ensure content block exists
+              if (!contentBlocks[blockIndex]) {
+                contentBlocks[blockIndex] = {
+                  type: event.delta.type === 'text_delta' ? 'text' : 'tool_use',
+                  text: event.delta.type === 'text_delta' ? '' : undefined,
+                }
+                if (event.delta.type === 'input_json_delta') {
+                  inputJSONBuffers.set(blockIndex, '')
+                }
+              }
+              
+              if (event.delta.type === 'text_delta') {
+                contentBlocks[blockIndex].text += event.delta.text
+              } else if (event.delta.type === 'input_json_delta') {
+                const currentBuffer = inputJSONBuffers.get(blockIndex) || ''
+                inputJSONBuffers.set(blockIndex, currentBuffer + event.delta.partial_json)
+              }
+              break
+              
+            case 'message_delta':
+              if (event.delta.stop_reason) stopReason = event.delta.stop_reason
+              if (event.delta.stop_sequence) stopSequence = event.delta.stop_sequence
+              if (event.usage) usage = { ...usage, ...event.usage }
+              break
+              
+            case 'content_block_stop':
+              const stopIndex = event.index
+              const block = contentBlocks[stopIndex]
+              
+              if (block?.type === 'tool_use' && inputJSONBuffers.has(stopIndex)) {
+                const jsonStr = inputJSONBuffers.get(stopIndex)
+                if (jsonStr) {
+                  try {
+                    block.input = JSON.parse(jsonStr)
+                  } catch (error) {
+                    debugLogger.error('JSON_PARSE_ERROR', {
+                      blockIndex: stopIndex,
+                      jsonStr,
+                      error: error instanceof Error ? error.message : String(error)
+                    })
+                    block.input = {}
+                  }
+                  inputJSONBuffers.delete(stopIndex)
+                }
+              }
+              break
+              
+            case 'message_stop':
+              // Clear any remaining buffers
+              inputJSONBuffers.clear()
+              break
+          }
+          
+          if (event.type === 'message_stop') {
             break
           }
         }
