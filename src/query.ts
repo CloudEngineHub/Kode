@@ -206,10 +206,10 @@ export async function* query(
               typeof lastUserMessage.message.content === 'string'
                 ? reminders + lastUserMessage.message.content
                 : [
-                    { type: 'text', text: reminders },
                     ...(Array.isArray(lastUserMessage.message.content)
                       ? lastUserMessage.message.content
                       : []),
+                    { type: 'text', text: reminders },
                   ],
           },
         }
