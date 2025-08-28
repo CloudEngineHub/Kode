@@ -1,10 +1,22 @@
 # Kode - AI Assistant for Your Terminal
 
 [![npm version](https://badge.fury.io/js/@shareai-lab%2Fkode.svg)](https://www.npmjs.com/package/@shareai-lab/kode)
-[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![AGENTS.md](https://img.shields.io/badge/AGENTS.md-Compatible-brightgreen)](https://agents.md)
 
 [中文文档](README.zh-CN.md) | [Contributing](CONTRIBUTING.md) | [Documentation](docs/)
+
+## 🎉 Big Announcement: We're Now Apache 2.0 Licensed!
+
+**Great news for the developer community!** In our commitment to democratizing AI agent technology and fostering a vibrant ecosystem of innovation, we're thrilled to announce that Kode has transitioned from AGPLv3 to the **Apache 2.0 license**.
+
+### What This Means for You:
+- ✅ **Complete Freedom**: Use Kode in any project - personal, commercial, or enterprise
+- ✅ **Build Without Barriers**: Create proprietary solutions without open-sourcing requirements
+- ✅ **Simple Attribution**: Just maintain copyright notices and license info
+- ✅ **Join a Movement**: Be part of accelerating the world's transition to AI-powered development
+
+This change reflects our belief that the future of software development is collaborative, open, and augmented by AI. By removing licensing barriers, we're empowering developers worldwide to build the next generation of AI-assisted tools and workflows. Let's build the future together! 🚀
 
 
 <img width="606" height="303" alt="image" src="https://github.com/user-attachments/assets/6cf50553-aacd-4241-a579-6e935b6c62b5" />
@@ -395,7 +407,7 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 ## License
 
-ISC License - see [LICENSE](LICENSE) for details.
+Apache 2.0 License - see [LICENSE](LICENSE) for details.
 
 ## Thanks
 

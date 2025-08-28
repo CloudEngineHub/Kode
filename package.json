@@ -11,7 +11,7 @@
   },
   "main": "cli.js",
   "author": "ShareAI-lab <ai-lab@foxmail.com>",
-  "license": "ISC",
+  "license": "Apache-2.0",
   "description": "AI-powered terminal assistant that understands your codebase, edits files, runs commands, and automates development workflows.",
   "homepage": "https://github.com/shareAI-lab/kode",
   "repository": {

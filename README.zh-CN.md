@@ -1,9 +1,21 @@
 # Kode - 终端 AI 助手
 
 [![npm version](https://badge.fury.io/js/@shareai-lab%2Fkode.svg)](https://www.npmjs.com/package/@shareai-lab/kode)
-[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 [English](README.md) | [贡献指南](CONTRIBUTING.md) | [文档](docs/)
+
+## 🎉 重磅消息：我们已切换至 Apache 2.0 开源协议！
+
+**开发者社区的福音来了！** 为了推动 AI 智能体技术的民主化进程，构建充满活力的创新生态，我们激动地宣布：Kode 已正式从 AGPLv3 协议升级为 **Apache 2.0 开源协议**。
+
+### 这对您意味着什么：
+- ✅ **完全自由**：在任何项目中使用 Kode - 无论是个人项目、商业产品还是企业方案
+- ✅ **无障碍创新**：构建专有解决方案，无需开源您的代码
+- ✅ **极简要求**：仅需保留版权声明和许可信息
+- ✅ **共创未来**：与全球开发者一起，加速世界向 AI 驱动生产的转型
+
+让我们携手共建未来！🚀
 
 Kode 是一个强大的 AI 助手，运行在你的终端中。它能理解你的代码库、编辑文件、运行命令，并为你处理整个开发工作流。
 
@@ -301,7 +313,7 @@ bun test
 
 ## 许可证
 
-ISC 许可证 - 详见 [LICENSE](LICENSE)。
+Apache 2.0 许可证 - 详见 [LICENSE](LICENSE)。
 
 ## 支持
 
