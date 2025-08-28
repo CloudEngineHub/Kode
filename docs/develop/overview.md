@@ -92,6 +92,7 @@ Standardized tool interface enabling:
 - File operations (read, write, edit)
 - Shell command execution
 - Code searching and analysis
+- Web search and content analysis
 - Task management and planning
 - External tool integration via MCP
 
@@ -151,6 +152,7 @@ Permission checks are mandatory for potentially dangerous operations, with clear
 - **File Manipulation**: Read, write, and edit files with validation
 - **Command Execution**: Run shell commands with output capture
 - **Search & Analysis**: Find code patterns and dependencies
+- **Web Search & Content**: Search the web and analyze web content with AI
 - **Task Management**: Plan and track development tasks
 
 ### AI-Enhanced Features
