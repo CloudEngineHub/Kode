@@ -37,6 +37,165 @@ const SHELL_CONFIGS: Record<string, string> = {
   '/bin/zsh': '.zshrc',
 }
 
+type DetectedShell = {
+  bin: string
+  args: string[]
+  type: 'posix' | 'msys' | 'wsl'
+}
+
+function quoteForBash(str: string): string {
+  return `'${str.replace(/'/g, "'\\''")}'`
+}
+
+function toBashPath(pathStr: string, type: 'posix' | 'msys' | 'wsl'): string {
+  // Already POSIX absolute path
+  if (pathStr.startsWith('/')) return pathStr
+  if (type === 'posix') return pathStr
+
+  // Normalize backslashes
+  const normalized = pathStr.replace(/\\/g, '/').replace(/\\\\/g, '/')
+  const driveMatch = /^[A-Za-z]:/.exec(normalized)
+  if (driveMatch) {
+    const drive = normalized[0].toLowerCase()
+    const rest = normalized.slice(2)
+    if (type === 'msys') {
+      return `/` + drive + (rest.startsWith('/') ? rest : `/${rest}`)
+    }
+    // wsl
+    return `/mnt/` + drive + (rest.startsWith('/') ? rest : `/${rest}`)
+  }
+  // Relative path: just convert slashes
+  return normalized
+}
+
+function fileExists(p: string | undefined): p is string {
+  return !!p && existsSync(p)
+}
+
+// Robust PATH splitter for Windows and POSIX
+function splitPathEntries(pathEnv: string, platform: NodeJS.Platform): string[] {
+  if (!pathEnv) return []
+
+  // POSIX: ':' is the separator
+  if (platform !== 'win32') {
+    return pathEnv
+      .split(':')
+      .map(s => s.trim().replace(/^"|"$/g, ''))
+      .filter(Boolean)
+  }
+
+  // Windows: primarily ';', but some environments may use ':'
+  // We must not split drive letters like 'C:\\' or 'D:foo\\bar'
+  const entries: string[] = []
+  let current = ''
+  const pushCurrent = () => {
+    const cleaned = current.trim().replace(/^"|"$/g, '')
+    if (cleaned) entries.push(cleaned)
+    current = ''
+  }
+
+  for (let i = 0; i < pathEnv.length; i++) {
+    const ch = pathEnv[i]
+
+    if (ch === ';') {
+      pushCurrent()
+      continue
+    }
+
+    if (ch === ':') {
+      const segmentLength = current.length
+      const firstChar = current[0]
+      const isDriveLetterPrefix = segmentLength === 1 && /[A-Za-z]/.test(firstChar || '')
+      // Treat ':' as separator only if it's NOT the drive letter colon
+      if (!isDriveLetterPrefix) {
+        pushCurrent()
+        continue
+      }
+    }
+
+    current += ch
+  }
+
+  // Flush the final segment
+  pushCurrent()
+
+  return entries
+}
+
+function detectShell(): DetectedShell {
+  const isWin = process.platform === 'win32'
+  if (!isWin) {
+    const bin = process.env.SHELL || '/bin/bash'
+    return { bin, args: ['-l'], type: 'posix' }
+  }
+
+  // 1) Respect SHELL if it points to a bash.exe that exists
+  if (process.env.SHELL && /bash\.exe$/i.test(process.env.SHELL) && existsSync(process.env.SHELL)) {
+    return { bin: process.env.SHELL, args: ['-l'], type: 'msys' }
+  }
+
+  // 1.1) Explicit override
+  if (process.env.KODE_BASH && existsSync(process.env.KODE_BASH)) {
+    return { bin: process.env.KODE_BASH, args: ['-l'], type: 'msys' }
+  }
+
+  // 2) Common Git Bash/MSYS2 locations
+  const programFiles = [
+    process.env['ProgramFiles'],
+    process.env['ProgramFiles(x86)'],
+    process.env['ProgramW6432'],
+  ].filter(Boolean) as string[]
+
+  const localAppData = process.env['LocalAppData']
+
+  const candidates: string[] = []
+  for (const base of programFiles) {
+    candidates.push(
+      join(base, 'Git', 'bin', 'bash.exe'),
+      join(base, 'Git', 'usr', 'bin', 'bash.exe'),
+    )
+  }
+  if (localAppData) {
+    candidates.push(
+      join(localAppData, 'Programs', 'Git', 'bin', 'bash.exe'),
+      join(localAppData, 'Programs', 'Git', 'usr', 'bin', 'bash.exe'),
+    )
+  }
+  // MSYS2 default
+  candidates.push('C:/msys64/usr/bin/bash.exe')
+
+  for (const c of candidates) {
+    if (existsSync(c)) {
+      return { bin: c, args: ['-l'], type: 'msys' }
+    }
+  }
+
+  // 2.1) Search in PATH for bash.exe
+  const pathEnv = process.env.PATH || process.env.Path || process.env.path || ''
+  const pathEntries = splitPathEntries(pathEnv, process.platform)
+  for (const p of pathEntries) {
+    const candidate = join(p, 'bash.exe')
+    if (existsSync(candidate)) {
+      return { bin: candidate, args: ['-l'], type: 'msys' }
+    }
+  }
+
+  // 3) WSL
+  try {
+    // Quick probe to ensure WSL+bash exists
+    execSync('wsl.exe -e bash -lc "echo KODE_OK"', { stdio: 'ignore', timeout: 1500 })
+    return { bin: 'wsl.exe', args: ['-e', 'bash', '-l'], type: 'wsl' }
+  } catch {}
+
+  // 4) Last resort: meaningful error
+  const hint = [
+    '无法找到可用的 bash。请安装 Git for Windows 或启用 WSL。',
+    '推荐安装 Git: https://git-scm.com/download/win',
+    '或启用 WSL 并安装 Ubuntu: https://learn.microsoft.com/windows/wsl/install',
+  ].join('\n')
+  throw new Error(hint)
+}
+
 export class PersistentShell {
   private commandQueue: QueuedCommand[] = []
   private isExecuting: boolean = false
@@ -49,10 +208,20 @@ export class PersistentShell {
   private cwdFile: string
   private cwd: string
   private binShell: string
+  private shellArgs: string[]
+  private shellType: 'posix' | 'msys' | 'wsl'
+  private statusFileBashPath: string
+  private stdoutFileBashPath: string
+  private stderrFileBashPath: string
+  private cwdFileBashPath: string
 
   constructor(cwd: string) {
-    this.binShell = process.env.SHELL || '/bin/bash'
-    this.shell = spawn(this.binShell, ['-l'], {
+    const { bin, args, type } = detectShell()
+    this.binShell = bin
+    this.shellArgs = args
+    this.shellType = type
+
+    this.shell = spawn(this.binShell, this.shellArgs, {
       stdio: ['pipe', 'pipe', 'pipe'],
       cwd,
       env: {
@@ -98,13 +267,15 @@ export class PersistentShell {
     }
     // Initialize CWD file with initial directory
     fs.writeFileSync(this.cwdFile, cwd)
-    const configFile = SHELL_CONFIGS[this.binShell]
-    if (configFile) {
-      const configFilePath = join(homedir(), configFile)
-      if (existsSync(configFilePath)) {
-        this.sendToShell(`source ${configFilePath}`)
-      }
-    }
+
+    // Compute bash-visible paths for redirections
+    this.statusFileBashPath = toBashPath(this.statusFile, this.shellType)
+    this.stdoutFileBashPath = toBashPath(this.stdoutFile, this.shellType)
+    this.stderrFileBashPath = toBashPath(this.stderrFile, this.shellType)
+    this.cwdFileBashPath = toBashPath(this.cwdFile, this.shellType)
+
+    // Source ~/.bashrc when available (works for bash on POSIX/MSYS/WSL)
+    this.sendToShell('[ -f ~/.bashrc ] && source ~/.bashrc || true')
   }
 
   private static instance: PersistentShell | null = null
@@ -232,10 +403,17 @@ export class PersistentShell {
 
     // Check the syntax of the command
     try {
-      execSync(`${this.binShell} -n -c ${quotedCommand}`, {
-        stdio: 'ignore',
-        timeout: 1000,
-      })
+      if (this.shellType === 'wsl') {
+        execSync(`wsl.exe -e bash -n -c ${quotedCommand}`, {
+          stdio: 'ignore',
+          timeout: 1000,
+        })
+      } else {
+        execSync(`${this.binShell} -n -c ${quotedCommand}`, {
+          stdio: 'ignore',
+          timeout: 1000,
+        })
+      }
     } catch (stderr) {
       // If there's a syntax error, return an error and log it
       const errorStr =
@@ -264,17 +442,17 @@ export class PersistentShell {
 
       // 1. Execute the main command with redirections
       commandParts.push(
-        `eval ${quotedCommand} < /dev/null > ${this.stdoutFile} 2> ${this.stderrFile}`,
+        `eval ${quotedCommand} < /dev/null > ${quoteForBash(this.stdoutFileBashPath)} 2> ${quoteForBash(this.stderrFileBashPath)}`,
       )
 
       // 2. Capture exit code immediately after command execution to avoid losing it
       commandParts.push(`EXEC_EXIT_CODE=$?`)
 
       // 3. Update CWD file
-      commandParts.push(`pwd > ${this.cwdFile}`)
+      commandParts.push(`pwd > ${quoteForBash(this.cwdFileBashPath)}`)
 
       // 4. Write the preserved exit code to status file to avoid race with pwd
-      commandParts.push(`echo $EXEC_EXIT_CODE > ${this.statusFile}`)
+      commandParts.push(`echo $EXEC_EXIT_CODE > ${quoteForBash(this.statusFileBashPath)}`)
 
       // Send the combined commands as a single operation to maintain atomicity
       this.sendToShell(commandParts.join('\n'))
@@ -363,7 +541,8 @@ export class PersistentShell {
     if (!existsSync(resolved)) {
       throw new Error(`Path "${resolved}" does not exist`)
     }
-    await this.exec(`cd ${resolved}`)
+    const bashPath = toBashPath(resolved, this.shellType)
+    await this.exec(`cd ${quoteForBash(bashPath)}`)
   }
 
   close(): void {
