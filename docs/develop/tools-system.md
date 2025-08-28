@@ -120,6 +120,39 @@ export abstract class Tool {
   - Size and permission information
   - Pattern filtering
 
+#### WebSearchTool
+- **Purpose**: Search the web for current information
+- **Key Features**:
+  - DuckDuckGo integration for web search
+  - Returns all available results (no artificial limits)
+  - Provides titles, snippets, and links
+  - Fast search results for current events and data
+- **Use Cases**: Finding recent news, current documentation, product updates
+- **Implementation**: HTML parsing of DuckDuckGo search results
+
+#### URLFetcherTool
+- **Purpose**: Fetch and analyze web content using AI
+- **Key Features**:
+  - Fetches content from any URL
+  - Converts HTML to clean markdown
+  - AI-powered content analysis based on user prompts
+  - 15-minute caching for raw content efficiency
+  - Smart content truncation for large pages
+  - Uses quick model for fast analysis
+- **Input Schema**:
+  ```typescript
+  {
+    url: string (URI format, required)
+    prompt: string (analysis instruction, required) 
+  }
+  ```
+- **Use Cases**: 
+  - Summarizing articles or documentation
+  - Extracting specific information from web pages
+  - Analyzing pricing, features, or technical requirements
+  - Content research and analysis
+- **Implementation**: Combines web fetching with AI analysis using queryQuick
+
 ### 3. System Execution Tools
 
 #### BashTool
@@ -172,14 +205,6 @@ export abstract class Tool {
   - Server lifecycle management
   - Error propagation
 - **Implementation**: JSON-RPC over stdio/SSE
-
-#### WebFetchTool
-- **Purpose**: Fetch and process web content
-- **Key Features**:
-  - HTML to markdown conversion
-  - Content extraction
-  - Caching support
-  - Redirect handling
 
 ## Tool Implementation Guide
 
