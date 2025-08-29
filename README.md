@@ -4,6 +4,9 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![AGENTS.md](https://img.shields.io/badge/AGENTS.md-Compatible-brightgreen)](https://agents.md)
 
+<img width="606" height="303" alt="image" src="https://github.com/user-attachments/assets/bcf0a964-15bc-4cae-ba79-14a9d2c90957" />
+
+
 [中文文档](README.zh-CN.md) | [Contributing](CONTRIBUTING.md) | [Documentation](docs/)
 
 ## 🎉 Big Announcement: We're Now Apache 2.0 Licensed!
@@ -22,8 +25,6 @@ This change reflects our belief that the future of software development is colla
 
 **2025-08-29**: We've added Windows support! All Windows users can now run Kode using Git Bash, Unix subsystems, or WSL (Windows Subsystem for Linux) on their computers.
 
-
-<img width="606" height="303" alt="image" src="https://github.com/user-attachments/assets/6cf50553-aacd-4241-a579-6e935b6c62b5" />
 
 ## 🤝 AGENTS.md Standard Support
 
