@@ -50,9 +50,8 @@ export function AssistantToolUseMessage({
   // Keeping color undefined makes the OS use the default color regardless of appearance
   const color = isQueued ? getTheme().secondaryText : undefined
 
-  // TODO: Avoid this special case
+  // Handle thinking tool with specialized rendering
   if (tool === ThinkTool) {
-    // params were already validated in query(), so this won't throe
     const { thought } = ThinkTool.inputSchema.parse(param.input)
     return (
       <AssistantThinkingMessage
@@ -62,7 +61,7 @@ export function AssistantToolUseMessage({
     )
   }
 
-  const userFacingToolName = tool.userFacingName ? tool.userFacingName(param.input) : tool.name
+  const userFacingToolName = tool.userFacingName ? tool.userFacingName() : tool.name
   return (
     <Box
       flexDirection="row"
@@ -89,11 +88,10 @@ export function AssistantToolUseMessage({
             ))}
           {tool.name === 'Task' && param.input ? (
             <TaskToolMessage
-              agentType={(param.input as any).subagent_type || 'general-purpose'}
-              bold={!isQueued}
-            >
-              {userFacingToolName}
-            </TaskToolMessage>
+              agentType={String((param.input as any).subagent_type || 'general-purpose')}
+              bold={Boolean(!isQueued)}
+              children={String(userFacingToolName || '')}
+            />
           ) : (
             <Text color={color} bold={!isQueued}>
               {userFacingToolName}

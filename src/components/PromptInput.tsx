@@ -11,8 +11,6 @@ import TextInput from './TextInput'
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { countTokens } from '../utils/tokens'
 import { SentryErrorBoundary } from './SentryErrorBoundary'
-import { AutoUpdater } from './AutoUpdater'
-import type { AutoUpdaterResult } from '../utils/autoUpdater'
 import type { Command } from '../commands'
 import type { SetToolJSXFn, Tool } from '../Tool'
 import { TokenWarning, WARNING_THRESHOLD } from './TokenWarning'
@@ -79,8 +77,6 @@ type Props = {
   verbose: boolean
   messages: Message[]
   setToolJSX: SetToolJSXFn
-  onAutoUpdaterResult: (result: AutoUpdaterResult) => void
-  autoUpdaterResult: AutoUpdaterResult | null
   tools: Tool[]
   input: string
   onInputChange: (value: string) => void
@@ -114,8 +110,6 @@ function PromptInput({
   verbose,
   messages,
   setToolJSX,
-  onAutoUpdaterResult,
-  autoUpdaterResult,
   tools,
   input,
   onInputChange,
@@ -131,7 +125,6 @@ function PromptInput({
   readFileTimestamps,
   onModelChange,
 }: Props): React.ReactNode {
-  const [isAutoUpdating, setIsAutoUpdating] = useState(false)
   const [exitMessage, setExitMessage] = useState<{
     show: boolean
     key?: string
@@ -596,7 +589,7 @@ function PromptInput({
           mode === 'bash'
             ? theme.bashBorder
             : mode === 'koding'
-              ? theme.koding
+              ? theme.noting
               : theme.secondaryBorder
         }
         borderDimColor
@@ -614,7 +607,7 @@ function PromptInput({
           {mode === 'bash' ? (
             <Text color={theme.bashBorder}>&nbsp;!&nbsp;</Text>
           ) : mode === 'koding' ? (
-            <Text color={theme.koding}>&nbsp;#&nbsp;</Text>
+            <Text color={theme.noting}>&nbsp;#&nbsp;</Text>
           ) : (
             <Text color={isLoading ? theme.secondaryText : undefined}>
               &nbsp;&gt;&nbsp;
@@ -668,7 +661,7 @@ function PromptInput({
                   ! for bash mode
                 </Text>
                 <Text
-                  color={mode === 'koding' ? theme.koding : undefined}
+                  color={mode === 'koding' ? theme.noting : undefined}
                   dimColor={mode !== 'koding'}
                 >
                   · # for AGENTS.md
@@ -681,9 +674,7 @@ function PromptInput({
           </Box>
           <SentryErrorBoundary children={
             <Box justifyContent="flex-end" gap={1}>
-              {!autoUpdaterResult &&
-                !isAutoUpdating &&
-                !debug &&
+              {!debug &&
                 tokenUsage < WARNING_THRESHOLD && (
                   <Text dimColor>
                     {terminalSetup.isEnabled &&
@@ -693,13 +684,6 @@ function PromptInput({
                   </Text>
                 )}
               <TokenWarning tokenUsage={tokenUsage} />
-              {/* <AutoUpdater
-                debug={debug}
-                onAutoUpdaterResult={onAutoUpdaterResult}
-                autoUpdaterResult={autoUpdaterResult}
-                isUpdating={isAutoUpdating}
-                onChangeIsUpdating={setIsAutoUpdating}
-              /> */}
             </Box>
           } />
         </Box>
@@ -737,13 +721,6 @@ function PromptInput({
           <SentryErrorBoundary children={
             <Box justifyContent="flex-end" gap={1}>
               <TokenWarning tokenUsage={countTokens(messages)} />
-              <AutoUpdater
-                debug={debug}
-                onAutoUpdaterResult={onAutoUpdaterResult}
-                autoUpdaterResult={autoUpdaterResult}
-                isUpdating={isAutoUpdating}
-                onChangeIsUpdating={setIsAutoUpdating}
-              />
             </Box>
           } />
         </Box>

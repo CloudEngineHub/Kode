@@ -1,8 +1,10 @@
 import { z } from 'zod'
 import * as React from 'react'
 
-// DEPRECATED: Use domain/tool/Tool.interface.ts for new implementations
-// This interface will be maintained for compatibility during transition
+/**
+ * Core Tool interface for Kode's extensible tool system
+ * Provides standardized contract for all tool implementations
+ */
 
 export type SetToolJSXFn = (jsx: {
   jsx: React.ReactNode | null
@@ -64,18 +66,19 @@ export interface Tool<
     input: z.infer<TInput>,
     context?: ToolUseContext,
   ) => Promise<ValidationResult>
-  renderResultForAssistant: (output: TOutput) => string
+  renderResultForAssistant: (output: TOutput) => string | any[]
   renderToolUseMessage: (
     input: z.infer<TInput>,
     options: { verbose: boolean },
   ) => string
-  renderToolUseRejectedMessage: () => React.ReactElement
+  renderToolUseRejectedMessage?: (...args: any[]) => React.ReactElement
   renderToolResultMessage?: (output: TOutput) => React.ReactElement
   call: (
     input: z.infer<TInput>,
     context: ToolUseContext,
   ) => AsyncGenerator<
-    { type: 'result'; data: TOutput; resultForAssistant?: string },
+    | { type: 'result'; data: TOutput; resultForAssistant?: string }
+    | { type: 'progress'; content: any; normalizedMessages?: any[]; tools?: any[] },
     void,
     unknown
   >

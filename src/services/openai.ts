@@ -5,25 +5,33 @@ import { setSessionState, getSessionState } from '../utils/sessionState'
 import { logEvent } from '../services/statsig'
 import { debug as debugLogger, getCurrentRequest, logAPIError } from '../utils/debugLogger'
 
-// Helper function to calculate retry delay with exponential backoff
+/**
+ * Retry configuration constants for API calls
+ */
+const RETRY_CONFIG = {
+  BASE_DELAY_MS: 1000,
+  MAX_DELAY_MS: 32000,
+  MAX_SERVER_DELAY_MS: 60000,
+  JITTER_FACTOR: 0.1,
+} as const
+
+/**
+ * Calculate retry delay with exponential backoff and jitter
+ */
 function getRetryDelay(attempt: number, retryAfter?: string | null): number {
   // If server suggests a retry-after time, use it
   if (retryAfter) {
     const retryAfterMs = parseInt(retryAfter) * 1000
     if (!isNaN(retryAfterMs) && retryAfterMs > 0) {
-      return Math.min(retryAfterMs, 60000) // Cap at 60 seconds
+      return Math.min(retryAfterMs, RETRY_CONFIG.MAX_SERVER_DELAY_MS)
     }
   }
 
-  // Exponential backoff: base delay of 1 second, doubling each attempt
-  const baseDelay = 1000
-  const maxDelay = 32000 // Cap at 32 seconds
-  const delay = baseDelay * Math.pow(2, attempt - 1)
+  // Exponential backoff with jitter
+  const delay = RETRY_CONFIG.BASE_DELAY_MS * Math.pow(2, attempt - 1)
+  const jitter = Math.random() * RETRY_CONFIG.JITTER_FACTOR * delay
 
-  // Add some jitter to avoid thundering herd
-  const jitter = Math.random() * 0.1 * delay
-
-  return Math.min(delay + jitter, maxDelay)
+  return Math.min(delay + jitter, RETRY_CONFIG.MAX_DELAY_MS)
 }
 
 // Helper function to create an abortable delay
@@ -518,7 +526,7 @@ export async function getCompletionWithProfile(
     messageCount: opts.messages?.length || 0,
     streamMode: opts.stream,
     timestamp: new Date().toISOString(),
-    modelProfileName: modelProfile?.modelName,
+    modelProfileModelName: modelProfile?.modelName,
     modelProfileName: modelProfile?.name,
   })
 
@@ -608,7 +616,13 @@ export async function getCompletionWithProfile(
         // 🔥 NEW: Parse error message to detect and handle specific API errors
         try {
           const errorData = await response.json()
-          const errorMessage = errorData?.error?.message || errorData?.message || `HTTP ${response.status}`
+          // Type guard for error data structure
+          const hasError = (data: unknown): data is { error?: { message?: string }; message?: string } => {
+            return typeof data === 'object' && data !== null
+          }
+          const errorMessage = hasError(errorData) 
+            ? (errorData.error?.message || errorData.message || `HTTP ${response.status}`)
+            : `HTTP ${response.status}`
           
           // Check if this is a parameter error that we can fix
           const isGPT5 = opts.model.startsWith('gpt-5')
@@ -740,7 +754,13 @@ export async function getCompletionWithProfile(
       // 🔥 NEW: Parse error message to detect and handle specific API errors
       try {
         const errorData = await response.json()
-        const errorMessage = errorData?.error?.message || errorData?.message || `HTTP ${response.status}`
+        // Type guard for error data structure
+        const hasError = (data: unknown): data is { error?: { message?: string }; message?: string } => {
+          return typeof data === 'object' && data !== null
+        }
+        const errorMessage = hasError(errorData) 
+          ? (errorData.error?.message || errorData.message || `HTTP ${response.status}`)
+          : `HTTP ${response.status}`
         
         // Check if this is a parameter error that we can fix
         const isGPT5 = opts.model.startsWith('gpt-5')
@@ -1285,16 +1305,25 @@ export async function fetchCustomModels(
 
     const data = await response.json()
 
+    // Type guards for different API response formats
+    const hasDataArray = (obj: unknown): obj is { data: unknown[] } => {
+      return typeof obj === 'object' && obj !== null && 'data' in obj && Array.isArray((obj as any).data)
+    }
+    
+    const hasModelsArray = (obj: unknown): obj is { models: unknown[] } => {
+      return typeof obj === 'object' && obj !== null && 'models' in obj && Array.isArray((obj as any).models)
+    }
+
     // Validate response format and extract models array
     let models = []
 
-    if (data && data.data && Array.isArray(data.data)) {
+    if (hasDataArray(data)) {
       // Standard OpenAI format: { data: [...] }
       models = data.data
     } else if (Array.isArray(data)) {
       // Direct array format
       models = data
-    } else if (data && data.models && Array.isArray(data.models)) {
+    } else if (hasModelsArray(data)) {
       // Alternative format: { models: [...] }
       models = data.models
     } else {
