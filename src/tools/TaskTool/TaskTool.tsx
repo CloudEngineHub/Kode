@@ -72,7 +72,12 @@ export const TaskTool = {
       options: { safeMode = false, forkNumber, messageLogName, verbose },
       readFileTimestamps,
     },
-  ) {
+  ): AsyncGenerator<
+    | { type: 'result'; data: TextBlock[]; resultForAssistant?: string }
+    | { type: 'progress'; content: any; normalizedMessages?: any[]; tools?: any[] },
+    void,
+    unknown
+  > {
     const startTime = Date.now()
     
     // Default to general-purpose if no subagent_type specified
@@ -95,7 +100,7 @@ export const TaskTool = {
         
         yield {
           type: 'result',
-          data: { error: helpMessage },
+          data: [{ type: 'text', text: helpMessage }] as TextBlock[],
           resultForAssistant: helpMessage,
         }
         return
@@ -135,11 +140,34 @@ export const TaskTool = {
       }
     }
 
-    // We yield an initial message immediately so the UI
-    // doesn't move around when messages start streaming back.
+    // Model already resolved in effectiveModel variable above
+    const modelToUse = effectiveModel
+
+    // Display initial task information with separate progress lines
     yield {
       type: 'progress',
-      content: createAssistantMessage(chalk.dim(`[${agentType}] ${description}`)),
+      content: createAssistantMessage(`Starting agent: ${agentType}`),
+      normalizedMessages: normalizeMessages(messages),
+      tools,
+    }
+    
+    yield {
+      type: 'progress', 
+      content: createAssistantMessage(`Using model: ${modelToUse}`),
+      normalizedMessages: normalizeMessages(messages),
+      tools,
+    }
+    
+    yield {
+      type: 'progress',
+      content: createAssistantMessage(`Task: ${description}`),
+      normalizedMessages: normalizeMessages(messages),
+      tools,
+    }
+    
+    yield {
+      type: 'progress',
+      content: createAssistantMessage(`Prompt: ${prompt.length > 150 ? prompt.substring(0, 150) + '...' : prompt}`),
       normalizedMessages: normalizeMessages(messages),
       tools,
     }
@@ -149,9 +177,6 @@ export const TaskTool = {
       getContext(),
       getMaxThinkingTokens(messages),
     ])
-
-    // Model already resolved in effectiveModel variable above
-    const modelToUse = effectiveModel
     
     // Inject model context to prevent self-referential expert consultations
     taskPrompt.push(`\nIMPORTANT: You are currently running as ${modelToUse}. You do not need to consult ${modelToUse} via AskExpertModel since you ARE ${modelToUse}. Complete tasks directly using your capabilities.`)
@@ -194,6 +219,7 @@ export const TaskTool = {
         messageId: getLastAssistantMessageId(messages),
         agentId: taskId,
         readFileTimestamps,
+        setToolJSX: () => {}, // No-op implementation for TaskTool
       },
     )) {
       messages.push(message)
@@ -216,7 +242,7 @@ export const TaskTool = {
           const preview = content.text.length > 200 ? content.text.substring(0, 200) + '...' : content.text
           yield {
             type: 'progress',
-            content: createAssistantMessage(`[${agentType}] ${preview}`),
+            content: createAssistantMessage(`${preview}`),
             normalizedMessages,
             tools,
           }
@@ -273,12 +299,7 @@ export const TaskTool = {
         _ => _.type === 'text' && _.text === INTERRUPT_MESSAGE,
       )
     ) {
-      yield {
-        type: 'progress',
-        content: lastMessage,
-        normalizedMessages,
-        tools,
-      }
+      // Skip progress yield - only yield final result
     } else {
       const result = [
         toolUseCount === 1 ? '1 tool use' : `${toolUseCount} tool uses`,
@@ -292,7 +313,7 @@ export const TaskTool = {
       ]
       yield {
         type: 'progress',
-        content: createAssistantMessage(`[${agentType}] Completed (${result.join(' · ')})`),
+        content: createAssistantMessage(`Task completed (${result.join(' · ')})`),
         normalizedMessages,
         tools,
       }
@@ -304,9 +325,7 @@ export const TaskTool = {
     yield {
       type: 'result',
       data,
-      normalizedMessages,
       resultForAssistant: this.renderResultForAssistant(data),
-      tools,
     }
   },
 
