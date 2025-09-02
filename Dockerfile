@@ -72,6 +72,7 @@ WORKDIR /workspace
 COPY --from=builder /app/cli.js /app/cli.js
 COPY --from=builder /app/package.json /app/package.json
 COPY --from=builder /app/node_modules /app/node_modules
+COPY --from=builder /app/src /app/src
 
 # Create the entrypoint script
 RUN cat << 'EOF' > /entrypoint.sh
