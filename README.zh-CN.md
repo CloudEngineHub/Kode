@@ -41,20 +41,6 @@ Kode 是一个强大的 AI 助手，运行在你的终端中。它能理解你�
 
 ## 安装
 
-### 推荐方式：使用 Bun（最快）
-
-首先安装 Bun（如果尚未安装）：
-```bash
-curl -fsSL https://bun.sh/install | bash
-```
-
-然后安装 Kode：
-```bash
-bun add -g @shareai-lab/kode
-```
-
-### 备选方式：使用 npm
-
 ```bash
 npm install -g @shareai-lab/kode
 ```
