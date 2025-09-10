@@ -10,7 +10,7 @@ import { useTerminalSize } from '../hooks/useTerminalSize'
 
 type Props = {
   filePath: string
-  structuredPatch: Hunk[]
+  structuredPatch?: Hunk[]
   verbose: boolean
 }
 
@@ -20,11 +20,12 @@ export function FileEditToolUpdatedMessage({
   verbose,
 }: Props): React.ReactNode {
   const { columns } = useTerminalSize()
-  const numAdditions = structuredPatch.reduce(
+  const patches = Array.isArray(structuredPatch) ? structuredPatch : []
+  const numAdditions = patches.reduce(
     (count, hunk) => count + hunk.lines.filter(_ => _.startsWith('+')).length,
     0,
   )
-  const numRemovals = structuredPatch.reduce(
+  const numRemovals = patches.reduce(
     (count, hunk) => count + hunk.lines.filter(_ => _.startsWith('-')).length,
     0,
   )
@@ -49,18 +50,19 @@ export function FileEditToolUpdatedMessage({
           </>
         ) : null}
       </Text>
-      {intersperse(
-        structuredPatch.map(_ => (
-          <Box flexDirection="column" paddingLeft={5} key={_.newStart}>
-            <StructuredDiff patch={_} dim={false} width={columns - 12} />
-          </Box>
-        )),
-        i => (
-          <Box paddingLeft={5} key={`ellipsis-${i}`}>
-            <Text color={getTheme().secondaryText}>...</Text>
-          </Box>
-        ),
-      )}
+      {patches.length > 0 &&
+        intersperse(
+          patches.map(_ => (
+            <Box flexDirection="column" paddingLeft={5} key={_.newStart}>
+              <StructuredDiff patch={_} dim={false} width={columns - 12} />
+            </Box>
+          )),
+          i => (
+            <Box paddingLeft={5} key={`ellipsis-${i}`}>
+              <Text color={getTheme().secondaryText}>...</Text>
+            </Box>
+          ),
+        )}
     </Box>
   )
 }
