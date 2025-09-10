@@ -46,6 +46,7 @@ import { PROJECT_FILE } from '../../constants/product'
 import { DESCRIPTION, PROMPT } from './prompt'
 import { emitReminderEvent } from '../../services/systemReminder'
 import { recordFileEdit } from '../../services/fileFreshness'
+import { getPatch } from '../../utils/diff'
 
 const EditSchema = z.object({
   old_string: z.string().describe('The text to replace'),
@@ -136,7 +137,13 @@ export const MultiEditTool = {
       )
     }
 
-    return <FileEditToolUpdatedMessage {...output} />
+    return (
+      <FileEditToolUpdatedMessage
+        filePath={output.filePath}
+        structuredPatch={output.structuredPatch}
+        verbose={false}
+      />
+    )
   },
   async validateInput(
     { file_path, edits }: z.infer<typeof inputSchema>,
@@ -350,12 +357,20 @@ export const MultiEditTool = {
       const relativePath = relative(workingDir, filePath)
       const summary = `Successfully applied ${edits.length} edits to ${relativePath}`
 
+      const structuredPatch = getPatch({
+        filePath: file_path,
+        fileContents: currentContent,
+        oldStr: currentContent,
+        newStr: modifiedContent,
+      })
+
       const resultData = {
-        filePath: relativePath,
+        filePath: file_path,
         wasNewFile: !fileExists,
         editsApplied: appliedEdits,
         totalEdits: edits.length,
         summary,
+        structuredPatch,
       }
 
       // Log the operation
