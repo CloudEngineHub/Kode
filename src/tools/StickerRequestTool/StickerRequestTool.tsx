@@ -7,7 +7,7 @@ import {
   StickerRequestForm,
   FormData,
 } from '../../components/StickerRequestForm'
-import { checkGate, logEvent } from '../../services/statsig'
+// Telemetry and gates removed
 import { getTheme } from '../../utils/theme'
 
 const stickerRequestSchema = z.object({
@@ -19,18 +19,14 @@ export const StickerRequestTool: Tool = {
   userFacingName: () => 'Stickers',
   description: async () => DESCRIPTION,
   inputSchema: stickerRequestSchema,
-  isEnabled: async () => {
-    const enabled = await checkGate('tengu_sticker_easter_egg')
-    return enabled
-  },
+  isEnabled: async () => false,
   isReadOnly: () => false,
   isConcurrencySafe: () => false, // StickerRequestTool modifies state, not safe for concurrent execution
   needsPermissions: () => false,
   prompt: async () => PROMPT,
 
   async *call(_, context: ToolUseContext) {
-    // Log form entry event
-    logEvent('sticker_request_form_opened', {})
+    
 
     // Create a promise to track form completion and status
     let resolveForm: (success: boolean) => void
@@ -45,19 +41,14 @@ export const StickerRequestTool: Tool = {
         jsx: (
         <StickerRequestForm
           onSubmit={(formData: FormData) => {
-            // Log successful completion with form data
-            logEvent('sticker_request_form_completed', {
-              has_address: Boolean(formData.address1).toString(),
-              has_optional_address: Boolean(formData.address2).toString(),
-            })
+            
             resolveForm(true)
             if (extendedContext.setToolJSX) {
               extendedContext.setToolJSX(null) // Clear the JSX
             }
           }}
           onClose={() => {
-            // Log form cancellation
-            logEvent('sticker_request_form_cancelled', {})
+            
             resolveForm(false)
             if (extendedContext.setToolJSX) {
               extendedContext.setToolJSX(null) // Clear the JSX

@@ -1,4 +1,4 @@
-import { logEvent } from '../services/statsig'
+ 
 type SessionState = {
   modelErrors: Record<string, unknown>
   currentError: string | null
@@ -24,16 +24,8 @@ function setSessionState(
   value?: any,
 ): void {
   if (typeof keyOrState === 'string') {
-    logEvent('session_state_set', {
-      key: keyOrState,
-      value: JSON.stringify(value),
-    })
     sessionState[keyOrState] = value
   } else {
-    logEvent('session_state_set', {
-      key: 'partial',
-      value: JSON.stringify(keyOrState),
-    })
     Object.assign(sessionState, keyOrState)
   }
 }

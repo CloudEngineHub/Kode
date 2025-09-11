@@ -12,7 +12,6 @@ import {
   isNotEmptyMessage,
   normalizeMessages,
 } from '../utils/messages.js'
-import { logEvent } from '../services/statsig'
 import type { AssistantMessage, UserMessage } from '../query'
 import { useExitOnCtrlCD } from '../hooks/useExitOnCtrlCD'
 
@@ -37,23 +36,14 @@ export function MessageSelector({
 }: Props): React.ReactNode {
   const currentUUID = useMemo(randomUUID, [])
 
-  // Log when selector is opened
-  useEffect(() => {
-    logEvent('tengu_message_selector_opened', {})
-  }, [])
+  useEffect(() => {}, [])
 
   function handleSelect(message: UserMessage) {
     const indexFromEnd = messages.length - 1 - messages.indexOf(message)
-    logEvent('tengu_message_selector_selected', {
-      index_from_end: indexFromEnd.toString(),
-      message_type: message.type,
-      is_current_prompt: (message.uuid === currentUUID).toString(),
-    })
     onSelect(message)
   }
 
   function handleEscape() {
-    logEvent('tengu_message_selector_cancelled', {})
     onEscape()
   }
 

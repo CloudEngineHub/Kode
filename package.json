@@ -51,8 +51,6 @@
     "@commander-js/extra-typings": "^13.1.0",
     "@inkjs/ui": "^2.0.0",
     "@modelcontextprotocol/sdk": "^1.15.1",
-    "@statsig/client-core": "^3.18.2",
-    "@statsig/js-client": "^3.18.2",
     "@types/lodash-es": "^4.17.12",
     "@types/react": "^19.1.8",
     "ansi-escapes": "^7.0.0",

@@ -3,7 +3,6 @@ import { Static, Box, Text, useInput } from 'ink'
 import TextInput from './TextInput'
 import { OAuthService, createAndStoreApiKey } from '../services/oauth'
 import { getTheme } from '../utils/theme'
-import { logEvent } from '../services/statsig'
 import { AsciiLogo } from './AsciiLogo'
 import { useTerminalSize } from '../hooks/useTerminalSize'
 import { logError } from '../utils/log'
@@ -70,10 +69,10 @@ export function ConsoleOAuthFlow({ onDone }: Props): React.ReactNode {
   useInput(async (_, key) => {
     if (key.return) {
       if (oauthStatus.state === 'idle') {
-        logEvent('tengu_oauth_start', {})
+        
         setOAuthStatus({ state: 'ready_to_start' })
       } else if (oauthStatus.state === 'success') {
-        logEvent('tengu_oauth_success', {})
+        
         await clearTerminal() // needed to clear out Static components
         onDone()
       } else if (oauthStatus.state === 'error' && oauthStatus.toRetry) {
@@ -101,7 +100,7 @@ export function ConsoleOAuthFlow({ onDone }: Props): React.ReactNode {
       }
 
       // Track which path the user is taking (manual code entry)
-      logEvent('tengu_oauth_manual_entry', {})
+      
       oauthService.processCallback({
         authorizationCode,
         state,
@@ -133,7 +132,7 @@ export function ConsoleOAuthFlow({ onDone }: Props): React.ReactNode {
                 'Failed to exchange authorization code for access token. Please try again.',
               toRetry: { state: 'ready_to_start' },
             })
-            logEvent('tengu_oauth_token_exchange_error', { error: err.message })
+            
           } else {
             // Handle other errors
             setOAuthStatus({
@@ -154,7 +153,7 @@ export function ConsoleOAuthFlow({ onDone }: Props): React.ReactNode {
             message: 'Failed to create API key: ' + err.message,
             toRetry: { state: 'ready_to_start' },
           })
-          logEvent('tengu_oauth_api_key_error', { error: err.message })
+          
           throw err
         },
       )
@@ -169,13 +168,10 @@ export function ConsoleOAuthFlow({ onDone }: Props): React.ReactNode {
             "Unable to create API key. The server accepted the request but didn't return a key.",
           toRetry: { state: 'ready_to_start' },
         })
-        logEvent('tengu_oauth_api_key_error', {
-          error: 'server_returned_no_key',
-        })
+        
       }
     } catch (err) {
       const errorMessage = (err as Error).message
-      logEvent('tengu_oauth_error', { error: errorMessage })
     }
   }, [oauthService, setShowPastePrompt])
 

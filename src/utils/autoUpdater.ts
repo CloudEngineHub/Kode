@@ -1,6 +1,6 @@
 import { execFileNoThrow } from './execFileNoThrow'
 import { logError } from './log'
-import { getDynamicConfig } from '../services/statsig'
+ 
 import { lt, gt } from 'semver'
 import { MACRO } from '../constants/macros'
 import { PRODUCT_NAME } from '../constants/product'
@@ -14,10 +14,7 @@ export type VersionConfig = {
 // Ensure current version meets minimum supported version; exit if too old
 export async function assertMinVersion(): Promise<void> {
   try {
-    const versionConfig = await getDynamicConfig<VersionConfig>(
-      'tengu_version_config',
-      { minVersion: '0.0.0' },
-    )
+    const versionConfig: VersionConfig = { minVersion: '0.0.0' }
     if (versionConfig.minVersion && lt(MACRO.VERSION, versionConfig.minVersion)) {
       const suggestions = await getUpdateCommandSuggestions()
       // Intentionally minimal: caller may print its own message; we just exit
@@ -122,4 +119,3 @@ export async function checkAndNotifyUpdate(): Promise<void> {
     logError(`update-notify: ${error}`)
   }
 }
-

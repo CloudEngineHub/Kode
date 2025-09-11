@@ -25,7 +25,6 @@ import {
   normalizeContentFromAPI,
 } from '../utils/messages'
 import { countTokens } from '../utils/tokens'
-import { logEvent } from './statsig'
 import { withVCR } from './vcr'
 import {
   debug as debugLogger,
@@ -333,13 +332,7 @@ async function withRetry<T>(
         `  ⎿  ${chalk.red(`API ${error.name} (${error.message}) · Retrying in ${Math.round(delayMs / 1000)} seconds… (attempt ${attempt}/${maxRetries})`)}`,
       )
 
-      logEvent('tengu_api_retry', {
-        attempt: String(attempt),
-        delayMs: String(delayMs),
-        error: error.message,
-        status: String(error.status),
-        provider: USE_BEDROCK ? 'bedrock' : USE_VERTEX ? 'vertex' : '1p',
-      })
+      
 
       try {
         await abortableDelay(delayMs, options.signal)
@@ -770,9 +763,6 @@ function convertOpenAIResponseToAnthropic(response: OpenAI.ChatCompletion, tools
   let contentBlocks: ContentBlock[] = []
   const message = response.choices?.[0]?.message
   if (!message) {
-    logEvent('weird_response', {
-      response: JSON.stringify(response),
-    })
     return {
       role: 'assistant',
       content: [],
@@ -1426,13 +1416,6 @@ async function queryAnthropicNative(
   if (options?.prependCLISysprompt) {
     // Log stats about first block for analyzing prefix matching config
     const [firstSyspromptBlock] = splitSysPromptPrefix(systemPrompt)
-    logEvent('tengu_sysprompt_block', {
-      snippet: firstSyspromptBlock?.slice(0, 20),
-      length: String(firstSyspromptBlock?.length ?? 0),
-      hash: firstSyspromptBlock
-        ? createHash('sha256').update(firstSyspromptBlock).digest('hex')
-        : '',
-    })
 
     systemPrompt = [getCLISyspromptPrefix(), ...systemPrompt]
   }
@@ -1750,17 +1733,7 @@ async function queryAnthropicNative(
     assistantMessage.costUSD = costUSD
     addToTotalCost(costUSD, durationMs)
 
-    logEvent('api_response_anthropic_native', {
-      model,
-      input_tokens: String(inputTokens),
-      output_tokens: String(outputTokens),
-      cache_creation_input_tokens: String(cacheCreationInputTokens),
-      cache_read_input_tokens: String(cacheReadInputTokens),
-      cost_usd: String(costUSD),
-      duration_ms: String(durationMs),
-      ttft_ms: String(ttftMs),
-      attempt_number: String(attemptNumber),
-    })
+    
 
     return assistantMessage
   } catch (error) {
@@ -1850,13 +1823,6 @@ async function queryOpenAI(
   if (options?.prependCLISysprompt) {
     // Log stats about first block for analyzing prefix matching config (see https://console.statsig.com/4aF3Ewatb6xPVpCwxb5nA3/dynamic_configs/claude_cli_system_prompt_prefixes)
     const [firstSyspromptBlock] = splitSysPromptPrefix(systemPrompt)
-    logEvent('tengu_sysprompt_block', {
-      snippet: firstSyspromptBlock?.slice(0, 20),
-      length: String(firstSyspromptBlock?.length ?? 0),
-      hash: firstSyspromptBlock
-        ? createHash('sha256').update(firstSyspromptBlock).digest('hex')
-        : '',
-    })
 
     systemPrompt = [getCLISyspromptPrefix() + systemPrompt] // some openai-like providers need the entire system prompt as a single block
   }
@@ -1943,9 +1909,6 @@ async function queryOpenAI(
       }
       const reasoningEffort = await getReasoningEffort(modelProfile, messages)
       if (reasoningEffort) {
-        logEvent('debug_reasoning_effort', {
-          effort: reasoningEffort,
-        })
         opts.reasoning_effort = reasoningEffort
       }
 

@@ -36,7 +36,6 @@ import type { Tool } from '../Tool'
 import { MCPTool } from '../tools/MCPTool/MCPTool'
 import { logMCPError } from '../utils/log'
 import { Command } from '../commands'
-import { logEvent } from '../services/statsig'
 import { PRODUCT_COMMAND } from '../constants/product.js'
 
 type McpName = string
@@ -332,10 +331,8 @@ export const getClients = memoize(async (): Promise<WrappedClient[]> => {
     Object.entries(allServers).map(async ([name, serverRef]) => {
       try {
         const client = await connectToServer(name, serverRef as McpServerConfig)
-        logEvent('tengu_mcp_server_connection_succeeded', {})
         return { name, client, type: 'connected' as const }
       } catch (error) {
-        logEvent('tengu_mcp_server_connection_failed', {})
         logMCPError(
           name,
           `Connection failed: ${error instanceof Error ? error.message : String(error)}`,

@@ -6,7 +6,6 @@ import { spawn, execSync, type ChildProcess } from 'child_process'
 import { isAbsolute, resolve, join } from 'path'
 import { logError } from './log'
 import * as os from 'os'
-import { logEvent } from '../services/statsig'
 import { PRODUCT_COMMAND } from '../constants/product'
 
 type ExecResult = {
@@ -236,10 +235,6 @@ export class PersistentShell {
       if (code) {
         // TODO: It would be nice to alert the user that shell crashed
         logError(`Shell exited with code ${code} and signal ${signal}`)
-        logEvent('persistent_shell_exit', {
-          code: code?.toString() || 'null',
-          signal: signal || 'null',
-        })
       }
       for (const file of [
         this.statusFile,
@@ -303,20 +298,13 @@ export class PersistentShell {
         .split('\n')
         .filter(Boolean) // Filter out empty strings
 
-      if (childPids.length > 0) {
-        logEvent('persistent_shell_command_interrupted', {
-          numChildProcesses: childPids.length.toString(),
-        })
-      }
+      
 
       childPids.forEach(pid => {
         try {
           process.kill(Number(pid), 'SIGTERM')
         } catch (error) {
           logError(`Failed to kill process ${pid}: ${error}`)
-          logEvent('persistent_shell_kill_process_error', {
-            error: (error as Error).message.substring(0, 10),
-          })
         }
       })
     } catch {
@@ -355,9 +343,7 @@ export class PersistentShell {
 
       resolve(result)
     } catch (error) {
-      logEvent('persistent_shell_command_error', {
-        error: (error as Error).message.substring(0, 10),
-      })
+      
       reject(error as Error)
     } finally {
       this.isExecuting = false
@@ -418,9 +404,7 @@ export class PersistentShell {
       // If there's a syntax error, return an error and log it
       const errorStr =
         typeof stderr === 'string' ? stderr : String(stderr || '')
-      logEvent('persistent_shell_syntax_error', {
-        error: errorStr.substring(0, 10),
-      })
+      
       return Promise.resolve({
         stdout: '',
         stderr: errorStr,
@@ -486,10 +470,7 @@ export class PersistentShell {
               this.killChildren()
               code = SIGTERM_CODE
               stderr += (stderr ? '\n' : '') + 'Command execution timed out'
-              logEvent('persistent_shell_command_timeout', {
-                command: command.substring(0, 10),
-                timeout: commandTimeout.toString(),
-              })
+              
             }
             resolve({
               stdout,
@@ -515,10 +496,7 @@ export class PersistentShell {
           ? error.message
           : String(error || 'Unknown error')
       logError(`Error in sendToShell: ${errorString}`)
-      logEvent('persistent_shell_write_error', {
-        error: errorString.substring(0, 100),
-        command: command.substring(0, 30),
-      })
+      
       throw error
     }
   }

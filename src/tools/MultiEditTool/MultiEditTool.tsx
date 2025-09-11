@@ -5,7 +5,6 @@ import * as React from 'react'
 import { z } from 'zod'
 import { FileEditToolUpdatedMessage } from '../../components/FileEditToolUpdatedMessage'
 import { StructuredDiff } from '../../components/StructuredDiff'
-import { logEvent } from '../../services/statsig'
 import { Tool, ValidationResult } from '../../Tool'
 import { intersperse } from '../../utils/array'
 import {
@@ -374,12 +373,7 @@ export const MultiEditTool = {
       }
 
       // Log the operation
-      logEvent('multi_edit_tool_used', {
-        file_path: relativePath,
-        edits_count: String(edits.length),
-        was_new_file: String(!fileExists),
-        duration_ms: String(Date.now() - startTime),
-      })
+      
 
       yield {
         type: 'result',

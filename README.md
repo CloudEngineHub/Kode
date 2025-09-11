@@ -96,6 +96,18 @@ After installation, you can use any of these commands:
 - `kwa` - Kode With Agent (alternative)
 - `kd` - Ultra-short alias
 
+### Windows Notes
+
+- Install Git for Windows to provide a Bash (Unix‑like) environment: https://git-scm.com/download/win
+  - Kode automatically prefers Git Bash/MSYS or WSL Bash when available.
+  - If neither is available, it will fall back to your default shell, but many features work best with Bash.
+- Use VS Code’s integrated terminal rather than legacy Command Prompt (cmd):
+  - Better font rendering and icon support.
+  - Fewer path and encoding quirks compared to cmd.
+  - Select “Git Bash” as the VS Code terminal shell when possible.
+- Optional: If you install globally via npm, avoid spaces in the global prefix path to prevent shim issues.
+  - Example: `npm config set prefix "C:\\npm"` and reinstall global packages.
+
 ## Usage
 
 ### Interactive Mode

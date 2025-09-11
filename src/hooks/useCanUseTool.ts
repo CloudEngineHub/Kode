@@ -1,6 +1,5 @@
 import React, { useCallback } from 'react'
 import { hasPermissionsToUseTool } from '../permissions'
-import { logEvent } from '../services/statsig'
 import { BashTool, inputSchema } from '../tools/BashTool/BashTool'
 import { getCommandSubcommandPrefix } from '../utils/commands'
 import { REJECT_MESSAGE } from '../utils/messages'
@@ -25,12 +24,7 @@ function useCanUseTool(
   return useCallback<CanUseToolFn>(
     async (tool, input, toolUseContext, assistantMessage) => {
       return new Promise(resolve => {
-        function logCancelledEvent() {
-          logEvent('tengu_tool_use_cancelled', {
-            messageID: assistantMessage.message.id,
-            toolName: tool.name,
-          })
-        }
+        function logCancelledEvent() {}
 
         function resolveWithCancelledAndAbortAllToolCalls() {
           resolve({
@@ -58,10 +52,7 @@ function useCanUseTool(
           .then(async result => {
             // Has permissions to use tool, granted in config
             if (result.result) {
-              logEvent('tengu_tool_use_granted_in_config', {
-                messageID: assistantMessage.message.id,
-                toolName: tool.name,
-              })
+              
               resolve({ result: true })
               return
             }
@@ -92,31 +83,15 @@ function useCanUseTool(
               riskScore: null,
               onAbort() {
                 logCancelledEvent()
-                logEvent('tengu_tool_use_rejected_in_prompt', {
-                  messageID: assistantMessage.message.id,
-                  toolName: tool.name,
-                })
                 resolveWithCancelledAndAbortAllToolCalls()
               },
               onAllow(type) {
                 if (type === 'permanent') {
-                  logEvent('tengu_tool_use_granted_in_prompt_permanent', {
-                    messageID: assistantMessage.message.id,
-                    toolName: tool.name,
-                  })
                 } else {
-                  logEvent('tengu_tool_use_granted_in_prompt_temporary', {
-                    messageID: assistantMessage.message.id,
-                    toolName: tool.name,
-                  })
                 }
                 resolve({ result: true })
               },
               onReject() {
-                logEvent('tengu_tool_use_rejected_in_prompt', {
-                  messageID: assistantMessage.message.id,
-                  toolName: tool.name,
-                })
                 resolveWithCancelledAndAbortAllToolCalls()
               },
             })

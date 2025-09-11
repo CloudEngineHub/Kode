@@ -1,5 +1,4 @@
 import { getTodos, TodoItem } from '../utils/todoStorage'
-import { logEvent } from './statsig'
 
 export interface ReminderMessage {
   role: 'system'
@@ -98,17 +97,7 @@ class SystemReminderService {
     }
 
     // Log aggregated metrics instead of individual events for performance
-    if (reminders.length > 0) {
-      logEvent('system_reminder_batch', {
-        count: reminders.length.toString(),
-        types: reminders.map(r => r.type).join(','),
-        priorities: reminders.map(r => r.priority).join(','),
-        categories: reminders.map(r => r.category).join(','),
-        sessionCount: this.sessionState.reminderCount.toString(),
-        agentId: agentId || 'default',
-        timestamp: currentTime.toString(),
-      })
-    }
+    
 
     return reminders
   }
@@ -339,13 +328,7 @@ class SystemReminderService {
       this.sessionState.contextPresent =
         Object.keys(context.context || {}).length > 0
 
-      // Log session startup
-      logEvent('system_reminder_session_startup', {
-        agentId: context.agentId || 'default',
-        contextKeys: Object.keys(context.context || {}).join(','),
-        messageCount: (context.messages || 0).toString(),
-        timestamp: context.timestamp.toString(),
-      })
+      
     })
 
     // Todo change events

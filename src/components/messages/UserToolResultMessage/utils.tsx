@@ -4,7 +4,6 @@ import { useMemo } from 'react'
 import { Tool } from '../../../Tool'
 import { GlobTool } from '../../../tools/GlobTool/GlobTool'
 import { GrepTool } from '../../../tools/GrepTool/GrepTool'
-import { logEvent } from '../../../services/statsig'
 
 function getToolUseFromMessages(
   toolUseID: string,
@@ -46,7 +45,7 @@ export function useGetToolFromMessages(
       _ => _.name === toolUse.name,
     )
     if (tool === GlobTool || tool === GrepTool) {
-      logEvent('tengu_legacy_tool_lookup', {})
+      
     }
     if (!tool) {
       throw new ReferenceError(`Tool not found for ${toolUse.name}`)

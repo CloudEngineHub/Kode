@@ -1,7 +1,6 @@
 import { getGlobalConfig, getOrCreateUserID } from './config'
 import { memoize } from 'lodash-es'
 import { env } from './env'
-import { type StatsigUser } from '@statsig/js-client'
 import { execFileNoThrow } from './execFileNoThrow'
 import { logError, SESSION_ID } from './log'
 import { MACRO } from '../constants/macros'
@@ -14,7 +13,16 @@ export const getGitEmail = memoize(async (): Promise<string | undefined> => {
   return result.stdout.trim() || undefined
 })
 
-export const getUser = memoize(async (): Promise<StatsigUser> => {
+type SimpleUser = {
+  customIDs?: Record<string, string>
+  userID: string
+  appVersion?: string
+  userAgent?: string
+  email?: string
+  custom?: Record<string, unknown>
+}
+
+export const getUser = memoize(async (): Promise<SimpleUser> => {
   const userID = getOrCreateUserID()
   const config = getGlobalConfig()
   const email = undefined

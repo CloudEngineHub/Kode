@@ -11,7 +11,6 @@ import { MalformedCommandError } from './errors'
 import { logError } from './log'
 import { resolve } from 'path'
 import { last, memoize } from 'lodash-es'
-import { logEvent } from '../services/statsig'
 import type { SetToolJSXFn, Tool, ToolUseContext } from '../Tool'
 import { lastX } from '../utils/generators'
 import { NO_CONTENT_MESSAGE } from '../services/claude'
@@ -175,7 +174,7 @@ export async function processUserInput(
 ): Promise<Message[]> {
   // Bash commands
   if (mode === 'bash') {
-    logEvent('tengu_input_bash', {})
+    
 
     const userMessage = createUserMessage(`<bash-input>${input}</bash-input>`)
 
@@ -242,7 +241,7 @@ export async function processUserInput(
   }
   // Koding mode - special wrapper for display
   else if (mode === 'koding') {
-    logEvent('tengu_input_koding', {})
+    
 
     const userMessage = createUserMessage(
       `<koding-input>${input}</koding-input>`,
@@ -265,7 +264,7 @@ export async function processUserInput(
       commandName = commandName + ' (MCP)'
     }
     if (!commandName) {
-      logEvent('tengu_input_slash_missing', { input })
+      
       return [
         createAssistantMessage('Commands are in the form `/command [args]`'),
       ]
@@ -274,7 +273,7 @@ export async function processUserInput(
     // Check if it's a real command before processing
     if (!hasCommand(commandName, context.options.commands)) {
       // If not a real command, treat it as a regular user input
-      logEvent('tengu_input_prompt', {})
+      
       return [createUserMessage(input)]
     }
 
@@ -288,7 +287,7 @@ export async function processUserInput(
 
     // Local JSX commands
     if (newMessages.length === 0) {
-      logEvent('tengu_input_command', { input })
+      
       return []
     }
 
@@ -300,23 +299,23 @@ export async function processUserInput(
       typeof newMessages[1]!.message.content === 'string' &&
       newMessages[1]!.message.content.startsWith('Unknown command:')
     ) {
-      logEvent('tengu_input_slash_invalid', { input })
+      
       return newMessages
     }
 
     // User-Assistant pair (eg. local commands)
     if (newMessages.length === 2) {
-      logEvent('tengu_input_command', { input })
+      
       return newMessages
     }
 
     // A valid command
-    logEvent('tengu_input_command', { input })
+    
     return newMessages
   }
 
   // Regular user prompt
-  logEvent('tengu_input_prompt', {})
+  
 
   // Check if this is a Koding request that needs special handling
   const isKodingRequest = context.options?.isKodingRequest === true

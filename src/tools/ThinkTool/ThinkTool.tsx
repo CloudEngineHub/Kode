@@ -5,7 +5,7 @@ import { Tool } from '../../Tool'
 import { DESCRIPTION, PROMPT } from './prompt'
 import { getTheme } from '../../utils/theme'
 import { MessageResponse } from '../../components/MessageResponse'
-import { checkGate, logEvent } from '../../services/statsig'
+// Telemetry and gates removed
 import { USE_BEDROCK, USE_VERTEX } from '../../utils/model'
 
 const thinkToolSchema = z.object({
@@ -17,20 +17,14 @@ export const ThinkTool = {
   userFacingName: () => 'Think',
   description: async () => DESCRIPTION,
   inputSchema: thinkToolSchema,
-  isEnabled: async () =>
-    Boolean(process.env.THINK_TOOL) && (await checkGate('tengu_think_tool')),
+  isEnabled: async () => Boolean(process.env.THINK_TOOL),
   isReadOnly: () => true,
   isConcurrencySafe: () => true, // ThinkTool is read-only, safe for concurrent execution
   needsPermissions: () => false,
   prompt: async () => PROMPT,
 
   async *call(input, { messageId }) {
-    logEvent('tengu_thinking', {
-      messageId,
-      thoughtLength: input.thought.length.toString(),
-      method: 'tool',
-      provider: USE_BEDROCK ? 'bedrock' : USE_VERTEX ? 'vertex' : '1p',
-    })
+    
 
     yield {
       type: 'result',

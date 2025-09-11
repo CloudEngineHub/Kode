@@ -7,7 +7,6 @@ import {
   getCurrentProjectConfig,
 } from '../utils/config.js'
 import { PRODUCT_NAME } from '../constants/product'
-import { logEvent } from '../services/statsig'
 import { useExitOnCtrlCD } from '../hooks/useExitOnCtrlCD'
 import { homedir } from 'os'
 import { getCwd } from '../utils/state'
@@ -19,20 +18,13 @@ type Props = {
 
 export function TrustDialog({ onDone }: Props): React.ReactNode {
   const theme = getTheme()
-  React.useEffect(() => {
-    // Log when dialog is shown
-    logEvent('trust_dialog_shown', {})
-  }, [])
+  React.useEffect(() => {}, [])
 
   function onChange(value: 'yes' | 'no') {
     const config = getCurrentProjectConfig()
     switch (value) {
       case 'yes': {
-        // Log when user accepts
         const isHomeDir = homedir() === getCwd()
-        logEvent('trust_dialog_accept', {
-          isHomeDir: String(isHomeDir),
-        })
 
         if (!isHomeDir) {
           saveCurrentProjectConfig({
