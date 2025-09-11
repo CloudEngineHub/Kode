@@ -45,7 +45,6 @@ import type { Tool } from '../Tool'
 // Auto-updater removed; only show a new version banner passed from CLI
 import { getGlobalConfig, saveGlobalConfig } from '../utils/config'
 import { MACRO } from '../constants/macros'
-import { logEvent } from '../services/statsig'
 import { getNextAvailableLogForkNumber } from '../utils/log'
 import {
   getErroredToolUseMessages,
@@ -214,7 +213,7 @@ export function REPL({
   useEffect(() => {
     const totalCost = getTotalCost()
     if (totalCost >= 5 /* $5 */ && !showCostDialog && !haveShownCostDialog) {
-      logEvent('tengu_cost_threshold_reached', {})
+      
       setShowCostDialog(true)
     }
   }, [messages, showCostDialog, haveShownCostDialog])
@@ -681,7 +680,7 @@ export function REPL({
                   ...projectConfig,
                   hasAcknowledgedCostThreshold: true,
                 })
-                logEvent('tengu_cost_threshold_acknowledged', {})
+                
               }}
             />
           )}

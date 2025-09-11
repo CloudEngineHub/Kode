@@ -1,7 +1,6 @@
 import { TextBlock, ToolUseBlock } from '@anthropic-ai/sdk/resources/index.mjs'
 import { AssistantMessage, BinaryFeedbackResult } from '../../query'
 import { MAIN_QUERY_TEMPERATURE } from '../../services/claude'
-import { getDynamicConfig, logEvent } from '../../services/statsig'
 
 import { isEqual, zip } from 'lodash-es'
 import { getGitState } from '../../utils/git'
@@ -19,9 +18,8 @@ type BinaryFeedbackConfig = {
 }
 
 async function getBinaryFeedbackStatsigConfig(): Promise<BinaryFeedbackConfig> {
-  return await getDynamicConfig('tengu-binary-feedback-config', {
-    sampleFrequency: 0,
-  })
+  
+  return { sampleFrequency: 0 }
 }
 
 function getMessageBlockSequence(m: AssistantMessage) {
@@ -40,38 +38,14 @@ export async function logBinaryFeedbackEvent(
   const modelA = m1.message.model
   const modelB = m2.message.model
   const gitState = await getGitState()
-  logEvent('tengu_binary_feedback', {
-    msg_id_A: m1.message.id,
-    msg_id_B: m2.message.id,
-    choice: {
-      'prefer-left': m1.message.id,
-      'prefer-right': m2.message.id,
-      neither: undefined,
-      'no-preference': undefined,
-    }[choice],
-    choiceStr: choice,
-    gitHead: gitState?.commitHash,
-    gitBranch: gitState?.branchName,
-    gitRepoRemoteUrl: gitState?.remoteUrl || undefined,
-    gitRepoIsHeadOnRemote: gitState?.isHeadOnRemote?.toString(),
-    gitRepoIsClean: gitState?.isClean?.toString(),
-    modelA,
-    modelB,
-    temperatureA: String(MAIN_QUERY_TEMPERATURE),
-    temperatureB: String(MAIN_QUERY_TEMPERATURE),
-    seqA: String(getMessageBlockSequence(m1)),
-    seqB: String(getMessageBlockSequence(m2)),
-  })
+  
 }
 
 export async function logBinaryFeedbackSamplingDecision(
   decision: boolean,
   reason?: string,
 ): Promise<void> {
-  logEvent('tengu_binary_feedback_sampling_decision', {
-    decision: decision.toString(),
-    reason,
-  })
+  
 }
 
 export async function logBinaryFeedbackDisplayDecision(
@@ -80,14 +54,7 @@ export async function logBinaryFeedbackDisplayDecision(
   m2: AssistantMessage,
   reason?: string,
 ): Promise<void> {
-  logEvent('tengu_binary_feedback_display_decision', {
-    decision: decision.toString(),
-    reason,
-    msg_id_A: m1.message.id,
-    msg_id_B: m2.message.id,
-    seqA: String(getMessageBlockSequence(m1)),
-    seqB: String(getMessageBlockSequence(m2)),
-  })
+  
 }
 
 function textContentBlocksEqual(cb1: TextBlock, cb2: TextBlock): boolean {

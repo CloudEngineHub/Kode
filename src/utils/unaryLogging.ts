@@ -1,4 +1,3 @@
-import { logEvent } from '../services/statsig'
 
 export type CompletionType =
   | 'str_replace_single'
@@ -16,11 +15,5 @@ type LogEvent = {
 }
 
 export function logUnaryEvent(event: LogEvent): void {
-  logEvent('tengu_unary_event', {
-    event: event.event,
-    completion_type: event.completion_type,
-    language_name: event.metadata.language_name,
-    message_id: event.metadata.message_id,
-    platform: event.metadata.platform,
-  })
+  // intentionally no-op
 }

@@ -7,7 +7,6 @@ import { z } from 'zod'
 import { FileEditToolUpdatedMessage } from '../../components/FileEditToolUpdatedMessage'
 import { StructuredDiff } from '../../components/StructuredDiff'
 import { FallbackToolUseRejectedMessage } from '../../components/FallbackToolUseRejectedMessage'
-import { logEvent } from '../../services/statsig'
 import { Tool, ValidationResult } from '../../Tool'
 import { intersperse } from '../../utils/array'
 import {
@@ -251,7 +250,6 @@ export const FileEditTool = {
 
     // Log when editing CLAUDE.md
     if (fullFilePath.endsWith(`${sep}${PROJECT_FILE}`)) {
-      logEvent('tengu_write_claudemd', {})
     }
 
     // Emit file edited event for system reminders

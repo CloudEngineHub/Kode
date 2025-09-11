@@ -9,7 +9,6 @@ import { FileEditToolUpdatedMessage } from '../../components/FileEditToolUpdated
 import { HighlightedCode } from '../../components/HighlightedCode'
 import { StructuredDiff } from '../../components/StructuredDiff'
 import { FallbackToolUseRejectedMessage } from '../../components/FallbackToolUseRejectedMessage'
-import { logEvent } from '../../services/statsig'
 import type { Tool } from '../../Tool'
 import { intersperse } from '../../utils/array'
 import {
@@ -226,7 +225,6 @@ export const FileWriteTool = {
 
     // Log when writing to CLAUDE.md
     if (fullFilePath.endsWith(`${sep}${PROJECT_FILE}`)) {
-      logEvent('tengu_write_claudemd', {})
     }
 
     // Emit file edited event for system reminders

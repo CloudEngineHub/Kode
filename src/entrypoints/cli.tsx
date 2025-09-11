@@ -89,7 +89,7 @@ import {
   ensureConfigScope,
 } from '../services/mcpClient'
 import { handleMcprcServerApprovals } from '../services/mcpServerApproval'
-import { checkGate, initializeStatsig, logEvent } from '../services/statsig'
+ 
 import { getExampleCommands } from '../utils/exampleCommands'
 import { cursorShow } from 'ansi-escapes'
 import { getLatestVersion, assertMinVersion, getUpdateCommandSuggestions } from '../utils/autoUpdater'
@@ -97,7 +97,7 @@ import { gt } from 'semver'
 import { CACHE_PATHS } from '../utils/log'
 // import { checkAndNotifyUpdate } from '../utils/autoUpdater'
 import { PersistentShell } from '../utils/PersistentShell'
-import { GATE_USE_EXTERNAL_UPDATER } from '../constants/betas'
+// Vendor beta gates removed
 import { clearTerminal } from '../utils/terminal'
 import { showInvalidConfigDialog } from '../components/InvalidConfigDialog'
 import { ConfigParseError } from '../utils/errors'
@@ -269,12 +269,7 @@ async function setup(cwd: string, safeMode?: boolean): Promise<void> {
     projectConfig.lastCost !== undefined &&
     projectConfig.lastDuration !== undefined
   ) {
-    logEvent('tengu_exit', {
-      last_session_cost: String(projectConfig.lastCost),
-      last_session_api_duration: String(projectConfig.lastAPIDuration),
-      last_session_duration: String(projectConfig.lastDuration),
-      last_session_id: projectConfig.lastSessionId,
-    })
+        
     // Clear the values after logging
     // saveCurrentProjectConfig({
     //   ...projectConfig,
@@ -321,9 +316,7 @@ async function main() {
   let renderContext: RenderOptions | undefined = {
     exitOnCtrlC: false,
   
-    onFlicker() {
-      logEvent('tengu_flicker', {})
-    },
+    onFlicker() {},
   } as any
 
   if (
@@ -400,15 +393,7 @@ ${commandList}`,
     .action(
       async (prompt, { cwd, debug, verbose, enableArchitect, print, safe }) => {
         await showSetupScreens(safe, print)
-        logEvent('tengu_init', {
-          entrypoint: PRODUCT_COMMAND,
-          hasInitialPrompt: Boolean(prompt).toString(),
-          hasStdin: Boolean(stdinContent).toString(),
-          enableArchitect: enableArchitect?.toString() ?? 'false',
-          verbose: verbose?.toString() ?? 'false',
-          debug: debug?.toString() ?? 'false',
-          print: print?.toString() ?? 'false',
-        })
+        
         await setup(cwd, safe)
 
         assertMinVersion()
@@ -574,10 +559,6 @@ ${commandList}`,
     .description('Remove a tool from the list of approved tools')
     .action(async (tool: string) => {
       const result = handleRemoveApprovedTool(tool)
-      logEvent('tengu_approved_tool_remove', {
-        tool,
-        success: String(result.success),
-      })
       console.log(result.message)
       process.exit(result.success ? 0 : 1)
     })
@@ -593,7 +574,6 @@ ${commandList}`,
     .description(`Start the ${PRODUCT_NAME} MCP server`)
     .action(async () => {
       const providedCwd = (program.opts() as { cwd?: string }).cwd ?? cwd()
-      logEvent('tengu_mcp_start', { providedCwd })
 
       // Verify the directory exists
       if (!existsSync(providedCwd)) {
@@ -621,7 +601,6 @@ ${commandList}`,
     .action(async (name, url, options) => {
       try {
         const scope = ensureConfigScope(options.scope)
-        logEvent('tengu_mcp_add', { name, type: 'sse', scope })
 
         addMcpServer(name, { type: 'sse', url }, scope)
         console.log(
@@ -717,11 +696,7 @@ ${commandList}`,
 
           // Add the server
           if (type === 'sse') {
-            logEvent('tengu_mcp_add', {
-              name: serverName,
-              type: 'sse',
-              scope: serverScope,
-            })
+            
             addMcpServer(
               serverName,
               { type: 'sse', url: commandOrUrlValue },
@@ -731,11 +706,7 @@ ${commandList}`,
               `Added SSE MCP server ${serverName} with URL ${commandOrUrlValue} to ${serverScope} config`,
             )
           } else {
-            logEvent('tengu_mcp_add', {
-              name: serverName,
-              type: 'stdio',
-              scope: serverScope,
-            })
+            
             addMcpServer(
               serverName,
               {
@@ -757,13 +728,13 @@ ${commandList}`,
 
           // Check if it's an SSE URL (starts with http:// or https://)
           if (commandOrUrl.match(/^https?:\/\//)) {
-            logEvent('tengu_mcp_add', { name, type: 'sse', scope })
+            
             addMcpServer(name, { type: 'sse', url: commandOrUrl }, scope)
             console.log(
               `Added SSE MCP server ${name} with URL ${commandOrUrl} to ${scope} config`,
             )
           } else {
-            logEvent('tengu_mcp_add', { name, type: 'stdio', scope })
+            
             const env = parseEnvVars(options.env)
             addMcpServer(
               name,
@@ -799,7 +770,7 @@ ${commandList}`,
     .action(async (name: string, options: { scope?: string }) => {
       try {
         const scope = ensureConfigScope(options.scope)
-        logEvent('tengu_mcp_delete', { name, scope })
+        
 
         removeMcpServer(name, scope)
         console.log(`Removed MCP server ${name} from ${scope} config`)
@@ -814,7 +785,6 @@ ${commandList}`,
     .command('list')
     .description('List configured MCP servers')
     .action(() => {
-      logEvent('tengu_mcp_list', {})
       const servers = listMCPServers()
       if (Object.keys(servers).length === 0) {
         console.log(
@@ -873,7 +843,7 @@ ${commandList}`,
         }
 
         // Add server with the provided config
-        logEvent('tengu_mcp_add_json', { name, type: serverConfig.type, scope })
+        
         addMcpServer(name, serverConfig, scope)
 
         if (serverConfig.type === 'sse') {
@@ -899,7 +869,7 @@ ${commandList}`,
     .command('get <name>')
     .description('Get details about an MCP server')
     .action((name: string) => {
-      logEvent('tengu_mcp_get', { name })
+      
       const server = getMcpServer(name)
       if (!server) {
         console.error(`No MCP server found with name: ${name}`)
@@ -1227,7 +1197,7 @@ ${commandList}`,
       'Reset all approved and rejected project-scoped (.mcp.json) servers within this project',
     )
     .action(() => {
-      logEvent('tengu_mcp_reset_project_choices', {})
+      
       resetMcpChoices()
     })
 
@@ -1239,7 +1209,7 @@ ${commandList}`,
         'Reset all approved and rejected .mcprc servers for this project',
       )
       .action(() => {
-        logEvent('tengu_mcp_reset_mcprc_choices', {})
+        
         resetMcpChoices()
       })
   }
@@ -1249,7 +1219,7 @@ ${commandList}`,
     .command('doctor')
     .description(`Check the health of your ${PRODUCT_NAME} installation`)
     .action(async () => {
-      logEvent('tengu_doctor_command', {})
+      
 
       await new Promise<void>(resolve => {
         ;(async () => {
@@ -1267,7 +1237,7 @@ ${commandList}`,
     .command('update')
     .description('Show manual upgrade commands (no auto-install)')
     .action(async () => {
-      logEvent('tengu_update_check', {})
+      
       console.log(`Current version: ${MACRO.VERSION}`)
       console.log('Checking for updates...')
 
@@ -1306,7 +1276,7 @@ ${commandList}`,
     .option('-c, --cwd <cwd>', 'The current working directory', String, cwd())
     .action(async (number, { cwd }) => {
       await setup(cwd, false)
-      logEvent('tengu_view_logs', { number: number?.toString() ?? '' })
+      
       const context: { unmount?: () => void } = {}
       ;(async () => {
         const { render } = await import('ink')
@@ -1358,7 +1328,7 @@ ${commandList}`,
         let messages, date, forkNumber
         try {
           if (isNumber) {
-            logEvent('tengu_resume', { number: number.toString() })
+            
             const log = logs[number]
             if (!log) {
               console.error('No conversation found at index', number)
@@ -1368,7 +1338,7 @@ ${commandList}`,
             ;({ date, forkNumber } = log)
           } else {
             // Handle file path case
-            logEvent('tengu_resume', { filePath: identifier })
+            
             if (!existsSync(identifier)) {
               console.error('File does not exist:', identifier)
               process.exit(1)
@@ -1438,7 +1408,7 @@ ${commandList}`,
     .option('-c, --cwd <cwd>', 'The current working directory', String, cwd())
     .action(async (number, { cwd }) => {
       await setup(cwd, false)
-      logEvent('tengu_view_errors', { number: number?.toString() ?? '' })
+      
       const context: { unmount?: () => void } = {}
       ;(async () => {
         const { render } = await import('ink')
@@ -1463,7 +1433,7 @@ ${commandList}`,
     .description('Get a value from context')
     .action(async (key, { cwd }) => {
       await setup(cwd, false)
-      logEvent('tengu_context_get', { key })
+      
       const context = omit(
         await getContext(),
         'codeStyle',
@@ -1479,7 +1449,7 @@ ${commandList}`,
     .option('-c, --cwd <cwd>', 'The current working directory', String, cwd())
     .action(async (key, value, { cwd }) => {
       await setup(cwd, false)
-      logEvent('tengu_context_set', { key })
+      
       setContext(key, value)
       console.log(`Set context.${key} to "${value}"`)
       process.exit(0)
@@ -1491,7 +1461,7 @@ ${commandList}`,
     .option('-c, --cwd <cwd>', 'The current working directory', String, cwd())
     .action(async ({ cwd }) => {
       await setup(cwd, false)
-      logEvent('tengu_context_list', {})
+      
       const context = omit(
         await getContext(),
         'codeStyle',
@@ -1508,7 +1478,7 @@ ${commandList}`,
     .option('-c, --cwd <cwd>', 'The current working directory', String, cwd())
     .action(async (key, { cwd }) => {
       await setup(cwd, false)
-      logEvent('tengu_context_delete', { key })
+      
       removeContext(key)
       console.log(`Removed context.${key}`)
       process.exit(0)

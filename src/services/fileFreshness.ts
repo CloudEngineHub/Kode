@@ -4,7 +4,6 @@ import {
   systemReminderService,
 } from '../services/systemReminder'
 import { getAgentFilePath } from '../utils/agentStorage'
-import { logEvent } from '../services/statsig'
 
 interface FileTimestamp {
   path: string
@@ -44,11 +43,7 @@ class FileFreshnessService {
         // Reset session state on startup
         this.resetSession()
 
-        // Log session startup
-        logEvent('file_freshness_session_startup', {
-          agentId: context.agentId || 'default',
-          timestamp: context.timestamp,
-        })
+        
       },
     )
   }

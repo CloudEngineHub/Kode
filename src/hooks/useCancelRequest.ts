@@ -1,6 +1,5 @@
 import { useInput } from 'ink'
 import { ToolUseConfirm } from '../components/permissions/PermissionRequest'
-import { logEvent } from '../services/statsig'
 import { BinaryFeedbackContext } from '../screens/REPL'
 import type { SetToolJSXFn } from '../Tool'
 
@@ -30,7 +29,7 @@ export function useCancelRequest(
       // Esc closes the message selector
       return
     }
-    logEvent('tengu_cancel', {})
+  
     setToolJSX(null)
     setToolUseConfirm(null)
     setBinaryFeedbackContext(null)

@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { logEvent } from '../services/statsig'
+ 
 import { logUnaryEvent, CompletionType } from '../utils/unaryLogging'
 import { ToolUseConfirm } from '../components/permissions/PermissionRequest'
 import { env } from '../utils/env'
@@ -19,11 +19,7 @@ export function usePermissionRequestLogging(
   unaryEvent: UnaryEvent,
 ): void {
   useEffect(() => {
-    // Log Statsig event
-    logEvent('tengu_tool_use_show_permission_request', {
-      messageID: toolUseConfirm.assistantMessage.message.id,
-      toolName: toolUseConfirm.tool.name,
-    })
+    
 
     // Handle string or Promise language name
     const languagePromise = Promise.resolve(unaryEvent.language_name)

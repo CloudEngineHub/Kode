@@ -50,6 +50,17 @@ npm install -g @shareai-lab/kode
 - `kwa` - Kode With Agent（备选）
 - `kd` - 超短别名
 
+### Windows 提示
+
+- 请安装 Git for Windows（包含 Git Bash 类 Unix 终端）：https://git-scm.com/download/win
+  - Kode 会优先使用 Git Bash/MSYS 或 WSL Bash；没有时会回退到默认终端，但在 Bash 下体验更佳。
+- 推荐在 VS Code 的集成终端中运行（而非系统默认的 cmd）：
+  - 字体与图标显示更稳定，UI 体验更好。
+  - 相比 cmd 路径/编码等兼容性问题更少。
+  - 在 VS Code 终端中选择 “Git Bash” 作为默认 Shell。
+- 可选：若通过 npm 全局安装，建议避免将 npm 全局 prefix 设置在含空格的路径，以免生成的可执行 shim 出现路径解析问题。
+  - 示例：`npm config set prefix "C:\\npm"`，然后重新安装全局包。
+
 ## 使用方法
 
 ### 交互模式

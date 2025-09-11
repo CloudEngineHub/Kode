@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { logUnaryEvent, CompletionType } from '../../utils/unaryLogging'
 import { ToolUseConfirm } from '../../components/permissions/PermissionRequest'
 import { env } from '../../utils/env'
-import { logEvent } from '../../services/statsig'
+ 
 
 type UnaryEventType = {
   completion_type: CompletionType
@@ -19,11 +19,7 @@ export function usePermissionRequestLogging(
   unaryEvent: UnaryEventType,
 ): void {
   useEffect(() => {
-    // Log Statsig event
-    logEvent('tengu_tool_use_show_permission_request', {
-      messageID: toolUseConfirm.assistantMessage.message.id,
-      toolName: toolUseConfirm.tool.name,
-    })
+    
 
     // Handle string or Promise language name
     const languagePromise = Promise.resolve(unaryEvent.language_name)

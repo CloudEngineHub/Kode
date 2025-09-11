@@ -5,7 +5,6 @@ import * as url from 'url'
 
 import { OAUTH_CONFIG } from '../constants/oauth'
 import { openBrowser } from '../utils/browser'
-import { logEvent } from '../services/statsig'
 import { logError } from '../utils/log'
 import { resetAnthropicClient } from './claude'
 import {
@@ -180,8 +179,7 @@ export class OAuthService {
           })
           res.end()
 
-          // Track which path the user is taking (automatic browser redirect)
-          logEvent('tengu_oauth_automatic_redirect', {})
+          
 
           this.processCallback({
             authorizationCode,
@@ -309,11 +307,7 @@ export async function createAndStoreApiKey(
       errorText = await createApiKeyResp.text()
     }
 
-    logEvent('tengu_oauth_api_key', {
-      status: createApiKeyResp.ok ? 'success' : 'failure',
-      statusCode: createApiKeyResp.status.toString(),
-      error: createApiKeyResp.ok ? '' : errorText || JSON.stringify(apiKeyData),
-    })
+    
 
     if (createApiKeyResp.ok && apiKeyData && apiKeyData.raw_key) {
       const apiKey = apiKeyData.raw_key
@@ -347,11 +341,7 @@ export async function createAndStoreApiKey(
 
     return null
   } catch (error) {
-    logEvent('tengu_oauth_api_key', {
-      status: 'failure',
-      statusCode: 'exception',
-      error: error instanceof Error ? error.message : String(error),
-    })
+    
     throw error
   }
 }

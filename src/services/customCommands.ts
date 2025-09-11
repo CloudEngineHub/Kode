@@ -5,7 +5,6 @@ import { memoize } from 'lodash-es'
 import type { MessageParam } from '@anthropic-ai/sdk/resources/index.mjs'
 import type { Command } from '../commands'
 import { getCwd } from '../utils/state'
-import { logEvent } from './statsig'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 
@@ -559,12 +558,7 @@ export const loadCustomCommands = memoize(
 
       // Log performance metrics for monitoring
       // This follows the same pattern as other performance-sensitive operations
-      logEvent('tengu_custom_command_scan', {
-        durationMs: duration.toString(),
-        projectFilesFound: projectFiles.length.toString(),
-        userFilesFound: userFiles.length.toString(),
-        totalFiles: allFiles.length.toString(),
-      })
+      
 
       // Parse files and create command objects
       const commands: CustomCommandWithScope[] = []
@@ -619,12 +613,7 @@ export const loadCustomCommands = memoize(
       const enabledCommands = commands.filter(cmd => cmd.isEnabled)
 
       // Log loading results for debugging and monitoring
-      logEvent('tengu_custom_commands_loaded', {
-        totalCommands: commands.length.toString(),
-        enabledCommands: enabledCommands.length.toString(),
-        userCommands: commands.filter(cmd => cmd.scope === 'user').length.toString(),
-        projectCommands: commands.filter(cmd => cmd.scope === 'project').length.toString(),
-      })
+      
 
       return enabledCommands
     } catch (error) {

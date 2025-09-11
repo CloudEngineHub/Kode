@@ -2,7 +2,6 @@ import { OpenAI } from 'openai'
 import { getGlobalConfig, GlobalConfig } from '../utils/config'
 import { ProxyAgent, fetch, Response } from 'undici'
 import { setSessionState, getSessionState } from '../utils/sessionState'
-import { logEvent } from '../services/statsig'
 import { debug as debugLogger, getCurrentRequest, logAPIError } from '../utils/debugLogger'
 
 /**
@@ -169,12 +168,7 @@ const ERROR_HANDLERS: ErrorHandler[] = [
             remainder += line + '\n'
           }
         }
-        logEvent('truncated_tool_description', {
-          name: tool.function.name,
-          original_length: String(tool.function.description.length),
-          truncated_length: String(str.length),
-          remainder_length: String(remainder.length),
-        })
+        
         tool.function.description = str
         toolDescriptions[tool.function.name] = remainder
       }

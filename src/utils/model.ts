@@ -1,5 +1,5 @@
 import { memoize } from 'lodash-es'
-import { getDynamicConfig, getExperimentValue } from '../services/statsig'
+ 
 import { logError } from './log'
 import {
   getGlobalConfig,
@@ -28,15 +28,7 @@ const DEFAULT_MODEL_CONFIG: ModelConfig = {
  * Relies on the built-in caching from StatsigClient
  */
 async function getModelConfig(): Promise<ModelConfig> {
-  try {
-    return await getDynamicConfig<ModelConfig>(
-      'tengu-capable-model-config',
-      DEFAULT_MODEL_CONFIG,
-    )
-  } catch (error) {
-    logError(error)
-    return DEFAULT_MODEL_CONFIG
-  }
+  return DEFAULT_MODEL_CONFIG
 }
 
 export const getSlowAndCapableModel = memoize(async (): Promise<string> => {
