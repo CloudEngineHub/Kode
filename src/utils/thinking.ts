@@ -4,7 +4,6 @@ import { logEvent } from '../services/statsig'
 import { getLastAssistantMessageId } from './messages'
 import { ThinkTool } from '../tools/ThinkTool/ThinkTool'
 import { USE_BEDROCK, USE_VERTEX, getModelManager } from './model'
-import { getGlobalConfig } from './config'
 
 export async function getMaxThinkingTokens(
   messages: Message[],

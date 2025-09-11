@@ -1,57 +1,17 @@
-import React from 'react'
 import { memoize } from 'lodash-es'
 import chalk from 'chalk'
-import {
-  StatsigClient,
-  StatsigOptions,
-  StatsigEvent,
-  LogLevel,
-} from '@statsig/js-client'
-import './browserMocks.js' // Initialize browser mocks
-import { FileSystemStorageProvider } from './statsigStorage'
-import { STATSIG_CLIENT_KEY } from '../constants/keys'
+// Statsig is disabled by default in the CLI runtime to avoid
+// bringing browser-only globals (e.g., XMLHttpRequest) into Node.
+// The Client SDK is browser-oriented; using it at module scope can
+// break on Windows shells. We keep a lightweight no-op shim.
 import { env } from '../utils/env'
-import { getUser } from '../utils/user'
-import { logError } from '../utils/log'
-import { SESSION_ID } from '../utils/log'
-import { getBetas } from '../utils/betas'
-import { getIsGit } from '../utils/git'
-import { getModelManager } from '../utils/model'
-import { MACRO } from '../constants/macros'
 const gateValues: Record<string, boolean> = {}
-let client: StatsigClient | null = null
+let client: any | null = null
 
 export const initializeStatsig = memoize(
-  async (): Promise<StatsigClient | null> => {
-    if (env.isCI || process.env.NODE_ENV === 'test') {
-      return null
-    }
-
-    const user = await getUser()
-    const options: StatsigOptions = {
-      networkConfig: {
-        api: 'https://statsig.anthropic.com/v1/',
-      },
-      environment: {
-        tier:
-          env.isCI ||
-          ['test', 'development'].includes(process.env.NODE_ENV ?? '')
-            ? 'dev'
-            : 'production',
-      },
-      logLevel: LogLevel.None,
-      storageProvider: new FileSystemStorageProvider(),
-    }
-
-    client = new StatsigClient(STATSIG_CLIENT_KEY, user, options)
-    client.on('error', errorEvent => {
-      logError(`Statsig error: ${errorEvent}`)
-    })
-    await client.initializeAsync()
-    process.on('exit', () => {
-      client?.flush()
-    })
-    return client
+  async (): Promise<any | null> => {
+    // Fully disabled in CLI by default
+    return null
   },
 )
 
@@ -63,47 +23,10 @@ export function logEvent(
   if (env.isCI || process.env.NODE_ENV === 'test') {
     return
   }
-  Promise.all([
-    initializeStatsig(),
-    getIsGit(),
-    getBetas(),
-    metadata.model ? Promise.resolve(metadata.model) : Promise.resolve(getModelManager().getModelName('main') || 'unknown'),
-  ]).then(([statsigClient, isGit, betas, model]) => {
-    if (!statsigClient) return
-
-    const eventMetadata: Record<string, string> = {
-      ...metadata,
-      model,
-      sessionId: SESSION_ID,
-      userType: process.env.USER_TYPE || '',
-      ...(process.env.SWE_BENCH_RUN_ID
-        ? { sweBenchId: process.env.SWE_BENCH_RUN_ID }
-        : {}),
-      ...(betas.length > 0 ? { betas: betas.join(',') } : {}),
-      env: JSON.stringify({
-        isGit,
-        platform: env.platform,
-        nodeVersion: env.nodeVersion,
-        terminal: env.terminal,
-        version: MACRO.VERSION,
-      }),
-    }
-
-    // Debug logging when debug mode is enabled
-    if (process.argv.includes('--debug') || process.argv.includes('-d')) {
-      console.log(
-        chalk.dim(
-          `[DEBUG-ONLY] Statsig event: ${eventName} ${JSON.stringify(metadata, null, 0)}`,
-        ),
-      )
-    }
-
-    const event: StatsigEvent = {
-      eventName,
-      metadata: eventMetadata,
-    }
-    // statsigClient.logEvent(event)
-  })
+  // Keep debug line for local visibility, but do not import client SDK
+  if (process.argv.includes('--debug') || process.argv.includes('-d')) {
+    console.log(chalk.dim(`[DEBUG-ONLY] Statsig event: ${eventName} ${JSON.stringify(metadata, null, 0)}`))
+  }
 }
 
 export const checkGate = memoize(async (gateName: string): Promise<boolean> => {
