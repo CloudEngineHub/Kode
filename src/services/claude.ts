@@ -1088,7 +1088,7 @@ export function assistantMessageToMessageParam(
 
 function splitSysPromptPrefix(systemPrompt: string[]): string[] {
   // split out the first block of the system prompt as the "prefix" for API
-  // to match on in https://console.statsig.com/4aF3Ewatb6xPVpCwxb5nA3/dynamic_configs/claude_cli_system_prompt_prefixes
+  
   const systemPromptFirstBlock = systemPrompt[0] || ''
   const systemPromptRest = systemPrompt.slice(1)
   return [systemPromptFirstBlock, systemPromptRest.join('\n')].filter(Boolean)
@@ -1821,7 +1821,7 @@ async function queryOpenAI(
   }
   // Prepend system prompt block for easy API identification
   if (options?.prependCLISysprompt) {
-    // Log stats about first block for analyzing prefix matching config (see https://console.statsig.com/4aF3Ewatb6xPVpCwxb5nA3/dynamic_configs/claude_cli_system_prompt_prefixes)
+    
     const [firstSyspromptBlock] = splitSysPromptPrefix(systemPrompt)
 
     systemPrompt = [getCLISyspromptPrefix() + systemPrompt] // some openai-like providers need the entire system prompt as a single block

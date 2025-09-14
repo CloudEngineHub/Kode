@@ -17,8 +17,7 @@ type BinaryFeedbackConfig = {
   sampleFrequency: number
 }
 
-async function getBinaryFeedbackStatsigConfig(): Promise<BinaryFeedbackConfig> {
-  
+async function getBinaryFeedbackConfig(): Promise<BinaryFeedbackConfig> {
   return { sampleFrequency: 0 }
 }
 
@@ -30,32 +29,7 @@ function getMessageBlockSequence(m: AssistantMessage) {
   })
 }
 
-export async function logBinaryFeedbackEvent(
-  m1: AssistantMessage,
-  m2: AssistantMessage,
-  choice: BinaryFeedbackChoice,
-): Promise<void> {
-  const modelA = m1.message.model
-  const modelB = m2.message.model
-  const gitState = await getGitState()
-  
-}
-
-export async function logBinaryFeedbackSamplingDecision(
-  decision: boolean,
-  reason?: string,
-): Promise<void> {
-  
-}
-
-export async function logBinaryFeedbackDisplayDecision(
-  decision: boolean,
-  m1: AssistantMessage,
-  m2: AssistantMessage,
-  reason?: string,
-): Promise<void> {
-  
-}
+// Logging removed to minimize runtime surface area; behavior unaffected
 
 function textContentBlocksEqual(cb1: TextBlock, cb2: TextBlock): boolean {
   return cb1.text === cb2.text
@@ -89,34 +63,27 @@ function allContentBlocksEqual(
 
 export async function shouldUseBinaryFeedback(): Promise<boolean> {
   if (process.env.DISABLE_BINARY_FEEDBACK) {
-    logBinaryFeedbackSamplingDecision(false, 'disabled_by_env_var')
     return false
   }
   if (process.env.FORCE_BINARY_FEEDBACK) {
-    logBinaryFeedbackSamplingDecision(true, 'forced_by_env_var')
     return true
   }
   if (process.env.USER_TYPE !== 'ant') {
-    logBinaryFeedbackSamplingDecision(false, 'not_ant')
     return false
   }
   if (process.env.NODE_ENV === 'test') {
     // Binary feedback breaks a couple tests related to checking for permission,
     // so we have to disable it in tests at the risk of hiding bugs
-    logBinaryFeedbackSamplingDecision(false, 'test')
     return false
   }
 
-  const config = await getBinaryFeedbackStatsigConfig()
+  const config = await getBinaryFeedbackConfig()
   if (config.sampleFrequency === 0) {
-    logBinaryFeedbackSamplingDecision(false, 'top_level_frequency_zero')
     return false
   }
   if (Math.random() > config.sampleFrequency) {
-    logBinaryFeedbackSamplingDecision(false, 'top_level_frequency_rng')
     return false
   }
-  logBinaryFeedbackSamplingDecision(true)
   return true
 }
 
@@ -124,9 +91,8 @@ export function messagePairValidForBinaryFeedback(
   m1: AssistantMessage,
   m2: AssistantMessage,
 ): boolean {
-  const logPass = () => logBinaryFeedbackDisplayDecision(true, m1, m2)
-  const logFail = (reason: string) =>
-    logBinaryFeedbackDisplayDecision(false, m1, m2, reason)
+  const logPass = () => {}
+  const logFail = (_reason: string) => {}
 
   // Ignore thinking blocks, on the assumption that users don't find them very relevant
   // compared to other content types
@@ -185,3 +151,9 @@ export function getBinaryFeedbackResultForChoice(
       return { message: null, shouldSkipPermissionCheck: false }
   }
 }
+// Keep a minimal exported stub to satisfy imports without side effects
+export async function logBinaryFeedbackEvent(
+  _m1: AssistantMessage,
+  _m2: AssistantMessage,
+  _choice: BinaryFeedbackChoice,
+): Promise<void> {}

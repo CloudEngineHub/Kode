@@ -76,9 +76,9 @@ kd
 ### 非交互模式
 获取快速响应：
 ```bash
-kode -p "解释这个函数" main.js
+kode -p "解释这个函数" 路径/到/文件.js
 # 或
-kwa -p "解释这个函数" main.js
+kwa -p "解释这个函数" 路径/到/文件.js
 ```
 
 ### Docker 使用说明

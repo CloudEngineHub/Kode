@@ -29,8 +29,7 @@ export const MemoryReadTool = {
     return 'Read Memory'
   },
   async isEnabled() {
-    // TODO: Use a statsig gate
-    // TODO: Figure out how to do that without regressing app startup perf
+    // TODO: Gate with a setting or feature flag
     return false
   },
   isReadOnly() {
