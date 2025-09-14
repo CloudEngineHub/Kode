@@ -164,7 +164,7 @@ gh pr create --title "the pr title" --body "$(cat <<'EOF'
 ## Test plan
 [Checklist of TODOs for testing the pull request...]
 
-🤖 Generated with ${process.env.USER_TYPE === 'ant' ? `[${PRODUCT_NAME}](${PRODUCT_URL})` : PRODUCT_NAME} & {MODEL_NAME}
+🤖 Generated with [${PRODUCT_NAME}](${PRODUCT_URL}) & {MODEL_NAME}
 EOF
 )"
 </example>
