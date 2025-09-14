@@ -10,8 +10,7 @@ export type UnaryEvent = {
 }
 
 /**
- * Logs permission request events using Statsig and unary logging.
- * Handles both the Statsig event and the unary event logging.
+ * Logs permission request events via unary logging.
  * Can handle either a string or Promise<string> for language_name.
  */
 export function usePermissionRequestLogging(

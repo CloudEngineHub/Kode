@@ -24,8 +24,7 @@ const DEFAULT_MODEL_CONFIG: ModelConfig = {
 }
 
 /**
- * Helper to get the model config from statsig or defaults
- * Relies on the built-in caching from StatsigClient
+ * Helper to get the model config from defaults.
  */
 async function getModelConfig(): Promise<ModelConfig> {
   return DEFAULT_MODEL_CONFIG

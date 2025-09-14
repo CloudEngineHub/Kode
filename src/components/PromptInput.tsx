@@ -1,6 +1,5 @@
 import { Box, Text, useInput } from 'ink'
 import { sample } from 'lodash-es'
-import { getExampleCommands } from '../utils/exampleCommands'
 import * as React from 'react'
 import { type Message } from '../query'
 import { processUserInput } from '../utils/messages'

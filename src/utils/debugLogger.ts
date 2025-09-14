@@ -388,9 +388,6 @@ export const debug = {
   // 新增UI相关的调试函数 (只记录到文件，不显示在终端)
   ui: (phase: string, data: any, requestId?: string) =>
     debugLog(LogLevel.STATE, `UI_${phase}`, data, requestId),
-
-  // 新增Statsig事件追踪
-  statsig: (phase: string, data: any) => debugLog(LogLevel.TRACE, phase, data),
 }
 
 // 请求生命周期管理

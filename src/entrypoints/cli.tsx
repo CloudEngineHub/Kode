@@ -61,7 +61,6 @@ import { dateToFilename, logError, parseLogFilename } from '../utils/log'
 import { initDebugLogger } from '../utils/debugLogger'
 import { Onboarding } from '../components/Onboarding'
 import { Doctor } from '../screens/Doctor'
-import { ApproveApiKey } from '../components/ApproveApiKey'
 import { TrustDialog } from '../components/TrustDialog'
 import { checkHasTrustDialogAccepted, McpServerConfig } from '../utils/config'
 import { isDefaultSlowAndCapableModel } from '../utils/model'
@@ -90,14 +89,12 @@ import {
 } from '../services/mcpClient'
 import { handleMcprcServerApprovals } from '../services/mcpServerApproval'
  
-import { getExampleCommands } from '../utils/exampleCommands'
 import { cursorShow } from 'ansi-escapes'
 import { getLatestVersion, assertMinVersion, getUpdateCommandSuggestions } from '../utils/autoUpdater'
 import { gt } from 'semver'
 import { CACHE_PATHS } from '../utils/log'
 // import { checkAndNotifyUpdate } from '../utils/autoUpdater'
 import { PersistentShell } from '../utils/PersistentShell'
-// Vendor beta gates removed
 import { clearTerminal } from '../utils/terminal'
 import { showInvalidConfigDialog } from '../components/InvalidConfigDialog'
 import { ConfigParseError } from '../utils/errors'
@@ -143,29 +140,7 @@ async function showSetupScreens(
     })
   }
 
-  // // Check for custom API key (only allowed for ants)
-  // if (process.env.ANTHROPIC_API_KEY && process.env.USER_TYPE === 'ant') {
-  //   const customApiKeyTruncated = normalizeApiKeyForConfig(
-  //     process.env.ANTHROPIC_API_KEY!,
-  //   )
-  //   const keyStatus = getCustomApiKeyStatus(customApiKeyTruncated)
-  //   if (keyStatus === 'new') {
-  //     await new Promise<void>(resolve => {
-  //       render(
-  //         <ApproveApiKey
-  //           customApiKeyTruncated={customApiKeyTruncated}
-  //           onDone={async () => {
-  //             await clearTerminal()
-  //             resolve()
-  //           }}
-  //         />,
-  //         {
-  //           exitOnCtrlC: false,
-  //         },
-  //       )
-  //     })
-  //   }
-  // }
+  
 
   // In non-interactive mode, only show trust dialog in safe mode
   if (!print && safeMode) {
@@ -244,9 +219,7 @@ async function setup(cwd: string, safeMode?: boolean): Promise<void> {
   }
 
   cleanupOldMessageFilesInBackground()
-  // getExampleCommands() // Pre-fetch example commands
   getContext() // Pre-fetch all context data at once
-  // initializeStatsig() // Kick off statsig initialization
 
   // Migrate old iterm2KeyBindingInstalled config to new shiftEnterKeyBindingInstalled
   const globalConfig = getGlobalConfig()

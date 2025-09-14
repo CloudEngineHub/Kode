@@ -123,9 +123,9 @@ kd
 ### Non-Interactive Mode
 Get a quick response:
 ```bash
-kode -p "explain this function" main.js
+kode -p "explain this function" path/to/file.js
 # or
-kwa -p "explain this function" main.js
+kwa -p "explain this function" path/to/file.js
 ```
 
 ### Using the @ Mention System
