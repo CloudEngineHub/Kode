@@ -20,7 +20,7 @@ import { randomUUID } from 'crypto'
 
 const execAsync = promisify(exec)
 
-// Core constants aligned with Claude Code architecture
+// Core constants aligned with the Claude Code agent architecture
 const AGENT_LOCATIONS = {
   USER: "user",
   PROJECT: "project", 
@@ -324,7 +324,7 @@ function validateAgentConfig(config: Partial<CreateState>, existingAgents: Agent
   }
 }
 
-// File system operations with Claude Code alignment
+// File system operations retained for Claude Code parity
 function getAgentDirectory(location: AgentLocation): string {
   if (location === AGENT_LOCATIONS.BUILT_IN || location === AGENT_LOCATIONS.ALL) {
     throw new Error(`Cannot get directory path for ${location} agents`)
@@ -545,7 +545,7 @@ async function updateAgent(
   writeFileSync(filePath, content, { encoding: 'utf-8', flag: 'w' })
 }
 
-// Enhanced UI Components with Claude Code alignment
+// Enhanced UI components retained for Claude Code parity
 
 interface HeaderProps {
   title: string
@@ -1574,7 +1574,7 @@ function AgentListView({
             <Box marginBottom={1}>
               <Text bold color={theme.primary}>💭 What are agents?</Text>
             </Box>
-            <Text>Specialized AI assistants that Claude can delegate to for specific tasks.</Text>
+            <Text>Specialized AI assistants that Kode can delegate to for specific tasks, compatible with Claude Code `.claude` agent packs.</Text>
             <Text>Each agent has its own context, prompt, and tools.</Text>
             
             <Box marginTop={1} marginBottom={1}>

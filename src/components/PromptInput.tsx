@@ -308,7 +308,7 @@ function PromptInput({
         addToHistory(mode === 'koding' ? `#${input}` : input)
         onInputChange('')
 
-        // Create additional context to inform Claude this is for KODING.md
+        // Create additional context to inform the assistant this is for KODING.md
         const kodingContext =
           'The user is using Koding mode. Format your response as a comprehensive, well-structured document suitable for adding to AGENTS.md. Use proper markdown formatting with headings, lists, code blocks, etc. The response should be complete and ready to add to AGENTS.md documentation.'
 
@@ -354,8 +354,8 @@ function PromptInput({
         if (messages.length) {
           await onQuery(messages)
 
-          // After query completes, the last message should be Claude's response
-          // We'll set up a one-time listener to capture and save Claude's response
+        // After query completes, the last message should be the assistant's response
+        // We'll set up a one-time listener to capture and save that response
           // This will be handled by the REPL component or message handler
         }
 
@@ -524,7 +524,7 @@ function PromptInput({
       onShowMessageSelector()
     }
 
-    // Shift+Tab for mode cycling (matching original Claude Code implementation)
+    // Shift+Tab for mode cycling (retains legacy keyboard behavior)
     if (key.shift && key.tab) {
       cycleMode()
       return true // Explicitly handled

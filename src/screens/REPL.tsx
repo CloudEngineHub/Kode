@@ -2,7 +2,7 @@ import { ToolUseBlockParam } from '@anthropic-ai/sdk/resources/index.mjs'
 import { Box, Newline, Static, Text } from 'ink'
 import ProjectOnboarding, {
   markProjectOnboardingComplete,
-} from '../ProjectOnboarding.js'
+} from '../components/ProjectOnboarding.js'
 import { CostThresholdDialog } from '../components/CostThresholdDialog'
 import * as React from 'react'
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
@@ -337,7 +337,7 @@ export function REPL({
 
     setMessages(oldMessages => [...oldMessages, ...newMessages])
 
-    // Mark onboarding as complete when any user message is sent to Claude
+    // Mark onboarding as complete when any user message is sent to the assistant
     markProjectOnboardingComplete()
 
     // The last message is an assistant message if the user input was a bash command,

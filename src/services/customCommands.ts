@@ -136,7 +136,6 @@ export async function resolveFileReferences(content: string): Promise<string> {
 function validateAllowedTools(allowedTools: string[] | undefined): boolean {
   // Log allowed tools for debugging and future integration
   if (allowedTools && allowedTools.length > 0) {
-    console.log('Command allowed tools:', allowedTools)
     // TODO: Integrate with src/permissions.ts tool permission system
     // TODO: Connect to Tool.tsx needsPermissions() mechanism
   }
@@ -147,8 +146,8 @@ function validateAllowedTools(allowedTools: string[] | undefined): boolean {
  * Frontmatter configuration for custom commands
  *
  * This interface defines the YAML frontmatter structure that can be used
- * to configure custom commands. It follows the same pattern as Claude Desktop's
- * custom command system but with additional fields for enhanced functionality.
+ * to configure custom commands. It mirrors the Claude Desktop custom command
+ * system for compatibility while adding Kode-specific enhancements.
  */
 export interface CustomCommandFrontmatter {
   /** Display name for the command (overrides filename-based naming) */
@@ -436,10 +435,10 @@ function createCustomCommand(
     async getPromptForCommand(args: string): Promise<MessageParam[]> {
       let prompt = content.trim()
 
-      // Process argument substitution following Claude Code conventions
+  // Process argument substitution following legacy conventions
       // This supports both the official $ARGUMENTS format and legacy {arg} format
 
-      // Step 1: Handle $ARGUMENTS placeholder (official Claude Code format)
+      // Step 1: Handle $ARGUMENTS placeholder (legacy command format)
       if (prompt.includes('$ARGUMENTS')) {
         prompt = prompt.replace(/\$ARGUMENTS/g, args || '')
       }
@@ -650,9 +649,6 @@ export const loadCustomCommands = memoize(
  */
 export const reloadCustomCommands = (): void => {
   loadCustomCommands.cache.clear()
-  console.log(
-    'Custom commands cache cleared. Commands will be reloaded on next use.',
-  )
 }
 
 /**

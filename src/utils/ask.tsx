@@ -22,7 +22,7 @@ type Props = {
   verbose?: boolean
 }
 
-// Sends a single prompt to the Claude API and returns the response.
+// Sends a single prompt to the Anthropic Messages API and returns the response.
 // Assumes that claude is being used non-interactively -- will not
 // ask the user for permissions or further input.
 export async function ask({

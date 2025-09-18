@@ -9,6 +9,7 @@ import { getAvailableAgentTypes } from '../utils/agentLoader'
 import { existsSync } from 'fs'
 import { resolve } from 'path'
 import { getCwd } from '../utils/state'
+import { debug as debugLogger } from '../utils/debugLogger'
 
 export interface MentionContext {
   type: 'agent' | 'file'
@@ -159,10 +160,10 @@ class MentionProcessorService {
       
       // Log cache refresh for debugging mention resolution issues
       if (agents.length !== previousCacheSize) {
-        console.log('[MentionProcessor] Agent cache refreshed:', {
+        debugLogger.info('MENTION_PROCESSOR_CACHE_REFRESHED', {
           agentCount: agents.length,
           previousCacheSize,
-          cacheAge: now - this.lastAgentCheck
+          cacheAge: now - this.lastAgentCheck,
         })
       }
     } catch (error) {
@@ -232,17 +233,17 @@ class MentionProcessorService {
       }
       
       // Debug log for mention event emission tracking
-      console.log('[MentionProcessor] Emitted mention event:', {
+      debugLogger.info('MENTION_PROCESSOR_EVENT_EMITTED', {
         type: isAskModel ? 'ask-model' : 'agent',
         mention,
-        agentType: isAskModel ? undefined : agentType
+        agentType: isAskModel ? undefined : agentType,
       })
     } catch (error) {
-      console.error('[MentionProcessor] Failed to emit mention event:', {
+      debugLogger.error('MENTION_PROCESSOR_EVENT_FAILED', {
         mention,
         agentType,
         isAskModel,
-        error: error instanceof Error ? error.message : error
+        error: error instanceof Error ? error.message : error,
       })
     }
   }

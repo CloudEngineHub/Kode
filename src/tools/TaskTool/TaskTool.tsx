@@ -55,12 +55,12 @@ const inputSchema = z.object({
 
 export const TaskTool = {
   async prompt({ safeMode }) {
-    // Match original Claude Code - prompt returns full agent descriptions
+    // Ensure agent prompts remain compatible with Claude Code `.claude` agent packs
     return await getPrompt(safeMode)
   },
   name: TOOL_NAME,
   async description() {
-    // Match original Claude Code exactly - simple description
+    // Ensure metadata stays compatible with Claude Code `.claude` agent packs
     return "Launch a new task"
   },
   inputSchema,

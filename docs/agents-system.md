@@ -74,8 +74,8 @@ Agents can be defined at five levels with priority order (later overrides earlie
    - Provided with Kode
    - Cannot be modified
 
-2. **Claude User** (`~/.claude/agents/`)
-   - Claude Code compatible user-level agents
+2. **.claude User (Claude Code)** (`~/.claude/agents/`)
+   - Compatibility with Claude Code user directories
    - Personal agents available across all projects
 
 3. **Kode User** (`~/.kode/agents/`)
@@ -83,8 +83,8 @@ Agents can be defined at five levels with priority order (later overrides earlie
    - Overrides Claude user agents with same name
    - Create with `/agents` command or manually
 
-4. **Claude Project** (`./.claude/agents/`)
-   - Claude Code compatible project-specific agents
+4. **.claude Project (Claude Code)** (`./.claude/agents/`)
+   - Compatibility with Claude Code project directories
    - Overrides user-level agents
 
 5. **Kode Project** (`./.kode/agents/`)
