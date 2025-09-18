@@ -148,9 +148,9 @@ class KodeContextManager {
 
       // 在调试模式下记录加载结果
       if (process.env.NODE_ENV === 'development') {
-        console.log(
-          `[KodeContext] Loaded ${this.projectDocsCache.length} characters from project docs`,
-        )
+        debugLogger.info('KODE_CONTEXT_LOADED', {
+          characters: this.projectDocsCache.length,
+        })
       }
     } catch (error) {
       console.warn('[KodeContext] Failed to load project docs:', error)
@@ -1212,7 +1212,7 @@ export function formatSystemPromptWithContext(
   agentId?: string,
   skipContextReminders = false, // Parameter kept for API compatibility but not used anymore
 ): { systemPrompt: string[]; reminders: string } {
-  // 构建增强的系统提示 - 对齐官方 Claude Code 直接注入方式
+  // 构建增强的系统提示，保持与原先直接注入方式的兼容
   const enhancedPrompt = [...systemPrompt]
   let reminders = ''
 
@@ -1759,7 +1759,10 @@ function getAssistantMessageFromError(error: unknown): AssistantMessage {
   }
   if (error instanceof Error) {
     if (process.env.NODE_ENV === 'development') {
-      console.log(error)
+      debugLogger.error('ANTHROPIC_API_ERROR', {
+        message: error.message,
+        stack: error.stack,
+      })
     }
     return createAssistantAPIErrorMessage(
       `${API_ERROR_MESSAGE_PREFIX}: ${error.message}`,

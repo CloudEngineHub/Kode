@@ -30,17 +30,17 @@ This change reflects our belief that the future of software development is colla
 ### Full Compatibility with Multiple Standards
 
 - ✅ **AGENTS.md** - Native support for the OpenAI-initiated standard format
-- ✅ **CLAUDE.md** - Full backward compatibility with Claude Code configurations  
+- ✅ **CLAUDE.md** - Full backward compatibility with Claude Code `.claude` configurations  
 - ✅ **Subagent System** - Advanced agent delegation and task orchestration
 - ✅ **Cross-platform** - Works with 20+ AI models and providers
 
-Use `# Your documentation request` to generate and maintain your AGENTS.md file automatically, while maintaining full compatibility with existing Claude Code workflows.
+Use `# Your documentation request` to generate and maintain your AGENTS.md file automatically, while preserving compatibility with existing `.claude` workflows.
 
 ## Overview
 
 Kode is a powerful AI assistant that lives in your terminal. It can understand your codebase, edit files, run commands, and handle entire workflows for you.
 
-> **⚠️ Security Notice**: Kode runs in YOLO mode by default (equivalent to Claude's `--dangerously-skip-permissions` flag), bypassing all permission checks for maximum productivity. YOLO mode is recommended only for trusted, secure environments when working on non-critical projects. If you're working with important files or using models of questionable capability, we strongly recommend using `kode --safe` to enable permission checks and manual approval for all operations.
+> **⚠️ Security Notice**: Kode runs in YOLO mode by default (equivalent to Claude Code's `--dangerously-skip-permissions` flag), bypassing all permission checks for maximum productivity. YOLO mode is recommended only for trusted, secure environments when working on non-critical projects. If you're working with important files or using models of questionable capability, we strongly recommend using `kode --safe` to enable permission checks and manual approval for all operations.
 > 
 > **📊 Model Performance**: For optimal performance, we recommend using newer, more capable models designed for autonomous task completion. Avoid older Q&A-focused models like GPT-4o or Gemini 2.5 Pro, which are optimized for answering questions rather than sustained independent task execution. Choose models specifically trained for agentic workflows and extended reasoning capabilities.
 

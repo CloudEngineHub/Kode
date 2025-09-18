@@ -74,7 +74,7 @@ export function AssistantTextMessage({
   }
 
   switch (text) {
-    // Local JSX commands don't need a response, but we still want Claude to see them
+    // Local JSX commands don't need a response, but we still want the assistant to see them
     // Tool results render their own interrupt messages
     case NO_RESPONSE_REQUESTED:
     case INTERRUPT_MESSAGE_FOR_TOOL_USE:

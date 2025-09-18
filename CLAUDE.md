@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Kode automation agents (including those compatible with Claude Code's `.claude` ecosystem) when working with code in this repository.
 
 ## Development Commands
 
@@ -46,7 +46,7 @@ SKIP_BUNDLED_CHECK=true npm publish
 ## High-Level Architecture
 
 ### Core System Design
-Kode implements a **three-layer parallel architecture** inspired by Claude Code:
+Kode implements a **three-layer parallel architecture** refined for fast iteration across terminal workflows while remaining compatible with the Claude Code agent ecosystem:
 
 1. **User Interaction Layer** (`src/screens/REPL.tsx`)
    - Interactive terminal interface using Ink (React for CLI)
@@ -74,9 +74,9 @@ Kode implements a **three-layer parallel architecture** inspired by Claude Code:
 ### Agent System (`src/utils/agentLoader.ts`)
 **Dynamic Agent Configuration Loading** with 5-tier priority system:
 1. Built-in (code-embedded)
-2. `~/.claude/agents/` (Claude user)
+2. `~/.claude/agents/` (Claude Code user directory compatibility)
 3. `~/.kode/agents/` (Kode user)
-4. `./.claude/agents/` (Claude project)
+4. `./.claude/agents/` (Claude Code project directory compatibility)
 5. `./.kode/agents/` (Kode project)
 
 Agents are defined as markdown files with YAML frontmatter:
@@ -99,7 +99,7 @@ Each tool follows a consistent pattern in `src/tools/[ToolName]/`:
 - Permission-aware execution
 
 ### Service Layer
-- **Claude Service** (`src/services/claude.ts`): Primary AI model interface
+- **Anthropic Service** (`src/services/claude.ts`): Claude API integration
 - **OpenAI Service** (`src/services/openai.ts`): OpenAI-compatible models
 - **Model Adapter Factory** (`src/services/modelAdapterFactory.ts`): Unified model interface
 - **MCP Client** (`src/services/mcpClient.ts`): Model Context Protocol for tool extensions

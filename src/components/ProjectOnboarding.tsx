@@ -6,17 +6,17 @@ import {
   getGlobalConfig,
   saveCurrentProjectConfig,
   saveGlobalConfig,
-} from './utils/config.js'
+} from '../utils/config.js'
 import { existsSync } from 'fs'
 import { join } from 'path'
 import { homedir } from 'os'
-import terminalSetup from './commands/terminalSetup'
-import { getTheme } from './utils/theme'
-import { RELEASE_NOTES } from './constants/releaseNotes'
+import terminalSetup from '../commands/terminalSetup'
+import { getTheme } from '../utils/theme'
+import { RELEASE_NOTES } from '../constants/releaseNotes'
 import { gt } from 'semver'
-import { isDirEmpty } from './utils/file'
-import { MACRO } from './constants/macros'
-import { PROJECT_FILE, PRODUCT_NAME } from './constants/product'
+import { isDirEmpty } from '../utils/file'
+import { MACRO } from '../constants/macros'
+import { PROJECT_FILE, PRODUCT_NAME } from '../constants/product'
 
 // Function to mark onboarding as complete
 export function markProjectOnboardingComplete(): void {
@@ -74,9 +74,9 @@ export default function ProjectOnboarding({
 
   // Load what we need for onboarding
   // NOTE: This whole component is statically rendered Once
-  const hasClaudeMd = existsSync(join(workspaceDir, PROJECT_FILE))
+  const workspaceHasProjectGuide = existsSync(join(workspaceDir, PROJECT_FILE))
   const isWorkspaceDirEmpty = isDirEmpty(workspaceDir)
-  const needsClaudeMd = !hasClaudeMd && !isWorkspaceDirEmpty
+  const shouldRecommendProjectGuide = !workspaceHasProjectGuide && !isWorkspaceDirEmpty
   const showTerminalTip =
     terminalSetup.isEnabled && !getGlobalConfig().shiftEnterKeyBindingInstalled
 
@@ -106,9 +106,9 @@ export default function ProjectOnboarding({
                   </React.Fragment>,
                 )
               }
-              if (needsClaudeMd) {
+              if (shouldRecommendProjectGuide) {
                 items.push(
-                  <React.Fragment key="claudemd">
+                  <React.Fragment key="projectGuide">
                     {/* @ts-expect-error - OrderedList.Item children prop issue */}
                     <OrderedList.Item>
                       <Text color={theme.secondaryText}>

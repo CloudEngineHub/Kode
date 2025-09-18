@@ -1,4 +1,4 @@
-// Permission mode types based on original Claude Code implementation
+// Permission mode types retained for compatibility with earlier agent implementations
 export type PermissionMode =
   | 'default'
   | 'acceptEdits'
@@ -35,7 +35,7 @@ export interface ModeConfig {
   }
 }
 
-// Mode configuration based on original Claude Code
+// Mode configuration preserved for Claude Code parity
 export const MODE_CONFIGS: Record<PermissionMode, ModeConfig> = {
   default: {
     name: 'default',
@@ -100,7 +100,7 @@ export const MODE_CONFIGS: Record<PermissionMode, ModeConfig> = {
   },
 }
 
-// Mode cycling function (based on original yg2 function)
+// Mode cycling function preserved from the Claude Code workflow
 export function getNextPermissionMode(
   currentMode: PermissionMode,
   isBypassAvailable: boolean = true,

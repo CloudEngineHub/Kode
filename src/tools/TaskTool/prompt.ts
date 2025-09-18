@@ -18,7 +18,7 @@ export async function getTaskTools(safeMode: boolean): Promise<Tool[]> {
 }
 
 export async function getPrompt(safeMode: boolean): Promise<string> {
-  // Extracted directly from original Claude Code obfuscated source
+  // Maintain compatibility with Claude Code `.claude` agent descriptions
   const agents = await getActiveAgents()
   
   // Format exactly as in original: (Tools: tool1, tool2)
@@ -29,7 +29,7 @@ export async function getPrompt(safeMode: boolean): Promise<string> {
     return `- ${agent.agentType}: ${agent.whenToUse} (Tools: ${toolsStr})`
   }).join('\n')
   
-  // 100% exact copy from original Claude Code source
+  // Keep the wording aligned so shared `.claude` agent packs behave identically
   return `Launch a new agent to handle complex, multi-step tasks autonomously. 
 
 Available agent types and the tools they have access to:

@@ -19,7 +19,8 @@ import { lastX } from './utils/generators'
 import { getGitEmail } from './utils/user'
 import { PROJECT_FILE } from './constants/product'
 /**
- * Find all AGENTS.md and CLAUDE.md files in the current working directory
+ * Locate AGENTS.md and CLAUDE.md files for backward compatibility with
+ * existing documentation workflows.
  */
 export async function getClaudeFiles(): Promise<string | null> {
   const abortController = new AbortController()

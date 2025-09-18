@@ -1,7 +1,8 @@
 /**
  * Agent configuration loader
- * Loads agent configurations from markdown files with YAML frontmatter
- * Following Claude Code's agent system architecture
+ * Loads agent configurations from markdown files with YAML frontmatter.
+ * Maintains compatibility with Claude Code `.claude` agent directories while
+ * prioritizing Kode-specific overrides.
  */
 
 import { existsSync, readFileSync, readdirSync, statSync, watch, FSWatcher } from 'fs'
@@ -231,7 +232,7 @@ let watchers: FSWatcher[] = []
 export async function startAgentWatcher(onChange?: () => void): Promise<void> {
   await stopAgentWatcher() // Clean up any existing watchers
   
-  // Watch both .claude and .kode directories
+  // Watch both Claude (.claude) and native (.kode) directories
   const userClaudeDir = join(homedir(), '.claude', 'agents')
   const userKodeDir = join(homedir(), '.kode', 'agents')
   const projectClaudeDir = join(getCwd(), '.claude', 'agents')

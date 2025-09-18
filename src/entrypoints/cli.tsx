@@ -377,7 +377,6 @@ ${commandList}`,
           ),
           getClients(),
         ])
-        // logStartup()
         const inputPrompt = [prompt, stdinContent].filter(Boolean).join('\n')
         if (print) {
           if (!inputPrompt) {
@@ -1291,7 +1290,6 @@ ${commandList}`,
         loadLogList(CACHE_PATHS.messages()),
         getClients(),
       ])
-      // logStartup()
 
       // If a specific conversation is requested, load and resume it directly
       if (identifier !== undefined) {
@@ -1393,7 +1391,7 @@ ${commandList}`,
       })()
     })
 
-  // claude context (TODO: deprecate)
+  // legacy context (TODO: deprecate)
   const context = program
     .command('context')
     .description(
