@@ -1,15 +1,15 @@
 import React from 'react'
 import { Box, Text, useInput } from 'ink'
-import { getTheme } from '../utils/theme'
+import { getTheme } from '@utils/theme'
 import { Select } from './CustomSelect/select'
 import {
   saveCurrentProjectConfig,
   getCurrentProjectConfig,
-} from '../utils/config.js'
-import { PRODUCT_NAME } from '../constants/product'
-import { useExitOnCtrlCD } from '../hooks/useExitOnCtrlCD'
+} from '@utils/config'
+import { PRODUCT_NAME } from '@constants/product'
+import { useExitOnCtrlCD } from '@hooks/useExitOnCtrlCD'
 import { homedir } from 'os'
-import { getCwd } from '../utils/state'
+import { getCwd } from '@utils/state'
 import Link from './Link'
 
 type Props = {

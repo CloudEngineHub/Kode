@@ -1,7 +1,7 @@
 import {
   getCurrentProjectConfig,
   saveCurrentProjectConfig,
-} from './utils/config.js'
+} from '@utils/config'
 import { logError } from './utils/log'
 import { getCodeStyle } from './utils/style'
 import { getCwd } from './utils/state'

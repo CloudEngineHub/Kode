@@ -1,7 +1,7 @@
 import {
   getCurrentProjectConfig,
   saveCurrentProjectConfig,
-} from './utils/config.js'
+} from '@utils/config'
 
 const MAX_HISTORY_ITEMS = 100
 

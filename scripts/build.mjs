@@ -70,7 +70,9 @@ async function main() {
     target: ['node20'],
     sourcemap: true,
     legalComments: 'none',
-    logLevel: 'info'  })
+    logLevel: 'info',
+    tsconfig: 'tsconfig.json',
+  })
 
   // Fix relative import specifiers to include .js extension for ESM
   fixRelativeImports(OUT_DIR)

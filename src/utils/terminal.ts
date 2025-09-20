@@ -1,6 +1,6 @@
 import { safeParseJSON } from './json'
 import { logError } from './log'
-import { queryQuick } from '../services/claude'
+import { queryQuick } from '@services/claude'
 
 export function setTerminalTitle(title: string): void {
   if (process.platform === 'win32') {

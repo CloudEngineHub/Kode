@@ -6,17 +6,17 @@ import {
   getGlobalConfig,
   saveCurrentProjectConfig,
   saveGlobalConfig,
-} from '../utils/config.js'
+} from '@utils/config'
 import { existsSync } from 'fs'
 import { join } from 'path'
 import { homedir } from 'os'
-import terminalSetup from '../commands/terminalSetup'
-import { getTheme } from '../utils/theme'
-import { RELEASE_NOTES } from '../constants/releaseNotes'
+import terminalSetup from '@commands/terminalSetup'
+import { getTheme } from '@utils/theme'
+import { RELEASE_NOTES } from '@constants/releaseNotes'
 import { gt } from 'semver'
-import { isDirEmpty } from '../utils/file'
-import { MACRO } from '../constants/macros'
-import { PROJECT_FILE, PRODUCT_NAME } from '../constants/product'
+import { isDirEmpty } from '@utils/file'
+import { MACRO } from '@constants/macros'
+import { PROJECT_FILE, PRODUCT_NAME } from '@constants/product'
 
 // Function to mark onboarding as complete
 export function markProjectOnboardingComplete(): void {

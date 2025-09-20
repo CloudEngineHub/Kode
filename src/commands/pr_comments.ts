@@ -1,4 +1,4 @@
-import { Command } from '../commands'
+import { Command } from '@commands'
 
 export default {
   type: 'prompt',

@@ -5,34 +5,34 @@ import { EOL } from 'os'
 import React, { useState, useEffect } from 'react'
 import { Box, Text } from 'ink'
 import { z } from 'zod'
-import { Tool, ValidationResult } from '../../Tool'
-import { FallbackToolUseRejectedMessage } from '../../components/FallbackToolUseRejectedMessage'
-import { getAgentPrompt } from '../../constants/prompts'
-import { getContext } from '../../context'
-import { hasPermissionsToUseTool } from '../../permissions'
-import { AssistantMessage, Message as MessageType, query } from '../../query'
-import { formatDuration, formatNumber } from '../../utils/format'
+import { Tool, ValidationResult } from '@tool'
+import { FallbackToolUseRejectedMessage } from '@components/FallbackToolUseRejectedMessage'
+import { getAgentPrompt } from '@constants/prompts'
+import { getContext } from '@context'
+import { hasPermissionsToUseTool } from '@permissions'
+import { AssistantMessage, Message as MessageType, query } from '@query'
+import { formatDuration, formatNumber } from '@utils/format'
 import {
   getMessagesPath,
   getNextAvailableLogSidechainNumber,
   overwriteLog,
-} from '../../utils/log.js'
-import { applyMarkdown } from '../../utils/markdown'
+} from '@utils/log'
+import { applyMarkdown } from '@utils/markdown'
 import {
   createAssistantMessage,
   createUserMessage,
   getLastAssistantMessageId,
   INTERRUPT_MESSAGE,
   normalizeMessages,
-} from '../../utils/messages.js'
-import { getModelManager } from '../../utils/model'
-import { getMaxThinkingTokens } from '../../utils/thinking'
-import { getTheme } from '../../utils/theme'
-import { generateAgentId } from '../../utils/agentStorage'
-import { debug as debugLogger } from '../../utils/debugLogger'
+} from '@utils/messages'
+import { getModelManager } from '@utils/model'
+import { getMaxThinkingTokens } from '@utils/thinking'
+import { getTheme } from '@utils/theme'
+import { generateAgentId } from '@utils/agentStorage'
+import { debug as debugLogger } from '@utils/debugLogger'
 import { getTaskTools, getPrompt } from './prompt'
 import { TOOL_NAME } from './constants'
-import { getActiveAgents, getAgentByType, getAvailableAgentTypes } from '../../utils/agentLoader'
+import { getActiveAgents, getAgentByType, getAvailableAgentTypes } from '@utils/agentLoader'
 
 const inputSchema = z.object({
   description: z

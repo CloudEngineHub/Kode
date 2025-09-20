@@ -1,8 +1,8 @@
-import type { Command } from '../commands'
-import { listMCPServers, getClients } from '../services/mcpClient'
-import { PRODUCT_COMMAND } from '../constants/product'
+import type { Command } from '@commands'
+import { listMCPServers, getClients } from '@services/mcpClient'
+import { PRODUCT_COMMAND } from '@constants/product'
 import chalk from 'chalk'
-import { getTheme } from '../utils/theme'
+import { getTheme } from '@utils/theme'
 
 const mcp = {
   type: 'local',

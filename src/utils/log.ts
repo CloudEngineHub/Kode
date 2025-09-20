@@ -1,18 +1,56 @@
-import { existsSync, mkdirSync } from 'fs'
+import {
+  existsSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  promises as fsPromises,
+} from 'fs'
 import { dirname, join } from 'path'
-import { writeFileSync, readFileSync } from 'fs'
-import { captureException } from '../services/sentry'
+import { captureException } from '@services/sentry'
 import { randomUUID } from 'crypto'
 import envPaths from 'env-paths'
-import { promises as fsPromises } from 'fs'
-import type { LogOption, SerializedMessage } from '../types/logs'
-import { MACRO } from '../constants/macros'
-import { PRODUCT_COMMAND } from '../constants/product'
-const IN_MEMORY_ERROR_LOG: Array<{
-  error: string
-  timestamp: string
-}> = []
+import type { LogOption, SerializedMessage } from '@kode-types/logs'
+import { MACRO } from '@constants/macros'
+import { PRODUCT_COMMAND } from '@constants/product'
+
+const IN_MEMORY_ERROR_LOG: Array<{ error: string; timestamp: string }> = []
 const MAX_IN_MEMORY_ERRORS = 100 // Limit to prevent memory issues
+
+const PERMISSION_ERROR_CODES = new Set(['EACCES', 'EPERM', 'EROFS'])
+
+function isPermissionError(error: unknown): error is NodeJS.ErrnoException {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    PERMISSION_ERROR_CODES.has((error as NodeJS.ErrnoException).code ?? '')
+  )
+}
+
+function safeMkdir(dir: string): boolean {
+  if (existsSync(dir)) return true
+  try {
+    mkdirSync(dir, { recursive: true })
+    return true
+  } catch (error) {
+    if (isPermissionError(error)) {
+      return false
+    }
+    throw error
+  }
+}
+
+function safeWriteFile(path: string, data: string, encoding: BufferEncoding = 'utf8'): boolean {
+  try {
+    writeFileSync(path, data, encoding)
+    return true
+  } catch (error) {
+    if (isPermissionError(error)) {
+      return false
+    }
+    throw error
+  }
+}
 
 export const SESSION_ID = randomUUID()
 
@@ -106,13 +144,13 @@ function appendToLog(path: string, message: object): void {
   }
 
   const dir = dirname(path)
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true })
+  if (!safeMkdir(dir)) {
+    return
   }
 
   // Create messages file with empty array if it doesn't exist
-  if (!existsSync(path)) {
-    writeFileSync(path, '[]', 'utf8')
+  if (!existsSync(path) && !safeWriteFile(path, '[]')) {
+    return
   }
 
   const messages = readLog(path)
@@ -126,7 +164,7 @@ function appendToLog(path: string, message: object): void {
   }
   messages.push(messageWithTimestamp)
 
-  writeFileSync(path, JSON.stringify(messages, null, 2), 'utf8')
+  safeWriteFile(path, JSON.stringify(messages, null, 2))
 }
 
 export function overwriteLog(path: string, messages: object[]): void {
@@ -139,8 +177,8 @@ export function overwriteLog(path: string, messages: object[]): void {
   }
 
   const dir = dirname(path)
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true })
+  if (!safeMkdir(dir)) {
+    return
   }
 
   const messagesWithMetadata = messages.map(message => ({
@@ -152,7 +190,7 @@ export function overwriteLog(path: string, messages: object[]): void {
     version: MACRO.VERSION,
   }))
 
-  writeFileSync(path, JSON.stringify(messagesWithMetadata, null, 2), 'utf8')
+  safeWriteFile(path, JSON.stringify(messagesWithMetadata, null, 2))
 }
 
 export async function loadLogList(

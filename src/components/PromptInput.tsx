@@ -1,34 +1,34 @@
 import { Box, Text, useInput } from 'ink'
 import { sample } from 'lodash-es'
 import * as React from 'react'
-import { type Message } from '../query'
-import { processUserInput } from '../utils/messages'
-import { useArrowKeyHistory } from '../hooks/useArrowKeyHistory'
-import { useUnifiedCompletion } from '../hooks/useUnifiedCompletion'
-import { addToHistory } from '../history'
+import { type Message } from '@query'
+import { processUserInput } from '@utils/messages'
+import { useArrowKeyHistory } from '@hooks/useArrowKeyHistory'
+import { useUnifiedCompletion } from '@hooks/useUnifiedCompletion'
+import { addToHistory } from '@history'
 import TextInput from './TextInput'
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
-import { countTokens } from '../utils/tokens'
+import { countTokens } from '@utils/tokens'
 import { SentryErrorBoundary } from './SentryErrorBoundary'
-import type { Command } from '../commands'
-import type { SetToolJSXFn, Tool } from '../Tool'
+import type { Command } from '@commands'
+import type { SetToolJSXFn, Tool } from '@tool'
 import { TokenWarning, WARNING_THRESHOLD } from './TokenWarning'
-import { useTerminalSize } from '../hooks/useTerminalSize'
-import { getTheme } from '../utils/theme'
-import { getModelManager, reloadModelManager } from '../utils/model'
-import { saveGlobalConfig } from '../utils/config'
-import { setTerminalTitle } from '../utils/terminal'
+import { useTerminalSize } from '@hooks/useTerminalSize'
+import { getTheme } from '@utils/theme'
+import { getModelManager, reloadModelManager } from '@utils/model'
+import { saveGlobalConfig } from '@utils/config'
+import { setTerminalTitle } from '@utils/terminal'
 import terminalSetup, {
   isShiftEnterKeyBindingInstalled,
   handleHashCommand,
-} from '../commands/terminalSetup'
-import { usePermissionContext } from '../context/PermissionContext'
+} from '@commands/terminalSetup'
+import { usePermissionContext } from '@context/PermissionContext'
 
 // Async function to interpret the '#' command input using AI
 async function interpretHashCommand(input: string): Promise<string> {
   // Use the AI to interpret the input
   try {
-    const { queryQuick } = await import('../services/claude')
+    const { queryQuick } = await import('@services/claude')
 
     // Create a prompt for the model to interpret the hash command
     const systemPrompt = [

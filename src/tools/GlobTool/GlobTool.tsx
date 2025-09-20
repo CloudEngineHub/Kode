@@ -1,14 +1,14 @@
 import { Box, Text } from 'ink'
 import React from 'react'
 import { z } from 'zod'
-import { Cost } from '../../components/Cost'
-import { FallbackToolUseRejectedMessage } from '../../components/FallbackToolUseRejectedMessage'
-import { Tool } from '../../Tool'
-import { getCwd } from '../../utils/state'
-import { glob } from '../../utils/file'
+import { Cost } from '@components/Cost'
+import { FallbackToolUseRejectedMessage } from '@components/FallbackToolUseRejectedMessage'
+import { Tool } from '@tool'
+import { getCwd } from '@utils/state'
+import { glob } from '@utils/file'
 import { DESCRIPTION, TOOL_NAME_FOR_PROMPT } from './prompt'
 import { isAbsolute, relative, resolve } from 'path'
-import { hasReadPermission } from '../../utils/permissions/filesystem'
+import { hasReadPermission } from '@utils/permissions/filesystem'
 
 const inputSchema = z.strictObject({
   pattern: z.string().describe('The glob pattern to match files against'),

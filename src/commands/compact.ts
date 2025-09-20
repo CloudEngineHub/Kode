@@ -1,15 +1,15 @@
-import { Command } from '../commands'
-import { getContext } from '../context'
-import { getMessagesGetter, getMessagesSetter } from '../messages'
-import { API_ERROR_MESSAGE_PREFIX, queryLLM } from '../services/claude'
+import { Command } from '@commands'
+import { getContext } from '@context'
+import { getMessagesGetter, getMessagesSetter } from '@messages'
+import { API_ERROR_MESSAGE_PREFIX, queryLLM } from '@services/claude'
 import {
   createUserMessage,
   normalizeMessagesForAPI,
-} from '../utils/messages.js'
-import { getCodeStyle } from '../utils/style'
-import { clearTerminal } from '../utils/terminal'
-import { resetReminderSession } from '../services/systemReminder'
-import { resetFileFreshnessSession } from '../services/fileFreshness'
+} from '@utils/messages'
+import { getCodeStyle } from '@utils/style'
+import { clearTerminal } from '@utils/terminal'
+import { resetReminderSession } from '@services/systemReminder'
+import { resetFileFreshnessSession } from '@services/fileFreshness'
 
 const COMPRESSION_PROMPT = `Please provide a comprehensive summary of our conversation structured as follows:
 

@@ -1,6 +1,6 @@
 import { Box, Text } from 'ink'
 import * as React from 'react'
-import { getTheme } from '../utils/theme'
+import { getTheme } from '@utils/theme'
 
 type Props = {
   tokenUsage: number

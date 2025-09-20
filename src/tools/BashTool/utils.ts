@@ -1,5 +1,5 @@
-import { queryQuick } from '../../services/claude'
-import { extractTag } from '../../utils/messages'
+import { queryQuick } from '@services/claude'
+import { extractTag } from '@utils/messages'
 import { MAX_OUTPUT_LENGTH } from './prompt'
 
 export function formatOutput(content: string): {

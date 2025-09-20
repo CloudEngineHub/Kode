@@ -2,19 +2,19 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import { useInput } from 'ink'
 import { existsSync, statSync, readdirSync } from 'fs'
 import { join, dirname, basename, resolve } from 'path'
-import { getCwd } from '../utils/state'
-import { getCommand } from '../commands'
-import { getActiveAgents } from '../utils/agentLoader'
-import { getModelManager } from '../utils/model'
+import { getCwd } from '@utils/state'
+import { getCommand } from '@commands'
+import { getActiveAgents } from '@utils/agentLoader'
+import { getModelManager } from '@utils/model'
 import { glob } from 'glob'
-import { matchCommands } from '../utils/fuzzyMatcher'
+import { matchCommands } from '@utils/fuzzyMatcher'
 import { 
   getCommonSystemCommands, 
   getCommandPriority,
   getEssentialCommands,
   getMinimalFallbackCommands 
-} from '../utils/commonUnixCommands'
-import type { Command } from '../commands'
+} from '@utils/commonUnixCommands'
+import type { Command } from '@commands'
 
 // Unified suggestion type for all completion types
 export interface UnifiedSuggestion {

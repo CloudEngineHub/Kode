@@ -5,11 +5,11 @@
  */
 
 import { emitReminderEvent } from './systemReminder'
-import { getAvailableAgentTypes } from '../utils/agentLoader'
+import { getAvailableAgentTypes } from '@utils/agentLoader'
 import { existsSync } from 'fs'
 import { resolve } from 'path'
-import { getCwd } from '../utils/state'
-import { debug as debugLogger } from '../utils/debugLogger'
+import { getCwd } from '@utils/state'
+import { debug as debugLogger } from '@utils/debugLogger'
 
 export interface MentionContext {
   type: 'agent' | 'file'

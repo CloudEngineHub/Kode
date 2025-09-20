@@ -2,17 +2,17 @@ import { stat } from 'fs/promises'
 import { Box, Text } from 'ink'
 import React from 'react'
 import { z } from 'zod'
-import { Cost } from '../../components/Cost'
-import { FallbackToolUseRejectedMessage } from '../../components/FallbackToolUseRejectedMessage'
-import { Tool } from '../../Tool'
-import { getCwd } from '../../utils/state'
+import { Cost } from '@components/Cost'
+import { FallbackToolUseRejectedMessage } from '@components/FallbackToolUseRejectedMessage'
+import { Tool } from '@tool'
+import { getCwd } from '@utils/state'
 import {
   getAbsolutePath,
   getAbsoluteAndRelativePaths,
-} from '../../utils/file.js'
-import { ripGrep } from '../../utils/ripgrep'
+} from '@utils/file'
+import { ripGrep } from '@utils/ripgrep'
 import { DESCRIPTION, TOOL_NAME_FOR_PROMPT } from './prompt'
-import { hasReadPermission } from '../../utils/permissions/filesystem'
+import { hasReadPermission } from '@utils/permissions/filesystem'
 
 const inputSchema = z.strictObject({
   pattern: z

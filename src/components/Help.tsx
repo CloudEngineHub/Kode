@@ -1,15 +1,15 @@
-import { Command } from '../commands'
-import { PRODUCT_COMMAND, PRODUCT_NAME } from '../constants/product'
+import { Command } from '@commands'
+import { PRODUCT_COMMAND, PRODUCT_NAME } from '@constants/product'
 import {
   getCustomCommandDirectories,
   hasCustomCommands,
   type CustomCommandWithScope,
-} from '../services/customCommands'
+} from '@services/customCommands'
 import * as React from 'react'
 import { Box, Text, useInput } from 'ink'
-import { getTheme } from '../utils/theme'
+import { getTheme } from '@utils/theme'
 import { PressEnterToContinue } from './PressEnterToContinue'
-import { MACRO } from '../constants/macros'
+import { MACRO } from '@constants/macros'
 
 /**
  * Help Component - Interactive help system with progressive disclosure

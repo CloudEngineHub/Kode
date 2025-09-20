@@ -8,7 +8,7 @@ import { getCommandSubcommandPrefix, splitCommand } from './utils/commands'
 import {
   getCurrentProjectConfig,
   saveCurrentProjectConfig,
-} from './utils/config.js'
+} from '@utils/config'
 import { AbortError } from './utils/errors'
 import { logError } from './utils/log'
 import { grantWritePermissionForOriginalDir } from './utils/permissions/filesystem'

@@ -1,13 +1,13 @@
 import { Box, Text, Newline } from 'ink'
 import * as React from 'react'
-import { getTheme } from '../utils/theme'
-import { PRODUCT_NAME } from '../constants/product'
-import { getAnthropicApiKey, getGlobalConfig } from '../utils/config'
-import { getCwd } from '../utils/state'
+import { getTheme } from '@utils/theme'
+import { PRODUCT_NAME } from '@constants/product'
+import { getAnthropicApiKey, getGlobalConfig } from '@utils/config'
+import { getCwd } from '@utils/state'
 import { AsciiLogo } from './AsciiLogo'
-import type { WrappedClient } from '../services/mcpClient'
-import { getModelManager } from '../utils/model'
-import { MACRO } from '../constants/macros'
+import type { WrappedClient } from '@services/mcpClient'
+import { getModelManager } from '@utils/model'
+import { MACRO } from '@constants/macros'
 
 export const MIN_LOGO_WIDTH = 50
 

@@ -1,5 +1,5 @@
-import { env } from '../../utils/env'
-import { CompletionType, logUnaryEvent } from '../../utils/unaryLogging'
+import { env } from '@utils/env'
+import { CompletionType, logUnaryEvent } from '@utils/unaryLogging'
 import { ToolUseConfirm } from './PermissionRequest'
 
 export function logUnaryPermissionEvent(

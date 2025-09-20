@@ -4,9 +4,9 @@ import { homedir } from 'os'
 import { randomUUID } from 'crypto'
 import chalk from 'chalk'
 import envPaths from 'env-paths'
-import { PRODUCT_COMMAND } from '../constants/product'
+import { PRODUCT_COMMAND } from '@constants/product'
 import { SESSION_ID } from './log'
-import type { Message } from '../types/conversation'
+import type { Message } from '@kode-types/conversation'
 
 // 调试日志级别
 export enum LogLevel {

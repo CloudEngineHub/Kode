@@ -1,19 +1,19 @@
 import React, { useState } from 'react'
-import { PRODUCT_NAME } from '../constants/product'
+import { PRODUCT_NAME } from '@constants/product'
 import { Box, Newline, Text, useInput } from 'ink'
 import {
   getGlobalConfig,
   saveGlobalConfig,
   DEFAULT_GLOBAL_CONFIG,
   ProviderType,
-} from '../utils/config.js'
+} from '@utils/config'
 import { OrderedList } from '@inkjs/ui'
-import { useExitOnCtrlCD } from '../hooks/useExitOnCtrlCD'
+import { useExitOnCtrlCD } from '@hooks/useExitOnCtrlCD'
 import { MIN_LOGO_WIDTH } from './Logo'
 import { Select } from './CustomSelect/select'
 import { StructuredDiff } from './StructuredDiff'
-import { getTheme, type ThemeNames } from '../utils/theme'
-import { clearTerminal } from '../utils/terminal'
+import { getTheme, type ThemeNames } from '@utils/theme'
+import { clearTerminal } from '@utils/terminal'
 import { PressEnterToContinue } from './PressEnterToContinue'
 import { ModelSelector } from './ModelSelector'
 type StepId = 'theme' | 'usage' | 'providers' | 'model'

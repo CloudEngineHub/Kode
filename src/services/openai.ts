@@ -1,8 +1,8 @@
 import { OpenAI } from 'openai'
-import { getGlobalConfig, GlobalConfig } from '../utils/config'
+import { getGlobalConfig, GlobalConfig } from '@utils/config'
 import { ProxyAgent, fetch, Response } from 'undici'
-import { setSessionState, getSessionState } from '../utils/sessionState'
-import { debug as debugLogger, getCurrentRequest, logAPIError } from '../utils/debugLogger'
+import { setSessionState, getSessionState } from '@utils/sessionState'
+import { debug as debugLogger, getCurrentRequest, logAPIError } from '@utils/debugLogger'
 
 /**
  * Retry configuration constants for API calls

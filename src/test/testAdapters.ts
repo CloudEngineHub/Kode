@@ -1,6 +1,6 @@
-import { ModelAdapterFactory } from '../services/modelAdapterFactory'
-import { getModelCapabilities } from '../constants/modelCapabilities'
-import { ModelProfile } from '../utils/config'
+import { ModelAdapterFactory } from '@services/modelAdapterFactory'
+import { getModelCapabilities } from '@constants/modelCapabilities'
+import { ModelProfile } from '@utils/config'
 
 // Test different models' adapter selection
 const testModels: ModelProfile[] = [

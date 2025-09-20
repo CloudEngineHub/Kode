@@ -1,6 +1,6 @@
-import { ModelCapabilities, UnifiedRequestParams, UnifiedResponse } from '../../types/modelCapabilities'
-import { ModelProfile } from '../../utils/config'
-import { Tool } from '../../Tool'
+import { ModelCapabilities, UnifiedRequestParams, UnifiedResponse } from '@kode-types/modelCapabilities'
+import { ModelProfile } from '@utils/config'
+import { Tool } from '@tool'
 
 export abstract class ModelAPIAdapter {
   constructor(

@@ -1,15 +1,15 @@
 import * as React from 'react'
 import { existsSync, readFileSync } from 'fs'
 import { useMemo } from 'react'
-import { StructuredDiff } from '../../StructuredDiff'
+import { StructuredDiff } from '@components/StructuredDiff'
 import { Box, Text } from 'ink'
-import { getTheme } from '../../../utils/theme'
-import { intersperse } from '../../../utils/array'
-import { getCwd } from '../../../utils/state'
+import { getTheme } from '@utils/theme'
+import { intersperse } from '@utils/array'
+import { getCwd } from '@utils/state'
 import { extname, relative } from 'path'
-import { detectFileEncoding } from '../../../utils/file'
-import { HighlightedCode } from '../../HighlightedCode'
-import { getPatch } from '../../../utils/diff'
+import { detectFileEncoding } from '@utils/file'
+import { HighlightedCode } from '@components/HighlightedCode'
+import { getPatch } from '@utils/diff'
 
 type Props = {
   file_path: string

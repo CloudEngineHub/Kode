@@ -1,6 +1,6 @@
 import { ModelAPIAdapter } from './base'
-import { UnifiedRequestParams, UnifiedResponse } from '../../types/modelCapabilities'
-import { Tool } from '../../Tool'
+import { UnifiedRequestParams, UnifiedResponse } from '@kode-types/modelCapabilities'
+import { Tool } from '@tool'
 import { zodToJsonSchema } from 'zod-to-json-schema'
 
 export class ResponsesAPIAdapter extends ModelAPIAdapter {

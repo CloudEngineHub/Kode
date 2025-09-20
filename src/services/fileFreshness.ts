@@ -2,8 +2,8 @@ import { statSync, existsSync, watchFile, unwatchFile } from 'fs'
 import {
   emitReminderEvent,
   systemReminderService,
-} from '../services/systemReminder'
-import { getAgentFilePath } from '../utils/agentStorage'
+} from '@services/systemReminder'
+import { getAgentFilePath } from '@utils/agentStorage'
 
 interface FileTimestamp {
   path: string

@@ -1,11 +1,11 @@
 import { Box, Text } from 'ink'
 import * as React from 'react'
 import { z } from 'zod'
-import { FallbackToolUseRejectedMessage } from '../../components/FallbackToolUseRejectedMessage'
-import { type Tool } from '../../Tool'
-import { getTheme } from '../../utils/theme'
+import { FallbackToolUseRejectedMessage } from '@components/FallbackToolUseRejectedMessage'
+import { type Tool } from '@tool'
+import { getTheme } from '@utils/theme'
 import { DESCRIPTION, PROMPT } from './prompt'
-import { OutputLine } from '../BashTool/OutputLine'
+import { OutputLine } from '@tools/BashTool/OutputLine'
 
 // Allow any input object since MCP tools define their own schemas
 const inputSchema = z.object({}).passthrough()

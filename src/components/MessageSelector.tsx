@@ -2,18 +2,18 @@ import { Box, Text, useInput } from 'ink'
 import * as React from 'react'
 import { useMemo, useState, useEffect } from 'react'
 import figures from 'figures'
-import { getTheme } from '../utils/theme'
+import { getTheme } from '@utils/theme'
 import { Message as MessageComponent } from './Message'
 import { randomUUID } from 'crypto'
-import { type Tool } from '../Tool'
+import { type Tool } from '@tool'
 import {
   createUserMessage,
   isEmptyMessageText,
   isNotEmptyMessage,
   normalizeMessages,
-} from '../utils/messages.js'
-import type { AssistantMessage, UserMessage } from '../query'
-import { useExitOnCtrlCD } from '../hooks/useExitOnCtrlCD'
+} from '@utils/messages'
+import type { AssistantMessage, UserMessage } from '@query'
+import { useExitOnCtrlCD } from '@hooks/useExitOnCtrlCD'
 
 type Props = {
   erroredToolUseIDs: Set<string>

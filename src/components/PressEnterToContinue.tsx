@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { getTheme } from '../utils/theme'
+import { getTheme } from '@utils/theme'
 import { Text } from 'ink'
 
 export function PressEnterToContinue(): React.ReactNode {

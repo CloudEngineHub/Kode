@@ -1,25 +1,25 @@
 import * as React from 'react'
 import { Box, Text } from 'ink'
 import { z } from 'zod'
-import { Tool, ValidationResult } from '../../Tool'
-import { FallbackToolUseRejectedMessage } from '../../components/FallbackToolUseRejectedMessage'
-import { getModelManager } from '../../utils/model'
-import { getTheme } from '../../utils/theme'
+import { Tool, ValidationResult } from '@tool'
+import { FallbackToolUseRejectedMessage } from '@components/FallbackToolUseRejectedMessage'
+import { getModelManager } from '@utils/model'
+import { getTheme } from '@utils/theme'
 import {
   createUserMessage,
   createAssistantMessage,
   INTERRUPT_MESSAGE,
-} from '../../utils/messages'
-import { logError } from '../../utils/log'
+} from '@utils/messages'
+import { logError } from '@utils/log'
 import {
   createExpertChatSession,
   loadExpertChatSession,
   getSessionMessages,
   addMessageToSession,
-} from '../../utils/expertChatStorage'
-import { queryLLM } from '../../services/claude'
-import { debug as debugLogger } from '../../utils/debugLogger'
-import { applyMarkdown } from '../../utils/markdown'
+} from '@utils/expertChatStorage'
+import { queryLLM } from '@services/claude'
+import { debug as debugLogger } from '@utils/debugLogger'
+import { applyMarkdown } from '@utils/markdown'
 
 export const inputSchema = z.strictObject({
   question: z.string().describe(

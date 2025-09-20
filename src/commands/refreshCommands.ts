@@ -1,6 +1,6 @@
-import { Command } from '../commands'
-import { reloadCustomCommands } from '../services/customCommands'
-import { getCommands } from '../commands'
+import { Command } from '@commands'
+import { reloadCustomCommands } from '@services/customCommands'
+import { getCommands } from '@commands'
 
 /**
  * Refresh Commands - Reload custom commands from filesystem

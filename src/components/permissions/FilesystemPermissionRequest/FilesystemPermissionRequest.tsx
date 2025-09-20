@@ -1,37 +1,37 @@
 import { Box, Text } from 'ink'
 import React, { useMemo } from 'react'
-import { Select } from '../../CustomSelect/select'
-import { getTheme } from '../../../utils/theme'
+import { Select } from '@components/CustomSelect/select'
+import { getTheme } from '@utils/theme'
 import {
   PermissionRequestTitle,
   textColorForRiskScore,
-} from '../PermissionRequestTitle.js'
-import { logUnaryEvent } from '../../../utils/unaryLogging'
-import { env } from '../../../utils/env'
+} from '@components/permissions/PermissionRequestTitle'
+import { logUnaryEvent } from '@utils/unaryLogging'
+import { env } from '@utils/env'
 import {
   type PermissionRequestProps,
   type ToolUseConfirm,
-} from '../PermissionRequest.js'
+} from '@components/permissions/PermissionRequest'
 import chalk from 'chalk'
 import {
   UnaryEvent,
   usePermissionRequestLogging,
-} from '../../../hooks/usePermissionRequestLogging.js'
-import { FileEditTool } from '../../../tools/FileEditTool/FileEditTool'
-import { FileWriteTool } from '../../../tools/FileWriteTool/FileWriteTool'
-import { GrepTool } from '../../../tools/GrepTool/GrepTool'
-import { GlobTool } from '../../../tools/GlobTool/GlobTool'
-import { LSTool } from '../../../tools/lsTool/lsTool'
-import { FileReadTool } from '../../../tools/FileReadTool/FileReadTool'
-import { NotebookEditTool } from '../../../tools/NotebookEditTool/NotebookEditTool'
-import { NotebookReadTool } from '../../../tools/NotebookReadTool/NotebookReadTool'
-import { FallbackPermissionRequest } from '../FallbackPermissionRequest'
+} from '@hooks/usePermissionRequestLogging'
+import { FileEditTool } from '@tools/FileEditTool/FileEditTool'
+import { FileWriteTool } from '@tools/FileWriteTool/FileWriteTool'
+import { GrepTool } from '@tools/GrepTool/GrepTool'
+import { GlobTool } from '@tools/GlobTool/GlobTool'
+import { LSTool } from '@tools/lsTool/lsTool'
+import { FileReadTool } from '@tools/FileReadTool/FileReadTool'
+import { NotebookEditTool } from '@tools/NotebookEditTool/NotebookEditTool'
+import { NotebookReadTool } from '@tools/NotebookReadTool/NotebookReadTool'
+import { FallbackPermissionRequest } from '@components/permissions/FallbackPermissionRequest'
 import {
   grantWritePermissionForOriginalDir,
   pathInOriginalCwd,
   toAbsolutePath,
-} from '../../../utils/permissions/filesystem.js'
-import { getCwd } from '../../../utils/state'
+} from '@utils/permissions/filesystem'
+import { getCwd } from '@utils/state'
 
 function pathArgNameForToolUse(toolUseConfirm: ToolUseConfirm): string | null {
   switch (toolUseConfirm.tool) {

@@ -8,11 +8,11 @@ import {
   getMcprcConfig,
   addMcprcServerForTesting,
   removeMcprcServerForTesting,
-} from '../utils/config.js'
+} from '@utils/config'
 import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
-import { getCwd } from '../utils/state'
-import { safeParseJSON } from '../utils/json'
+import { getCwd } from '@utils/state'
+import { safeParseJSON } from '@utils/json'
 import {
   ImageBlockParam,
   MessageParam,
@@ -32,11 +32,11 @@ import {
   ResultSchema,
 } from '@modelcontextprotocol/sdk/types.js'
 import { memoize, pickBy } from 'lodash-es'
-import type { Tool } from '../Tool'
-import { MCPTool } from '../tools/MCPTool/MCPTool'
-import { logMCPError } from '../utils/log'
-import { Command } from '../commands'
-import { PRODUCT_COMMAND } from '../constants/product.js'
+import type { Tool } from '@tool'
+import { MCPTool } from '@tools/MCPTool/MCPTool'
+import { logMCPError } from '@utils/log'
+import { Command } from '@commands'
+import { PRODUCT_COMMAND } from '@constants/product'
 
 type McpName = string
 

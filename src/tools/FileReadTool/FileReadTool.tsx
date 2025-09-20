@@ -5,26 +5,26 @@ import * as path from 'node:path'
 import { extname, relative } from 'node:path'
 import * as React from 'react'
 import { z } from 'zod'
-import { FallbackToolUseRejectedMessage } from '../../components/FallbackToolUseRejectedMessage'
-import { HighlightedCode } from '../../components/HighlightedCode'
-import type { Tool } from '../../Tool'
-import { getCwd } from '../../utils/state'
+import { FallbackToolUseRejectedMessage } from '@components/FallbackToolUseRejectedMessage'
+import { HighlightedCode } from '@components/HighlightedCode'
+import type { Tool } from '@tool'
+import { getCwd } from '@utils/state'
 import {
   addLineNumbers,
   findSimilarFile,
   normalizeFilePath,
   readTextContent,
-} from '../../utils/file.js'
-import { logError } from '../../utils/log'
-import { getTheme } from '../../utils/theme'
-import { emitReminderEvent } from '../../services/systemReminder'
+} from '@utils/file'
+import { logError } from '@utils/log'
+import { getTheme } from '@utils/theme'
+import { emitReminderEvent } from '@services/systemReminder'
 import {
   recordFileRead,
   generateFileModificationReminder,
-} from '../../services/fileFreshness'
+} from '@services/fileFreshness'
 import { DESCRIPTION, PROMPT } from './prompt'
-import { hasReadPermission } from '../../utils/permissions/filesystem'
-import { secureFileService } from '../../utils/secureFile'
+import { hasReadPermission } from '@utils/permissions/filesystem'
+import { secureFileService } from '@utils/secureFile'
 
 const MAX_LINES_TO_RENDER = 5
 const MAX_OUTPUT_SIZE = 0.25 * 1024 * 1024 // 0.25MB in bytes

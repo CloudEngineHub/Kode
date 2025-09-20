@@ -1,13 +1,13 @@
 import React from 'react'
 import { render } from 'ink'
 import { REPL } from './REPL'
-import { deserializeMessages } from '../utils/conversationRecovery'
-import { LogSelector } from '../components/LogSelector'
-import type { LogOption } from '../types/logs'
-import { logError, getNextAvailableLogForkNumber } from '../utils/log'
-import type { Tool } from '../Tool'
-import { Command } from '../commands'
-import { isDefaultSlowAndCapableModel } from '../utils/model'
+import { deserializeMessages } from '@utils/conversationRecovery'
+import { LogSelector } from '@components/LogSelector'
+import type { LogOption } from '@kode-types/logs'
+import { logError, getNextAvailableLogForkNumber } from '@utils/log'
+import type { Tool } from '@tool'
+import { Command } from '@commands'
+import { isDefaultSlowAndCapableModel } from '@utils/model'
 
 type Props = {
   commands: Command[]

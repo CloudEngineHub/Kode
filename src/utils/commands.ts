@@ -1,7 +1,7 @@
 import { memoize } from 'lodash-es'
-import { API_ERROR_MESSAGE_PREFIX, queryQuick } from '../services/claude'
+import { API_ERROR_MESSAGE_PREFIX, queryQuick } from '@services/claude'
 import { type ControlOperator, parse, ParseEntry } from 'shell-quote'
-import { PRODUCT_NAME } from '../constants/product'
+import { PRODUCT_NAME } from '@constants/product'
 
 const SINGLE_QUOTE = '__SINGLE_QUOTE__'
 const DOUBLE_QUOTE = '__DOUBLE_QUOTE__'

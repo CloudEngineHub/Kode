@@ -1,11 +1,11 @@
 import React from 'react'
 import { Box, Newline, Text, useInput } from 'ink'
-import { getTheme } from '../utils/theme'
+import { getTheme } from '@utils/theme'
 import { Select } from './CustomSelect/select'
 import { render } from 'ink'
 import { writeFileSync } from 'fs'
-import { ConfigParseError } from '../utils/errors'
-import { useExitOnCtrlCD } from '../hooks/useExitOnCtrlCD'
+import { ConfigParseError } from '@utils/errors'
+import { useExitOnCtrlCD } from '@hooks/useExitOnCtrlCD'
 interface InvalidConfigHandlerProps {
   error: ConfigParseError
 }

@@ -1,7 +1,7 @@
 import { last } from 'lodash-es'
-import type { Message } from '../query'
+import type { Message } from '@query'
 import { getLastAssistantMessageId } from './messages'
-import { ThinkTool } from '../tools/ThinkTool/ThinkTool'
+import { ThinkTool } from '@tools/ThinkTool/ThinkTool'
 import { USE_BEDROCK, USE_VERTEX, getModelManager } from './model'
 
 export async function getMaxThinkingTokens(

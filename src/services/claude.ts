@@ -7,24 +7,24 @@ import chalk from 'chalk'
 import { createHash, randomUUID, UUID } from 'crypto'
 import 'dotenv/config'
 
-import { addToTotalCost } from '../cost-tracker'
-import models from '../constants/models'
-import type { AssistantMessage, UserMessage } from '../query'
-import { Tool } from '../Tool'
+import { addToTotalCost } from '@costTracker'
+import models from '@constants/models'
+import type { AssistantMessage, UserMessage } from '@query'
+import { Tool } from '@tool'
 import {
   getAnthropicApiKey,
   getOrCreateUserID,
   getGlobalConfig,
   ModelProfile,
-} from '../utils/config'
-import { getProjectDocs } from '../context'
-import { logError, SESSION_ID } from '../utils/log'
-import { USER_AGENT } from '../utils/http'
+} from '@utils/config'
+import { getProjectDocs } from '@context'
+import { logError, SESSION_ID } from '@utils/log'
+import { USER_AGENT } from '@utils/http'
 import {
   createAssistantAPIErrorMessage,
   normalizeContentFromAPI,
-} from '../utils/messages'
-import { countTokens } from '../utils/tokens'
+} from '@utils/messages'
+import { countTokens } from '@utils/tokens'
 import { withVCR } from './vcr'
 import {
   debug as debugLogger,
@@ -33,32 +33,32 @@ import {
   logLLMInteraction,
   logSystemPromptConstruction,
   logErrorWithDiagnosis,
-} from '../utils/debugLogger'
+} from '@utils/debugLogger'
 import {
   MessageContextManager,
   createRetentionStrategy,
-} from '../utils/messageContextManager'
-import { getModelManager } from '../utils/model'
+} from '@utils/messageContextManager'
+import { getModelManager } from '@utils/model'
 import { zodToJsonSchema } from 'zod-to-json-schema'
 import type { BetaMessageStream } from '@anthropic-ai/sdk/lib/BetaMessageStream.mjs'
 import { ModelAdapterFactory } from './modelAdapterFactory'
-import { UnifiedRequestParams } from '../types/modelCapabilities'
+import { UnifiedRequestParams } from '@kode-types/modelCapabilities'
 import { responseStateManager, getConversationId } from './responseStateManager'
-import type { ToolUseContext } from '../Tool'
+import type { ToolUseContext } from '@tool'
 import type {
   Message as APIMessage,
   MessageParam,
   TextBlockParam,
 } from '@anthropic-ai/sdk/resources/index.mjs'
-import { USE_BEDROCK, USE_VERTEX } from '../utils/model'
-import { getCLISyspromptPrefix } from '../constants/prompts'
-import { getVertexRegionForModel } from '../utils/model'
+import { USE_BEDROCK, USE_VERTEX } from '@utils/model'
+import { getCLISyspromptPrefix } from '@constants/prompts'
+import { getVertexRegionForModel } from '@utils/model'
 import OpenAI from 'openai'
 import type { ChatCompletionStream } from 'openai/lib/ChatCompletionStream'
 import { ContentBlock } from '@anthropic-ai/sdk/resources/messages/messages'
 import { nanoid } from 'nanoid'
 import { getCompletionWithProfile, getGPT5CompletionWithProfile } from './openai'
-import { getReasoningEffort } from '../utils/thinking'
+import { getReasoningEffort } from '@utils/thinking'
 import { generateSystemReminders } from './systemReminder'
 
 // Helper function to check if a model is GPT-5
@@ -1102,7 +1102,7 @@ export async function queryLLM(
   signal: AbortSignal,
   options: {
     safeMode: boolean
-    model: string | import('../utils/config').ModelPointerType
+    model: string | import('@utils/config').ModelPointerType
     prependCLISysprompt: boolean
     toolUseContext?: ToolUseContext
   },
@@ -2115,7 +2115,7 @@ function getModelOutputTokenCostUSD(model: string): number {
 
 // New unified query functions for model pointer system
 export async function queryModel(
-  modelPointer: import('../utils/config').ModelPointerType,
+  modelPointer: import('@utils/config').ModelPointerType,
   messages: (UserMessage | AssistantMessage)[],
   systemPrompt: string[] = [],
   signal?: AbortSignal,

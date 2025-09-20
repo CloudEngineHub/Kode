@@ -2,7 +2,7 @@ import figures from 'figures'
 import { Box, Text } from 'ink'
 import React, { type ReactNode } from 'react'
 import { type Theme } from './theme'
-import { getTheme } from '../../utils/theme'
+import { getTheme } from '@utils/theme'
 
 export type SelectOptionProps = {
   /**

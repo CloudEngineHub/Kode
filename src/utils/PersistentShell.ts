@@ -6,7 +6,7 @@ import { spawn, execSync, type ChildProcess } from 'child_process'
 import { isAbsolute, resolve, join } from 'path'
 import { logError } from './log'
 import * as os from 'os'
-import { PRODUCT_COMMAND } from '../constants/product'
+import { PRODUCT_COMMAND } from '@constants/product'
 
 type ExecResult = {
   stdout: string

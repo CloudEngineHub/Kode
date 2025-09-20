@@ -1,9 +1,9 @@
 import { Box, Text } from 'ink'
 import * as React from 'react'
 import { Hunk } from 'diff'
-import { getTheme, ThemeNames } from '../utils/theme'
+import { getTheme, ThemeNames } from '@utils/theme'
 import { useMemo } from 'react'
-import { wrapText } from '../utils/format'
+import { wrapText } from '@utils/format'
 
 type Props = {
   patch: Hunk

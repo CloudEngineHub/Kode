@@ -1,13 +1,13 @@
 import React from 'react'
 import { Box, Text, useInput } from 'ink'
-import { getTheme } from '../utils/theme'
+import { getTheme } from '@utils/theme'
 import { Select } from './CustomSelect/select'
 import {
   saveCurrentProjectConfig,
   getCurrentProjectConfig,
-} from '../utils/config.js'
+} from '@utils/config'
 import { MCPServerDialogCopy } from './MCPServerDialogCopy'
-import { useExitOnCtrlCD } from '../hooks/useExitOnCtrlCD'
+import { useExitOnCtrlCD } from '@hooks/useExitOnCtrlCD'
 
 type Props = {
   serverName: string

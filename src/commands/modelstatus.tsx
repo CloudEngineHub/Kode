@@ -1,6 +1,6 @@
 import React from 'react'
-import type { Command } from '../commands'
-import { ModelStatusDisplay } from '../components/ModelStatusDisplay'
+import type { Command } from '@commands'
+import { ModelStatusDisplay } from '@components/ModelStatusDisplay'
 
 const modelstatus: Command = {
   name: 'modelstatus',
