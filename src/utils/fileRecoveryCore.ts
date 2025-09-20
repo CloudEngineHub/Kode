@@ -1,5 +1,5 @@
 import { readTextContent } from './file'
-import { fileFreshnessService } from '../services/fileFreshness'
+import { fileFreshnessService } from '@services/fileFreshness'
 
 /**
  * File recovery configuration for auto-compact feature

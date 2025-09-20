@@ -4,7 +4,7 @@ import { UserKodingInputMessage } from './UserKodingInputMessage'
 import { UserCommandMessage } from './UserCommandMessage'
 import { UserPromptMessage } from './UserPromptMessage'
 import * as React from 'react'
-import { NO_CONTENT_MESSAGE } from '../../services/claude'
+import { NO_CONTENT_MESSAGE } from '@services/claude'
 
 type Props = {
   addMargin: boolean

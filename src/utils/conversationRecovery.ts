@@ -1,6 +1,6 @@
 import fs from 'fs/promises'
 import { logError } from './log'
-import { Tool } from '../Tool'
+import { Tool } from '@tool'
 
 /**
  * Load messages from a log file

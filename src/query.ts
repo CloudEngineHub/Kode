@@ -8,23 +8,23 @@ import type { Tool, ToolUseContext } from './Tool'
 import {
   messagePairValidForBinaryFeedback,
   shouldUseBinaryFeedback,
-} from './components/binary-feedback/utils.js'
+} from '@components/binary-feedback/utils'
 import { CanUseToolFn } from './hooks/useCanUseTool'
 import {
   formatSystemPromptWithContext,
   queryLLM,
   queryModel,
-} from './services/claude.js'
-import { emitReminderEvent } from './services/systemReminder'
-import { all } from './utils/generators'
-import { logError } from './utils/log'
+} from '@services/claude'
+import { emitReminderEvent } from '@services/systemReminder'
+import { all } from '@utils/generators'
+import { logError } from '@utils/log'
 import {
   debug as debugLogger,
   markPhase,
   getCurrentRequest,
   logUserFriendly,
 } from './utils/debugLogger'
-import { getModelManager } from './utils/model.js'
+import { getModelManager } from '@utils/model'
 import {
   createAssistantMessage,
   createProgressMessage,
@@ -35,9 +35,9 @@ import {
   INTERRUPT_MESSAGE_FOR_TOOL_USE,
   NormalizedMessage,
   normalizeMessagesForAPI,
-} from './utils/messages.js'
-import { createToolExecutionController } from './utils/toolExecutionController'
-import { BashTool } from './tools/BashTool/BashTool'
+} from '@utils/messages'
+import { createToolExecutionController } from '@utils/toolExecutionController'
+import { BashTool } from '@tools/BashTool/BashTool'
 import { getCwd } from './utils/state'
 import { checkAutoCompact } from './utils/autoCompactCore'
 

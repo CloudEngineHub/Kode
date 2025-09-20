@@ -10,7 +10,7 @@ import {
   PermissionContext as IPermissionContext,
   getNextPermissionMode,
   MODE_CONFIGS,
-} from '../types/PermissionMode'
+} from '@kode-types/PermissionMode'
 
 interface PermissionContextValue {
   permissionContext: IPermissionContext

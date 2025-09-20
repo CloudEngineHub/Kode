@@ -1,6 +1,6 @@
-import { MACRO } from '../constants/macros.js'
-import type { Command } from '../commands'
-import { RELEASE_NOTES } from '../constants/releaseNotes'
+import { MACRO } from '@constants/macros'
+import type { Command } from '@commands'
+import { RELEASE_NOTES } from '@constants/releaseNotes'
 
 const releaseNotes: Command = {
   description: 'Show release notes for the current or specified version',

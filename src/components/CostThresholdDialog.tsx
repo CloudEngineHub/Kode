@@ -1,7 +1,7 @@
 import { Box, Text, useInput } from 'ink'
 import React from 'react'
 import { Select } from './CustomSelect/select'
-import { getTheme } from '../utils/theme'
+import { getTheme } from '@utils/theme'
 import Link from './Link'
 
 interface Props {

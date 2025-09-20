@@ -1,13 +1,13 @@
 import React, { useCallback } from 'react'
-import { hasPermissionsToUseTool } from '../permissions'
-import { BashTool, inputSchema } from '../tools/BashTool/BashTool'
-import { getCommandSubcommandPrefix } from '../utils/commands'
-import { REJECT_MESSAGE } from '../utils/messages'
-import type { Tool as ToolType, ToolUseContext } from '../Tool'
-import { AssistantMessage } from '../query'
-import { ToolUseConfirm } from '../components/permissions/PermissionRequest'
-import { AbortError } from '../utils/errors'
-import { logError } from '../utils/log'
+import { hasPermissionsToUseTool } from '@permissions'
+import { BashTool, inputSchema } from '@tools/BashTool/BashTool'
+import { getCommandSubcommandPrefix } from '@utils/commands'
+import { REJECT_MESSAGE } from '@utils/messages'
+import type { Tool as ToolType, ToolUseContext } from '@tool'
+import { AssistantMessage } from '@query'
+import { ToolUseConfirm } from '@components/permissions/PermissionRequest'
+import { AbortError } from '@utils/errors'
+import { logError } from '@utils/log'
 
 type SetState<T> = React.Dispatch<React.SetStateAction<T>>
 

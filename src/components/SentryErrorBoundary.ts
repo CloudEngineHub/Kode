@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { captureException } from '../services/sentry'
+import { captureException } from '@services/sentry'
 
 interface Props {
   children: React.ReactNode

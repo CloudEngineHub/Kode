@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
-import { type Message } from '../query'
-import { overwriteLog, getMessagesPath } from '../utils/log'
+import { type Message } from '@query'
+import { overwriteLog, getMessagesPath } from '@utils/log'
 
 export function useLogMessages(
   messages: Message[],

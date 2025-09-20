@@ -1,15 +1,15 @@
 import { default as React, useCallback } from 'react'
-import { useNotifyAfterTimeout } from '../../hooks/useNotifyAfterTimeout'
-import { AssistantMessage, BinaryFeedbackResult } from '../../query'
-import type { Tool } from '../../Tool'
-import type { NormalizedMessage } from '../../utils/messages'
+import { useNotifyAfterTimeout } from '@hooks/useNotifyAfterTimeout'
+import { AssistantMessage, BinaryFeedbackResult } from '@query'
+import type { Tool } from '@tool'
+import type { NormalizedMessage } from '@utils/messages'
 import { BinaryFeedbackView } from './BinaryFeedbackView'
 import {
   type BinaryFeedbackChoose,
   getBinaryFeedbackResultForChoice,
   logBinaryFeedbackEvent,
-} from './utils.js'
-import { PRODUCT_NAME } from '../../constants/product'
+} from './utils'
+import { PRODUCT_NAME } from '@constants/product'
 
 type Props = {
   m1: AssistantMessage

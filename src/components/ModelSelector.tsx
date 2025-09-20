@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { Box, Text, useInput } from 'ink'
-import { getTheme } from '../utils/theme'
+import { getTheme } from '@utils/theme'
 import { Select } from './CustomSelect/select'
 import { Newline } from 'ink'
-import { getModelManager } from '../utils/model'
+import { getModelManager } from '@utils/model'
 
 // 共享的屏幕容器组件，避免重复边框
 function ScreenContainer({
@@ -33,8 +33,8 @@ function ScreenContainer({
     </Box>
   )
 }
-import { PRODUCT_NAME } from '../constants/product'
-import { useExitOnCtrlCD } from '../hooks/useExitOnCtrlCD'
+import { PRODUCT_NAME } from '@constants/product'
+import { useExitOnCtrlCD } from '@hooks/useExitOnCtrlCD'
 import {
   getGlobalConfig,
   saveGlobalConfig,
@@ -42,14 +42,14 @@ import {
   ModelPointerType,
   setAllPointersToModel,
   setModelPointer,
-} from '../utils/config.js'
-import models, { providers } from '../constants/models'
+} from '@utils/config'
+import models, { providers } from '@constants/models'
 import TextInput from './TextInput'
 import OpenAI from 'openai'
 import chalk from 'chalk'
-import { fetchAnthropicModels, verifyApiKey } from '../services/claude'
-import { fetchCustomModels, getModelFeatures } from '../services/openai'
-import { testGPT5Connection, validateGPT5Config } from '../services/gpt5ConnectionTest'
+import { fetchAnthropicModels, verifyApiKey } from '@services/claude'
+import { fetchCustomModels, getModelFeatures } from '@services/openai'
+import { testGPT5Connection, validateGPT5Config } from '@services/gpt5ConnectionTest'
 type Props = {
   onDone: () => void
   abortController?: AbortController

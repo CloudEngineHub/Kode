@@ -5,15 +5,15 @@ import {
   Message,
   ProgressMessage,
   UserMessage,
-} from '../query.js'
-import { getCommand, hasCommand } from '../commands'
+} from '@query'
+import { getCommand, hasCommand } from '@commands'
 import { MalformedCommandError } from './errors'
 import { logError } from './log'
 import { resolve } from 'path'
 import { last, memoize } from 'lodash-es'
-import type { SetToolJSXFn, Tool, ToolUseContext } from '../Tool'
-import { lastX } from '../utils/generators'
-import { NO_CONTENT_MESSAGE } from '../services/claude'
+import type { SetToolJSXFn, Tool, ToolUseContext } from '@tool'
+import { lastX } from '@utils/generators'
+import { NO_CONTENT_MESSAGE } from '@services/claude'
 import {
   ImageBlockParam,
   TextBlockParam,
@@ -27,9 +27,9 @@ import { setCwd } from './state'
 import { getCwd } from './state'
 import chalk from 'chalk'
 import * as React from 'react'
-import { UserBashInputMessage } from '../components/messages/UserBashInputMessage'
-import { Spinner } from '../components/Spinner'
-import { BashTool } from '../tools/BashTool/BashTool'
+import { UserBashInputMessage } from '@components/messages/UserBashInputMessage'
+import { Spinner } from '@components/Spinner'
+import { BashTool } from '@tools/BashTool/BashTool'
 import { ToolUseBlock } from '@anthropic-ai/sdk/resources/index.mjs'
 
 // NOTE: Dynamic content processing for custom commands has been moved to
@@ -354,7 +354,7 @@ export async function processUserInput(
       try {
         // Import functions from customCommands service to avoid code duplication
         const { executeBashCommands } = await import(
-          '../services/customCommands'
+          '@services/customCommands'
         )
 
         // Execute bash commands if present
@@ -368,7 +368,7 @@ export async function processUserInput(
         // Note: We don't call resolveFileReferences here anymore - 
         // @file mentions should trigger Read tool usage via reminders, not embed content
         if (input.includes('@')) {
-          const { processMentions } = await import('../services/mentionProcessor')
+          const { processMentions } = await import('@services/mentionProcessor')
           await processMentions(input)
         }
       } catch (error) {

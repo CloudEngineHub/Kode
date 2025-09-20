@@ -3,11 +3,11 @@ import chalk from 'chalk'
 import {
   type ToolUseConfirm,
   toolUseConfirmGetPrefix,
-} from './PermissionRequest.js'
-import { isUnsafeCompoundCommand } from '../../utils/commands'
-import { getCwd } from '../../utils/state'
-import { getTheme } from '../../utils/theme'
-import { type OptionSubtree } from '../CustomSelect/select'
+} from './PermissionRequest'
+import { isUnsafeCompoundCommand } from '@utils/commands'
+import { getCwd } from '@utils/state'
+import { getTheme } from '@utils/theme'
+import { type OptionSubtree } from '@components/CustomSelect/select'
 
 /**
  * Generates options for the tool use confirmation dialog

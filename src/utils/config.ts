@@ -322,7 +322,19 @@ function saveConfig<A extends object>(
         JSON.stringify(value) !== JSON.stringify(defaultConfig[key as keyof A]),
     ),
   )
-  writeFileSync(file, JSON.stringify(filteredConfig, null, 2), 'utf-8')
+  try {
+    writeFileSync(file, JSON.stringify(filteredConfig, null, 2), 'utf-8')
+  } catch (error) {
+    const err = error as NodeJS.ErrnoException
+    if (err?.code === 'EACCES' || err?.code === 'EPERM' || err?.code === 'EROFS') {
+      debugLogger.state('CONFIG_SAVE_SKIPPED', {
+        file,
+        reason: String(err.code),
+      })
+      return
+    }
+    throw error
+  }
 }
 
 // Flag to track if config reading is allowed

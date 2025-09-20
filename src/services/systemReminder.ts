@@ -1,4 +1,4 @@
-import { getTodos, TodoItem } from '../utils/todoStorage'
+import { getTodos, TodoItem } from '@utils/todoStorage'
 
 export interface ReminderMessage {
   role: 'system'

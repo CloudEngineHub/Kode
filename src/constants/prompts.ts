@@ -1,12 +1,12 @@
-import { env } from '../utils/env'
-import { getIsGit } from '../utils/git'
+import { env } from '@utils/env'
+import { getIsGit } from '@utils/git'
 import {
   INTERRUPT_MESSAGE,
   INTERRUPT_MESSAGE_FOR_TOOL_USE,
-} from '../utils/messages.js'
-import { getCwd } from '../utils/state'
+} from '@utils/messages'
+import { getCwd } from '@utils/state'
 import { PRODUCT_NAME, PROJECT_FILE, PRODUCT_COMMAND } from './product'
-import { BashTool } from '../tools/BashTool/BashTool'
+import { BashTool } from '@tools/BashTool/BashTool'
 import { MACRO } from './macros'
 
 // // Security policy constant matching reference implementation 

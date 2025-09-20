@@ -2,8 +2,8 @@ import { execFileNoThrow } from './execFileNoThrow'
 import { logError } from './log'
  
 import { lt, gt } from 'semver'
-import { MACRO } from '../constants/macros'
-import { PRODUCT_NAME } from '../constants/product'
+import { MACRO } from '@constants/macros'
+import { PRODUCT_NAME } from '@constants/product'
 import { getGlobalConfig, saveGlobalConfig, isAutoUpdaterDisabled } from './config'
 import { env } from './env'
 

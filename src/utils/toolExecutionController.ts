@@ -1,5 +1,5 @@
 import { ToolUseBlock } from '@anthropic-ai/sdk/resources/index.mjs'
-import type { Tool } from '../Tool'
+import type { Tool } from '@tool'
 
 export interface ToolExecutionGroup {
   concurrent: ToolUseBlock[]

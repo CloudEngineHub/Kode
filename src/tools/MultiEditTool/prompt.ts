@@ -1,4 +1,4 @@
-import { NotebookEditTool } from '../NotebookEditTool/NotebookEditTool'
+import { NotebookEditTool } from '@tools/NotebookEditTool/NotebookEditTool'
 
 export const DESCRIPTION = `This is a tool for making multiple edits to a single file in one operation. It is built on top of the Edit tool and allows you to perform multiple find-and-replace operations efficiently. Prefer this tool over the Edit tool when you need to make multiple edits to the same file.
 

@@ -3,21 +3,21 @@ import { Box, Text } from 'ink'
 import { extname, isAbsolute, relative, resolve } from 'path'
 import * as React from 'react'
 import { z } from 'zod'
-import { FallbackToolUseRejectedMessage } from '../../components/FallbackToolUseRejectedMessage'
-import { HighlightedCode } from '../../components/HighlightedCode'
-import type { Tool } from '../../Tool'
-import { NotebookCellType, NotebookContent } from '../../types/notebook'
+import { FallbackToolUseRejectedMessage } from '@components/FallbackToolUseRejectedMessage'
+import { HighlightedCode } from '@components/HighlightedCode'
+import type { Tool } from '@tool'
+import { NotebookCellType, NotebookContent } from '@kode-types/notebook'
 import {
   detectFileEncoding,
   detectLineEndings,
   writeTextContent,
-} from '../../utils/file.js'
-import { safeParseJSON } from '../../utils/json'
-import { getCwd } from '../../utils/state'
+} from '@utils/file'
+import { safeParseJSON } from '@utils/json'
+import { getCwd } from '@utils/state'
 import { DESCRIPTION, PROMPT } from './prompt'
-import { hasWritePermission } from '../../utils/permissions/filesystem'
-import { emitReminderEvent } from '../../services/systemReminder'
-import { recordFileEdit } from '../../services/fileFreshness'
+import { hasWritePermission } from '@utils/permissions/filesystem'
+import { emitReminderEvent } from '@services/systemReminder'
+import { recordFileEdit } from '@services/fileFreshness'
 
 const inputSchema = z.strictObject({
   notebook_path: z

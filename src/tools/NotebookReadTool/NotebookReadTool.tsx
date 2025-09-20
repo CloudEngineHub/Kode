@@ -8,8 +8,8 @@ import { Text } from 'ink'
 import { extname, isAbsolute, relative, resolve } from 'path'
 import * as React from 'react'
 import { z } from 'zod'
-import { FallbackToolUseRejectedMessage } from '../../components/FallbackToolUseRejectedMessage'
-import { Tool } from '../../Tool'
+import { FallbackToolUseRejectedMessage } from '@components/FallbackToolUseRejectedMessage'
+import { Tool } from '@tool'
 import {
   NotebookCellSource,
   NotebookContent,
@@ -18,12 +18,12 @@ import {
   NotebookCellSourceOutput,
   NotebookCellOutput,
   NotebookCellType,
-} from '../../types/notebook'
-import { formatOutput } from '../BashTool/utils'
-import { getCwd } from '../../utils/state'
-import { findSimilarFile } from '../../utils/file'
+} from '@kode-types/notebook'
+import { formatOutput } from '@tools/BashTool/utils'
+import { getCwd } from '@utils/state'
+import { findSimilarFile } from '@utils/file'
 import { DESCRIPTION, PROMPT } from './prompt'
-import { hasReadPermission } from '../../utils/permissions/filesystem'
+import { hasReadPermission } from '@utils/permissions/filesystem'
 
 const inputSchema = z.strictObject({
   notebook_path: z

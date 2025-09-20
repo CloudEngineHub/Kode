@@ -1,9 +1,9 @@
 import { Box, Text } from 'ink'
 import * as React from 'react'
 import { useEffect, useRef, useState } from 'react'
-import { getTheme } from '../utils/theme'
+import { getTheme } from '@utils/theme'
 import { sample } from 'lodash-es'
-import { getSessionState } from '../utils/sessionState'
+import { getSessionState } from '@utils/sessionState'
 // NB: The third character in this string is an emoji that
 // renders on Windows consoles with a green background
 const CHARACTERS =

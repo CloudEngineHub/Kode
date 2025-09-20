@@ -2,25 +2,25 @@ import { TextBlockParam } from '@anthropic-ai/sdk/resources/index.mjs'
 import React from 'react'
 import { AssistantBashOutputMessage } from './AssistantBashOutputMessage'
 import { AssistantLocalCommandOutputMessage } from './AssistantLocalCommandOutputMessage'
-import { getTheme } from '../../utils/theme'
+import { getTheme } from '@utils/theme'
 import { Box, Text } from 'ink'
-import { Cost } from '../Cost'
+import { Cost } from '@components/Cost'
 import {
   API_ERROR_MESSAGE_PREFIX,
   CREDIT_BALANCE_TOO_LOW_ERROR_MESSAGE,
   INVALID_API_KEY_ERROR_MESSAGE,
   PROMPT_TOO_LONG_ERROR_MESSAGE,
-} from '../../services/claude.js'
+} from '@services/claude'
 import {
   CANCEL_MESSAGE,
   INTERRUPT_MESSAGE,
   INTERRUPT_MESSAGE_FOR_TOOL_USE,
   isEmptyMessageText,
   NO_RESPONSE_REQUESTED,
-} from '../../utils/messages.js'
-import { BLACK_CIRCLE } from '../../constants/figures'
-import { applyMarkdown } from '../../utils/markdown'
-import { useTerminalSize } from '../../hooks/useTerminalSize'
+} from '@utils/messages'
+import { BLACK_CIRCLE } from '@constants/figures'
+import { applyMarkdown } from '@utils/markdown'
+import { useTerminalSize } from '@hooks/useTerminalSize'
 
 type Props = {
   param: TextBlockParam

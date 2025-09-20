@@ -1,6 +1,6 @@
 import React from 'react'
 import { Box, Text } from 'ink'
-import type { TodoItem as TodoItemType } from '../utils/todoStorage'
+import type { TodoItem as TodoItemType } from '@utils/todoStorage'
 
 export interface TodoItemProps {
   todo: TodoItemType

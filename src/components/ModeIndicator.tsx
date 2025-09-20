@@ -1,7 +1,7 @@
 import React from 'react'
 import { Box, Text } from 'ink'
-import { usePermissionContext } from '../context/PermissionContext'
-import { getTheme } from '../utils/theme'
+import { usePermissionContext } from '@context/PermissionContext'
+import { getTheme } from '@utils/theme'
 
 interface ModeIndicatorProps {
   showTransitionCount?: boolean

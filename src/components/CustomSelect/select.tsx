@@ -5,7 +5,7 @@ import { type Theme } from './theme'
 import { useSelectState } from './use-select-state'
 import { useSelect } from './use-select'
 import { Option } from '@inkjs/ui'
-import { getTheme } from '../../utils/theme'
+import { getTheme } from '@utils/theme'
 
 export type OptionSubtree = {
   /**

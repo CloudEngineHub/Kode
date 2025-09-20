@@ -5,28 +5,28 @@ import { EOL } from 'os'
 import { dirname, extname, isAbsolute, relative, resolve, sep } from 'path'
 import * as React from 'react'
 import { z } from 'zod'
-import { FileEditToolUpdatedMessage } from '../../components/FileEditToolUpdatedMessage'
-import { HighlightedCode } from '../../components/HighlightedCode'
-import { StructuredDiff } from '../../components/StructuredDiff'
-import { FallbackToolUseRejectedMessage } from '../../components/FallbackToolUseRejectedMessage'
-import type { Tool } from '../../Tool'
-import { intersperse } from '../../utils/array'
+import { FileEditToolUpdatedMessage } from '@components/FileEditToolUpdatedMessage'
+import { HighlightedCode } from '@components/HighlightedCode'
+import { StructuredDiff } from '@components/StructuredDiff'
+import { FallbackToolUseRejectedMessage } from '@components/FallbackToolUseRejectedMessage'
+import type { Tool } from '@tool'
+import { intersperse } from '@utils/array'
 import {
   addLineNumbers,
   detectFileEncoding,
   detectLineEndings,
   detectRepoLineEndings,
   writeTextContent,
-} from '../../utils/file.js'
-import { logError } from '../../utils/log'
-import { getCwd } from '../../utils/state'
-import { getTheme } from '../../utils/theme'
+} from '@utils/file'
+import { logError } from '@utils/log'
+import { getCwd } from '@utils/state'
+import { getTheme } from '@utils/theme'
 import { PROMPT } from './prompt'
-import { hasWritePermission } from '../../utils/permissions/filesystem'
-import { getPatch } from '../../utils/diff'
-import { PROJECT_FILE } from '../../constants/product'
-import { emitReminderEvent } from '../../services/systemReminder'
-import { recordFileEdit } from '../../services/fileFreshness'
+import { hasWritePermission } from '@utils/permissions/filesystem'
+import { getPatch } from '@utils/diff'
+import { PROJECT_FILE } from '@constants/product'
+import { emitReminderEvent } from '@services/systemReminder'
+import { recordFileEdit } from '@services/fileFreshness'
 
 const MAX_LINES_TO_RENDER = 5
 const MAX_LINES_TO_RENDER_FOR_ASSISTANT = 16000

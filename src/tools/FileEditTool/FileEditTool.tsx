@@ -4,28 +4,28 @@ import { Box, Text } from 'ink'
 import { dirname, isAbsolute, relative, resolve, sep } from 'path'
 import * as React from 'react'
 import { z } from 'zod'
-import { FileEditToolUpdatedMessage } from '../../components/FileEditToolUpdatedMessage'
-import { StructuredDiff } from '../../components/StructuredDiff'
-import { FallbackToolUseRejectedMessage } from '../../components/FallbackToolUseRejectedMessage'
-import { Tool, ValidationResult } from '../../Tool'
-import { intersperse } from '../../utils/array'
+import { FileEditToolUpdatedMessage } from '@components/FileEditToolUpdatedMessage'
+import { StructuredDiff } from '@components/StructuredDiff'
+import { FallbackToolUseRejectedMessage } from '@components/FallbackToolUseRejectedMessage'
+import { Tool, ValidationResult } from '@tool'
+import { intersperse } from '@utils/array'
 import {
   addLineNumbers,
   detectFileEncoding,
   detectLineEndings,
   findSimilarFile,
   writeTextContent,
-} from '../../utils/file.js'
-import { logError } from '../../utils/log'
-import { getCwd } from '../../utils/state'
-import { getTheme } from '../../utils/theme'
-import { emitReminderEvent } from '../../services/systemReminder'
-import { recordFileEdit } from '../../services/fileFreshness'
-import { NotebookEditTool } from '../NotebookEditTool/NotebookEditTool'
+} from '@utils/file'
+import { logError } from '@utils/log'
+import { getCwd } from '@utils/state'
+import { getTheme } from '@utils/theme'
+import { emitReminderEvent } from '@services/systemReminder'
+import { recordFileEdit } from '@services/fileFreshness'
+import { NotebookEditTool } from '@tools/NotebookEditTool/NotebookEditTool'
 import { DESCRIPTION } from './prompt'
 import { applyEdit } from './utils'
-import { hasWritePermission } from '../../utils/permissions/filesystem'
-import { PROJECT_FILE } from '../../constants/product'
+import { hasWritePermission } from '@utils/permissions/filesystem'
+import { PROJECT_FILE } from '@constants/product'
 
 const inputSchema = z.strictObject({
   file_path: z.string().describe('The absolute path to the file to modify'),

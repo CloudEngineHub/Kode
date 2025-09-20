@@ -1,6 +1,6 @@
 import { Box } from 'ink'
 import * as React from 'react'
-import type { AssistantMessage, Message, UserMessage } from '../query'
+import type { AssistantMessage, Message, UserMessage } from '@query'
 import type {
   ContentBlock,
   DocumentBlockParam,
@@ -10,16 +10,16 @@ import type {
   ToolResultBlockParam,
   ToolUseBlockParam,
 } from '@anthropic-ai/sdk/resources/index.mjs'
-import { Tool } from '../Tool'
-import { logError } from '../utils/log'
+import { Tool } from '@tool'
+import { logError } from '@utils/log'
 import { UserToolResultMessage } from './messages/UserToolResultMessage/UserToolResultMessage'
 import { AssistantToolUseMessage } from './messages/AssistantToolUseMessage'
 import { AssistantTextMessage } from './messages/AssistantTextMessage'
 import { UserTextMessage } from './messages/UserTextMessage'
-import { NormalizedMessage } from '../utils/messages'
+import { NormalizedMessage } from '@utils/messages'
 import { AssistantThinkingMessage } from './messages/AssistantThinkingMessage'
 import { AssistantRedactedThinkingMessage } from './messages/AssistantRedactedThinkingMessage'
-import { useTerminalSize } from '../hooks/useTerminalSize'
+import { useTerminalSize } from '@hooks/useTerminalSize'
 
 type Props = {
   message: UserMessage | AssistantMessage

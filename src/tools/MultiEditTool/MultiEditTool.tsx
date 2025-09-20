@@ -3,21 +3,21 @@ import { Box, Text } from 'ink'
 import { dirname, isAbsolute, relative, resolve, sep } from 'path'
 import * as React from 'react'
 import { z } from 'zod'
-import { FileEditToolUpdatedMessage } from '../../components/FileEditToolUpdatedMessage'
-import { StructuredDiff } from '../../components/StructuredDiff'
-import { Tool, ValidationResult } from '../../Tool'
-import { intersperse } from '../../utils/array'
+import { FileEditToolUpdatedMessage } from '@components/FileEditToolUpdatedMessage'
+import { StructuredDiff } from '@components/StructuredDiff'
+import { Tool, ValidationResult } from '@tool'
+import { intersperse } from '@utils/array'
 import {
   addLineNumbers,
   detectFileEncoding,
   detectLineEndings,
   findSimilarFile,
   writeTextContent,
-} from '../../utils/file.js'
-import { logError } from '../../utils/log'
-import { getCwd } from '../../utils/state'
-import { getTheme } from '../../utils/theme'
-import { NotebookEditTool } from '../NotebookEditTool/NotebookEditTool'
+} from '@utils/file'
+import { logError } from '@utils/log'
+import { getCwd } from '@utils/state'
+import { getTheme } from '@utils/theme'
+import { NotebookEditTool } from '@tools/NotebookEditTool/NotebookEditTool'
 // Local content-based edit function for MultiEditTool
 function applyContentEdit(
   content: string,
@@ -40,12 +40,12 @@ function applyContentEdit(
     }
   }
 }
-import { hasWritePermission } from '../../utils/permissions/filesystem'
-import { PROJECT_FILE } from '../../constants/product'
+import { hasWritePermission } from '@utils/permissions/filesystem'
+import { PROJECT_FILE } from '@constants/product'
 import { DESCRIPTION, PROMPT } from './prompt'
-import { emitReminderEvent } from '../../services/systemReminder'
-import { recordFileEdit } from '../../services/fileFreshness'
-import { getPatch } from '../../utils/diff'
+import { emitReminderEvent } from '@services/systemReminder'
+import { recordFileEdit } from '@services/fileFreshness'
+import { getPatch } from '@utils/diff'
 
 const EditSchema = z.object({
   old_string: z.string().describe('The text to replace'),

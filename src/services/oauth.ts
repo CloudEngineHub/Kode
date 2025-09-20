@@ -3,16 +3,16 @@ import * as http from 'http'
 import { IncomingMessage, ServerResponse } from 'http'
 import * as url from 'url'
 
-import { OAUTH_CONFIG } from '../constants/oauth'
-import { openBrowser } from '../utils/browser'
-import { logError } from '../utils/log'
+import { OAUTH_CONFIG } from '@constants/oauth'
+import { openBrowser } from '@utils/browser'
+import { logError } from '@utils/log'
 import { resetAnthropicClient } from './claude'
 import {
   AccountInfo,
   getGlobalConfig,
   saveGlobalConfig,
   normalizeApiKeyForConfig,
-} from '../utils/config.js'
+} from '@utils/config'
 
 // Base64URL encoding function (RFC 4648)
 function base64URLEncode(buffer: Buffer): string {

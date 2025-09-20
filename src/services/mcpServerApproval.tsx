@@ -1,9 +1,9 @@
 import React from 'react'
 import { render } from 'ink'
-import { MCPServerMultiselectDialog } from '../components/MCPServerMultiselectDialog'
-import { MCPServerApprovalDialog } from '../components/MCPServerApprovalDialog'
+import { MCPServerMultiselectDialog } from '@components/MCPServerMultiselectDialog'
+import { MCPServerApprovalDialog } from '@components/MCPServerApprovalDialog'
 import { getMcprcServerStatus } from './mcpClient'
-import { getMcprcConfig } from '../utils/config'
+import { getMcprcConfig } from '@utils/config'
 
 export async function handleMcprcServerApprovals(): Promise<void> {
   const mcprcServers = getMcprcConfig()

@@ -1,8 +1,8 @@
 import React from 'react'
 import { render } from 'ink'
-import { ModelConfig } from '../components/ModelConfig'
-import { enableConfigs } from '../utils/config'
-import { triggerModelConfigChange } from '../messages'
+import { ModelConfig } from '@components/ModelConfig'
+import { enableConfigs } from '@utils/config'
+import { triggerModelConfigChange } from '@messages'
 
 export const help = 'Change your AI provider and model settings'
 export const description = 'Change your AI provider and model settings'
@@ -26,7 +26,7 @@ export async function call(
     <ModelConfig
       onClose={() => {
         // Force ModelManager reload to ensure UI sync - wait for completion before closing
-        import('../utils/model').then(({ reloadModelManager }) => {
+        import('@utils/model').then(({ reloadModelManager }) => {
           reloadModelManager()
           // 🔧 Critical fix: Trigger global UI refresh after model config changes
           // This ensures PromptInput component detects ModelManager singleton state changes

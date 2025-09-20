@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { sendNotification } from '../services/notifier'
+import { sendNotification } from '@services/notifier'
 import { memoize } from 'lodash-es'
 
 // The time threshold in milliseconds for considering an interaction "recent" (6 seconds)

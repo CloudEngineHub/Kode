@@ -1,21 +1,21 @@
 import React, { useState, useEffect, useMemo, useCallback, useReducer, Fragment } from 'react'
 import { Box, Text, useInput } from 'ink'
 import InkTextInput from 'ink-text-input'
-import { getActiveAgents, clearAgentCache } from '../utils/agentLoader'
-import { AgentConfig } from '../utils/agentLoader'
+import { getActiveAgents, clearAgentCache } from '@utils/agentLoader'
+import { AgentConfig } from '@utils/agentLoader'
 import { writeFileSync, unlinkSync, mkdirSync, existsSync, readFileSync, renameSync } from 'fs'
 import { join } from 'path'
 import * as path from 'path'
 import { homedir } from 'os'
 import * as os from 'os'
-import { getCwd } from '../utils/state'
-import { getTheme } from '../utils/theme'
+import { getCwd } from '@utils/state'
+import { getTheme } from '@utils/theme'
 import matter from 'gray-matter'
 import { exec, spawn } from 'child_process'
 import { promisify } from 'util'
 import { watch, FSWatcher } from 'fs'
-import { getMCPTools } from '../services/mcpClient'
-import { getModelManager } from '../utils/model'
+import { getMCPTools } from '@services/mcpClient'
+import { getModelManager } from '@utils/model'
 import { randomUUID } from 'crypto'
 
 const execAsync = promisify(exec)
@@ -119,7 +119,7 @@ type GeneratedAgent = {
 // AI generation function (use main pointer model)
 async function generateAgentWithClaude(prompt: string): Promise<GeneratedAgent> {
   // Import Claude service dynamically to avoid circular dependencies
-  const { queryModel } = await import('../services/claude')
+  const { queryModel } = await import('@services/claude')
   
   const systemPrompt = `You are an expert at creating AI agent configurations. Based on the user's description, generate a specialized agent configuration.
 

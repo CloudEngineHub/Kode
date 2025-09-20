@@ -1,16 +1,16 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { Static, Box, Text, useInput } from 'ink'
 import TextInput from './TextInput'
-import { OAuthService, createAndStoreApiKey } from '../services/oauth'
-import { getTheme } from '../utils/theme'
+import { OAuthService, createAndStoreApiKey } from '@services/oauth'
+import { getTheme } from '@utils/theme'
 import { AsciiLogo } from './AsciiLogo'
-import { useTerminalSize } from '../hooks/useTerminalSize'
-import { logError } from '../utils/log'
-import { clearTerminal } from '../utils/terminal'
+import { useTerminalSize } from '@hooks/useTerminalSize'
+import { logError } from '@utils/log'
+import { clearTerminal } from '@utils/terminal'
 import { SimpleSpinner } from './Spinner'
 import { WelcomeBox } from './Onboarding'
-import { PRODUCT_NAME } from '../constants/product'
-import { sendNotification } from '../services/notifier'
+import { PRODUCT_NAME } from '@constants/product'
+import { sendNotification } from '@services/notifier'
 
 type Props = {
   onDone(): void

@@ -2,8 +2,8 @@
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { existsSync } from 'node:fs'
-import { initSentry } from '../services/sentry'
-import { PRODUCT_COMMAND, PRODUCT_NAME } from '../constants/product'
+import { initSentry } from '@services/sentry'
+import { PRODUCT_COMMAND, PRODUCT_NAME } from '@constants/product'
 initSentry() // Initialize Sentry as early as possible
 
 // Ensure YOGA_WASM_PATH is set for Ink across run modes (wrapper/dev)
@@ -36,12 +36,12 @@ import { ReadStream } from 'tty'
 import { openSync } from 'fs'
 // ink and REPL are imported lazily to avoid top-level awaits during module init
 import type { RenderOptions } from 'ink'
-import { addToHistory } from '../history'
-import { getContext, setContext, removeContext } from '../context'
+import { addToHistory } from '@history'
+import { getContext, setContext, removeContext } from '@context'
 import { Command } from '@commander-js/extra-typings'
-import { ask } from '../utils/ask'
-import { hasPermissionsToUseTool } from '../permissions'
-import { getTools } from '../tools'
+import { ask } from '@utils/ask'
+import { hasPermissionsToUseTool } from '@permissions'
+import { getTools } from '@tools'
 import {
   getGlobalConfig,
   getCurrentProjectConfig,
@@ -55,29 +55,29 @@ import {
   listConfigForCLI,
   enableConfigs,
   validateAndRepairAllGPT5Profiles,
-} from '../utils/config'
+} from '@utils/config'
 import { cwd } from 'process'
-import { dateToFilename, logError, parseLogFilename } from '../utils/log'
-import { initDebugLogger } from '../utils/debugLogger'
-import { Onboarding } from '../components/Onboarding'
-import { Doctor } from '../screens/Doctor'
-import { TrustDialog } from '../components/TrustDialog'
-import { checkHasTrustDialogAccepted, McpServerConfig } from '../utils/config'
-import { isDefaultSlowAndCapableModel } from '../utils/model'
-import { LogList } from '../screens/LogList'
-import { ResumeConversation } from '../screens/ResumeConversation'
+import { dateToFilename, logError, parseLogFilename } from '@utils/log'
+import { initDebugLogger } from '@utils/debugLogger'
+import { Onboarding } from '@components/Onboarding'
+import { Doctor } from '@screens/Doctor'
+import { TrustDialog } from '@components/TrustDialog'
+import { checkHasTrustDialogAccepted, McpServerConfig } from '@utils/config'
+import { isDefaultSlowAndCapableModel } from '@utils/model'
+import { LogList } from '@screens/LogList'
+import { ResumeConversation } from '@screens/ResumeConversation'
 import { startMCPServer } from './mcp'
-import { env } from '../utils/env'
-import { getCwd, setCwd, setOriginalCwd } from '../utils/state'
+import { env } from '@utils/env'
+import { getCwd, setCwd, setOriginalCwd } from '@utils/state'
 import { omit } from 'lodash-es'
-import { getCommands } from '../commands'
-import { getNextAvailableLogForkNumber, loadLogList } from '../utils/log'
-import { loadMessagesFromLog } from '../utils/conversationRecovery'
-import { cleanupOldMessageFilesInBackground } from '../utils/cleanup'
+import { getCommands } from '@commands'
+import { getNextAvailableLogForkNumber, loadLogList } from '@utils/log'
+import { loadMessagesFromLog } from '@utils/conversationRecovery'
+import { cleanupOldMessageFilesInBackground } from '@utils/cleanup'
 import {
   handleListApprovedTools,
   handleRemoveApprovedTool,
-} from '../commands/approvedTools'
+} from '@commands/approvedTools'
 import {
   addMcpServer,
   getMcpServer,
@@ -86,20 +86,20 @@ import {
   removeMcpServer,
   getClients,
   ensureConfigScope,
-} from '../services/mcpClient'
-import { handleMcprcServerApprovals } from '../services/mcpServerApproval'
+} from '@services/mcpClient'
+import { handleMcprcServerApprovals } from '@services/mcpServerApproval'
  
 import { cursorShow } from 'ansi-escapes'
-import { getLatestVersion, assertMinVersion, getUpdateCommandSuggestions } from '../utils/autoUpdater'
+import { getLatestVersion, assertMinVersion, getUpdateCommandSuggestions } from '@utils/autoUpdater'
 import { gt } from 'semver'
-import { CACHE_PATHS } from '../utils/log'
-// import { checkAndNotifyUpdate } from '../utils/autoUpdater'
-import { PersistentShell } from '../utils/PersistentShell'
-import { clearTerminal } from '../utils/terminal'
-import { showInvalidConfigDialog } from '../components/InvalidConfigDialog'
-import { ConfigParseError } from '../utils/errors'
-import { grantReadPermissionForOriginalDir } from '../utils/permissions/filesystem'
-import { MACRO } from '../constants/macros'
+import { CACHE_PATHS } from '@utils/log'
+// import { checkAndNotifyUpdate } from '@utils/autoUpdater'
+import { PersistentShell } from '@utils/PersistentShell'
+import { clearTerminal } from '@utils/terminal'
+import { showInvalidConfigDialog } from '@components/InvalidConfigDialog'
+import { ConfigParseError } from '@utils/errors'
+import { grantReadPermissionForOriginalDir } from '@utils/permissions/filesystem'
+import { MACRO } from '@constants/macros'
 export function completeOnboarding(): void {
   const config = getGlobalConfig()
   saveGlobalConfig({
@@ -189,9 +189,9 @@ async function setup(cwd: string, safeMode?: boolean): Promise<void> {
   // Try ESM-friendly path first (compiled dist), then fall back to extensionless (dev/tsx)
   let agentLoader: any
   try {
-    agentLoader = await import('../utils/agentLoader.js')
+    agentLoader = await import('@utils/agentLoader')
   } catch {
-    agentLoader = await import('../utils/agentLoader')
+    agentLoader = await import('@utils/agentLoader')
   }
   const { startAgentWatcher, clearAgentCache } = agentLoader
   await startAgentWatcher(() => {
@@ -415,7 +415,7 @@ ${commandList}`,
 
           {
             const { render } = await import('ink')
-            const { REPL } = await import('../screens/REPL')
+            const { REPL } = await import('@screens/REPL')
             render(
               <REPL
               commands={commands}
@@ -976,7 +976,7 @@ ${commandList}`,
         const ink = await import('ink')
         const reactModule = await import('react')
         const inkjsui = await import('@inkjs/ui')
-        const utilsTheme = await import('../utils/theme')
+        const utilsTheme = await import('@utils/theme')
 
         const { render } = ink
         const React = reactModule // React is already the default export when imported this way
@@ -1226,7 +1226,7 @@ ${commandList}`,
       }
 
       console.log(`New version available: ${latestVersion}`)
-      const { getUpdateCommandSuggestions } = await import('../utils/autoUpdater')
+      const { getUpdateCommandSuggestions } = await import('@utils/autoUpdater')
       const cmds = await getUpdateCommandSuggestions()
       console.log('\nRun one of the following commands to update:')
       for (const c of cmds) console.log(`  ${c}`)
@@ -1323,7 +1323,7 @@ ${commandList}`,
           const isDefaultModel = await isDefaultSlowAndCapableModel()
           {
             const { render } = await import('ink')
-            const { REPL } = await import('../screens/REPL')
+            const { REPL } = await import('@screens/REPL')
             render(
               <REPL
               initialPrompt=""

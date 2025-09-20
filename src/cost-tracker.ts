@@ -4,7 +4,7 @@ import { formatDuration } from './utils/format'
 import {
   getCurrentProjectConfig,
   saveCurrentProjectConfig,
-} from './utils/config.js'
+} from '@utils/config'
 import { SESSION_ID } from './utils/log'
 
 // DO NOT ADD MORE STATE HERE OR BORIS WILL CURSE YOU

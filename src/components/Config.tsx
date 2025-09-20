@@ -2,15 +2,15 @@ import { Box, Text, useInput } from 'ink'
 import * as React from 'react'
 import { useState } from 'react'
 import figures from 'figures'
-import { getTheme } from '../utils/theme'
+import { getTheme } from '@utils/theme'
 import {
   GlobalConfig,
   saveGlobalConfig,
   getGlobalConfig,
-} from '../utils/config.js'
+} from '@utils/config'
 import chalk from 'chalk'
-import { useExitOnCtrlCD } from '../hooks/useExitOnCtrlCD'
-import { getModelManager } from '../utils/model'
+import { useExitOnCtrlCD } from '@hooks/useExitOnCtrlCD'
+import { getModelManager } from '@utils/model'
 
 type Props = {
   onClose: () => void

@@ -1,7 +1,7 @@
 import InkLink from 'ink-link'
 import { Text } from 'ink'
 import React from 'react'
-import { env } from '../utils/env'
+import { env } from '@utils/env'
 
 type LinkProps = {
   url: string

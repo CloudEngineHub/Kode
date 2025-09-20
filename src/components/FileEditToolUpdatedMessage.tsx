@@ -1,12 +1,12 @@
 import { Hunk } from 'diff'
 import { Box, Text } from 'ink'
 import * as React from 'react'
-import { intersperse } from '../utils/array'
+import { intersperse } from '@utils/array'
 import { StructuredDiff } from './StructuredDiff'
-import { getTheme } from '../utils/theme'
-import { getCwd } from '../utils/state'
+import { getTheme } from '@utils/theme'
+import { getCwd } from '@utils/state'
 import { relative } from 'path'
-import { useTerminalSize } from '../hooks/useTerminalSize'
+import { useTerminalSize } from '@hooks/useTerminalSize'
 
 type Props = {
   filePath: string

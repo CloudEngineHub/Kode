@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import { Box, Text, useInput } from 'ink'
-import { getTheme } from '../utils/theme'
+import { getTheme } from '@utils/theme'
 // Removed autoUpdater usage; Doctor is now a simple health check
-import { PressEnterToContinue } from '../components/PressEnterToContinue'
+import { PressEnterToContinue } from '@components/PressEnterToContinue'
 
 type Props = {
   onDone: () => void

@@ -1,7 +1,7 @@
 import { highlight, supportsLanguage } from 'cli-highlight'
 import { Text } from 'ink'
 import React, { useMemo } from 'react'
-import { logError } from '../utils/log'
+import { logError } from '@utils/log'
 
 type Props = {
   code: string

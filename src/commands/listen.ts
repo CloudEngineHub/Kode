@@ -1,6 +1,6 @@
-import { Command } from '../commands'
-import { logError } from '../utils/log'
-import { execFileNoThrow } from '../utils/execFileNoThrow'
+import { Command } from '@commands'
+import { logError } from '@utils/log'
+import { execFileNoThrow } from '@utils/execFileNoThrow'
 
 const isEnabled =
   process.platform === 'darwin' &&

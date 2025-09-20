@@ -1,9 +1,9 @@
 import React from 'react'
 import { Text, Box } from 'ink'
-import { getModelManager } from '../utils/model'
-import { getGlobalConfig } from '../utils/config'
-import { useExitOnCtrlCD } from '../hooks/useExitOnCtrlCD'
-import { getTheme } from '../utils/theme'
+import { getModelManager } from '@utils/model'
+import { getGlobalConfig } from '@utils/config'
+import { useExitOnCtrlCD } from '@hooks/useExitOnCtrlCD'
+import { getTheme } from '@utils/theme'
 
 type Props = {
   onClose: () => void

@@ -1,14 +1,14 @@
 import { Box, Text } from 'ink'
 import * as React from 'react'
 import { z } from 'zod'
-import { FallbackToolUseRejectedMessage } from '../../components/FallbackToolUseRejectedMessage'
-import { TodoItem as TodoItemComponent } from '../../components/TodoItem'
-import { Tool, ValidationResult } from '../../Tool'
-import { setTodos, getTodos, TodoItem } from '../../utils/todoStorage'
-import { emitReminderEvent } from '../../services/systemReminder'
-import { startWatchingTodoFile } from '../../services/fileFreshness'
+import { FallbackToolUseRejectedMessage } from '@components/FallbackToolUseRejectedMessage'
+import { TodoItem as TodoItemComponent } from '@components/TodoItem'
+import { Tool, ValidationResult } from '@tool'
+import { setTodos, getTodos, TodoItem } from '@utils/todoStorage'
+import { emitReminderEvent } from '@services/systemReminder'
+import { startWatchingTodoFile } from '@services/fileFreshness'
 import { DESCRIPTION, PROMPT } from './prompt'
-import { getTheme } from '../../utils/theme'
+import { getTheme } from '@utils/theme'
 
 const TodoItemSchema = z.object({
   content: z.string().min(1).describe('The task description or content'),

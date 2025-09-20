@@ -1,8 +1,8 @@
 import React from 'react'
 import { Text, useInput } from 'ink'
 import chalk from 'chalk'
-import { useTextInput } from '../hooks/useTextInput'
-import { getTheme } from '../utils/theme'
+import { useTextInput } from '@hooks/useTextInput'
+import { getTheme } from '@utils/theme'
 import { type Key } from 'ink'
 
 export type Props = {

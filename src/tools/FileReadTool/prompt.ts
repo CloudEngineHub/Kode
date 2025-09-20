@@ -1,4 +1,4 @@
-import { NotebookReadTool } from '../NotebookReadTool/NotebookReadTool'
+import { NotebookReadTool } from '@tools/NotebookReadTool/NotebookReadTool'
 
 const MAX_LINES_TO_READ = 2000
 const MAX_LINE_LENGTH = 2000

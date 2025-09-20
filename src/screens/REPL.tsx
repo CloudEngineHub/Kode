@@ -2,50 +2,50 @@ import { ToolUseBlockParam } from '@anthropic-ai/sdk/resources/index.mjs'
 import { Box, Newline, Static, Text } from 'ink'
 import ProjectOnboarding, {
   markProjectOnboardingComplete,
-} from '../components/ProjectOnboarding.js'
-import { CostThresholdDialog } from '../components/CostThresholdDialog'
+} from '@components/ProjectOnboarding'
+import { CostThresholdDialog } from '@components/CostThresholdDialog'
 import * as React from 'react'
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
-import { Command } from '../commands'
-import { Logo } from '../components/Logo'
-import { Message } from '../components/Message'
-import { MessageResponse } from '../components/MessageResponse'
-import { MessageSelector } from '../components/MessageSelector'
+import { Command } from '@commands'
+import { Logo } from '@components/Logo'
+import { Message } from '@components/Message'
+import { MessageResponse } from '@components/MessageResponse'
+import { MessageSelector } from '@components/MessageSelector'
 import {
   PermissionRequest,
   type ToolUseConfirm,
-} from '../components/permissions/PermissionRequest.js'
-import PromptInput from '../components/PromptInput'
-import { Spinner } from '../components/Spinner'
-import { getSystemPrompt } from '../constants/prompts'
-import { getContext } from '../context'
-import { getTotalCost, useCostSummary } from '../cost-tracker'
-import { useLogStartupTime } from '../hooks/useLogStartupTime'
-import { addToHistory } from '../history'
-import { useApiKeyVerification } from '../hooks/useApiKeyVerification'
-import { useCancelRequest } from '../hooks/useCancelRequest'
-import useCanUseTool from '../hooks/useCanUseTool'
-import { useLogMessages } from '../hooks/useLogMessages'
-import { PermissionProvider } from '../context/PermissionContext'
-import { ModeIndicator } from '../components/ModeIndicator'
+} from '@components/permissions/PermissionRequest'
+import PromptInput from '@components/PromptInput'
+import { Spinner } from '@components/Spinner'
+import { getSystemPrompt } from '@constants/prompts'
+import { getContext } from '@context'
+import { getTotalCost, useCostSummary } from '@costTracker'
+import { useLogStartupTime } from '@hooks/useLogStartupTime'
+import { addToHistory } from '@history'
+import { useApiKeyVerification } from '@hooks/useApiKeyVerification'
+import { useCancelRequest } from '@hooks/useCancelRequest'
+import useCanUseTool from '@hooks/useCanUseTool'
+import { useLogMessages } from '@hooks/useLogMessages'
+import { PermissionProvider } from '@context/PermissionContext'
+import { ModeIndicator } from '@components/ModeIndicator'
 import {
   setMessagesGetter,
   setMessagesSetter,
   setModelConfigChangeHandler,
-} from '../messages'
+} from '@messages'
 import {
   type AssistantMessage,
   type BinaryFeedbackResult,
   type Message as MessageType,
   type ProgressMessage,
   query,
-} from '../query.js'
-import type { WrappedClient } from '../services/mcpClient'
-import type { Tool } from '../Tool'
+} from '@query'
+import type { WrappedClient } from '@services/mcpClient'
+import type { Tool } from '@tool'
 // Auto-updater removed; only show a new version banner passed from CLI
-import { getGlobalConfig, saveGlobalConfig } from '../utils/config'
-import { MACRO } from '../constants/macros'
-import { getNextAvailableLogForkNumber } from '../utils/log'
+import { getGlobalConfig, saveGlobalConfig } from '@utils/config'
+import { MACRO } from '@constants/macros'
+import { getNextAvailableLogForkNumber } from '@utils/log'
 import {
   getErroredToolUseMessages,
   getInProgressToolUseIDs,
@@ -61,14 +61,14 @@ import {
   reorderMessages,
   extractTag,
   createAssistantMessage,
-} from '../utils/messages.js'
-import { getModelManager, ModelManager } from '../utils/model'
-import { clearTerminal, updateTerminalTitle } from '../utils/terminal'
-import { BinaryFeedback } from '../components/binary-feedback/BinaryFeedback'
-import { getMaxThinkingTokens } from '../utils/thinking'
-import { getOriginalCwd } from '../utils/state'
-import { handleHashCommand } from '../commands/terminalSetup'
-import { debug as debugLogger } from '../utils/debugLogger'
+} from '@utils/messages'
+import { getModelManager, ModelManager } from '@utils/model'
+import { clearTerminal, updateTerminalTitle } from '@utils/terminal'
+import { BinaryFeedback } from '@components/binary-feedback/BinaryFeedback'
+import { getMaxThinkingTokens } from '@utils/thinking'
+import { getOriginalCwd } from '@utils/state'
+import { handleHashCommand } from '@commands/terminalSetup'
+import { debug as debugLogger } from '@utils/debugLogger'
 
 type Props = {
   commands: Command[]

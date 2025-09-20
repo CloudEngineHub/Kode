@@ -1,9 +1,9 @@
 import { Box, Text } from 'ink'
 import React from 'react'
 import { z } from 'zod'
-import { Cost } from '../../components/Cost'
-import { FallbackToolUseRejectedMessage } from '../../components/FallbackToolUseRejectedMessage'
-import { Tool, ToolUseContext } from '../../Tool'
+import { Cost } from '@components/Cost'
+import { FallbackToolUseRejectedMessage } from '@components/FallbackToolUseRejectedMessage'
+import { Tool, ToolUseContext } from '@tool'
 import { DESCRIPTION, TOOL_NAME_FOR_PROMPT } from './prompt'
 import { SearchResult, searchProviders } from './searchProviders'
 

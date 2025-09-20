@@ -2,15 +2,15 @@ import { Box, Text, useInput } from 'ink'
 import * as React from 'react'
 import { useState, useCallback, useEffect, useRef } from 'react'
 import figures from 'figures'
-import { getTheme } from '../utils/theme'
+import { getTheme } from '@utils/theme'
 import {
   getGlobalConfig,
   saveGlobalConfig,
   ModelPointerType,
   setModelPointer,
-} from '../utils/config.js'
-import { getModelManager } from '../utils/model'
-import { useExitOnCtrlCD } from '../hooks/useExitOnCtrlCD'
+} from '@utils/config'
+import { getModelManager } from '@utils/model'
+import { useExitOnCtrlCD } from '@hooks/useExitOnCtrlCD'
 import { ModelSelector } from './ModelSelector'
 import { ModelListManager } from './ModelListManager'
 

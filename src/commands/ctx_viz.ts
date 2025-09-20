@@ -1,11 +1,11 @@
-import type { Command } from '../commands'
-import type { Tool } from '../Tool'
+import type { Command } from '@commands'
+import type { Tool } from '@tool'
 import Table from 'cli-table3'
-import { getSystemPrompt } from '../constants/prompts'
-import { getContext } from '../context'
+import { getSystemPrompt } from '@constants/prompts'
+import { getContext } from '@context'
 import { zodToJsonSchema } from 'zod-to-json-schema'
-import { getMessagesGetter } from '../messages'
-import { PROJECT_FILE } from '../constants/product'
+import { getMessagesGetter } from '@messages'
+import { PROJECT_FILE } from '@constants/product'
 // Quick and dirty estimate of bytes per token for rough token counts
 const BYTES_PER_TOKEN = 4
 
