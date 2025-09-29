@@ -5,6 +5,7 @@ This file provides guidance to Kode automation agents (including those compatibl
 ## Development Commands
 
 ### Essential Development Workflow
+
 ```bash
 # Install dependencies
 bun install
@@ -14,6 +15,9 @@ bun run dev
 
 # Build the CLI wrapper for distribution
 bun run build
+
+# Pre-release integration testing
+bun link
 
 # Clean build artifacts
 bun run clean
@@ -30,12 +34,17 @@ bun run format:check
 ```
 
 ### Build System Details
+
 - **Primary Build Tool**: Bun (required for development)
 - **Distribution**: Smart CLI wrapper (`cli.js`) that prefers Bun but falls back to Node.js with tsx loader
 - **Entry Point**: `src/entrypoints/cli.tsx`
-- **Build Output**: `cli.js` (executable wrapper) and `.npmrc` (npm configuration)
+- **Build Output**:
+  - `cli.js` - Cross-platform executable wrapper that uses `process.cwd()` as working directory
+  - `.npmrc` - npm configuration file with `package-lock=false` and `save-exact=true`
+  - `dist/` - ESM modules compiled from TypeScript sources
 
 ### Publishing
+
 ```bash
 # Publish to npm (requires build first)
 npm publish
@@ -111,6 +120,7 @@ Each tool follows a consistent pattern in `src/tools/[ToolName]/`:
 - Environment variables
 - CLI parameter overrides
 - Multi-model profile management
+
 
 ### Context Management
 - **Message Context Manager** (`src/utils/messageContextManager.ts`): Intelligent context window handling
@@ -205,3 +215,23 @@ const description = typeof tool.description === 'function'
 2. Place in appropriate directory based on scope
 3. Test with `/agents` command
 4. Verify tool permissions work correctly
+
+### Testing in Other Projects
+After making changes, test the CLI in different environments:
+
+1. **Development Testing**:
+   ```bash
+   bun run build  # Build with updated cli.js wrapper
+   bun link       # Link globally for testing
+   ```
+
+2. **Test in External Project**:
+   ```bash
+   cd /path/to/other/project
+   kode --help    # Verify CLI works and uses correct working directory
+   ```
+
+3. **Verify Working Directory**:
+   - CLI wrapper uses `process.cwd()` to ensure commands run in user's current directory
+   - Not in Kode's installation directory
+   - Essential for file operations and project context
