@@ -1434,7 +1434,9 @@ async function queryAnthropicNative(
         description: typeof tool.description === 'function' 
           ? await tool.description() 
           : tool.description,
-        input_schema: zodToJsonSchema(tool.inputSchema),
+        input_schema:'inputJSONSchema' in tool && tool.inputJSONSchema
+          ? tool.inputJSONSchema
+          : zodToJsonSchema(tool.inputSchema),
       }) as unknown as Anthropic.Beta.Messages.BetaTool,
     )
   )
