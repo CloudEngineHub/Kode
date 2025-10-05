@@ -1042,6 +1042,7 @@ export function ModelSelector({
       // Transform Ollama models to our format
       const ollamaModels = models.map((model: any) => ({
         model:
+          model.id ??
           model.name ??
           model.modelName ??
           (typeof model === 'string' ? model : ''),
