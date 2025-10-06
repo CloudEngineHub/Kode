@@ -419,7 +419,10 @@ export function ModelSelector({
   function getModelDetails(model: ModelInfo): string {
     const details = []
 
-    if (model.max_tokens) {
+    // Show context_length if available (Ollama models), otherwise max_tokens
+    if (model.context_length) {
+      details.push(`${formatNumber(model.context_length)} tokens`)
+    } else if (model.max_tokens) {
       details.push(`${formatNumber(model.max_tokens)} tokens`)
     }
 
@@ -1040,6 +1043,7 @@ export function ModelSelector({
       }
 
       // Transform Ollama models to our format
+      // Note: max_tokens here is for OUTPUT tokens, not context length
       const ollamaModels = models.map((model: any) => ({
         model:
           model.id ??
@@ -1047,7 +1051,7 @@ export function ModelSelector({
           model.modelName ??
           (typeof model === 'string' ? model : ''),
         provider: 'ollama',
-        max_tokens: 4096, // Default value
+        max_tokens: DEFAULT_MAX_TOKENS, // Default output tokens (8K is reasonable)
         supports_vision: false,
         supports_function_calling: true,
         supports_reasoning_effort: false,
@@ -1056,16 +1060,102 @@ export function ModelSelector({
       // Filter out models with empty names
       const validModels = ollamaModels.filter(model => model.model)
 
-      setAvailableModels(validModels)
+      // Helper: normalize Ollama server root for /api/show (strip trailing /v1)
+      const normalizeOllamaRoot = (url: string): string => {
+        try {
+          const u = new URL(url)
+          let pathname = u.pathname.replace(/\/+$|^$/, '')
+          if (pathname.endsWith('/v1')) {
+            pathname = pathname.slice(0, -3)
+          }
+          u.pathname = pathname
+          return u.toString().replace(/\/+$/, '')
+        } catch {
+          return url.replace(/\/v1\/?$/, '')
+        }
+      }
+
+      // Helper: extract num_ctx/context_length from /api/show response
+      const extractContextTokens = (data: any): number | null => {
+        if (!data || typeof data !== 'object') return null
+        
+        // First check model_info for architecture-specific context_length fields
+        // Example: qwen2.context_length, llama.context_length, etc.
+        if (data.model_info && typeof data.model_info === 'object') {
+          const modelInfo = data.model_info
+          for (const key of Object.keys(modelInfo)) {
+            if (key.endsWith('.context_length') || key.endsWith('_context_length')) {
+              const val = modelInfo[key]
+              if (typeof val === 'number' && isFinite(val) && val > 0) {
+                return val
+              }
+            }
+          }
+        }
+        
+        // Fallback to other common fields
+        const candidates = [
+          (data as any)?.parameters?.num_ctx,
+          (data as any)?.model_info?.num_ctx,
+          (data as any)?.config?.num_ctx,
+          (data as any)?.details?.context_length,
+          (data as any)?.context_length,
+          (data as any)?.num_ctx,
+          (data as any)?.max_tokens,
+          (data as any)?.max_new_tokens
+        ].filter((v: any) => typeof v === 'number' && isFinite(v) && v > 0)
+        if (candidates.length > 0) {
+          return Math.max(...candidates)
+        }
+        
+        // parameters may be a string like "num_ctx=4096 ..."
+        if (typeof (data as any)?.parameters === 'string') {
+          const m = (data as any).parameters.match(/num_ctx\s*[:=]\s*(\d+)/i)
+          if (m) {
+            const n = parseInt(m[1], 10)
+            if (Number.isFinite(n) && n > 0) return n
+          }
+        }
+        return null
+      }
+
+      // Enrich each model via /api/show to get accurate context length
+      // Store context length separately from max_tokens (output limit)
+      const ollamaRoot = normalizeOllamaRoot(ollamaBaseUrl)
+      const enrichedModels = await Promise.all(
+        validModels.map(async (m: any) => {
+          try {
+            const showResp = await fetch(`${ollamaRoot}/api/show`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: m.model })
+            })
+            if (showResp.ok) {
+              const showData = await showResp.json()
+              const ctx = extractContextTokens(showData)
+              if (typeof ctx === 'number' && isFinite(ctx) && ctx > 0) {
+                // Store context_length separately, don't override max_tokens
+                return { ...m, context_length: ctx }
+              }
+            }
+            // Fallback to default if missing
+            return m
+          } catch {
+            return m
+          }
+        })
+      )
+
+      setAvailableModels(enrichedModels)
 
       // Only navigate if we have models
-      if (validModels.length > 0) {
+      if (enrichedModels.length > 0) {
         navigateTo('model')
       } else {
         setModelLoadError('No models found in your Ollama installation')
       }
 
-      return validModels
+      return enrichedModels
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error)
@@ -1404,7 +1494,15 @@ export function ModelSelector({
       setReasoningEffort(null)
     }
 
+    // Set context length if available (from Ollama /api/show)
+    if (modelInfo?.context_length) {
+      setContextLength(modelInfo.context_length)
+    } else {
+      setContextLength(DEFAULT_CONTEXT_LENGTH)
+    }
+
     // Set max tokens based on model info or default
+    // Note: max_tokens is for OUTPUT, not context window
     if (modelInfo?.max_tokens) {
       const modelMaxTokens = modelInfo.max_tokens
       // Check if the model's max tokens matches any of our presets
