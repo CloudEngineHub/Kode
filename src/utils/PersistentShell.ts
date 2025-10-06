@@ -2,7 +2,7 @@ import * as fs from 'fs'
 import { homedir } from 'os'
 import { existsSync } from 'fs'
 import shellquote from 'shell-quote'
-import { spawn, execSync, type ChildProcess } from 'child_process'
+import { spawn, execSync, execFileSync, type ChildProcess } from 'child_process'
 import { isAbsolute, resolve, join } from 'path'
 import { logError } from './log'
 import * as os from 'os'
@@ -390,25 +390,34 @@ export class PersistentShell {
     // Check the syntax of the command
     try {
       if (this.shellType === 'wsl') {
-        execSync(`wsl.exe -e bash -n -c ${quotedCommand}`, {
+        // On Windows WSL, avoid shell string quoting issues by using argv form
+        execFileSync('wsl.exe', ['-e', 'bash', '-n', '-c', command], {
+          stdio: 'ignore',
+          timeout: 1000,
+        })
+      } else if (this.shellType === 'msys') {
+        // On Windows Git Bash/MSYS, use execFileSync to bypass cmd.exe parsing
+        execFileSync(this.binShell, ['-n', '-c', command], {
           stdio: 'ignore',
           timeout: 1000,
         })
       } else {
+        // POSIX platforms: keep existing behavior
         execSync(`${this.binShell} -n -c ${quotedCommand}`, {
           stdio: 'ignore',
           timeout: 1000,
         })
       }
-    } catch (stderr) {
-      // If there's a syntax error, return an error and log it
-      const errorStr =
-        typeof stderr === 'string' ? stderr : String(stderr || '')
+    } catch (error) {
+      // If there's a syntax error, return an error with the actual exit code
+      const execError = error as any
+      const actualExitCode = execError?.status ?? execError?.code ?? 2 // Default to 2 (syntax error) if no code available
+      const errorStr = execError?.stderr?.toString() || execError?.message || String(error || '')
       
       return Promise.resolve({
         stdout: '',
         stderr: errorStr,
-        code: 128,
+        code: actualExitCode,
         interrupted: false,
       })
     }
