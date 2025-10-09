@@ -2,7 +2,7 @@ import * as fs from 'fs'
 import { homedir } from 'os'
 import { existsSync } from 'fs'
 import shellquote from 'shell-quote'
-import { spawn, execSync, type ChildProcess } from 'child_process'
+import { spawn, execSync, execFileSync, type ChildProcess } from 'child_process'
 import { isAbsolute, resolve, join } from 'path'
 import { logError } from './log'
 import * as os from 'os'
@@ -130,12 +130,12 @@ function detectShell(): DetectedShell {
 
   // 1) Respect SHELL if it points to a bash.exe that exists
   if (process.env.SHELL && /bash\.exe$/i.test(process.env.SHELL) && existsSync(process.env.SHELL)) {
-    return { bin: process.env.SHELL, args: ['-l'], type: 'msys' }
+    return { bin: process.env.SHELL, args: [], type: 'msys' }
   }
 
   // 1.1) Explicit override
   if (process.env.KODE_BASH && existsSync(process.env.KODE_BASH)) {
-    return { bin: process.env.KODE_BASH, args: ['-l'], type: 'msys' }
+    return { bin: process.env.KODE_BASH, args: [], type: 'msys' }
   }
 
   // 2) Common Git Bash/MSYS2 locations
@@ -165,7 +165,7 @@ function detectShell(): DetectedShell {
 
   for (const c of candidates) {
     if (existsSync(c)) {
-      return { bin: c, args: ['-l'], type: 'msys' }
+      return { bin: c, args: [], type: 'msys' }
     }
   }
 
@@ -175,7 +175,7 @@ function detectShell(): DetectedShell {
   for (const p of pathEntries) {
     const candidate = join(p, 'bash.exe')
     if (existsSync(candidate)) {
-      return { bin: candidate, args: ['-l'], type: 'msys' }
+      return { bin: candidate, args: [], type: 'msys' }
     }
   }
 
@@ -269,8 +269,15 @@ export class PersistentShell {
     this.stderrFileBashPath = toBashPath(this.stderrFile, this.shellType)
     this.cwdFileBashPath = toBashPath(this.cwdFile, this.shellType)
 
-    // Source ~/.bashrc when available (works for bash on POSIX/MSYS/WSL)
-    this.sendToShell('[ -f ~/.bashrc ] && source ~/.bashrc || true')
+    // Source ~/.bashrc when available (avoid login shells on MSYS to prevent cwd resets)
+    if (this.shellType === 'msys') {
+      // Use non-login shell; explicitly source but keep working directory
+      this.sendToShell('[ -f ~/.bashrc ] && source ~/.bashrc || true')
+      // Ensure CWD file reflects current Windows path immediately on MSYS
+      this.sendToShell(`pwd -W > ${quoteForBash(this.cwdFileBashPath)}`)
+    } else {
+      this.sendToShell('[ -f ~/.bashrc ] && source ~/.bashrc || true')
+    }
   }
 
   private static instance: PersistentShell | null = null
@@ -385,30 +392,39 @@ export class PersistentShell {
      * - This sequence eliminates race conditions between exit code capture and CWD updates
      * - The pwd() method reads the CWD file directly for current directory info
      */
-    const quotedCommand = shellquote.quote([command])
+    const quotedCommand = quoteForBash(command)
 
     // Check the syntax of the command
     try {
       if (this.shellType === 'wsl') {
-        execSync(`wsl.exe -e bash -n -c ${quotedCommand}`, {
+        // On Windows WSL, avoid shell string quoting issues by using argv form
+        execFileSync('wsl.exe', ['-e', 'bash', '-n', '-c', command], {
+          stdio: 'ignore',
+          timeout: 1000,
+        })
+      } else if (this.shellType === 'msys') {
+        // On Windows Git Bash/MSYS, use execFileSync to bypass cmd.exe parsing
+        execFileSync(this.binShell, ['-n', '-c', command], {
           stdio: 'ignore',
           timeout: 1000,
         })
       } else {
+        // POSIX platforms: keep existing behavior
         execSync(`${this.binShell} -n -c ${quotedCommand}`, {
           stdio: 'ignore',
           timeout: 1000,
         })
       }
-    } catch (stderr) {
-      // If there's a syntax error, return an error and log it
-      const errorStr =
-        typeof stderr === 'string' ? stderr : String(stderr || '')
+    } catch (error) {
+      // If there's a syntax error, return an error with the actual exit code
+      const execError = error as any
+      const actualExitCode = execError?.status ?? execError?.code ?? 2 // Default to 2 (syntax error) if no code available
+      const errorStr = execError?.stderr?.toString() || execError?.message || String(error || '')
       
       return Promise.resolve({
         stdout: '',
         stderr: errorStr,
-        code: 128,
+        code: actualExitCode,
         interrupted: false,
       })
     }
@@ -432,8 +448,12 @@ export class PersistentShell {
       // 2. Capture exit code immediately after command execution to avoid losing it
       commandParts.push(`EXEC_EXIT_CODE=$?`)
 
-      // 3. Update CWD file
-      commandParts.push(`pwd > ${quoteForBash(this.cwdFileBashPath)}`)
+      // 3. Update CWD file (use Windows path on MSYS to keep Node path checks correct)
+      if (this.shellType === 'msys') {
+        commandParts.push(`pwd -W > ${quoteForBash(this.cwdFileBashPath)}`)
+      } else {
+        commandParts.push(`pwd > ${quoteForBash(this.cwdFileBashPath)}`)
+      }
 
       // 4. Write the preserved exit code to status file to avoid race with pwd
       commandParts.push(`echo $EXEC_EXIT_CODE > ${quoteForBash(this.statusFileBashPath)}`)
