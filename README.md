@@ -6,17 +6,15 @@
 
 [中文文档](README.zh-CN.md) | [Contributing](CONTRIBUTING.md) | [Documentation](docs/)
 
-## 🎉 Big Announcement: We're Now Apache 2.0 Licensed!
+<img width="90%" alt="image" src="https://github.com/user-attachments/assets/fdce7017-8095-429d-b74e-07f43a6919e1" />
 
-**Great news for the developer community!** In our commitment to democratizing AI agent technology and fostering a vibrant ecosystem of innovation, we're thrilled to announce that Kode has transitioned from AGPLv3 to the **Apache 2.0 license**.
+<img width="90%" alt="2c0ad8540f2872d197c7b17ae23d74f5" src="https://github.com/user-attachments/assets/f220cc27-084d-468e-a3f4-d5bc44d84fac" />
 
-### What This Means for You:
-- ✅ **Complete Freedom**: Use Kode in any project - personal, commercial, or enterprise
-- ✅ **Build Without Barriers**: Create proprietary solutions without open-sourcing requirements
-- ✅ **Simple Attribution**: Just maintain copyright notices and license info
-- ✅ **Join a Movement**: Be part of accelerating the world's transition to AI-powered development
+<img width="90%" alt="f266d316d90ddd0db5a3d640c1126930" src="https://github.com/user-attachments/assets/90ec7399-1349-4607-b689-96613b3dc3e2" />
 
-This change reflects our belief that the future of software development is collaborative, open, and augmented by AI. By removing licensing barriers, we're empowering developers worldwide to build the next generation of AI-assisted tools and workflows. Let's build the future together! 🚀
+
+<img width="90%" alt="image" src="https://github.com/user-attachments/assets/b30696ce-5ab1-40a0-b741-c7ef3945dba0" />
+
 
 ## 📢 Update Log
 
