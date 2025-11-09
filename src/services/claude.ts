@@ -1956,7 +1956,7 @@ async function queryOpenAI(
             // Use Responses API for GPT-5 and similar models
             const { callGPT5ResponsesAPI } = await import('./openai')
             const response = await callGPT5ResponsesAPI(modelProfile, request, signal)
-            const unifiedResponse = adapter.parseResponse(response)
+            const unifiedResponse = await adapter.parseResponse(response)
             
             // Convert unified response back to Anthropic format
             const apiMessage = {

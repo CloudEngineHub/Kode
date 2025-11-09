@@ -41,11 +41,11 @@ export class ModelAdapterFactory {
     const isOfficialOpenAI = !modelProfile.baseURL || 
       modelProfile.baseURL.includes('api.openai.com')
     
-    // Non-official endpoints use Chat Completions (even if model supports Responses API)
+    // Non-official endpoints can use Responses API if model supports it
     if (!isOfficialOpenAI) {
       // If there's a fallback option, use fallback
       if (capabilities.apiArchitecture.fallback === 'chat_completions') {
-        return 'chat_completions'
+        return capabilities.apiArchitecture.primary  // ← FIXED: Use primary instead of fallback
       }
       // Otherwise use primary (might fail, but let it try)
       return capabilities.apiArchitecture.primary
