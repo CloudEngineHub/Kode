@@ -10,7 +10,7 @@ export abstract class ModelAPIAdapter {
   
   // Subclasses must implement these methods
   abstract createRequest(params: UnifiedRequestParams): any
-  abstract parseResponse(response: any): UnifiedResponse
+  abstract parseResponse(response: any): Promise<UnifiedResponse>
   abstract buildTools(tools: Tool[]): any
   
   // Shared utility methods
