@@ -955,7 +955,7 @@ export function streamCompletion(
  */
 export async function callGPT5ResponsesAPI(
   modelProfile: any,
-  opts: any, // Using 'any' for Responses API params which differ from ChatCompletionCreateParams
+  request: any, // Pre-formatted request from adapter
   signal?: AbortSignal,
 ): Promise<any> {
   const baseURL = modelProfile?.baseURL || 'https://api.openai.com/v1'
@@ -969,82 +969,8 @@ export async function callGPT5ResponsesAPI(
     Authorization: `Bearer ${apiKey}`,
   }
 
-  // 🔥 Enhanced Responses API Parameter Mapping for GPT-5
-  const responsesParams: any = {
-    model: opts.model,
-    input: opts.messages, // Responses API uses 'input' instead of 'messages'
-  }
-
-  // 🔧 GPT-5 Token Configuration
-  if (opts.max_completion_tokens) {
-    responsesParams.max_completion_tokens = opts.max_completion_tokens
-  } else if (opts.max_tokens) {
-    // Fallback conversion if max_tokens is still present
-    responsesParams.max_completion_tokens = opts.max_tokens
-  }
-
-  // 🔧 GPT-5 Temperature Handling (only 1 or undefined)
-  if (opts.temperature === 1) {
-    responsesParams.temperature = 1
-  }
-  // Note: Do not pass temperature if it's not 1, GPT-5 will use default
-
-  // 🔧 GPT-5 Reasoning Configuration
-  const reasoningEffort = opts.reasoning_effort || 'medium'
-  responsesParams.reasoning = {
-    effort: reasoningEffort,
-    // 🚀 Enable reasoning summaries for transparency in coding tasks
-    generate_summary: true,
-  }
-
-  // 🔧 GPT-5 Tools Support
-  if (opts.tools && opts.tools.length > 0) {
-    responsesParams.tools = opts.tools
-    
-    // 🚀 GPT-5 Tool Choice Configuration
-    if (opts.tool_choice) {
-      responsesParams.tool_choice = opts.tool_choice
-    }
-  }
-
-  // 🔧 GPT-5 System Instructions (separate from messages)
-  const systemMessages = opts.messages.filter(msg => msg.role === 'system')
-  const nonSystemMessages = opts.messages.filter(msg => msg.role !== 'system')
-  
-  if (systemMessages.length > 0) {
-    responsesParams.instructions = systemMessages.map(msg => msg.content).join('\n\n')
-    responsesParams.input = nonSystemMessages
-  }
-
-  // Handle verbosity (if supported) - optimized for coding tasks
-  const features = getModelFeatures(opts.model)
-  if (features.supportsVerbosityControl) {
-    // High verbosity for coding tasks to get detailed explanations and structured code
-    // Based on GPT-5 best practices for agent-like coding environments
-    responsesParams.text = {
-      verbosity: 'high',
-    }
-  }
-
-  // Apply GPT-5 coding optimizations
-  if (opts.model.startsWith('gpt-5')) {
-    // Set reasoning effort based on task complexity
-    if (!responsesParams.reasoning) {
-      responsesParams.reasoning = {
-        effort: 'medium', // Balanced for most coding tasks
-      }
-    }
-
-    // Add instructions parameter for coding-specific guidance
-    if (!responsesParams.instructions) {
-      responsesParams.instructions = `You are an expert programmer working in a terminal-based coding environment. Follow these guidelines:
-- Provide clear, concise code solutions
-- Use proper error handling and validation
-- Follow coding best practices and patterns
-- Explain complex logic when necessary
-- Focus on maintainable, readable code`
-    }
-  }
+  // Use the pre-formatted request from the adapter
+  const responsesParams = request
 
   try {
     const response = await fetch(`${baseURL}/responses`, {
@@ -1056,13 +982,12 @@ export async function callGPT5ResponsesAPI(
     })
 
     if (!response.ok) {
-      throw new Error(`GPT-5 Responses API error: ${response.status} ${response.statusText}`)
+      const errorText = await response.text()
+      throw new Error(`GPT-5 Responses API error: ${response.status} ${response.statusText} - ${errorText}`)
     }
 
-    const responseData = await response.json()
-    
-    // Convert Responses API response back to Chat Completion format for compatibility
-    return convertResponsesAPIToChatCompletion(responseData)
+    // Return the raw response - the adapter will handle parsing
+    return response
   } catch (error) {
     if (signal?.aborted) {
       throw new Error('Request cancelled by user')

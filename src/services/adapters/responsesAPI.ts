@@ -5,7 +5,7 @@ import { zodToJsonSchema } from 'zod-to-json-schema'
 
 export class ResponsesAPIAdapter extends ModelAPIAdapter {
   createRequest(params: UnifiedRequestParams): any {
-    const { messages, systemPrompt, tools, maxTokens, stream } = params
+    const { messages, systemPrompt, tools, maxTokens, stream, reasoningEffort } = params
 
     // Build base request
     const request: any = {
@@ -13,7 +13,7 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
       input: this.convertMessagesToInput(messages),
       instructions: this.buildInstructions(systemPrompt)
     }
-    
+
     // Add token limit - Responses API uses max_output_tokens
     request.max_output_tokens = maxTokens
 
@@ -24,78 +24,74 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
     if (this.getTemperature() === 1) {
       request.temperature = 1
     }
-    
-    // Add reasoning control - correct format for Responses API
-    if (this.shouldIncludeReasoningEffort()) {
+
+    // Add reasoning control - include array is required for reasoning content
+    const include: string[] = []
+    if (this.shouldIncludeReasoningEffort() || reasoningEffort) {
+      include.push('reasoning.encrypted_content')
       request.reasoning = {
-        effort: params.reasoningEffort || this.modelProfile.reasoningEffort || 'medium'
+        effort: reasoningEffort || this.modelProfile.reasoningEffort || 'medium'
       }
     }
-    
+
     // Add verbosity control - correct format for Responses API
     if (this.shouldIncludeVerbosity()) {
       request.text = {
         verbosity: params.verbosity || 'high'  // High verbosity for coding tasks
       }
     }
-    
+
     // Add tools
     if (tools && tools.length > 0) {
       request.tools = this.buildTools(tools)
-      
-      // Handle allowed_tools
-      if (params.allowedTools && this.capabilities.toolCalling.supportsAllowedTools) {
-        request.tool_choice = {
-          type: 'allowed_tools',
-          mode: 'auto',
-          tools: params.allowedTools
-        }
-      }
     }
-    
+
+    // Add tool choice - use simple format like codex-cli.js
+    request.tool_choice = 'auto'
+
+    // Add parallel tool calls flag
+    request.parallel_tool_calls = this.capabilities.toolCalling.supportsParallelCalls
+
+    // Add store flag
+    request.store = false
+
     // Add state management
     if (params.previousResponseId && this.capabilities.stateManagement.supportsPreviousResponseId) {
       request.previous_response_id = params.previousResponseId
     }
-    
+
+    // Add include array for reasoning and other content
+    if (include.length > 0) {
+      request.include = include
+    }
+
     return request
   }
   
   buildTools(tools: Tool[]): any[] {
-    // If freeform not supported, use traditional format
-    if (!this.capabilities.toolCalling.supportsFreeform) {
-      return tools.map(tool => ({
-        type: 'function',
-        function: {
-          name: tool.name,
-          description: tool.description || '',
-          parameters: tool.inputJSONSchema || zodToJsonSchema(tool.inputSchema)
-        }
-      }))
-    }
-    
-    // Custom tools format (GPT-5 feature)
+    // Follow codex-cli.js format: flat structure, no nested 'function' object
     return tools.map(tool => {
-      const hasSchema = tool.inputJSONSchema || tool.inputSchema
-      const isCustom = !hasSchema
-      
-      if (isCustom) {
-        // Custom tool format
-        return {
-          type: 'custom',
-          name: tool.name,
-          description: tool.description || ''
+      // Prefer pre-built JSON schema if available
+      let parameters = tool.inputJSONSchema
+
+      // Otherwise, try to convert Zod schema
+      if (!parameters && tool.inputSchema) {
+        try {
+          parameters = zodToJsonSchema(tool.inputSchema)
+        } catch (error) {
+          console.warn(`Failed to convert Zod schema for tool ${tool.name}:`, error)
+          // Use minimal schema as fallback
+          parameters = { type: 'object', properties: {} }
         }
-      } else {
-        // Traditional function format
-        return {
-          type: 'function',
-          function: {
-            name: tool.name,
-            description: tool.description || '',
-            parameters: tool.inputJSONSchema || zodToJsonSchema(tool.inputSchema)
-          }
-        }
+      }
+
+      return {
+        type: 'function',
+        name: tool.name,
+        description: typeof tool.description === 'function'
+          ? 'Tool with dynamic description'
+          : (tool.description || ''),
+        parameters: parameters || { type: 'object', properties: {} }
       }
     })
   }
@@ -137,9 +133,14 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
     const toolCalls = this.parseToolCalls(response)
 
     // Build unified response
+    // Convert content to array format for Anthropic compatibility
+    const contentArray = content
+      ? [{ type: 'text', text: content, citations: [] }]
+      : [{ type: 'text', text: '', citations: [] }]
+
     return {
       id: response.id || `resp_${Date.now()}`,
-      content,
+      content: contentArray,  // Return as array (Anthropic format)
       toolCalls,
       usage: {
         promptTokens: response.usage?.input_tokens || 0,
