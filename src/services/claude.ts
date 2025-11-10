@@ -2068,10 +2068,13 @@ async function queryOpenAI(
     apiFormat: 'openai',
   })
 
+  // Extract content from OpenAI response structure
+  const messageContent = response.choices?.[0]?.message?.content || []
+
   return {
     message: {
-      ...response,
-      content: normalizeContentFromAPI(response.content),
+      role: 'assistant',
+      content: normalizeContentFromAPI(Array.isArray(messageContent) ? messageContent : [{ type: 'text', text: String(messageContent) }]),
       usage: {
         input_tokens: inputTokens,
         output_tokens: outputTokens,
