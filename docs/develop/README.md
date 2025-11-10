@@ -17,6 +17,7 @@ This comprehensive documentation provides a complete understanding of the Kode c
 - **[Model Management](./modules/model-management.md)** - Multi-provider AI model integration and intelligent switching
 - **[MCP Integration](./modules/mcp-integration.md)** - Model Context Protocol for third-party tool integration
 - **[Custom Commands](./modules/custom-commands.md)** - Markdown-based extensible command system
+- **[OpenAI Adapter Layer](./modules/openai-adapters.md)** - Anthropic-to-OpenAI request translation for Chat Completions and Responses API
 
 ### Core Modules
 

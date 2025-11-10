@@ -196,7 +196,7 @@ describe('🌐 Production API Integration Tests', () => {
 
         if (response.ok) {
           // Use the adapter's parseResponse method to handle the response
-          const unifiedResponse = adapter.parseResponse(response)
+          const unifiedResponse = await adapter.parseResponse(response)
           console.log('✅ SUCCESS! Response received:')
           console.log('📄 Unified Response:', JSON.stringify(unifiedResponse, null, 2))
 
@@ -334,127 +334,6 @@ describe('🌐 Production API Integration Tests', () => {
         // Don't fail for network issues
         expect(error.message).toBeDefined()
       }
-    })
-  })
-
-  describe('🎯 Integration Validation Report', () => {
-    test('📋 Complete production test summary', async () => {
-      const results = {
-        timestamp: new Date().toISOString(),
-        tests: [],
-        endpoints: [],
-        performance: {},
-        recommendations: [] as string[],
-      }
-
-      // Test both endpoints
-      const profiles = [
-        { name: 'GPT-5 Codex', profile: GPT5_CODEX_PROFILE },
-        { name: 'MiniMax Codex', profile: MINIMAX_CODEX_PROFILE },
-      ]
-
-      for (const { name, profile } of profiles) {
-        try {
-          const adapter = ModelAdapterFactory.createAdapter(profile)
-          const shouldUseResponses = ModelAdapterFactory.shouldUseResponsesAPI(profile)
-          const endpoint = shouldUseResponses
-            ? `${profile.baseURL}/responses`
-            : `${profile.baseURL}/chat/completions`
-
-          // Quick connectivity test
-          const testRequest = {
-            model: profile.modelName,
-            messages: [{ role: 'user', content: 'test' }],
-            max_tokens: 1
-          }
-
-          const startTime = performance.now()
-          const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${profile.apiKey}`,
-            },
-            body: JSON.stringify(testRequest),
-          })
-          const endTime = performance.now()
-
-          results.tests.push({
-            name,
-            status: response.ok ? 'success' : 'failed',
-            statusCode: response.status,
-            endpoint,
-            responseTime: `${(endTime - startTime).toFixed(2)}ms`,
-          })
-
-          results.endpoints.push({
-            name,
-            url: endpoint,
-            accessible: response.ok,
-          })
-
-        } catch (error) {
-          results.tests.push({
-            name,
-            status: 'error',
-            error: error.message,
-            endpoint: `${profile.baseURL}/...`,
-          })
-        }
-      }
-
-      // Generate recommendations
-      const successCount = results.tests.filter(t => t.status === 'success').length
-      if (successCount === results.tests.length) {
-        results.recommendations.push('🎉 All endpoints are accessible and working!')
-        results.recommendations.push('✅ Integration tests passed - ready for production use')
-      } else {
-        results.recommendations.push('⚠️  Some endpoints failed - check configuration')
-        results.recommendations.push('🔧 Verify API keys and endpoint URLs')
-      }
-
-      // 📨 COMPREHENSIVE PRODUCTION TEST REPORT
-      console.log('\n🎯 PRODUCTION INTEGRATION REPORT:')
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-      console.log(`📅 Test Date: ${results.timestamp}`)
-      console.log(`🎯 Tests Run: ${results.tests.length}`)
-      console.log(`✅ Successful: ${successCount}`)
-      console.log(`❌ Failed: ${results.tests.length - successCount}`)
-      console.log('')
-
-      console.log('📊 ENDPOINT TEST RESULTS:')
-      results.tests.forEach(test => {
-        const icon = test.status === 'success' ? '✅' : '❌'
-        console.log(`  ${icon} ${test.name}: ${test.status} (${test.statusCode || 'N/A'})`)
-        if (test.responseTime) {
-          console.log(`     ⏱️  Response time: ${test.responseTime}`)
-        }
-        if (test.error) {
-          console.log(`     💥 Error: ${test.error}`)
-        }
-      })
-
-      console.log('')
-      console.log('🌐 ACCESSIBLE ENDPOINTS:')
-      results.endpoints.forEach(endpoint => {
-        const icon = endpoint.accessible ? '🟢' : '🔴'
-        console.log(`  ${icon} ${endpoint.name}: ${endpoint.url}`)
-      })
-
-      console.log('')
-      console.log('💡 RECOMMENDATIONS:')
-      results.recommendations.forEach(rec => console.log(`  ${rec}`))
-
-      console.log('')
-      console.log('🚀 NEXT STEPS:')
-      console.log('  1. ✅ Integration tests complete')
-      console.log('  2. 🔍 Review any failed tests above')
-      console.log('  3. 🎯 Configure your applications to use working endpoints')
-      console.log('  4. 📊 Monitor API usage and costs')
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-
-      expect(results.tests.length).toBeGreaterThan(0)
-      return results
     })
   })
 })

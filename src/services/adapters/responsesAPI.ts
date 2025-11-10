@@ -74,14 +74,21 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
       // Prefer pre-built JSON schema if available
       let parameters = tool.inputJSONSchema
 
-      // Otherwise, try to convert Zod schema
+      // Otherwise, check if inputSchema is already a JSON schema (not Zod)
       if (!parameters && tool.inputSchema) {
-        try {
-          parameters = zodToJsonSchema(tool.inputSchema)
-        } catch (error) {
-          console.warn(`Failed to convert Zod schema for tool ${tool.name}:`, error)
-          // Use minimal schema as fallback
-          parameters = { type: 'object', properties: {} }
+        // Check if it's already a JSON schema (has 'type' property) vs a Zod schema
+        if (tool.inputSchema.type || tool.inputSchema.properties) {
+          // Already a JSON schema, use directly
+          parameters = tool.inputSchema
+        } else {
+          // Try to convert Zod schema
+          try {
+            parameters = zodToJsonSchema(tool.inputSchema)
+          } catch (error) {
+            console.warn(`Failed to convert Zod schema for tool ${tool.name}:`, error)
+            // Use minimal schema as fallback
+            parameters = { type: 'object', properties: {} }
+          }
         }
       }
 
