@@ -1,11 +1,11 @@
-import { ModelAPIAdapter } from './base'
+import { ModelAPIAdapter, StreamingEvent } from './base'
 import { UnifiedRequestParams, UnifiedResponse } from '@kode-types/modelCapabilities'
 import { Tool } from '@tool'
 import { zodToJsonSchema } from 'zod-to-json-schema'
 
 export class ResponsesAPIAdapter extends ModelAPIAdapter {
   createRequest(params: UnifiedRequestParams): any {
-    const { messages, systemPrompt, tools, maxTokens, stream, reasoningEffort } = params
+    const { messages, systemPrompt, tools, maxTokens, reasoningEffort } = params
 
     // Build base request
     const request: any = {
@@ -76,8 +76,12 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
 
       // Otherwise, check if inputSchema is already a JSON schema (not Zod)
       if (!parameters && tool.inputSchema) {
-        // Check if it's already a JSON schema (has 'type' property) vs a Zod schema
-        if (tool.inputSchema.type || tool.inputSchema.properties) {
+        // Type guard to check if it's a plain JSON schema object
+        const isPlainObject = (obj: any): boolean => {
+          return obj !== null && typeof obj === 'object' && !Array.isArray(obj)
+        }
+
+        if (isPlainObject(tool.inputSchema) && ('type' in tool.inputSchema || 'properties' in tool.inputSchema)) {
           // Already a JSON schema, use directly
           parameters = tool.inputSchema
         } else {
@@ -106,7 +110,9 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
   async parseResponse(response: any): Promise<UnifiedResponse> {
     // Check if this is a streaming response (Response object with body)
     if (response && typeof response === 'object' && 'body' in response && response.body) {
-      return await this.parseStreamingResponse(response)
+      // For backward compatibility, buffer the stream and return complete response
+      // This can be upgraded to true streaming once claude.ts is updated
+      return await this.parseStreamingResponseBuffered(response)
     }
 
     // Process non-streaming response
@@ -158,9 +164,127 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
     }
   }
 
-  private async parseStreamingResponse(response: any): Promise<UnifiedResponse> {
+  // New streaming method that yields events incrementally
+  async *parseStreamingResponse(response: any): AsyncGenerator<StreamingEvent> {
     // Handle streaming response from Responses API
-    // Collect all chunks and build a unified response
+    // Yield events incrementally for real-time UI updates
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    let responseId = response.id || `resp_${Date.now()}`
+    let hasStarted = false
+    let accumulatedContent = ''
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (line.trim()) {
+            const parsed = this.parseSSEChunk(line)
+            if (parsed) {
+              // Extract response ID
+              if (parsed.response?.id) {
+                responseId = parsed.response.id
+              }
+
+              // Handle text content deltas
+              if (parsed.type === 'response.output_text.delta') {
+                const delta = parsed.delta || ''
+                if (delta) {
+                  // First content - yield message_start event
+                  if (!hasStarted) {
+                    yield {
+                      type: 'message_start',
+                      message: {
+                        role: 'assistant',
+                        content: []
+                      },
+                      responseId
+                    }
+                    hasStarted = true
+                  }
+
+                  accumulatedContent += delta
+
+                  // Yield text delta event
+                  yield {
+                    type: 'text_delta',
+                    delta: delta,
+                    responseId
+                  }
+                }
+              }
+
+              // Handle tool calls
+              if (parsed.type === 'response.output_item.done') {
+                const item = parsed.item || {}
+                if (item.type === 'function_call') {
+                  yield {
+                    type: 'tool_request',
+                    tool: {
+                      id: item.call_id || item.id || `tool_${Date.now()}`,
+                      name: item.name,
+                      input: item.arguments
+                    }
+                  }
+                }
+              }
+
+              // Handle usage information
+              if (parsed.usage) {
+                yield {
+                  type: 'usage',
+                  usage: {
+                    promptTokens: parsed.usage.input_tokens || 0,
+                    completionTokens: parsed.usage.output_tokens || 0,
+                    reasoningTokens: parsed.usage.output_tokens_details?.reasoning_tokens || 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error reading streaming response:', error)
+      yield {
+        type: 'error',
+        error: error instanceof Error ? error.message : String(error)
+      }
+    } finally {
+      reader.releaseLock()
+    }
+
+    // Build final response
+    const finalContent = accumulatedContent
+      ? [{ type: 'text', text: accumulatedContent, citations: [] }]
+      : [{ type: 'text', text: '', citations: [] }]
+
+    // Yield final message stop
+    yield {
+      type: 'message_stop',
+      message: {
+        id: responseId,
+        role: 'assistant',
+        content: finalContent,
+        responseId
+      }
+    }
+  }
+
+  // Legacy buffered method for backward compatibility
+  // This will be removed once the streaming integration is complete
+  private async parseStreamingResponseBuffered(response: any): Promise<UnifiedResponse> {
+    // Handle streaming response from Responses API
+    // Collect all chunks and build a unified response (BUFFERING APPROACH)
 
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
@@ -211,12 +335,19 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
       }
     } catch (error) {
       console.error('Error reading streaming response:', error)
+    } finally {
+      reader.releaseLock()
     }
 
     // Build unified response
+    // Convert string content to array of content blocks (like Chat Completions format)
+    const contentArray = fullContent
+      ? [{ type: 'text', text: fullContent, citations: [] }]
+      : [{ type: 'text', text: '', citations: [] }]
+
     return {
       id: responseId,
-      content: fullContent,
+      content: contentArray,  // Return as array of content blocks
       toolCalls,
       usage: {
         promptTokens: 0, // Will be filled in by the caller
