@@ -1952,12 +1952,19 @@ async function queryOpenAI(
           const request = adapter.createRequest(unifiedParams)
           
           // Determine which API to use
-          if (ModelAdapterFactory.shouldUseResponsesAPI(modelProfile)) {
+          const shouldUseResponses = ModelAdapterFactory.shouldUseResponsesAPI(modelProfile)
+          console.log('[DEBUG-PATH] shouldUseResponsesAPI:', shouldUseResponses)
+          console.log('[DEBUG-PATH] modelProfile:', modelProfile.modelName)
+
+          if (shouldUseResponses) {
             // Use Responses API for GPT-5 and similar models
             const { callGPT5ResponsesAPI } = await import('./openai')
             const response = await callGPT5ResponsesAPI(modelProfile, request, signal)
             const unifiedResponse = await adapter.parseResponse(response)
-            
+
+            // 🔍 DEBUG: Log what the adapter returned
+            console.log('[DEBUG-RESPONSES-API] unifiedResponse.content:', JSON.stringify(unifiedResponse.content, null, 2))
+
             // Convert unified response back to Anthropic format
             const apiMessage = {
               role: 'assistant' as const,
@@ -1976,9 +1983,14 @@ async function queryOpenAI(
               uuid: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}` as any,
               responseId: unifiedResponse.responseId  // For state management
             }
+
+            // 🔍 DEBUG: Trace the return value
+            console.log('[TRACE-RESPONSES-API-RETURN] content[0].text:', assistantMsg.message.content[0]?.text)
+
             return assistantMsg
           } else {
             // Use existing Chat Completions flow
+            console.log('[DEBUG-PATH] Using CHAT COMPLETIONS PATH')
             const s = await getCompletionWithProfile(modelProfile, request, 0, 10, signal)
             let finalResponse
             if (config.stream) {
@@ -2033,6 +2045,13 @@ async function queryOpenAI(
     logError(error)
     return getAssistantMessageFromError(error)
   }
+
+  // 🔥 CRITICAL FIX: If response is already an AssistantMessage (from adapter), return it immediately
+  // Don't continue processing it as a ChatCompletion!
+  if (response && response.type === 'assistant') {
+    return response
+  }
+
   const durationMs = Date.now() - start
   const durationMsIncludingRetries = Date.now() - startIncludingRetries
 
