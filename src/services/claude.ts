@@ -1871,7 +1871,6 @@ async function queryOpenAI(
   )
 
   const openaiMessages = convertAnthropicMessagesToOpenAIMessages(messages)
-  const startIncludingRetries = Date.now()
 
   // 记录系统提示构建过程 (OpenAI path)
   logSystemPromptConstruction({
@@ -1882,17 +1881,108 @@ async function queryOpenAI(
   })
 
   let start = Date.now()
-  let attemptNumber = 0
+
+  // Extract adapter path BEFORE withRetry for cleaner flow
+  if (modelProfile && modelProfile.modelName) {
+    debugLogger.api('CHECKING_ADAPTER_SYSTEM', {
+      modelProfileName: modelProfile.modelName,
+      modelName: modelProfile.modelName,
+      provider: modelProfile.provider,
+      requestId: getCurrentRequest()?.id,
+    })
+
+    const USE_NEW_ADAPTER_SYSTEM = process.env.USE_NEW_ADAPTERS !== 'false'
+
+    if (USE_NEW_ADAPTER_SYSTEM) {
+      // New adapter system - extract before withRetry
+      const adapter = ModelAdapterFactory.createAdapter(modelProfile)
+
+      // Build unified request parameters
+      const reasoningEffort = await getReasoningEffort(modelProfile, messages)
+      const unifiedParams: UnifiedRequestParams = {
+        messages: openaiMessages,
+        systemPrompt: openaiSystem.map(s => s.content as string),
+        tools: tools,
+        maxTokens: getMaxTokensFromProfile(modelProfile),
+        stream: config.stream,
+        reasoningEffort: reasoningEffort as any,
+        temperature: isGPT5Model(model) ? 1 : MAIN_QUERY_TEMPERATURE,
+        previousResponseId: toolUseContext?.responseState?.previousResponseId,
+        verbosity: 'high' // High verbosity for coding tasks
+      }
+
+      // Create request using adapter
+      const request = adapter.createRequest(unifiedParams)
+
+      // Determine which API to use
+      const shouldUseResponses = ModelAdapterFactory.shouldUseResponsesAPI(modelProfile)
+
+      if (shouldUseResponses) {
+        // Use Responses API for GPT-5 and similar models
+        // NOTE: Direct call without withRetry for separation of concerns
+        // If retry logic is needed later, wrap in withRetry:
+        // const response = await withRetry(() => callGPT5ResponsesAPI(modelProfile, request, signal))
+        const { callGPT5ResponsesAPI } = await import('./openai')
+        const response = await callGPT5ResponsesAPI(modelProfile, request, signal)
+        const unifiedResponse = await adapter.parseResponse(response)
+
+        // Convert unified response back to Anthropic format
+        const apiMessage = {
+          role: 'assistant' as const,
+          content: unifiedResponse.content,
+          tool_calls: unifiedResponse.toolCalls,
+          usage: {
+            prompt_tokens: unifiedResponse.usage.promptTokens,
+            completion_tokens: unifiedResponse.usage.completionTokens,
+          }
+        }
+        const assistantMsg: AssistantMessage = {
+          type: 'assistant',
+          message: apiMessage as any,
+          costUSD: 0, // Will be calculated later
+          durationMs: Date.now() - start,
+          uuid: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}` as any,
+          responseId: unifiedResponse.responseId
+        }
+
+        return assistantMsg
+      } else {
+        // Use Chat Completions adapter (not withRetry)
+        // NOTE: The ChatCompletionsAdapter is created above and used to build the request,
+        // but parseResponse() is not called here. Instead, we use legacy functions for backward compatibility.
+        // Future improvement: Call adapter.parseResponse() to fully utilize the adapter pattern.
+        const s = await getCompletionWithProfile(modelProfile, request, 0, 10, signal)
+        let finalResponse
+        if (config.stream) {
+          finalResponse = await handleMessageStream(s as ChatCompletionStream, signal)
+        } else {
+          finalResponse = s
+        }
+        const message = convertOpenAIResponseToAnthropic(finalResponse, tools)
+        const assistantMsg: AssistantMessage = {
+          type: 'assistant',
+          message: message as any,
+          costUSD: 0, // Will be calculated later
+          durationMs: Date.now() - start,
+          uuid: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}` as any
+        }
+        return assistantMsg
+      }
+    }
+  }
+
+  // Legacy ChatCompletion path uses withRetry
   let response
+  let startIncludingRetries = Date.now()
 
   try {
-    response = await withRetry(async attempt => {
-      attemptNumber = attempt
+    response = await withRetry(async () => {
       start = Date.now()
+
       // 🔥 GPT-5 Enhanced Parameter Construction
       const maxTokens = getMaxTokensFromProfile(modelProfile)
       const isGPT5 = isGPT5Model(model)
-      
+
       const opts: OpenAI.ChatCompletionCreateParams = {
         model,
 
@@ -1917,139 +2007,23 @@ async function queryOpenAI(
         opts.reasoning_effort = reasoningEffort
       }
 
-
-      if (modelProfile && modelProfile.modelName) {
-        debugLogger.api('USING_MODEL_PROFILE_PATH', {
-          modelProfileName: modelProfile.modelName,
-          modelName: modelProfile.modelName,
-          provider: modelProfile.provider,
-          baseURL: modelProfile.baseURL,
-          apiKeyExists: !!modelProfile.apiKey,
-          requestId: getCurrentRequest()?.id,
-        })
-
-        // Enable new adapter system with environment variable
-        const USE_NEW_ADAPTER_SYSTEM = process.env.USE_NEW_ADAPTERS !== 'false'
-        
-        if (USE_NEW_ADAPTER_SYSTEM) {
-          // New adapter system
-          const adapter = ModelAdapterFactory.createAdapter(modelProfile)
-          
-          // Build unified request parameters
-          const unifiedParams: UnifiedRequestParams = {
-            messages: openaiMessages,
-            systemPrompt: openaiSystem.map(s => s.content as string),
-            tools: tools,
-            maxTokens: getMaxTokensFromProfile(modelProfile),
-            stream: config.stream,
-            reasoningEffort: reasoningEffort as any,
-            temperature: isGPT5Model(model) ? 1 : MAIN_QUERY_TEMPERATURE,
-            previousResponseId: toolUseContext?.responseState?.previousResponseId,
-            verbosity: 'high' // High verbosity for coding tasks
-          }
-          
-          // Create request using adapter
-          const request = adapter.createRequest(unifiedParams)
-          
-          // Determine which API to use
-          const shouldUseResponses = ModelAdapterFactory.shouldUseResponsesAPI(modelProfile)
-          console.log('[DEBUG-PATH] shouldUseResponsesAPI:', shouldUseResponses)
-          console.log('[DEBUG-PATH] modelProfile:', modelProfile.modelName)
-
-          if (shouldUseResponses) {
-            // Use Responses API for GPT-5 and similar models
-            const { callGPT5ResponsesAPI } = await import('./openai')
-            const response = await callGPT5ResponsesAPI(modelProfile, request, signal)
-            const unifiedResponse = await adapter.parseResponse(response)
-
-            // 🔍 DEBUG: Log what the adapter returned
-            console.log('[DEBUG-RESPONSES-API] unifiedResponse.content:', JSON.stringify(unifiedResponse.content, null, 2))
-
-            // Convert unified response back to Anthropic format
-            const apiMessage = {
-              role: 'assistant' as const,
-              content: unifiedResponse.content,
-              tool_calls: unifiedResponse.toolCalls,
-              usage: {
-                prompt_tokens: unifiedResponse.usage.promptTokens,
-                completion_tokens: unifiedResponse.usage.completionTokens,
-              }
-            }
-            const assistantMsg: AssistantMessage = {
-              type: 'assistant',
-              message: apiMessage as any,
-              costUSD: 0, // Will be calculated later
-              durationMs: Date.now() - start,
-              uuid: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}` as any,
-              responseId: unifiedResponse.responseId  // For state management
-            }
-
-            // 🔍 DEBUG: Trace the return value
-            console.log('[TRACE-RESPONSES-API-RETURN] content[0].text:', assistantMsg.message.content[0]?.text)
-
-            return assistantMsg
-          } else {
-            // Use existing Chat Completions flow
-            console.log('[DEBUG-PATH] Using CHAT COMPLETIONS PATH')
-            const s = await getCompletionWithProfile(modelProfile, request, 0, 10, signal)
-            let finalResponse
-            if (config.stream) {
-              finalResponse = await handleMessageStream(s as ChatCompletionStream, signal)
-            } else {
-              finalResponse = s
-            }
-            const r = convertOpenAIResponseToAnthropic(finalResponse, tools)
-            return r
-          }
-        } else {
-          // Legacy system (preserved for fallback)
-          const completionFunction = isGPT5Model(modelProfile.modelName) 
-            ? getGPT5CompletionWithProfile 
-            : getCompletionWithProfile
-          const s = await completionFunction(modelProfile, opts, 0, 10, signal)
-          let finalResponse
-          if (opts.stream) {
-            finalResponse = await handleMessageStream(s as ChatCompletionStream, signal)
-          } else {
-            finalResponse = s
-          }
-          const r = convertOpenAIResponseToAnthropic(finalResponse, tools)
-          return r
-        }
+      // Legacy system (preserved for fallback)
+      const completionFunction = isGPT5Model(modelProfile?.modelName || '')
+        ? getGPT5CompletionWithProfile
+        : getCompletionWithProfile
+      const s = await completionFunction(modelProfile, opts, 0, 10, signal)
+      let finalResponse
+      if (opts.stream) {
+        finalResponse = await handleMessageStream(s as ChatCompletionStream, signal)
       } else {
-        // 🚨 警告：ModelProfile不可用，使用旧逻辑路径
-        debugLogger.api('USING_LEGACY_PATH', {
-          modelProfileExists: !!modelProfile,
-          modelProfileId: modelProfile?.modelName,
-          modelNameExists: !!modelProfile?.modelName,
-          fallbackModel: 'main',
-          actualModel: model,
-          requestId: getCurrentRequest()?.id,
-        })
-
-        // 🚨 FALLBACK: 没有有效的ModelProfile时，应该抛出错误而不是使用遗留系统
-        const errorDetails = {
-          modelProfileExists: !!modelProfile,
-          modelProfileId: modelProfile?.modelName,
-          modelNameExists: !!modelProfile?.modelName,
-          requestedModel: model,
-          requestId: getCurrentRequest()?.id,
-        }
-        debugLogger.error('NO_VALID_MODEL_PROFILE', errorDetails)
-        throw new Error(
-          `No valid ModelProfile available for model: ${model}. Please configure model through /model command. Debug: ${JSON.stringify(errorDetails)}`,
-        )
+        finalResponse = s
       }
+      const r = convertOpenAIResponseToAnthropic(finalResponse, tools)
+      return r
     }, { signal })
   } catch (error) {
     logError(error)
     return getAssistantMessageFromError(error)
-  }
-
-  // 🔥 CRITICAL FIX: If response is already an AssistantMessage (from adapter), return it immediately
-  // Don't continue processing it as a ChatCompletion!
-  if (response && response.type === 'assistant') {
-    return response
   }
 
   const durationMs = Date.now() - start
