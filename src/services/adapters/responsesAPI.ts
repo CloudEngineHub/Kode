@@ -223,16 +223,23 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
                 }
               }
 
-              // Handle tool calls
+              // Handle tool calls - enhanced following codex-cli.js pattern
               if (parsed.type === 'response.output_item.done') {
                 const item = parsed.item || {}
                 if (item.type === 'function_call') {
-                  yield {
-                    type: 'tool_request',
-                    tool: {
-                      id: item.call_id || item.id || `tool_${Date.now()}`,
-                      name: item.name,
-                      input: item.arguments
+                  // Validate tool call fields
+                  const callId = item.call_id || item.id
+                  const name = item.name
+                  const args = item.arguments
+
+                  if (typeof callId === 'string' && typeof name === 'string' && typeof args === 'string') {
+                    yield {
+                      type: 'tool_request',
+                      tool: {
+                        id: callId,
+                        name: name,
+                        input: args
+                      }
                     }
                   }
                 }
@@ -317,16 +324,25 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
                 fullContent += parsed.delta || ''
               }
 
-              // Handle tool calls
+              // Handle tool calls - enhanced following codex-cli.js pattern
               if (parsed.type === 'response.output_item.done') {
                 const item = parsed.item || {}
                 if (item.type === 'function_call') {
-                  toolCalls.push({
-                    id: item.call_id || item.id || `tool_${Date.now()}`,
-                    type: 'tool_call',
-                    name: item.name,
-                    arguments: item.arguments
-                  })
+                  // Validate tool call fields
+                  const callId = item.call_id || item.id
+                  const name = item.name
+                  const args = item.arguments
+
+                  if (typeof callId === 'string' && typeof name === 'string' && typeof args === 'string') {
+                    toolCalls.push({
+                      id: callId,
+                      type: 'function',
+                      function: {
+                        name: name,
+                        arguments: args
+                      }
+                    })
+                  }
                 }
               }
             }
@@ -385,15 +401,20 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
       const role = message.role
 
       if (role === 'tool') {
-        // Handle tool call results
+        // Handle tool call results - enhanced following codex-cli.js pattern
         const callId = message.tool_call_id || message.id
         if (typeof callId === 'string' && callId) {
           let content = message.content || ''
           if (Array.isArray(content)) {
-            const texts = content
-              .filter(part => typeof part === 'object' && part !== null)
-              .map(part => part.text || part.content)
-              .filter(text => typeof text === 'string' && text)
+            const texts = []
+            for (const part of content) {
+              if (typeof part === 'object' && part !== null) {
+                const t = part.text || part.content
+                if (typeof t === 'string' && t) {
+                  texts.push(t)
+                }
+              }
+            }
             content = texts.join('\n')
           }
           if (typeof content === 'string') {
@@ -408,12 +429,15 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
       }
 
       if (role === 'assistant' && Array.isArray(message.tool_calls)) {
-        // Handle assistant tool calls
+        // Handle assistant tool calls - enhanced following codex-cli.js pattern
         for (const tc of message.tool_calls) {
-          if (typeof tc !== 'object' || tc === null) continue
+          if (typeof tc !== 'object' || tc === null) {
+            continue
+          }
           const tcType = tc.type || 'function'
-          if (tcType !== 'function') continue
-
+          if (tcType !== 'function') {
+            continue
+          }
           const callId = tc.id || tc.call_id
           const fn = tc.function
           const name = typeof fn === 'object' && fn !== null ? fn.name : null
@@ -477,17 +501,43 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
   }
   
   private parseToolCalls(response: any): any[] {
+    // Enhanced tool call parsing following codex-cli.js pattern
     if (!response.output || !Array.isArray(response.output)) {
       return []
     }
-    
-    return response.output
-      .filter(item => item.type === 'tool_call')
-      .map(item => ({
-        id: item.id || `tool_${Date.now()}`,
-        type: 'tool_call',
-        name: item.name,
-        arguments: item.arguments  // Can be text or JSON
-      }))
+
+    const toolCalls = []
+
+    for (const item of response.output) {
+      if (item.type === 'function_call') {
+        // Parse tool call with better structure
+        const callId = item.call_id || item.id
+        const name = item.name || ''
+        const args = item.arguments || '{}'
+
+        // Validate required fields
+        if (typeof callId === 'string' && typeof name === 'string' && typeof args === 'string') {
+          toolCalls.push({
+            id: callId,
+            type: 'function',
+            function: {
+              name: name,
+              arguments: args
+            }
+          })
+        }
+      } else if (item.type === 'tool_call') {
+        // Handle alternative tool_call type
+        const callId = item.id || `tool_${Math.random().toString(36).substring(2, 15)}`
+        toolCalls.push({
+          id: callId,
+          type: 'tool_call',
+          name: item.name,
+          arguments: item.arguments
+        })
+      }
+    }
+
+    return toolCalls
   }
 }
