@@ -16,9 +16,9 @@
  */
 
 import { test, expect, describe } from 'bun:test'
-import { ModelAdapterFactory } from '../services/modelAdapterFactory'
-import { ModelProfile } from '../utils/config'
-import { callGPT5ResponsesAPI } from '../services/openai'
+import { ModelAdapterFactory } from '../../services/modelAdapterFactory'
+import { ModelProfile } from '../../utils/config'
+import { callGPT5ResponsesAPI } from '../../services/openai'
 
 // Load environment variables from .env file for integration tests
 if (process.env.NODE_ENV !== 'production') {
@@ -61,8 +61,8 @@ const MINIMAX_CODEX_PROFILE: ModelProfile = {
   name: 'minimax codex-MiniMax-M2',
   provider: 'minimax',
   modelName: 'codex-MiniMax-M2',
-  baseURL: process.env.TEST_MINIMAX_BASE_URL || 'https://api.minimaxi.com/v1',
-  apiKey: process.env.TEST_MINIMAX_API_KEY || '',
+  baseURL: process.env.TEST_CHAT_COMPLETIONS_BASE_URL || 'https://api.minimaxi.com/v1',
+  apiKey: process.env.TEST_CHAT_COMPLETIONS_API_KEY || '',
   maxTokens: 8192,
   contextLength: 128000,
   reasoningEffort: null,
