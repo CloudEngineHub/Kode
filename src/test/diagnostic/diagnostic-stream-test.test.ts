@@ -1,4 +1,6 @@
 /**
+ * [DIAGNOSTIC ONLY - NOT FOR REGULAR CI]
+ *
  * Diagnostic Test: Stream State Tracking
  *
  * Purpose: This test will identify EXACTLY where the stream gets locked
@@ -9,8 +11,8 @@
  */
 
 import { test, expect, describe } from 'bun:test'
-import { ModelAdapterFactory } from '../services/modelAdapterFactory'
-import { callGPT5ResponsesAPI } from '../services/openai'
+import { ModelAdapterFactory } from '../../services/modelAdapterFactory'
+import { callGPT5ResponsesAPI } from '../../services/openai'
 
 const GPT5_CODEX_PROFILE = {
   name: 'gpt-5-codex',

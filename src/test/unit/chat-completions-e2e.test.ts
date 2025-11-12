@@ -1,7 +1,7 @@
 import { test, expect, describe } from 'bun:test'
-import { ModelAdapterFactory } from '../services/modelAdapterFactory'
-import { getModelCapabilities } from '../constants/modelCapabilities'
-import { ModelProfile } from '../utils/config'
+import { ModelAdapterFactory } from '../../services/modelAdapterFactory'
+import { getModelCapabilities } from '../../constants/modelCapabilities'
+import { ModelProfile } from '../../utils/config'
 
 /**
  * Chat Completions End-to-End Integration Tests
@@ -14,8 +14,8 @@ import { ModelProfile } from '../utils/config'
  *   PRODUCTION_TEST_MODE=true bun test src/test/chat-completions-e2e.test.ts
  *
  * Environment variables required for production tests:
- *   TEST_MINIMAX_API_KEY=your_api_key_here
- *   TEST_MINIMAX_BASE_URL=https://api.minimaxi.com/v1
+ *   TEST_CHAT_COMPLETIONS_API_KEY=your_api_key_here
+ *   TEST_CHAT_COMPLETIONS_BASE_URL=https://api.minimaxi.com/v1
  *
  * ⚠️  WARNING: Production tests make real API calls and may incur costs!
  */
@@ -33,8 +33,8 @@ const MINIMAX_CODEX_PROFILE_PROD: ModelProfile = {
   name: 'minimax codex-MiniMax-M2',
   provider: 'minimax',
   modelName: 'codex-MiniMax-M2',
-  baseURL: process.env.TEST_MINIMAX_BASE_URL || 'https://api.minimaxi.com/v1',
-  apiKey: process.env.TEST_MINIMAX_API_KEY || '',
+  baseURL: process.env.TEST_CHAT_COMPLETIONS_BASE_URL || 'https://api.minimaxi.com/v1',
+  apiKey: process.env.TEST_CHAT_COMPLETIONS_API_KEY || '',
   maxTokens: 8192,
   contextLength: 128000,
   reasoningEffort: null,
@@ -176,137 +176,4 @@ describe('🔧 Chat Completions API Tests', () => {
     }
   })
 
-  if (!PRODUCTION_TEST_MODE) {
-    test('⚠️  PRODUCTION TEST MODE DISABLED', () => {
-      console.log('\n🚀 CHAT COMPLETIONS PRODUCTION TESTS 🚀')
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-      console.log('To enable production tests, run:')
-      console.log('  PRODUCTION_TEST_MODE=true bun test src/test/chat-completions-e2e.test.ts')
-      console.log('')
-      console.log('⚠️  WARNING: This will make REAL API calls and may incur costs!')
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-      expect(true).toBe(true) // This test always passes
-    })
-    return
-  }
-
-  describe('📡 Chat Completions Production Test - Request Validation', () => {
-    test('🚀 Makes real API call to Chat Completions endpoint and validates ALL request parameters', async () => {
-      const adapter = ModelAdapterFactory.createAdapter(MINIMAX_CODEX_PROFILE_PROD)
-      const shouldUseResponses = ModelAdapterFactory.shouldUseResponsesAPI(MINIMAX_CODEX_PROFILE_PROD)
-
-      console.log('\n🚀 CHAT COMPLETIONS CODEX PRODUCTION TEST:')
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-      console.log('🔗 Adapter:', adapter.constructor.name)
-      console.log('📍 Endpoint:', shouldUseResponses
-        ? `${MINIMAX_CODEX_PROFILE_PROD.baseURL}/responses`
-        : `${MINIMAX_CODEX_PROFILE_PROD.baseURL}/chat/completions`)
-      console.log('🤖 Model:', MINIMAX_CODEX_PROFILE_PROD.modelName)
-      console.log('🔑 API Key:', MINIMAX_CODEX_PROFILE_PROD.apiKey.substring(0, 8) + '...')
-
-      // Create test request with same structure as integration test
-      const testPrompt = "Write a simple JavaScript function that adds two numbers"
-      const mockParams = {
-        messages: [
-          { role: 'user', content: testPrompt }
-        ],
-        systemPrompt: ['You are a helpful coding assistant. Provide clear, concise code examples.'],
-        maxTokens: 100,
-        temperature: 0.7,
-        // No reasoningEffort - Chat Completions doesn't support it
-        // No verbosity - Chat Completions doesn't support it
-      }
-
-      try {
-        const request = adapter.createRequest(mockParams)
-
-        // Make the actual API call
-        const endpoint = shouldUseResponses
-          ? `${MINIMAX_CODEX_PROFILE_PROD.baseURL}/responses`
-          : `${MINIMAX_CODEX_PROFILE_PROD.baseURL}/chat/completions`
-
-        console.log('\n📡 Making request to:', endpoint)
-        console.log('\n📝 CHAT COMPLETIONS REQUEST BODY:')
-        console.log(JSON.stringify(request, null, 2))
-
-        // 🕵️ CRITICAL VALIDATION: Verify this is CHAT COMPLETIONS format
-        console.log('\n🕵️  CRITICAL PARAMETER VALIDATION:')
-
-        // Must have these Chat Completions parameters
-        const requiredParams = ['model', 'messages', 'max_tokens', 'temperature']
-        requiredParams.forEach(param => {
-          if (request[param] !== undefined) {
-            console.log(`  ✅ ${param}: PRESENT`)
-          } else {
-            console.log(`  ❌ ${param}: MISSING`)
-          }
-        })
-
-        // Must NOT have these Responses API parameters
-        const forbiddenParams = ['include', 'max_output_tokens', 'input', 'instructions', 'reasoning']
-        forbiddenParams.forEach(param => {
-          if (request[param] === undefined) {
-            console.log(`  ✅ NOT ${param}: CORRECT (not used in Chat Completions)`)
-          } else {
-            console.log(`  ⚠️  HAS ${param}: WARNING (should not be in Chat Completions)`)
-          }
-        })
-
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${MINIMAX_CODEX_PROFILE_PROD.apiKey}`,
-          },
-          body: JSON.stringify(request),
-        })
-
-        console.log('\n📊 Response status:', response.status)
-        console.log('📊 Response headers:', Object.fromEntries(response.headers.entries()))
-
-        if (response.ok) {
-          // Parse response based on content type
-          let responseData
-          if (response.headers.get('content-type')?.includes('application/json')) {
-            responseData = await response.json()
-            console.log('  ✅ Response type: application/json')
-
-            // Check for API auth errors (similar to integration test)
-            if (responseData.base_resp && responseData.base_resp.status_code !== 0) {
-              console.log('  ⚠️  API returned error:', responseData.base_resp.status_msg)
-              console.log('  💡 API key/auth issue - this is expected outside production environment')
-              console.log('  ✅ Key validation: Request structure is correct')
-            }
-          } else {
-            responseData = { status: response.status }
-          }
-
-          // Try to use the adapter's parseResponse method
-          try {
-            const unifiedResponse = await adapter.parseResponse(responseData)
-            console.log('\n✅ SUCCESS! Response received:')
-            console.log('📄 Unified Response:', JSON.stringify(unifiedResponse, null, 2))
-
-            expect(response.status).toBe(200)
-            expect(unifiedResponse).toBeDefined()
-
-          } catch (parseError) {
-            console.log('  ⚠️  Response parsing failed (expected with auth errors)')
-            console.log('  💡 This is normal - the important part is the request structure was correct')
-            expect(response.status).toBe(200) // At least the API call succeeded
-          }
-
-        } else {
-          const errorText = await response.text()
-          console.log('❌ API ERROR:', response.status, errorText)
-          console.log('  💡 API authentication issues are expected outside production environment')
-          console.log('  ✅ Key validation: Request structure is correct')
-        }
-
-      } catch (error) {
-        console.log('💥 Request failed:', error.message)
-        throw error
-      }
-    }, 30000) // 30 second timeout
-  })
 })
