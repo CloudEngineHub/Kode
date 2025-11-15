@@ -64,9 +64,9 @@ export class ChatCompletionsAdapter extends ModelAPIAdapter {
     }))
   }
   
-  parseResponse(response: any): UnifiedResponse {
+  async parseResponse(response: any): Promise<UnifiedResponse> {
     const choice = response.choices?.[0]
-    
+
     return {
       id: response.id || `chatcmpl_${Date.now()}`,
       content: choice?.message?.content || '',
