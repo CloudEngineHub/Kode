@@ -1871,7 +1871,6 @@ async function queryOpenAI(
   )
 
   const openaiMessages = convertAnthropicMessagesToOpenAIMessages(messages)
-  const startIncludingRetries = Date.now()
 
   // 记录系统提示构建过程 (OpenAI path)
   logSystemPromptConstruction({
@@ -1882,23 +1881,147 @@ async function queryOpenAI(
   })
 
   let start = Date.now()
-  let attemptNumber = 0
-  let response
+
+  type AdapterExecutionContext = {
+    adapter: ReturnType<typeof ModelAdapterFactory.createAdapter>
+    request: any
+    shouldUseResponses: boolean
+  }
+
+  type QueryResult = {
+    assistantMessage: AssistantMessage
+    rawResponse?: any
+    apiFormat: 'openai' | 'openai_responses'
+  }
+
+  let adapterContext: AdapterExecutionContext | null = null
+
+  if (modelProfile && modelProfile.modelName) {
+    debugLogger.api('CHECKING_ADAPTER_SYSTEM', {
+      modelProfileName: modelProfile.modelName,
+      modelName: modelProfile.modelName,
+      provider: modelProfile.provider,
+      requestId: getCurrentRequest()?.id,
+    })
+
+    const USE_NEW_ADAPTER_SYSTEM = process.env.USE_NEW_ADAPTERS !== 'false'
+
+    if (USE_NEW_ADAPTER_SYSTEM) {
+      const adapter = ModelAdapterFactory.createAdapter(modelProfile)
+      const reasoningEffort = await getReasoningEffort(modelProfile, messages)
+      const unifiedParams: UnifiedRequestParams = {
+        messages: openaiMessages,
+        systemPrompt: openaiSystem.map(s => s.content as string),
+        tools,
+        maxTokens: getMaxTokensFromProfile(modelProfile),
+        stream: config.stream,
+        reasoningEffort: reasoningEffort as any,
+        temperature: isGPT5Model(model) ? 1 : MAIN_QUERY_TEMPERATURE,
+        previousResponseId: toolUseContext?.responseState?.previousResponseId,
+        verbosity: 'high',
+      }
+
+      adapterContext = {
+        adapter,
+        request: adapter.createRequest(unifiedParams),
+        shouldUseResponses: ModelAdapterFactory.shouldUseResponsesAPI(
+          modelProfile,
+        ),
+      }
+    }
+  }
+
+  let queryResult: QueryResult
+  let startIncludingRetries = Date.now()
 
   try {
-    response = await withRetry(async attempt => {
-      attemptNumber = attempt
+    queryResult = await withRetry(async () => {
       start = Date.now()
-      // 🔥 GPT-5 Enhanced Parameter Construction
+
+      if (adapterContext) {
+        if (adapterContext.shouldUseResponses) {
+          const { callGPT5ResponsesAPI } = await import('./openai')
+          const response = await callGPT5ResponsesAPI(
+            modelProfile,
+            adapterContext.request,
+            signal,
+          )
+          const unifiedResponse = await adapterContext.adapter.parseResponse(
+            response,
+          )
+
+          const assistantMsg: AssistantMessage = {
+            type: 'assistant',
+            message: {
+              role: 'assistant',
+              content: unifiedResponse.content,
+              tool_calls: unifiedResponse.toolCalls,
+              usage: {
+                input_tokens: unifiedResponse.usage.promptTokens ?? 0,
+                output_tokens: unifiedResponse.usage.completionTokens ?? 0,
+                prompt_tokens: unifiedResponse.usage.promptTokens ?? 0,
+                completion_tokens: unifiedResponse.usage.completionTokens ?? 0,
+              },
+            },
+            costUSD: 0,
+            durationMs: Date.now() - start,
+            uuid: `${Date.now()}-${Math.random()
+              .toString(36)
+              .substr(2, 9)}` as any,
+            responseId: unifiedResponse.responseId,
+          }
+
+          return {
+            assistantMessage: assistantMsg,
+            rawResponse: unifiedResponse,
+            apiFormat: 'openai_responses',
+          }
+        }
+
+        const s = await getCompletionWithProfile(
+          modelProfile,
+          adapterContext.request,
+          0,
+          10,
+          signal,
+        )
+        let finalResponse
+        if (config.stream) {
+          finalResponse = await handleMessageStream(
+            s as ChatCompletionStream,
+            signal,
+          )
+        } else {
+          finalResponse = s
+        }
+
+        const message = convertOpenAIResponseToAnthropic(finalResponse, tools)
+        const assistantMsg: AssistantMessage = {
+          type: 'assistant',
+          message: message as any,
+          costUSD: 0,
+          durationMs: Date.now() - start,
+          uuid: `${Date.now()}-${Math.random()
+            .toString(36)
+            .substr(2, 9)}` as any,
+        }
+
+        return {
+          assistantMessage: assistantMsg,
+          rawResponse: finalResponse,
+          apiFormat: 'openai',
+        }
+      }
+
       const maxTokens = getMaxTokensFromProfile(modelProfile)
       const isGPT5 = isGPT5Model(model)
-      
+
       const opts: OpenAI.ChatCompletionCreateParams = {
         model,
-
-        ...(isGPT5 ? { max_completion_tokens: maxTokens } : { max_tokens: maxTokens }),
+        ...(isGPT5
+          ? { max_completion_tokens: maxTokens }
+          : { max_tokens: maxTokens }),
         messages: [...openaiSystem, ...openaiMessages],
-
         temperature: isGPT5 ? 1 : MAIN_QUERY_TEMPERATURE,
       }
       if (config.stream) {
@@ -1917,131 +2040,57 @@ async function queryOpenAI(
         opts.reasoning_effort = reasoningEffort
       }
 
-
-      if (modelProfile && modelProfile.modelName) {
-        debugLogger.api('USING_MODEL_PROFILE_PATH', {
-          modelProfileName: modelProfile.modelName,
-          modelName: modelProfile.modelName,
-          provider: modelProfile.provider,
-          baseURL: modelProfile.baseURL,
-          apiKeyExists: !!modelProfile.apiKey,
-          requestId: getCurrentRequest()?.id,
-        })
-
-        // Enable new adapter system with environment variable
-        const USE_NEW_ADAPTER_SYSTEM = process.env.USE_NEW_ADAPTERS !== 'false'
-        
-        if (USE_NEW_ADAPTER_SYSTEM) {
-          // New adapter system
-          const adapter = ModelAdapterFactory.createAdapter(modelProfile)
-          
-          // Build unified request parameters
-          const unifiedParams: UnifiedRequestParams = {
-            messages: openaiMessages,
-            systemPrompt: openaiSystem.map(s => s.content as string),
-            tools: tools,
-            maxTokens: getMaxTokensFromProfile(modelProfile),
-            stream: config.stream,
-            reasoningEffort: reasoningEffort as any,
-            temperature: isGPT5Model(model) ? 1 : MAIN_QUERY_TEMPERATURE,
-            previousResponseId: toolUseContext?.responseState?.previousResponseId,
-            verbosity: 'high' // High verbosity for coding tasks
-          }
-          
-          // Create request using adapter
-          const request = adapter.createRequest(unifiedParams)
-          
-          // Determine which API to use
-          if (ModelAdapterFactory.shouldUseResponsesAPI(modelProfile)) {
-            // Use Responses API for GPT-5 and similar models
-            const { callGPT5ResponsesAPI } = await import('./openai')
-            const response = await callGPT5ResponsesAPI(modelProfile, request, signal)
-            const unifiedResponse = adapter.parseResponse(response)
-            
-            // Convert unified response back to Anthropic format
-            const apiMessage = {
-              role: 'assistant' as const,
-              content: unifiedResponse.content,
-              tool_calls: unifiedResponse.toolCalls,
-              usage: {
-                prompt_tokens: unifiedResponse.usage.promptTokens,
-                completion_tokens: unifiedResponse.usage.completionTokens,
-              }
-            }
-            const assistantMsg: AssistantMessage = {
-              type: 'assistant',
-              message: apiMessage as any,
-              costUSD: 0, // Will be calculated later
-              durationMs: Date.now() - start,
-              uuid: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}` as any,
-              responseId: unifiedResponse.responseId  // For state management
-            }
-            return assistantMsg
-          } else {
-            // Use existing Chat Completions flow
-            const s = await getCompletionWithProfile(modelProfile, request, 0, 10, signal)
-            let finalResponse
-            if (config.stream) {
-              finalResponse = await handleMessageStream(s as ChatCompletionStream, signal)
-            } else {
-              finalResponse = s
-            }
-            const r = convertOpenAIResponseToAnthropic(finalResponse, tools)
-            return r
-          }
-        } else {
-          // Legacy system (preserved for fallback)
-          const completionFunction = isGPT5Model(modelProfile.modelName) 
-            ? getGPT5CompletionWithProfile 
-            : getCompletionWithProfile
-          const s = await completionFunction(modelProfile, opts, 0, 10, signal)
-          let finalResponse
-          if (opts.stream) {
-            finalResponse = await handleMessageStream(s as ChatCompletionStream, signal)
-          } else {
-            finalResponse = s
-          }
-          const r = convertOpenAIResponseToAnthropic(finalResponse, tools)
-          return r
-        }
-      } else {
-        // 🚨 警告：ModelProfile不可用，使用旧逻辑路径
-        debugLogger.api('USING_LEGACY_PATH', {
-          modelProfileExists: !!modelProfile,
-          modelProfileId: modelProfile?.modelName,
-          modelNameExists: !!modelProfile?.modelName,
-          fallbackModel: 'main',
-          actualModel: model,
-          requestId: getCurrentRequest()?.id,
-        })
-
-        // 🚨 FALLBACK: 没有有效的ModelProfile时，应该抛出错误而不是使用遗留系统
-        const errorDetails = {
-          modelProfileExists: !!modelProfile,
-          modelProfileId: modelProfile?.modelName,
-          modelNameExists: !!modelProfile?.modelName,
-          requestedModel: model,
-          requestId: getCurrentRequest()?.id,
-        }
-        debugLogger.error('NO_VALID_MODEL_PROFILE', errorDetails)
-        throw new Error(
-          `No valid ModelProfile available for model: ${model}. Please configure model through /model command. Debug: ${JSON.stringify(errorDetails)}`,
+      const completionFunction = isGPT5Model(modelProfile?.modelName || '')
+        ? getGPT5CompletionWithProfile
+        : getCompletionWithProfile
+      const s = await completionFunction(modelProfile, opts, 0, 10, signal)
+      let finalResponse
+      if (opts.stream) {
+        finalResponse = await handleMessageStream(
+          s as ChatCompletionStream,
+          signal,
         )
+      } else {
+        finalResponse = s
+      }
+      const message = convertOpenAIResponseToAnthropic(finalResponse, tools)
+      const assistantMsg: AssistantMessage = {
+        type: 'assistant',
+        message: message as any,
+        costUSD: 0,
+        durationMs: Date.now() - start,
+        uuid: `${Date.now()}-${Math.random()
+          .toString(36)
+          .substr(2, 9)}` as any,
+      }
+      return {
+        assistantMessage: assistantMsg,
+        rawResponse: finalResponse,
+        apiFormat: 'openai',
       }
     }, { signal })
   } catch (error) {
     logError(error)
     return getAssistantMessageFromError(error)
   }
+
   const durationMs = Date.now() - start
   const durationMsIncludingRetries = Date.now() - startIncludingRetries
 
-  const inputTokens = response.usage?.prompt_tokens ?? 0
-  const outputTokens = response.usage?.completion_tokens ?? 0
-  const cacheReadInputTokens =
-    response.usage?.prompt_token_details?.cached_tokens ?? 0
+  const assistantMessage = queryResult.assistantMessage
+  assistantMessage.message.content = normalizeContentFromAPI(
+    assistantMessage.message.content || [],
+  )
+
+  const normalizedUsage = normalizeUsage(assistantMessage.message.usage)
+  assistantMessage.message.usage = normalizedUsage
+
+  const inputTokens = normalizedUsage.input_tokens ?? 0
+  const outputTokens = normalizedUsage.output_tokens ?? 0
+  const cacheReadInputTokens = normalizedUsage.cache_read_input_tokens ?? 0
   const cacheCreationInputTokens =
-    response.usage?.prompt_token_details?.cached_tokens ?? 0
+    normalizedUsage.cache_creation_input_tokens ?? 0
+
   const costUSD =
     (inputTokens / 1_000_000) * SONNET_COST_PER_MILLION_INPUT_TOKENS +
     (outputTokens / 1_000_000) * SONNET_COST_PER_MILLION_OUTPUT_TOKENS +
@@ -2052,43 +2101,70 @@ async function queryOpenAI(
 
   addToTotalCost(costUSD, durationMsIncludingRetries)
 
-  // 记录完整的 LLM 交互调试信息 (OpenAI path)
   logLLMInteraction({
     systemPrompt: systemPrompt.join('\n'),
     messages: [...openaiSystem, ...openaiMessages],
-    response: response,
+    response: queryResult.rawResponse || assistantMessage.message,
     usage: {
-      inputTokens: inputTokens,
-      outputTokens: outputTokens,
+      inputTokens,
+      outputTokens,
     },
     timing: {
-      start: start,
+      start,
       end: Date.now(),
     },
-    apiFormat: 'openai',
+    apiFormat: queryResult.apiFormat,
   })
 
-  return {
-    message: {
-      ...response,
-      content: normalizeContentFromAPI(response.content),
-      usage: {
-        input_tokens: inputTokens,
-        output_tokens: outputTokens,
-        cache_read_input_tokens: cacheReadInputTokens,
-        cache_creation_input_tokens: 0,
-      },
-    },
-    costUSD,
-    durationMs,
-    type: 'assistant',
-    uuid: randomUUID(),
-  }
+  assistantMessage.costUSD = costUSD
+  assistantMessage.durationMs = durationMs
+  assistantMessage.uuid = assistantMessage.uuid || (randomUUID() as UUID)
+
+  return assistantMessage
 }
 
 function getMaxTokensFromProfile(modelProfile: any): number {
   // Use ModelProfile maxTokens or reasonable default
   return modelProfile?.maxTokens || 8000
+}
+
+function normalizeUsage(usage?: any) {
+  if (!usage) {
+    return {
+      input_tokens: 0,
+      output_tokens: 0,
+      cache_read_input_tokens: 0,
+      cache_creation_input_tokens: 0,
+    }
+  }
+
+  const inputTokens =
+    usage.input_tokens ??
+    usage.prompt_tokens ??
+    usage.inputTokens ??
+    0
+  const outputTokens =
+    usage.output_tokens ??
+    usage.completion_tokens ??
+    usage.outputTokens ??
+    0
+  const cacheReadInputTokens =
+    usage.cache_read_input_tokens ??
+    usage.prompt_token_details?.cached_tokens ??
+    usage.cacheReadInputTokens ??
+    0
+  const cacheCreationInputTokens =
+    usage.cache_creation_input_tokens ??
+    usage.cacheCreatedInputTokens ??
+    0
+
+  return {
+    ...usage,
+    input_tokens: inputTokens,
+    output_tokens: outputTokens,
+    cache_read_input_tokens: cacheReadInputTokens,
+    cache_creation_input_tokens: cacheCreationInputTokens,
+  }
 }
 
 function getModelInputTokenCostUSD(model: string): number {

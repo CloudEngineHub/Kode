@@ -53,7 +53,7 @@ export interface UnifiedRequestParams {
 // Unified response format
 export interface UnifiedResponse {
   id: string
-  content: string
+  content: string | Array<{ type: string; text?: string; [key: string]: any }>
   toolCalls?: any[]
   usage: {
     promptTokens: number
