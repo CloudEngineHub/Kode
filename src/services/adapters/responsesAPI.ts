@@ -17,8 +17,8 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
     // Add token limit - Responses API uses max_output_tokens
     request.max_output_tokens = maxTokens
 
-    // Add streaming support - Responses API always returns streaming
-    request.stream = true
+    // Add streaming support - allow disabling when caller requests buffered mode
+    request.stream = params.stream !== false
 
     // Add temperature (GPT-5 only supports 1)
     if (this.getTemperature() === 1) {
@@ -127,8 +127,7 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
   async parseResponse(response: any): Promise<UnifiedResponse> {
     // Check if this is a streaming response (Response object with body)
     if (response && typeof response === 'object' && 'body' in response && response.body) {
-      // For backward compatibility, buffer the stream and return complete response
-      // This can be upgraded to true streaming once claude.ts is updated
+      // Return buffered response for now (legacy). Streaming path now preferred via parseStreamingResponse.
       return await this.parseStreamingResponseBuffered(response)
     }
 
@@ -331,6 +330,10 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
     let fullContent = ''
     let toolCalls = []
     let responseId = response.id || `resp_${Date.now()}`
+    let promptTokens = 0
+    let completionTokens = 0
+    let totalTokens = 0
+    let reasoningTokens = 0
 
     try {
       while (true) {
@@ -345,21 +348,17 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
           if (line.trim()) {
             const parsed = this.parseSSEChunk(line)
             if (parsed) {
-              // Extract response ID
               if (parsed.response?.id) {
                 responseId = parsed.response.id
               }
 
-              // Handle text content
               if (parsed.type === 'response.output_text.delta') {
                 fullContent += parsed.delta || ''
               }
 
-              // Handle tool calls - enhanced following codex-cli.js pattern
               if (parsed.type === 'response.output_item.done') {
                 const item = parsed.item || {}
                 if (item.type === 'function_call') {
-                  // Validate tool call fields
                   const callId = item.call_id || item.id
                   const name = item.name
                   const args = item.arguments
@@ -376,6 +375,13 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
                   }
                 }
               }
+
+              if (parsed.usage) {
+                promptTokens = parsed.usage.input_tokens || 0
+                completionTokens = parsed.usage.output_tokens || 0
+                totalTokens = parsed.usage.total_tokens ?? (promptTokens + completionTokens)
+                reasoningTokens = parsed.usage.output_tokens_details?.reasoning_tokens || 0
+              }
             }
           }
         }
@@ -386,23 +392,21 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
       reader.releaseLock()
     }
 
-    // Build unified response
-    // Convert string content to array of content blocks (like Chat Completions format)
     const contentArray = fullContent
       ? [{ type: 'text', text: fullContent, citations: [] }]
       : [{ type: 'text', text: '', citations: [] }]
 
     return {
       id: responseId,
-      content: contentArray,  // Return as array of content blocks
+      content: contentArray,
       toolCalls,
       usage: {
-        promptTokens: 0, // Will be filled in by the caller
-        completionTokens: 0,
-        input_tokens: 0,
-        output_tokens: 0,
-        totalTokens: 0,
-        reasoningTokens: 0
+        promptTokens,
+        completionTokens,
+        input_tokens: promptTokens,
+        output_tokens: completionTokens,
+        totalTokens,
+        reasoningTokens
       },
       responseId: responseId
     }

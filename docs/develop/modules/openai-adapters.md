@@ -88,7 +88,7 @@ Both adapters normalize provider-specific responses into the `UnifiedResponse` f
 *   Handles standard function calling format.
 
 ### Responses API
-*   **Streaming**: Incrementally decodes SSE chunks.
+*   **Streaming**: Incrementally decodes SSE chunks via `processResponsesStream()` (`src/services/adapters/responsesStreaming.ts`) so all provider-specific streaming normalization stays inside the adapter layer before `claude.ts` consumes it.
 *   **JSON**: Folds `output` message items into text blocks.
 *   **State**: Captures `response.id` for stateful conversational continuity.
 
