@@ -168,13 +168,20 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
       ? [{ type: 'text', text: content, citations: [] }]
       : [{ type: 'text', text: '', citations: [] }]
 
+    const promptTokens = response.usage?.input_tokens || 0
+    const completionTokens = response.usage?.output_tokens || 0
+    const totalTokens = response.usage?.total_tokens ?? (promptTokens + completionTokens)
+
     return {
       id: response.id || `resp_${Date.now()}`,
       content: contentArray,  // Return as array (Anthropic format)
       toolCalls,
       usage: {
-        promptTokens: response.usage?.input_tokens || 0,
-        completionTokens: response.usage?.output_tokens || 0,
+        promptTokens,
+        completionTokens,
+        input_tokens: promptTokens,
+        output_tokens: completionTokens,
+        totalTokens,
         reasoningTokens: response.usage?.output_tokens_details?.reasoning_tokens
       },
       responseId: response.id  // Save for state management
@@ -264,11 +271,18 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
 
               // Handle usage information
               if (parsed.usage) {
+                const promptTokens = parsed.usage.input_tokens || 0
+                const completionTokens = parsed.usage.output_tokens || 0
+                const totalTokens = parsed.usage.total_tokens ?? (promptTokens + completionTokens)
+
                 yield {
                   type: 'usage',
                   usage: {
-                    promptTokens: parsed.usage.input_tokens || 0,
-                    completionTokens: parsed.usage.output_tokens || 0,
+                    promptTokens,
+                    completionTokens,
+                    input_tokens: promptTokens,
+                    output_tokens: completionTokens,
+                    totalTokens,
                     reasoningTokens: parsed.usage.output_tokens_details?.reasoning_tokens || 0
                   }
                 }
@@ -385,6 +399,9 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
       usage: {
         promptTokens: 0, // Will be filled in by the caller
         completionTokens: 0,
+        input_tokens: 0,
+        output_tokens: 0,
+        totalTokens: 0,
         reasoningTokens: 0
       },
       responseId: responseId
