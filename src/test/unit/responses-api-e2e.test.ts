@@ -173,5 +173,45 @@ describe('Responses API Tests', () => {
       expect(request.stream).toBe(true)
     })
 
+    test('streaming usage events expose unified token format', async () => {
+      const adapter = ModelAdapterFactory.createAdapter(testModel)
+      const encoder = new TextEncoder()
+      const streamChunks = [
+        'data: {"type":"response.output_text.delta","delta":"Hello"}\n',
+        'data: {"type":"response.completed","usage":{"input_tokens":12,"output_tokens":8,"total_tokens":20,"output_tokens_details":{"reasoning_tokens":3}}}\n',
+        'data: [DONE]\n'
+      ]
+
+      const stream = new ReadableStream({
+        start(controller) {
+          for (const chunk of streamChunks) {
+            controller.enqueue(encoder.encode(chunk))
+          }
+          controller.close()
+        }
+      })
+
+      const mockResponse = {
+        body: stream,
+        id: 'resp-stream-test'
+      }
+
+      const events: any[] = []
+      for await (const event of (adapter as any).parseStreamingResponse(mockResponse)) {
+        events.push(event)
+      }
+
+      const usageEvent = events.find(event => event.type === 'usage')
+      expect(usageEvent).toBeDefined()
+      expect(usageEvent.usage).toMatchObject({
+        promptTokens: 12,
+        completionTokens: 8,
+        input_tokens: 12,
+        output_tokens: 8,
+        totalTokens: 20,
+      })
+      expect(usageEvent.usage.reasoningTokens).toBe(3)
+    })
+
   })
 })

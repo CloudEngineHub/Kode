@@ -104,6 +104,16 @@ function getActiveProfile(): ModelProfile {
 
 const ACTIVE_PROFILE = getActiveProfile()
 
+function expectUnifiedUsage(usage: any) {
+  expect(usage).toBeDefined()
+  expect(typeof usage.promptTokens).toBe('number')
+  expect(typeof usage.completionTokens).toBe('number')
+  expect(typeof usage.input_tokens).toBe('number')
+  expect(typeof usage.output_tokens).toBe('number')
+  expect(typeof usage.totalTokens).toBe('number')
+  expect(usage.totalTokens).toBe(usage.promptTokens + usage.completionTokens)
+}
+
 describe('🔌 Integration: Full Claude.ts Flow (Model-Agnostic)', () => {
   test('✅ End-to-end flow through claude.ts path', async () => {
     console.log('\n🔧 TEST CONFIGURATION:')
@@ -192,6 +202,7 @@ describe('🔌 Integration: Full Claude.ts Flow (Model-Agnostic)', () => {
       console.log('\nStep 7: Validating response...')
       expect(unifiedResponse).toBeDefined()
       expect(unifiedResponse.content).toBeDefined()
+      expectUnifiedUsage(unifiedResponse.usage)
       console.log('  ✅ All validations passed')
 
     } catch (error) {
@@ -204,7 +215,7 @@ describe('🔌 Integration: Full Claude.ts Flow (Model-Agnostic)', () => {
     }
   })
 
-  test('✅ Test with TOOLS (full tool call parsing flow)', async () => {
+  test('✅ Test with TOOLS (full tool call parsing flow)', { timeout: 15000 }, async () => {
     console.log('\n✅ INTEGRATION TEST: With Tools (Full Tool Call Parsing)')
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 
@@ -257,13 +268,7 @@ describe('🔌 Integration: Full Claude.ts Flow (Model-Agnostic)', () => {
         })
       }
 
-      // Add timeout to prevent hanging
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Test timeout after 5 seconds')), 5000)
-      })
-
-      const responsePromise = callGPT5ResponsesAPI(ACTIVE_PROFILE, request)
-      const response = await Promise.race([responsePromise, timeoutPromise]) as any
+      const response = await callGPT5ResponsesAPI(ACTIVE_PROFILE, request)
 
       console.log('\n📡 Response received:', response.status)
 
@@ -277,6 +282,7 @@ describe('🔌 Integration: Full Claude.ts Flow (Model-Agnostic)', () => {
       expect(unifiedResponse.id).toBeDefined()
       expect(unifiedResponse.content).toBeDefined()
       expect(Array.isArray(unifiedResponse.content)).toBe(true)
+      expectUnifiedUsage(unifiedResponse.usage)
 
       // Log tool call information if present
       if (unifiedResponse.toolCalls && unifiedResponse.toolCalls.length > 0) {
@@ -304,7 +310,7 @@ describe('🔌 Integration: Full Claude.ts Flow (Model-Agnostic)', () => {
     }
   })
 
-  test('✅ Test with TOOLS (multi-turn conversation with tool results)', async () => {
+  test('✅ Test with TOOLS (multi-turn conversation with tool results)', { timeout: 15000 }, async () => {
     console.log('\n✅ INTEGRATION TEST: Multi-Turn Conversation with Tool Results')
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 
@@ -383,13 +389,7 @@ describe('🔌 Integration: Full Claude.ts Flow (Model-Agnostic)', () => {
         console.log('  Tool result:', JSON.stringify(toolResultMessage, null, 2))
       }
 
-      // Add timeout to prevent hanging
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Test timeout after 5 seconds')), 5000)
-      })
-
-      const responsePromise = callGPT5ResponsesAPI(ACTIVE_PROFILE, request)
-      const response = await Promise.race([responsePromise, timeoutPromise]) as any
+      const response = await callGPT5ResponsesAPI(ACTIVE_PROFILE, request)
 
       console.log('\n📡 Response received:', response.status)
 
@@ -397,6 +397,7 @@ describe('🔌 Integration: Full Claude.ts Flow (Model-Agnostic)', () => {
 
       console.log('\n✅ SUCCESS: Multi-turn conversation with tool results worked!')
       console.log('Response:', JSON.stringify(unifiedResponse, null, 2))
+      expectUnifiedUsage(unifiedResponse.usage)
 
       // Verify the response is valid
       expect(unifiedResponse).toBeDefined()
