@@ -146,7 +146,7 @@ describe('🔌 Integration: Full Claude.ts Flow (Model-Agnostic)', () => {
         systemPrompt: ['You are a helpful assistant.'],
         tools: [],  // Start with no tools to isolate the issue
         maxTokens: 100,
-        stream: false,
+        stream: true,
         reasoningEffort: shouldUseResponses ? 'high' as const : undefined,
         temperature: 1,
         verbosity: shouldUseResponses ? 'high' as const : undefined
@@ -251,7 +251,7 @@ describe('🔌 Integration: Full Claude.ts Flow (Model-Agnostic)', () => {
           }
         ],
         maxTokens: 100,
-        stream: false,
+        stream: true,
         reasoningEffort: 'high' as const,
         temperature: 1,
         verbosity: 'high' as const
@@ -368,7 +368,7 @@ describe('🔌 Integration: Full Claude.ts Flow (Model-Agnostic)', () => {
           }
         ],
         maxTokens: 100,
-        stream: false,
+        stream: true,
         reasoningEffort: 'high' as const,
         temperature: 1,
         verbosity: 'high' as const

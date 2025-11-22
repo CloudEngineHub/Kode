@@ -2,6 +2,8 @@ import { test, expect, describe } from 'bun:test'
 import { ModelAdapterFactory } from '../../services/modelAdapterFactory'
 import { ModelProfile } from '../../utils/config'
 import { testModels, getResponsesAPIModels } from '../testAdapters'
+import { processResponsesStream } from '../../services/adapters/responsesStreaming'
+import { ReadableStream } from 'node:stream/web'
 
 /**
  * Responses API Unit Tests
@@ -25,7 +27,7 @@ describe('Responses API Tests', () => {
         systemPrompt: ['test system'],
         tools: [],
         maxTokens: 100,
-        stream: false, // Even if false, Responses API always streams
+        stream: true,
         temperature: 0.7
       }
 
@@ -35,7 +37,7 @@ describe('Responses API Tests', () => {
       expect(request).toHaveProperty('include')
       expect(request).toHaveProperty('max_output_tokens')
       expect(request).toHaveProperty('input')
-      expect(request.stream).toBe(true) // Responses API always streams
+      expect(request.stream).toBe(true)
 
       // Should NOT have Chat Completions fields
       expect(request).not.toHaveProperty('messages')
@@ -155,7 +157,7 @@ describe('Responses API Tests', () => {
       expect(request.instructions).toBe('You are a coding assistant\n\nAlways write clean code')
     })
 
-    test('always enables streaming regardless of stream parameter', () => {
+    test('respects stream flag for buffered requests', () => {
       const adapter = ModelAdapterFactory.createAdapter(testModel)
 
       const unifiedParams = {
@@ -164,13 +166,12 @@ describe('Responses API Tests', () => {
         ],
         systemPrompt: ['You are helpful'],
         maxTokens: 100,
-        stream: false, // Even if user sets this to false
+        stream: false,
       }
 
       const request = adapter.createRequest(unifiedParams)
 
-      // Responses API always requires streaming
-      expect(request.stream).toBe(true)
+      expect(request.stream).toBe(false)
     })
 
     test('streaming usage events expose unified token format', async () => {
@@ -191,13 +192,8 @@ describe('Responses API Tests', () => {
         }
       })
 
-      const mockResponse = {
-        body: stream,
-        id: 'resp-stream-test'
-      }
-
       const events: any[] = []
-      for await (const event of (adapter as any).parseStreamingResponse(mockResponse)) {
+      for await (const event of (adapter as any).parseStreamingResponse({ body: stream, id: 'resp-stream-test' })) {
         events.push(event)
       }
 
@@ -211,6 +207,25 @@ describe('Responses API Tests', () => {
         totalTokens: 20,
       })
       expect(usageEvent.usage.reasoningTokens).toBe(3)
+
+      async function* replayEvents(evts: any[]) {
+        for (const evt of evts) {
+          yield evt
+        }
+      }
+
+      const { assistantMessage, rawResponse } = await processResponsesStream(
+        replayEvents(events),
+        Date.now(),
+        'resp-stream-processed'
+      )
+
+      expect(assistantMessage.message.usage).toMatchObject({
+        input_tokens: 12,
+        output_tokens: 8,
+        totalTokens: 20,
+      })
+      expect(rawResponse.id).toBe('resp-stream-test')
     })
 
   })

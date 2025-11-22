@@ -7,7 +7,17 @@ export type StreamingEvent =
   | { type: 'message_start', message: any, responseId: string }
   | { type: 'text_delta', delta: string, responseId: string }
   | { type: 'tool_request', tool: any }
-  | { type: 'usage', usage: { promptTokens: number, completionTokens: number, reasoningTokens: number } }
+  | {
+      type: 'usage'
+      usage: {
+        promptTokens?: number
+        completionTokens?: number
+        input_tokens?: number
+        output_tokens?: number
+        totalTokens?: number
+        reasoningTokens?: number
+      }
+    }
   | { type: 'message_stop', message: any }
   | { type: 'error', error: string }
 

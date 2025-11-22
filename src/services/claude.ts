@@ -1,5 +1,7 @@
 import '@anthropic-ai/sdk/shims/node'
 import Anthropic, { APIConnectionError, APIError } from '@anthropic-ai/sdk'
+import { StreamingEvent } from './adapters/base'
+import { processResponsesStream } from './adapters/responsesStreaming'
 import { AnthropicBedrock } from '@anthropic-ai/bedrock-sdk'
 import { AnthropicVertex } from '@anthropic-ai/vertex-sdk'
 import type { BetaUsage } from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
@@ -44,6 +46,8 @@ import type { BetaMessageStream } from '@anthropic-ai/sdk/lib/BetaMessageStream.
 import { ModelAdapterFactory } from './modelAdapterFactory'
 import { UnifiedRequestParams } from '@kode-types/modelCapabilities'
 import { responseStateManager, getConversationId } from './responseStateManager'
+import { processResponsesStream } from './adapters/responsesStreaming'
+import { processResponsesStream } from './adapters/responsesStreaming'
 import type { ToolUseContext } from '@tool'
 import type {
   Message as APIMessage,
@@ -1941,60 +1945,46 @@ async function queryOpenAI(
       if (adapterContext) {
         if (adapterContext.shouldUseResponses) {
           const { callGPT5ResponsesAPI } = await import('./openai')
+
           const response = await callGPT5ResponsesAPI(
             modelProfile,
             adapterContext.request,
             signal,
           )
+
+          if (config.stream && adapterContext.adapter.parseStreamingResponse) {
+            debugLogger.api('RESPONSES_STREAMING_PATH', {
+              model: modelProfile?.modelName,
+              requestId: getCurrentRequest()?.id,
+            })
+
+            const { assistantMessage, rawResponse } = await processResponsesStream(
+              adapterContext.adapter.parseStreamingResponse(response),
+              start,
+              response.id ?? `resp_${Date.now()}`,
+            )
+
+            assistantMessage.message.usage = normalizeUsage(assistantMessage.message.usage)
+
+            return {
+              assistantMessage,
+              rawResponse,
+              apiFormat: 'openai_responses',
+            }
+          }
+
           const unifiedResponse = await adapterContext.adapter.parseResponse(
             response,
           )
 
-          // Convert UnifiedResponse.toolCalls to tool_use content blocks
-          const contentBlocks = [...(unifiedResponse.content || [])]
-
-          if (unifiedResponse.toolCalls && unifiedResponse.toolCalls.length > 0) {
-            for (const toolCall of unifiedResponse.toolCalls) {
-              const tool = toolCall.function
-              const toolName = tool?.name
-              let toolArgs = {}
-              try {
-                toolArgs = tool?.arguments ? JSON.parse(tool.arguments) : {}
-              } catch (e) {
-                // Invalid JSON in tool arguments
-              }
-
-              contentBlocks.push({
-                type: 'tool_use',
-                input: toolArgs,
-                name: toolName,
-                id: toolCall.id?.length > 0 ? toolCall.id : nanoid(),
-              })
-            }
-          }
-
-          const assistantMsg: AssistantMessage = {
-            type: 'assistant',
-            message: {
-              role: 'assistant',
-              content: contentBlocks,
-              usage: {
-                input_tokens: unifiedResponse.usage.promptTokens ?? 0,
-                output_tokens: unifiedResponse.usage.completionTokens ?? 0,
-                prompt_tokens: unifiedResponse.usage.promptTokens ?? 0,
-                completion_tokens: unifiedResponse.usage.completionTokens ?? 0,
-              },
-            },
-            costUSD: 0,
-            durationMs: Date.now() - start,
-            uuid: `${Date.now()}-${Math.random()
-              .toString(36)
-              .substr(2, 9)}` as any,
-            responseId: unifiedResponse.responseId,
-          }
+          const assistantMessage = buildAssistantMessageFromUnifiedResponse(
+            unifiedResponse,
+            start,
+          )
+          assistantMessage.message.usage = normalizeUsage(assistantMessage.message.usage)
 
           return {
-            assistantMessage: assistantMsg,
+            assistantMessage,
             rawResponse: unifiedResponse,
             apiFormat: 'openai_responses',
           }
