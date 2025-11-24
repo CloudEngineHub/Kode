@@ -37,13 +37,16 @@ export async function processResponsesStream(
     }
 
     if (event.type === 'usage') {
-      usage.prompt_tokens =
-        event.usage.input_tokens ?? event.usage.promptTokens ?? usage.prompt_tokens
-      usage.completion_tokens =
-        event.usage.output_tokens ?? event.usage.completionTokens ?? usage.completion_tokens
+      const promptTokens = event.usage.input_tokens ?? event.usage.promptTokens ?? usage.prompt_tokens
+      const completionTokens = event.usage.output_tokens ?? event.usage.completionTokens ?? usage.completion_tokens
+
+      usage.prompt_tokens = promptTokens
+      usage.completion_tokens = completionTokens
+      usage.promptTokens = promptTokens
+      usage.completionTokens = completionTokens
       usage.totalTokens =
         event.usage.totalTokens ??
-        (usage.prompt_tokens || 0) + (usage.completion_tokens || 0)
+        (promptTokens || 0) + (completionTokens || 0)
       if (event.usage.reasoningTokens !== undefined) {
         usage.reasoningTokens = event.usage.reasoningTokens
       }

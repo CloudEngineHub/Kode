@@ -75,7 +75,7 @@ interface UnifiedResponse {
     | **Endpoint** | `/chat/completions` | `/responses` |
     | **Message Format** | Single list with system messages | `input` array with typed items |
     | **Tools** | `tools` array (JSON Schema) | Flat `tools` list |
-    | **Streaming** | Optional `stream: true` | Always enabled |
+    | **Streaming** | Optional `stream: true` | Respects `stream` flag (`true` vs `false`) |
     | **Reasoning** | `reasoning_effort` param | `include: ['reasoning.encrypted_content']` |
 
 ## Response Flow
@@ -88,7 +88,7 @@ Both adapters normalize provider-specific responses into the `UnifiedResponse` f
 *   Handles standard function calling format.
 
 ### Responses API
-*   **Streaming**: Incrementally decodes SSE chunks via `processResponsesStream()` (`src/services/adapters/responsesStreaming.ts`) so all provider-specific streaming normalization stays inside the adapter layer before `claude.ts` consumes it.
+*   **Streaming**: Incrementally decodes SSE chunks via `processResponsesStream()` (`src/services/adapters/responsesStreaming.ts`) so all provider-specific streaming normalization stays inside the adapter layer before `claude.ts` consumes it. The adapter respects the caller's `stream` flag (`true` vs `false`) - when `stream: false`, it issues a buffered request and skips the streaming helper.
 *   **JSON**: Folds `output` message items into text blocks.
 *   **State**: Captures `response.id` for stateful conversational continuity.
 

@@ -2,6 +2,7 @@ import { ModelAPIAdapter, StreamingEvent } from './base'
 import { UnifiedRequestParams, UnifiedResponse } from '@kode-types/modelCapabilities'
 import { Tool } from '@tool'
 import { zodToJsonSchema } from 'zod-to-json-schema'
+import { processResponsesStream } from './responsesStreaming'
 
 export class ResponsesAPIAdapter extends ModelAPIAdapter {
   createRequest(params: UnifiedRequestParams): any {
@@ -125,10 +126,31 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
   }
   
   async parseResponse(response: any): Promise<UnifiedResponse> {
-    // Check if this is a streaming response (Response object with body)
-    if (response && typeof response === 'object' && 'body' in response && response.body) {
-      // Return buffered response for now (legacy). Streaming path now preferred via parseStreamingResponse.
-      return await this.parseStreamingResponseBuffered(response)
+    // Check if this is a streaming response (has ReadableStream body)
+    if (response?.body instanceof ReadableStream) {
+      // Use streaming helper for streaming responses
+      const { assistantMessage } = await processResponsesStream(
+        this.parseStreamingResponse(response),
+        Date.now(),
+        response.id ?? `resp_${Date.now()}`
+      )
+
+      return {
+        id: assistantMessage.responseId,
+        content: assistantMessage.message.content,
+        toolCalls: assistantMessage.message.content
+          .filter((block: any) => block.type === 'tool_use')
+          .map((block: any) => ({
+            id: block.id,
+            type: 'function',
+            function: {
+              name: block.name,
+              arguments: JSON.stringify(block.input)
+            }
+          })),
+        usage: this.normalizeUsageForAdapter(assistantMessage.message.usage),
+        responseId: assistantMessage.responseId
+      }
     }
 
     // Process non-streaming response
@@ -199,6 +221,7 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
     let responseId = response.id || `resp_${Date.now()}`
     let hasStarted = false
     let accumulatedContent = ''
+    let hasUsageEvent = false
 
     try {
       while (true) {
@@ -270,6 +293,7 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
 
               // Handle usage information
               if (parsed.usage) {
+                hasUsageEvent = true
                 const promptTokens = parsed.usage.input_tokens || 0
                 const completionTokens = parsed.usage.output_tokens || 0
                 const totalTokens = parsed.usage.total_tokens ?? (promptTokens + completionTokens)
@@ -300,6 +324,25 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
       reader.releaseLock()
     }
 
+    // If no usage event was found during streaming, yield a fallback usage event
+    if (!hasUsageEvent) {
+      // For streaming responses that don't include usage data, provide minimal usage
+      // This prevents undefined errors in tests and provides sensible defaults
+      const fallbackUsage = {
+        promptTokens: 0,
+        completionTokens: 0,
+        input_tokens: 0,
+        output_tokens: 0,
+        totalTokens: 0,
+        reasoningTokens: 0
+      }
+
+      yield {
+        type: 'usage',
+        usage: fallbackUsage
+      }
+    }
+
     // Build final response
     const finalContent = accumulatedContent
       ? [{ type: 'text', text: accumulatedContent, citations: [] }]
@@ -317,100 +360,7 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
     }
   }
 
-  // Legacy buffered method for backward compatibility
-  // This will be removed once the streaming integration is complete
-  private async parseStreamingResponseBuffered(response: any): Promise<UnifiedResponse> {
-    // Handle streaming response from Responses API
-    // Collect all chunks and build a unified response (BUFFERING APPROACH)
-
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-
-    let fullContent = ''
-    let toolCalls = []
-    let responseId = response.id || `resp_${Date.now()}`
-    let promptTokens = 0
-    let completionTokens = 0
-    let totalTokens = 0
-    let reasoningTokens = 0
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-
-        for (const line of lines) {
-          if (line.trim()) {
-            const parsed = this.parseSSEChunk(line)
-            if (parsed) {
-              if (parsed.response?.id) {
-                responseId = parsed.response.id
-              }
-
-              if (parsed.type === 'response.output_text.delta') {
-                fullContent += parsed.delta || ''
-              }
-
-              if (parsed.type === 'response.output_item.done') {
-                const item = parsed.item || {}
-                if (item.type === 'function_call') {
-                  const callId = item.call_id || item.id
-                  const name = item.name
-                  const args = item.arguments
-
-                  if (typeof callId === 'string' && typeof name === 'string' && typeof args === 'string') {
-                    toolCalls.push({
-                      id: callId,
-                      type: 'function',
-                      function: {
-                        name: name,
-                        arguments: args
-                      }
-                    })
-                  }
-                }
-              }
-
-              if (parsed.usage) {
-                promptTokens = parsed.usage.input_tokens || 0
-                completionTokens = parsed.usage.output_tokens || 0
-                totalTokens = parsed.usage.total_tokens ?? (promptTokens + completionTokens)
-                reasoningTokens = parsed.usage.output_tokens_details?.reasoning_tokens || 0
-              }
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error reading streaming response:', error)
-    } finally {
-      reader.releaseLock()
-    }
-
-    const contentArray = fullContent
-      ? [{ type: 'text', text: fullContent, citations: [] }]
-      : [{ type: 'text', text: '', citations: [] }]
-
-    return {
-      id: responseId,
-      content: contentArray,
-      toolCalls,
-      usage: {
-        promptTokens,
-        completionTokens,
-        input_tokens: promptTokens,
-        output_tokens: completionTokens,
-        totalTokens,
-        reasoningTokens
-      },
-      responseId: responseId
-    }
-  }
+  // Buffered method removed - streaming helper is now used instead
 
   private parseSSEChunk(line: string): any | null {
     if (line.startsWith('data: ')) {
@@ -577,5 +527,39 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
     }
 
     return toolCalls
+  }
+
+  private normalizeUsageForAdapter(usage?: any) {
+    if (!usage) {
+      return {
+        input_tokens: 0,
+        output_tokens: 0,
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        reasoningTokens: 0
+      }
+    }
+
+    const inputTokens =
+      usage.input_tokens ??
+      usage.prompt_tokens ??
+      usage.promptTokens ??
+      0
+    const outputTokens =
+      usage.output_tokens ??
+      usage.completion_tokens ??
+      usage.completionTokens ??
+      0
+
+    return {
+      ...usage,
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+      promptTokens: inputTokens,
+      completionTokens: outputTokens,
+      totalTokens: usage.totalTokens ?? (inputTokens + outputTokens),
+      reasoningTokens: usage.reasoningTokens ?? 0
+    }
   }
 }
