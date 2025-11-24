@@ -2092,7 +2092,7 @@ async function queryOpenAI(
   logLLMInteraction({
     systemPrompt: systemPrompt.join('\n'),
     messages: [...openaiSystem, ...openaiMessages],
-    response: queryResult.rawResponse || assistantMessage.message,
+    response: assistantMessage.message || queryResult.rawResponse,
     usage: {
       inputTokens,
       outputTokens,

@@ -90,8 +90,37 @@ export class ChatCompletionsAdapter extends OpenAIAdapter {
       role: 'system',
       content: prompt
     }))
-    
-    return [...systemMessages, ...messages]
+
+    // Normalize tool messages (logic from original openai.ts:527-550)
+    const normalizedMessages = this.normalizeToolMessages(messages)
+
+    return [...systemMessages, ...normalizedMessages]
+  }
+
+  private normalizeToolMessages(messages: any[]): any[] {
+    return messages.map(msg => {
+      if (msg.role === 'tool') {
+        if (Array.isArray(msg.content)) {
+          return {
+            ...msg,
+            content:
+              msg.content
+                .map(c => c.text || '')
+                .filter(Boolean)
+                .join('\n\n') || '(empty content)',
+          }
+        } else if (typeof msg.content !== 'string') {
+          return {
+            ...msg,
+            content:
+              typeof msg.content === 'undefined'
+                ? '(empty content)'
+                : JSON.stringify(msg.content),
+          }
+        }
+      }
+      return msg
+    })
   }
 
   // Implement abstract method from OpenAIAdapter - Chat Completions specific streaming logic
