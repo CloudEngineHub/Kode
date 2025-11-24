@@ -1,9 +1,9 @@
-import { ModelAPIAdapter, StreamingEvent } from './base'
+import { OpenAIAdapter, StreamingEvent } from './openaiAdapter'
 import { UnifiedRequestParams, UnifiedResponse } from '@kode-types/modelCapabilities'
 import { Tool } from '@tool'
 import { zodToJsonSchema } from 'zod-to-json-schema'
 
-export class ChatCompletionsAdapter extends ModelAPIAdapter {
+export class ChatCompletionsAdapter extends OpenAIAdapter {
   createRequest(params: UnifiedRequestParams): any {
     const { messages, systemPrompt, tools, maxTokens, stream } = params
     
@@ -64,31 +64,10 @@ export class ChatCompletionsAdapter extends ModelAPIAdapter {
     }))
   }
   
-  async parseResponse(response: any): Promise<UnifiedResponse> {
-    // Check if this is a streaming response (has ReadableStream body)
-    if (response?.body instanceof ReadableStream) {
-      // Use streaming helper for streaming responses
-      const { assistantMessage } = await this.parseStreamingChatCompletion(response)
+  // parseResponse is now handled by the base OpenAIAdapter class
 
-      return {
-        id: assistantMessage.responseId,
-        content: assistantMessage.message.content,
-        toolCalls: assistantMessage.message.content
-          .filter((block: any) => block.type === 'tool_use')
-          .map((block: any) => ({
-            id: block.id,
-            type: 'function',
-            function: {
-              name: block.name,
-              arguments: JSON.stringify(block.input)
-            }
-          })),
-        usage: this.normalizeUsageForAdapter(assistantMessage.message.usage),
-        responseId: assistantMessage.responseId
-      }
-    }
-
-    // Process non-streaming response
+  // Implement abstract method from OpenAIAdapter - Chat Completions specific non-streaming
+  protected parseNonStreamingResponse(response: any): UnifiedResponse {
     const choice = response.choices?.[0]
 
     return {
@@ -115,130 +94,86 @@ export class ChatCompletionsAdapter extends ModelAPIAdapter {
     return [...systemMessages, ...messages]
   }
 
-  // New streaming method that yields events incrementally
-  async *parseStreamingResponse(response: any): AsyncGenerator<StreamingEvent> {
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
+  // Implement abstract method from OpenAIAdapter - Chat Completions specific streaming logic
+  protected *processStreamingChunk(
+    parsed: any,
+    responseId: string,
+    hasStarted: boolean,
+    accumulatedContent: string
+  ): AsyncGenerator<StreamingEvent> {
+    // Handle content deltas (Chat Completions format)
+    const choice = parsed.choices?.[0]
+    if (choice?.delta) {
+      const delta = choice.delta.content || ''
+      const reasoningDelta = choice.delta.reasoning_content || ''
+      const fullDelta = delta + reasoningDelta
 
-    let responseId = response.id || `chatcmpl_${Date.now()}`
-    let hasStarted = false
-    let accumulatedContent = ''
+      if (fullDelta) {
+        const textEvents = this.handleTextDelta(fullDelta, responseId, hasStarted)
+        for (const event of textEvents) {
+          yield event
+        }
+      }
+    }
 
-    try {
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-
-        for (const line of lines) {
-          if (line.trim()) {
-            const parsed = this.parseSSEChunk(line)
-            if (parsed) {
-              // Extract response ID
-              if (parsed.id) {
-                responseId = parsed.id
-              }
-
-              // Handle content deltas
-              const choice = parsed.choices?.[0]
-              if (choice?.delta) {
-                const delta = choice.delta.content || ''
-                const reasoningDelta = choice.delta.reasoning_content || ''
-                const fullDelta = delta + reasoningDelta
-
-                if (fullDelta) {
-                  // First content - yield message_start event
-                  if (!hasStarted) {
-                    yield {
-                      type: 'message_start',
-                      message: {
-                        role: 'assistant',
-                        content: []
-                      },
-                      responseId
-                    }
-                    hasStarted = true
-                  }
-
-                  accumulatedContent += fullDelta
-
-                  // Yield text delta event
-                  yield {
-                    type: 'text_delta',
-                    delta: fullDelta,
-                    responseId
-                  }
-                }
-              }
-
-              // Handle tool calls
-              if (choice?.delta?.tool_calls) {
-                for (const toolCall of choice.delta.tool_calls) {
-                  yield {
-                    type: 'tool_request',
-                    tool: {
-                      id: toolCall.id,
-                      name: toolCall.function?.name,
-                      input: toolCall.function?.arguments || '{}'
-                    }
-                  }
-                }
-              }
-
-              // Handle usage information
-              if (parsed.usage) {
-                const promptTokens = parsed.usage.prompt_tokens || 0
-                const completionTokens = parsed.usage.completion_tokens || 0
-                const totalTokens = parsed.usage.total_tokens ?? (promptTokens + completionTokens)
-
-                yield {
-                  type: 'usage',
-                  usage: {
-                    promptTokens,
-                    completionTokens,
-                    input_tokens: promptTokens,
-                    output_tokens: completionTokens,
-                    totalTokens,
-                    reasoningTokens: 0 // Chat Completions doesn't have reasoning tokens
-                  }
-                }
-              }
-            }
+    // Handle tool calls (Chat Completions format)
+    if (choice?.delta?.tool_calls) {
+      for (const toolCall of choice.delta.tool_calls) {
+        yield {
+          type: 'tool_request',
+          tool: {
+            id: toolCall.id,
+            name: toolCall.function?.name,
+            input: toolCall.function?.arguments || '{}'
           }
         }
       }
-    } catch (error) {
-      console.error('Error reading streaming response:', error)
-      yield {
-        type: 'error',
-        error: error instanceof Error ? error.message : String(error)
-      }
-    } finally {
-      reader.releaseLock()
     }
 
-    // Build final response
-    const finalContent = accumulatedContent
-      ? [{ type: 'text', text: accumulatedContent, citations: [] }]
-      : [{ type: 'text', text: '', citations: [] }]
+    // Handle usage information
+    if (parsed.usage) {
+      const promptTokens = parsed.usage.prompt_tokens || 0
+      const completionTokens = parsed.usage.completion_tokens || 0
+      const totalTokens = parsed.usage.total_tokens ?? (promptTokens + completionTokens)
 
-    // Yield final message stop
-    yield {
-      type: 'message_stop',
-      message: {
-        id: responseId,
-        role: 'assistant',
-        content: finalContent,
-        responseId
+      yield {
+        type: 'usage',
+        usage: {
+          promptTokens,
+          completionTokens,
+          input_tokens: promptTokens,
+          output_tokens: completionTokens,
+          totalTokens,
+          reasoningTokens: 0 // Chat Completions doesn't have reasoning tokens
+        }
       }
     }
   }
 
-  private async parseStreamingChatCompletion(response: any): Promise<{ assistantMessage: any; rawResponse: any }> {
+  protected updateStreamingState(
+    parsed: any,
+    accumulatedContent: string
+  ): { content?: string; hasStarted?: boolean } {
+    const state: { content?: string; hasStarted?: boolean } = {}
+
+    // Check if we have content delta
+    const choice = parsed.choices?.[0]
+    if (choice?.delta) {
+      const delta = choice.delta.content || ''
+      const reasoningDelta = choice.delta.reasoning_content || ''
+      const fullDelta = delta + reasoningDelta
+
+      if (fullDelta) {
+        state.content = accumulatedContent + fullDelta
+        state.hasStarted = true
+      }
+    }
+
+    return state
+  }
+
+  // Implement abstract method for parsing streaming OpenAI responses
+  protected async parseStreamingOpenAIResponse(response: any): Promise<{ assistantMessage: any; rawResponse: any }> {
     const contentBlocks: any[] = []
     const usage: any = {
       prompt_tokens: 0,
@@ -326,55 +261,9 @@ export class ChatCompletionsAdapter extends ModelAPIAdapter {
     }
   }
 
-  private parseSSEChunk(line: string): any | null {
-    if (line.startsWith('data: ')) {
-      const data = line.slice(6).trim()
-      if (data === '[DONE]') {
-        return null
-      }
-      if (data) {
-        try {
-          return JSON.parse(data)
-        } catch (error) {
-          console.error('Error parsing SSE chunk:', error)
-          return null
-        }
-      }
-    }
-    return null
-  }
-
-  private normalizeUsageForAdapter(usage?: any) {
-    if (!usage) {
-      return {
-        input_tokens: 0,
-        output_tokens: 0,
-        promptTokens: 0,
-        completionTokens: 0,
-        totalTokens: 0,
-        reasoningTokens: 0
-      }
-    }
-
-    const inputTokens =
-      usage.input_tokens ??
-      usage.prompt_tokens ??
-      usage.promptTokens ??
-      0
-    const outputTokens =
-      usage.output_tokens ??
-      usage.completion_tokens ??
-      usage.completionTokens ??
-      0
-
-    return {
-      ...usage,
-      input_tokens: inputTokens,
-      output_tokens: outputTokens,
-      promptTokens: inputTokens,
-      completionTokens: outputTokens,
-      totalTokens: usage.totalTokens ?? (inputTokens + outputTokens),
-      reasoningTokens: usage.reasoningTokens ?? 0
-    }
+  // Implement abstract method for usage normalization
+  protected normalizeUsageForAdapter(usage?: any) {
+    // Call the base implementation with Chat Completions specific defaults
+    return super.normalizeUsageForAdapter(usage)
   }
 }
