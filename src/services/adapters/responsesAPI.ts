@@ -1,10 +1,9 @@
-import { ModelAPIAdapter, StreamingEvent } from './base'
+import { OpenAIAdapter, StreamingEvent } from './openaiAdapter'
 import { UnifiedRequestParams, UnifiedResponse } from '@kode-types/modelCapabilities'
 import { Tool } from '@tool'
 import { zodToJsonSchema } from 'zod-to-json-schema'
-import { processResponsesStream } from './responsesStreaming'
 
-export class ResponsesAPIAdapter extends ModelAPIAdapter {
+export class ResponsesAPIAdapter extends OpenAIAdapter {
   createRequest(params: UnifiedRequestParams): any {
     const { messages, systemPrompt, tools, maxTokens, reasoningEffort } = params
 
@@ -125,39 +124,10 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
     })
   }
   
-  async parseResponse(response: any): Promise<UnifiedResponse> {
-    // Check if this is a streaming response (has ReadableStream body)
-    if (response?.body instanceof ReadableStream) {
-      // Use streaming helper for streaming responses
-      const { assistantMessage } = await processResponsesStream(
-        this.parseStreamingResponse(response),
-        Date.now(),
-        response.id ?? `resp_${Date.now()}`
-      )
+  // parseResponse is now handled by the base OpenAIAdapter class
 
-      return {
-        id: assistantMessage.responseId,
-        content: assistantMessage.message.content,
-        toolCalls: assistantMessage.message.content
-          .filter((block: any) => block.type === 'tool_use')
-          .map((block: any) => ({
-            id: block.id,
-            type: 'function',
-            function: {
-              name: block.name,
-              arguments: JSON.stringify(block.input)
-            }
-          })),
-        usage: this.normalizeUsageForAdapter(assistantMessage.message.usage),
-        responseId: assistantMessage.responseId
-      }
-    }
-
-    // Process non-streaming response
-    return this.parseNonStreamingResponse(response)
-  }
-
-  private parseNonStreamingResponse(response: any): UnifiedResponse {
+  // Implement abstract method from OpenAIAdapter
+  protected parseNonStreamingResponse(response: any): UnifiedResponse {
     // Process basic text output
     let content = response.output_text || ''
 
@@ -209,175 +179,104 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
     }
   }
 
-  // New streaming method that yields events incrementally
-  async *parseStreamingResponse(response: any): AsyncGenerator<StreamingEvent> {
-    // Handle streaming response from Responses API
-    // Yield events incrementally for real-time UI updates
+  // Implement abstract method from OpenAIAdapter - Responses API specific streaming logic
+  protected *processStreamingChunk(
+    parsed: any,
+    responseId: string,
+    hasStarted: boolean,
+    accumulatedContent: string
+  ): AsyncGenerator<StreamingEvent> {
+    // Handle text content deltas (Responses API format)
+    if (parsed.type === 'response.output_text.delta') {
+      const delta = parsed.delta || ''
+      if (delta) {
+        const textEvents = this.handleTextDelta(delta, responseId, hasStarted)
+        for (const event of textEvents) {
+          yield event
+        }
+      }
+    }
 
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
+    // Handle tool calls (Responses API format)
+    if (parsed.type === 'response.output_item.done') {
+      const item = parsed.item || {}
+      if (item.type === 'function_call') {
+        const callId = item.call_id || item.id
+        const name = item.name
+        const args = item.arguments
 
-    let responseId = response.id || `resp_${Date.now()}`
-    let hasStarted = false
-    let accumulatedContent = ''
-    let hasUsageEvent = false
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-
-        for (const line of lines) {
-          if (line.trim()) {
-            const parsed = this.parseSSEChunk(line)
-            if (parsed) {
-              // Extract response ID
-              if (parsed.response?.id) {
-                responseId = parsed.response.id
-              }
-
-              // Handle text content deltas
-              if (parsed.type === 'response.output_text.delta') {
-                const delta = parsed.delta || ''
-                if (delta) {
-                  // First content - yield message_start event
-                  if (!hasStarted) {
-                    yield {
-                      type: 'message_start',
-                      message: {
-                        role: 'assistant',
-                        content: []
-                      },
-                      responseId
-                    }
-                    hasStarted = true
-                  }
-
-                  accumulatedContent += delta
-
-                  // Yield text delta event
-                  yield {
-                    type: 'text_delta',
-                    delta: delta,
-                    responseId
-                  }
-                }
-              }
-
-              // Handle tool calls - enhanced following codex-cli.js pattern
-              if (parsed.type === 'response.output_item.done') {
-                const item = parsed.item || {}
-                if (item.type === 'function_call') {
-                  // Validate tool call fields
-                  const callId = item.call_id || item.id
-                  const name = item.name
-                  const args = item.arguments
-
-                  if (typeof callId === 'string' && typeof name === 'string' && typeof args === 'string') {
-                    yield {
-                      type: 'tool_request',
-                      tool: {
-                        id: callId,
-                        name: name,
-                        input: args
-                      }
-                    }
-                  }
-                }
-              }
-
-              // Handle usage information
-              if (parsed.usage) {
-                hasUsageEvent = true
-                const promptTokens = parsed.usage.input_tokens || 0
-                const completionTokens = parsed.usage.output_tokens || 0
-                const totalTokens = parsed.usage.total_tokens ?? (promptTokens + completionTokens)
-
-                yield {
-                  type: 'usage',
-                  usage: {
-                    promptTokens,
-                    completionTokens,
-                    input_tokens: promptTokens,
-                    output_tokens: completionTokens,
-                    totalTokens,
-                    reasoningTokens: parsed.usage.output_tokens_details?.reasoning_tokens || 0
-                  }
-                }
-              }
+        if (typeof callId === 'string' && typeof name === 'string' && typeof args === 'string') {
+          yield {
+            type: 'tool_request',
+            tool: {
+              id: callId,
+              name: name,
+              input: args
             }
           }
         }
       }
-    } catch (error) {
-      console.error('Error reading streaming response:', error)
-      yield {
-        type: 'error',
-        error: error instanceof Error ? error.message : String(error)
-      }
-    } finally {
-      reader.releaseLock()
     }
 
-    // If no usage event was found during streaming, yield a fallback usage event
-    if (!hasUsageEvent) {
-      // For streaming responses that don't include usage data, provide minimal usage
-      // This prevents undefined errors in tests and provides sensible defaults
-      const fallbackUsage = {
-        promptTokens: 0,
-        completionTokens: 0,
-        input_tokens: 0,
-        output_tokens: 0,
-        totalTokens: 0,
-        reasoningTokens: 0
-      }
+    // Handle usage information
+    if (parsed.usage) {
+      const promptTokens = parsed.usage.input_tokens || 0
+      const completionTokens = parsed.usage.output_tokens || 0
+      const totalTokens = parsed.usage.total_tokens ?? (promptTokens + completionTokens)
 
       yield {
         type: 'usage',
-        usage: fallbackUsage
-      }
-    }
-
-    // Build final response
-    const finalContent = accumulatedContent
-      ? [{ type: 'text', text: accumulatedContent, citations: [] }]
-      : [{ type: 'text', text: '', citations: [] }]
-
-    // Yield final message stop
-    yield {
-      type: 'message_stop',
-      message: {
-        id: responseId,
-        role: 'assistant',
-        content: finalContent,
-        responseId
+        usage: {
+          promptTokens,
+          completionTokens,
+          input_tokens: promptTokens,
+          output_tokens: completionTokens,
+          totalTokens,
+          reasoningTokens: parsed.usage.output_tokens_details?.reasoning_tokens || 0
+        }
       }
     }
   }
 
-  // Buffered method removed - streaming helper is now used instead
+  protected updateStreamingState(
+    parsed: any,
+    accumulatedContent: string
+  ): { content?: string; hasStarted?: boolean } {
+    const state: { content?: string; hasStarted?: boolean } = {}
 
-  private parseSSEChunk(line: string): any | null {
-    if (line.startsWith('data: ')) {
-      const data = line.slice(6).trim()
-      if (data === '[DONE]') {
-        return null
-      }
-      if (data) {
-        try {
-          return JSON.parse(data)
-        } catch (error) {
-          console.error('Error parsing SSE chunk:', error)
-          return null
-        }
-      }
+    // Check if we have content delta
+    if (parsed.type === 'response.output_text.delta' && parsed.delta) {
+      state.content = accumulatedContent + parsed.delta
+      state.hasStarted = true
     }
-    return null
+
+    return state
+  }
+
+  // parseStreamingResponse and parseSSEChunk are now handled by the base OpenAIAdapter class
+
+  // Implement abstract method for parsing streaming OpenAI responses
+  protected async parseStreamingOpenAIResponse(response: any): Promise<{ assistantMessage: any; rawResponse: any }> {
+    // Delegate to the processResponsesStream helper for consistency
+    const { processResponsesStream } = await import('./responsesStreaming')
+
+    return await processResponsesStream(
+      this.parseStreamingResponse(response),
+      Date.now(),
+      response.id ?? `resp_${Date.now()}`
+    )
+  }
+
+  // Implement abstract method for usage normalization
+  protected normalizeUsageForAdapter(usage?: any) {
+    // Call the base implementation with Responses API specific defaults
+    const baseUsage = super.normalizeUsageForAdapter(usage)
+
+    // Add any Responses API specific usage fields
+    return {
+      ...baseUsage,
+      reasoningTokens: usage?.output_tokens_details?.reasoning_tokens ?? 0
+    }
   }
   
   private convertMessagesToInput(messages: any[]): any[] {
@@ -527,39 +426,5 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
     }
 
     return toolCalls
-  }
-
-  private normalizeUsageForAdapter(usage?: any) {
-    if (!usage) {
-      return {
-        input_tokens: 0,
-        output_tokens: 0,
-        promptTokens: 0,
-        completionTokens: 0,
-        totalTokens: 0,
-        reasoningTokens: 0
-      }
-    }
-
-    const inputTokens =
-      usage.input_tokens ??
-      usage.prompt_tokens ??
-      usage.promptTokens ??
-      0
-    const outputTokens =
-      usage.output_tokens ??
-      usage.completion_tokens ??
-      usage.completionTokens ??
-      0
-
-    return {
-      ...usage,
-      input_tokens: inputTokens,
-      output_tokens: outputTokens,
-      promptTokens: inputTokens,
-      completionTokens: outputTokens,
-      totalTokens: usage.totalTokens ?? (inputTokens + outputTokens),
-      reasoningTokens: usage.reasoningTokens ?? 0
-    }
   }
 }
