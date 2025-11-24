@@ -75,18 +75,33 @@ export class ChatCompletionsAdapter extends OpenAIAdapter {
 
   // Implement abstract method from OpenAIAdapter - Chat Completions specific non-streaming
   protected parseNonStreamingResponse(response: any): UnifiedResponse {
+    // Validate response structure
+    if (!response || typeof response !== 'object') {
+      throw new Error('Invalid response: response must be an object')
+    }
+
     const choice = response.choices?.[0]
+    if (!choice) {
+      throw new Error('Invalid response: no choices found in response')
+    }
+
+    // Extract message content safely
+    const message = choice.message || {}
+    const content = typeof message.content === 'string' ? message.content : ''
+    const toolCalls = Array.isArray(message.tool_calls) ? message.tool_calls : []
+
+    // Extract usage safely
+    const usage = response.usage || {}
+    const promptTokens = Number(usage.prompt_tokens) || 0
+    const completionTokens = Number(usage.completion_tokens) || 0
 
     return {
       id: response.id || `chatcmpl_${Date.now()}`,
-      content: choice?.message?.content || '',
-      toolCalls: choice?.message?.tool_calls || [],
+      content,
+      toolCalls,
       usage: {
-        promptTokens: response.usage?.prompt_tokens || 0,
-        completionTokens: response.usage?.completion_tokens || 0,
-        input_tokens: response.usage?.prompt_tokens || 0,
-        output_tokens: response.usage?.completion_tokens || 0,
-        totalTokens: (response.usage?.prompt_tokens || 0) + (response.usage?.completion_tokens || 0)
+        promptTokens,
+        completionTokens
       }
     }
   }
@@ -105,14 +120,22 @@ export class ChatCompletionsAdapter extends OpenAIAdapter {
   }
 
   private normalizeToolMessages(messages: any[]): any[] {
+    if (!Array.isArray(messages)) {
+      return []
+    }
+
     return messages.map(msg => {
+      if (!msg || typeof msg !== 'object') {
+        return msg
+      }
+
       if (msg.role === 'tool') {
         if (Array.isArray(msg.content)) {
           return {
             ...msg,
             content:
               msg.content
-                .map(c => c.text || '')
+                .map(c => c?.text || '')
                 .filter(Boolean)
                 .join('\n\n') || '(empty content)',
           }
@@ -120,7 +143,7 @@ export class ChatCompletionsAdapter extends OpenAIAdapter {
           return {
             ...msg,
             content:
-              typeof msg.content === 'undefined'
+              msg.content === null || msg.content === undefined
                 ? '(empty content)'
                 : JSON.stringify(msg.content),
           }
@@ -131,17 +154,22 @@ export class ChatCompletionsAdapter extends OpenAIAdapter {
   }
 
   // Implement abstract method from OpenAIAdapter - Chat Completions specific streaming logic
-  protected *processStreamingChunk(
+  protected async *processStreamingChunk(
     parsed: any,
     responseId: string,
     hasStarted: boolean,
     accumulatedContent: string
   ): AsyncGenerator<StreamingEvent> {
+    // Validate input
+    if (!parsed || typeof parsed !== 'object') {
+      return
+    }
+
     // Handle content deltas (Chat Completions format)
     const choice = parsed.choices?.[0]
-    if (choice?.delta) {
-      const delta = choice.delta.content || ''
-      const reasoningDelta = choice.delta.reasoning_content || ''
+    if (choice?.delta && typeof choice.delta === 'object') {
+      const delta = typeof choice.delta.content === 'string' ? choice.delta.content : ''
+      const reasoningDelta = typeof choice.delta.reasoning_content === 'string' ? choice.delta.reasoning_content : ''
       const fullDelta = delta + reasoningDelta
 
       if (fullDelta) {
@@ -153,24 +181,28 @@ export class ChatCompletionsAdapter extends OpenAIAdapter {
     }
 
     // Handle tool calls (Chat Completions format)
-    if (choice?.delta?.tool_calls) {
+    if (choice?.delta?.tool_calls && Array.isArray(choice.delta.tool_calls)) {
       for (const toolCall of choice.delta.tool_calls) {
-        yield {
-          type: 'tool_request',
-          tool: {
-            id: toolCall.id,
-            name: toolCall.function?.name,
-            input: toolCall.function?.arguments || '{}'
+        if (toolCall && typeof toolCall === 'object') {
+          yield {
+            type: 'tool_request',
+            tool: {
+              id: toolCall.id || `tool_${Date.now()}`,
+              name: toolCall.function?.name || 'unknown',
+              input: toolCall.function?.arguments || '{}'
+            }
           }
         }
       }
     }
 
-    // Handle usage information - normalize to canonical structure
-    if (parsed.usage) {
+    // Handle usage information - normalize to canonical structure and track cumulatively
+    if (parsed.usage && typeof parsed.usage === 'object') {
+      const normalizedUsage = normalizeTokens(parsed.usage)
+      this.updateCumulativeUsage(normalizedUsage)
       yield {
         type: 'usage',
-        usage: normalizeTokens(parsed.usage)
+        usage: { ...this.cumulativeUsage }
       }
     }
   }
@@ -198,7 +230,7 @@ export class ChatCompletionsAdapter extends OpenAIAdapter {
   }
 
   // Implement abstract method for parsing streaming OpenAI responses
-  protected async parseStreamingOpenAIResponse(response: any): Promise<{ assistantMessage: any; rawResponse: any }> {
+  protected async parseStreamingOpenAIResponse(response: any, signal?: AbortSignal): Promise<{ assistantMessage: any; rawResponse: any }> {
     const contentBlocks: any[] = []
     const usage: any = {
       prompt_tokens: 0,
@@ -208,36 +240,78 @@ export class ChatCompletionsAdapter extends OpenAIAdapter {
     let responseId = response.id || `chatcmpl_${Date.now()}`
     const pendingToolCalls: any[] = []
 
-    for await (const event of this.parseStreamingResponse(response)) {
-      if (event.type === 'message_start') {
-        responseId = event.responseId || responseId
-        continue
-      }
+    try {
+      this.resetCumulativeUsage() // Reset usage for new request
 
-      if (event.type === 'text_delta') {
-        const last = contentBlocks[contentBlocks.length - 1]
-        if (!last || last.type !== 'text') {
-          contentBlocks.push({ type: 'text', text: event.delta, citations: [] })
-        } else {
-          last.text += event.delta
+      for await (const event of this.parseStreamingResponse(response)) {
+        // Check for abort signal
+        if (signal?.aborted) {
+          throw new Error('Stream aborted by user')
         }
-        continue
-      }
 
-      if (event.type === 'tool_request') {
-        pendingToolCalls.push(event.tool)
-        continue
-      }
+        if (event.type === 'message_start') {
+          responseId = event.responseId || responseId
+          continue
+        }
 
-      if (event.type === 'usage') {
-        // Usage is now in canonical format - just extract the values
-        usage.prompt_tokens = event.usage.input
-        usage.completion_tokens = event.usage.output
-        usage.totalTokens = event.usage.total ?? (event.usage.input + event.usage.output)
-        usage.promptTokens = event.usage.input
-        usage.completionTokens = event.usage.output
-        continue
+        if (event.type === 'text_delta') {
+          const last = contentBlocks[contentBlocks.length - 1]
+          if (!last || last.type !== 'text') {
+            contentBlocks.push({ type: 'text', text: event.delta, citations: [] })
+          } else {
+            last.text += event.delta
+          }
+          continue
+        }
+
+        if (event.type === 'tool_request') {
+          pendingToolCalls.push(event.tool)
+          continue
+        }
+
+        if (event.type === 'usage') {
+          // Usage is now in canonical format - just extract the values
+          usage.prompt_tokens = event.usage.input
+          usage.completion_tokens = event.usage.output
+          usage.totalTokens = event.usage.total ?? (event.usage.input + event.usage.output)
+          usage.promptTokens = event.usage.input
+          usage.completionTokens = event.usage.output
+          continue
+        }
       }
+    } catch (error) {
+      if (signal?.aborted) {
+        // Return partial response on abort
+        const assistantMessage = {
+          type: 'assistant',
+          message: {
+            role: 'assistant',
+            content: contentBlocks,
+            usage: {
+              input_tokens: usage.prompt_tokens ?? 0,
+              output_tokens: usage.completion_tokens ?? 0,
+              prompt_tokens: usage.prompt_tokens ?? 0,
+              completion_tokens: usage.completion_tokens ?? 0,
+              totalTokens: (usage.prompt_tokens || 0) + (usage.completion_tokens || 0),
+            },
+          },
+          costUSD: 0,
+          durationMs: Date.now() - Date.now(),
+          uuid: `${Date.now()}-${Math.random().toString(36).slice(2, 11)}` as any,
+          responseId,
+        }
+
+        return {
+          assistantMessage,
+          rawResponse: {
+            id: responseId,
+            content: contentBlocks,
+            usage,
+            aborted: true,
+          },
+        }
+      }
+      throw error // Re-throw other errors
     }
 
     for (const toolCall of pendingToolCalls) {

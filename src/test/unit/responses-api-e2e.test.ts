@@ -200,13 +200,11 @@ describe('Responses API Tests', () => {
       const usageEvent = events.find(event => event.type === 'usage')
       expect(usageEvent).toBeDefined()
       expect(usageEvent.usage).toMatchObject({
-        promptTokens: 12,
-        completionTokens: 8,
-        input_tokens: 12,
-        output_tokens: 8,
-        totalTokens: 20,
+        input: 12,
+        output: 8,
+        total: 20,
+        reasoning: 3,
       })
-      expect(usageEvent.usage.reasoningTokens).toBe(3)
 
       async function* replayEvents(evts: any[]) {
         for (const evt of evts) {
