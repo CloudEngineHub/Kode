@@ -1908,26 +1908,30 @@ async function queryOpenAI(
     const USE_NEW_ADAPTER_SYSTEM = process.env.USE_NEW_ADAPTERS !== 'false'
 
     if (USE_NEW_ADAPTER_SYSTEM) {
-      const adapter = ModelAdapterFactory.createAdapter(modelProfile)
-      const reasoningEffort = await getReasoningEffort(modelProfile, messages)
-      const unifiedParams: UnifiedRequestParams = {
-        messages: openaiMessages,
-        systemPrompt: openaiSystem.map(s => s.content as string),
-        tools,
-        maxTokens: getMaxTokensFromProfile(modelProfile),
-        stream: config.stream,
-        reasoningEffort: reasoningEffort as any,
-        temperature: isGPT5Model(model) ? 1 : MAIN_QUERY_TEMPERATURE,
-        previousResponseId: toolUseContext?.responseState?.previousResponseId,
-        verbosity: 'high',
-      }
+      const shouldUseResponses = ModelAdapterFactory.shouldUseResponsesAPI(modelProfile)
 
-      adapterContext = {
-        adapter,
-        request: adapter.createRequest(unifiedParams),
-        shouldUseResponses: ModelAdapterFactory.shouldUseResponsesAPI(
-          modelProfile,
-        ),
+      // Only use new adapters for Responses API models
+      // Chat Completions models use legacy path for stability
+      if (shouldUseResponses) {
+        const adapter = ModelAdapterFactory.createAdapter(modelProfile)
+        const reasoningEffort = await getReasoningEffort(modelProfile, messages)
+        const unifiedParams: UnifiedRequestParams = {
+          messages: openaiMessages,
+          systemPrompt: openaiSystem.map(s => s.content as string),
+          tools,
+          maxTokens: getMaxTokensFromProfile(modelProfile),
+          stream: config.stream,
+          reasoningEffort: reasoningEffort as any,
+          temperature: isGPT5Model(model) ? 1 : MAIN_QUERY_TEMPERATURE,
+          previousResponseId: toolUseContext?.responseState?.previousResponseId,
+          verbosity: 'high',
+        }
+
+        adapterContext = {
+          adapter,
+          request: adapter.createRequest(unifiedParams),
+          shouldUseResponses: true,
+        }
       }
     }
   }

@@ -2,24 +2,34 @@ import { ModelCapabilities, UnifiedRequestParams, UnifiedResponse } from '@kode-
 import { ModelProfile } from '@utils/config'
 import { Tool } from '@tool'
 
+// Canonical token representation - normalize once at the boundary
+interface TokenUsage {
+  input: number
+  output: number
+  total?: number
+  reasoning?: number
+}
+
 // Streaming event types for async generator streaming
 export type StreamingEvent =
   | { type: 'message_start', message: any, responseId: string }
   | { type: 'text_delta', delta: string, responseId: string }
   | { type: 'tool_request', tool: any }
-  | {
-      type: 'usage'
-      usage: {
-        promptTokens?: number
-        completionTokens?: number
-        input_tokens?: number
-        output_tokens?: number
-        totalTokens?: number
-        reasoningTokens?: number
-      }
-    }
+  | { type: 'usage', usage: TokenUsage }
   | { type: 'message_stop', message: any }
   | { type: 'error', error: string }
+
+// Normalize API-specific token names to canonical representation - do this ONCE at the boundary
+function normalizeTokens(apiResponse: any): TokenUsage {
+  return {
+    input: apiResponse.prompt_tokens ?? apiResponse.input_tokens ?? apiResponse.promptTokens ?? 0,
+    output: apiResponse.completion_tokens ?? apiResponse.output_tokens ?? apiResponse.completionTokens ?? 0,
+    total: apiResponse.total_tokens ?? apiResponse.totalTokens,
+    reasoning: apiResponse.reasoning_tokens ?? apiResponse.reasoningTokens
+  }
+}
+
+export { TokenUsage, normalizeTokens }
 
 export abstract class ModelAPIAdapter {
   constructor(
