@@ -8,7 +8,7 @@ export interface ModelCapabilities {
   
   // Parameter mapping
   parameters: {
-    maxTokensField: 'max_tokens' | 'max_completion_tokens'
+    maxTokensField: 'max_tokens' | 'max_completion_tokens' | 'max_output_tokens'
     supportsReasoningEffort: boolean
     supportsVerbosity: boolean
     temperatureMode: 'flexible' | 'fixed_one' | 'restricted'

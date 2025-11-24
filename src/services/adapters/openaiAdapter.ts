@@ -1,10 +1,11 @@
 import { ModelAPIAdapter, StreamingEvent, normalizeTokens } from './base'
-import { UnifiedRequestParams, UnifiedResponse } from '@kode-types/modelCapabilities'
+import { UnifiedRequestParams, UnifiedResponse, ModelCapabilities } from '@kode-types/modelCapabilities'
+import { ModelProfile } from '@utils/config'
 import { Tool } from '@tool'
 import { zodToJsonSchema } from 'zod-to-json-schema'
 
-// Re-export normalizeTokens for subclasses
-export { normalizeTokens }
+// Re-export normalizeTokens and StreamingEvent for subclasses
+export { normalizeTokens, type StreamingEvent }
 
 /**
  * Base adapter for all OpenAI-compatible APIs (Chat Completions and Responses API)
@@ -222,13 +223,13 @@ export abstract class OpenAIAdapter extends ModelAPIAdapter {
   /**
    * Common tool building logic
    */
-  protected buildTools(tools: Tool[]): any[] {
+  public buildTools(tools: Tool[]): any[] {
     return tools.map(tool => ({
       type: 'function',
       function: {
         name: tool.name,
         description: tool.description,
-        parameters: zodToJsonSchema(tool.schema)
+        parameters: zodToJsonSchema(tool.inputSchema)
       }
     }))
   }
