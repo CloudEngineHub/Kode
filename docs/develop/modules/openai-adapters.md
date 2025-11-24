@@ -1,108 +1,147 @@
 # OpenAI Adapter Layer
 
-This module enables Kode's Anthropic-first conversation engine to seamlessly interact with OpenAI-compatible providers. It selectively routes requests through either the standard Chat Completions API or the new Responses API without exposing provider complexity to the rest of the system.
-
-The adapter layer activates when `USE_NEW_ADAPTERS !== 'false'` and a valid `ModelProfile` is configured.
+OpenAI-compatible provider abstraction that routes requests through Chat Completions or Responses API while maintaining provider neutrality.
 
 ## Architecture
 
-The adapter layer acts as a translation bridge, preserving Anthropic data structures internally while communicating with various external providers.
+The adapter layer translates between Anthropic's internal format and various OpenAI-compatible APIs:
 
-```mermaid
-graph TD
-    A[Anthropic Messages] -->|queryOpenAI| B(UnifiedRequestParams)
-    B --> C{Adapter Selection}
-    C -->|Standard| D[ChatCompletionsAdapter]
-    C -->|Native Responses| E[ResponsesAPIAdapter]
-    D --> F[OpenAI API /chat/completions]
-    E --> G[OpenAI API /responses]
-    F --> H(UnifiedResponse)
-    G --> H
-    H -->|Normalization| I[Anthropic AssistantMessage]
-```
+1. **Normalization** - Convert Anthropic messages to `UnifiedRequestParams`
+2. **Adapter Selection** - Choose ChatCompletionsAdapter or ResponsesAPIAdapter based on model capabilities
+3. **Request Construction** - Build provider-specific requests using capability-driven logic
+4. **Response Normalization** - Convert provider responses back to `UnifiedResponse`
 
-## Core Concepts
+## Canonical Token Structure
 
-### Unified Data Structures
+### Eliminating Field Name Ambiguity
 
-To maintain provider neutrality, the system uses intermediate data structures defined in [`src/types/modelCapabilities.ts`](file:///Users/ruonan/repo/kode/Kode-cli/src/types/modelCapabilities.ts).
+Different APIs use different token field names (`prompt_tokens` vs `input_tokens` vs `promptTokens`). The system normalizes all API responses to a canonical `TokenUsage` interface:
 
-#### UnifiedRequestParams
 ```typescript
-interface UnifiedRequestParams {
-  messages: any[]           // OpenAI-format messages
-  systemPrompt: string[]    // Preserved system prompts
-  tools: Tool[]             // Abstract tool definitions
-  maxTokens: number
-  stream: boolean
-  reasoningEffort?: string  // 'low' | 'medium' | 'high'
-  verbosity?: string        // 'concise' | 'verbose'
-  previousResponseId?: string
+interface TokenUsage {
+  input: number      // Always called "input"
+  output: number     // Always called "output"
+  total?: number     // Optional total
+  reasoning?: number // Optional reasoning tokens
 }
 ```
 
-#### UnifiedResponse
+### Boundary Normalization
+
+All adapters call `normalizeTokens()` once at the API boundary, eliminating ambiguity throughout the rest of the system.
+
+## Capability-Driven Adapter Logic
+
+### Smart Field Selection
+
+Adapters use model capabilities to determine request parameters:
+
 ```typescript
-interface UnifiedResponse {
-  id: string
-  content: any[]            // Normalized content blocks
-  toolCalls: any[]          // Normalized tool calls
-  usage: {
-    promptTokens: number
-    completionTokens: number
-    reasoningTokens?: number
+// Smart max tokens field selection
+const maxTokensField = this.getMaxTokensParam() // From model capabilities
+request[maxTokensField] = maxTokens
+
+// Capability-driven feature enablement
+if (this.capabilities.parameters.supportsReasoningEffort && params.reasoningEffort) {
+  request.reasoning_effort = params.reasoningEffort
+}
+
+if (this.capabilities.streaming.supported) {
+  request.stream = true
+  if (this.capabilities.streaming.includesUsage) {
+    request.stream_options = { include_usage: true }
   }
-  responseId?: string       // For stateful follow-ups
 }
 ```
 
-## Request Flow
+### Model-Specific Constraints
 
-1.  **Normalization (`src/services/claude.ts`)**
-    *   Converts Anthropic message history to OpenAI format.
-    *   Flattens system prompts while preserving structure.
-    *   Builds the `UnifiedRequestParams` bundle.
+Adapters use capabilities to handle model-specific requirements:
 
-2.  **Adapter Selection (`ModelAdapterFactory`)**
-    *   Inspects `ModelProfile` and capabilities.
-    *   Selects `ChatCompletionsAdapter` for standard providers.
-    *   Selects `ResponsesAPIAdapter` for providers supporting the new Responses API.
+```typescript
+// Capability-driven model constraints
+if (this.capabilities.parameters.temperatureMode === 'fixed_one') {
+  delete request.temperature
+}
 
-3.  **Request Construction**
+if (!this.capabilities.streaming.supported) {
+  delete request.stream
+  delete request.stream_options
+}
+```
 
-    | Feature | Chat Completions Adapter | Responses API Adapter |
-    | :--- | :--- | :--- |
-    | **Endpoint** | `/chat/completions` | `/responses` |
-    | **Message Format** | Single list with system messages | `input` array with typed items |
-    | **Tools** | `tools` array (JSON Schema) | Flat `tools` list |
-    | **Streaming** | Optional `stream: true` | Respects `stream` flag (`true` vs `false`) |
-    | **Reasoning** | `reasoning_effort` param | `include: ['reasoning.encrypted_content']` |
+## Chat Completions Fallback Strategy
 
-## Response Flow
+### Safety-First Architecture
 
-Both adapters normalize provider-specific responses into the `UnifiedResponse` format.
+The system only uses new adapters for Responses API models. Chat Completions models use the proven legacy path to ensure stability.
 
-### Chat Completions
-*   Extracts content from `choices[0].message`.
-*   Normalizes standard usage statistics.
-*   Handles standard function calling format.
+```typescript
+const shouldUseResponses = ModelAdapterFactory.shouldUseResponsesAPI(modelProfile)
 
-### Responses API
-*   **Streaming**: Incrementally decodes SSE chunks via `processResponsesStream()` (`src/services/adapters/responsesStreaming.ts`) so all provider-specific streaming normalization stays inside the adapter layer before `claude.ts` consumes it. The adapter respects the caller's `stream` flag (`true` vs `false`) - when `stream: false`, it issues a buffered request and skips the streaming helper.
-*   **JSON**: Folds `output` message items into text blocks.
-*   **State**: Captures `response.id` for stateful conversational continuity.
+// Only use new adapters for Responses API models
+// Chat Completions models use legacy path for stability
+if (shouldUseResponses) {
+  const adapter = ModelAdapterFactory.createAdapter(modelProfile)
+  // ... adapter logic
+}
+// Chat Completions models skip adapter creation and use proven legacy path
+```
+
+**Benefits:**
+- **Stability**: Chat Completions models continue using battle-tested legacy path
+- **Innovation**: Responses API models get new adapter improvements
+- **Clean separation**: No dual execution paths for the same model type
+- **Zero breakage**: All existing functionality preserved
 
 ## Extension Guide
 
-### Adding a New Provider
-If a new provider follows standard OpenAI conventions, simply add a new `ModelProfile`. If it requires custom handling:
+### Adding New Models
+1. Define capabilities in `src/constants/modelCapabilities.ts`
+2. Add to `MODEL_CAPABILITIES_REGISTRY`
+3. Test with integration tests
 
-1.  Define capabilities in [`src/constants/modelCapabilities.ts`](file:///Users/ruonan/repo/kode/Kode-cli/src/constants/modelCapabilities.ts).
-2.  Extend `ModelAPIAdapter` if the protocol is significantly different.
-3.  Register the new adapter in `ModelAdapterFactory`.
+### Custom Provider Handling
+For providers requiring custom protocol handling:
+1. Extend `ModelAPIAdapter`
+2. Implement required abstract methods
+3. Register in `ModelAdapterFactory`
 
-### Handling Model Quirks
-Keep model-specific logic (like `o1` unsupported fields) inside the specific adapter's `createRequest` method. This keeps the core logic clean and provider-agnostic.
+## Non-Obvious Design Patterns
+
+### 1. Adapter Pattern for API Compatibility
+- **What it looks like**: Code duplication across adapters
+- **Why it's intentional**: Separate protocols require separate adapters for clarity and type safety
+
+### 2. Canonical Data Normalization
+- **What it looks like**: Multiple field names for the same concept
+- **Why it's solved**: Normalize once at the API boundary to eliminate ambiguity
+
+### 3. Capability-Driven Design
+- **What it looks like**: Model-specific logic scattered throughout code
+- **Why it's solved**: Centralize model behavior in capability definitions
+
+### Safety-First Architecture
+
+To ensure stability, the system only uses new adapters for Responses API models:
+
+```typescript
+const shouldUseResponses = ModelAdapterFactory.shouldUseResponsesAPI(modelProfile)
+
+// Only use new adapters for Responses API models
+// Chat Completions models use legacy path for stability
+if (shouldUseResponses) {
+  const adapter = ModelAdapterFactory.createAdapter(modelProfile)
+  // ... adapter logic
+}
+// Chat Completions models skip adapter creation and use proven legacy path
+```
+
+**Benefits:**
+- **Stability**: Chat Completions models continue using battle-tested legacy path
+- **Innovation**: Responses API models get new adapter improvements
+- **Clean separation**: No dual execution paths for the same model type
+- **Zero breakage**: All existing functionality preserved
 
 ## Non-Obvious Design Patterns
 
@@ -115,6 +154,11 @@ Keep model-specific logic (like `o1` unsupported fields) inside the specific ada
 - **What it looks like**: Complex model management with profiles and pointers (`ModelManager`).
 - **Why it's intentional**: Different models excel at different tasks (reasoning vs coding vs speed). This allows optimal model selection for each job.
 - **When to use**: When you need to leverage the specific strengths of multiple AI models within a single workflow.
+
+### 3. Canonical Data Normalization
+- **What it looks like**: Multiple field names for the same concept (prompt_tokens vs input_tokens).
+- **Why it's solved**: Normalize once at the API boundary to eliminate ambiguity throughout the system.
+- **When to use**: When integrating multiple APIs with different naming conventions for the same concepts.
 
 ## Maintenance Tips
 

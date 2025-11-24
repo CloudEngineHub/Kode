@@ -1,193 +1,93 @@
 # Kode CLI Test Suite
 
-> *AI-friendly testing framework that guides implementation and validates multi-model adapter architecture*
+AI-friendly testing framework that validates multi-model adapter architecture with clear separation between unit, integration, and production testing.
 
-## Overview
+## Testing Philosophy
 
-The Kode CLI test suite is designed as a **conversational partner** for AI agents and developers. Every test provides clear guidance on what to implement next and offers actionable feedback when things go wrong.
+### Three-Tier Architecture
 
-## Test Architecture
+**Unit Tests** - Fast, isolated adapter logic validation with mock data
+**Integration Tests** - End-to-end CLI workflow testing through `claude.ts`
+**Production Tests** - Real API validation (opt-in with `PRODUCTION_TEST_MODE=true`)
 
-```
-src/test/
-├── testAdapters.ts              # Central model profiles & helper functions
-├── unit/                        # Unit tests (mock data, fast execution)
-│   ├── comprehensive-adapter-tests.test.ts  # General adapter selection & validation
-│   ├── chat-completions-e2e.test.ts        # Chat Completions API-specific tests
-│   └── responses-api-e2e.test.ts           # Responses API-specific tests
-├── integration/                 # Integration tests (real API calls)
-│   ├── integration-cli-flow.test.ts        # Full CLI workflow testing
-│   └── integration-multi-turn-cli.test.ts  # Multi-turn conversation testing
-├── production/                  # Production API testing
-│   └── production-api-tests.test.ts        # Real API calls with credentials
-└── diagnostic/                  # Diagnostic and regression tests
-    ├── diagnostic-stream-test.test.ts
-└── regression/
-    └── responses-api-regression.test.ts
-```
+### Key Principles
 
-## Quick Start
-
-### Run All Tests
-```bash
-# Run all tests with detailed output
-bun test
-
-# Run with coverage
-bun test --coverage
-
-# Run specific test file
-bun test src/test/unit/comprehensive-adapter-tests.test.ts
-```
-
-### Run Tests by Category
-```bash
-# Unit tests only (fast, no API calls)
-bun test src/test/unit/
-
-# Integration tests (requires API setup)
-bun test src/test/integration/
-
-# Production tests (requires real API keys)
-PRODUCTION_TEST_MODE=true bun test src/test/production/
-```
-
-### Run Tests by Model/Feature
-```bash
-# Test specific model adapter
-TEST_MODEL=gpt5 bun test
-TEST_MODEL=minimax bun test
-```
+1. **Clear Separation** - Each behavior tested exactly once
+2. **Environment Resilience** - Graceful handling of missing credentials
+3. **Fast Feedback** - Unit tests complete in < 100ms total
+4. **Adapter Safety** - Validate Chat Completions fallback strategy
 
 ## Test Categories
 
-### 🧪 Unit Tests (`src/test/unit/`)
-**Purpose**: Fast, isolated testing with mock data
-- **No external API calls**
-- **Mock responses** for predictable testing
-- **Fast execution** for development workflow
+### Unit Tests
+Fast, isolated validation of adapter logic with mock data and predictable responses.
 
-#### Key Files:
-- **`comprehensive-adapter-tests.test.ts`**: Tests adapter selection logic and basic request/response format for all models
-- **`chat-completions-e2e.test.ts`**: Tests Chat Completions API-specific features (tool handling, message structure)
-- **`responses-api-e2e.test.ts`**: Tests Responses API-specific features (reasoning, verbosity, streaming)
+### Integration Tests
+End-to-end CLI workflow testing through `claude.ts` with real API calls when credentials available.
 
-### 🔌 Integration Tests (`src/test/integration/`)
-**Purpose**: End-to-end testing through the actual CLI workflow
-- **Real API calls** when credentials are available
-- **Complete user journeys** through claude.ts service
-- **Tool calling and multi-turn conversations**
+### Production Tests
+Real API validation (opt-in only with `PRODUCTION_TEST_MODE=true`) for comprehensive workflow testing.
 
-#### Key Features:
-- Uses `productionTestModels` from `testAdapters.ts`
-- Models are **active only when API keys are provided**
-- Automatic fallback to available models
+### Diagnostic Tests
+Regression prevention and performance benchmarking for known issues.
 
-### 🏭 Production Tests (`src/test/production/`)
-**Purpose**: Validate real API integrations
-- **Actual API calls** to external services
-- **Cost-aware**: Only runs when `PRODUCTION_TEST_MODE=true`
-- **Comprehensive validation** of complete workflows
+## Adapter Testing Strategy
 
-### 🔍 Diagnostic Tests (`src/test/diagnostic/`)
-**Purpose**: Debugging and regression prevention
-- **Stream validation** for real-time features
-- **Regression testing** for known issues
-- **Performance benchmarking**
+### Model-Driven Testing
 
-## Mock Server Infrastructure
-
-To enable local testing without API quota requirements, Kode includes a robust mock server.
-
-- **Location**: `/Users/ruonan/repo/kode/mock-server.js`
-- **Status**: Running on port 3001
-- **Features**:
-  - Responses API (`/openai/responses`) with SSE streaming
-  - Chat Completions API (`/openai/chat/completions`) with JSON
-  - Health check endpoint (`/health`)
-  - Unique response ID generation using `crypto.randomUUID()`
-  - Intelligent pattern-matching responses
-
-**Environment Configuration**:
-```env
-TEST_GPT5_BASE_URL=http://127.0.0.1:3001/openai
-TEST_GPT5_API_KEY=cr_test_mock_key_123456789
-```
-
-## Test Design Philosophy
-
-### 1. Clear Separation of Concerns
-Our tests are organized to minimize overlap and maximize clarity:
-
-- **Comprehensive Tests**: General adapter functionality that applies to all models
-- **API-Specific Tests**: Features unique to each API architecture
-- **No Duplication**: Each behavior is tested in exactly one place
-
-### 2. Focused, Maintainable Tests
-We prioritize clarity and maintainability over verbose output:
-
-```javascript
-// Clear intent without excessive decoration
-describe('Chat Completions API Tests', () => {
-  test('handles Chat Completions request parameters correctly', () => {
-    // Test implementation focused on specific behavior
-  })
-})
-```
-
-### 3. Self-Documenting Test Structure
-Each test file includes comprehensive header documentation explaining its purpose and focus.
-
-## Model Configuration
-
-### Test Models (`testModels`)
-Mock models for unit testing:
-- **GPT-5 Test**: Uses Responses API adapter
-- **GPT-4o Test**: Uses Chat Completions adapter
-- **Claude Test**: Uses Chat Completions adapter
-
-### Production Models (`productionTestModels`)
-Real API models for integration testing:
-- **GPT-5 Production**: Requires `TEST_GPT5_API_KEY`
-- **MiniMax Codex Production**: Requires `TEST_MINIMAX_API_KEY`
-- **DeepSeek Production**: Requires `TEST_DEEPSEEK_API_KEY`
-- **Anthropic Claude Production**: Requires `TEST_CLAUDE_API_KEY`
-- **GLM Production**: Requires `TEST_GLM_API_KEY`
-
-### Environment Variables
 ```bash
-# API Keys (set these for integration/production tests)
-TEST_GPT5_API_KEY=your-gpt5-key
-TEST_MINIMAX_API_KEY=your-minimax-key
-TEST_DEEPSEEK_API_KEY=your-deepseek-key
-TEST_CLAUDE_API_KEY=your-claude-key
-TEST_GLM_API_KEY=your-glm-key
+# Test specific adapter types
+TEST_MODEL=gpt5          # First Responses API model
+TEST_MODEL=glm           # First Chat Completions model
+TEST_MODEL=specific-name # Exact model match
 
-# Optional: Custom endpoints
-TEST_GPT5_BASE_URL=http://localhost:3001/openai
-TEST_MINIMAX_BASE_URL=https://api.minimaxi.com/v1
-
-# Production test mode (enables real API calls)
-PRODUCTION_TEST_MODE=true
+# Enable production testing
+PRODUCTION_TEST_MODE=true bun test
 ```
 
-## Test Helper Functions
+### Test Design Principles
 
-### `getChatCompletionsModels(models)`
-Filters models that use Chat Completions API.
+#### 1. Clear Separation of Concerns
+- **Comprehensive Tests**: General adapter functionality for all models
+- **API-Specific Tests**: Features unique to each API architecture
+- **No Duplication**: Each behavior tested exactly once
 
-### `getResponsesAPIModels(models)`
-Filters models that use Responses API.
+#### 2. Environment Resilience
+```typescript
+// Tests handle missing credentials gracefully
+const apiKey = process.env.TEST_GPT5_API_KEY
+if (!apiKey) {
+  test.skip('Missing TEST_GPT5_API_KEY')
+}
+```
 
-### Model Selection Logic
-Integration tests automatically select appropriate models:
-- `TEST_MODEL=gpt5` → First Responses API model
-- `TEST_MODEL=minimax` → First Chat Completions model
-- `TEST_MODEL=specific-model` → Exact model match
+#### 3. Fast Feedback Loop
+- Unit tests run in < 100ms total
+- Integration tests only when needed
+- Production tests opt-in only
+
+### Adapter-Specific Testing
+
+#### Chat Completions Adapter Tests
+- Request building with various model types
+- Tool calling format compatibility
+- Streaming response parsing
+- Error handling for malformed responses
+
+#### Responses API Adapter Tests
+- Native Responses API request format
+- Reasoning effort parameter handling
+- SSE streaming with proper chunk parsing
+- State management with response IDs
+
+#### Cross-Adapter Validation
+- Same model produces consistent results
+- Token normalization works across adapters
+- Error handling is adapter-agnostic
 
 ## Victory Conditions
 
-A test suite passes the **Victory Test** when:
+A test suite passes when:
 
 1. **✅ Clear Purpose**: Each test file has documented intent and scope
 2. **✅ No Redundancy**: Each behavior is tested exactly once
@@ -196,3 +96,6 @@ A test suite passes the **Victory Test** when:
 5. **✅ Environment Ready**: Tests handle setup/teardown automatically
 6. **✅ Multi-Model Support**: All configured models are tested
 7. **✅ Maintainable Structure**: Tests are easy to understand and modify
+8. **✅ Adapter Safety**: Chat Completions fallback strategy validated
+9. **✅ Token Normalization**: Canonical token structure works across all adapters
+10. **✅ Capability-Driven**: Model capabilities properly influence adapter behavior
