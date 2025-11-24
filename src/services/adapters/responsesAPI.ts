@@ -1,4 +1,4 @@
-import { OpenAIAdapter, StreamingEvent } from './openaiAdapter'
+import { OpenAIAdapter, StreamingEvent, normalizeTokens } from './openaiAdapter'
 import { UnifiedRequestParams, UnifiedResponse } from '@kode-types/modelCapabilities'
 import { Tool } from '@tool'
 import { zodToJsonSchema } from 'zod-to-json-schema'
@@ -14,28 +14,30 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
       instructions: this.buildInstructions(systemPrompt)
     }
 
-    // Add token limit - Responses API uses max_output_tokens
-    request.max_output_tokens = maxTokens
+    // Add token limit using model capabilities
+    const maxTokensField = this.getMaxTokensParam()
+    request[maxTokensField] = maxTokens
 
-    // Add streaming support - allow disabling when caller requests buffered mode
-    request.stream = params.stream !== false
+    // Add streaming support using model capabilities
+    request.stream = params.stream !== false && this.capabilities.streaming.supported
 
-    // Add temperature (GPT-5 only supports 1)
-    if (this.getTemperature() === 1) {
-      request.temperature = 1
+    // Add temperature using model capabilities
+    const temperature = this.getTemperature()
+    if (temperature !== undefined) {
+      request.temperature = temperature
     }
 
-    // Add reasoning control - include array is required for reasoning content
+    // Add reasoning control using model capabilities
     const include: string[] = []
-    if (this.shouldIncludeReasoningEffort() || reasoningEffort) {
+    if (this.capabilities.parameters.supportsReasoningEffort && (this.shouldIncludeReasoningEffort() || reasoningEffort)) {
       include.push('reasoning.encrypted_content')
       request.reasoning = {
         effort: reasoningEffort || this.modelProfile.reasoningEffort || 'medium'
       }
     }
 
-    // Add verbosity control - correct format for Responses API
-    if (this.shouldIncludeVerbosity()) {
+    // Add verbosity control using model capabilities
+    if (this.capabilities.parameters.supportsVerbosity && this.shouldIncludeVerbosity()) {
       request.text = {
         verbosity: params.verbosity || 'high'  // High verbosity for coding tasks
       }
@@ -46,11 +48,13 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
       request.tools = this.buildTools(tools)
     }
 
-    // Add tool choice - use simple format like codex-cli.js
+    // Add tool choice using model capabilities
     request.tool_choice = 'auto'
 
-    // Add parallel tool calls flag
-    request.parallel_tool_calls = this.capabilities.toolCalling.supportsParallelCalls
+    // Add parallel tool calls flag using model capabilities
+    if (this.capabilities.toolCalling.supportsParallelCalls) {
+      request.parallel_tool_calls = true
+    }
 
     // Add store flag
     request.store = false
@@ -218,22 +222,18 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
       }
     }
 
-    // Handle usage information
+    // Handle usage information - normalize to canonical structure
     if (parsed.usage) {
-      const promptTokens = parsed.usage.input_tokens || 0
-      const completionTokens = parsed.usage.output_tokens || 0
-      const totalTokens = parsed.usage.total_tokens ?? (promptTokens + completionTokens)
+      const normalizedUsage = normalizeTokens(parsed.usage)
+
+      // Add reasoning tokens if available in Responses API format
+      if (parsed.usage.output_tokens_details?.reasoning_tokens) {
+        normalizedUsage.reasoning = parsed.usage.output_tokens_details.reasoning_tokens
+      }
 
       yield {
         type: 'usage',
-        usage: {
-          promptTokens,
-          completionTokens,
-          input_tokens: promptTokens,
-          output_tokens: completionTokens,
-          totalTokens,
-          reasoningTokens: parsed.usage.output_tokens_details?.reasoning_tokens || 0
-        }
+        usage: normalizedUsage
       }
     }
   }

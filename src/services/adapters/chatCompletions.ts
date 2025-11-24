@@ -1,4 +1,4 @@
-import { OpenAIAdapter, StreamingEvent } from './openaiAdapter'
+import { OpenAIAdapter, StreamingEvent, normalizeTokens } from './openaiAdapter'
 import { UnifiedRequestParams, UnifiedResponse } from '@kode-types/modelCapabilities'
 import { Tool } from '@tool'
 import { zodToJsonSchema } from 'zod-to-json-schema'
@@ -24,28 +24,35 @@ export class ChatCompletionsAdapter extends OpenAIAdapter {
       request.tool_choice = 'auto'
     }
     
-    // Add reasoning effort for GPT-5 via Chat Completions
-    if (this.shouldIncludeReasoningEffort() && params.reasoningEffort) {
+    // Add reasoning effort using model capabilities
+    if (this.capabilities.parameters.supportsReasoningEffort && params.reasoningEffort) {
       request.reasoning_effort = params.reasoningEffort  // Chat Completions format
     }
-    
-    // Add verbosity for GPT-5 via Chat Completions
-    if (this.shouldIncludeVerbosity() && params.verbosity) {
+
+    // Add verbosity using model capabilities
+    if (this.capabilities.parameters.supportsVerbosity && params.verbosity) {
       request.verbosity = params.verbosity  // Chat Completions format
     }
-    
-    // Add streaming options
-    if (stream) {
+
+    // Add streaming options using model capabilities
+    if (stream && this.capabilities.streaming.supported) {
       request.stream = true
-      request.stream_options = {
-        include_usage: true
+      if (this.capabilities.streaming.includesUsage) {
+        request.stream_options = {
+          include_usage: true
+        }
       }
     }
-    
-    // O1 model special handling
-    if (this.modelProfile.modelName.startsWith('o1')) {
-      delete request.temperature  // O1 doesn't support temperature
-      delete request.stream  // O1 doesn't support streaming
+
+    // Apply model-specific constraints based on capabilities
+    if (this.capabilities.parameters.temperatureMode === 'fixed_one') {
+      // Models like O1 that don't support temperature
+      delete request.temperature
+    }
+
+    if (!this.capabilities.streaming.supported) {
+      // Models that don't support streaming
+      delete request.stream
       delete request.stream_options
     }
     
@@ -53,7 +60,7 @@ export class ChatCompletionsAdapter extends OpenAIAdapter {
   }
   
   buildTools(tools: Tool[]): any[] {
-    // Chat Completions only supports traditional function calling
+    // Use tool calling capabilities from model configuration
     return tools.map(tool => ({
       type: 'function',
       function: {
@@ -159,22 +166,11 @@ export class ChatCompletionsAdapter extends OpenAIAdapter {
       }
     }
 
-    // Handle usage information
+    // Handle usage information - normalize to canonical structure
     if (parsed.usage) {
-      const promptTokens = parsed.usage.prompt_tokens || 0
-      const completionTokens = parsed.usage.completion_tokens || 0
-      const totalTokens = parsed.usage.total_tokens ?? (promptTokens + completionTokens)
-
       yield {
         type: 'usage',
-        usage: {
-          promptTokens,
-          completionTokens,
-          input_tokens: promptTokens,
-          output_tokens: completionTokens,
-          totalTokens,
-          reasoningTokens: 0 // Chat Completions doesn't have reasoning tokens
-        }
+        usage: normalizeTokens(parsed.usage)
       }
     }
   }
@@ -234,13 +230,12 @@ export class ChatCompletionsAdapter extends OpenAIAdapter {
       }
 
       if (event.type === 'usage') {
-        usage.prompt_tokens =
-          event.usage.input_tokens ?? event.usage.promptTokens ?? usage.prompt_tokens
-        usage.completion_tokens =
-          event.usage.output_tokens ?? event.usage.completionTokens ?? usage.completion_tokens
-        usage.totalTokens =
-          event.usage.totalTokens ??
-          (usage.prompt_tokens || 0) + (usage.completion_tokens || 0)
+        // Usage is now in canonical format - just extract the values
+        usage.prompt_tokens = event.usage.input
+        usage.completion_tokens = event.usage.output
+        usage.totalTokens = event.usage.total ?? (event.usage.input + event.usage.output)
+        usage.promptTokens = event.usage.input
+        usage.completionTokens = event.usage.output
         continue
       }
     }

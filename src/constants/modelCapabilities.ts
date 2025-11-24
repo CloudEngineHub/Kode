@@ -7,8 +7,7 @@ const GPT5_CAPABILITIES: ModelCapabilities = {
     fallback: 'chat_completions'
   },
   parameters: {
-    // TODO: use model capability in adapter
-    maxTokensField: 'max_completion_tokens',
+    maxTokensField: 'max_output_tokens',  // Responses API uses max_output_tokens
     supportsReasoningEffort: true,
     supportsVerbosity: true,
     temperatureMode: 'fixed_one'
@@ -25,7 +24,7 @@ const GPT5_CAPABILITIES: ModelCapabilities = {
     supportsPreviousResponseId: true
   },
   streaming: {
-    supported: false,  // Responses API doesn't support streaming yet
+    supported: true,   // Responses API supports streaming
     includesUsage: true
   }
 }

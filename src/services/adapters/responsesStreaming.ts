@@ -37,18 +37,14 @@ export async function processResponsesStream(
     }
 
     if (event.type === 'usage') {
-      const promptTokens = event.usage.input_tokens ?? event.usage.promptTokens ?? usage.prompt_tokens
-      const completionTokens = event.usage.output_tokens ?? event.usage.completionTokens ?? usage.completion_tokens
-
-      usage.prompt_tokens = promptTokens
-      usage.completion_tokens = completionTokens
-      usage.promptTokens = promptTokens
-      usage.completionTokens = completionTokens
-      usage.totalTokens =
-        event.usage.totalTokens ??
-        (promptTokens || 0) + (completionTokens || 0)
-      if (event.usage.reasoningTokens !== undefined) {
-        usage.reasoningTokens = event.usage.reasoningTokens
+      // Usage is now in canonical format - just extract the values
+      usage.prompt_tokens = event.usage.input
+      usage.completion_tokens = event.usage.output
+      usage.promptTokens = event.usage.input
+      usage.completionTokens = event.usage.output
+      usage.totalTokens = event.usage.total ?? (event.usage.input + event.usage.output)
+      if (event.usage.reasoning !== undefined) {
+        usage.reasoningTokens = event.usage.reasoning
       }
       continue
     }
