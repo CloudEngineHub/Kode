@@ -2,6 +2,7 @@ import { OpenAIAdapter, StreamingEvent, normalizeTokens } from './openaiAdapter'
 import { UnifiedRequestParams, UnifiedResponse } from '@kode-types/modelCapabilities'
 import { Tool } from '@tool'
 import { zodToJsonSchema } from 'zod-to-json-schema'
+import { processResponsesStream } from './responsesStreaming'
 
 export class ResponsesAPIAdapter extends OpenAIAdapter {
   createRequest(params: UnifiedRequestParams): any {
@@ -128,7 +129,33 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
     })
   }
   
-  // parseResponse is now handled by the base OpenAIAdapter class
+  // Override parseResponse to handle Response API directly without double conversion
+  async parseResponse(response: any): Promise<UnifiedResponse> {
+    // Check if this is a streaming response (has ReadableStream body)
+    if (response?.body instanceof ReadableStream) {
+      // Handle streaming directly - don't go through OpenAIAdapter conversion
+      const { assistantMessage } = await processResponsesStream(
+        this.parseStreamingResponse(response),
+        Date.now(),
+        response.id ?? `resp_${Date.now()}`
+      )
+
+      // LINUX WAY: ONE representation only - tool_use blocks in content
+      // NO toolCalls array when we have tool_use blocks
+      const hasToolUseBlocks = assistantMessage.message.content.some((block: any) => block.type === 'tool_use')
+
+      return {
+        id: assistantMessage.responseId,
+        content: assistantMessage.message.content,
+        toolCalls: hasToolUseBlocks ? [] : this.extractToolCallsFromContent(assistantMessage.message.content),
+        usage: this.normalizeUsageForAdapter(assistantMessage.message.usage),
+        responseId: assistantMessage.responseId
+      }
+    }
+
+    // Process non-streaming response - delegate to existing method
+    return this.parseNonStreamingResponse(response)
+  }
 
   // Implement abstract method from OpenAIAdapter
   protected parseNonStreamingResponse(response: any): UnifiedResponse {
@@ -426,5 +453,12 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
     }
 
     return toolCalls
+  }
+
+  // Helper method to extract tool calls from content (when not using tool_use blocks)
+  private extractToolCallsFromContent(content: any[]): any[] {
+    // For Response API, we typically don't need this since we use tool_use blocks
+    // But keeping it for consistency with non-tool_use content
+    return []
   }
 }
