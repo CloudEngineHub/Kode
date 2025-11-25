@@ -2,16 +2,48 @@ import { ModelCapabilities, UnifiedRequestParams, UnifiedResponse } from '@kode-
 import { ModelProfile } from '@utils/config'
 import { Tool } from '@tool'
 
+// Canonical token representation - normalize once at the boundary
+interface TokenUsage {
+  input: number
+  output: number
+  total?: number
+  reasoning?: number
+}
+
 // Streaming event types for async generator streaming
 export type StreamingEvent =
   | { type: 'message_start', message: any, responseId: string }
   | { type: 'text_delta', delta: string, responseId: string }
   | { type: 'tool_request', tool: any }
-  | { type: 'usage', usage: { promptTokens: number, completionTokens: number, reasoningTokens: number } }
+  | { type: 'usage', usage: TokenUsage }
   | { type: 'message_stop', message: any }
   | { type: 'error', error: string }
 
+// Normalize API-specific token names to canonical representation - do this ONCE at the boundary
+function normalizeTokens(apiResponse: any): TokenUsage {
+  // Validate input to prevent runtime errors
+  if (!apiResponse || typeof apiResponse !== 'object') {
+    return { input: 0, output: 0 }
+  }
+
+  const input = Number(apiResponse.prompt_tokens ?? apiResponse.input_tokens ?? apiResponse.promptTokens) || 0
+  const output = Number(apiResponse.completion_tokens ?? apiResponse.output_tokens ?? apiResponse.completionTokens) || 0
+  const total = Number(apiResponse.total_tokens ?? apiResponse.totalTokens) || undefined
+  const reasoning = Number(apiResponse.reasoning_tokens ?? apiResponse.reasoningTokens) || undefined
+
+  return {
+    input,
+    output,
+    total: total && total > 0 ? total : undefined,
+    reasoning: reasoning && reasoning > 0 ? reasoning : undefined
+  }
+}
+
+export { type TokenUsage, normalizeTokens }
+
 export abstract class ModelAPIAdapter {
+  protected cumulativeUsage: TokenUsage = { input: 0, output: 0 }
+
   constructor(
     protected capabilities: ModelCapabilities,
     protected modelProfile: ModelProfile
@@ -24,10 +56,27 @@ export abstract class ModelAPIAdapter {
 
   // Optional: subclasses can implement streaming for real-time updates
   // Default implementation returns undefined (not supported)
-  async *parseStreamingResponse?(response: any): AsyncGenerator<StreamingEvent> {
+  async *parseStreamingResponse?(response: any, signal?: AbortSignal): AsyncGenerator<StreamingEvent> {
     // Not supported by default - subclasses can override
     return
     yield // unreachable, but satisfies TypeScript
+  }
+
+  // Reset cumulative usage for new requests
+  protected resetCumulativeUsage(): void {
+    this.cumulativeUsage = { input: 0, output: 0 }
+  }
+
+  // Safely update cumulative usage
+  protected updateCumulativeUsage(usage: TokenUsage): void {
+    this.cumulativeUsage.input += usage.input
+    this.cumulativeUsage.output += usage.output
+    if (usage.total) {
+      this.cumulativeUsage.total = (this.cumulativeUsage.total || 0) + usage.total
+    }
+    if (usage.reasoning) {
+      this.cumulativeUsage.reasoning = (this.cumulativeUsage.reasoning || 0) + usage.reasoning
+    }
   }
   
   // Shared utility methods

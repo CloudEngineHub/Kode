@@ -96,7 +96,7 @@ describe('🌐 Production API Integration Tests', () => {
 
   describe(`📡 Production Tests (${testModelNames})`, () => {
     modelsToTest.forEach((model) => {
-      test(`🚀 Making real API call to ${model.name}`, async () => {
+      test(`🚀 Making real API call to ${model.name}`, { timeout: 30000 }, async () => {
         const adapter = ModelAdapterFactory.createAdapter(model)
         const shouldUseResponses = ModelAdapterFactory.shouldUseResponsesAPI(model)
 

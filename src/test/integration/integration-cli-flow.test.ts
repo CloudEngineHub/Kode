@@ -104,6 +104,16 @@ function getActiveProfile(): ModelProfile {
 
 const ACTIVE_PROFILE = getActiveProfile()
 
+function expectUnifiedUsage(usage: any) {
+  expect(usage).toBeDefined()
+  expect(typeof usage.promptTokens).toBe('number')
+  expect(typeof usage.completionTokens).toBe('number')
+  expect(typeof usage.input_tokens).toBe('number')
+  expect(typeof usage.output_tokens).toBe('number')
+  expect(typeof usage.totalTokens).toBe('number')
+  expect(usage.totalTokens).toBe(usage.promptTokens + usage.completionTokens)
+}
+
 describe('🔌 Integration: Full Claude.ts Flow (Model-Agnostic)', () => {
   test('✅ End-to-end flow through claude.ts path', async () => {
     console.log('\n🔧 TEST CONFIGURATION:')
@@ -136,7 +146,7 @@ describe('🔌 Integration: Full Claude.ts Flow (Model-Agnostic)', () => {
         systemPrompt: ['You are a helpful assistant.'],
         tools: [],  // Start with no tools to isolate the issue
         maxTokens: 100,
-        stream: false,
+        stream: true, // Test streaming for both APIs
         reasoningEffort: shouldUseResponses ? 'high' as const : undefined,
         temperature: 1,
         verbosity: shouldUseResponses ? 'high' as const : undefined
@@ -173,12 +183,18 @@ describe('🔌 Integration: Full Claude.ts Flow (Model-Agnostic)', () => {
       }
       console.log(`  ✅ Response received: ${response.status}`)
 
-      // For Chat Completions, show raw response when content is empty
+      // For Chat Completions, handle streaming vs non-streaming responses
       if (!shouldUseResponses && response.headers) {
-        const responseData = await response.json()
-        console.log('\n🔍 Raw MiniMax Response:')
-        console.log(JSON.stringify(responseData, null, 2))
-        response = responseData
+        if (request.stream) {
+          // Streaming response - pass the response object directly to adapter
+          console.log('\n🔍 Streaming Chat Completions Response (skipping JSON parse)')
+        } else {
+          // Non-streaming response - parse JSON
+          const responseData = await response.json()
+          console.log('\n🔍 Raw Chat Completions Response:')
+          console.log(JSON.stringify(responseData, null, 2))
+          response = responseData
+        }
       }
 
       // Step 6: Parse response (same as claude.ts:1959)
@@ -192,6 +208,7 @@ describe('🔌 Integration: Full Claude.ts Flow (Model-Agnostic)', () => {
       console.log('\nStep 7: Validating response...')
       expect(unifiedResponse).toBeDefined()
       expect(unifiedResponse.content).toBeDefined()
+      expectUnifiedUsage(unifiedResponse.usage)
       console.log('  ✅ All validations passed')
 
     } catch (error) {
@@ -204,7 +221,7 @@ describe('🔌 Integration: Full Claude.ts Flow (Model-Agnostic)', () => {
     }
   })
 
-  test('✅ Test with TOOLS (full tool call parsing flow)', async () => {
+  test('✅ Test with TOOLS (full tool call parsing flow)', { timeout: 15000 }, async () => {
     console.log('\n✅ INTEGRATION TEST: With Tools (Full Tool Call Parsing)')
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 
@@ -240,7 +257,7 @@ describe('🔌 Integration: Full Claude.ts Flow (Model-Agnostic)', () => {
           }
         ],
         maxTokens: 100,
-        stream: false,
+        stream: true,
         reasoningEffort: 'high' as const,
         temperature: 1,
         verbosity: 'high' as const
@@ -257,13 +274,7 @@ describe('🔌 Integration: Full Claude.ts Flow (Model-Agnostic)', () => {
         })
       }
 
-      // Add timeout to prevent hanging
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Test timeout after 5 seconds')), 5000)
-      })
-
-      const responsePromise = callGPT5ResponsesAPI(ACTIVE_PROFILE, request)
-      const response = await Promise.race([responsePromise, timeoutPromise]) as any
+      const response = await callGPT5ResponsesAPI(ACTIVE_PROFILE, request)
 
       console.log('\n📡 Response received:', response.status)
 
@@ -277,6 +288,7 @@ describe('🔌 Integration: Full Claude.ts Flow (Model-Agnostic)', () => {
       expect(unifiedResponse.id).toBeDefined()
       expect(unifiedResponse.content).toBeDefined()
       expect(Array.isArray(unifiedResponse.content)).toBe(true)
+      expectUnifiedUsage(unifiedResponse.usage)
 
       // Log tool call information if present
       if (unifiedResponse.toolCalls && unifiedResponse.toolCalls.length > 0) {
@@ -304,7 +316,7 @@ describe('🔌 Integration: Full Claude.ts Flow (Model-Agnostic)', () => {
     }
   })
 
-  test('✅ Test with TOOLS (multi-turn conversation with tool results)', async () => {
+  test('✅ Test with TOOLS (multi-turn conversation with tool results)', { timeout: 15000 }, async () => {
     console.log('\n✅ INTEGRATION TEST: Multi-Turn Conversation with Tool Results')
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 
@@ -362,7 +374,7 @@ describe('🔌 Integration: Full Claude.ts Flow (Model-Agnostic)', () => {
           }
         ],
         maxTokens: 100,
-        stream: false,
+        stream: true,
         reasoningEffort: 'high' as const,
         temperature: 1,
         verbosity: 'high' as const
@@ -383,13 +395,7 @@ describe('🔌 Integration: Full Claude.ts Flow (Model-Agnostic)', () => {
         console.log('  Tool result:', JSON.stringify(toolResultMessage, null, 2))
       }
 
-      // Add timeout to prevent hanging
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Test timeout after 5 seconds')), 5000)
-      })
-
-      const responsePromise = callGPT5ResponsesAPI(ACTIVE_PROFILE, request)
-      const response = await Promise.race([responsePromise, timeoutPromise]) as any
+      const response = await callGPT5ResponsesAPI(ACTIVE_PROFILE, request)
 
       console.log('\n📡 Response received:', response.status)
 
@@ -397,6 +403,7 @@ describe('🔌 Integration: Full Claude.ts Flow (Model-Agnostic)', () => {
 
       console.log('\n✅ SUCCESS: Multi-turn conversation with tool results worked!')
       console.log('Response:', JSON.stringify(unifiedResponse, null, 2))
+      expectUnifiedUsage(unifiedResponse.usage)
 
       // Verify the response is valid
       expect(unifiedResponse).toBeDefined()
@@ -438,5 +445,109 @@ describe('🔌 Integration: Full Claude.ts Flow (Model-Agnostic)', () => {
         throw error
       }
     }
+  })
+
+  test('✅ Bug Regression: Empty content should never occur', { timeout: 15000 }, async () => {
+    console.log('\n🔍 BUG REGRESSION TEST: Empty Content Check')
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+
+    const adapter = ModelAdapterFactory.createAdapter(ACTIVE_PROFILE)
+    const shouldUseResponses = ModelAdapterFactory.shouldUseResponsesAPI(ACTIVE_PROFILE)
+
+    const request = adapter.createRequest({
+      messages: [{ role: 'user', content: 'What is 2+2?' }],
+      systemPrompt: ['You are a helpful assistant.'],
+      tools: [],
+      maxTokens: 50,
+      stream: true,
+      reasoningEffort: shouldUseResponses ? 'medium' as const : undefined,
+      temperature: 1,
+      verbosity: shouldUseResponses ? 'medium' as const : undefined
+    })
+
+    const endpoint = shouldUseResponses
+      ? `${ACTIVE_PROFILE.baseURL}/responses`
+      : `${ACTIVE_PROFILE.baseURL}/chat/completions`
+
+    let response: any
+    if (shouldUseResponses) {
+      response = await callGPT5ResponsesAPI(ACTIVE_PROFILE, request)
+    } else {
+      response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${ACTIVE_PROFILE.apiKey}`,
+        },
+        body: JSON.stringify(request),
+      })
+    }
+
+    const unifiedResponse = await adapter.parseResponse(response)
+
+    // Extract content text for validation
+    const content = Array.isArray(unifiedResponse.content)
+      ? unifiedResponse.content.map(b => b.text || b.content || '').join('')
+      : unifiedResponse.content || ''
+
+    console.log(`  📄 Content: "${content}"`)
+    console.log(`  📏 Content length: ${content.length} chars`)
+
+    // CRITICAL: Content must never be empty
+    expect(content.length).toBeGreaterThan(0)
+    expect(content).not.toBe('')
+    expect(content).not.toBe('(no content)')
+
+    console.log(`  ✅ BUG REGRESSION PASSED: Content present (${content.length} chars)`)
+  })
+
+  test('✅ responseId preservation across adapter chain', { timeout: 15000 }, async () => {
+    console.log('\n🔄 INTEGRATION TEST: responseId Preservation')
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+
+    const adapter = ModelAdapterFactory.createAdapter(ACTIVE_PROFILE)
+    const shouldUseResponses = ModelAdapterFactory.shouldUseResponsesAPI(ACTIVE_PROFILE)
+
+    const request = adapter.createRequest({
+      messages: [{ role: 'user', content: 'Hello' }],
+      systemPrompt: ['You are a helpful assistant.'],
+      tools: [],
+      maxTokens: 50,
+      stream: true,
+      reasoningEffort: shouldUseResponses ? 'medium' as const : undefined,
+      temperature: 1,
+      verbosity: shouldUseResponses ? 'medium' as const : undefined
+    })
+
+    const endpoint = shouldUseResponses
+      ? `${ACTIVE_PROFILE.baseURL}/responses`
+      : `${ACTIVE_PROFILE.baseURL}/chat/completions`
+
+    let response: any
+    if (shouldUseResponses) {
+      response = await callGPT5ResponsesAPI(ACTIVE_PROFILE, request)
+    } else {
+      response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${ACTIVE_PROFILE.apiKey}`,
+        },
+        body: JSON.stringify(request),
+      })
+    }
+
+    const unifiedResponse = await adapter.parseResponse(response)
+
+    console.log(`  🆔 UnifiedResponse.id: ${unifiedResponse.id}`)
+    console.log(`  🆔 UnifiedResponse.responseId: ${unifiedResponse.responseId}`)
+
+    // CRITICAL: responseId must be preserved
+    expect(unifiedResponse.id).toBeDefined()
+    expect(unifiedResponse.responseId).toBeDefined()
+    expect(unifiedResponse.responseId).not.toBeNull()
+    expect(unifiedResponse.responseId).not.toBe('')
+
+    console.log('  ✅ responseId correctly preserved through adapter chain')
   })
 })
