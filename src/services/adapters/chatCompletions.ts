@@ -1,5 +1,5 @@
 import { OpenAIAdapter, StreamingEvent, normalizeTokens } from './openaiAdapter'
-import { UnifiedRequestParams, UnifiedResponse } from '@kode-types/modelCapabilities'
+import { UnifiedRequestParams, UnifiedResponse, ReasoningStreamingContext } from '@kode-types/modelCapabilities'
 import { Tool, getToolDescription } from '@tool'
 import { zodToJsonSchema } from 'zod-to-json-schema'
 
@@ -158,7 +158,8 @@ export class ChatCompletionsAdapter extends OpenAIAdapter {
     parsed: any,
     responseId: string,
     hasStarted: boolean,
-    accumulatedContent: string
+    accumulatedContent: string,
+    reasoningContext?: ReasoningStreamingContext
   ): AsyncGenerator<StreamingEvent> {
     // Validate input
     if (!parsed || typeof parsed !== 'object') {
