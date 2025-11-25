@@ -1,5 +1,5 @@
 import { OpenAIAdapter, StreamingEvent, normalizeTokens } from './openaiAdapter'
-import { UnifiedRequestParams, UnifiedResponse } from '@kode-types/modelCapabilities'
+import { UnifiedRequestParams, UnifiedResponse, ReasoningStreamingContext } from '@kode-types/modelCapabilities'
 import { Tool, getToolDescription } from '@tool'
 import { zodToJsonSchema } from 'zod-to-json-schema'
 import { processResponsesStream } from './responsesStreaming'
@@ -105,7 +105,7 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
         type: 'function',
         name: tool.name,
         description: getToolDescription(tool),
-        parameters: (parameters as Record<string, unknown>) || { type: 'object', properties: {} }
+        parameters: (parameters as any) || { type: 'object', properties: {} }
       }
     })
   }
@@ -128,7 +128,7 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
       return {
         id: assistantMessage.responseId,
         content: assistantMessage.message.content,
-        toolCalls: hasToolUseBlocks ? [] : this.extractToolCallsFromContent(assistantMessage.message.content),
+        toolCalls: hasToolUseBlocks ? [] : [],
         usage: this.normalizeUsageForAdapter(assistantMessage.message.usage),
         responseId: assistantMessage.responseId
       }
@@ -143,7 +143,8 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
     // Process basic text output
     let content = response.output_text || ''
 
-    // Process structured output
+    // Extract reasoning content from structured output
+    let reasoningContent = ''
     if (response.output && Array.isArray(response.output)) {
       const messageItems = response.output.filter(item => item.type === 'message')
       if (messageItems.length > 0) {
@@ -160,6 +161,25 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
           .filter(Boolean)
           .join('\n\n')
       }
+
+      // Extract reasoning content
+      const reasoningItems = response.output.filter(item => item.type === 'reasoning')
+      if (reasoningItems.length > 0) {
+        reasoningContent = reasoningItems
+          .map(item => item.content || '')
+          .filter(Boolean)
+          .join('\n\n')
+      }
+    }
+
+    // Apply reasoning formatting
+    if (reasoningContent) {
+      const thinkBlock = `
+
+${reasoningContent}
+
+`
+      content = thinkBlock + content
     }
 
     // Parse tool calls
@@ -182,7 +202,6 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
       usage: {
         promptTokens,
         completionTokens,
-        totalTokens,
         reasoningTokens: response.usage?.output_tokens_details?.reasoning_tokens
       },
       responseId: response.id  // Save for state management
@@ -194,8 +213,74 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
     parsed: any,
     responseId: string,
     hasStarted: boolean,
-    accumulatedContent: string
+    accumulatedContent: string,
+    reasoningContext?: ReasoningStreamingContext
   ): AsyncGenerator<StreamingEvent> {
+    // Handle reasoning summary part events
+    if (parsed.type === 'response.reasoning_summary_part.added') {
+      const partIndex = parsed.summary_index || 0
+
+      // Initialize reasoning state if not already done
+      if (!reasoningContext?.thinkingContent) {
+        reasoningContext!.thinkingContent = ''
+        reasoningContext!.currentPartIndex = -1
+      }
+
+      reasoningContext!.currentPartIndex = partIndex
+
+      // If this is not the first part and we have content, add newline separator
+      if (partIndex > 0 && reasoningContext!.thinkingContent) {
+        reasoningContext!.thinkingContent += '\n\n'
+
+        // Emit newline separator as thinking delta
+        yield {
+          type: 'text_delta',
+          delta: '\n\n',
+          responseId
+        }
+      }
+
+      return
+    }
+
+    // Handle reasoning summary text delta
+    if (parsed.type === 'response.reasoning_summary_text.delta') {
+      const delta = parsed.delta || ''
+
+      if (delta && reasoningContext) {
+        // Accumulate thinking content
+        reasoningContext.thinkingContent += delta
+
+        // Stream thinking delta
+        yield {
+          type: 'text_delta',
+          delta,
+          responseId
+        }
+      }
+
+      return
+    }
+
+    // Handle reasoning text delta (following codex-cli.js pattern)
+    if (parsed.type === 'response.reasoning_text.delta') {
+      const delta = parsed.delta || ''
+
+      if (delta && reasoningContext) {
+        // Accumulate thinking content
+        reasoningContext.thinkingContent += delta
+
+        // Stream thinking delta
+        yield {
+          type: 'text_delta',
+          delta,
+          responseId
+        }
+      }
+
+      return
+    }
+
     // Handle text content deltas (Responses API format)
     if (parsed.type === 'response.output_text.delta') {
       const delta = parsed.delta || ''
@@ -434,10 +519,22 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
     return toolCalls
   }
 
-  // Helper method to extract tool calls from content (when not using tool_use blocks)
-  private extractToolCallsFromContent(content: any[]): any[] {
-    // For Response API, we typically don't need this since we use tool_use blocks
-    // But keeping it for consistency with non-tool_use content
-    return []
+  
+  // Apply reasoning content to message for non-streaming
+  private applyReasoningToMessage(message: any, reasoningSummaryText: string, reasoningFullText: string): any {
+    const rtxtParts = []
+    if (typeof reasoningSummaryText === 'string' && reasoningSummaryText.trim()) {
+      rtxtParts.push(reasoningSummaryText)
+    }
+    if (typeof reasoningFullText === 'string' && reasoningFullText.trim()) {
+      rtxtParts.push(reasoningFullText)
+    }
+    const rtxt = rtxtParts.filter((p) => p).join('\n\n')
+    if (rtxt) {
+      const thinkBlock = `<think>\n${rtxt}\n</think>\n`
+      const contentText = message.content || ''
+      message.content = thinkBlock + (typeof contentText === 'string' ? contentText : '')
+    }
+    return message
   }
 }

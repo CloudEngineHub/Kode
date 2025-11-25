@@ -1,5 +1,5 @@
 import { ModelAPIAdapter, StreamingEvent, normalizeTokens } from './base'
-import { UnifiedRequestParams, UnifiedResponse, ModelCapabilities } from '@kode-types/modelCapabilities'
+import { UnifiedRequestParams, UnifiedResponse, ModelCapabilities, ReasoningStreamingContext } from '@kode-types/modelCapabilities'
 import { ModelProfile } from '@utils/config'
 import { Tool } from '@tool'
 import { zodToJsonSchema } from 'zod-to-json-schema'
@@ -59,6 +59,14 @@ export abstract class OpenAIAdapter extends ModelAPIAdapter {
     let hasStarted = false
     let accumulatedContent = ''
 
+    // Initialize reasoning context for Responses API
+    const reasoningContext: ReasoningStreamingContext = {
+      thinkOpen: false,
+      thinkClosed: false,
+      sawAnySummary: false,
+      pendingSummaryParagraph: false
+    }
+
     try {
       while (true) {
         const { done, value } = await reader.read()
@@ -78,7 +86,7 @@ export abstract class OpenAIAdapter extends ModelAPIAdapter {
               }
 
               // Delegate to subclass for specific processing
-              yield* this.processStreamingChunk(parsed, responseId, hasStarted, accumulatedContent)
+              yield* this.processStreamingChunk(parsed, responseId, hasStarted, accumulatedContent, reasoningContext)
 
               // Update state based on subclass processing
               const stateUpdate = this.updateStreamingState(parsed, accumulatedContent)
@@ -208,7 +216,8 @@ export abstract class OpenAIAdapter extends ModelAPIAdapter {
     parsed: any,
     responseId: string,
     hasStarted: boolean,
-    accumulatedContent: string
+    accumulatedContent: string,
+    reasoningContext?: ReasoningStreamingContext
   ): AsyncGenerator<StreamingEvent>
 
   protected abstract updateStreamingState(

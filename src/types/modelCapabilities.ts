@@ -36,6 +36,22 @@ export interface ModelCapabilities {
   }
 }
 
+export interface ReasoningConfig {
+  enable: boolean
+  effort: 'low' | 'medium' | 'high' | 'none' | 'minimal'
+  summary: 'auto' | 'concise' | 'detailed' | 'none'
+}
+
+// Streaming context for reasoning state management
+export interface ReasoningStreamingContext {
+  thinkOpen: boolean
+  thinkClosed: boolean
+  sawAnySummary: boolean
+  pendingSummaryParagraph: boolean
+  thinkingContent?: string
+  currentPartIndex?: number
+}
+
 // Unified request parameters
 export interface UnifiedRequestParams {
   messages: any[]
@@ -45,6 +61,7 @@ export interface UnifiedRequestParams {
   stream?: boolean
   previousResponseId?: string
   reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high'
+  reasoning?: ReasoningConfig  // Full reasoning config
   verbosity?: 'low' | 'medium' | 'high'
   temperature?: number
   allowedTools?: string[]

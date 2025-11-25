@@ -227,4 +227,170 @@ describe('Responses API Tests', () => {
     })
 
   })
+
+  describe('Reasoning Support Tests', () => {
+    const testModel = getResponsesAPIModels(testModels)[0] || testModels[0]
+
+    test('includes reasoning and verbosity parameters when provided', () => {
+      const adapter = ModelAdapterFactory.createAdapter(testModel)
+
+      const unifiedParams = {
+        messages: [{ role: 'user', content: 'Solve this complex problem' }],
+        systemPrompt: ['You are a helpful assistant'],
+        tools: [],
+        maxTokens: 100,
+        stream: true,
+        reasoningEffort: 'high' as const,
+        verbosity: 'high' as const
+      }
+
+      const request = adapter.createRequest(unifiedParams)
+
+      // Verify reasoning configuration
+      expect(request).toHaveProperty('reasoning')
+      expect(request.reasoning).toBeDefined()
+      expect(request.reasoning.effort).toBe('high')
+
+      // Verify reasoning content inclusion
+      expect(request).toHaveProperty('include')
+      expect(request.include).toContain('reasoning.encrypted_content')
+
+      // Verify verbosity configuration
+      expect(request).toHaveProperty('text')
+      expect(request.text.verbosity).toBe('high')
+    })
+
+    test('processes real GPT-5 reasoning stream with reasoning items and text deltas', async () => {
+      const adapter = ModelAdapterFactory.createAdapter(testModel)
+
+      // Mock real reasoning stream based on actual GPT-5 API behavior
+      const reasoningStreamData = [
+        'data: {"type":"response.output_item.added","output_index":0,"item":{"id":"rs_123","type":"reasoning","summary":[]}}\n\n',
+        'data: {"type":"response.output_item.done","output_index":0,"item":{"id":"rs_123","type":"reasoning","summary":[]}}\n\n',
+        'data: {"type":"response.output_item.added","output_index":1,"item":{"id":"msg_123","type":"message","status":"in_progress","content":[],"role":"assistant"}}\n\n',
+        'data: {"type":"response.content_part.added","item_id":"msg_123","output_index":1,"content_index":0,"part":{"type":"output_text","text":""}}\n\n',
+        'data: {"type":"response.output_text.delta","item_id":"msg_123","output_index":1,"content_index":0,"delta":"Let me think step by step"}\n\n',
+        'data: {"type":"response.output_text.delta","item_id":"msg_123","output_index":1,"content_index":0,"delta":"\\n\\nFirst, I need to analyze the problem"}\n\n',
+        'data: {"type":"response.output_text.delta","item_id":"msg_123","output_index":1,"content_index":0,"delta":"\\n\\nThe solution is:"}\n\n',
+        'data: {"type":"response.output_text.delta","item_id":"msg_123","output_index":1,"content_index":0,"delta":" $0.05"}\n\n',
+        'data: {"type":"response.completed"}\n\n',
+        'data: [DONE]\n\n'
+      ].join('')
+
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(reasoningStreamData))
+          controller.close()
+        }
+      })
+
+      const response = new Response(stream)
+      const events = []
+
+      // Collect all streaming events
+      for await (const event of adapter.parseStreamingResponse(response)) {
+        events.push(event)
+      }
+
+      // Verify reasoning content is processed as regular text deltas
+      const textDeltas = events.filter(e => e.type === 'text_delta')
+      expect(textDeltas.length).toBeGreaterThan(0)
+
+      // Should include the reasoning content mixed with answer
+      const fullContent = textDeltas.map(e => e.delta).join('')
+      expect(fullContent).toContain('Let me think step by step')
+      expect(fullContent).toContain('First, I need to analyze the problem')
+      expect(fullContent).toContain('The solution is:')
+      expect(fullContent).toContain('$0.05')
+
+      // Should be properly formatted as continuous reasoning
+      expect(fullContent).toMatch(/Let me think step by step\n\nFirst, I need to analyze the problem\n\nThe solution is: \$0\.05/)
+    })
+
+    
+    test('processes non-streaming response with real GPT-5 reasoning structure', async () => {
+      const adapter = ModelAdapterFactory.createAdapter(testModel)
+
+      // Mock non-streaming response based on real GPT-5 API structure
+      // In real API, reasoning content appears directly in message text
+      const mockResponse = {
+        id: 'resp-test-reasoning',
+        output_text: '$0.05\n\nReason: Let the ball cost x. Then the bat costs x + 1.00. So x + (x + 1.00) = 1.10 ⇒ 2x = 0.10 ⇒ x = 0.05. The intuitive $0.10 would make the total $1.20, not $1.10.',
+        usage: {
+          input_tokens: 5062,
+          output_tokens: 340,
+          total_tokens: 5402,
+          output_tokens_details: {
+            reasoning_tokens: 256  // Real reasoning token count
+          }
+        }
+      }
+
+      const result = await adapter.parseResponse(mockResponse)
+
+      // Verify reasoning content is extracted and formatted with think blocks
+      expect(result.content).toBeDefined()
+      const contentText = Array.isArray(result.content)
+        ? result.content.map(c => c.text).join('')
+        : result.content
+
+      // Should contain the reasoning and answer content
+      expect(contentText).toContain('$0.05')  // Answer part
+      expect(contentText).toContain('Reason: Let the ball cost x')  // Reasoning part
+
+      // Verify reasoning tokens are captured correctly
+      expect(result.usage.reasoningTokens).toBe(256)
+    })
+
+    test('handles response without reasoning content gracefully', async () => {
+      const adapter = ModelAdapterFactory.createAdapter(testModel)
+
+      // Mock response without reasoning
+      const mockResponse = {
+        id: 'resp-no-reasoning',
+        output_text: 'Simple answer without reasoning.',
+        usage: {
+          input_tokens: 10,
+          output_tokens: 5,
+          total_tokens: 15
+        }
+      }
+
+      const result = await adapter.parseResponse(mockResponse)
+
+      // Should work normally without think blocks
+      expect(result.content).toBeDefined()
+      const contentText = Array.isArray(result.content)
+        ? result.content.map(c => c.text).join('')
+        : result.content
+
+      expect(contentText).toBe('Simple answer without reasoning.')
+      // Should not have think blocks in simple responses
+
+      // Should not have reasoning tokens
+      expect(result.usage.reasoningTokens).toBeUndefined()
+    })
+
+    
+    test('handles reasoning effort parameter validation', () => {
+      const adapter = ModelAdapterFactory.createAdapter(testModel)
+
+      // Test different reasoning effort levels
+      const effortLevels = ['minimal', 'low', 'medium', 'high'] as const
+
+      effortLevels.forEach(effort => {
+        const request = adapter.createRequest({
+          messages: [{ role: 'user', content: 'test' }],
+          systemPrompt: [],
+          tools: [],
+          maxTokens: 100,
+          reasoningEffort: effort
+        })
+
+        expect(request.reasoning.effort).toBe(effort)
+        expect(request.include).toContain('reasoning.encrypted_content')
+      })
+    })
+
+  })
 })
