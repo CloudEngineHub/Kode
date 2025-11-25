@@ -1,6 +1,6 @@
 import { OpenAIAdapter, StreamingEvent, normalizeTokens } from './openaiAdapter'
 import { UnifiedRequestParams, UnifiedResponse } from '@kode-types/modelCapabilities'
-import { Tool } from '@tool'
+import { Tool, getToolDescription } from '@tool'
 import { zodToJsonSchema } from 'zod-to-json-schema'
 import { processResponsesStream } from './responsesStreaming'
 
@@ -101,30 +101,11 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
         }
       }
 
-      let description: string
-      if (typeof tool.description === 'function') {
-        // For async functions, we can't await in sync context
-        // Use a fallback approach - try to get cached description or use name
-        description = `Tool: ${tool.name}`
-
-        // Try to get description synchronously if possible
-        try {
-          // Some tools might have a cached description property
-          if ('cachedDescription' in tool) {
-            description = (tool as any).cachedDescription
-          }
-        } catch (error) {
-          // Keep fallback
-        }
-      } else {
-        description = tool.description || `Tool: ${tool.name}`
-      }
-
       return {
         type: 'function',
         name: tool.name,
-        description,
-        parameters: parameters || { type: 'object', properties: {} }
+        description: getToolDescription(tool),
+        parameters: (parameters as Record<string, unknown>) || { type: 'object', properties: {} }
       }
     })
   }
@@ -201,8 +182,6 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
       usage: {
         promptTokens,
         completionTokens,
-        input_tokens: promptTokens,
-        output_tokens: completionTokens,
         totalTokens,
         reasoningTokens: response.usage?.output_tokens_details?.reasoning_tokens
       },
@@ -211,7 +190,7 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
   }
 
   // Implement abstract method from OpenAIAdapter - Responses API specific streaming logic
-  protected *processStreamingChunk(
+  protected async *processStreamingChunk(
     parsed: any,
     responseId: string,
     hasStarted: boolean,

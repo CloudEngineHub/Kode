@@ -1,6 +1,6 @@
 import { OpenAIAdapter, StreamingEvent, normalizeTokens } from './openaiAdapter'
 import { UnifiedRequestParams, UnifiedResponse } from '@kode-types/modelCapabilities'
-import { Tool } from '@tool'
+import { Tool, getToolDescription } from '@tool'
 import { zodToJsonSchema } from 'zod-to-json-schema'
 
 export class ChatCompletionsAdapter extends OpenAIAdapter {
@@ -65,7 +65,7 @@ export class ChatCompletionsAdapter extends OpenAIAdapter {
       type: 'function',
       function: {
         name: tool.name,
-        description: tool.description || '',
+        description: getToolDescription(tool),
         parameters: tool.inputJSONSchema || zodToJsonSchema(tool.inputSchema)
       }
     }))
