@@ -11,7 +11,7 @@ import 'dotenv/config'
 import { addToTotalCost } from '@costTracker'
 import models from '@constants/models'
 import type { AssistantMessage, UserMessage } from '@query'
-import { Tool } from '@tool'
+import { Tool, getToolDescription } from '@tool'
 import {
   getAnthropicApiKey,
   getOrCreateUserID,
@@ -1432,9 +1432,7 @@ async function queryAnthropicNative(
     tools.map(async tool =>
       ({
         name: tool.name,
-        description: typeof tool.description === 'function' 
-          ? await tool.description() 
-          : tool.description,
+        description: getToolDescription(tool),
         input_schema:'inputJSONSchema' in tool && tool.inputJSONSchema
           ? tool.inputJSONSchema
           : zodToJsonSchema(tool.inputSchema),
