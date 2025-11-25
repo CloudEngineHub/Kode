@@ -53,11 +53,13 @@ export interface Tool<
   TOutput = any,
 > {
   name: string
-  description?: () => Promise<string>
+  description?: string | (() => Promise<string>)
   inputSchema: TInput
   inputJSONSchema?: Record<string, unknown>
   prompt: (options?: { safeMode?: boolean }) => Promise<string>
   userFacingName?: () => string
+  /** Cached description for synchronous access by adapters */
+  cachedDescription?: string
   isEnabled: () => Promise<boolean>
   isReadOnly: () => boolean
   isConcurrencySafe: () => boolean
@@ -82,4 +84,23 @@ export interface Tool<
     void,
     unknown
   >
+}
+
+/**
+ * Get tool description synchronously for adapter usage.
+ * Adapter code cannot await async descriptions, so we use cached or fallback values.
+ */
+export function getToolDescription(tool: Tool): string {
+  // First try cached description (populated by tool initialization)
+  if (tool.cachedDescription) {
+    return tool.cachedDescription
+  }
+
+  // Then try string description
+  if (typeof tool.description === 'string') {
+    return tool.description
+  }
+
+  // Finally, use fallback name if description is async function
+  return `Tool: ${tool.name}`
 }

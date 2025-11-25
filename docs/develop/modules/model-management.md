@@ -1,12 +1,16 @@
 # Model Management System
 
+Capability-driven architecture for managing multiple AI providers with intelligent adapter selection and model-specific behavior configuration.
+
 ## Overview
 
-The Model Management System (`src/utils/model.ts`) provides a unified interface for managing multiple AI providers, model configurations, and intelligent model switching. It abstracts the complexity of different AI APIs behind a consistent interface.
+The Model Management System provides the foundational layer for Kode's multi-model architecture. It abstracts the complexity of different AI providers behind a unified interface while enabling intelligent model selection, cost optimization, and seamless switching between providers.
 
 ## Core Architecture
 
 ### ModelManager Class
+
+The `ModelManager` serves as the central orchestrator for all model operations:
 
 ```typescript
 export class ModelManager {
@@ -14,41 +18,43 @@ export class ModelManager {
   private pointers: ModelPointers
   private currentModel: ModelInfo
   private contextLimit: Map<string, number>
-  
+
   constructor(config: ModelConfig) {
     this.loadProfiles(config.profiles)
     this.loadPointers(config.pointers)
     this.initializeContextLimits()
   }
-  
-  // Model resolution
+
+  // Core operations
   resolveModel(pointer: string): ModelInfo
-  
-  // Model switching
   switchToNextModel(reason: SwitchReason): ModelInfo
-  
-  // Context analysis
   analyzeContextCompatibility(messages: Message[]): ContextAnalysis
-  
-  // Profile management
   addProfile(profile: ModelProfile): void
   updateProfile(id: string, updates: Partial<ModelProfile>): void
   deleteProfile(id: string): void
 }
 ```
 
+**Key Responsibilities:**
+- **Profile Management**: Centralized storage and retrieval of model configurations
+- **Intelligent Selection**: Choose optimal models based on context, cost, and requirements
+- **Context Analysis**: Evaluate conversation context for model compatibility
+- **Dynamic Switching**: Automatic fallback and upgrade based on conditions
+
 ## Model Configuration
 
 ### Model Profile Structure
+
+Each model profile contains comprehensive configuration for provider integration:
 
 ```typescript
 interface ModelProfile {
   id: string                    // Unique identifier
   name: string                  // Display name
-  provider: ModelProvider       // 'anthropic' | 'openai' | 'bedrock' | 'vertex' | 'custom'
+  provider: ModelProvider       // Provider type
   config: {
-    model: string              // Model identifier (e.g., 'claude-3-5-sonnet-20241022')
-    baseURL?: string           // Custom endpoint URL
+    model: string              // API model identifier
+    baseURL?: string           // Custom endpoint override
     apiKey?: string            // Provider API key
     maxTokens?: number         // Maximum output tokens
     temperature?: number       // Sampling temperature
@@ -82,6 +88,8 @@ interface ModelProfile {
 
 ### Model Pointers
 
+Model pointers enable semantic model selection for different use cases:
+
 ```typescript
 interface ModelPointers {
   main: string        // Primary conversation model
@@ -94,228 +102,171 @@ interface ModelPointers {
 }
 ```
 
-### Default Profiles
-
+**Usage Example:**
 ```typescript
-const DEFAULT_PROFILES: ModelProfile[] = [
-  {
-    id: 'claude-sonnet',
-    name: 'Claude 3.5 Sonnet',
-    provider: 'anthropic',
-    config: {
-      model: 'claude-3-5-sonnet-20241022',
-      maxTokens: 8192,
-      temperature: 0.7
-    },
-    capabilities: {
-      supportsTools: true,
-      supportsVision: true,
-      supportsStreaming: true,
-      maxContextTokens: 200000,
-      costPer1kTokens: {
-        input: 0.003,
-        output: 0.015
-      }
-    }
-  },
-  {
-    id: 'claude-haiku',
-    name: 'Claude 3.5 Haiku',
-    provider: 'anthropic',
-    config: {
-      model: 'claude-3-5-haiku-20241022',
-      maxTokens: 8192,
-      temperature: 0.7
-    },
-    capabilities: {
-      supportsTools: true,
-      supportsVision: false,
-      supportsStreaming: true,
-      maxContextTokens: 200000,
-      costPer1kTokens: {
-        input: 0.0008,
-        output: 0.004
-      }
-    }
-  },
-  {
-    id: 'gpt-4o',
-    name: 'GPT-4o',
-    provider: 'openai',
-    config: {
-      model: 'gpt-4o',
-      maxTokens: 4096,
-      temperature: 0.7
-    },
-    capabilities: {
-      supportsTools: true,
-      supportsVision: true,
-      supportsStreaming: true,
-      maxContextTokens: 128000,
-      costPer1kTokens: {
-        input: 0.0025,
-        output: 0.01
-      }
-    }
-  }
-]
+// Select model for complex reasoning task
+const reasoningModel = modelManager.resolveModel('reasoning')
+
+// Select fastest model for quick response
+const quickModel = modelManager.resolveModel('quick')
 ```
 
-## Provider Integration
+## Model Capabilities System
 
-### Provider Factory
+### Capability-Driven Architecture
+
+The Model Management System uses a comprehensive capabilities registry to drive adapter selection and behavior:
 
 ```typescript
-class ProviderFactory {
-  static createProvider(profile: ModelProfile): AIProvider {
-    switch (profile.provider) {
-      case 'anthropic':
-        return new AnthropicProvider(profile)
-      
-      case 'openai':
-        return new OpenAIProvider(profile)
-      
-      case 'bedrock':
-        return new BedrockProvider(profile)
-      
-      case 'vertex':
-        return new VertexProvider(profile)
-      
-      case 'custom':
-        return new CustomProvider(profile)
-      
-      default:
-        throw new Error(`Unknown provider: ${profile.provider}`)
+interface ModelCapabilities {
+  apiArchitecture: {
+    primary: 'responses_api' | 'chat_completions'
+    fallback?: 'chat_completions'
+  }
+  parameters: {
+    maxTokensField: string
+    supportsReasoningEffort: boolean
+    supportsVerbosity: boolean
+    temperatureMode: 'flexible' | 'restricted' | 'fixed_one'
+  }
+  toolCalling: {
+    mode: 'function_calling' | 'custom_tools'
+    supportsFreeform: boolean
+    supportsAllowedTools: boolean
+    supportsParallelCalls: boolean
+  }
+  stateManagement: {
+    supportsResponseId: boolean
+    supportsConversationChaining: boolean
+    supportsPreviousResponseId: boolean
+  }
+  streaming: {
+    supported: boolean
+    includesUsage: boolean
+  }
+}
+```
+
+### Capability Registry
+
+Pre-defined capabilities for known models:
+
+```typescript
+export const MODEL_CAPABILITIES_REGISTRY: Record<string, ModelCapabilities> = {
+  // GPT-5 series - Responses API native
+  'gpt-5': GPT5_CAPABILITIES,
+  'gpt-5-mini': GPT5_CAPABILITIES,
+
+  // GPT-4 series - Chat Completions
+  'gpt-4o': CHAT_COMPLETIONS_CAPABILITIES,
+  'gpt-4o-mini': CHAT_COMPLETIONS_CAPABILITIES,
+
+  // O1 series - Special reasoning models
+  'o1': {
+    ...CHAT_COMPLETIONS_CAPABILITIES,
+    parameters: {
+      ...CHAT_COMPLETIONS_CAPABILITIES.parameters,
+      maxTokensField: 'max_completion_tokens',
+      temperatureMode: 'fixed_one'
     }
   }
 }
 ```
 
-### Anthropic Provider
+### Dynamic Capability Inference
+
+For unregistered models, the system intelligently infers capabilities based on naming patterns:
 
 ```typescript
-class AnthropicProvider implements AIProvider {
-  private client: Anthropic
-  private profile: ModelProfile
-  
-  constructor(profile: ModelProfile) {
-    this.profile = profile
-    this.client = new Anthropic({
-      apiKey: profile.config.apiKey || process.env.ANTHROPIC_API_KEY,
-      baseURL: profile.config.baseURL,
-      defaultHeaders: profile.config.headers,
-      timeout: profile.config.timeout
-    })
-  }
-  
-  async createMessage(request: MessageRequest): Promise<MessageResponse> {
-    const response = await this.client.messages.create({
-      model: this.profile.config.model,
-      messages: this.convertMessages(request.messages),
-      max_tokens: request.maxTokens || this.profile.config.maxTokens,
-      temperature: request.temperature || this.profile.config.temperature,
-      system: request.systemPrompt,
-      tools: this.convertTools(request.tools),
-      stream: request.stream
-    })
-    
-    return this.normalizeResponse(response)
-  }
-  
-  async *streamMessage(
-    request: MessageRequest
-  ): AsyncGenerator<StreamEvent> {
-    const stream = await this.client.messages.stream({
-      ...this.buildRequest(request),
-      stream: true
-    })
-    
-    for await (const event of stream) {
-      yield this.normalizeStreamEvent(event)
-    }
-  }
-}
-```
+export function inferModelCapabilities(modelName: string): ModelCapabilities | null {
+  const lowerName = modelName.toLowerCase()
 
-### OpenAI Provider
+  // GPT-5 series - Use Responses API
+  if (lowerName.includes('gpt-5') || lowerName.includes('gpt5')) {
+    return GPT5_CAPABILITIES
+  }
 
-```typescript
-class OpenAIProvider implements AIProvider {
-  private client: OpenAI
-  private profile: ModelProfile
-  
-  constructor(profile: ModelProfile) {
-    this.profile = profile
-    this.client = new OpenAI({
-      apiKey: profile.config.apiKey || process.env.OPENAI_API_KEY,
-      baseURL: profile.config.baseURL,
-      defaultHeaders: profile.config.headers,
-      timeout: profile.config.timeout
-    })
-  }
-  
-  async createMessage(request: MessageRequest): Promise<MessageResponse> {
-    const completion = await this.client.chat.completions.create({
-      model: this.profile.config.model,
-      messages: this.convertMessages(request.messages),
-      max_tokens: request.maxTokens,
-      temperature: request.temperature,
-      functions: this.convertTools(request.tools),
-      stream: request.stream
-    })
-    
-    return this.normalizeResponse(completion)
-  }
-  
-  private convertMessages(messages: Message[]): OpenAIMessage[] {
-    return messages.map(msg => ({
-      role: this.mapRole(msg.role),
-      content: msg.content,
-      name: msg.name,
-      function_call: msg.toolCalls?.[0]
-    }))
-  }
-}
-```
-
-### Custom Provider
-
-```typescript
-class CustomProvider implements AIProvider {
-  private profile: ModelProfile
-  private httpClient: HTTPClient
-  
-  constructor(profile: ModelProfile) {
-    this.profile = profile
-    this.httpClient = new HTTPClient({
-      baseURL: profile.config.baseURL,
-      headers: {
-        'Authorization': `Bearer ${profile.config.apiKey}`,
-        ...profile.config.headers
-      },
-      timeout: profile.config.timeout
-    })
-  }
-  
-  async createMessage(request: MessageRequest): Promise<MessageResponse> {
-    // Custom API implementation
-    const response = await this.httpClient.post('/v1/messages', {
-      model: this.profile.config.model,
-      ...this.transformRequest(request)
-    })
-    
-    return this.normalizeResponse(response)
-  }
-  
-  private transformRequest(request: MessageRequest): any {
-    // Transform to custom API format
+  // O1 series - Special reasoning models
+  if (lowerName.startsWith('o1') || lowerName.includes('o1-')) {
     return {
-      prompt: this.buildPrompt(request.messages),
-      max_length: request.maxTokens,
-      temperature: request.temperature,
-      // Custom transformations...
+      ...CHAT_COMPLETIONS_CAPABILITIES,
+      parameters: {
+        ...CHAT_COMPLETIONS_CAPABILITIES.parameters,
+        maxTokensField: 'max_completion_tokens',
+        temperatureMode: 'fixed_one'
+      }
     }
   }
+
+  // GLM series - Chat Completions with limited tool support
+  if (lowerName.includes('glm-5') || lowerName.includes('glm5')) {
+    return {
+      ...CHAT_COMPLETIONS_CAPABILITIES,
+      toolCalling: {
+        ...CHAT_COMPLETIONS_CAPABILITIES.toolCalling,
+        supportsAllowedTools: false
+      }
+    }
+  }
+
+  return null // Use default Chat Completions
+}
+```
+
+### Adapter Selection Logic
+
+The `ModelAdapterFactory` uses capabilities to determine the appropriate adapter:
+
+```typescript
+class ModelAdapterFactory {
+  static shouldUseResponsesAPI(modelProfile: ModelProfile): boolean {
+    const capabilities = getModelCapabilities(modelProfile.modelName)
+    return capabilities.apiArchitecture.primary === 'responses_api'
+  }
+
+  static createAdapter(modelProfile: ModelProfile): ModelAPIAdapter {
+    const capabilities = getModelCapabilities(modelProfile.modelName)
+
+    if (capabilities.apiArchitecture.primary === 'responses_api') {
+      return new ResponsesAPIAdapter(capabilities, modelProfile)
+    } else {
+      return new ChatCompletionsAdapter(capabilities, modelProfile)
+    }
+  }
+}
+```
+
+### Capability Caching
+
+For performance, capabilities are cached after first lookup:
+
+```typescript
+const capabilityCache = new Map<string, ModelCapabilities>()
+
+export function getModelCapabilities(modelName: string): ModelCapabilities {
+  // Check cache first
+  if (capabilityCache.has(modelName)) {
+    return capabilityCache.get(modelName)!
+  }
+
+  // Look up in registry
+  if (MODEL_CAPABILITIES_REGISTRY[modelName]) {
+    const capabilities = MODEL_CAPABILITIES_REGISTRY[modelName]
+    capabilityCache.set(modelName, capabilities)
+    return capabilities
+  }
+
+  // Try to infer
+  const inferred = inferModelCapabilities(modelName)
+  if (inferred) {
+    capabilityCache.set(modelName, inferred)
+    return inferred
+  }
+
+  // Default to Chat Completions
+  const defaultCapabilities = CHAT_COMPLETIONS_CAPABILITIES
+  capabilityCache.set(modelName, defaultCapabilities)
+  return defaultCapabilities
 }
 ```
 
@@ -323,63 +274,67 @@ class CustomProvider implements AIProvider {
 
 ### Intelligent Model Selection
 
+The system uses a sophisticated scoring algorithm to select the optimal model:
+
 ```typescript
 class ModelSelector {
   selectModel(context: SelectionContext): ModelProfile {
     // Priority-based selection
     const candidates = this.filterCandidates(context)
-    
+
     // Score each candidate
     const scored = candidates.map(model => ({
       model,
       score: this.scoreModel(model, context)
     }))
-    
+
     // Sort by score and select best
     scored.sort((a, b) => b.score - a.score)
     return scored[0].model
   }
-  
+
   private scoreModel(
     model: ModelProfile,
     context: SelectionContext
   ): number {
     let score = 0
-    
+
     // Context size compatibility
     if (context.tokenCount <= model.capabilities.maxContextTokens) {
       score += 100
     } else {
       return -1 // Disqualify if context too large
     }
-    
+
     // Tool support requirement
     if (context.requiresTools && model.capabilities.supportsTools) {
       score += 50
     } else if (context.requiresTools) {
       return -1 // Disqualify if tools required but not supported
     }
-    
+
     // Cost optimization
     const costScore = 100 - (model.capabilities.costPer1kTokens.input * 10)
     score += costScore * context.costWeight
-    
+
     // Speed optimization
     if (context.prioritizeSpeed && model.metadata?.tags?.includes('fast')) {
       score += 50
     }
-    
+
     // Quality optimization
     if (context.prioritizeQuality && model.metadata?.tags?.includes('powerful')) {
       score += 50
     }
-    
+
     return score
   }
 }
 ```
 
 ### Context-Based Switching
+
+Intelligent analysis of conversation context for model optimization:
 
 ```typescript
 class ContextAnalyzer {
@@ -388,7 +343,7 @@ class ContextAnalyzer {
     const hasImages = this.detectImages(messages)
     const codeRatio = this.calculateCodeRatio(messages)
     const complexity = this.estimateComplexity(messages)
-    
+
     return {
       tokenCount,
       hasImages,
@@ -402,24 +357,7 @@ class ContextAnalyzer {
       })
     }
   }
-  
-  private countTokens(messages: Message[]): number {
-    // Use tiktoken for accurate counting
-    const encoder = getEncoding('cl100k_base')
-    
-    let total = 0
-    for (const message of messages) {
-      const tokens = encoder.encode(message.content)
-      total += tokens.length
-      
-      // Add overhead for message structure
-      total += 4 // role, content markers
-    }
-    
-    encoder.free()
-    return total
-  }
-  
+
   private estimateComplexity(messages: Message[]): ComplexityLevel {
     const indicators = {
       multiStep: /step \d+|first|then|finally/i,
@@ -427,7 +365,7 @@ class ContextAnalyzer {
       analysis: /analyze|explain|compare|evaluate/i,
       creative: /create|design|generate|imagine/i
     }
-    
+
     let score = 0
     for (const message of messages) {
       for (const [type, pattern] of Object.entries(indicators)) {
@@ -436,7 +374,7 @@ class ContextAnalyzer {
         }
       }
     }
-    
+
     if (score >= 4) return 'high'
     if (score >= 2) return 'medium'
     return 'low'
@@ -448,6 +386,8 @@ class ContextAnalyzer {
 
 ### Automatic Switching
 
+The system automatically switches models based on various conditions:
+
 ```typescript
 class ModelSwitcher {
   async switchModel(
@@ -458,43 +398,27 @@ class ModelSwitcher {
     switch (reason) {
       case 'CONTEXT_OVERFLOW':
         return this.switchToLargerContext(currentModel, context)
-      
+
       case 'RATE_LIMITED':
         return this.switchToBackup(currentModel)
-      
+
       case 'ERROR':
         return this.switchToFallback(currentModel)
-      
+
       case 'COST_OPTIMIZATION':
         return this.switchToCheaper(currentModel, context)
-      
+
       case 'QUALITY_NEEDED':
         return this.switchToStronger(currentModel)
-      
+
       case 'SPEED_NEEDED':
         return this.switchToFaster(currentModel)
-      
+
       default:
         return currentModel
     }
   }
-  
-  private async switchToLargerContext(
-    current: ModelProfile,
-    context: SwitchContext
-  ): Promise<ModelProfile> {
-    const candidates = this.getAllProfiles()
-      .filter(p => p.capabilities.maxContextTokens > context.requiredTokens)
-      .sort((a, b) => a.capabilities.maxContextTokens - b.capabilities.maxContextTokens)
-    
-    if (candidates.length === 0) {
-      throw new Error('No model available with sufficient context')
-    }
-    
-    // Choose smallest sufficient model for cost optimization
-    return candidates[0]
-  }
-  
+
   private switchToBackup(current: ModelProfile): ModelProfile {
     // Define backup chain
     const backupChain = {
@@ -503,52 +427,9 @@ class ModelSwitcher {
       'gpt-4o': 'gpt-3.5-turbo',
       'gpt-3.5-turbo': 'claude-3-5-haiku'
     }
-    
+
     const backupId = backupChain[current.id]
     return this.getProfile(backupId) || current
-  }
-}
-```
-
-### Manual Model Selection
-
-```typescript
-class ModelUI {
-  async selectModel(
-    profiles: ModelProfile[],
-    current: ModelProfile
-  ): Promise<ModelProfile> {
-    const items = profiles.map(profile => ({
-      label: this.formatProfileLabel(profile),
-      value: profile.id,
-      description: this.formatProfileDescription(profile)
-    }))
-    
-    const selected = await prompt({
-      type: 'select',
-      message: 'Select a model:',
-      choices: items,
-      initial: current.id
-    })
-    
-    return profiles.find(p => p.id === selected)!
-  }
-  
-  private formatProfileLabel(profile: ModelProfile): string {
-    const cost = profile.capabilities.costPer1kTokens
-    const context = profile.capabilities.maxContextTokens
-    
-    return `${profile.name} (${this.formatTokens(context)} context, $${cost.input}/$${cost.output} per 1k)`
-  }
-  
-  private formatTokens(tokens: number): string {
-    if (tokens >= 1000000) {
-      return `${(tokens / 1000000).toFixed(1)}M`
-    }
-    if (tokens >= 1000) {
-      return `${(tokens / 1000).toFixed(0)}k`
-    }
-    return tokens.toString()
   }
 }
 ```
@@ -557,10 +438,12 @@ class ModelUI {
 
 ### Cost Tracking
 
+Comprehensive tracking of model usage and costs:
+
 ```typescript
 class CostTracker {
   private usage: Map<string, ModelUsage> = new Map()
-  
+
   track(
     model: ModelProfile,
     inputTokens: number,
@@ -572,51 +455,29 @@ class CostTracker {
       cost: 0,
       requests: 0
     }
-    
+
     usage.inputTokens += inputTokens
     usage.outputTokens += outputTokens
     usage.requests += 1
-    
+
     // Calculate cost
     const inputCost = (inputTokens / 1000) * model.capabilities.costPer1kTokens.input
     const outputCost = (outputTokens / 1000) * model.capabilities.costPer1kTokens.output
     usage.cost += inputCost + outputCost
-    
+
     this.usage.set(model.id, usage)
-    
-    // Emit cost event
     this.emitCostUpdate(model.id, usage)
   }
-  
-  getUsageSummary(): UsageSummary {
-    const summary: UsageSummary = {
-      totalCost: 0,
-      totalInputTokens: 0,
-      totalOutputTokens: 0,
-      totalRequests: 0,
-      byModel: {}
-    }
-    
-    for (const [modelId, usage] of this.usage) {
-      summary.totalCost += usage.cost
-      summary.totalInputTokens += usage.inputTokens
-      summary.totalOutputTokens += usage.outputTokens
-      summary.totalRequests += usage.requests
-      summary.byModel[modelId] = { ...usage }
-    }
-    
-    return summary
-  }
-  
+
   async enforceCostLimit(limit: number): Promise<void> {
     const summary = this.getUsageSummary()
-    
+
     if (summary.totalCost >= limit) {
       throw new CostLimitExceededError(
         `Cost limit of $${limit} exceeded. Current: $${summary.totalCost.toFixed(4)}`
       )
     }
-    
+
     if (summary.totalCost >= limit * 0.8) {
       this.emitCostWarning(summary.totalCost, limit)
     }
@@ -624,80 +485,24 @@ class CostTracker {
 }
 ```
 
-### Cost Optimization
+## Profile Management
 
-```typescript
-class CostOptimizer {
-  optimizeModelSelection(
-    task: TaskType,
-    budget: number,
-    profiles: ModelProfile[]
-  ): ModelProfile {
-    // Estimate tokens for task
-    const estimatedTokens = this.estimateTokensForTask(task)
-    
-    // Filter models within budget
-    const affordable = profiles.filter(profile => {
-      const cost = this.calculateCost(profile, estimatedTokens)
-      return cost <= budget
-    })
-    
-    if (affordable.length === 0) {
-      throw new Error('No model available within budget')
-    }
-    
-    // Select best quality within budget
-    return this.selectBestQuality(affordable, task)
-  }
-  
-  private estimateTokensForTask(task: TaskType): TokenEstimate {
-    const estimates = {
-      simple_question: { input: 500, output: 500 },
-      code_generation: { input: 1000, output: 2000 },
-      analysis: { input: 2000, output: 1500 },
-      refactoring: { input: 3000, output: 3000 },
-      complex_task: { input: 5000, output: 5000 }
-    }
-    
-    return estimates[task] || estimates.complex_task
-  }
-}
-```
+### CRUD Operations
 
-## Model Profiles Management
-
-### Profile CRUD Operations
+Complete lifecycle management for model profiles:
 
 ```typescript
 class ProfileManager {
   private profiles: Map<string, ModelProfile> = new Map()
   private configPath: string
-  
-  async loadProfiles(): Promise<void> {
-    // Load from config file
-    const config = await this.loadConfig()
-    
-    // Load default profiles
-    for (const profile of DEFAULT_PROFILES) {
-      this.profiles.set(profile.id, profile)
-    }
-    
-    // Override with user profiles
-    for (const profile of config.profiles || []) {
-      this.profiles.set(profile.id, profile)
-    }
-  }
-  
+
   async createProfile(profile: ModelProfile): Promise<void> {
-    // Validate profile
     this.validateProfile(profile)
-    
-    // Check for duplicates
+
     if (this.profiles.has(profile.id)) {
       throw new Error(`Profile ${profile.id} already exists`)
     }
-    
-    // Add profile
+
     this.profiles.set(profile.id, {
       ...profile,
       metadata: {
@@ -706,46 +511,17 @@ class ProfileManager {
         updatedAt: new Date()
       }
     })
-    
-    // Save to config
+
     await this.saveProfiles()
   }
-  
-  async updateProfile(
-    id: string,
-    updates: Partial<ModelProfile>
-  ): Promise<void> {
-    const existing = this.profiles.get(id)
-    if (!existing) {
-      throw new Error(`Profile ${id} not found`)
-    }
-    
-    // Merge updates
-    const updated = {
-      ...existing,
-      ...updates,
-      metadata: {
-        ...existing.metadata,
-        ...updates.metadata,
-        updatedAt: new Date()
-      }
-    }
-    
-    // Validate updated profile
-    this.validateProfile(updated)
-    
-    // Update and save
-    this.profiles.set(id, updated)
-    await this.saveProfiles()
-  }
-  
+
   private validateProfile(profile: ModelProfile): void {
-    // Required fields
+    // Required fields validation
     if (!profile.id) throw new Error('Profile ID is required')
     if (!profile.name) throw new Error('Profile name is required')
     if (!profile.provider) throw new Error('Provider is required')
     if (!profile.config.model) throw new Error('Model is required')
-    
+
     // Provider-specific validation
     switch (profile.provider) {
       case 'anthropic':
@@ -764,7 +540,9 @@ class ProfileManager {
 
 ## Error Handling
 
-### Provider Errors
+### Provider Error Management
+
+Comprehensive error handling and recovery strategies:
 
 ```typescript
 class ProviderErrorHandler {
@@ -776,40 +554,50 @@ class ProviderErrorHandler {
     if (this.isRateLimitError(error)) {
       return this.handleRateLimit(provider, request)
     }
-    
+
     if (this.isAuthError(error)) {
       return this.handleAuthError(provider)
     }
-    
+
     if (this.isNetworkError(error)) {
       return this.retryWithBackoff(provider, request)
     }
-    
+
     if (this.isContextLengthError(error)) {
       return this.handleContextOverflow(request)
     }
-    
+
     // Unrecoverable error
     throw new ProviderError(error.message, provider, error)
   }
-  
+
   private async handleRateLimit(
     provider: AIProvider,
     request: MessageRequest
   ): Promise<MessageResponse> {
-    // Get retry-after header if available
     const retryAfter = this.extractRetryAfter(error)
-    
+
     if (retryAfter) {
       await sleep(retryAfter * 1000)
       return provider.createMessage(request)
     }
-    
+
     // Switch to backup provider
     const backup = this.getBackupProvider(provider)
     return backup.createMessage(request)
   }
 }
 ```
+
+## Benefits of Capability-Driven Design
+
+1. **Eliminates Hardcoded Logic**: No more if/else chains for model-specific behavior
+2. **Consistent Behavior**: Same capabilities produce same behavior across adapters
+3. **Easy Extension**: Adding new models only requires capability definition
+4. **Type Safety**: Compile-time validation of model capabilities
+5. **Performance**: Cached lookups prevent repeated computation
+6. **Maintainability**: Centralized capability definitions reduce code duplication
+
+---
 
 The Model Management System provides comprehensive, flexible, and robust handling of multiple AI providers with intelligent model selection, cost optimization, and error recovery.

@@ -728,7 +728,7 @@ export function logLLMInteraction(context: {
   // 显示 LLM 响应核心信息 - 更详细友好的格式
   console.log(chalk.magenta('\n🤖 LLM Response:'))
 
-  // Handle different response formats (Anthropic vs OpenAI)
+  // Handle different response formats (Anthropic vs OpenAI vs UnifiedResponse)
   let responseContent = ''
   let toolCalls: any[] = []
 
@@ -742,12 +742,26 @@ export function logLLMInteraction(context: {
       (block: any) => block.type === 'tool_use',
     )
   } else if (typeof context.response.content === 'string') {
-    // OpenAI format: content might be string
+    // OpenAI/UnifiedResponse format: content is string
     responseContent = context.response.content
-    // Tool calls are separate in OpenAI format
-    toolCalls = context.response.tool_calls || []
+    // Tool calls are separate in OpenAI format or UnifiedResponse
+    toolCalls = context.response.tool_calls || context.response.toolCalls || []
+  } else if (context.response.message?.content) {
+    // Handle internal message format (from streaming responses)
+    if (Array.isArray(context.response.message.content)) {
+      // Internal format with content blocks
+      const textBlocks = context.response.message.content.filter(
+        (block: any) => block.type === 'text',
+      )
+      responseContent = textBlocks.length > 0 ? textBlocks[0].text || '' : ''
+      toolCalls = context.response.message.content.filter(
+        (block: any) => block.type === 'tool_use',
+      )
+    } else if (typeof context.response.message.content === 'string') {
+      responseContent = context.response.message.content
+    }
   } else {
-    responseContent = JSON.stringify(context.response.content || '')
+    responseContent = JSON.stringify(context.response.content || context.response || '')
   }
 
   // 显示更多响应内容

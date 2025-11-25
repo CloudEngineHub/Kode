@@ -21,7 +21,7 @@ import { FileReadTool } from '@tools/FileReadTool/FileReadTool'
 import { GlobTool } from '@tools/GlobTool/GlobTool'
 import { GrepTool } from '@tools/GrepTool/GrepTool'
 import { FileWriteTool } from '@tools/FileWriteTool/FileWriteTool'
-import { Tool } from '@tool'
+import { Tool, getToolDescription } from '@tool'
 import { Command } from '@commands'
 import review from '@commands/review'
 import { lastX } from '@utils/generators'
@@ -67,7 +67,7 @@ export async function startMCPServer(cwd: string): Promise<void> {
       const tools = await Promise.all(
         MCP_TOOLS.map(async tool => ({
           ...tool,
-          description: await tool.description(),
+          description: getToolDescription(tool),
           inputSchema: zodToJsonSchema(tool.inputSchema) as ToolInput,
         })),
       )
