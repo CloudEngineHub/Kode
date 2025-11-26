@@ -39,8 +39,22 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
 
     // Add verbosity control using model capabilities
     if (this.capabilities.parameters.supportsVerbosity && this.shouldIncludeVerbosity()) {
+      // Determine default verbosity based on model name if not provided
+      let defaultVerbosity: 'low' | 'medium' | 'high' = 'medium'
+      if (params.verbosity) {
+        defaultVerbosity = params.verbosity
+      } else {
+        const modelNameLower = this.modelProfile.modelName.toLowerCase()
+        if (modelNameLower.includes('high')) {
+          defaultVerbosity = 'high'
+        } else if (modelNameLower.includes('low')) {
+          defaultVerbosity = 'low'
+        }
+        // Default to 'medium' for all other cases
+      }
+
       request.text = {
-        verbosity: params.verbosity || 'high'  // High verbosity for coding tasks
+        verbosity: defaultVerbosity
       }
     }
 

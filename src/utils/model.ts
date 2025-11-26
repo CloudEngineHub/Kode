@@ -554,6 +554,18 @@ export class ModelManager {
         quick: config.modelName,
       }
       this.config.defaultModelName = config.modelName
+    } else {
+      // For any new model after the first, set it as the main pointer
+      if (!this.config.modelPointers) {
+        this.config.modelPointers = {
+          main: config.modelName,
+          task: '',
+          reasoning: '',
+          quick: '',
+        }
+      } else {
+        this.config.modelPointers.main = config.modelName
+      }
     }
 
     this.saveConfig()

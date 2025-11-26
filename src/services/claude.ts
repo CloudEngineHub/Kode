@@ -1913,6 +1913,18 @@ async function queryOpenAI(
       if (shouldUseResponses) {
         const adapter = ModelAdapterFactory.createAdapter(modelProfile)
         const reasoningEffort = await getReasoningEffort(modelProfile, messages)
+
+        // Determine verbosity based on model name
+        // Most GPT-5 codex models only support 'medium', so default to that unless we detect 'high' in the name
+        let verbosity: 'low' | 'medium' | 'high' = 'medium'
+        const modelNameLower = modelProfile.modelName.toLowerCase()
+        if (modelNameLower.includes('high')) {
+          verbosity = 'high'
+        } else if (modelNameLower.includes('low')) {
+          verbosity = 'low'
+        }
+        // Default to 'medium' for all other cases, including mini, codex, etc.
+
         const unifiedParams: UnifiedRequestParams = {
           messages: openaiMessages,
           systemPrompt: openaiSystem.map(s => s.content as string),
@@ -1922,7 +1934,7 @@ async function queryOpenAI(
           reasoningEffort: reasoningEffort as any,
           temperature: isGPT5Model(model) ? 1 : MAIN_QUERY_TEMPERATURE,
           previousResponseId: toolUseContext?.responseState?.previousResponseId,
-          verbosity: 'high',
+          verbosity,
         }
 
         adapterContext = {
