@@ -315,10 +315,6 @@ export function validateGPT5Config(config: GPT5TestConfig): { valid: boolean; er
     errors.push('API key is required')
   }
 
-  if (config.apiKey && config.apiKey.length < 10) {
-    errors.push('API key appears to be invalid (too short)')
-  }
-
   const isGPT5 = config.model?.toLowerCase().includes('gpt-5')
   if (isGPT5) {
     console.log(`🔧 GPT-5 validation: model=${config.model}, maxTokens=${config.maxTokens}`)

@@ -219,7 +219,7 @@ function PromptInput({
     [onModeChange, onInputChange],
   )
 
-  // Handle Shift+M model switching with enhanced debugging
+  // Handle Option+M (Alt+M) model switching with enhanced debugging
   const handleQuickModelSwitch = useCallback(async () => {
     const modelManager = getModelManager()
     const currentTokens = countTokens(messages)
@@ -535,12 +535,20 @@ function PromptInput({
 
   // Handle special key combinations before character input
   const handleSpecialKey = useCallback((inputChar: string, key: any): boolean => {
-    // Shift+M for model switching - intercept before character input
-    if (key.shift && (inputChar === 'M' || inputChar === 'm')) {
+    // Check for Option+M (Alt+M) for model switching
+    // On macOS, Option+M typically produces 'µ' character
+    // On other systems, Alt+M might come through differently
+    if ((key.meta || key.option) && (inputChar === 'm' || inputChar === 'M')) {
       handleQuickModelSwitch()
       return true // Prevent character from being input
     }
-    
+
+    // Also check for the µ character which is what Option+M produces on macOS
+    if (inputChar === 'µ') {
+      handleQuickModelSwitch()
+      return true // Prevent µ from being input
+    }
+
     return false // Not handled, allow normal processing
   }, [handleQuickModelSwitch])
 
@@ -666,7 +674,7 @@ function PromptInput({
                   · # for AGENTS.md
                 </Text>
                 <Text dimColor>
-                  · / for commands · shift+m to switch model · esc to undo
+                  · / for commands · option+m to switch model · esc to undo
                 </Text>
               </>
             )}
