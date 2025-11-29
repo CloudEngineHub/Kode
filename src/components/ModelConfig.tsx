@@ -191,7 +191,7 @@ export function ModelConfig({ onClose }: Props): React.ReactNode {
     [selectedIndex, menuItems, onClose, isDeleteMode, modelManager],
   )
 
-  useInput(handleInput)
+  useInput(handleInput, { isActive: !showModelSelector && !showModelListManager })
 
   // If showing ModelListManager, render it directly
   if (showModelListManager) {
