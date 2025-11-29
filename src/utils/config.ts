@@ -289,10 +289,6 @@ export function getGlobalConfig(): GlobalConfig {
   return migrateModelProfilesRemoveId(config)
 }
 
-export function getAnthropicApiKey(): null | string {
-  return process.env.ANTHROPIC_API_KEY || null
-}
-
 export function normalizeApiKeyForConfig(apiKey: string): string {
   return apiKey?.slice(-20) ?? ''
 }
@@ -671,6 +667,10 @@ export function listConfigForCLI(global: boolean): object {
 
 export function getOpenAIApiKey(): string | undefined {
   return process.env.OPENAI_API_KEY
+}
+
+export function getAnthropicApiKey(): string {
+  return process.env.ANTHROPIC_API_KEY || ''
 }
 
 // Configuration migration utility functions

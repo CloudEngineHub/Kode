@@ -85,7 +85,7 @@ export function Onboarding({ onDone }: Props): React.ReactNode {
         goToNextStep()
       }
     }
-  })
+  }, { isActive: !showModelSelector })
 
   // Define all onboarding steps
   const themeStep = (
