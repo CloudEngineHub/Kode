@@ -1,30 +1,35 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { Box, Text, useInput } from 'ink'
+import { Box, Text, useInput, useStdout } from 'ink'
 import { getTheme } from '@utils/theme'
 import { Select } from './CustomSelect/select'
 import { Newline } from 'ink'
 import { getModelManager } from '@utils/model'
 import { CardNavigator, useCardNavigation } from './CardNavigator'
+import figures from 'figures'
 
 // 共享的屏幕容器组件，避免重复边框
 function ScreenContainer({
   title,
   exitState,
   children,
+  paddingY = 1,
+  gap = 1,
 }: {
   title: string
   exitState: { pending: boolean; keyName: string }
   children: React.ReactNode
+  paddingY?: number
+  gap?: number
 }) {
   const theme = getTheme()
   return (
     <Box
       flexDirection="column"
-      gap={1}
+      gap={gap}
       borderStyle="round"
       borderColor={theme.secondaryBorder}
       paddingX={2}
-      paddingY={1}
+      paddingY={paddingY}
     >
       <Text bold>
         {title}{' '}
@@ -161,6 +166,12 @@ export function ModelSelector({
 }: Props): React.ReactNode {
   const config = getGlobalConfig()
   const theme = getTheme()
+  const { stdout } = useStdout()
+  const terminalRows = stdout?.rows ?? 24
+  const compactLayout = terminalRows <= 22
+  const tightLayout = terminalRows <= 18
+  const containerPaddingY = tightLayout ? 0 : compactLayout ? 0 : 1
+  const containerGap = tightLayout ? 0 : 1
   const onDone = () => {
     printModelConfig()
     onDoneProp()
@@ -267,6 +278,11 @@ export function ModelSelector({
     useState<number>(0)
   const [cursorOffset, setCursorOffset] = useState<number>(0)
   const [apiKeyEdited, setApiKeyEdited] = useState<boolean>(false)
+  // Menu focus state for windowed lists
+  const [providerFocusIndex, setProviderFocusIndex] = useState(0)
+  const [partnerProviderFocusIndex, setPartnerProviderFocusIndex] =
+    useState(0)
+  const [codingPlanFocusIndex, setCodingPlanFocusIndex] = useState(0)
 
   // Retry logic state
   const [fetchRetryCount, setFetchRetryCount] = useState<number>(0)
@@ -485,6 +501,29 @@ export function ModelSelector({
     return details.length > 0 ? ` (${details.join(', ')})` : ''
   }
 
+  // Layout helpers to fit within small terminals
+  const providerReservedLines = 8 + containerPaddingY * 2 + containerGap * 2
+  const partnerReservedLines = 10 + containerPaddingY * 2 + containerGap * 3
+  const codingReservedLines = partnerReservedLines
+  const clampIndex = (index: number, length: number) =>
+    length === 0 ? 0 : Math.max(0, Math.min(index, length - 1))
+
+  useEffect(() => {
+    setProviderFocusIndex(prev => clampIndex(prev, mainMenuOptions.length))
+  }, [mainMenuOptions.length])
+
+  useEffect(() => {
+    setPartnerProviderFocusIndex(prev =>
+      clampIndex(prev, partnerProviderOptions.length),
+    )
+  }, [partnerProviderOptions.length])
+
+  useEffect(() => {
+    setCodingPlanFocusIndex(prev =>
+      clampIndex(prev, codingPlanOptions.length),
+    )
+  }, [codingPlanOptions.length])
+
   function formatNumber(num: number): string {
     if (num >= 1000000) {
       return `${(num / 1000000).toFixed(1)}M`
@@ -505,9 +544,11 @@ export function ModelSelector({
   function handleProviderSelection(provider: string) {
     // Handle main menu navigation
     if (provider === 'partnerProviders') {
+      setPartnerProviderFocusIndex(0)
       navigateTo('partnerProviders')
       return
     } else if (provider === 'partnerCodingPlans') {
+      setCodingPlanFocusIndex(0)
       navigateTo('partnerCodingPlans')
       return
     } else if (provider === 'custom-anthropic') {
@@ -537,6 +578,77 @@ export function ModelSelector({
       setProviderBaseUrl(defaultBaseUrl)
       navigateTo('apiKey')
     }
+  }
+
+  /**
+   * Clamp visible list height to stay within the terminal.
+   * Prevents overflowing renders that leave stray borders when the list rerenders.
+   */
+  function getSafeVisibleOptionCount(
+    requestedCount: number,
+    optionLength: number,
+    reservedLines: number = 10,
+  ): number {
+    const rows = terminalRows
+    // Allow shrinking down to 1 item on very small terminals to avoid scroll artifacts
+    const available = Math.max(1, rows - reservedLines)
+    return Math.max(1, Math.min(requestedCount, optionLength, available))
+  }
+
+  function renderWindowedOptions(
+    options: Array<{ value: string; label: string }>,
+    focusedIndex: number,
+    maxVisible: number,
+  ) {
+    if (options.length === 0) {
+      return <Text color={theme.secondaryText}>No options available.</Text>
+    }
+
+    const visibleCount = Math.max(1, Math.min(maxVisible, options.length))
+    const half = Math.floor(visibleCount / 2)
+    const start = Math.max(
+      0,
+      Math.min(
+        focusedIndex - half,
+        Math.max(0, options.length - visibleCount),
+      ),
+    )
+    const end = Math.min(options.length, start + visibleCount)
+    const showUp = start > 0
+    const showDown = end < options.length
+
+    return (
+      <Box flexDirection="column" gap={0}>
+        {showUp && (
+          <Text color={theme.secondaryText}>
+            {figures.arrowUp} More
+          </Text>
+        )}
+        {options.slice(start, end).map((opt, idx) => {
+          const absoluteIndex = start + idx
+          const isFocused = absoluteIndex === focusedIndex
+          return (
+            <Box key={opt.value} flexDirection="row">
+              <Text color={isFocused ? theme.kode : theme.secondaryText}>
+                {isFocused ? figures.pointer : ' '}
+              </Text>
+              <Text
+                color={isFocused ? theme.text : theme.secondaryText}
+                bold={isFocused}
+              >
+                {' '}
+                {opt.label}
+              </Text>
+            </Box>
+          )
+        })}
+        {showDown && (
+          <Text color={theme.secondaryText}>
+            {figures.arrowDown} More
+          </Text>
+        )}
+      </Box>
+    )
   }
 
   // Local implementation of fetchAnthropicModels for UI
@@ -2111,6 +2223,7 @@ export function ModelSelector({
     // Special handling for submenus - they should go back to main menu
     if (currentScreen === 'partnerProviders' || currentScreen === 'partnerCodingPlans') {
       // Go back to the provider (main menu) screen
+      setProviderFocusIndex(0)
       setScreenStack(['provider'])
       return
     }
@@ -2140,6 +2253,7 @@ export function ModelSelector({
       setScreenStack(prev => prev.slice(0, -1))
     } else {
       // Fallback to provider screen
+      setProviderFocusIndex(0)
       setScreenStack(['provider'])
     }
   }
@@ -2197,6 +2311,89 @@ export function ModelSelector({
 
   // Handle input for Resource Name screen
   useInput((input, key) => {
+    // Provider main menu navigation (windowed list)
+    if (currentScreen === 'provider') {
+      if (key.upArrow) {
+        setProviderFocusIndex(prev =>
+          mainMenuOptions.length === 0
+            ? 0
+            : (prev - 1 + mainMenuOptions.length) % mainMenuOptions.length,
+        )
+        return
+      }
+      if (key.downArrow) {
+        setProviderFocusIndex(prev =>
+          mainMenuOptions.length === 0
+            ? 0
+            : (prev + 1) % mainMenuOptions.length,
+        )
+        return
+      }
+      if (key.return) {
+        const opt = mainMenuOptions[providerFocusIndex]
+        if (opt) {
+          handleProviderSelection(opt.value)
+        }
+        return
+      }
+    }
+
+    // Partner providers submenu navigation
+    if (currentScreen === 'partnerProviders') {
+      if (key.upArrow) {
+        setPartnerProviderFocusIndex(prev =>
+          partnerProviderOptions.length === 0
+            ? 0
+            : (prev - 1 + partnerProviderOptions.length) %
+              partnerProviderOptions.length,
+        )
+        return
+      }
+      if (key.downArrow) {
+        setPartnerProviderFocusIndex(prev =>
+          partnerProviderOptions.length === 0
+            ? 0
+            : (prev + 1) % partnerProviderOptions.length,
+        )
+        return
+      }
+      if (key.return) {
+        const opt = partnerProviderOptions[partnerProviderFocusIndex]
+        if (opt) {
+          handleProviderSelection(opt.value)
+        }
+        return
+      }
+    }
+
+    // Partner coding plans submenu navigation
+    if (currentScreen === 'partnerCodingPlans') {
+      if (key.upArrow) {
+        setCodingPlanFocusIndex(prev =>
+          codingPlanOptions.length === 0
+            ? 0
+            : (prev - 1 + codingPlanOptions.length) %
+              codingPlanOptions.length,
+        )
+        return
+      }
+      if (key.downArrow) {
+        setCodingPlanFocusIndex(prev =>
+          codingPlanOptions.length === 0
+            ? 0
+            : (prev + 1) % codingPlanOptions.length,
+        )
+        return
+      }
+      if (key.return) {
+        const opt = codingPlanOptions[codingPlanFocusIndex]
+        if (opt) {
+          handleProviderSelection(opt.value)
+        }
+        return
+      }
+    }
+
     // Handle API key submission on Enter
     if (currentScreen === 'apiKey' && key.return) {
       if (apiKey) {
@@ -3533,15 +3730,16 @@ export function ModelSelector({
 
   // Render Partner Providers Sub-Menu
   if (currentScreen === 'partnerProviders') {
+    const footerMarginTop = tightLayout ? 0 : 1
     return (
-      <Box flexDirection="column" gap={1}>
+      <Box flexDirection="column" gap={containerGap}>
         <Box
           flexDirection="column"
-          gap={1}
+          gap={containerGap}
           borderStyle="round"
           borderColor={theme.secondaryBorder}
           paddingX={2}
-          paddingY={1}
+          paddingY={containerPaddingY}
         >
           <Text bold>
             Partner Providers{' '}
@@ -3549,23 +3747,29 @@ export function ModelSelector({
               ? `(press ${exitState.keyName} again to exit)`
               : ''}
           </Text>
-          <Box flexDirection="column" gap={1}>
+          <Box flexDirection="column" gap={containerGap}>
             <Text bold>
               Select a partner AI provider for this model profile:
             </Text>
             <Box flexDirection="column" width={70}>
               <Text color={theme.secondaryText}>
-                Choose from official partner providers to access their models and services.
+                {compactLayout
+                  ? 'Choose an official partner provider.'
+                  : 'Choose from official partner providers to access their models and services.'}
               </Text>
             </Box>
 
-            <Select
-              options={partnerProviderOptions}
-              onChange={handleProviderSelection}
-              visibleOptionCount={20}
-            />
+            {renderWindowedOptions(
+              partnerProviderOptions,
+              partnerProviderFocusIndex,
+              getSafeVisibleOptionCount(
+                6,
+                partnerProviderOptions.length,
+                partnerReservedLines,
+              ),
+            )}
 
-            <Box marginTop={1}>
+            <Box marginTop={footerMarginTop}>
               <Text dimColor>
                 Press <Text color={theme.suggestion}>Esc</Text> to go back to
                 main menu
@@ -3579,15 +3783,16 @@ export function ModelSelector({
 
   // Render Partner Coding Plans Sub-Menu
   if (currentScreen === 'partnerCodingPlans') {
+    const footerMarginTop = tightLayout ? 0 : 1
     return (
-      <Box flexDirection="column" gap={1}>
+      <Box flexDirection="column" gap={containerGap}>
         <Box
           flexDirection="column"
-          gap={1}
+          gap={containerGap}
           borderStyle="round"
           borderColor={theme.secondaryBorder}
           paddingX={2}
-          paddingY={1}
+          paddingY={containerPaddingY}
         >
           <Text bold>
             Partner Coding Plans{' '}
@@ -3595,25 +3800,35 @@ export function ModelSelector({
               ? `(press ${exitState.keyName} again to exit)`
               : ''}
           </Text>
-          <Box flexDirection="column" gap={1}>
+          <Box flexDirection="column" gap={containerGap}>
             <Text bold>
               Select a partner coding plan for specialized programming assistance:
             </Text>
             <Box flexDirection="column" width={70}>
               <Text color={theme.secondaryText}>
-                These are specialized models optimized for coding and development tasks.
-                <Newline />
-                They require specific coding plan subscriptions from the respective providers.
+                {compactLayout
+                  ? 'Specialized coding models from partners.'
+                  : (
+                    <>
+                      These are specialized models optimized for coding and development tasks.
+                      <Newline />
+                      They require specific coding plan subscriptions from the respective providers.
+                    </>
+                  )}
               </Text>
             </Box>
 
-            <Select
-              options={codingPlanOptions}
-              onChange={handleProviderSelection}
-              visibleOptionCount={10}
-            />
+            {renderWindowedOptions(
+              codingPlanOptions,
+              codingPlanFocusIndex,
+              getSafeVisibleOptionCount(
+                5,
+                codingPlanOptions.length,
+                codingReservedLines,
+              ),
+            )}
 
-            <Box marginTop={1}>
+            <Box marginTop={footerMarginTop}>
               <Text dimColor>
                 Press <Text color={theme.suggestion}>Esc</Text> to go back to
                 main menu
@@ -3630,22 +3845,38 @@ export function ModelSelector({
     <ScreenContainer 
       title="Provider Selection" 
       exitState={exitState}
+      paddingY={containerPaddingY}
+      gap={containerGap}
       children={
-        <Box flexDirection="column" gap={1}>
+        <Box flexDirection="column" gap={containerGap}>
           <Text bold>
             Select your preferred AI provider for this model profile:
           </Text>
           <Box flexDirection="column" width={70}>
             <Text color={theme.secondaryText}>
-              Choose the provider you want to use for this model profile.
-              <Newline />
-              This will determine which models are available to you.
+              {compactLayout
+                ? 'Choose the provider to use for this profile.'
+                : (
+                  <>
+                    Choose the provider you want to use for this model profile.
+                    <Newline />
+                    This will determine which models are available to you.
+                  </>
+                )}
             </Text>
           </Box>
 
-          <Select options={mainMenuOptions} onChange={handleProviderSelection} visibleOptionCount={8} />
+          {renderWindowedOptions(
+            mainMenuOptions,
+            providerFocusIndex,
+            getSafeVisibleOptionCount(
+              5,
+              mainMenuOptions.length,
+              providerReservedLines,
+            ),
+          )}
 
-          <Box marginTop={1}>
+          <Box marginTop={tightLayout ? 0 : 1}>
             <Text dimColor>
               You can change this later by running{' '}
               <Text color={theme.suggestion}>/model</Text> again

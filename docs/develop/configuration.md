@@ -222,9 +222,10 @@ kode config list -g
 
 ### Core Variables
 
+> Anthropic environment overrides are disabled—configure Anthropic keys in Kode settings instead.
+
 ```bash
 # API Keys
-ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...
 
 # Model Selection
@@ -247,7 +248,7 @@ LOG_LEVEL=debug
 
 ### Precedence Rules
 
-Environment variables override configuration files:
+Environment variables override configuration files (Anthropic keys excluded):
 1. Check environment variable
 2. Check project configuration
 3. Check global configuration

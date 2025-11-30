@@ -568,6 +568,7 @@ export async function getCompletionWithProfile(
         'siliconflow',
         'qwen',
         'glm',
+        'glm-coding',
         'baidu-qianfan',
         'openai',
         'mistral',

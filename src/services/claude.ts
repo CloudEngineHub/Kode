@@ -469,8 +469,7 @@ export async function verifyApiKey(
   if (
     baseURL &&
     (provider === 'anthropic' ||
-      provider === 'bigdream' ||
-      provider === 'opendev')
+      provider === 'minimax-coding')
   ) {
     clientConfig.baseURL = baseURL
   }
@@ -854,10 +853,14 @@ export function getAnthropicClient(
 
   const region = getVertexRegionForModel(model)
 
+  const modelManager = getModelManager()
+  const modelProfile = modelManager.getModel('main')
+
   const defaultHeaders: { [key: string]: string } = {
     'x-app': 'cli',
     'User-Agent': USER_AGENT,
   }
+
   if (process.env.ANTHROPIC_AUTH_TOKEN) {
     defaultHeaders['Authorization'] =
       `Bearer ${process.env.ANTHROPIC_AUTH_TOKEN}`
@@ -883,10 +886,6 @@ export function getAnthropicClient(
     return client
   }
 
-  // Get appropriate API key and baseURL from ModelProfile
-  const modelManager = getModelManager()
-  const modelProfile = modelManager.getModel('main')
-
   let apiKey: string
   let baseURL: string | undefined
 
@@ -894,7 +893,6 @@ export function getAnthropicClient(
     apiKey = modelProfile.apiKey || ''
     baseURL = modelProfile.baseURL
   } else {
-    // Fallback to default anthropic if no ModelProfile
     apiKey = getAnthropicApiKey()
     baseURL = undefined
   }
@@ -1310,7 +1308,8 @@ async function queryLLMWithPromptCaching(
   if (
     provider === 'anthropic' ||
     provider === 'bigdream' ||
-    provider === 'opendev'
+    provider === 'opendev' ||
+    provider === 'minimax-coding'
   ) {
     return queryAnthropicNative(
       messages,
@@ -1375,8 +1374,7 @@ async function queryAnthropicNative(
     // 基于ModelProfile创建专用的API客户端
     if (
       modelProfile.provider === 'anthropic' ||
-      modelProfile.provider === 'bigdream' ||
-      modelProfile.provider === 'opendev'
+      modelProfile.provider === 'minimax-coding'
     ) {
       const clientConfig: any = {
         apiKey: modelProfile.apiKey,

@@ -222,9 +222,10 @@ kode config list -g
 
 ### 核心变量
 
+> 注意：Anthropic 的环境变量覆盖已禁用，请在 Kode 设置或模型配置中填写密钥。
+
 ```bash
 # API 密钥
-ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...
 
 # 模型选择
@@ -247,7 +248,7 @@ LOG_LEVEL=debug
 
 ### 优先级规则
 
-环境变量覆盖配置文件：
+环境变量覆盖配置文件（Anthropic 密钥除外）：
 1. 检查环境变量
 2. 检查项目配置
 3. 检查全局配置

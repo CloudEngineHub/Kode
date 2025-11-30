@@ -2,7 +2,7 @@ import { Box, Text, Newline } from 'ink'
 import * as React from 'react'
 import { getTheme } from '@utils/theme'
 import { PRODUCT_NAME } from '@constants/product'
-import { getAnthropicApiKey, getGlobalConfig } from '@utils/config'
+import { getGlobalConfig } from '@utils/config'
 import { getCwd } from '@utils/state'
 import { AsciiLogo } from './AsciiLogo'
 import type { WrappedClient } from '@services/mcpClient'
@@ -34,10 +34,8 @@ export function Logo({
   const modelManager = getModelManager()
   const mainModelName = modelManager.getModelName('main')
   const currentModel = mainModelName || 'No model configured'
-  const apiKey = getAnthropicApiKey()
   const hasOverrides = Boolean(
-    process.env.ANTHROPIC_API_KEY ||
-      process.env.DISABLE_PROMPT_CACHING ||
+    process.env.DISABLE_PROMPT_CACHING ||
       process.env.API_TIMEOUT_MS ||
       process.env.MAX_THINKING_TOKENS,
   )
@@ -98,12 +96,6 @@ export function Logo({
               <Box marginBottom={1}>
                 <Text color={theme.secondaryText}>Overrides (via env):</Text>
               </Box>
-              {process.env.ANTHROPIC_API_KEY && apiKey ? (
-                <Text color={theme.secondaryText}>
-                  • API Key:{' '}
-                  <Text bold>sk-ant-…{apiKey!.slice(-width + 25)}</Text>
-                </Text>
-              ) : null}
               {process.env.DISABLE_PROMPT_CACHING ? (
                 <Text color={theme.secondaryText}>
                   • Prompt caching:{' '}
@@ -122,12 +114,6 @@ export function Logo({
                 <Text color={theme.secondaryText}>
                   • Max thinking tokens:{' '}
                   <Text bold>{process.env.MAX_THINKING_TOKENS}</Text>
-                </Text>
-              ) : null}
-              {process.env.ANTHROPIC_BASE_URL ? (
-                <Text color={theme.secondaryText}>
-                  • API Base URL:{' '}
-                  <Text bold>{process.env.ANTHROPIC_BASE_URL}</Text>
                 </Text>
               ) : null}
             </Box>
