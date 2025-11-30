@@ -132,6 +132,13 @@ export function useTextInput({
   }
 
   function tryImagePaste() {
+    // For text inputs with masks (like API keys), don't try to process as image
+    // Let the system handle normal paste operations
+    if (mask) {
+      // Return cursor unchanged - let the default paste handler work
+      return cursor
+    }
+
     const base64Image = getImageFromClipboard()
     if (base64Image === null) {
       if (process.platform !== 'darwin') {
@@ -222,7 +229,7 @@ export function useTextInput({
     if (key.tab) {
       return // Skip Tab key processing - let completion system handle it
     }
-    
+
     // Direct handling for backspace or delete (which is being detected as delete)
     if (
       key.backspace ||
@@ -232,6 +239,20 @@ export function useTextInput({
       input === '\x08'
     ) {
       const nextCursor = cursor.backspace()
+      if (!cursor.equals(nextCursor)) {
+        setOffset(nextCursor.offset)
+        if (cursor.text !== nextCursor.text) {
+          onChange(nextCursor.text)
+        }
+      }
+      return
+    }
+
+    // Handle paste operations - process large input strings more efficiently
+    // This prevents cursor position issues when pasting into masked fields
+    if (!key.ctrl && !key.meta && input.length > 1) {
+      // Likely a paste operation
+      const nextCursor = cursor.insert(input)
       if (!cursor.equals(nextCursor)) {
         setOffset(nextCursor.offset)
         if (cursor.text !== nextCursor.text) {

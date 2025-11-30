@@ -56,6 +56,10 @@ Kode is a powerful AI assistant that lives in your terminal. It can understand y
 - 🚀 **Command Execution** - Run shell commands and see results in real-time
 - 🛠️ **Workflow Automation** - Handle complex development tasks with simple prompts
 
+### Authoring Comfort
+- `Ctrl+G` opens your message in your preferred editor (respects `$EDITOR`/`$VISUAL`; falls back to code/nano/vim/notepad) and returns the text to the prompt when you close it.
+- `Shift+Enter` inserts a newline inside the prompt without sending; plain Enter submits. `Ctrl+M` switches the active model.
+
 ### 🎯 Advanced Intelligent Completion System
 Our state-of-the-art completion system provides unparalleled coding assistance:
 

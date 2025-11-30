@@ -9,7 +9,7 @@ import { logError, getInMemoryErrors } from '@utils/log'
 import { env } from '@utils/env'
 import { getGitState, getIsGit, GitRepoState } from '@utils/git'
 import { useTerminalSize } from '@hooks/useTerminalSize'
-import { getAnthropicApiKey, getGlobalConfig } from '@utils/config'
+import { getGlobalConfig } from '@utils/config'
 import { USER_AGENT } from '@utils/http'
 import { PRODUCT_NAME } from '@constants/product'
 import { API_ERROR_MESSAGE_PREFIX, queryQuick } from '@services/claude'
@@ -325,11 +325,6 @@ async function submitFeedback(
 ): Promise<{ success: boolean; feedbackId?: string }> {
   return { success: true, feedbackId: '123' }
   // try {
-  //   const apiKey = getAnthropicApiKey()
-  //   if (!apiKey) {
-  //     return { success: false }
-  //   }
-
   //   const response = await fetch(
   //     'https://api.anthropic.com/api/claude_cli_feedback',
   //     {

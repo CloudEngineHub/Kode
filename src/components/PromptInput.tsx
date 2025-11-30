@@ -18,6 +18,7 @@ import { getTheme } from '@utils/theme'
 import { getModelManager, reloadModelManager } from '@utils/model'
 import { saveGlobalConfig } from '@utils/config'
 import { setTerminalTitle } from '@utils/terminal'
+import { launchExternalEditor } from '@utils/externalEditor'
 import terminalSetup, {
   isShiftEnterKeyBindingInstalled,
   handleHashCommand,
@@ -141,6 +142,7 @@ function PromptInput({
   const [placeholder, setPlaceholder] = useState('')
   const [cursorOffset, setCursorOffset] = useState<number>(input.length)
   const [pastedText, setPastedText] = useState<string | null>(null)
+  const [isEditingExternally, setIsEditingExternally] = useState(false)
 
   // Permission context for mode management
   const { cycleMode, currentMode } = usePermissionContext()
@@ -531,26 +533,76 @@ function PromptInput({
     }
 
     return false // Not handled, allow other hooks
-  })
+  }, { isActive: !isEditingExternally })
+
+  const handleExternalEdit = useCallback(async () => {
+    if (isEditingExternally || isLoading || isDisabled) return
+    setIsEditingExternally(true)
+    setMessage({ show: true, text: 'Opening external editor...' })
+
+    const result = await launchExternalEditor(input)
+    if (result.text !== null) {
+      onInputChange(result.text)
+      setCursorOffset(result.text.length)
+      setMessage({
+        show: true,
+        text: `Loaded from ${result.editorLabel ?? 'editor'}`,
+      })
+      setTimeout(() => setMessage({ show: false }), 3000)
+    } else {
+      setMessage({
+        show: true,
+        text:
+          result.error?.message ??
+          'External editor unavailable. Set $EDITOR or install code/nano/vim/notepad.',
+      })
+      setTimeout(() => setMessage({ show: false }), 4000)
+    }
+
+    setIsEditingExternally(false)
+  }, [
+    input,
+    isEditingExternally,
+    isLoading,
+    isDisabled,
+    onInputChange,
+    setCursorOffset,
+    setMessage,
+  ])
+
+  const insertNewlineAtCursor = useCallback(() => {
+    const next = input.slice(0, cursorOffset) + '\n' + input.slice(cursorOffset)
+    onInputChange(next)
+    setCursorOffset(cursorOffset + 1)
+  }, [cursorOffset, input, onInputChange])
 
   // Handle special key combinations before character input
   const handleSpecialKey = useCallback((inputChar: string, key: any): boolean => {
-    // Check for Option+M (Alt+M) for model switching
-    // On macOS, Option+M typically produces 'µ' character
-    // On other systems, Alt+M might come through differently
-    if ((key.meta || key.option) && (inputChar === 'm' || inputChar === 'M')) {
+    if (isEditingExternally) return true
+
+    // Ctrl+M switches model (preferred), also allow Option/Alt+M and µ on macOS
+    if (
+      (key.ctrl && (key.return || inputChar === 'm' || inputChar === 'M')) ||
+      ((key.option || key.meta) && (inputChar === 'm' || inputChar === 'M' || inputChar === 'µ'))
+    ) {
       handleQuickModelSwitch()
-      return true // Prevent character from being input
+      return true
     }
 
-    // Also check for the µ character which is what Option+M produces on macOS
-    if (inputChar === 'µ') {
-      handleQuickModelSwitch()
-      return true // Prevent µ from being input
+    // Shift/Meta/Option + Enter => insert newline, do not submit
+    if (key.return && (key.shift || key.meta || key.option)) {
+      insertNewlineAtCursor()
+      return true
+    }
+
+    // Ctrl+G -> open external editor
+    if (key.ctrl && (inputChar === 'g' || inputChar === 'G')) {
+      void handleExternalEdit()
+      return true
     }
 
     return false // Not handled, allow normal processing
-  }, [handleQuickModelSwitch])
+  }, [handleQuickModelSwitch, handleExternalEdit, isEditingExternally])
 
   const textInputColumns = useTerminalSize().columns - 6
   const tokenUsage = useMemo(() => countTokens(messages), [messages])
@@ -624,6 +676,7 @@ function PromptInput({
         <Box paddingRight={1}>
           <TextInput
             multiline
+            focus={!isEditingExternally}
             onSubmit={onSubmit}
             onChange={onChange}
             value={input}
@@ -636,7 +689,7 @@ function PromptInput({
             onMessage={(show, text) => setMessage({ show, text })}
             onImagePaste={onImagePaste}
             columns={textInputColumns}
-            isDimmed={isDisabled || isLoading}
+            isDimmed={isDisabled || isLoading || isEditingExternally}
             disableCursorMovementForUpDownKeys={completionActive}
             cursorOffset={cursorOffset}
             onChangeCursorOffset={setCursorOffset}
@@ -667,18 +720,18 @@ function PromptInput({
                 >
                   ! for bash mode
                 </Text>
-                <Text
-                  color={mode === 'koding' ? theme.noting : undefined}
-                  dimColor={mode !== 'koding'}
-                >
-                  · # for AGENTS.md
-                </Text>
-                <Text dimColor>
-                  · / for commands · option+m to switch model · esc to undo
-                </Text>
-              </>
-            )}
-          </Box>
+              <Text
+                color={mode === 'koding' ? theme.noting : undefined}
+                dimColor={mode !== 'koding'}
+              >
+                · # for AGENTS.md
+              </Text>
+              <Text dimColor>
+                  · / for commands · ctrl+m (or option+m) to switch model · ctrl+g edit in editor · shift+⏎ for newline · esc to undo
+              </Text>
+            </>
+          )}
+        </Box>
           <SentryErrorBoundary children={
             <Box justifyContent="flex-end" gap={1}>
               {!debug &&

@@ -201,7 +201,7 @@ class AnthropicProvider implements AIProvider {
   constructor(profile: ModelProfile) {
     this.profile = profile
     this.client = new Anthropic({
-      apiKey: profile.config.apiKey || process.env.ANTHROPIC_API_KEY,
+      apiKey: profile.config.apiKey,
       baseURL: profile.config.baseURL,
       defaultHeaders: profile.config.headers,
       timeout: profile.config.timeout

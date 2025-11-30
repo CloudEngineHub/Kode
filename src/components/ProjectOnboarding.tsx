@@ -188,7 +188,7 @@ export default function ProjectOnboarding({
 
       {workspaceDir === homedir() && (
         <Text color={getTheme().warning}>
-          Note: You have launched <Text bold>anon-code</Text> in your home
+          Note: You have launched <Text bold>Kode-cli</Text> in your home
           directory. For the best experience, launch it in a project directory
           instead.
         </Text>

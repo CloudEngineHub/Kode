@@ -1,6 +1,5 @@
 import { useCallback, useState } from 'react'
 import { verifyApiKey } from '@services/claude'
-import { getAnthropicApiKey } from '@utils/config'
 
 export type VerificationStatus =
   | 'loading'
@@ -16,22 +15,12 @@ export type ApiKeyVerificationResult = {
 }
 
 export function useApiKeyVerification(): ApiKeyVerificationResult {
-  // const [status, setStatus] = useState<VerificationStatus>(() => {
-  //   const apiKey = getAnthropicApiKey()
-  //   return apiKey ? 'loading' : 'missing'
-  // })
+  // const [status, setStatus] = useState<VerificationStatus>(() => 'missing')
   // const [error, setError] = useState<Error | null>(null)
 
   // const verify = useCallback(async (): Promise<void> => {
   //   if (isDefaultApiKey()) {
   //     setStatus('valid')
-  //     return
-  //   }
-
-  //   const apiKey = getAnthropicApiKey()
-  //   if (!apiKey) {
-  //     const newStatus = 'missing' as const
-  //     setStatus(newStatus)
   //     return
   //   }
 
