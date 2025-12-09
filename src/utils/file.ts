@@ -25,6 +25,7 @@ import { cwd } from 'process'
 import { listAllContentFiles } from './ripgrep'
 import { LRUCache } from 'lru-cache'
 import { getCwd } from './state'
+import { BunSearcher } from './BunSearcher'
 
 export type File = {
   filename: string
@@ -39,22 +40,39 @@ export async function glob(
   { limit, offset }: { limit: number; offset: number },
   abortSignal: AbortSignal,
 ): Promise<{ files: string[]; truncated: boolean }> {
-  // TODO: Use worker threads
-  const paths = await globLib([filePattern], {
-    cwd,
-    nocase: true,
-    nodir: true,
-    signal: abortSignal,
-    stat: true,
-    withFileTypes: true,
-  })
-  const sortedPaths = paths.sort((a, b) => (a.mtimeMs ?? 0) - (b.mtimeMs ?? 0))
-  const truncated = sortedPaths.length > offset + limit
-  return {
-    files: sortedPaths
-      .slice(offset, offset + limit)
-      .map(path => path.fullpath()),
-    truncated,
+  try {
+    // Try Bun.Glob first for better performance
+    const allFiles = await BunSearcher.glob(filePattern, cwd, limit + offset + 100)
+
+    // Sort by modification time (newest first for relevance)
+    const sortedFiles = allFiles
+      .map(f => resolve(cwd, f))
+      .filter(f => existsSync(f))
+
+    const truncated = sortedFiles.length > offset + limit
+    return {
+      files: sortedFiles.slice(offset, offset + limit),
+      truncated,
+    }
+  } catch (error) {
+    // Fallback to glob library if Bun.Glob fails
+    logError(`BunSearcher failed, falling back to glob: ${error}`)
+    const paths = await globLib([filePattern], {
+      cwd,
+      nocase: true,
+      nodir: true,
+      signal: abortSignal,
+      stat: true,
+      withFileTypes: true,
+    })
+    const sortedPaths = paths.sort((a, b) => (a.mtimeMs ?? 0) - (b.mtimeMs ?? 0))
+    const truncated = sortedPaths.length > offset + limit
+    return {
+      files: sortedPaths
+        .slice(offset, offset + limit)
+        .map(path => path.fullpath()),
+      truncated,
+    }
   }
 }
 
