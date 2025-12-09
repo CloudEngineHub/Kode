@@ -1,4 +1,4 @@
-import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync } from 'fs'
+import { lstatSync, mkdirSync, readdirSync } from 'fs'
 import { Box, Text } from 'ink'
 import { join } from 'path'
 import * as React from 'react'
@@ -7,6 +7,7 @@ import { FallbackToolUseRejectedMessage } from '@components/FallbackToolUseRejec
 import { Tool } from '@tool'
 import { MEMORY_DIR } from '@utils/env'
 import { resolveAgentId } from '@utils/agentStorage'
+import { readFileBun, fileExistsBun } from '@utils/BunFile'
 import { DESCRIPTION, PROMPT } from './prompt'
 
 const inputSchema = z.strictObject({
@@ -71,7 +72,7 @@ export const MemoryReadTool = {
       if (!fullPath.startsWith(agentMemoryDir)) {
         return { result: false, message: 'Invalid memory file path' }
       }
-      if (!existsSync(fullPath)) {
+      if (!fileExistsBun(fullPath)) {
         return { result: false, message: 'Memory file does not exist' }
       }
     }
@@ -85,10 +86,13 @@ export const MemoryReadTool = {
     // If a specific file is requested, return its contents
     if (file_path) {
       const fullPath = join(agentMemoryDir, file_path)
-      if (!existsSync(fullPath)) {
+      if (!fileExistsBun(fullPath)) {
         throw new Error('Memory file does not exist')
       }
-      const content = readFileSync(fullPath, 'utf-8')
+      const content = await readFileBun(fullPath)
+      if (!content) {
+        throw new Error('Could not read memory file')
+      }
       yield {
         type: 'result',
         data: {
@@ -107,7 +111,7 @@ export const MemoryReadTool = {
       .join('\n')
 
     const indexPath = join(agentMemoryDir, 'index.md')
-    const index = existsSync(indexPath) ? readFileSync(indexPath, 'utf-8') : ''
+    const index = fileExistsBun(indexPath) ? await readFileBun(indexPath) : ''
 
     const quotes = "'''"
     const content = `Here are the contents of the agent memory file, \`${indexPath}\`:

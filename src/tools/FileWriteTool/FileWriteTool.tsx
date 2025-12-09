@@ -1,5 +1,5 @@
 import { Hunk } from 'diff'
-import { existsSync, mkdirSync, readFileSync, statSync } from 'fs'
+import { mkdirSync, statSync } from 'fs'
 import { Box, Text } from 'ink'
 import { EOL } from 'os'
 import { dirname, extname, isAbsolute, relative, resolve, sep } from 'path'
@@ -18,6 +18,7 @@ import {
   detectRepoLineEndings,
   writeTextContent,
 } from '@utils/file'
+import { readFileBun, fileExistsBun } from '@utils/BunFile'
 import { logError } from '@utils/log'
 import { getCwd } from '@utils/state'
 import { getTheme } from '@utils/theme'
@@ -67,7 +68,7 @@ export const FileWriteTool = {
   renderToolUseMessage(input, { verbose }) {
     return `file_path: ${verbose ? input.file_path : relative(getCwd(), input.file_path)}`
   },
-  renderToolUseRejectedMessage({ file_path, content }: any = {}, { columns, verbose }: any = {}) {
+  async renderToolUseRejectedMessage({ file_path, content }: any = {}, { columns, verbose }: any = {}) {
     try {
       if (!file_path) {
         return <FallbackToolUseRejectedMessage />
@@ -75,9 +76,9 @@ export const FileWriteTool = {
       const fullFilePath = isAbsolute(file_path)
         ? file_path
         : resolve(getCwd(), file_path)
-      const oldFileExists = existsSync(fullFilePath)
+      const oldFileExists = fileExistsBun(fullFilePath)
       const enc = oldFileExists ? detectFileEncoding(fullFilePath) : 'utf-8'
-      const oldContent = oldFileExists ? readFileSync(fullFilePath, enc) : null
+      const oldContent = oldFileExists ? await readFileBun(fullFilePath) : null
       const type = oldContent ? 'update' : 'create'
       const patch = getPatch({
         filePath: file_path,
@@ -175,7 +176,7 @@ export const FileWriteTool = {
     const fullFilePath = isAbsolute(file_path)
       ? file_path
       : resolve(getCwd(), file_path)
-    if (!existsSync(fullFilePath)) {
+    if (!fileExistsBun(fullFilePath)) {
       return { result: true }
     }
 
@@ -206,9 +207,9 @@ export const FileWriteTool = {
       ? file_path
       : resolve(getCwd(), file_path)
     const dir = dirname(fullFilePath)
-    const oldFileExists = existsSync(fullFilePath)
+    const oldFileExists = fileExistsBun(fullFilePath)
     const enc = oldFileExists ? detectFileEncoding(fullFilePath) : 'utf-8'
-    const oldContent = oldFileExists ? readFileSync(fullFilePath, enc) : null
+    const oldContent = oldFileExists ? await readFileBun(fullFilePath) : null
 
     const endings = oldFileExists
       ? detectLineEndings(fullFilePath)

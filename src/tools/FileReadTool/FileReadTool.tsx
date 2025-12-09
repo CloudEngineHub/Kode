@@ -1,5 +1,5 @@
 import { ImageBlockParam } from '@anthropic-ai/sdk/resources/index.mjs'
-import { statSync } from 'node:fs'
+import { statSync } from 'fs'
 import { Box, Text } from 'ink'
 import * as path from 'node:path'
 import { extname, relative } from 'node:path'
@@ -25,6 +25,7 @@ import {
 import { DESCRIPTION, PROMPT } from './prompt'
 import { hasReadPermission } from '@utils/permissions/filesystem'
 import { secureFileService } from '@utils/secureFile'
+import { readFileBun, fileExistsBun, getFileSizeBun } from '@utils/BunFile'
 
 const MAX_LINES_TO_RENDER = 5
 const MAX_OUTPUT_SIZE = 0.25 * 1024 * 1024 // 0.25MB in bytes

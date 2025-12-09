@@ -1,6 +1,6 @@
 import { isAbsolute, resolve } from 'path'
 import { getCwd } from '@utils/state'
-import { readFileSync } from 'fs'
+import { readFileBun, fileExistsBun } from '@utils/BunFile'
 import { detectFileEncoding } from '@utils/file'
 import { type Hunk } from 'diff'
 import { getPatch } from '@utils/diff'
@@ -9,11 +9,11 @@ import { getPatch } from '@utils/diff'
  * Applies an edit to a file and returns the patch and updated file.
  * Does not write the file to disk.
  */
-export function applyEdit(
+export async function applyEdit(
   file_path: string,
   old_string: string,
   new_string: string,
-): { patch: Hunk[]; updatedFile: string } {
+): Promise<{ patch: Hunk[]; updatedFile: string }> {
   const fullFilePath = isAbsolute(file_path)
     ? file_path
     : resolve(getCwd(), file_path)
@@ -27,7 +27,11 @@ export function applyEdit(
   } else {
     // Edit existing file
     const enc = detectFileEncoding(fullFilePath)
-    originalFile = readFileSync(fullFilePath, enc)
+    const fileContent = await readFileBun(fullFilePath)
+    if (!fileContent) {
+      throw new Error('Could not read file')
+    }
+    originalFile = fileContent
     if (new_string === '') {
       if (
         !old_string.endsWith('\n') &&

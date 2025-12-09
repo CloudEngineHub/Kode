@@ -1,5 +1,5 @@
 import { Hunk } from 'diff'
-import { existsSync, mkdirSync, readFileSync, statSync } from 'fs'
+import { mkdirSync, statSync } from 'fs'
 import { Box, Text } from 'ink'
 import { dirname, isAbsolute, relative, resolve, sep } from 'path'
 import * as React from 'react'
@@ -16,6 +16,7 @@ import {
   findSimilarFile,
   writeTextContent,
 } from '@utils/file'
+import { readFileBun, fileExistsBun } from '@utils/BunFile'
 import { logError } from '@utils/log'
 import { getCwd } from '@utils/state'
 import { getTheme } from '@utils/theme'
@@ -75,7 +76,7 @@ export const FileEditTool = {
       />
     )
   },
-  renderToolUseRejectedMessage(
+  async renderToolUseRejectedMessage(
     { file_path, old_string, new_string }: any = {},
     { columns, verbose }: any = {},
   ) {
@@ -83,7 +84,7 @@ export const FileEditTool = {
       if (!file_path) {
         return <FallbackToolUseRejectedMessage />
       }
-      const { patch } = applyEdit(file_path, old_string, new_string)
+      const { patch } = await applyEdit(file_path, old_string, new_string)
       return (
         <Box flexDirection="column">
           <Text>
@@ -139,20 +140,20 @@ export const FileEditTool = {
       ? file_path
       : resolve(getCwd(), file_path)
 
-    if (existsSync(fullFilePath) && old_string === '') {
+    if (fileExistsBun(fullFilePath) && old_string === '') {
       return {
         result: false,
         message: 'Cannot create new file - file already exists.',
       }
     }
 
-    if (!existsSync(fullFilePath) && old_string === '') {
+    if (!fileExistsBun(fullFilePath) && old_string === '') {
       return {
         result: true,
       }
     }
 
-    if (!existsSync(fullFilePath)) {
+    if (!fileExistsBun(fullFilePath)) {
       // Try to find a similar file with a different extension
       const similarFilename = findSimilarFile(fullFilePath)
       let message = 'File does not exist.'
@@ -199,7 +200,16 @@ export const FileEditTool = {
     }
 
     const enc = detectFileEncoding(fullFilePath)
-    const file = readFileSync(fullFilePath, enc)
+    const file = await readFileBun(fullFilePath)
+    if (!file) {
+      return {
+        result: false,
+        message: 'Could not read file.',
+        meta: {
+          isFilePathAbsolute: String(isAbsolute(file_path)),
+        },
+      }
+    }
     if (!file.includes(old_string)) {
       return {
         result: false,
@@ -224,21 +234,21 @@ export const FileEditTool = {
     return { result: true }
   },
   async *call({ file_path, old_string, new_string }, { readFileTimestamps }) {
-    const { patch, updatedFile } = applyEdit(file_path, old_string, new_string)
+    const { patch, updatedFile } = await applyEdit(file_path, old_string, new_string)
 
     const fullFilePath = isAbsolute(file_path)
       ? file_path
       : resolve(getCwd(), file_path)
     const dir = dirname(fullFilePath)
     mkdirSync(dir, { recursive: true })
-    const enc = existsSync(fullFilePath)
+    const enc = fileExistsBun(fullFilePath)
       ? detectFileEncoding(fullFilePath)
       : 'utf8'
-    const endings = existsSync(fullFilePath)
+    const endings = fileExistsBun(fullFilePath)
       ? detectLineEndings(fullFilePath)
       : 'LF'
-    const originalFile = existsSync(fullFilePath)
-      ? readFileSync(fullFilePath, enc)
+    const originalFile = fileExistsBun(fullFilePath)
+      ? await readFileBun(fullFilePath)
       : ''
     writeTextContent(fullFilePath, updatedFile, enc, endings)
 

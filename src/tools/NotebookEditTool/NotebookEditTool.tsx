@@ -1,4 +1,3 @@
-import { existsSync, readFileSync } from 'fs'
 import { Box, Text } from 'ink'
 import { extname, isAbsolute, relative, resolve } from 'path'
 import * as React from 'react'
@@ -12,6 +11,7 @@ import {
   detectLineEndings,
   writeTextContent,
 } from '@utils/file'
+import { readFileBun, fileExistsBun } from '@utils/BunFile'
 import { safeParseJSON } from '@utils/json'
 import { getCwd } from '@utils/state'
 import { DESCRIPTION, PROMPT } from './prompt'
@@ -112,7 +112,7 @@ export const NotebookEditTool = {
       ? notebook_path
       : resolve(getCwd(), notebook_path)
 
-    if (!existsSync(fullPath)) {
+    if (!fileExistsBun(fullPath)) {
       return {
         result: false,
         message: 'Notebook file does not exist.',
@@ -153,7 +153,13 @@ export const NotebookEditTool = {
     }
 
     const enc = detectFileEncoding(fullPath)
-    const content = readFileSync(fullPath, enc)
+    const content = await readFileBun(fullPath)
+    if (!content) {
+      return {
+        result: false,
+        message: 'Could not read notebook file.',
+      }
+    }
     const notebook = safeParseJSON(content) as NotebookContent | null
     if (!notebook) {
       return {
@@ -192,7 +198,10 @@ export const NotebookEditTool = {
 
     try {
       const enc = detectFileEncoding(fullPath)
-      const content = readFileSync(fullPath, enc)
+      const content = await readFileBun(fullPath)
+      if (!content) {
+        throw new Error('Could not read notebook file')
+      }
       const notebook = JSON.parse(content) as NotebookContent
       const language = notebook.metadata.language_info?.name ?? 'python'
 

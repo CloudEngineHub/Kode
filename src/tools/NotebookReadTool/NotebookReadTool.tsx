@@ -3,7 +3,6 @@ import type {
   TextBlockParam,
 } from '@anthropic-ai/sdk/resources/index.mjs'
 
-import { existsSync, readFileSync } from 'fs'
 import { Text } from 'ink'
 import { extname, isAbsolute, relative, resolve } from 'path'
 import * as React from 'react'
@@ -22,6 +21,7 @@ import {
 import { formatOutput } from '@tools/BashTool/utils'
 import { getCwd } from '@utils/state'
 import { findSimilarFile } from '@utils/file'
+import { readFileBun, fileExistsBun } from '@utils/BunFile'
 import { DESCRIPTION, PROMPT } from './prompt'
 import { hasReadPermission } from '@utils/permissions/filesystem'
 
@@ -66,7 +66,7 @@ export const NotebookReadTool = {
       ? notebook_path
       : resolve(getCwd(), notebook_path)
 
-    if (!existsSync(fullFilePath)) {
+    if (!fileExistsBun(fullFilePath)) {
       // Try to find a similar file with a different extension
       const similarFilename = findSimilarFile(fullFilePath)
       let message = 'File does not exist.'
@@ -112,7 +112,10 @@ export const NotebookReadTool = {
       ? notebook_path
       : resolve(getCwd(), notebook_path)
 
-    const content = readFileSync(fullPath, 'utf-8')
+    const content = await readFileBun(fullPath)
+    if (!content) {
+      throw new Error('Could not read notebook file')
+    }
     const notebook = JSON.parse(content) as NotebookContent
     const language = notebook.metadata.language_info?.name ?? 'python'
     const cells = notebook.cells.map((cell, index) =>

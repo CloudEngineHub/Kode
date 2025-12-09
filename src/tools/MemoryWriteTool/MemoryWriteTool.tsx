@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'fs'
+import { mkdirSync } from 'fs'
 import { Box, Text } from 'ink'
 import { dirname, join } from 'path'
 import * as React from 'react'
@@ -7,6 +7,7 @@ import { FallbackToolUseRejectedMessage } from '@components/FallbackToolUseRejec
 import { Tool } from '@tool'
 import { MEMORY_DIR } from '@utils/env'
 import { resolveAgentId } from '@utils/agentStorage'
+import { writeFileBun } from '@utils/BunFile'
 import { recordFileEdit } from '@services/fileFreshness'
 import { DESCRIPTION, PROMPT } from './prompt'
 
@@ -74,7 +75,7 @@ export const MemoryWriteTool = {
     const agentMemoryDir = join(MEMORY_DIR, 'agents', agentId)
     const fullPath = join(agentMemoryDir, file_path)
     mkdirSync(dirname(fullPath), { recursive: true })
-    writeFileSync(fullPath, content, 'utf-8')
+    await writeFileBun(fullPath, content)
 
     // Record Agent edit operation for file freshness tracking
     recordFileEdit(fullPath, content)

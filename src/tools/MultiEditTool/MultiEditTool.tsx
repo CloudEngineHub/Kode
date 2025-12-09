@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, statSync } from 'fs'
+import { mkdirSync, statSync } from 'fs'
 import { Box, Text } from 'ink'
 import { dirname, isAbsolute, relative, resolve, sep } from 'path'
 import * as React from 'react'
@@ -14,6 +14,7 @@ import {
   findSimilarFile,
   writeTextContent,
 } from '@utils/file'
+import { readFileBun, fileExistsBun } from '@utils/BunFile'
 import { logError } from '@utils/log'
 import { getCwd } from '@utils/state'
 import { getTheme } from '@utils/theme'
@@ -163,9 +164,9 @@ export const MultiEditTool = {
     }
 
     // For new files, check parent directory exists
-    if (!existsSync(normalizedPath)) {
+    if (!fileExistsBun(normalizedPath)) {
       const parentDir = dirname(normalizedPath)
-      if (!existsSync(parentDir)) {
+      if (!fileExistsBun(parentDir)) {
         return {
           result: false,
           errorCode: 2,
@@ -227,7 +228,14 @@ export const MultiEditTool = {
         }
       }
 
-      const currentContent = readFileSync(normalizedPath, 'utf-8')
+      const currentContent = await readFileBun(normalizedPath)
+      if (!currentContent) {
+        return {
+          result: false,
+          errorCode: 11,
+          message: 'Could not read file.',
+        }
+      }
       for (let i = 0; i < edits.length; i++) {
         const edit = edits[i]
         if (
@@ -271,7 +279,7 @@ export const MultiEditTool = {
     try {
       // Read current file content (or empty for new files)
       let currentContent = ''
-      let fileExists = existsSync(filePath)
+      let fileExists = fileExistsBun(filePath)
 
       if (fileExists) {
         const encoding = detectFileEncoding(filePath)
@@ -283,11 +291,20 @@ export const MultiEditTool = {
           }
           return
         }
-        currentContent = readFileSync(filePath, 'utf-8')
+        const content = await readFileBun(filePath)
+        if (!content) {
+          yield {
+            type: 'result',
+            data: 'Error: Could not read file',
+            resultForAssistant: 'Error: Could not read file',
+          }
+          return
+        }
+        currentContent = content
       } else {
         // For new files, ensure parent directory exists
         const parentDir = dirname(filePath)
-        if (!existsSync(parentDir)) {
+        if (!fileExistsBun(parentDir)) {
           mkdirSync(parentDir, { recursive: true })
         }
       }
