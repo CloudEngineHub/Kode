@@ -1,6 +1,5 @@
 import { existsSync } from 'fs'
 import { isAbsolute, resolve } from 'path'
-import { $ } from 'bun'
 import { logError } from './log'
 
 type ExecResult = {
@@ -14,11 +13,9 @@ type ExecResult = {
  * BunShell - Modern shell implementation using Bun's native shell
  *
  * Advantages over PersistentShell:
- * - No external bash dependency (Windows compatible out-of-box)
- * - Cross-platform by default (Bun handles platform differences)
+ * - Cross-platform (auto-detects sh/cmd)
  * - Simpler implementation (~150 lines vs 550 lines)
  * - No temporary file IPC overhead
- * - No process spawning complexity
  * - Faster execution (no shell startup cost per command)
  */
 export class BunShell {
@@ -48,6 +45,16 @@ export class BunShell {
   }
 
   /**
+   * Get shell command for current platform
+   */
+  private getShellCommand(command: string): string[] {
+    if (process.platform === 'win32') {
+      return ['cmd', '/c', command]
+    }
+    return ['sh', '-c', command]
+  }
+
+  /**
    * Execute a command in the current working directory
    *
    * @param command - The shell command to execute
@@ -67,7 +74,6 @@ export class BunShell {
 
     // Create a new AbortController that combines timeout and external signal
     this.abortController = new AbortController()
-    const { signal } = this.abortController
 
     // Handle external abort signal
     const handleAbort = () => {
@@ -85,19 +91,26 @@ export class BunShell {
       this.abortController?.abort()
     }, commandTimeout)
 
+    // Track interval for cleanup
+    let checkInterval: ReturnType<typeof setInterval> | null = null
+
     try {
-      // Bun's shell function handles cross-platform shell differences automatically
-      // It uses cmd.exe on Windows and sh/bash on Unix-like systems
+      // Cross-platform shell command
+      const shellCmd = this.getShellCommand(command)
       const proc = Bun.spawn({
-        cmd: ['sh', '-c', command],
+        cmd: shellCmd,
         cwd: this.cwd,
         stdio: ['pipe', 'pipe', 'pipe'],
       })
 
-      // Set up timeout signal handling
-      const timeoutPromise = new Promise<ExecResult>(() => {})
       const commandPromise = proc.exited.then(
         async () => {
+          // Clear interval when command completes normally
+          if (checkInterval) {
+            clearInterval(checkInterval)
+            checkInterval = null
+          }
+
           const stdout = await Bun.readableStreamToText(proc.stdout)
           const stderr = await Bun.readableStreamToText(proc.stderr)
 
@@ -116,9 +129,12 @@ export class BunShell {
       const result = await Promise.race([
         commandPromise,
         new Promise<ExecResult>((resolve) => {
-          const checkInterval = setInterval(() => {
+          checkInterval = setInterval(() => {
             if (this.commandInterrupted) {
-              clearInterval(checkInterval)
+              if (checkInterval) {
+                clearInterval(checkInterval)
+                checkInterval = null
+              }
               proc.kill()
               resolve({
                 stdout: '',
@@ -132,9 +148,19 @@ export class BunShell {
       ])
 
       clearTimeout(timeoutId)
+      // Ensure interval is cleaned up
+      if (checkInterval) {
+        clearInterval(checkInterval)
+        checkInterval = null
+      }
       return result
     } catch (error) {
       clearTimeout(timeoutId)
+      // Ensure interval is cleaned up on error
+      if (checkInterval) {
+        clearInterval(checkInterval)
+        checkInterval = null
+      }
 
       // Handle syntax errors and other execution failures
       const errorStr = error instanceof Error

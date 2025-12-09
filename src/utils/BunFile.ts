@@ -7,6 +7,7 @@
  * - Better memory efficiency
  */
 
+import { existsSync } from 'fs'
 import { logError } from './log'
 
 /**
@@ -15,6 +16,10 @@ import { logError } from './log'
  */
 export async function readFileBun(filepath: string): Promise<string | null> {
   try {
+    // Check if file exists first (Bun.file doesn't throw for non-existent files)
+    if (!existsSync(filepath)) {
+      return null
+    }
     const file = Bun.file(filepath)
     return await file.text()
   } catch (error) {
@@ -41,22 +46,22 @@ export async function writeFileBun(
 }
 
 /**
- * Check if file exists using Bun.file()
+ * Check if file exists
+ * Uses Node.js existsSync for reliable detection (Bun.file doesn't distinguish)
  */
 export function fileExistsBun(filepath: string): boolean {
-  try {
-    const file = Bun.file(filepath)
-    return file.size > 0 || file.size === 0 // Both cases mean file exists
-  } catch {
-    return false
-  }
+  return existsSync(filepath)
 }
 
 /**
  * Get file size using Bun.file()
+ * Returns 0 if file doesn't exist
  */
 export async function getFileSizeBun(filepath: string): Promise<number> {
   try {
+    if (!existsSync(filepath)) {
+      return 0
+    }
     const file = Bun.file(filepath)
     return file.size
   } catch (error) {
@@ -74,6 +79,9 @@ export async function readPartialFileBun(
   maxBytes?: number,
 ): Promise<string | null> {
   try {
+    if (!existsSync(filepath)) {
+      return null
+    }
     const file = Bun.file(filepath)
     if (maxBytes && file.size > maxBytes) {
       // Only read first maxBytes
