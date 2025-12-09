@@ -1,5 +1,6 @@
 import { existsSync } from 'fs'
 import { isAbsolute, resolve } from 'path'
+import { $ } from 'bun'
 import { logError } from './log'
 
 type ExecResult = {
@@ -10,13 +11,12 @@ type ExecResult = {
 }
 
 /**
- * BunShell - Modern shell implementation using Bun's native shell
+ * BunShell - Modern shell implementation using Bun's native $ shell
  *
- * Advantages over PersistentShell:
- * - Cross-platform (auto-detects sh/cmd)
- * - Simpler implementation (~150 lines vs 550 lines)
- * - No temporary file IPC overhead
- * - Faster execution (no shell startup cost per command)
+ * Uses Bun's built-in cross-platform shell:
+ * - Automatically handles Windows/Unix differences
+ * - No need for platform detection
+ * - Simple template literal syntax
  */
 export class BunShell {
   private cwd: string
@@ -45,21 +45,8 @@ export class BunShell {
   }
 
   /**
-   * Get shell command for current platform
-   */
-  private getShellCommand(command: string): string[] {
-    if (process.platform === 'win32') {
-      return ['cmd', '/c', command]
-    }
-    return ['sh', '-c', command]
-  }
-
-  /**
    * Execute a command in the current working directory
-   *
-   * @param command - The shell command to execute
-   * @param abortSignal - Optional AbortSignal for cancellation
-   * @param timeout - Optional timeout in milliseconds (default: 30 minutes)
+   * Uses Bun's native $ shell for cross-platform compatibility
    */
   async exec(
     command: string,
@@ -69,13 +56,9 @@ export class BunShell {
     const DEFAULT_TIMEOUT = 30 * 60 * 1000 // 30 minutes
     const commandTimeout = timeout || DEFAULT_TIMEOUT
 
-    // Reset interrupted state for new command
     this.commandInterrupted = false
-
-    // Create a new AbortController that combines timeout and external signal
     this.abortController = new AbortController()
 
-    // Handle external abort signal
     const handleAbort = () => {
       this.commandInterrupted = true
       this.abortController?.abort()
@@ -85,84 +68,28 @@ export class BunShell {
       abortSignal.addEventListener('abort', handleAbort)
     }
 
-    // Set up timeout
     const timeoutId = setTimeout(() => {
       this.commandInterrupted = true
       this.abortController?.abort()
     }, commandTimeout)
 
-    // Track interval for cleanup
-    let checkInterval: ReturnType<typeof setInterval> | null = null
-
     try {
-      // Cross-platform shell command
-      const shellCmd = this.getShellCommand(command)
-      const proc = Bun.spawn({
-        cmd: shellCmd,
-        cwd: this.cwd,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      })
-
-      const commandPromise = proc.exited.then(
-        async () => {
-          // Clear interval when command completes normally
-          if (checkInterval) {
-            clearInterval(checkInterval)
-            checkInterval = null
-          }
-
-          const stdout = await Bun.readableStreamToText(proc.stdout)
-          const stderr = await Bun.readableStreamToText(proc.stderr)
-
-          return {
-            stdout: stdout || '',
-            stderr: this.commandInterrupted
-              ? `${stderr}\nCommand execution timed out or was interrupted`
-              : stderr || '',
-            code: proc.exitCode || 0,
-            interrupted: this.commandInterrupted,
-          }
-        },
-      )
-
-      // Wait for either the command or timeout
-      const result = await Promise.race([
-        commandPromise,
-        new Promise<ExecResult>((resolve) => {
-          checkInterval = setInterval(() => {
-            if (this.commandInterrupted) {
-              if (checkInterval) {
-                clearInterval(checkInterval)
-                checkInterval = null
-              }
-              proc.kill()
-              resolve({
-                stdout: '',
-                stderr: 'Command was interrupted',
-                code: 143,
-                interrupted: true,
-              })
-            }
-          }, 100)
-        }),
-      ])
+      // Use Bun's native $ shell - cross-platform by design
+      const result = await $`${{ raw: command }}`.cwd(this.cwd).nothrow().quiet()
 
       clearTimeout(timeoutId)
-      // Ensure interval is cleaned up
-      if (checkInterval) {
-        clearInterval(checkInterval)
-        checkInterval = null
+
+      return {
+        stdout: result.stdout.toString(),
+        stderr: this.commandInterrupted
+          ? `${result.stderr.toString()}\nCommand execution timed out or was interrupted`
+          : result.stderr.toString(),
+        code: this.commandInterrupted ? 143 : result.exitCode,
+        interrupted: this.commandInterrupted,
       }
-      return result
     } catch (error) {
       clearTimeout(timeoutId)
-      // Ensure interval is cleaned up on error
-      if (checkInterval) {
-        clearInterval(checkInterval)
-        checkInterval = null
-      }
 
-      // Handle syntax errors and other execution failures
       const errorStr = error instanceof Error
         ? error.message
         : String(error || 'Unknown error')
@@ -172,7 +99,7 @@ export class BunShell {
       return {
         stdout: '',
         stderr: errorStr,
-        code: 2, // Standard error exit code
+        code: 2,
         interrupted: this.commandInterrupted,
       }
     } finally {
@@ -183,18 +110,10 @@ export class BunShell {
     }
   }
 
-  /**
-   * Get current working directory
-   */
   pwd(): string {
     return this.cwd
   }
 
-  /**
-   * Change working directory
-   *
-   * @param cwd - Absolute or relative path to new directory
-   */
   async setCwd(cwd: string) {
     const resolved = isAbsolute(cwd) ? cwd : resolve(this.cwd, cwd)
 
@@ -205,17 +124,11 @@ export class BunShell {
     this.cwd = resolved
   }
 
-  /**
-   * Interrupt currently running command
-   */
   killChildren() {
     this.commandInterrupted = true
     this.abortController?.abort()
   }
 
-  /**
-   * Close shell instance
-   */
   close(): void {
     this.isAlive = false
     this.abortController?.abort()
