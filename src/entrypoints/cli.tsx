@@ -95,7 +95,7 @@ import { getLatestVersion, assertMinVersion, getUpdateCommandSuggestions } from 
 import { gt } from 'semver'
 import { CACHE_PATHS } from '@utils/log'
 // import { checkAndNotifyUpdate } from '@utils/autoUpdater'
-import { PersistentShell } from '@utils/PersistentShell'
+import { BunShell } from '@utils/BunShell'
 import { clearTerminal } from '@utils/terminal'
 import { showInvalidConfigDialog } from '@components/InvalidConfigDialog'
 import { ConfigParseError } from '@utils/errors'
@@ -1473,12 +1473,12 @@ async function stdin() {
 
 process.on('exit', () => {
   resetCursor()
-  PersistentShell.getInstance().close()
+  BunShell.getInstance().close()
 })
 
 function gracefulExit(code = 0) {
   try { resetCursor() } catch {}
-  try { PersistentShell.getInstance().close() } catch {}
+  try { BunShell.getInstance().close() } catch {}
   process.exit(code)
 }
 

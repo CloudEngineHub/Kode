@@ -1,5 +1,5 @@
 import { cwd } from 'process'
-import { PersistentShell } from './PersistentShell'
+import { BunShell } from './BunShell'
 
 // DO NOT ADD MORE STATE HERE OR BORIS WILL CURSE YOU
 const STATE: {
@@ -9,7 +9,7 @@ const STATE: {
 }
 
 export async function setCwd(cwd: string): Promise<void> {
-  await PersistentShell.getInstance().setCwd(cwd)
+  await BunShell.getInstance().setCwd(cwd)
 }
 
 export function setOriginalCwd(cwd: string): void {
@@ -21,5 +21,5 @@ export function getOriginalCwd(): string {
 }
 
 export function getCwd(): string {
-  return PersistentShell.getInstance().pwd()
+  return BunShell.getInstance().pwd()
 }

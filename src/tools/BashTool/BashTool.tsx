@@ -10,13 +10,14 @@ import { Tool, ValidationResult } from '@tool'
 import { splitCommand } from '@utils/commands'
 import { isInDirectory } from '@utils/file'
 import { logError } from '@utils/log'
-import { PersistentShell } from '@utils/PersistentShell'
+import { BunShell } from '@utils/BunShell'
 import { getCwd, getOriginalCwd } from '@utils/state'
 import { getGlobalConfig } from '@utils/config'
 import { getModelManager } from '@utils/model'
 import BashToolResultMessage from './BashToolResultMessage'
 import { BANNED_COMMANDS, PROMPT } from './prompt'
 import { formatOutput, getCommandFilePaths } from './utils'
+import { type CommandSource } from './commandSource'
 
 export const inputSchema = z.strictObject({
   command: z.string().describe('The command to execute'),
@@ -66,13 +67,19 @@ export const BashTool = {
     // Always check per-project permissions for BashTool
     return true
   },
-  async validateInput({ command }): Promise<ValidationResult> {
+  async validateInput(
+    { command },
+    context?: { commandSource?: CommandSource },
+  ): Promise<ValidationResult> {
+    const source = context?.commandSource || 'agent_call'
+    const isUserMode = source === 'user_bash_mode'
     const commands = splitCommand(command)
+
     for (const cmd of commands) {
       const parts = cmd.split(' ')
       const baseCmd = parts[0]
 
-      // Check if command is banned
+      // Check if command is banned (same for both modes)
       if (baseCmd && BANNED_COMMANDS.includes(baseCmd.toLowerCase())) {
         return {
           result: false,
@@ -82,6 +89,12 @@ export const BashTool = {
 
       // Special handling for cd command
       if (baseCmd === 'cd' && parts[1]) {
+        // In user bash mode, allow cd to any directory
+        if (isUserMode) {
+          continue
+        }
+
+        // In agent mode, restrict cd to child directories of original working directory
         const targetDir = parts[1]!.replace(/^['"]|['"]$/g, '') // Remove quotes if present
         const fullTargetDir = isAbsolute(targetDir)
           ? targetDir
@@ -160,7 +173,7 @@ export const BashTool = {
 
     try {
       // Execute commands
-      const result = await PersistentShell.getInstance().exec(
+      const result = await BunShell.getInstance().exec(
         command,
         abortController.signal,
         timeout,
@@ -173,9 +186,9 @@ export const BashTool = {
 
       if (!isInDirectory(getCwd(), getOriginalCwd())) {
         // Shell directory is outside original working directory, reset it
-        await PersistentShell.getInstance().setCwd(getOriginalCwd())
+        await BunShell.getInstance().setCwd(getOriginalCwd())
         stderr = `${stderr.trim()}${EOL}Shell cwd was reset to ${getOriginalCwd()}`
-        
+
       }
 
       // Update read timestamps for any files referenced by the command

@@ -459,8 +459,9 @@ function PromptInput({
       // After executing a bash command, update the PWD
       if (mode === 'bash') {
         // Schedule PWD update after command execution
-        onQuery(messages, newAbortController).then(() => {
-          setCurrentPwd(process.cwd())
+        onQuery(messages, newAbortController).then(async () => {
+          const { getCwd } = await import('@utils/state')
+          setCurrentPwd(getCwd())
         })
       } else {
         onQuery(messages, newAbortController)

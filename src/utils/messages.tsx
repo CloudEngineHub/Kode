@@ -181,7 +181,7 @@ export async function processUserInput(
     // Special case: cd
     if (input.startsWith('cd ')) {
       const oldCwd = getCwd()
-      const newCwd = resolve(oldCwd, input.slice(3))
+      const newCwd = resolve(getCwd(), input.slice(3).trim())
       try {
         await setCwd(newCwd)
         return [
@@ -215,9 +215,10 @@ export async function processUserInput(
       shouldHidePromptInput: false,
     })
     try {
-      const validationResult = await BashTool.validateInput({
-        command: input,
-      })
+      const validationResult = await BashTool.validateInput(
+        { command: input },
+        { commandSource: 'user_bash_mode' },
+      )
       if (!validationResult.result) {
         return [userMessage, createAssistantMessage(validationResult.message)]
       }
