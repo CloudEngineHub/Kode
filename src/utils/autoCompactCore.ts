@@ -10,22 +10,19 @@ import { queryLLM } from '@services/claude'
 import { selectAndReadFiles } from './fileRecoveryCore'
 import { addLineNumbers } from './file'
 import { getModelManager } from './model'
+import {
+  AUTO_COMPACT_THRESHOLD_RATIO,
+  calculateAutoCompactThresholds,
+} from './autoCompactThreshold'
 
 /**
- * Threshold ratio for triggering automatic context compression
- * When context usage exceeds 92% of the model's limit, auto-compact activates
+ * Retrieves the context length for the current main conversation model.
  */
-const AUTO_COMPACT_THRESHOLD_RATIO = 0.92
-
-/**
- * Retrieves the context length for the main model that should execute compression
- * Uses ModelManager to get the current model's context length
- */
-async function getCompressionModelContextLimit(): Promise<number> {
+async function getMainConversationContextLimit(): Promise<number> {
   try {
-    // 🔧 Fix: Use ModelManager instead of legacy config
     const modelManager = getModelManager()
-    const modelProfile = modelManager.getModel('main')
+    const resolution = modelManager.resolveModelWithInfo('main')
+    const modelProfile = resolution.success ? resolution.profile : null
 
     if (modelProfile?.contextLength) {
       return modelProfile.contextLength
@@ -71,15 +68,12 @@ Focus on information essential for continuing the conversation effectively, incl
  * Uses the main model context length since compression tasks require a capable model
  */
 async function calculateThresholds(tokenCount: number) {
-  const contextLimit = await getCompressionModelContextLimit()
-  const autoCompactThreshold = contextLimit * AUTO_COMPACT_THRESHOLD_RATIO
-
-  return {
-    isAboveAutoCompactThreshold: tokenCount >= autoCompactThreshold,
-    percentUsed: Math.round((tokenCount / contextLimit) * 100),
-    tokensRemaining: Math.max(0, autoCompactThreshold - tokenCount),
+  const contextLimit = await getMainConversationContextLimit()
+  return calculateAutoCompactThresholds(
+    tokenCount,
     contextLimit,
-  }
+    AUTO_COMPACT_THRESHOLD_RATIO,
+  )
 }
 
 /**
@@ -149,17 +143,46 @@ async function executeAutoCompact(
 ): Promise<Message[]> {
   const summaryRequest = createUserMessage(COMPRESSION_PROMPT)
 
+  const tokenCount = countTokens(messages)
+  const modelManager = getModelManager()
+  const compactResolution = modelManager.resolveModelWithInfo('compact')
+  const mainResolution = modelManager.resolveModelWithInfo('main')
+
+  let compressionModelPointer: 'compact' | 'main' = 'compact'
+  let compressionNotice: string | null = null
+
+  if (!compactResolution.success || !compactResolution.profile) {
+    compressionModelPointer = 'main'
+    compressionNotice =
+      compactResolution.error ||
+      "Compression model pointer 'compact' is not configured."
+  } else {
+    const compactBudget = Math.floor(compactResolution.profile.contextLength * 0.9)
+    if (compactBudget > 0 && tokenCount > compactBudget) {
+      compressionModelPointer = 'main'
+      compressionNotice =
+        `Compression model '${compactResolution.profile.name}' does not fit current context (~${Math.round(tokenCount / 1000)}k tokens).`
+    }
+  }
+
+  if (compressionModelPointer === 'main' && (!mainResolution.success || !mainResolution.profile)) {
+    throw new Error(
+      mainResolution.error ||
+        "Compression fallback failed: model pointer 'main' is not configured.",
+    )
+  }
+
   const summaryResponse = await queryLLM(
     normalizeMessagesForAPI([...messages, summaryRequest]),
     [
       'You are a helpful AI assistant tasked with creating comprehensive conversation summaries that preserve all essential context for continuing development work.',
     ],
     0,
-    toolUseContext.options.tools,
+    [],
     toolUseContext.abortController.signal,
     {
       safeMode: false,
-      model: 'main', // 使用模型指针，让queryLLM统一解析
+      model: compressionModelPointer,
       prependCLISysprompt: true,
     },
   )
@@ -191,7 +214,9 @@ async function executeAutoCompact(
 
   const compactedMessages = [
     createUserMessage(
-      'Context automatically compressed due to token limit. Essential information preserved.',
+      compressionNotice
+        ? `Context automatically compressed due to token limit. ${compressionNotice} Using '${compressionModelPointer}' for compression.`
+        : `Context automatically compressed due to token limit. Using '${compressionModelPointer}' for compression.`,
     ),
     summaryResponse,
   ]
