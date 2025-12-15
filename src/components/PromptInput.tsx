@@ -234,6 +234,7 @@ function PromptInput({
 
     if (switchResult.success && switchResult.modelName) {
       // Successful switch - use enhanced message from model manager
+      onModelChange?.()
       onSubmitCountChange(prev => prev + 1)
       setModelSwitchMessage({
         show: true,
@@ -506,23 +507,6 @@ function PromptInput({
     setPastedText(text)
   }
 
-  // Global keyboard shortcut handler for Option+M and Option+G
-  useInput((inputChar, key) => {
-    if (isEditingExternally || isLoading) return
-
-    // Option+M (Alt+M) switches model
-    if (inputChar === 'µ' || (key.meta && inputChar === 'm')) {
-      handleQuickModelSwitch()
-      return
-    }
-
-    // Option+G (Alt+G) opens external editor
-    if (inputChar === '©' || (key.meta && inputChar === 'g')) {
-      void handleExternalEdit()
-      return
-    }
-  }, { isActive: !isEditingExternally && !isLoading })
-
   useInput((inputChar, key) => {
     // For bash mode, only exit when deleting the last character (which would be the '!' character)
     if (mode === 'bash' && (key.backspace || key.delete)) {
@@ -613,7 +597,9 @@ function PromptInput({
     // Option+M (Alt+M) switches model - check both option and meta keys
     // Block the µ character from being inserted
     if (inputChar === 'µ' || ((key.option || key.meta) && (inputChar === 'm' || inputChar === 'M'))) {
-      handleQuickModelSwitch()
+      if (!isLoading) {
+        handleQuickModelSwitch()
+      }
       return true // Block character insertion
     }
 
@@ -627,7 +613,7 @@ function PromptInput({
     }
 
     return false // Not handled, allow normal processing
-  }, [handleQuickModelSwitch, handleExternalEdit, isEditingExternally])
+  }, [handleQuickModelSwitch, handleExternalEdit, isEditingExternally, isLoading])
 
   const textInputColumns = useTerminalSize().columns - 6
   const tokenUsage = useMemo(() => countTokens(messages), [messages])

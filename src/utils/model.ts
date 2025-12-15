@@ -143,7 +143,8 @@ export class ModelManager {
 
   /**
    * Switch to the next available model with simple context overflow handling
-   * If target model can't handle current context, shows warning and reverts after delay
+   * If the next model can't handle current context, skips incompatible models.
+   * If no alternative model can handle the current context, keeps the current model.
    *
    * @param currentContextTokens - Current conversation token count for validation
    * @returns Object with model name and context status information
@@ -154,6 +155,14 @@ export class ModelManager {
     previousModelName: string | null
     contextOverflow: boolean
     usagePercentage: number
+    currentContextTokens: number
+    skippedModels?: Array<{
+      name: string
+      provider: string
+      contextLength: number
+      budgetTokens: number | null
+      usagePercentage: number
+    }>
   } {
     // Use ALL configured models, not just active ones
     const allProfiles = this.getAllConfiguredModels()
@@ -164,14 +173,13 @@ export class ModelManager {
         previousModelName: null,
         contextOverflow: false,
         usagePercentage: 0,
+        currentContextTokens,
       }
     }
 
-    // Sort by createdAt for consistent cycling order (don't use lastUsed)
-    // Using lastUsed causes the order to change each time, preventing proper cycling
-    allProfiles.sort((a, b) => {
-      return a.createdAt - b.createdAt // Oldest first for consistent order
-    })
+    // Sort by createdAt for consistent cycling order (don't use lastUsed).
+    // Using lastUsed causes the order to change each time, preventing proper cycling.
+    allProfiles.sort((a, b) => a.createdAt - b.createdAt) // Oldest first
 
     const currentMainModelName = this.config.modelPointers?.main
     const currentModel = currentMainModelName
@@ -179,53 +187,28 @@ export class ModelManager {
       : null
     const previousModelName = currentModel?.name || null
 
-    if (!currentMainModelName) {
-      // No current main model, select first available (activate if needed)
-      const firstModel = allProfiles[0]
-      if (!firstModel.isActive) {
-        firstModel.isActive = true
+    const budgetForModel = (
+      model: ModelProfile,
+    ): { budgetTokens: number | null; usagePercentage: number; compatible: boolean } => {
+      const contextLength = Number(model.contextLength)
+      if (!Number.isFinite(contextLength) || contextLength <= 0) {
+        return { budgetTokens: null, usagePercentage: 0, compatible: true }
       }
-      this.setPointer('main', firstModel.modelName)
-      this.updateLastUsed(firstModel.modelName)
-
-      const analysis = this.analyzeContextCompatibility(
-        firstModel,
-        currentContextTokens,
-      )
+      const budgetTokens = Math.floor(contextLength * 0.9) // keep headroom for output/tools
+      const usagePercentage =
+        budgetTokens > 0 ? (currentContextTokens / budgetTokens) * 100 : 0
       return {
-        success: true,
-        modelName: firstModel.name,
-        previousModelName: null,
-        contextOverflow: !analysis.compatible,
-        usagePercentage: analysis.usagePercentage,
+        budgetTokens,
+        usagePercentage,
+        compatible: budgetTokens > 0 ? currentContextTokens <= budgetTokens : true,
       }
     }
 
-    // Find current model index in ALL models
-    const currentIndex = allProfiles.findIndex(
-      p => p.modelName === currentMainModelName,
-    )
-    if (currentIndex === -1) {
-      // Current model not found, select first available (activate if needed)
-      const firstModel = allProfiles[0]
-      if (!firstModel.isActive) {
-        firstModel.isActive = true
-      }
-      this.setPointer('main', firstModel.modelName)
-      this.updateLastUsed(firstModel.modelName)
-
-      const analysis = this.analyzeContextCompatibility(
-        firstModel,
-        currentContextTokens,
-      )
-      return {
-        success: true,
-        modelName: firstModel.name,
-        previousModelName,
-        contextOverflow: !analysis.compatible,
-        usagePercentage: analysis.usagePercentage,
-      }
-    }
+    // Find current model index in ALL models (sorted)
+    const currentIndex = currentMainModelName
+      ? allProfiles.findIndex(p => p.modelName === currentMainModelName)
+      : -1
+    const startIndex = currentIndex >= 0 ? currentIndex : -1
 
     // Check if only one model is available
     if (allProfiles.length === 1) {
@@ -235,40 +218,70 @@ export class ModelManager {
         previousModelName,
         contextOverflow: false,
         usagePercentage: 0,
+        currentContextTokens,
       }
     }
 
-    // Get next model in cycle (from ALL models)
-    const nextIndex = (currentIndex + 1) % allProfiles.length
-    const nextModel = allProfiles[nextIndex]
-    
+    const maxOffsets =
+      startIndex === -1 ? allProfiles.length : allProfiles.length - 1
+    const skippedModels: NonNullable<
+      ReturnType<ModelManager['switchToNextModelWithContextCheck']>['skippedModels']
+    > = []
+
+    let selected: ModelProfile | null = null
+    let selectedUsagePercentage = 0
+
+    for (let offset = 1; offset <= maxOffsets; offset++) {
+      const candidateIndex =
+        (startIndex + offset + allProfiles.length) % allProfiles.length
+      const candidate = allProfiles[candidateIndex]
+      if (!candidate) continue
+
+      const { budgetTokens, usagePercentage, compatible } =
+        budgetForModel(candidate)
+      if (compatible) {
+        selected = candidate
+        selectedUsagePercentage = usagePercentage
+        break
+      }
+      skippedModels.push({
+        name: candidate.name,
+        provider: candidate.provider,
+        contextLength: candidate.contextLength,
+        budgetTokens,
+        usagePercentage,
+      })
+    }
+
+    if (!selected) {
+      const firstSkipped = skippedModels[0]
+      return {
+        success: false,
+        modelName: null,
+        previousModelName,
+        contextOverflow: true,
+        usagePercentage: firstSkipped?.usagePercentage ?? 0,
+        currentContextTokens,
+        skippedModels,
+      }
+    }
+
     // Activate the model if it's not already active
-    const wasInactive = !nextModel.isActive
-    if (!nextModel.isActive) {
-      nextModel.isActive = true
+    if (!selected.isActive) {
+      selected.isActive = true
     }
 
-    // Analyze context compatibility for next model
-    const analysis = this.analyzeContextCompatibility(
-      nextModel,
-      currentContextTokens,
-    )
-
-    // Always switch to next model, but return context status
-    this.setPointer('main', nextModel.modelName)
-    this.updateLastUsed(nextModel.modelName)
-    
-    // Save configuration if we activated a new model
-    if (wasInactive) {
-      this.saveConfig()
-    }
+    this.setPointer('main', selected.modelName)
+    this.updateLastUsed(selected.modelName)
 
     return {
       success: true,
-      modelName: nextModel.name,
+      modelName: selected.name,
       previousModelName,
-      contextOverflow: !analysis.compatible,
-      usagePercentage: analysis.usagePercentage,
+      contextOverflow: false,
+      usagePercentage: selectedUsagePercentage,
+      currentContextTokens,
+      skippedModels,
     }
   }
 
@@ -283,43 +296,80 @@ export class ModelManager {
     blocked?: boolean
     message?: string
   } {
-    // Use the enhanced context check method for consistency
     const result = this.switchToNextModelWithContextCheck(currentContextTokens)
-    
-    if (!result.success) {
-      const allModels = this.getAllConfiguredModels()
-      if (allModels.length === 0) {
-        return {
-          success: false,
-          modelName: null,
-          blocked: false,
-          message: '❌ No models configured. Use /model to add models.',
-        }
-      } else if (allModels.length === 1) {
-        return {
-          success: false,
-          modelName: null,
-          blocked: false,
-          message: `⚠️ Only one model configured (${allModels[0].modelName}). Use /model to add more models for switching.`,
-        }
+
+    const formatTokens = (tokens: number): string => {
+      if (!Number.isFinite(tokens)) return 'unknown'
+      if (tokens >= 1000) return `${Math.round(tokens / 1000)}k`
+      return String(Math.round(tokens))
+    }
+
+    const allModels = this.getAllConfiguredModels()
+    if (allModels.length === 0) {
+      return {
+        success: false,
+        modelName: null,
+        blocked: false,
+        message: '❌ No models configured. Use /model to add models.',
       }
     }
-    
+    if (allModels.length === 1) {
+      return {
+        success: false,
+        modelName: null,
+        blocked: false,
+        message: `⚠️ Only one model configured (${allModels[0].modelName}). Use /model to add more models for switching.`,
+      }
+    }
+
     // Convert the detailed result to the simple interface
     const currentModel = this.findModelProfile(this.config.modelPointers?.main)
-    const allModels = this.getAllConfiguredModels()
-    const currentIndex = allModels.findIndex(m => m.modelName === currentModel?.modelName)
-    const totalModels = allModels.length
-    
+    const modelsSorted = [...allModels].sort((a, b) => a.createdAt - b.createdAt)
+    const currentIndex = modelsSorted.findIndex(
+      m => m.modelName === currentModel?.modelName,
+    )
+    const totalModels = modelsSorted.length
+
+    if (result.success && result.modelName) {
+      const skippedCount = result.skippedModels?.length ?? 0
+      const skippedSuffix =
+        skippedCount > 0 ? ` · skipped ${skippedCount} incompatible` : ''
+      const contextSuffix =
+        currentModel?.contextLength && result.currentContextTokens
+          ? ` · context ~${formatTokens(result.currentContextTokens)}/${formatTokens(currentModel.contextLength)}`
+          : ''
+
+      return {
+        success: true,
+        modelName: result.modelName,
+        blocked: false,
+        message: `✅ Switched to ${result.modelName} (${currentIndex + 1}/${totalModels})${currentModel?.provider ? ` [${currentModel.provider}]` : ''}${skippedSuffix}${contextSuffix}`,
+      }
+    }
+
+    if (result.contextOverflow) {
+      const attempted = result.skippedModels?.[0]
+      const attemptedContext = attempted?.contextLength
+      const attemptedBudget = attempted?.budgetTokens
+      const currentLabel = currentModel?.name || currentModel?.modelName || 'current model'
+
+      const attemptedText = attempted
+        ? `Can't switch to ${attempted.name}: current ~${formatTokens(result.currentContextTokens)} tokens exceeds safe budget (~${formatTokens(attemptedBudget ?? 0)} tokens, 90% of ${formatTokens(attemptedContext ?? 0)}).`
+        : `Can't switch models due to context size (~${formatTokens(result.currentContextTokens)} tokens).`
+
+      return {
+        success: false,
+        modelName: null,
+        blocked: true,
+        message: `⚠️ ${attemptedText} Keeping ${currentLabel}.`,
+      }
+    }
+
     return {
-      success: result.success,
-      modelName: result.modelName,
-      blocked: result.contextOverflow,
-      message: result.success
-        ? result.contextOverflow
-          ? `⚠️ Context usage: ${result.usagePercentage.toFixed(1)}% - ${result.modelName}`
-          : `✅ Switched to ${result.modelName} (${currentIndex + 1}/${totalModels})${currentModel?.provider ? ` [${currentModel.provider}]` : ''}`
-        : `❌ Failed to switch models`,
+      success: false,
+      modelName: null,
+      blocked: false,
+      message: '❌ Failed to switch models',
     }
   }
 
