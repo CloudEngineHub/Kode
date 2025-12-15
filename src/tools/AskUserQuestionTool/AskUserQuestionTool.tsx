@@ -22,7 +22,7 @@ const questionSchema = z.strictObject({
 
 const inputSchema = z.strictObject({
   questions: z.array(questionSchema).min(1).max(4),
-  // Claude Code permission UI may populate this field; accept it for parity.
+  // Compatibility: permission UI may populate this field.
   answers: z.record(z.string()).optional(),
 })
 

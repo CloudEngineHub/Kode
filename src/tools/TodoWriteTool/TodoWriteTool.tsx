@@ -248,7 +248,7 @@ export const TodoWriteTool = {
         activeForm: todo.activeForm || todo.content,
       }))
 
-      // Claude behavior: if all todos are completed, clear the list
+      // Default behavior: if all todos are completed, clear the list
       const shouldClear =
         todos.length > 0 && todos.every(todo => todo.status === 'completed')
 

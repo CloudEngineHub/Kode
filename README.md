@@ -28,7 +28,7 @@
 ### Full Compatibility with Multiple Standards
 
 - ✅ **AGENTS.md** - Native support for the OpenAI-initiated standard format
-- ✅ **CLAUDE.md** - Full backward compatibility with Claude Code `.claude` configurations  
+- ✅ **CLAUDE.md** - Full backward compatibility with `.claude` configurations  
 - ✅ **Subagent System** - Advanced agent delegation and task orchestration
 - ✅ **Cross-platform** - Works with 20+ AI models and providers
 
@@ -38,7 +38,7 @@ Use `# Your documentation request` to generate and maintain your AGENTS.md file 
 
 Kode is a powerful AI assistant that lives in your terminal. It can understand your codebase, edit files, run commands, and handle entire workflows for you.
 
-> **⚠️ Security Notice**: Kode runs in YOLO mode by default (equivalent to Claude Code's `--dangerously-skip-permissions` flag), bypassing all permission checks for maximum productivity. YOLO mode is recommended only for trusted, secure environments when working on non-critical projects. If you're working with important files or using models of questionable capability, we strongly recommend using `kode --safe` to enable permission checks and manual approval for all operations.
+> **⚠️ Security Notice**: Kode runs in YOLO mode by default (equivalent to the `--dangerously-skip-permissions` flag), bypassing all permission checks for maximum productivity. YOLO mode is recommended only for trusted, secure environments when working on non-critical projects. If you're working with important files or using models of questionable capability, we strongly recommend using `kode --safe` to enable permission checks and manual approval for all operations.
 > 
 > **📊 Model Performance**: For optimal performance, we recommend using newer, more capable models designed for autonomous task completion. Avoid older Q&A-focused models like GPT-4o or Gemini 2.5 Pro, which are optimized for answering questions rather than sustained independent task execution. Choose models specifically trained for agentic workflows and extended reasoning capabilities.
 
@@ -233,7 +233,7 @@ As long as you have an openai-like endpoint, it should work.
 
 ## Multi-Model Intelligent Collaboration
 
-Unlike official Claude which supports only a single model, Kode implements **true multi-model collaboration**, allowing you to fully leverage the unique strengths of different AI models.
+Unlike single-model CLIs, Kode implements **true multi-model collaboration**, allowing you to fully leverage the unique strengths of different AI models.
 
 ### 🏗️ Core Technical Architecture
 
@@ -346,11 +346,11 @@ We specially designed the `AskExpertModel` tool:
 4. **Flexible Switching**: Switch models based on task requirements without restarting sessions
 5. **Leveraging Strengths**: Combine advantages of different models for optimal overall results
 
-### 📊 Comparison with Official Implementation
+### 📊 Comparison (Single-model CLI)
 
-| Feature | Kode | Official Claude |
+| Feature | Kode | Single-model CLI |
 |---------|------|-----------------|
-| Number of Supported Models | Unlimited, configurable for any model | Only supports single Claude model |
+| Number of Supported Models | Unlimited, configurable for any model | Only supports one model |
 | Model Switching | ✅ Tab key quick switch | ❌ Requires session restart |
 | Parallel Processing | ✅ Multiple SubAgents work in parallel | ❌ Single-threaded processing |
 | Cost Tracking | ✅ Separate statistics for multiple models | ❌ Single model cost |

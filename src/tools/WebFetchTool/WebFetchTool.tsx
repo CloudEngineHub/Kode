@@ -226,9 +226,9 @@ export const WebFetchTool = {
   async description(input?: Input) {
     const url = input?.url
     try {
-      return `Claude wants to fetch content from ${new URL(url || '').hostname}`
+      return `Requesting fetch content from ${new URL(url || '').hostname}`
     } catch {
-      return 'Claude wants to fetch content from this URL'
+      return 'Requesting fetch content from this URL'
     }
   },
   userFacingName: () => 'Fetch',

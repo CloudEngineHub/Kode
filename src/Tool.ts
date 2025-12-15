@@ -69,7 +69,7 @@ export interface Tool<
   needsPermissions: (input?: z.infer<TInput>) => boolean
   /**
    * True when the tool requires an interactive UI round-trip with the user.
-   * Claude Code parity: these tools should still prompt even in bypass modes.
+   * Default behavior: these tools should still prompt even in bypass modes.
    */
   requiresUserInteraction?: (input?: z.infer<TInput>) => boolean
   validateInput?: (

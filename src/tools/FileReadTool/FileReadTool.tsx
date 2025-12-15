@@ -32,7 +32,7 @@ const DEFAULT_MAX_LINES = 2000
 const MAX_LINE_LENGTH = 2000
 const MAX_OUTPUT_SIZE = 0.25 * 1024 * 1024 // 0.25MB in bytes (post-truncation safeguard)
 
-// Common image extensions (Claude-compatible)
+// Common image extensions (compatibility)
 const IMAGE_EXTENSIONS = new Set([
   '.png',
   '.jpg',

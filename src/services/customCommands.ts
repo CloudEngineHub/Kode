@@ -112,7 +112,7 @@ export async function resolveFileReferences(content: string): Promise<string> {
 }
 
 /**
- * Frontmatter configuration for Claude-style custom commands and skills.
+ * Frontmatter configuration for `.claude`-compatible custom commands and skills.
  */
 export interface CustomCommandFrontmatter {
   description?: string
@@ -126,7 +126,7 @@ export interface CustomCommandFrontmatter {
 }
 
 /**
- * Kode/Claude compatibility metadata attached to prompt commands.
+ * Compatibility metadata attached to prompt commands.
  */
 export interface CustomCommandWithScope {
   type: 'prompt'
@@ -483,7 +483,7 @@ function loadSkillDirectoryCommandsFromBaseDir(
  *
  * This function scans both user-level and project-level command directories
  * for markdown files and processes them into Command objects. It follows the
- * same discovery pattern as Claude Desktop but with additional performance
+ * same discovery pattern as the `.claude` ecosystem but with additional performance
  * optimizations and error handling.
  *
  * Directory structure:
@@ -499,13 +499,13 @@ export const loadCustomCommands = memoize(
   async (): Promise<CustomCommandWithScope[]> => {
     const cwd = getCwd()
 
-    // File-based commands (Claude-style)
+    // File-based commands (.claude-compatible)
     const projectClaudeCommandsDir = join(cwd, '.claude', 'commands')
     const userClaudeCommandsDir = join(homedir(), '.claude', 'commands')
     const projectKodeCommandsDir = join(cwd, '.kode', 'commands')
     const userKodeCommandsDir = join(homedir(), '.kode', 'commands')
 
-    // Directory-based skills (Claude-style)
+    // Directory-based skills (.claude-compatible)
     const projectClaudeSkillsDir = join(cwd, '.claude', 'skills')
     const userClaudeSkillsDir = join(homedir(), '.claude', 'skills')
     const projectKodeSkillsDir = join(cwd, '.kode', 'skills')

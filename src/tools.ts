@@ -25,7 +25,7 @@ import { WebFetchTool } from './tools/WebFetchTool/WebFetchTool'
 import { WebSearchTool } from './tools/WebSearchTool/WebSearchTool'
 import { getMCPTools } from './services/mcpClient'
 
-// Base tool list aligned with Claude standard toolset
+// Base tool list for the CLI toolset
 export const getAllTools = (): Tool[] => [
   TaskTool as unknown as Tool,
   AskExpertModelTool as unknown as Tool,

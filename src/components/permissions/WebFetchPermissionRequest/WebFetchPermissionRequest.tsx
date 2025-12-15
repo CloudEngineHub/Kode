@@ -82,7 +82,7 @@ export function WebFetchPermissionRequest({
       </Box>
 
       <Box flexDirection="column">
-        <Text>Do you want to allow Claude to fetch this content?</Text>
+        <Text>Do you want to allow the assistant to fetch this content?</Text>
         <Select
           options={[
             { label: 'Yes', value: 'yes' },
@@ -95,7 +95,7 @@ export function WebFetchPermissionRequest({
                 ]
               : []),
             {
-              label: `No, and tell Claude what to do differently (${chalk.bold.hex(
+              label: `No, and tell the assistant what to do differently (${chalk.bold.hex(
                 getTheme().warning,
               )('esc')})`,
               value: 'no',
@@ -143,4 +143,3 @@ export function WebFetchPermissionRequest({
     </Box>
   )
 }
-

@@ -23,8 +23,8 @@ type Props = {
 }
 
 // Sends a single prompt to the Anthropic Messages API and returns the response.
-// Assumes that claude is being used non-interactively -- will not
-// ask the user for permissions or further input.
+// Assumes the CLI is being used non-interactively: it will not ask the user
+// for permissions or further input.
 export async function ask({
   commands,
   safeMode,
@@ -90,7 +90,7 @@ export async function ask({
     )
   }
 
-  // Write log that can be retrieved with `claude log`
+  // Write a message log that can be viewed with `kode log`
   const messageHistoryFile = getMessagesPath(messageLogName, 0, 0)
   overwriteLog(messageHistoryFile, messages)
 

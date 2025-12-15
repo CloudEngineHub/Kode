@@ -112,7 +112,7 @@ export function ExitPlanModePermissionRequest({
         <PermissionRequestTitle title="No, keep planning" riskScore={null} />
         <Box flexDirection="column" paddingX={2} paddingY={1}>
           <Text dimColor>
-            Type here to tell Claude what to change (Enter submits, Esc cancels)
+            Type here to tell the assistant what to change (Enter submits, Esc cancels)
           </Text>
           {rejectError ? (
             <Text color={theme.error}>{rejectError}</Text>
@@ -161,7 +161,7 @@ export function ExitPlanModePermissionRequest({
       <PermissionRequestTitle title="Ready to code?" riskScore={null} />
 
       <Box flexDirection="column" paddingX={2} paddingY={1}>
-        <Text>Here is Claude's plan:</Text>
+        <Text>Here is the plan:</Text>
         <Box
           borderStyle="dashed"
           borderColor={theme.secondaryText}

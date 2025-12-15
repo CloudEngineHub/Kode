@@ -454,7 +454,7 @@ export async function* query(
   const { systemPrompt: fullSystemPrompt, reminders } =
     formatSystemPromptWithContext(systemPrompt, context, toolUseContext.agentId)
 
-  // Claude Code parity: plan mode reminders are injected as system-level guidance.
+  // Default behavior: plan mode reminders are injected as system-level guidance.
   const planModeAdditions = getPlanModeSystemPromptAdditions(
     messages as any[],
     toolUseContext,

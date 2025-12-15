@@ -33,7 +33,7 @@ const makeContext = (safeMode = true) => ({
 })
 
 describe('Tool registry', () => {
-  test('includes core Claude-aligned tools', () => {
+  test('includes core built-in tools', () => {
     process.env.CLAUDE_CONFIG_DIR = join(process.cwd(), '.tmp-claude-config')
     const toolNames = getAllTools().map(t => t.name)
     expect(toolNames).toContain('Bash')

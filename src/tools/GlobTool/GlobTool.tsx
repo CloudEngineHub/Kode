@@ -106,7 +106,7 @@ export const GlobTool = {
         : resolve(getCwd(), path)
       : getCwd()
 
-    // Claude Code semantics: use ripgrep file listing with no-ignore + hidden,
+    // Default semantics: use ripgrep file listing with no-ignore + hidden,
     // sorted by modified time, filtered by --glob pattern.
     const raw = await ripGrep(
       ['--files', '--no-ignore', '--hidden', '--sort=modified', '--glob', pattern],

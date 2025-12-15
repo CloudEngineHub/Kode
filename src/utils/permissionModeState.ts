@@ -24,7 +24,7 @@ export function getPermissionModeForConversationKey(options: {
     return existing
   }
 
-  // Claude Code parity: start in default mode; bypass is an optional mode when available.
+  // Default behavior: start in default mode; bypass is an optional mode when available.
   permissionModeByConversationKey.set(options.conversationKey, 'default')
   return 'default'
 }

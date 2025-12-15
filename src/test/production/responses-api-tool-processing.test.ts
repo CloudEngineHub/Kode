@@ -12,7 +12,7 @@ const MOCK_SERVER_TEST_MODE = process.env.MOCK_SERVER_TEST_MODE === 'true'
  * scenario that users encounter.
  */
 /**
- * NOTE: The canonical file read tool name is "Read" (Claude Code parity).
+ * NOTE: The canonical file read tool name is "Read" (compatibility).
  */
 
 describe('🧪 Response API Tool Processing - Real Mock Server Test', () => {

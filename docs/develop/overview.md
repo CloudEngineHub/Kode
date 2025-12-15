@@ -2,7 +2,7 @@
 
 ## Introduction
 
-Kode is an AI-powered terminal assistant that brings the power of Claude and other language models directly to your command line. It's designed as a sophisticated development tool that understands your codebase, executes commands, and handles complex workflows through natural language interaction.
+Kode is an AI-powered terminal assistant that brings the power of modern language models directly to your command line. It's designed as a sophisticated development tool that understands your codebase, executes commands, and handles complex workflows through natural language interaction.
 
 ## Core Design Philosophy
 
@@ -37,7 +37,7 @@ Two-tier security model balancing safety and usability:
 
 ### 5. **Provider Agnostic**
 Support for multiple AI providers through unified interface:
-- Anthropic Claude (primary)
+- Anthropic models (primary)
 - OpenAI and compatible APIs
 - Custom endpoints and local models
 - Automatic model switching based on context size
@@ -59,7 +59,7 @@ Model Context Protocol (MCP) integration enables:
 - **Validation**: Zod for runtime type checking
 
 ### AI Integration
-- **Anthropic SDK**: Native integration with Claude models
+- **Anthropic SDK**: Native integration with Anthropic models
 - **OpenAI SDK**: Support for GPT models and compatible APIs
 - **Streaming**: Server-sent events for real-time responses
 - **Context Management**: Smart token counting and compaction

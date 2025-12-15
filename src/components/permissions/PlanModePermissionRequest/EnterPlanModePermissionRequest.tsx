@@ -39,13 +39,13 @@ export function EnterPlanModePermissionRequest({
 
       <Box flexDirection="column" paddingX={2} paddingY={1}>
         <Text>
-          Claude wants to enter plan mode to explore and design an
+          The assistant wants to enter plan mode to explore and design an
           implementation approach.
         </Text>
       </Box>
 
       <Box flexDirection="column" paddingX={2}>
-        <Text dimColor>In plan mode, Claude will:</Text>
+        <Text dimColor>In plan mode, the assistant will:</Text>
         <Text dimColor> · Explore the codebase thoroughly</Text>
         <Text dimColor> · Identify existing patterns</Text>
         <Text dimColor> · Design an implementation strategy</Text>

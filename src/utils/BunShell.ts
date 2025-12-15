@@ -241,7 +241,7 @@ export class BunShell {
 
   /**
    * Return current buffered output for a background command WITHOUT consuming it.
-   * Prefer `readBackgroundOutput()` for Claude-style "only new output" semantics.
+   * Prefer `readBackgroundOutput()` for "only new output" semantics.
    */
   getBackgroundOutput(shellId: string):
     | {
@@ -306,7 +306,7 @@ export class BunShell {
     const stdoutDelta = proc.stdout.slice(proc.stdoutCursor)
     const stderrDelta = proc.stderr.slice(proc.stderrCursor)
 
-    // Consume all new output (Claude semantics: only new output since last check)
+    // Consume all new output (incremental semantics: only new output since last check)
     proc.stdoutCursor = proc.stdout.length
     proc.stderrCursor = proc.stderr.length
 

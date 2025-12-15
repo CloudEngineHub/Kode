@@ -173,19 +173,19 @@ export function Help({
                 Custom commands loaded from:
               </Text>
               <Text color={theme.secondaryText}>
-                • {getCustomCommandDirectories().userClaudeCommands} (Claude `.claude` user scope)
+                • {getCustomCommandDirectories().userClaudeCommands} (`.claude` user scope)
               </Text>
               <Text color={theme.secondaryText}>
-                • {getCustomCommandDirectories().projectClaudeCommands} (Claude `.claude` project scope)
+                • {getCustomCommandDirectories().projectClaudeCommands} (`.claude` project scope)
               </Text>
               <Text color={theme.secondaryText}>
                 Skills loaded from:
               </Text>
               <Text color={theme.secondaryText}>
-                • {getCustomCommandDirectories().userClaudeSkills} (Claude `.claude` user scope)
+                • {getCustomCommandDirectories().userClaudeSkills} (`.claude` user scope)
               </Text>
               <Text color={theme.secondaryText}>
-                • {getCustomCommandDirectories().projectClaudeSkills} (Claude `.claude` project scope)
+                • {getCustomCommandDirectories().projectClaudeSkills} (`.claude` project scope)
               </Text>
               <Text color={theme.secondaryText}>
                 Use /refresh-commands to reload after changes
@@ -197,19 +197,19 @@ export function Help({
                 Create custom commands by adding `.md` files to:
               </Text>
               <Text color={theme.secondaryText}>
-                • {getCustomCommandDirectories().userClaudeCommands} (Claude `.claude` user scope)
+                • {getCustomCommandDirectories().userClaudeCommands} (`.claude` user scope)
               </Text>
               <Text color={theme.secondaryText}>
-                • {getCustomCommandDirectories().projectClaudeCommands} (Claude `.claude` project scope)
+                • {getCustomCommandDirectories().projectClaudeCommands} (`.claude` project scope)
               </Text>
               <Text color={theme.secondaryText}>
                 Create skills by adding directories containing `SKILL.md` to:
               </Text>
               <Text color={theme.secondaryText}>
-                • {getCustomCommandDirectories().userClaudeSkills} (Claude `.claude` user scope)
+                • {getCustomCommandDirectories().userClaudeSkills} (`.claude` user scope)
               </Text>
               <Text color={theme.secondaryText}>
-                • {getCustomCommandDirectories().projectClaudeSkills} (Claude `.claude` project scope)
+                • {getCustomCommandDirectories().projectClaudeSkills} (`.claude` project scope)
               </Text>
               <Text color={theme.secondaryText}>
                 Use /refresh-commands to reload after creation

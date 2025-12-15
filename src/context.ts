@@ -234,8 +234,8 @@ export const getContext = memoize(
 )
 
 /**
- * Approximate directory structure, to orient Claude. Claude will start with this, then use
- * tools like Glob and Read to get more information.
+ * Approximate directory structure, to orient the model. The agent will start with this,
+ * then use tools like Glob and Read to get more information.
  */
 export const getDirectoryStructure = memoize(
   async function (): Promise<string> {

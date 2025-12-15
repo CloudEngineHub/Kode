@@ -20,7 +20,7 @@ import { randomUUID } from 'crypto'
 
 const execAsync = promisify(exec)
 
-// Core constants aligned with the Claude Code agent architecture
+// Core constants aligned with the agent architecture
 const AGENT_LOCATIONS = {
   USER: "user",
   PROJECT: "project", 
@@ -118,7 +118,7 @@ type GeneratedAgent = {
 
 // AI generation function (use main pointer model)
 async function generateAgentWithClaude(prompt: string): Promise<GeneratedAgent> {
-  // Import Claude service dynamically to avoid circular dependencies
+  // Import model query service dynamically to avoid circular dependencies
   const { queryModel } = await import('@services/claude')
   
   const systemPrompt = `You are an expert at creating AI agent configurations. Based on the user's description, generate a specialized agent configuration.
@@ -152,7 +152,7 @@ Make the agent highly specialized and effective for the described use case.`
     }
     
     if (!responseText) {
-      throw new Error('No text content in Claude response')
+      throw new Error('No text content in model response')
     }
     
     // 安全限制
@@ -174,7 +174,7 @@ Make the agent highly specialized and effective for the described use case.`
       const endIdx = responseText.lastIndexOf('}')
       
       if (startIdx === -1 || endIdx === -1 || startIdx >= endIdx) {
-        throw new Error('No valid JSON found in Claude response')
+        throw new Error('No valid JSON found in model response')
       }
       
       const jsonStr = responseText.substring(startIdx, endIdx + 1)
@@ -324,7 +324,7 @@ function validateAgentConfig(config: Partial<CreateState>, existingAgents: Agent
   }
 }
 
-// File system operations retained for Claude Code parity
+// File system operations retained for compatibility
 function getAgentDirectory(location: AgentLocation): string {
   if (location === AGENT_LOCATIONS.BUILT_IN || location === AGENT_LOCATIONS.ALL) {
     throw new Error(`Cannot get directory path for ${location} agents`)
@@ -545,7 +545,7 @@ async function updateAgent(
   writeFileSync(filePath, content, { encoding: 'utf-8', flag: 'w' })
 }
 
-// Enhanced UI components retained for Claude Code parity
+// Enhanced UI components retained for compatibility
 
 interface HeaderProps {
   title: string
@@ -1574,7 +1574,7 @@ function AgentListView({
             <Box marginBottom={1}>
               <Text bold color={theme.primary}>💭 What are agents?</Text>
             </Box>
-            <Text>Specialized AI assistants that Kode can delegate to for specific tasks, compatible with Claude Code `.claude` agent packs.</Text>
+            <Text>Specialized AI assistants that Kode can delegate to for specific tasks, compatible with `.claude` agent packs.</Text>
             <Text>Each agent has its own context, prompt, and tools.</Text>
             
             <Box marginTop={1} marginBottom={1}>
@@ -2449,7 +2449,7 @@ function MethodSelect({ createState, setCreateState, setModeState }: MethodSelec
   const [selectedIndex, setSelectedIndex] = useState(0)
   
   const options = [
-    { label: "Generate with Claude (recommended)", value: "generate" },
+    { label: "Generate with AI (recommended)", value: "generate" },
     { label: "Manual configuration", value: "manual" }
   ]
 

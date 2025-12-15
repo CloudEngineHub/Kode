@@ -418,7 +418,7 @@ export function addLineNumbers({
     .map((line, index) => {
       const lineNum = index + startLine
       const numStr = String(lineNum)
-      // Claude Code parity: line numbers are padded to 6 chars, followed by a right arrow.
+      // Format: line numbers are padded to 6 chars, followed by a right arrow.
       if (numStr.length >= 6) {
         return `${numStr}→${line}`
       }

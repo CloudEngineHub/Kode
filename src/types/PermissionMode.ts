@@ -35,7 +35,7 @@ export interface ModeConfig {
   }
 }
 
-// Mode configuration preserved for Claude Code parity
+// Mode configuration preserved for compatibility
 export const MODE_CONFIGS: Record<PermissionMode, ModeConfig> = {
   default: {
     name: 'default',
@@ -108,7 +108,7 @@ export const MODE_CONFIGS: Record<PermissionMode, ModeConfig> = {
   },
 }
 
-// Mode cycling function preserved from the Claude Code workflow
+// Mode cycling function preserved from the existing workflow
 export function getNextPermissionMode(
   currentMode: PermissionMode,
   isBypassAvailable: boolean = true,

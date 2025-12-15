@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This file provides guidance to Kode automation agents (including those compatible with Claude Code's `.claude` ecosystem) when working with code in this repository.
+This file provides guidance to Kode automation agents (including those compatible with the `.claude` ecosystem) when working with code in this repository.
 
 ## Development Commands
 
@@ -46,7 +46,7 @@ SKIP_BUNDLED_CHECK=true npm publish
 ## High-Level Architecture
 
 ### Core System Design
-Kode implements a **three-layer parallel architecture** refined for fast iteration across terminal workflows while remaining compatible with the Claude Code agent ecosystem:
+Kode implements a **three-layer parallel architecture** refined for fast iteration across terminal workflows while remaining compatible with the `.claude` agent ecosystem:
 
 1. **User Interaction Layer** (`src/screens/REPL.tsx`)
    - Interactive terminal interface using Ink (React for CLI)
@@ -74,9 +74,9 @@ Kode implements a **three-layer parallel architecture** refined for fast iterati
 ### Agent System (`src/utils/agentLoader.ts`)
 **Dynamic Agent Configuration Loading** with 5-tier priority system:
 1. Built-in (code-embedded)
-2. `~/.claude/agents/` (Claude Code user directory compatibility)
+2. `~/.claude/agents/` (`.claude` user directory compatibility)
 3. `~/.kode/agents/` (Kode user)
-4. `./.claude/agents/` (Claude Code project directory compatibility)
+4. `./.claude/agents/` (`.claude` project directory compatibility)
 5. `./.kode/agents/` (Kode project)
 
 Agents are defined as markdown files with YAML frontmatter:

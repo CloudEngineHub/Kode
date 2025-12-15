@@ -63,7 +63,7 @@ export const WebSearchTool = {
   name: TOOL_NAME_FOR_PROMPT,
   async description(input?: Input) {
     const query = input?.query ?? ''
-    return `Claude wants to search the web for: ${query}`
+    return `Requesting web search for: ${query}`
   },
   userFacingName: () => 'Web Search',
   inputSchema,

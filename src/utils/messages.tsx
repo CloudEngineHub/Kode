@@ -114,7 +114,7 @@ export function createAssistantAPIErrorMessage(
 export type FullToolUseResult = {
   data: unknown // Matches tool's `Output` type
   resultForAssistant: ToolResultBlockParam['content']
-  // Claude-style tool extensions (used by SlashCommand/Skill)
+  // Compatibility: tool extensions (used by SlashCommand/Skill)
   newMessages?: Message[]
   contextModifier?: { modifyContext: (ctx: any) => any }
 }
@@ -468,7 +468,7 @@ async function getMessagesForSlashCommand(
         }
       }
       case 'prompt': {
-        // Claude-style: emit a metadata message, then the expanded prompt.
+        // Compatibility: emit a metadata message, then the expanded prompt.
         const commandName = command.userFacingName()
         const progressMessage =
           (command as any).progressMessage || 'running'

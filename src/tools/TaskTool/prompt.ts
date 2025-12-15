@@ -18,9 +18,9 @@ export async function getTaskTools(safeMode: boolean): Promise<Tool[]> {
 }
 
 export async function getPrompt(safeMode: boolean): Promise<string> {
-  // Maintain compatibility with Claude Code `.claude` agent descriptions
+  // Maintain compatibility with `.claude` agent descriptions
   const agents = await getActiveAgents()
-  
+
   // Format exactly as in original: (Tools: tool1, tool2)
   const agentDescriptions = agents.map(agent => {
     const toolsStr = Array.isArray(agent.tools) 

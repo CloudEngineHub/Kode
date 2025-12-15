@@ -63,7 +63,7 @@ export const EnterPlanModeTool = {
         </Box>
         <Box paddingLeft={4}>
           <Text dimColor>
-            Claude is now exploring and designing an implementation approach.
+            Plan mode is now active. Exploring and designing an implementation approach.
           </Text>
         </Box>
       </Box>

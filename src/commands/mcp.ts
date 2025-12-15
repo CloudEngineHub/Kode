@@ -20,7 +20,7 @@ const mcp = {
     if (Object.keys(servers).length === 0) {
       return [
         '⎿  No MCP servers configured.',
-        `⎿  - Create \`.mcp.json\` (Claude Code format) or \`.mcprc\` in this project, or run \`${PRODUCT_COMMAND} mcp add\`.`,
+        `⎿  - Create \`.mcp.json\` or \`.mcprc\` in this project, or run \`${PRODUCT_COMMAND} mcp add\`.`,
         `⎿  - Run \`${PRODUCT_COMMAND} mcp list\` to view configured servers.`,
       ].join('\n')
     }

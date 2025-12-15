@@ -464,7 +464,7 @@ ${commandList}`,
   //     })
   // }
 
-  // claude config
+  // Config
   const config = program
     .command('config')
     .description(
@@ -519,7 +519,7 @@ ${commandList}`,
       process.exit(0)
     })
 
-  // claude approved-tools
+  // Approved tools
 
   const allowedTools = program
     .command('approved-tools')
@@ -1554,7 +1554,7 @@ ${commandList}`,
 
   // ant-only commands
 
-  // claude update
+  // Update
   program
     .command('update')
     .description('Show manual upgrade commands (no auto-install)')
@@ -1586,7 +1586,7 @@ ${commandList}`,
       process.exit(0)
     })
 
-  // claude log
+  // Logs
   program
     .command('log')
     .description('Manage conversation logs.')
@@ -1610,7 +1610,7 @@ ${commandList}`,
       })()
     })
 
-  // claude resume
+  // Resume
   program
     .command('resume')
     .description(
@@ -1715,7 +1715,7 @@ ${commandList}`,
       }
     })
 
-  // claude error
+  // Error logs
   program
     .command('error')
     .description(

@@ -1,7 +1,7 @@
 /**
  * Agent configuration loader
  * Loads agent configurations from markdown files with YAML frontmatter.
- * Maintains compatibility with Claude Code `.claude` agent directories while
+ * Maintains compatibility with `.claude` agent directories while
  * prioritizing Kode-specific overrides.
  */
 
@@ -19,7 +19,7 @@ export interface AgentConfig {
   agentType: string          // Agent identifier (matches subagent_type)
   whenToUse: string          // Description of when to use this agent  
   tools: string[] | '*'      // Tool permissions
-  disallowedTools?: string[] // Tools explicitly forbidden (Claude parity)
+  disallowedTools?: string[] // Tools explicitly forbidden (compatibility)
   systemPrompt: string       // System prompt content
   location: 'built-in' | 'user' | 'project'
   color?: string            // Optional UI color
@@ -54,7 +54,7 @@ const BUILTIN_EXPLORE: AgentConfig = {
   tools: '*',
   disallowedTools: ['Task', 'ExitPlanMode', 'Edit', 'Write', 'NotebookEdit'],
   model_name: 'haiku',
-  systemPrompt: `You are a file search specialist for Claude Code, Anthropic's official CLI for Claude. You excel at thoroughly navigating and exploring codebases.
+  systemPrompt: `You are a file search specialist. You excel at thoroughly navigating and exploring codebases.
 
 === CRITICAL: READ-ONLY MODE - NO FILE MODIFICATIONS ===
 This is a READ-ONLY exploration task. You are STRICTLY PROHIBITED from:
@@ -99,7 +99,7 @@ const BUILTIN_PLAN: AgentConfig = {
   tools: '*',
   disallowedTools: ['Task', 'ExitPlanMode', 'Edit', 'Write', 'NotebookEdit'],
   model_name: 'inherit',
-  systemPrompt: `You are a software architect and planning specialist for Claude Code. Your role is to explore the codebase and design implementation plans.
+  systemPrompt: `You are a software architect and planning specialist. Your role is to explore the codebase and design implementation plans.
 
 === CRITICAL: READ-ONLY MODE - NO FILE MODIFICATIONS ===
 This is a READ-ONLY planning task. You are STRICTLY PROHIBITED from:
@@ -260,7 +260,7 @@ async function loadAllAgents(): Promise<{
 }> {
   try {
     // Scan both .claude and .kode directories in parallel
-    // Claude Code compatibility: support both ~/.claude/agents and ~/.kode/agents
+    // Compatibility: support both ~/.claude/agents and ~/.kode/agents
     const userClaudeDir = join(homedir(), '.claude', 'agents')
     const userKodeDir = join(homedir(), '.kode', 'agents')
     const projectClaudeDir = join(getCwd(), '.claude', 'agents')
@@ -273,7 +273,7 @@ async function loadAllAgents(): Promise<{
       scanAgentDirectory(projectKodeDir, 'project')
     ])
     
-    // Built-in agents (Claude Code parity subset)
+    // Built-in agents (compatibility subset)
     const builtinAgents = [BUILTIN_GENERAL_PURPOSE, BUILTIN_EXPLORE, BUILTIN_PLAN]
     
     // Apply priority override: built-in < .claude (user) < .kode (user) < .claude (project) < .kode (project)
@@ -358,7 +358,7 @@ let watchers: FSWatcher[] = []
 export async function startAgentWatcher(onChange?: () => void): Promise<void> {
   await stopAgentWatcher() // Clean up any existing watchers
   
-  // Watch both Claude (.claude) and native (.kode) directories
+  // Watch both .claude and native (.kode) directories
   const userClaudeDir = join(homedir(), '.claude', 'agents')
   const userKodeDir = join(homedir(), '.kode', 'agents')
   const projectClaudeDir = join(getCwd(), '.claude', 'agents')

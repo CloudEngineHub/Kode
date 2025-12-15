@@ -3294,8 +3294,8 @@ export function ModelSelector({
       examples = 'For example: "gpt-4", "gpt-35-turbo", etc.'
       placeholder = 'gpt-4'
     } else if (selectedProvider === 'anthropic') {
-      screenTitle = 'Claude Model Setup'
-      description = `Enter the Claude model name for ${modelTypeText}:`
+      screenTitle = 'Anthropic Model Setup'
+      description = `Enter the Anthropic model name for ${modelTypeText}:`
       examples =
         'For example: "claude-3-5-sonnet-latest", "claude-3-5-haiku-latest", etc.'
       placeholder = 'claude-3-5-sonnet-latest'
@@ -3384,9 +3384,9 @@ export function ModelSelector({
                 {selectedProvider === 'azure'
                   ? 'This is the deployment name you configured in your Azure OpenAI resource.'
                   : selectedProvider === 'anthropic'
-                    ? 'This should be a valid Claude model identifier from Claude.'
+                    ? 'This should be a valid model identifier supported by Anthropic.'
                     : selectedProvider === 'bigdream'
-                      ? 'This should be a valid Claude model identifier supported by BigDream.'
+                      ? 'This should be a valid model identifier supported by BigDream.'
                       : selectedProvider === 'kimi'
                         ? 'This should be a valid Kimi model identifier from Moonshot AI.'
                         : selectedProvider === 'deepseek'

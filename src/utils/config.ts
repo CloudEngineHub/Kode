@@ -663,7 +663,7 @@ export const getProjectMcpServerDefinitions = memoize(
     }
 
     return {
-      // Claude Code parity-ish: allow local `.mcprc` to override `.mcp.json` on name conflicts.
+      // Compatibility: allow local `.mcprc` to override `.mcp.json` on name conflicts.
       servers: { ...mcpJsonServers, ...mcprcServers },
       sources,
       mcpJsonPath,

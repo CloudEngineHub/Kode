@@ -50,7 +50,7 @@ export function describeToolPermissionRuleSource(
   }
 }
 
-// Claude Code parity: parse rule string like "ToolName(content)".
+// Compatibility: parse rule string like "ToolName(content)".
 export function parseToolPermissionRuleValue(rule: string): ToolPermissionRuleValue {
   const match = rule.match(/^([^(]+)\(([^)]+)\)$/)
   if (!match) return { toolName: rule }
@@ -62,14 +62,14 @@ export function parseToolPermissionRuleValue(rule: string): ToolPermissionRuleVa
   return { toolName, ruleContent }
 }
 
-// Claude Code parity: format rule value back to string.
+// Compatibility: format rule value back to string.
 export function formatToolPermissionRuleValue(rule: ToolPermissionRuleValue): string {
   return rule.ruleContent ? `${rule.toolName}(${rule.ruleContent})` : rule.toolName
 }
 
 export type ParsedMcpToolName = { serverName: string; toolName?: string }
 
-// Claude Code parity: parse "mcp__<server>__<tool?>" identifiers.
+// Compatibility: parse "mcp__<server>__<tool?>" identifiers.
 export function parseMcpToolName(name: string): ParsedMcpToolName | null {
   const parts = name.split('__')
   const [prefix, serverName, ...rest] = parts
@@ -77,4 +77,3 @@ export function parseMcpToolName(name: string): ParsedMcpToolName | null {
   const toolName = rest.length > 0 ? rest.join('__') : undefined
   return { serverName, toolName }
 }
-

@@ -232,12 +232,12 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
     }
   }
 
-  // Claude Code parity: in bypass mode, still prompt for tools that require an interactive UI.
+  // Bypass mode still prompts for tools that require an interactive UI.
   if (permissionMode === 'bypassPermissions' && !requiresUserInteraction) {
     return { result: true }
   }
 
-  // Claude Code parity: always prompt for tools that require a user interaction UI.
+  // Always prompt for tools that require user interaction.
   if (requiresUserInteraction) {
     return {
       result: false,

@@ -77,7 +77,7 @@ export const ExitPlanModeTool = {
 
     return (
       <Box flexDirection="column" marginTop={1} width="100%">
-        <Text color={theme.error}>User rejected Claude's plan:</Text>
+        <Text color={theme.error}>User rejected the plan:</Text>
         <Box
           borderStyle="round"
           borderColor={theme.permission}
@@ -100,7 +100,7 @@ export const ExitPlanModeTool = {
         <Box flexDirection="row" justifyContent="space-between">
           <Box flexDirection="row">
             <Text color={theme.permission}>●</Text>
-            <Text> User approved Claude's plan</Text>
+            <Text> User approved the plan</Text>
           </Box>
           <Cost costUSD={0} durationMs={0} debug={false} />
         </Box>
