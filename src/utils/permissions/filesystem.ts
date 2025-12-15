@@ -1,5 +1,7 @@
-import { isAbsolute, resolve, relative, sep } from 'path'
+import { dirname, isAbsolute, resolve, relative } from 'path'
+import { statSync } from 'fs'
 import { getCwd, getOriginalCwd } from '@utils/state'
+import { isMainPlanFilePathForActiveConversation } from '@utils/planMode'
 
 // In-memory storage for file permissions that resets each session
 // Sets of allowed directories for read and write operations
@@ -34,6 +36,16 @@ function isSubpath(base: string, target: string): boolean {
   return true
 }
 
+function pathToPermissionDirectory(path: string): string {
+  try {
+    const stats = statSync(path)
+    if (stats.isDirectory()) return path
+  } catch {
+    // Treat missing/unstatable path as a file path.
+  }
+  return dirname(path)
+}
+
 /**
  * Ensures a path is in the original cwd path
  * @param directory The directory path to normalize
@@ -51,6 +63,7 @@ export function pathInOriginalCwd(path: string): boolean {
  * @returns true if read permission exists, false otherwise
  */
 export function hasReadPermission(directory: string): boolean {
+  if (isMainPlanFilePathForActiveConversation(directory)) return true
   const absolutePath = toAbsolutePath(directory)
   for (const allowedPath of readFileAllowedDirectories) {
     if (isSubpath(allowedPath, absolutePath)) return true
@@ -64,6 +77,7 @@ export function hasReadPermission(directory: string): boolean {
  * @returns true if write permission exists, false otherwise
  */
 export function hasWritePermission(directory: string): boolean {
+  if (isMainPlanFilePathForActiveConversation(directory)) return true
   const absolutePath = toAbsolutePath(directory)
   for (const allowedPath of writeFileAllowedDirectories) {
     if (isSubpath(allowedPath, absolutePath)) return true
@@ -97,6 +111,11 @@ export function grantReadPermissionForOriginalDir(): void {
   saveReadPermission(originalProjectDir)
 }
 
+export function grantReadPermissionForPath(path: string): void {
+  const absolutePath = toAbsolutePath(path)
+  saveReadPermission(pathToPermissionDirectory(absolutePath))
+}
+
 /**
  * Save write permission for a directory
  * @param directory The directory to grant write permission for
@@ -118,6 +137,11 @@ function saveWritePermission(directory: string): void {
 export function grantWritePermissionForOriginalDir(): void {
   const originalProjectDir = getOriginalCwd()
   saveWritePermission(originalProjectDir)
+}
+
+export function grantWritePermissionForPath(path: string): void {
+  const absolutePath = toAbsolutePath(path)
+  saveWritePermission(pathToPermissionDirectory(absolutePath))
 }
 
 // For testing purposes

@@ -18,7 +18,7 @@ export function MCPServerDialogCopy(): React.ReactNode {
 
       <Text dimColor>
         Remember: You can always change these choices later by running `
-        {PRODUCT_COMMAND} mcp reset-mcprc-choices`
+        {PRODUCT_COMMAND} mcp reset-project-choices`
       </Text>
     </>
   )

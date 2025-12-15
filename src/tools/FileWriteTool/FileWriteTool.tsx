@@ -44,7 +44,7 @@ const inputSchema = z.strictObject({
 })
 
 export const FileWriteTool = {
-  name: 'Replace',
+  name: 'Write',
   async description() {
     return 'Write a file to the local filesystem.'
   },
@@ -176,6 +176,14 @@ export const FileWriteTool = {
     const fullFilePath = isAbsolute(file_path)
       ? file_path
       : resolve(getCwd(), file_path)
+
+    if (fullFilePath.endsWith('.ipynb')) {
+      return {
+        result: false,
+        message:
+          'This tool cannot write Jupyter notebooks. Use the NotebookEdit tool instead.',
+      }
+    }
     if (!fileExistsBun(fullFilePath)) {
       return { result: true }
     }

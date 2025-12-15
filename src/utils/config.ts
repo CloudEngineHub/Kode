@@ -21,9 +21,46 @@ export type McpStdioServerConfig = {
 export type McpSSEServerConfig = {
   type: 'sse'
   url: string
+  headers?: Record<string, string>
+  headersHelper?: string
 }
 
-export type McpServerConfig = McpStdioServerConfig | McpSSEServerConfig
+export type McpHttpServerConfig = {
+  type: 'http'
+  url: string
+  headers?: Record<string, string>
+  headersHelper?: string
+}
+
+export type McpSSEIdeServerConfig = {
+  type: 'sse-ide'
+  url: string
+  ideName: string
+  ideRunningInWindows?: boolean
+  headers?: Record<string, string>
+  headersHelper?: string
+}
+
+export type McpWsServerConfig = {
+  type: 'ws'
+  url: string
+}
+
+export type McpWsIdeServerConfig = {
+  type: 'ws-ide'
+  url: string
+  ideName: string
+  authToken?: string
+  ideRunningInWindows?: boolean
+}
+
+export type McpServerConfig =
+  | McpStdioServerConfig
+  | McpSSEServerConfig
+  | McpHttpServerConfig
+  | McpSSEIdeServerConfig
+  | McpWsServerConfig
+  | McpWsIdeServerConfig
 
 export type ProjectConfig = {
   allowedTools: string[]
@@ -105,6 +142,7 @@ export type ProviderType =
   | 'azure'
   | 'custom'
   | 'custom-openai'
+  | (string & {})
 
 // New model system types
 export type ModelProfile = {
@@ -115,7 +153,7 @@ export type ModelProfile = {
   apiKey: string
   maxTokens: number // Output token limit (for GPT-5, this maps to max_completion_tokens)
   contextLength: number // Context window size
-  reasoningEffort?: 'low' | 'medium' | 'high' | 'minimal' | 'medium'
+  reasoningEffort?: 'low' | 'medium' | 'high' | 'minimal' | string
   isActive: boolean // Whether profile is enabled
   createdAt: number // Creation timestamp
   lastUsed?: number // Last usage timestamp
@@ -547,6 +585,113 @@ export const getMcprcConfig = memoize(
       }
     }
     return cwd
+  },
+)
+
+export type ProjectMcpServerDefinitions = {
+  servers: Record<string, McpServerConfig>
+  sources: Record<string, '.mcp.json' | '.mcprc'>
+  mcpJsonPath: string
+  mcprcPath: string
+}
+
+function parseMcpServersFromMcpJson(
+  value: unknown,
+): Record<string, McpServerConfig> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const raw = (value as { mcpServers?: unknown }).mcpServers
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  return raw as Record<string, McpServerConfig>
+}
+
+function parseMcpServersFromMcprc(
+  value: unknown,
+): Record<string, McpServerConfig> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const maybeNested = (value as { mcpServers?: unknown }).mcpServers
+  if (maybeNested && typeof maybeNested === 'object' && !Array.isArray(maybeNested)) {
+    return maybeNested as Record<string, McpServerConfig>
+  }
+  return value as Record<string, McpServerConfig>
+}
+
+export const getProjectMcpServerDefinitions = memoize(
+  (): ProjectMcpServerDefinitions => {
+    if (process.env.NODE_ENV === 'test') {
+      // Tests may rely on deterministic filesystem state; treat cwd files as absent.
+      return {
+        servers: {},
+        sources: {},
+        mcpJsonPath: join(getCwd(), '.mcp.json'),
+        mcprcPath: join(getCwd(), '.mcprc'),
+      }
+    }
+
+    const cwd = getCwd()
+    const mcpJsonPath = join(cwd, '.mcp.json')
+    const mcprcPath = join(cwd, '.mcprc')
+
+    let mcpJsonServers: Record<string, McpServerConfig> = {}
+    let mcprcServers: Record<string, McpServerConfig> = {}
+
+    if (existsSync(mcpJsonPath)) {
+      try {
+        const content = readFileSync(mcpJsonPath, 'utf-8')
+        const parsed = safeParseJSON(content)
+        mcpJsonServers = parseMcpServersFromMcpJson(parsed)
+      } catch {
+        // Ignore read errors.
+      }
+    }
+
+    if (existsSync(mcprcPath)) {
+      try {
+        const content = readFileSync(mcprcPath, 'utf-8')
+        const parsed = safeParseJSON(content)
+        mcprcServers = parseMcpServersFromMcprc(parsed)
+      } catch {
+        // Ignore read errors.
+      }
+    }
+
+    const sources: Record<string, '.mcp.json' | '.mcprc'> = {}
+    for (const name of Object.keys(mcpJsonServers)) {
+      sources[name] = '.mcp.json'
+    }
+    for (const name of Object.keys(mcprcServers)) {
+      sources[name] = '.mcprc'
+    }
+
+    return {
+      // Claude Code parity-ish: allow local `.mcprc` to override `.mcp.json` on name conflicts.
+      servers: { ...mcpJsonServers, ...mcprcServers },
+      sources,
+      mcpJsonPath,
+      mcprcPath,
+    }
+  },
+  () => {
+    const cwd = getCwd()
+    const mcpJsonPath = join(cwd, '.mcp.json')
+    const mcprcPath = join(cwd, '.mcprc')
+
+    const parts: string[] = [cwd]
+
+    if (existsSync(mcpJsonPath)) {
+      try {
+        parts.push('mcp.json')
+        parts.push(readFileSync(mcpJsonPath, 'utf-8'))
+      } catch {}
+    }
+
+    if (existsSync(mcprcPath)) {
+      try {
+        parts.push('mcprc')
+        parts.push(readFileSync(mcprcPath, 'utf-8'))
+      } catch {}
+    }
+
+    return parts.join(':')
   },
 )
 

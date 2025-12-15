@@ -7,6 +7,7 @@ import {
   existsSync,
   readdirSync,
 } from 'fs'
+import { stat as statAsync } from 'fs/promises'
 import { logError } from './log'
 import {
   isAbsolute,
@@ -45,9 +46,28 @@ export async function glob(
     const allFiles = await BunSearcher.glob(filePattern, cwd, limit + offset + 100)
 
     // Sort by modification time (newest first for relevance)
-    const sortedFiles = allFiles
+    const resolvedFiles = allFiles
       .map(f => resolve(cwd, f))
       .filter(f => existsSync(f))
+    const stats = await Promise.all(
+      resolvedFiles.map(async file => {
+        try {
+          return await statAsync(file)
+        } catch {
+          return null
+        }
+      }),
+    )
+    const sortedFiles = resolvedFiles
+      .map((file, i) => [file, stats[i]] as const)
+      .filter(([, stat]) => stat !== null)
+      .sort((a, b) => {
+        const timeComparison =
+          (b[1]!.mtimeMs ?? 0) - (a[1]!.mtimeMs ?? 0)
+        if (timeComparison !== 0) return timeComparison
+        return a[0].localeCompare(b[0])
+      })
+      .map(([file]) => file)
 
     const truncated = sortedFiles.length > offset + limit
     return {
@@ -65,7 +85,9 @@ export async function glob(
       stat: true,
       withFileTypes: true,
     })
-    const sortedPaths = paths.sort((a, b) => (a.mtimeMs ?? 0) - (b.mtimeMs ?? 0))
+    const sortedPaths = paths.sort(
+      (a, b) => (b.mtimeMs ?? 0) - (a.mtimeMs ?? 0),
+    )
     const truncated = sortedPaths.length > offset + limit
     return {
       files: sortedPaths
@@ -396,13 +418,11 @@ export function addLineNumbers({
     .map((line, index) => {
       const lineNum = index + startLine
       const numStr = String(lineNum)
-      // Handle large numbers differently
+      // Claude Code parity: line numbers are padded to 6 chars, followed by a right arrow.
       if (numStr.length >= 6) {
-        return `${numStr}\t${line}`
+        return `${numStr}→${line}`
       }
-      // Regular numbers get padding to 6 characters
-      const n = numStr.padStart(6, ' ')
-      return `${n}\t${line}`
+      return `${numStr.padStart(6, ' ')}→${line}`
     })
     .join('\n') // TODO: This probably won't work for Windows
 }

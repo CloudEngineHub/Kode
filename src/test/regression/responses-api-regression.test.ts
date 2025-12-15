@@ -2,6 +2,8 @@ import { test, expect, describe } from 'bun:test'
 import { ModelAdapterFactory } from '../../services/modelAdapterFactory'
 import { callGPT5ResponsesAPI } from '../../services/openai'
 
+const MOCK_SERVER_TEST_MODE = process.env.MOCK_SERVER_TEST_MODE === 'true'
+
 const GPT5_CODEX_PROFILE = {
   name: 'gpt-5-codex',
   provider: 'openai',
@@ -16,6 +18,14 @@ const GPT5_CODEX_PROFILE = {
 }
 
 describe('Regression Tests: Responses API Bug Fixes', () => {
+  if (!MOCK_SERVER_TEST_MODE) {
+    test.skip('[BUG FIXED] responseId must be preserved in AssistantMessage (requires MOCK_SERVER_TEST_MODE=true)', () => {})
+    test.skip('[BUG FIXED] Content must be array of blocks, not string (requires MOCK_SERVER_TEST_MODE=true)', () => {})
+    test.skip('[BUG FIXED] AssistantMessage must not be overwritten (requires MOCK_SERVER_TEST_MODE=true)', () => {})
+    test.skip('[RESPONSES API] Real conversation: Name remembering test (requires MOCK_SERVER_TEST_MODE=true)', () => {})
+    return
+  }
+
   test('[BUG FIXED] responseId must be preserved in AssistantMessage', async () => {
     console.log('\n🐛 REGRESSION TEST: responseId Preservation')
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
@@ -103,7 +113,8 @@ describe('Regression Tests: Responses API Bug Fixes', () => {
     }
 
     // Content should have text blocks
-    const hasTextBlock = unifiedResponse.content.some(b => b.type === 'text')
+    const contentBlocks = unifiedResponse.content as any[]
+    const hasTextBlock = contentBlocks.some(b => b.type === 'text')
     expect(hasTextBlock).toBe(true)
 
     console.log('  ✅ Content correctly formatted as array of blocks')

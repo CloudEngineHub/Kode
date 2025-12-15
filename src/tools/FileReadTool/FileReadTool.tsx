@@ -1,4 +1,4 @@
-import { ImageBlockParam } from '@anthropic-ai/sdk/resources/index.mjs'
+import { DocumentBlockParam, ImageBlockParam } from '@anthropic-ai/sdk/resources/index.mjs'
 import { statSync } from 'fs'
 import { Box, Text } from 'ink'
 import * as path from 'node:path'
@@ -28,15 +28,16 @@ import { secureFileService } from '@utils/secureFile'
 import { readFileBun, fileExistsBun, getFileSizeBun } from '@utils/BunFile'
 
 const MAX_LINES_TO_RENDER = 5
-const MAX_OUTPUT_SIZE = 0.25 * 1024 * 1024 // 0.25MB in bytes
+const DEFAULT_MAX_LINES = 2000
+const MAX_LINE_LENGTH = 2000
+const MAX_OUTPUT_SIZE = 0.25 * 1024 * 1024 // 0.25MB in bytes (post-truncation safeguard)
 
-// Common image extensions
+// Common image extensions (Claude-compatible)
 const IMAGE_EXTENSIONS = new Set([
   '.png',
   '.jpg',
   '.jpeg',
   '.gif',
-  '.bmp',
   '.webp',
 ])
 
@@ -62,7 +63,7 @@ const inputSchema = z.strictObject({
 })
 
 export const FileReadTool = {
-  name: 'View',
+  name: 'Read',
   async description() {
     return DESCRIPTION
   },
@@ -164,26 +165,12 @@ export const FileReadTool = {
       }
     }
 
-    const stats = fileCheck.stats!
-    const fileSize = stats.size
     const ext = path.extname(fullFilePath).toLowerCase()
-
-    // Skip size check for image files - they have their own size limits
-    if (!IMAGE_EXTENSIONS.has(ext)) {
-      // If file is too large and no offset/limit provided
-      if (fileSize > MAX_OUTPUT_SIZE && !offset && !limit) {
-        return {
-          result: false,
-          message: formatFileSizeError(fileSize),
-          meta: { fileSize },
-        }
-      }
-    }
 
     return { result: true }
   },
   async *call(
-    { file_path, offset = 1, limit = undefined },
+    { file_path, offset = 0, limit = undefined },
     { readFileTimestamps },
   ) {
     const ext = path.extname(file_path).toLowerCase()
@@ -223,29 +210,79 @@ export const FileReadTool = {
       return
     }
 
-    // Handle offset properly - if offset is 0, don't subtract 1
-    const lineOffset = offset === 0 ? 0 : offset - 1
+    if (ext === '.ipynb') {
+      const notebookRaw = await readFileBun(fullFilePath)
+      const notebook = notebookRaw ? JSON.parse(notebookRaw) : null
+      const data = {
+        type: 'notebook' as const,
+        file: {
+          filePath: file_path,
+          cells: Array.isArray(notebook?.cells) ? notebook.cells : [],
+        },
+      }
+      yield {
+        type: 'result',
+        data,
+        resultForAssistant: this.renderResultForAssistant(data),
+      }
+      return
+    }
+
+    if (ext === '.pdf') {
+      const fileReadResult = secureFileService.safeReadFile(fullFilePath, {
+        encoding: 'buffer' as BufferEncoding,
+        maxFileSize: 10 * 1024 * 1024,
+        checkFileExtension: false,
+      })
+      if (!fileReadResult.success) {
+        throw new Error(fileReadResult.error || 'Failed to read PDF file')
+      }
+      const buffer = fileReadResult.content as Buffer
+      const data = {
+        type: 'pdf' as const,
+        file: {
+          filePath: file_path,
+          base64: buffer.toString('base64'),
+          originalSize: fileReadResult.stats?.size ?? buffer.byteLength,
+        },
+      }
+      yield {
+        type: 'result',
+        data,
+        resultForAssistant: this.renderResultForAssistant(data),
+      }
+      return
+    }
+
+    const maxLines = limit ?? DEFAULT_MAX_LINES
     const { content, lineCount, totalLines } = readTextContent(
       fullFilePath,
-      lineOffset,
-      limit,
+      offset,
+      maxLines,
     )
 
-    // Add size validation after reading for non-image files
-    if (!IMAGE_EXTENSIONS.has(ext) && content.length > MAX_OUTPUT_SIZE) {
-      throw new Error(formatFileSizeError(content.length))
+    const truncatedLines = content
+      .split(/\r?\n/)
+      .map(line =>
+        line.length > MAX_LINE_LENGTH ? line.slice(0, MAX_LINE_LENGTH) : line,
+      )
+      .join('\n')
+
+    // Post-truncation size validation
+    if (Buffer.byteLength(truncatedLines, 'utf8') > MAX_OUTPUT_SIZE) {
+      throw new Error(formatFileSizeError(Buffer.byteLength(truncatedLines, 'utf8')))
     }
 
     const data = {
       type: 'text' as const,
       file: {
         filePath: file_path,
-        content: content,
+        content: truncatedLines,
         numLines: lineCount,
-        startLine: offset,
+        startLine: offset + 1,
         totalLines,
       },
-    }
+    } as const
 
     yield {
       type: 'result',
@@ -266,8 +303,24 @@ export const FileReadTool = {
             },
           },
         ]
+      case 'pdf':
+        return [
+          {
+            type: 'document',
+            source: {
+              type: 'base64',
+              media_type: 'application/pdf',
+              data: data.file.base64,
+            },
+          } satisfies DocumentBlockParam,
+        ]
+      case 'notebook':
+        return JSON.stringify(data.file, null, 2)
       case 'text':
-        return addLineNumbers(data.file)
+        return addLineNumbers({
+          content: data.file.content,
+          startLine: data.file.startLine,
+        })
     }
   },
 } satisfies Tool<
@@ -284,25 +337,48 @@ export const FileReadTool = {
     }
   | {
       type: 'image'
-      file: { base64: string; type: ImageBlockParam.Source['media_type'] }
+      file: {
+        base64: string
+        type: ImageBlockParam.Source['media_type']
+        originalSize: number
+      }
+    }
+  | { type: 'notebook'; file: { filePath: string; cells: any[] } }
+  | {
+      type: 'pdf'
+      file: { filePath: string; base64: string; originalSize: number }
     }
 >
 
 const formatFileSizeError = (sizeInBytes: number) =>
-  `File content (${Math.round(sizeInBytes / 1024)}KB) exceeds maximum allowed size (${Math.round(MAX_OUTPUT_SIZE / 1024)}KB). Please use offset and limit parameters to read specific portions of the file, or use the GrepTool to search for specific content.`
+  `File content (${Math.round(sizeInBytes / 1024)}KB) exceeds maximum allowed size (${Math.round(MAX_OUTPUT_SIZE / 1024)}KB). Please use offset and limit parameters to read specific portions of the file, or use the Grep tool to search for specific content.`
 
 function createImageResponse(
   buffer: Buffer,
   ext: string,
+  originalSize: number,
 ): {
   type: 'image'
-  file: { base64: string; type: ImageBlockParam.Source['media_type'] }
+  file: {
+    base64: string
+    type: ImageBlockParam.Source['media_type']
+    originalSize: number
+  }
 } {
+  const normalized: ImageBlockParam.Source['media_type'] =
+    ext === '.jpg' || ext === '.jpeg'
+      ? 'image/jpeg'
+      : ext === '.png'
+        ? 'image/png'
+        : ext === '.gif'
+          ? 'image/gif'
+          : 'image/webp'
   return {
     type: 'image',
     file: {
       base64: buffer.toString('base64'),
-      type: `image/${ext.slice(1)}` as ImageBlockParam.Source['media_type'],
+      type: normalized,
+      originalSize,
     },
   }
 }
@@ -312,13 +388,16 @@ async function readImage(
   ext: string,
 ): Promise<{
   type: 'image'
-  file: { base64: string; type: ImageBlockParam.Source['media_type'] }
+  file: {
+    base64: string
+    type: ImageBlockParam.Source['media_type']
+    originalSize: number
+  }
 }> {
   try {
     const stats = statSync(filePath)
-    const sharp = (
-      (await import('sharp')) as unknown as { default: typeof import('sharp') }
-    ).default
+    const sharpModule = (await import('sharp')) as any
+    const sharp = sharpModule.default || sharpModule
     
     // Use secure file service to read the file
     const fileReadResult = secureFileService.safeReadFile(filePath, {
@@ -336,7 +415,7 @@ async function readImage(
     if (!metadata.width || !metadata.height) {
       if (stats.size > MAX_IMAGE_SIZE) {
         const compressedBuffer = await image.jpeg({ quality: 80 }).toBuffer()
-        return createImageResponse(compressedBuffer, 'jpeg')
+        return createImageResponse(compressedBuffer, '.jpeg', stats.size)
       }
     }
 
@@ -360,7 +439,7 @@ async function readImage(
         throw new Error(`Failed to read image file: ${fileReadResult.error}`)
       }
       
-      return createImageResponse(fileReadResult.content as Buffer, ext)
+      return createImageResponse(fileReadResult.content as Buffer, ext, stats.size)
     }
 
     if (width > MAX_WIDTH) {
@@ -384,13 +463,14 @@ async function readImage(
     // If still too large after resize, compress quality
     if (resizedImageBuffer.length > MAX_IMAGE_SIZE) {
       const compressedBuffer = await image.jpeg({ quality: 80 }).toBuffer()
-      return createImageResponse(compressedBuffer, 'jpeg')
+      return createImageResponse(compressedBuffer, '.jpeg', stats.size)
     }
 
-    return createImageResponse(resizedImageBuffer, ext)
+    return createImageResponse(resizedImageBuffer, ext, stats.size)
   } catch (e) {
     logError(e)
     // If any error occurs during processing, return original image
+    const stats = statSync(filePath)
     const fileReadResult = secureFileService.safeReadFile(filePath, {
       encoding: 'buffer' as BufferEncoding,
       maxFileSize: MAX_IMAGE_SIZE
@@ -400,6 +480,6 @@ async function readImage(
       throw new Error(`Failed to read image file: ${fileReadResult.error}`)
     }
     
-    return createImageResponse(fileReadResult.content as Buffer, ext)
+    return createImageResponse(fileReadResult.content as Buffer, ext, stats.size)
   }
 }

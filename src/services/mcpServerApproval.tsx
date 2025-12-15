@@ -3,11 +3,11 @@ import { render } from 'ink'
 import { MCPServerMultiselectDialog } from '@components/MCPServerMultiselectDialog'
 import { MCPServerApprovalDialog } from '@components/MCPServerApprovalDialog'
 import { getMcprcServerStatus } from './mcpClient'
-import { getMcprcConfig } from '@utils/config'
+import { getProjectMcpServerDefinitions } from '@utils/config'
 
 export async function handleMcprcServerApprovals(): Promise<void> {
-  const mcprcServers = getMcprcConfig()
-  const pendingServers = Object.keys(mcprcServers).filter(
+  const { servers } = getProjectMcpServerDefinitions()
+  const pendingServers = Object.keys(servers).filter(
     serverName => getMcprcServerStatus(serverName) === 'pending',
   )
 

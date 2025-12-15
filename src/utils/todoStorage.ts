@@ -5,6 +5,7 @@ export interface TodoItem {
   id: string
   content: string
   status: 'pending' | 'in_progress' | 'completed'
+  activeForm: string
   priority: 'high' | 'medium' | 'low'
   createdAt?: number
   updatedAt?: number
@@ -107,14 +108,20 @@ export function getTodos(agentId?: string): TodoItem[] {
     const agentCacheKey = `todoCache_${resolvedAgentId}`
     // Note: In production, we'd want agent-specific caching
 
-    return agentTodos
+    return agentTodos.map(todo => ({
+      ...todo,
+      activeForm: todo.activeForm || todo.content,
+    }))
   }
 
   // Original session-based storage for backward compatibility
   // Check cache first
   if (todoCache && now - cacheTimestamp < CACHE_TTL) {
     updateMetrics('getTodos', true)
-    return todoCache
+    return todoCache.map(todo => ({
+      ...todo,
+      activeForm: todo.activeForm || todo.content,
+    }))
   }
 
   updateMetrics('getTodos', false)
@@ -122,10 +129,13 @@ export function getTodos(agentId?: string): TodoItem[] {
   const todos = (sessionState as any)[TODO_STORAGE_KEY] || []
 
   // Update cache
-  todoCache = [...todos]
+  todoCache = [...todos].map((todo: TodoItem) => ({
+    ...todo,
+    activeForm: todo.activeForm || todo.content,
+  }))
   cacheTimestamp = now
 
-  return todos
+  return todoCache
 }
 
 export function setTodos(todos: TodoItem[], agentId?: string): void {
@@ -156,6 +166,7 @@ export function setTodos(todos: TodoItem[], agentId?: string): void {
 
       return {
         ...todo,
+        activeForm: todo.activeForm || todo.content,
         updatedAt: Date.now(),
         createdAt: todo.createdAt || Date.now(),
         previousStatus:
@@ -209,6 +220,7 @@ export function setTodos(todos: TodoItem[], agentId?: string): void {
 
     return {
       ...todo,
+      activeForm: todo.activeForm || todo.content,
       updatedAt: Date.now(),
       createdAt: todo.createdAt || Date.now(),
       previousStatus:
@@ -419,6 +431,7 @@ export function optimizeTodoStorage(): void {
     todo =>
       todo.id &&
       todo.content &&
+      todo.activeForm &&
       ['pending', 'in_progress', 'completed'].includes(todo.status) &&
       ['high', 'medium', 'low'].includes(todo.priority),
   )

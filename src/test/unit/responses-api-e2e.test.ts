@@ -284,7 +284,7 @@ describe('Responses API Tests', () => {
         }
       })
 
-      const response = new Response(stream)
+      const response = new Response(stream as any)
       const events = []
 
       // Collect all streaming events

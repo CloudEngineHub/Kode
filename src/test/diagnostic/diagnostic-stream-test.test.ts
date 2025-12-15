@@ -14,6 +14,8 @@ import { test, expect, describe } from 'bun:test'
 import { ModelAdapterFactory } from '../../services/modelAdapterFactory'
 import { callGPT5ResponsesAPI } from '../../services/openai'
 
+const MOCK_SERVER_TEST_MODE = process.env.MOCK_SERVER_TEST_MODE === 'true'
+
 const GPT5_CODEX_PROFILE = {
   name: 'gpt-5-codex',
   provider: 'openai',
@@ -28,6 +30,12 @@ const GPT5_CODEX_PROFILE = {
 }
 
 describe('🔍 Diagnostic: Stream State Tracking', () => {
+  if (!MOCK_SERVER_TEST_MODE) {
+    test.skip('Track stream locked state through the entire pipeline (requires MOCK_SERVER_TEST_MODE=true)', () => {})
+    test.skip('Compare streaming vs non-streaming responses (requires MOCK_SERVER_TEST_MODE=true)', () => {})
+    return
+  }
+
   test('Track stream locked state through the entire pipeline', async () => {
     console.log('\n🔍 DIAGNOSTIC TEST: Stream State Tracking')
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')

@@ -13,9 +13,10 @@ export function UserCommandMessage({
   addMargin,
   param: { text },
 }: Props): React.ReactNode {
-  const commandMessage = extractTag(text, 'command-message')
+  const commandName =
+    extractTag(text, 'command-name') ?? extractTag(text, 'command-message')
   const args = extractTag(text, 'command-args')
-  if (!commandMessage) {
+  if (!commandName) {
     return null
   }
 
@@ -23,7 +24,7 @@ export function UserCommandMessage({
   return (
     <Box flexDirection="column" marginTop={addMargin ? 1 : 0} width="100%">
       <Text color={theme.secondaryText}>
-        &gt; /{commandMessage} {args}
+        &gt; /{commandName} {args}
       </Text>
     </Box>
   )

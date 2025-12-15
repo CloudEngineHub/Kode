@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { FallbackToolUseRejectedMessage } from '@components/FallbackToolUseRejectedMessage'
 import { PRODUCT_NAME } from '@constants/product'
 import { queryQuick } from '@services/claude'
-import { Tool, ValidationResult } from '@tool'
+import { Tool, ValidationResult, ToolUseContext } from '@tool'
 import { splitCommand } from '@utils/commands'
 import { isInDirectory } from '@utils/file'
 import { logError } from '@utils/log'
@@ -25,6 +25,24 @@ export const inputSchema = z.strictObject({
     .number()
     .optional()
     .describe('Optional timeout in milliseconds (max 600000)'),
+  description: z
+    .string()
+    .optional()
+    .describe(
+      'Clear, concise description of what this command does in 5-10 words, in active voice.',
+    ),
+  run_in_background: z
+    .boolean()
+    .optional()
+    .describe(
+      'Set to true to run this command in the background. Use BashOutput to read the output later.',
+    ),
+  dangerouslyDisableSandbox: z
+    .boolean()
+    .optional()
+    .describe(
+      'Set this to true to dangerously override sandbox mode and run commands without sandboxing.',
+    ),
 })
 
 type In = typeof inputSchema
@@ -34,6 +52,7 @@ export type Out = {
   stderr: string
   stderrLines: number // Total number of lines in original stderr, even if `stderr` is now truncated
   interrupted: boolean
+  bashId?: string
 }
 
 export const BashTool = {
@@ -68,10 +87,25 @@ export const BashTool = {
     return true
   },
   async validateInput(
-    { command },
-    context?: { commandSource?: CommandSource },
+    { command, timeout },
+    context?: ToolUseContext,
   ): Promise<ValidationResult> {
-    const source = context?.commandSource || 'agent_call'
+    if (timeout !== undefined) {
+      if (!Number.isFinite(timeout) || timeout < 0) {
+        return {
+          result: false,
+          message: `Invalid timeout: ${timeout}. Timeout must be a non-negative number of milliseconds.`,
+        }
+      }
+      if (timeout > 600_000) {
+        return {
+          result: false,
+          message: `Invalid timeout: ${timeout}. Maximum allowed timeout is 600000ms.`,
+        }
+      }
+    }
+
+    const source = (context as any)?.commandSource || 'agent_call'
     const isUserMode = source === 'user_bash_mode'
     const commands = splitCommand(command)
 
@@ -115,7 +149,7 @@ export const BashTool = {
 
     return { result: true }
   },
-  renderToolUseMessage({ command }) {
+  renderToolUseMessage({ command, run_in_background }) {
     // Clean up any command that uses the quoted HEREDOC pattern
     if (command.includes("\"$(cat <<'EOF'")) {
       const match = command.match(
@@ -125,10 +159,11 @@ export const BashTool = {
         const prefix = match[1]
         const content = match[2]
         const suffix = match[3] || ''
-        return `${prefix.trim()} "${content.trim()}"${suffix.trim()}`
+        const cleaned = `${prefix.trim()} "${content.trim()}"${suffix.trim()}`
+        return run_in_background ? `${cleaned} [background]` : cleaned
       }
     }
-    return command
+    return run_in_background ? `${command} [background]` : command
   },
   renderToolUseRejectedMessage() {
     return <FallbackToolUseRejectedMessage />
@@ -137,7 +172,10 @@ export const BashTool = {
   renderToolResultMessage(content) {
     return <BashToolResultMessage content={content} verbose={false} />
   },
-  renderResultForAssistant({ interrupted, stdout, stderr }) {
+  renderResultForAssistant({ interrupted, stdout, stderr, bashId }) {
+    if (bashId) {
+      return `Command is running in the background.\n\nUse BashOutput with bash_id="${bashId}" to retrieve the output.\nUse KillShell with shell_id="${bashId}" to stop the command.`
+    }
     let errorMessage = stderr.trim()
     if (interrupted) {
       if (stderr) errorMessage += EOL
@@ -147,7 +185,7 @@ export const BashTool = {
     return `${stdout.trim()}${hasBoth ? '\n' : ''}${errorMessage.trim()}`
   },
   async *call(
-    { command, timeout = 120000 },
+    { command, timeout = 120000, run_in_background },
     { abortController, readFileTimestamps },
   ) {
     let stdout = ''
@@ -172,6 +210,27 @@ export const BashTool = {
     }
 
     try {
+      if (run_in_background) {
+        const { bashId } = BunShell.getInstance().execInBackground(
+          command,
+          timeout,
+        )
+        const data: Out = {
+          stdout: '',
+          stdoutLines: 0,
+          stderr: '',
+          stderrLines: 0,
+          interrupted: false,
+          bashId,
+        }
+        yield {
+          type: 'result',
+          resultForAssistant: this.renderResultForAssistant(data),
+          data,
+        }
+        return
+      }
+
       // Execute commands
       const result = await BunShell.getInstance().exec(
         command,

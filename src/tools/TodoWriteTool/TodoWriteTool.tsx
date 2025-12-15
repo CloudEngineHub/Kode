@@ -1,45 +1,43 @@
 import { Box, Text } from 'ink'
 import * as React from 'react'
+import { randomUUID } from 'crypto'
 import { z } from 'zod'
 import { FallbackToolUseRejectedMessage } from '@components/FallbackToolUseRejectedMessage'
 import { TodoItem as TodoItemComponent } from '@components/TodoItem'
 import { Tool, ValidationResult } from '@tool'
-import { setTodos, getTodos, TodoItem } from '@utils/todoStorage'
+import { setTodos, getTodos, TodoItem as StoredTodoItem } from '@utils/todoStorage'
 import { emitReminderEvent } from '@services/systemReminder'
 import { startWatchingTodoFile } from '@services/fileFreshness'
 import { DESCRIPTION, PROMPT } from './prompt'
 import { getTheme } from '@utils/theme'
 
-const TodoItemSchema = z.object({
-  content: z.string().min(1).describe('The task description or content'),
-  status: z
-    .enum(['pending', 'in_progress', 'completed'])
-    .describe('Current status of the task'),
-  priority: z
-    .enum(['high', 'medium', 'low'])
-    .describe('Priority level of the task'),
-  id: z.string().min(1).describe('Unique identifier for the task'),
-})
+const TodoItemSchema = z
+  .object({
+    content: z.string().min(1).describe('The task description or content'),
+    status: z
+      .enum(['pending', 'in_progress', 'completed'])
+      .describe('Current status of the task'),
+    activeForm: z
+      .string()
+      .min(1)
+      .describe('The active form of the task (e.g., "Writing tests")'),
+  })
+  .strict()
 
 const inputSchema = z.strictObject({
   todos: z.array(TodoItemSchema).describe('The updated todo list'),
 })
 
-function validateTodos(todos: TodoItem[]): ValidationResult {
-  // Check for duplicate IDs
-  const ids = todos.map(todo => todo.id)
-  const uniqueIds = new Set(ids)
-  if (ids.length !== uniqueIds.size) {
-    return {
-      result: false,
-      errorCode: 1,
-      message: 'Duplicate todo IDs found',
-      meta: {
-        duplicateIds: ids.filter((id, index) => ids.indexOf(id) !== index),
-      },
+type InputTodo = z.infer<typeof TodoItemSchema>
+type Output =
+  | {
+      oldTodos: InputTodo[]
+      newTodos: InputTodo[]
+      agentId?: string
     }
-  }
+  | string
 
+function validateTodos(todos: InputTodo[]): ValidationResult {
   // Check for multiple in_progress tasks
   const inProgressTasks = todos.filter(todo => todo.status === 'in_progress')
   if (inProgressTasks.length > 1) {
@@ -47,7 +45,7 @@ function validateTodos(todos: TodoItem[]): ValidationResult {
       result: false,
       errorCode: 2,
       message: 'Only one task can be in_progress at a time',
-      meta: { inProgressTaskIds: inProgressTasks.map(t => t.id) },
+      meta: { inProgressTasks: inProgressTasks.map(t => t.content) },
     }
   }
 
@@ -57,24 +55,23 @@ function validateTodos(todos: TodoItem[]): ValidationResult {
       return {
         result: false,
         errorCode: 3,
-        message: `Todo with ID "${todo.id}" has empty content`,
-        meta: { todoId: todo.id },
+        message: 'Todo has empty content',
       }
     }
     if (!['pending', 'in_progress', 'completed'].includes(todo.status)) {
       return {
         result: false,
         errorCode: 4,
-        message: `Invalid status "${todo.status}" for todo "${todo.id}"`,
-        meta: { todoId: todo.id, invalidStatus: todo.status },
+        message: `Invalid status "${todo.status}" for todo "${todo.content}"`,
+        meta: { invalidStatus: todo.status },
       }
     }
-    if (!['high', 'medium', 'low'].includes(todo.priority)) {
+    if (!todo.activeForm?.trim()) {
       return {
         result: false,
         errorCode: 5,
-        message: `Invalid priority "${todo.priority}" for todo "${todo.id}"`,
-        meta: { todoId: todo.id, invalidPriority: todo.priority },
+        message: 'Todo has empty activeForm',
+        meta: { todoContent: todo.content },
       }
     }
   }
@@ -82,7 +79,7 @@ function validateTodos(todos: TodoItem[]): ValidationResult {
   return { result: true }
 }
 
-function generateTodoSummary(todos: TodoItem[]): string {
+function generateTodoSummary(todos: StoredTodoItem[]): string {
   const stats = {
     total: todos.length,
     pending: todos.filter(t => t.status === 'pending').length,
@@ -110,7 +107,7 @@ export const TodoWriteTool = {
   },
   inputSchema,
   userFacingName() {
-    return 'Update Todos'
+    return ''
   },
   async isEnabled() {
     return true
@@ -124,13 +121,11 @@ export const TodoWriteTool = {
   needsPermissions() {
     return false
   },
-  renderResultForAssistant(result) {
-    // Match official implementation - return static confirmation message
+  renderResultForAssistant() {
     return 'Todos have been modified successfully. Ensure that you continue to use the todo list to track your progress. Please proceed with the current tasks if applicable'
   },
   renderToolUseMessage(input, { verbose }) {
-    // Show a simple confirmation message when the tool is being used
-    return '{ params.todo }'
+    return `Update todo list (${input.todos.length} items)`
   },
   renderToolUseRejectedMessage() {
     return <FallbackToolUseRejectedMessage />
@@ -139,8 +134,12 @@ export const TodoWriteTool = {
     const isError = typeof output === 'string' && output.startsWith('Error')
 
     // For non-error output, get current todos from storage and render them
-    if (!isError && typeof output === 'string') {
-      const currentTodos = getTodos()
+    if (!isError) {
+      const agentId =
+        output && typeof output === 'object' && 'agentId' in output
+          ? (output as any).agentId
+          : undefined
+      const currentTodos = getTodos(agentId)
       
       if (currentTodos.length === 0) {
         return (
@@ -167,7 +166,7 @@ export const TodoWriteTool = {
 
       return (
         <Box flexDirection="column" width="100%">
-          {sortedTodos.map((todo: TodoItem, index: number) => {
+          {sortedTodos.map((todo: StoredTodoItem, index: number) => {
             // Determine checkbox symbol and colors
             let checkbox: string
             let textColor: string
@@ -225,9 +224,7 @@ export const TodoWriteTool = {
     )
   },
   async validateInput({ todos }: z.infer<typeof inputSchema>) {
-    // Type assertion to ensure todos match TodoItem[] interface
-    const todoItems = todos as TodoItem[]
-    const validation = validateTodos(todoItems)
+    const validation = validateTodos(todos)
     if (!validation.result) {
       return validation
     }
@@ -245,9 +242,40 @@ export const TodoWriteTool = {
 
       // Store previous todos for comparison (agent-scoped)
       const previousTodos = getTodos(agentId)
+      const oldTodos: InputTodo[] = previousTodos.map(todo => ({
+        content: todo.content,
+        status: todo.status,
+        activeForm: todo.activeForm || todo.content,
+      }))
 
-      // Type assertion to ensure todos match TodoItem[] interface
-      const todoItems = todos as TodoItem[]
+      // Claude behavior: if all todos are completed, clear the list
+      const shouldClear =
+        todos.length > 0 && todos.every(todo => todo.status === 'completed')
+
+      const reusable = new Map<string, StoredTodoItem[]>()
+      for (const todo of previousTodos) {
+        const key = `${todo.content}|||${todo.activeForm || todo.content}`
+        const list = reusable.get(key) ?? []
+        list.push(todo)
+        reusable.set(key, list)
+      }
+
+      const todoItems: StoredTodoItem[] = shouldClear
+        ? []
+        : todos.map(todo => {
+            const key = `${todo.content}|||${todo.activeForm}`
+            const list = reusable.get(key)
+            const reused = list && list.length > 0 ? list.shift() : undefined
+
+            return {
+              id: reused?.id ?? randomUUID(),
+              content: todo.content,
+              status: todo.status,
+              activeForm: todo.activeForm,
+              priority: reused?.priority ?? 'medium',
+              ...(reused?.createdAt ? { createdAt: reused.createdAt } : {}),
+            }
+          })
 
       // Note: Validation already done in validateInput, no need for duplicate validation
       // This eliminates the double validation issue
@@ -273,22 +301,14 @@ export const TodoWriteTool = {
         })
       }
 
-      // Generate enhanced summary
-      const summary = generateTodoSummary(todoItems)
-
-      // Enhanced result data for rendering
-      const resultData = {
-        oldTodos: previousTodos,
-        newTodos: todoItems,
-        summary,
-      }
-
       yield {
         type: 'result',
-        data: summary, // Return string to satisfy interface
-        resultForAssistant: summary,
-        // Store todo data in a way accessible to the renderer
-        // We'll modify the renderToolResultMessage to get todos from storage
+        data: {
+          oldTodos,
+          newTodos: todos,
+          agentId: agentId || undefined,
+        },
+        resultForAssistant: this.renderResultForAssistant(),
       }
     } catch (error) {
       const errorMessage =
@@ -310,4 +330,4 @@ export const TodoWriteTool = {
       }
     }
   },
-} satisfies Tool<typeof inputSchema, string>
+} satisfies Tool<typeof inputSchema, Output>

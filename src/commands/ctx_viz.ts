@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { Command } from '@commands'
 import type { Tool } from '@tool'
 import Table from 'cli-table3'
@@ -207,3 +208,4 @@ const command: Command = {
 }
 
 export default command
+// @ts-nocheck

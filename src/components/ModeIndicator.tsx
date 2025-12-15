@@ -50,7 +50,7 @@ export function ModeIndicator({
               Available tools: {permissionContext.allowedTools.join(', ')}
             </Text>
             <Text color="yellow" dimColor>
-              Use exit_plan_mode tool when ready to execute
+              Use ExitPlanMode tool when ready to execute
             </Text>
           </Box>
         )}

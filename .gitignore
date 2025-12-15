@@ -188,3 +188,6 @@ pnpm-lock.yaml
 cli.mjs
 cli.mjs.map
 source-maps/
+
+# Local scratch
+temp_code/

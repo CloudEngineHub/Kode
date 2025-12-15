@@ -615,11 +615,14 @@ export function REPL({
   // only show the dialog once not loading
   const showingCostDialog = !isLoading && showCostDialog
 
+  const conversationKey = `${messageLogName}:${forkNumber}`
+
   return (
-    <PermissionProvider 
+    <PermissionProvider
+      conversationKey={conversationKey}
       isBypassPermissionsModeAvailable={!safeMode}
-      children={
-        <React.Fragment>
+    >
+      <React.Fragment>
         {/* Update banner now renders inside Logo for stable placement */}
         <ModeIndicator />
       <React.Fragment key={`static-messages-${forkNumber}`}>
@@ -765,9 +768,8 @@ export function REPL({
       )}
       {/** Fix occasional rendering artifact */}
       <Newline />
-        </React.Fragment>
-      }
-    />
+      </React.Fragment>
+    </PermissionProvider>
   )
 }
 

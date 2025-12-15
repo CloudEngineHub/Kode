@@ -24,15 +24,8 @@ export class SecureFileService {
     // 默认最大文件大小 (10MB)
     this.maxFileSize = 10 * 1024 * 1024
     
-    // 允许的文件扩展名
-    this.allowedExtensions = new Set([
-      '.txt', '.md', '.json', '.js', '.ts', '.tsx', '.jsx',
-      '.yaml', '.yml', '.toml', '.ini', '.env', '.log',
-      '.html', '.css', '.scss', '.less', '.xml', '.csv',
-      '.py', '.go', '.rs', '.java', '.cpp', '.c', '.h',
-      '.sh', '.bash', '.zsh', '.fish', '.ps1', '.bat',
-      '.dockerfile', '.gitignore', '.npmignore', '.eslintignore'
-    ])
+    // 允许的文件扩展名（空集合表示不限制扩展名）
+    this.allowedExtensions = new Set()
   }
 
   public static getInstance(): SecureFileService {

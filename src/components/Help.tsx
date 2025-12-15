@@ -34,16 +34,14 @@ export function Help({
   // Filter out hidden commands from the help display
   const filteredCommands = commands.filter(cmd => !cmd.isHidden)
 
-  // Separate built-in commands from custom commands
-  // Built-in commands are those that don't follow the custom command patterns
-  const builtInCommands = filteredCommands.filter(
-    cmd => !cmd.name.startsWith('project:') && !cmd.name.startsWith('user:'),
-  )
-
-  // Custom commands are those with project: or user: prefixes
+  // Custom commands loaded from disk carry a scope field.
   const customCommands = filteredCommands.filter(
-    cmd => cmd.name.startsWith('project:') || cmd.name.startsWith('user:'),
+    cmd =>
+      (cmd as any).scope === 'project' ||
+      (cmd as any).scope === 'user',
   ) as CustomCommandWithScope[]
+
+  const builtInCommands = filteredCommands.filter(cmd => !customCommands.includes(cmd as any))
 
   // Progressive disclosure state for managing information flow
   const [count, setCount] = React.useState(0)
@@ -175,10 +173,19 @@ export function Help({
                 Custom commands loaded from:
               </Text>
               <Text color={theme.secondaryText}>
-                • {getCustomCommandDirectories().userClaude} (Claude `.claude` user scope)
+                • {getCustomCommandDirectories().userClaudeCommands} (Claude `.claude` user scope)
               </Text>
               <Text color={theme.secondaryText}>
-                • {getCustomCommandDirectories().projectClaude} (Claude `.claude` project scope)
+                • {getCustomCommandDirectories().projectClaudeCommands} (Claude `.claude` project scope)
+              </Text>
+              <Text color={theme.secondaryText}>
+                Skills loaded from:
+              </Text>
+              <Text color={theme.secondaryText}>
+                • {getCustomCommandDirectories().userClaudeSkills} (Claude `.claude` user scope)
+              </Text>
+              <Text color={theme.secondaryText}>
+                • {getCustomCommandDirectories().projectClaudeSkills} (Claude `.claude` project scope)
               </Text>
               <Text color={theme.secondaryText}>
                 Use /refresh-commands to reload after changes
@@ -187,13 +194,22 @@ export function Help({
           ) : (
             <Box marginTop={1}>
               <Text color={theme.secondaryText}>
-                Create custom commands by adding .md files to:
+                Create custom commands by adding `.md` files to:
               </Text>
               <Text color={theme.secondaryText}>
-                • {getCustomCommandDirectories().userClaude} (Claude `.claude` user scope)
+                • {getCustomCommandDirectories().userClaudeCommands} (Claude `.claude` user scope)
               </Text>
               <Text color={theme.secondaryText}>
-                • {getCustomCommandDirectories().projectClaude} (Claude `.claude` project scope)
+                • {getCustomCommandDirectories().projectClaudeCommands} (Claude `.claude` project scope)
+              </Text>
+              <Text color={theme.secondaryText}>
+                Create skills by adding directories containing `SKILL.md` to:
+              </Text>
+              <Text color={theme.secondaryText}>
+                • {getCustomCommandDirectories().userClaudeSkills} (Claude `.claude` user scope)
+              </Text>
+              <Text color={theme.secondaryText}>
+                • {getCustomCommandDirectories().projectClaudeSkills} (Claude `.claude` project scope)
               </Text>
               <Text color={theme.secondaryText}>
                 Use /refresh-commands to reload after creation

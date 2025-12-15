@@ -12,6 +12,7 @@ import envPaths from 'env-paths'
 import type { LogOption, SerializedMessage } from '@kode-types/logs'
 import { MACRO } from '@constants/macros'
 import { PRODUCT_COMMAND } from '@constants/product'
+import { getPlanSlugForConversationKey } from '@utils/planMode'
 
 const IN_MEMORY_ERROR_LOG: Array<{ error: string; timestamp: string }> = []
 const MAX_IN_MEMORY_ERRORS = 100 // Limit to prevent memory issues
@@ -167,7 +168,11 @@ function appendToLog(path: string, message: object): void {
   safeWriteFile(path, JSON.stringify(messages, null, 2))
 }
 
-export function overwriteLog(path: string, messages: object[]): void {
+export function overwriteLog(
+  path: string,
+  messages: object[],
+  options?: { conversationKey?: string },
+): void {
   if (process.env.USER_TYPE === 'external') {
     return
   }
@@ -181,8 +186,13 @@ export function overwriteLog(path: string, messages: object[]): void {
     return
   }
 
+  const slug = options?.conversationKey
+    ? getPlanSlugForConversationKey(options.conversationKey)
+    : null
+
   const messagesWithMetadata = messages.map(message => ({
     ...message,
+    ...(slug ? { slug } : {}),
     cwd: process.cwd(),
     userType: process.env.USER_TYPE,
     sessionId: SESSION_ID,

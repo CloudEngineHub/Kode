@@ -32,6 +32,10 @@ const inputSchema = z.strictObject({
   file_path: z.string().describe('The absolute path to the file to modify'),
   old_string: z.string().describe('The text to replace'),
   new_string: z.string().describe('The text to replace it with'),
+  replace_all: z
+    .boolean()
+    .optional()
+    .describe('Replace all occurences of old_string (default false)'),
 })
 
 export type In = typeof inputSchema
@@ -77,14 +81,19 @@ export const FileEditTool = {
     )
   },
   async renderToolUseRejectedMessage(
-    { file_path, old_string, new_string }: any = {},
+    { file_path, old_string, new_string, replace_all }: any = {},
     { columns, verbose }: any = {},
   ) {
     try {
       if (!file_path) {
         return <FallbackToolUseRejectedMessage />
       }
-      const { patch } = await applyEdit(file_path, old_string, new_string)
+      const { patch } = await applyEdit(
+        file_path,
+        old_string,
+        new_string,
+        Boolean(replace_all),
+      )
       return (
         <Box flexDirection="column">
           <Text>
@@ -122,7 +131,7 @@ export const FileEditTool = {
     }
   },
   async validateInput(
-    { file_path, old_string, new_string },
+    { file_path, old_string, new_string, replace_all },
     { readFileTimestamps },
   ) {
     if (old_string === new_string) {
@@ -221,7 +230,7 @@ export const FileEditTool = {
     }
 
     const matches = file.split(old_string).length - 1
-    if (matches > 1) {
+    if (matches > 1 && !replace_all) {
       return {
         result: false,
         message: `Found ${matches} matches of the string to replace. For safety, this tool only supports replacing exactly one occurrence at a time. Add more lines of context to your edit and try again.`,
@@ -233,8 +242,16 @@ export const FileEditTool = {
 
     return { result: true }
   },
-  async *call({ file_path, old_string, new_string }, { readFileTimestamps }) {
-    const { patch, updatedFile } = await applyEdit(file_path, old_string, new_string)
+  async *call(
+    { file_path, old_string, new_string, replace_all },
+    { readFileTimestamps },
+  ) {
+    const { patch, updatedFile } = await applyEdit(
+      file_path,
+      old_string,
+      new_string,
+      replace_all ?? false,
+    )
 
     const fullFilePath = isAbsolute(file_path)
       ? file_path

@@ -6,6 +6,7 @@ import {
   getGlobalConfig,
   saveGlobalConfig,
   getMcprcConfig,
+  getProjectMcpServerDefinitions,
   addMcprcServerForTesting,
   removeMcprcServerForTesting,
 } from '@utils/config'
@@ -21,6 +22,8 @@ import {
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { WebSocketClientTransport } from '@modelcontextprotocol/sdk/client/websocket.js'
 import {
   CallToolResultSchema,
   ClientRequest,
@@ -39,6 +42,68 @@ import { Command } from '@commands'
 import { PRODUCT_COMMAND } from '@constants/product'
 
 type McpName = string
+
+function sanitizeMcpIdentifierPart(value: string): string {
+  return value.replace(/[^a-zA-Z0-9_-]/g, '_')
+}
+
+function getMcpServerConnectionBatchSize(): number {
+  const raw = process.env.MCP_SERVER_CONNECTION_BATCH_SIZE
+  const parsed = raw ? Number.parseInt(raw, 10) : NaN
+  if (Number.isFinite(parsed) && parsed > 0 && parsed <= 50) return parsed
+  return 3
+}
+
+function getMcpToolTimeoutMs(): number | null {
+  const raw = process.env.MCP_TOOL_TIMEOUT
+  const parsed = raw ? Number.parseInt(raw, 10) : NaN
+  if (!Number.isFinite(parsed) || parsed <= 0) return null
+  return parsed
+}
+
+type TimeoutSignal = { signal: AbortSignal; cleanup: () => void }
+
+function createTimeoutSignal(timeoutMs: number): TimeoutSignal {
+  const timeoutFn = (AbortSignal as any)?.timeout
+  if (typeof timeoutFn === 'function') {
+    return { signal: timeoutFn(timeoutMs) as AbortSignal, cleanup: () => {} }
+  }
+
+  const controller = new AbortController()
+  const id = setTimeout(() => controller.abort(), timeoutMs)
+  return { signal: controller.signal, cleanup: () => clearTimeout(id) }
+}
+
+function mergeAbortSignals(
+  signals: Array<AbortSignal | undefined>,
+): { signal: AbortSignal; cleanup: () => void } | null {
+  const active = signals.filter((s): s is AbortSignal => !!s)
+  if (active.length === 0) return null
+  if (active.length === 1) return { signal: active[0]!, cleanup: () => {} }
+
+  const controller = new AbortController()
+
+  const abort = () => {
+    try {
+      controller.abort()
+    } catch {}
+  }
+
+  for (const s of active) {
+    if (s.aborted) {
+      abort()
+      return { signal: controller.signal, cleanup: () => {} }
+    }
+    s.addEventListener('abort', abort, { once: true })
+  }
+
+  return { signal: controller.signal, cleanup: () => {} }
+}
+
+const IDE_MCP_TOOL_ALLOWLIST = new Set([
+  'mcp__ide__executeCode',
+  'mcp__ide__getDiagnostics',
+])
 
 export function parseEnvVars(
   rawEnvArgs: string[] | undefined,
@@ -60,9 +125,9 @@ export function parseEnvVars(
   return parsedEnv
 }
 
-const VALID_SCOPES = ['project', 'global', 'mcprc'] as const
+const VALID_SCOPES = ['project', 'global', 'mcprc', 'mcpjson'] as const
 type ConfigScope = (typeof VALID_SCOPES)[number]
-const EXTERNAL_SCOPES = ['project', 'global'] as ConfigScope[]
+const EXTERNAL_SCOPES = ['project', 'global', 'mcprc', 'mcpjson'] as ConfigScope[]
 
 export function ensureConfigScope(scope?: string): ConfigScope {
   if (!scope) return 'project'
@@ -113,6 +178,36 @@ export function addMcpServer(
       } catch (error) {
         throw new Error(`Failed to write to .mcprc: ${error}`)
       }
+    }
+  } else if (scope === 'mcpjson') {
+    const mcpJsonPath = join(getCwd(), '.mcp.json')
+    let config: Record<string, unknown> = { mcpServers: {} }
+
+    if (existsSync(mcpJsonPath)) {
+      try {
+        const content = readFileSync(mcpJsonPath, 'utf-8')
+        const parsed = safeParseJSON(content)
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          config = parsed as Record<string, unknown>
+        }
+      } catch {
+        // Fall back to empty config.
+      }
+    }
+
+    const rawServers = (config as { mcpServers?: unknown }).mcpServers
+    const servers =
+      rawServers && typeof rawServers === 'object' && !Array.isArray(rawServers)
+        ? (rawServers as Record<string, McpServerConfig>)
+        : ({} as Record<string, McpServerConfig>)
+
+    servers[name] = server
+    config.mcpServers = servers
+
+    try {
+      writeFileSync(mcpJsonPath, JSON.stringify(config, null, 2), 'utf-8')
+    } catch (error) {
+      throw new Error(`Failed to write to .mcp.json: ${error}`)
     }
   } else if (scope === 'global') {
     const config = getGlobalConfig()
@@ -168,6 +263,36 @@ export function removeMcpServer(
         throw new Error(`Failed to remove from .mcprc: ${error}`)
       }
     }
+  } else if (scope === 'mcpjson') {
+    const mcpJsonPath = join(getCwd(), '.mcp.json')
+    if (!existsSync(mcpJsonPath)) {
+      throw new Error('No .mcp.json file found in this directory')
+    }
+
+    try {
+      const content = readFileSync(mcpJsonPath, 'utf-8')
+      const parsed = safeParseJSON(content) as Record<string, unknown> | null
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('Invalid .mcp.json format')
+      }
+
+      const rawServers = (parsed as { mcpServers?: unknown }).mcpServers
+      if (!rawServers || typeof rawServers !== 'object' || Array.isArray(rawServers)) {
+        throw new Error('Invalid .mcp.json format (missing mcpServers)')
+      }
+
+      const servers = rawServers as Record<string, McpServerConfig>
+      if (!servers[name]) {
+        throw new Error(`No MCP server found with name: ${name} in .mcp.json`)
+      }
+
+      delete servers[name]
+      ;(parsed as any).mcpServers = servers
+      writeFileSync(mcpJsonPath, JSON.stringify(parsed, null, 2), 'utf-8')
+    } catch (error) {
+      if (error instanceof Error) throw error
+      throw new Error(`Failed to remove from .mcp.json: ${error}`)
+    }
   } else if (scope === 'global') {
     const config = getGlobalConfig()
     if (!config.mcpServers?.[name]) {
@@ -187,12 +312,12 @@ export function removeMcpServer(
 
 export function listMCPServers(): Record<string, McpServerConfig> {
   const globalConfig = getGlobalConfig()
-  const mcprcConfig = getMcprcConfig()
+  const projectFileConfig = getProjectMcpServerDefinitions().servers
   const projectConfig = getCurrentProjectConfig()
   return {
     ...(globalConfig.mcpServers ?? {}),
-    ...(mcprcConfig ?? {}), // mcprc configs override global ones
-    ...(projectConfig.mcpServers ?? {}), // Project configs override mcprc ones
+    ...(projectFileConfig ?? {}), // Project-file configs override global ones
+    ...(projectConfig.mcpServers ?? {}), // Project configs override project-file ones
   }
 }
 
@@ -202,7 +327,8 @@ export type ScopedMcpServerConfig = McpServerConfig & {
 
 export function getMcpServer(name: McpName): ScopedMcpServerConfig | undefined {
   const projectConfig = getCurrentProjectConfig()
-  const mcprcConfig = getMcprcConfig()
+  const projectFileDefinitions = getProjectMcpServerDefinitions()
+  const projectFileConfig = projectFileDefinitions.servers
   const globalConfig = getGlobalConfig()
 
   // Check each scope in order of precedence
@@ -210,8 +336,10 @@ export function getMcpServer(name: McpName): ScopedMcpServerConfig | undefined {
     return { ...projectConfig.mcpServers[name], scope: 'project' }
   }
 
-  if (mcprcConfig?.[name]) {
-    return { ...mcprcConfig[name], scope: 'mcprc' }
+  if (projectFileConfig?.[name]) {
+    const source = projectFileDefinitions.sources[name]
+    const scope: ConfigScope = source === '.mcp.json' ? 'mcpjson' : 'mcprc'
+    return { ...projectFileConfig[name], scope }
   }
 
   if (globalConfig.mcpServers?.[name]) {
@@ -225,59 +353,200 @@ async function connectToServer(
   name: string,
   serverRef: McpServerConfig,
 ): Promise<Client> {
-  const transport =
-    serverRef.type === 'sse'
-      ? new SSEClientTransport(new URL(serverRef.url))
-      : new StdioClientTransport({
-          command: serverRef.command,
-          args: serverRef.args,
-          env: {
-            ...process.env,
-            ...serverRef.env,
-          } as Record<string, string>,
-          stderr: 'pipe', // prevents error output from the MCP server from printing to the UI
+  type Candidate = { transport: unknown; kind: 'stdio' | 'sse' | 'http' | 'ws' }
+
+  const ensureWebSocketGlobal = async () => {
+    if (typeof (globalThis as any).WebSocket === 'function') return
+    try {
+      const undici = await import('undici')
+      if (typeof (undici as any).WebSocket === 'function') {
+        ;(globalThis as any).WebSocket = (undici as any).WebSocket
+      }
+    } catch {
+      // Ignore; transport creation will throw if WebSocket is unavailable.
+    }
+  }
+
+  const candidates: Candidate[] = await (async () => {
+    switch (serverRef.type) {
+      case 'sse': {
+        const ref = serverRef
+        return [
+          {
+            kind: 'sse',
+            transport: new SSEClientTransport(new URL(ref.url), {
+              ...(ref.headers ? { requestInit: { headers: ref.headers } } : {}),
+            }),
+          },
+          // Best-effort fallback: some servers call their transport "sse" but implement Streamable HTTP.
+          {
+            kind: 'http',
+            transport: new StreamableHTTPClientTransport(new URL(ref.url), {
+              ...(ref.headers ? { requestInit: { headers: ref.headers } } : {}),
+            }),
+          },
+        ]
+      }
+      case 'sse-ide': {
+        const ref = serverRef
+        return [
+          {
+            kind: 'sse',
+            transport: new SSEClientTransport(new URL(ref.url), {
+              ...(ref.headers ? { requestInit: { headers: ref.headers } } : {}),
+            }),
+          },
+        ]
+      }
+      case 'http': {
+        const ref = serverRef
+        return [
+          {
+            kind: 'http',
+            transport: new StreamableHTTPClientTransport(new URL(ref.url), {
+              ...(ref.headers ? { requestInit: { headers: ref.headers } } : {}),
+            }),
+          },
+          // Best-effort fallback for legacy SSE servers.
+          {
+            kind: 'sse',
+            transport: new SSEClientTransport(new URL(ref.url), {
+              ...(ref.headers ? { requestInit: { headers: ref.headers } } : {}),
+            }),
+          },
+        ]
+      }
+      case 'ws': {
+        const ref = serverRef
+        await ensureWebSocketGlobal()
+        return [
+          {
+            kind: 'ws',
+            transport: new WebSocketClientTransport(new URL(ref.url)),
+          },
+        ]
+      }
+      case 'ws-ide': {
+        const ref = serverRef
+
+        let url = ref.url
+        if (ref.authToken) {
+          try {
+            const parsed = new URL(url)
+            if (!parsed.searchParams.has('authToken')) {
+              parsed.searchParams.set('authToken', ref.authToken)
+              url = parsed.toString()
+            }
+          } catch {
+            // Ignore; fall back to raw URL.
+          }
+        }
+
+        await ensureWebSocketGlobal()
+        return [
+          {
+            kind: 'ws',
+            transport: new WebSocketClientTransport(new URL(url)),
+          },
+        ]
+      }
+      case 'stdio':
+      default: {
+        const ref = serverRef
+        return [
+          {
+            kind: 'stdio',
+            transport: new StdioClientTransport({
+              command: ref.command,
+              args: ref.args,
+              env: {
+                ...process.env,
+                ...ref.env,
+              } as Record<string, string>,
+              stderr: 'pipe', // prevents error output from the MCP server from printing to the UI
+            }),
+          },
+        ]
+      }
+    }
+  })()
+
+  // Avoid hanging indefinitely; make this configurable because some MCP servers may take longer
+  // to finish their handshake.
+  const rawTimeout = process.env.MCP_CONNECTION_TIMEOUT_MS
+  const parsedTimeout = rawTimeout ? Number.parseInt(rawTimeout, 10) : NaN
+  const CONNECTION_TIMEOUT_MS = Number.isFinite(parsedTimeout)
+    ? parsedTimeout
+    : 30_000
+
+  let lastError: unknown
+
+  for (const candidate of candidates) {
+    const client = new Client(
+      {
+        name: PRODUCT_COMMAND,
+        version: '0.1.0',
+      },
+      {
+        capabilities: {},
+      },
+    )
+
+    try {
+      const connectPromise = client.connect(candidate.transport as any)
+      if (CONNECTION_TIMEOUT_MS > 0) {
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          const timeoutId = setTimeout(() => {
+            reject(
+              new Error(
+                `Connection to MCP server "${name}" timed out after ${CONNECTION_TIMEOUT_MS}ms`,
+              ),
+            )
+          }, CONNECTION_TIMEOUT_MS)
+
+          connectPromise.then(
+            () => clearTimeout(timeoutId),
+            () => clearTimeout(timeoutId),
+          )
         })
 
-  const client = new Client(
-    {
-      name: PRODUCT_COMMAND,
-      version: '0.1.0',
-    },
-    {
-      capabilities: {},
-    },
-  )
-
-  // Add a timeout to connection attempts to prevent tests from hanging indefinitely
-  const CONNECTION_TIMEOUT_MS = 5000
-  const connectPromise = client.connect(transport)
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    const timeoutId = setTimeout(() => {
-      reject(
-        new Error(
-          `Connection to MCP server "${name}" timed out after ${CONNECTION_TIMEOUT_MS}ms`,
-        ),
-      )
-    }, CONNECTION_TIMEOUT_MS)
-
-    // Clean up timeout if connect resolves or rejects
-    connectPromise.then(
-      () => clearTimeout(timeoutId),
-      () => clearTimeout(timeoutId),
-    )
-  })
-
-  await Promise.race([connectPromise, timeoutPromise])
-
-  if (serverRef.type === 'stdio') {
-    ;(transport as StdioClientTransport).stderr?.on('data', (data: Buffer) => {
-      const errorText = data.toString().trim()
-      if (errorText) {
-        logMCPError(name, `Server stderr: ${errorText}`)
+        await Promise.race([connectPromise, timeoutPromise])
+      } else {
+        await connectPromise
       }
-    })
+
+      if (candidate.kind === 'stdio') {
+        ;(candidate.transport as StdioClientTransport).stderr?.on(
+          'data',
+          (data: Buffer) => {
+            const errorText = data.toString().trim()
+            if (errorText) {
+              logMCPError(name, `Server stderr: ${errorText}`)
+            }
+          },
+        )
+      }
+
+      // Surface the fallback in logs to reduce confusion when configs are ambiguous.
+      if (candidates.length > 1 && candidate !== candidates[0]) {
+        logMCPError(
+          name,
+          `Connected using fallback transport "${candidate.kind}". Consider setting the server type explicitly in your MCP config.`,
+        )
+      }
+
+      return client
+    } catch (error) {
+      lastError = error
+      try {
+        await client.close()
+      } catch {}
+    }
   }
-  return client
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(`Failed to connect to MCP server "${name}"`)
 }
 
 type ConnectedClient = {
@@ -312,35 +581,45 @@ export const getClients = memoize(async (): Promise<WrappedClient[]> => {
   }
 
   const globalServers = getGlobalConfig().mcpServers ?? {}
-  const mcprcServers = getMcprcConfig()
+  const projectFileServers = getProjectMcpServerDefinitions().servers
   const projectServers = getCurrentProjectConfig().mcpServers ?? {}
 
-  // Filter mcprc servers to only include approved ones
-  const approvedMcprcServers = pickBy(
-    mcprcServers,
+  // Filter project-file servers (.mcp.json/.mcprc) to only include approved ones.
+  const approvedProjectFileServers = pickBy(
+    projectFileServers,
     (_, name) => getMcprcServerStatus(name) === 'approved',
   )
 
   const allServers = {
     ...globalServers,
-    ...approvedMcprcServers, // Approved .mcprc servers override global ones
+    ...approvedProjectFileServers, // Approved project-file servers override global ones
     ...projectServers, // Project servers take highest precedence
   }
 
-  return await Promise.all(
-    Object.entries(allServers).map(async ([name, serverRef]) => {
-      try {
-        const client = await connectToServer(name, serverRef as McpServerConfig)
-        return { name, client, type: 'connected' as const }
-      } catch (error) {
-        logMCPError(
-          name,
-          `Connection failed: ${error instanceof Error ? error.message : String(error)}`,
-        )
-        return { name, type: 'failed' as const }
-      }
-    }),
-  )
+  const batchSize = getMcpServerConnectionBatchSize()
+  const entries = Object.entries(allServers)
+  const results: WrappedClient[] = []
+
+  for (let i = 0; i < entries.length; i += batchSize) {
+    const batch = entries.slice(i, i + batchSize)
+    const batchResults = await Promise.all(
+      batch.map(async ([name, serverRef]) => {
+        try {
+          const client = await connectToServer(name, serverRef as McpServerConfig)
+          return { name, client, type: 'connected' as const }
+        } catch (error) {
+          logMCPError(
+            name,
+            `Connection failed: ${error instanceof Error ? error.message : String(error)}`,
+          )
+          return { name, type: 'failed' as const }
+        }
+      }),
+    )
+    results.push(...batchResults)
+  }
+
+  return results
 })
 
 async function requestAll<
@@ -351,19 +630,30 @@ async function requestAll<
   resultSchema: ResultSchemaT,
   requiredCapability: string,
 ): Promise<{ client: ConnectedClient; result: ResultT }[]> {
+  const timeoutMs = getMcpToolTimeoutMs()
   const clients = await getClients()
   const results = await Promise.allSettled(
     clients.map(async client => {
       if (client.type === 'failed') return null
+
+      let timeoutSignal: TimeoutSignal | null = null
 
       try {
         const capabilities = await client.client.getServerCapabilities()
         if (!capabilities?.[requiredCapability]) {
           return null
         }
+
+        timeoutSignal = timeoutMs ? createTimeoutSignal(timeoutMs) : null
+        const merged = mergeAbortSignals([timeoutSignal?.signal])
+
         return {
           client,
-          result: (await client.client.request(req, resultSchema)) as ResultT,
+          result: (await client.client.request(
+            req,
+            resultSchema,
+            merged?.signal ? ({ signal: merged.signal } as any) : undefined,
+          )) as ResultT,
         }
       } catch (error) {
         if (client.type === 'connected') {
@@ -373,6 +663,8 @@ async function requestAll<
           )
         }
         return null
+      } finally {
+        timeoutSignal?.cleanup()
       }
     }),
   )
@@ -405,84 +697,148 @@ export const getMCPTools = memoize(async (): Promise<Tool[]> => {
   )
 
   // TODO: Add zod schema validation
-  return toolsList.flatMap(({ client, result: { tools } }) =>
-    tools.map(
-      (tool): Tool => ({
-        ...MCPTool,
-        name: 'mcp__' + client.name + '__' + tool.name,
-        async description() {
-          return tool.description ?? ''
-        },
-        async prompt() {
-          return tool.description ?? ''
-        },
-        inputJSONSchema: tool.inputSchema as Tool['inputJSONSchema'],
-        async validateInput(input, context) {
-          // MCP tools handle their own validation through their schemas
-          return { result: true }
-        },
-        async *call(args: Record<string, unknown>, context) {
-          const data = await callMCPTool({ client, tool: tool.name, args })
-          yield {
-            type: 'result' as const,
-            data,
-            resultForAssistant: data,
+  return toolsList.flatMap(({ client, result: { tools } }) => {
+    const serverPart = sanitizeMcpIdentifierPart(client.name)
+
+    return tools
+      .map(
+        (tool): Tool | null => {
+          const toolPart = sanitizeMcpIdentifierPart(tool.name)
+          const name = `mcp__${serverPart}__${toolPart}`
+
+          if (name.startsWith('mcp__ide__') && !IDE_MCP_TOOL_ALLOWLIST.has(name)) {
+            return null
+          }
+
+          return {
+            ...MCPTool,
+            name,
+            isConcurrencySafe() {
+              return tool.annotations?.readOnlyHint ?? false
+            },
+            isReadOnly() {
+              return tool.annotations?.readOnlyHint ?? false
+            },
+            async description() {
+              return tool.description ?? ''
+            },
+            async prompt() {
+              return tool.description ?? ''
+            },
+            inputJSONSchema: tool.inputSchema as Tool['inputJSONSchema'],
+            async validateInput() {
+              return { result: true }
+            },
+            async *call(args: Record<string, unknown>, context) {
+              const data = await callMCPTool({
+                client,
+                tool: tool.name,
+                args,
+                toolUseId: context.toolUseId,
+                signal: context.abortController.signal,
+              })
+              yield {
+                type: 'result' as const,
+                data,
+                resultForAssistant: data,
+              }
+            },
+            userFacingName() {
+              const title = tool.annotations?.title || tool.name
+              return `${client.name} - ${title} (MCP)`
+            },
           }
         },
-        userFacingName() {
-          return `${client.name}:${tool.name} (MCP)`
-        },
-      }),
-    ),
-  )
+      )
+      .filter((tool): tool is Tool => tool !== null)
+  })
 })
 
 async function callMCPTool({
   client: { client, name },
   tool,
   args,
+  toolUseId,
+  signal,
 }: {
   client: ConnectedClient
   tool: string
   args: Record<string, unknown>
+  toolUseId?: string
+  signal?: AbortSignal
 }): Promise<ToolResultBlockParam['content']> {
-  const result = await client.callTool(
-    {
-      name: tool,
-      arguments: args,
-    },
-    CallToolResultSchema,
-  )
+  const timeoutMs = getMcpToolTimeoutMs()
+  const timeoutSignal = timeoutMs ? createTimeoutSignal(timeoutMs) : null
+  const merged = mergeAbortSignals([signal, timeoutSignal?.signal])
 
-  if ('isError' in result && result.isError) {
-    const errorMessage = `Error calling tool ${tool}: ${result.error}`
-    logMCPError(name, errorMessage)
-    throw Error(errorMessage)
-  }
+  const meta =
+    toolUseId && toolUseId.trim()
+      ? { 'claudecode/toolUseId': toolUseId }
+      : undefined
 
-  // Handle toolResult-type response
-  if ('toolResult' in result) {
-    return String(result.toolResult)
-  }
+  try {
+    const result = await client.callTool(
+      {
+        name: tool,
+        arguments: args,
+        ...(meta ? { _meta: meta } : {}),
+      },
+      CallToolResultSchema,
+      merged?.signal ? ({ signal: merged.signal } as any) : undefined,
+    )
 
-  // Handle content array response
-  if ('content' in result && Array.isArray(result.content)) {
-    return result.content.map(item => {
-      if (item.type === 'image') {
-        return {
-          type: 'image',
-          source: {
-            type: 'base64',
-            data: String(item.data),
-            media_type: item.mimeType as ImageBlockParam.Source['media_type'],
-          },
+    if ('isError' in result && result.isError) {
+      const contentText =
+        'content' in result && Array.isArray(result.content)
+          ? result.content.find(item => item.type === 'text' && 'text' in item)
+          : null
+
+      const rawMessage =
+        (contentText && typeof (contentText as any).text === 'string'
+          ? String((contentText as any).text)
+          : 'error' in result && result.error
+            ? String(result.error)
+            : '')
+
+      const message = rawMessage || `Error calling tool ${tool}`
+      logMCPError(name, `Error calling tool ${tool}: ${message}`)
+      throw new Error(message)
+    }
+
+    // Handle toolResult-type response
+    if ('toolResult' in result) {
+      return String(result.toolResult)
+    }
+
+    // Handle structuredContent response
+    if (
+      'structuredContent' in result &&
+      result.structuredContent !== undefined
+    ) {
+      return JSON.stringify(result.structuredContent)
+    }
+
+    // Handle content array response
+    if ('content' in result && Array.isArray(result.content)) {
+      return result.content.map(item => {
+        if (item.type === 'image') {
+          return {
+            type: 'image',
+            source: {
+              type: 'base64',
+              data: String(item.data),
+              media_type: item.mimeType as ImageBlockParam.Source['media_type'],
+            },
+          }
         }
-      }
-      return item
-    })
-  }
+        return item
+      })
+    }
 
-  throw Error(`Unexpected response format from tool ${tool}`)
+    throw Error(`Unexpected response format from tool ${tool}`)
+  } finally {
+    timeoutSignal?.cleanup()
+  }
 }
 
 export const getMCPCommands = memoize(async (): Promise<Command[]> => {
@@ -499,16 +855,18 @@ export const getMCPCommands = memoize(async (): Promise<Command[]> => {
 
   return results.flatMap(({ client, result }) =>
     result.prompts?.map(_ => {
+      const serverPart = sanitizeMcpIdentifierPart(client.name)
       const argNames = Object.values(_.arguments ?? {}).map(k => k.name)
       return {
         type: 'prompt',
-        name: 'mcp__' + client.name + '__' + _.name,
+        name: `mcp__${serverPart}__${_.name}`,
         description: _.description ?? '',
         isEnabled: true,
         isHidden: false,
         progressMessage: 'running',
         userFacingName() {
-          return `${client.name}:${_.name} (MCP)`
+          const title = typeof (_ as any).title === 'string' ? (_ as any).title : _.name
+          return `${client.name}:${title} (MCP)`
         },
         argNames,
         async getPromptForCommand(args: string) {
@@ -529,28 +887,46 @@ export async function runCommand(
 ): Promise<MessageParam[]> {
   try {
     const result = await client.client.getPrompt({ name, arguments: args })
-    // TODO: Support type == resource
-    return result.messages.map(
-      (message): MessageParam => ({
+    return result.messages.map((message): MessageParam => {
+      const content = message.content
+      if (content.type === 'text') {
+        return {
+          role: message.role,
+          content: [
+            {
+              type: 'text',
+              text: content.text,
+            },
+          ],
+        }
+      }
+      if (content.type === 'image' && 'data' in content) {
+        return {
+          role: message.role,
+          content: [
+            {
+              type: 'image',
+              source: {
+                data: String((content as any).data),
+                media_type: (content as any)
+                  .mimeType as ImageBlockParam.Source['media_type'],
+                type: 'base64',
+              },
+            },
+          ],
+        }
+      }
+      // Fallback: render unknown content as text description
+      return {
         role: message.role,
         content: [
-          message.content.type === 'text'
-            ? {
-                type: 'text',
-                text: message.content.text,
-              }
-            : {
-                type: 'image',
-                source: {
-                  data: String(message.content.data),
-                  media_type: message.content
-                    .mimeType as ImageBlockParam.Source['media_type'],
-                  type: 'base64',
-                },
-              },
+          {
+            type: 'text',
+            text: `Unsupported MCP content type ${(content as any)?.type ?? 'unknown'}`,
+          },
         ],
-      }),
-    )
+      }
+    })
   } catch (error) {
     logMCPError(
       client.name,

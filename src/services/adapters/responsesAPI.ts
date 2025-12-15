@@ -91,7 +91,7 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
     // Follow codex-cli.js format: flat structure, no nested 'function' object
     return tools.map(tool => {
       // Prefer pre-built JSON schema if available
-      let parameters = tool.inputJSONSchema
+      let parameters: Record<string, unknown> | undefined = tool.inputJSONSchema as any
 
       // Otherwise, check if inputSchema is already a JSON schema (not Zod)
       if (!parameters && tool.inputSchema) {
@@ -100,18 +100,18 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
           return obj !== null && typeof obj === 'object' && !Array.isArray(obj)
         }
 
-        if (isPlainObject(tool.inputSchema) && ('type' in tool.inputSchema || 'properties' in tool.inputSchema)) {
-          // Already a JSON schema, use directly
-          parameters = tool.inputSchema
-        } else {
-          // Try to convert Zod schema
-          try {
-            parameters = zodToJsonSchema(tool.inputSchema)
-          } catch (error) {
-            console.warn(`Failed to convert Zod schema for tool ${tool.name}:`, error)
-            // Use minimal schema as fallback
-            parameters = { type: 'object', properties: {} }
-          }
+          if (isPlainObject(tool.inputSchema) && ('type' in (tool.inputSchema as any) || 'properties' in (tool.inputSchema as any))) {
+            // Already a JSON schema, use directly
+            parameters = tool.inputSchema as any
+          } else {
+            // Try to convert Zod schema
+            try {
+              parameters = zodToJsonSchema(tool.inputSchema as any) as any
+            } catch (error) {
+              console.warn(`Failed to convert Zod schema for tool ${tool.name}:`, error)
+              // Use minimal schema as fallback
+              parameters = { type: 'object', properties: {} }
+            }
         }
       }
 

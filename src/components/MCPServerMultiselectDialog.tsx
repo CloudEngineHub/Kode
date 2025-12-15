@@ -79,8 +79,8 @@ export function MCPServerMultiselectDialog({
           New MCP Servers Detected
         </Text>
         <Text>
-          This project contains a .mcprc file with {serverNames.length} MCP
-          servers that require your approval.
+          This project contains an MCP config file (.mcp.json or .mcprc) with{' '}
+          {serverNames.length} MCP servers that require your approval.
         </Text>
         <MCPServerDialogCopy />
 

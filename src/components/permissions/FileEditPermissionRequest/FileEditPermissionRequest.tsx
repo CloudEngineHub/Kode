@@ -1,7 +1,7 @@
 import { Select } from '@components/CustomSelect/select'
 import chalk from 'chalk'
 import { Box, Text } from 'ink'
-import { basename, extname } from 'path'
+import { basename, dirname, extname } from 'path'
 import React, { useMemo } from 'react'
 import {
   UnaryEvent,
@@ -24,22 +24,22 @@ import { useTerminalSize } from '@hooks/useTerminalSize'
 import { pathInOriginalCwd } from '@utils/permissions/filesystem'
 
 function getOptions(path: string) {
-  // Only show don't ask again option for edits in original working directory
-  const showDontAskAgainOptions = pathInOriginalCwd(path)
-    ? [
-        {
-          label: "Yes, and don't ask again this session",
-          value: 'yes-dont-ask-again',
-        },
-      ]
-    : []
+  const dirPath = dirname(path)
+  const dirName = basename(dirPath) || 'this directory'
+  const isInWorkingDir = pathInOriginalCwd(dirPath)
+  const sessionLabel = isInWorkingDir
+    ? `Yes, allow all edits during this session ${chalk.bold.hex(getTheme().warning)('(auto-accept edits)')}`
+    : `Yes, allow all edits in ${chalk.bold(`${dirName}/`)} during this session ${chalk.bold.hex(getTheme().warning)('(auto-accept edits)')}`
 
   return [
     {
       label: 'Yes',
       value: 'yes',
     },
-    ...showDontAskAgainOptions,
+    {
+      label: sessionLabel,
+      value: 'yes-session',
+    },
     {
       label: `No, and provide instructions (${chalk.bold.hex(getTheme().warning)('esc')})`,
       value: 'no',
@@ -122,7 +122,7 @@ export function FileEditPermissionRequest({
                 onDone()
                 toolUseConfirm.onAllow('temporary')
                 break
-              case 'yes-dont-ask-again':
+              case 'yes-session':
                 extractLanguageName(file_path).then(language => {
                   logUnaryEvent({
                     completion_type: 'str_replace_single',

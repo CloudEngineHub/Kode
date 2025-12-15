@@ -144,27 +144,27 @@ async function showSetupScreens(
   
 
   // In non-interactive mode, only show trust dialog in safe mode
-  if (!print && safeMode) {
-    if (!checkHasTrustDialogAccepted()) {
-      await new Promise<void>(resolve => {
-        const onDone = () => {
-          // Grant read permission to the current working directory
-          grantReadPermissionForOriginalDir()
-          resolve()
-        }
-        ;(async () => {
-          const { render } = await import('ink')
-          render(<TrustDialog onDone={onDone} />, {
-            exitOnCtrlC: false,
-          })
-        })()
-      })
+  if (!print) {
+    if (safeMode) {
+      if (!checkHasTrustDialogAccepted()) {
+        await new Promise<void>(resolve => {
+          const onDone = () => {
+            // Grant read permission to the current working directory
+            grantReadPermissionForOriginalDir()
+            resolve()
+          }
+          ;(async () => {
+            const { render } = await import('ink')
+            render(<TrustDialog onDone={onDone} />, {
+              exitOnCtrlC: false,
+            })
+          })()
+        })
+      }
     }
 
-    // After trust dialog, check for any mcprc servers that need approval
-    if (process.env.USER_TYPE === 'ant') {
-      await handleMcprcServerApprovals()
-    }
+    // Prompt for project-file MCP servers (.mcp.json / .mcprc) that require approval.
+    await handleMcprcServerApprovals()
   }
 }
 
@@ -366,9 +366,8 @@ ${commandList}`,
     )
     .action(
       async (prompt, { cwd, debug, verbose, enableArchitect, print, safe }) => {
-        await showSetupScreens(safe, print)
-        
         await setup(cwd, safe)
+        await showSetupScreens(safe, print)
 
         assertMinVersion()
 
@@ -538,6 +537,77 @@ ${commandList}`,
 
   // claude mcp
 
+  type McpCliTransport = 'stdio' | 'sse' | 'http' | 'ws'
+
+  function looksLikeMcpUrl(value: string): boolean {
+    return (
+      value.startsWith('http://') ||
+      value.startsWith('https://') ||
+      value.startsWith('localhost') ||
+      value.endsWith('/sse') ||
+      value.endsWith('/mcp')
+    )
+  }
+
+  function parseMcpHeaders(
+    raw: string[] | undefined,
+  ): Record<string, string> | undefined {
+    if (!raw || raw.length === 0) return undefined
+    const headers: Record<string, string> = {}
+    for (const item of raw) {
+      const idx = item.indexOf(':')
+      if (idx === -1) {
+        throw new Error(
+          `Invalid header format: "${item}". Expected format: "Header-Name: value"`,
+        )
+      }
+      const key = item.slice(0, idx).trim()
+      const value = item.slice(idx + 1).trim()
+      if (!key) {
+        throw new Error(`Invalid header: "${item}". Header name cannot be empty.`)
+      }
+      headers[key] = value
+    }
+    return headers
+  }
+
+  function normalizeMcpScopeForCli(scope: string | undefined) {
+    const raw = (scope ?? 'local').trim()
+
+    // Claude Code parity mapping:
+    // - local  => per-project config (private to the user)
+    // - user   => global config (available in all projects)
+    // - project => .mcp.json (shared via repo)
+    if (raw === 'local') return ensureConfigScope('project')
+    if (raw === 'user') return ensureConfigScope('global')
+    if (raw === 'project') return ensureConfigScope('mcpjson')
+
+    // Backwards-compatible aliases
+    if (raw === 'global') return ensureConfigScope('global')
+    if (raw === 'projectConfig' || raw === 'project-config') {
+      return ensureConfigScope('project')
+    }
+
+    return ensureConfigScope(raw)
+  }
+
+  function normalizeMcpTransport(transport: string | undefined): {
+    transport: McpCliTransport
+    explicit: boolean
+  } {
+    if (!transport) return { transport: 'stdio', explicit: false }
+    const normalized = transport.trim()
+    if (normalized === 'stdio' || normalized === 'sse' || normalized === 'http') {
+      return { transport: normalized, explicit: true }
+    }
+    if (normalized === 'ws') {
+      return { transport: 'ws', explicit: true }
+    }
+    throw new Error(
+      `Invalid transport type: ${transport}. Must be one of: stdio, sse, http`,
+    )
+  }
+
   const mcp = program
     .command('mcp')
     .description('Configure and manage MCP servers')
@@ -568,7 +638,7 @@ ${commandList}`,
     .description('Add an SSE server')
     .option(
       '-s, --scope <scope>',
-      'Configuration scope (project or global)',
+      'Configuration scope (project, global, or mcprc)',
       'project',
     )
     .action(async (name, url, options) => {
@@ -587,11 +657,55 @@ ${commandList}`,
     })
 
   mcp
+    .command('add-http <name> <url>')
+    .description('Add a Streamable HTTP MCP server')
+    .option(
+      '-s, --scope <scope>',
+      'Configuration scope (project, global, or mcprc)',
+      'project',
+    )
+    .action(async (name, url, options) => {
+      try {
+        const scope = ensureConfigScope(options.scope)
+        addMcpServer(name, { type: 'http', url }, scope)
+        console.log(
+          `Added HTTP MCP server ${name} with URL ${url} to ${scope} config`,
+        )
+        process.exit(0)
+      } catch (error) {
+        console.error((error as Error).message)
+        process.exit(1)
+      }
+    })
+
+  mcp
+    .command('add-ws <name> <url>')
+    .description('Add a WebSocket MCP server')
+    .option(
+      '-s, --scope <scope>',
+      'Configuration scope (project, global, or mcprc)',
+      'project',
+    )
+    .action(async (name, url, options) => {
+      try {
+        const scope = ensureConfigScope(options.scope)
+        addMcpServer(name, { type: 'ws', url }, scope)
+        console.log(
+          `Added WebSocket MCP server ${name} with URL ${url} to ${scope} config`,
+        )
+        process.exit(0)
+      } catch (error) {
+        console.error((error as Error).message)
+        process.exit(1)
+      }
+    })
+
+  mcp
     .command('add [name] [commandOrUrl] [args...]')
     .description('Add a server (run without arguments for interactive wizard)')
     .option(
       '-s, --scope <scope>',
-      'Configuration scope (project or global)',
+      'Configuration scope (project, global, or mcprc)',
       'project',
     )
     .option(
@@ -622,10 +736,10 @@ ${commandList}`,
 
           // Get server type
           const serverType = await question(
-            'Server type (stdio or sse) [stdio]: ',
+            'Server type (stdio, http, sse, ws) [stdio]: ',
           )
           const type =
-            serverType && ['stdio', 'sse'].includes(serverType)
+            serverType && ['stdio', 'http', 'sse', 'ws'].includes(serverType)
               ? serverType
               : 'stdio'
 
@@ -661,25 +775,29 @@ ${commandList}`,
 
           // Get scope
           const scopeStr = await question(
-            'Configuration scope (project or global) [project]: ',
+            'Configuration scope (project, global, or mcprc) [project]: ',
           )
           const serverScope = ensureConfigScope(scopeStr || 'project')
 
           rl.close()
 
           // Add the server
-          if (type === 'sse') {
-            
-            addMcpServer(
-              serverName,
-              { type: 'sse', url: commandOrUrlValue },
-              serverScope,
+          if (type === 'http') {
+            addMcpServer(serverName, { type: 'http', url: commandOrUrlValue }, serverScope)
+            console.log(
+              `Added HTTP MCP server ${serverName} with URL ${commandOrUrlValue} to ${serverScope} config`,
             )
+          } else if (type === 'sse') {
+            addMcpServer(serverName, { type: 'sse', url: commandOrUrlValue }, serverScope)
             console.log(
               `Added SSE MCP server ${serverName} with URL ${commandOrUrlValue} to ${serverScope} config`,
             )
+          } else if (type === 'ws') {
+            addMcpServer(serverName, { type: 'ws', url: commandOrUrlValue }, serverScope)
+            console.log(
+              `Added WebSocket MCP server ${serverName} with URL ${commandOrUrlValue} to ${serverScope} config`,
+            )
           } else {
-            
             addMcpServer(
               serverName,
               {
@@ -699,15 +817,19 @@ ${commandList}`,
           // Regular non-interactive flow
           const scope = ensureConfigScope(options.scope)
 
-          // Check if it's an SSE URL (starts with http:// or https://)
-          if (commandOrUrl.match(/^https?:\/\//)) {
-            
-            addMcpServer(name, { type: 'sse', url: commandOrUrl }, scope)
+          // URL-based server configs.
+          if (commandOrUrl.match(/^wss?:\/\//)) {
+            addMcpServer(name, { type: 'ws', url: commandOrUrl }, scope)
             console.log(
-              `Added SSE MCP server ${name} with URL ${commandOrUrl} to ${scope} config`,
+              `Added WebSocket MCP server ${name} with URL ${commandOrUrl} to ${scope} config`,
+            )
+          } else if (commandOrUrl.match(/^https?:\/\//)) {
+            // Claude parity: prefer Streamable HTTP when given an URL. Use `mcp add-sse` for legacy SSE.
+            addMcpServer(name, { type: 'http', url: commandOrUrl }, scope)
+            console.log(
+              `Added HTTP MCP server ${name} with URL ${commandOrUrl} to ${scope} config`,
             )
           } else {
-            
             const env = parseEnvVars(options.env)
             addMcpServer(
               name,
@@ -765,10 +887,28 @@ ${commandList}`,
         )
       } else {
         for (const [name, server] of Object.entries(servers)) {
-          if (server.type === 'sse') {
-            console.log(`${name}: ${server.url} (SSE)`)
-          } else {
-            console.log(`${name}: ${server.command} ${server.args.join(' ')}`)
+          switch (server.type) {
+            case 'http':
+              console.log(`${name}: ${server.url} (HTTP)`)
+              break
+            case 'sse':
+              console.log(`${name}: ${server.url} (SSE)`)
+              break
+            case 'sse-ide':
+              console.log(`${name}: ${server.url} (SSE-IDE)`)
+              break
+            case 'ws':
+              console.log(`${name}: ${server.url} (WS)`)
+              break
+            case 'ws-ide':
+              console.log(`${name}: ${server.url} (WS-IDE)`)
+              break
+            case 'stdio':
+            default:
+              console.log(
+                `${name}: ${server.command} ${(server.args || []).join(' ')}`,
+              )
+              break
           }
         }
       }
@@ -777,10 +917,10 @@ ${commandList}`,
 
   mcp
     .command('add-json <name> <json>')
-    .description('Add an MCP server (stdio or SSE) with a JSON string')
+    .description('Add an MCP server with a JSON string')
     .option(
       '-s, --scope <scope>',
-      'Configuration scope (project or global)',
+      'Configuration scope (project, global, or mcprc)',
       'project',
     )
     .action(async (name, jsonStr, options) => {
@@ -799,14 +939,23 @@ ${commandList}`,
         // Validate the server config
         if (
           !serverConfig.type ||
-          !['stdio', 'sse'].includes(serverConfig.type)
+          !['stdio', 'sse', 'http', 'ws', 'sse-ide', 'ws-ide'].includes(
+            serverConfig.type,
+          )
         ) {
-          console.error('Error: Server type must be "stdio" or "sse"')
+          console.error(
+            'Error: Server type must be one of: "stdio", "http", "sse", "ws", "sse-ide", "ws-ide"',
+          )
           process.exit(1)
         }
 
-        if (serverConfig.type === 'sse' && !serverConfig.url) {
-          console.error('Error: SSE server must have a URL')
+        if (
+          ['sse', 'http', 'ws', 'sse-ide', 'ws-ide'].includes(
+            serverConfig.type,
+          ) &&
+          !serverConfig.url
+        ) {
+          console.error('Error: URL-based MCP servers must have a URL')
           process.exit(1)
         }
 
@@ -815,20 +964,52 @@ ${commandList}`,
           process.exit(1)
         }
 
+        if (
+          ['sse-ide', 'ws-ide'].includes(serverConfig.type) &&
+          !serverConfig.ideName
+        ) {
+          console.error('Error: IDE MCP servers must include ideName')
+          process.exit(1)
+        }
+
         // Add server with the provided config
         
         addMcpServer(name, serverConfig, scope)
 
-        if (serverConfig.type === 'sse') {
-          console.log(
-            `Added SSE MCP server ${name} with URL ${serverConfig.url} to ${scope} config`,
-          )
-        } else {
-          console.log(
-            `Added stdio MCP server ${name} with command: ${serverConfig.command} ${(
-              serverConfig.args || []
-            ).join(' ')} to ${scope} config`,
-          )
+        switch (serverConfig.type) {
+          case 'http':
+            console.log(
+              `Added HTTP MCP server ${name} with URL ${serverConfig.url} to ${scope} config`,
+            )
+            break
+          case 'sse':
+            console.log(
+              `Added SSE MCP server ${name} with URL ${serverConfig.url} to ${scope} config`,
+            )
+            break
+          case 'sse-ide':
+            console.log(
+              `Added SSE-IDE MCP server ${name} with URL ${serverConfig.url} to ${scope} config`,
+            )
+            break
+          case 'ws':
+            console.log(
+              `Added WS MCP server ${name} with URL ${serverConfig.url} to ${scope} config`,
+            )
+            break
+          case 'ws-ide':
+            console.log(
+              `Added WS-IDE MCP server ${name} with URL ${serverConfig.url} to ${scope} config`,
+            )
+            break
+          case 'stdio':
+          default:
+            console.log(
+              `Added stdio MCP server ${name} with command: ${serverConfig.command} ${(
+                serverConfig.args || []
+              ).join(' ')} to ${scope} config`,
+            )
+            break
         }
 
         process.exit(0)
@@ -850,19 +1031,41 @@ ${commandList}`,
       }
       console.log(`${name}:`)
       console.log(`  Scope: ${server.scope}`)
-      if (server.type === 'sse') {
-        console.log(`  Type: sse`)
-        console.log(`  URL: ${server.url}`)
-      } else {
-        console.log(`  Type: stdio`)
-        console.log(`  Command: ${server.command}`)
-        console.log(`  Args: ${server.args.join(' ')}`)
-        if (server.env) {
-          console.log('  Environment:')
-          for (const [key, value] of Object.entries(server.env)) {
-            console.log(`    ${key}=${value}`)
+      switch (server.type) {
+        case 'http':
+          console.log(`  Type: http`)
+          console.log(`  URL: ${server.url}`)
+          break
+        case 'sse':
+          console.log(`  Type: sse`)
+          console.log(`  URL: ${server.url}`)
+          break
+        case 'sse-ide':
+          console.log(`  Type: sse-ide`)
+          console.log(`  URL: ${server.url}`)
+          console.log(`  IDE: ${server.ideName}`)
+          break
+        case 'ws':
+          console.log(`  Type: ws`)
+          console.log(`  URL: ${server.url}`)
+          break
+        case 'ws-ide':
+          console.log(`  Type: ws-ide`)
+          console.log(`  URL: ${server.url}`)
+          console.log(`  IDE: ${server.ideName}`)
+          break
+        case 'stdio':
+        default:
+          console.log(`  Type: stdio`)
+          console.log(`  Command: ${server.command}`)
+          console.log(`  Args: ${(server.args || []).join(' ')}`)
+          if (server.env) {
+            console.log('  Environment:')
+            for (const [key, value] of Object.entries(server.env)) {
+              console.log(`    ${key}=${value}`)
+            }
           }
-        }
+          break
       }
       process.exit(0)
     })
@@ -875,7 +1078,7 @@ ${commandList}`,
     )
     .option(
       '-s, --scope <scope>',
-      'Configuration scope (project or global)',
+      'Configuration scope (project, global, or mcprc)',
       'project',
     )
     .action(async options => {
@@ -963,10 +1166,26 @@ ${commandList}`,
           const server = mcpServers[name]
           let description = ''
 
-          if (server.type === 'sse') {
-            description = `SSE: ${server.url}`
-          } else {
-            description = `stdio: ${server.command} ${(server.args || []).join(' ')}`
+          switch (server.type) {
+            case 'http':
+              description = `HTTP: ${server.url}`
+              break
+            case 'sse':
+              description = `SSE: ${server.url}`
+              break
+            case 'sse-ide':
+              description = `SSE-IDE (${server.ideName}): ${server.url}`
+              break
+            case 'ws':
+              description = `WS: ${server.url}`
+              break
+            case 'ws-ide':
+              description = `WS-IDE (${server.ideName}): ${server.url}`
+              break
+            case 'stdio':
+            default:
+              description = `stdio: ${server.command} ${(server.args || []).join(' ')}`
+              break
           }
 
           return { name, description, server }
@@ -1156,7 +1375,9 @@ ${commandList}`,
       approvedMcprcServers: [],
       rejectedMcprcServers: [],
     })
-    console.log('All .mcprc server approvals and rejections have been reset.')
+    console.log(
+      'All project-file MCP server approvals/rejections (.mcp.json/.mcprc) have been reset.',
+    )
     console.log(
       `You will be prompted for approval next time you start ${PRODUCT_NAME}.`,
     )
@@ -1167,25 +1388,21 @@ ${commandList}`,
   mcp
     .command('reset-project-choices')
     .description(
-      'Reset all approved and rejected project-scoped (.mcp.json) servers within this project',
+      'Reset approvals for project-file MCP servers (.mcp.json/.mcprc) in this project',
     )
     .action(() => {
       
       resetMcpChoices()
     })
 
-  // Keep old command for backward compatibility (visible only to ants)
-  if (process.env.USER_TYPE === 'ant') {
-    mcp
-      .command('reset-mcprc-choices')
-      .description(
-        'Reset all approved and rejected .mcprc servers for this project',
-      )
-      .action(() => {
-        
-        resetMcpChoices()
-      })
-  }
+  // Keep old command for backward compatibility.
+  mcp
+    .command('reset-mcprc-choices')
+    .description('Reset approvals for project-file MCP servers (.mcp.json/.mcprc) in this project')
+    .action(() => {
+      
+      resetMcpChoices()
+    })
 
   // Doctor command - simple installation health check (no auto-update)
   program

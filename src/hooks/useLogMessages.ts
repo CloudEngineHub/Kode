@@ -11,6 +11,7 @@ export function useLogMessages(
     overwriteLog(
       getMessagesPath(messageLogName, forkNumber, 0),
       messages.filter(_ => _.type !== 'progress'),
+      { conversationKey: `${messageLogName}:${forkNumber}` },
     )
   }, [messages, messageLogName, forkNumber])
 }

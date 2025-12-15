@@ -3,6 +3,7 @@ import React, {
   useContext,
   useState,
   useCallback,
+  useEffect,
   ReactNode,
 } from 'react'
 import {
@@ -11,10 +12,20 @@ import {
   getNextPermissionMode,
   MODE_CONFIGS,
 } from '@kode-types/PermissionMode'
+import {
+  getPermissionModeForConversationKey,
+  setPermissionModeForConversationKey,
+} from '@utils/permissionModeState'
+import {
+  enterPlanModeForConversationKey,
+  exitPlanModeForConversationKey,
+  setActivePlanConversationKey,
+} from '@utils/planMode'
 
 interface PermissionContextValue {
   permissionContext: IPermissionContext
   currentMode: PermissionMode
+  conversationKey: string
   cycleMode: () => void
   setMode: (mode: PermissionMode) => void
   isToolAllowed: (toolName: string) => boolean
@@ -26,28 +37,56 @@ const PermissionContext = createContext<PermissionContextValue | undefined>(
 )
 
 interface PermissionProviderProps {
-  children: ReactNode
+  children?: ReactNode
+  conversationKey: string
   isBypassPermissionsModeAvailable?: boolean
 }
 
 export function PermissionProvider({
   children,
+  conversationKey,
   isBypassPermissionsModeAvailable = false,
 }: PermissionProviderProps) {
-  const [permissionContext, setPermissionContext] =
-    useState<IPermissionContext>({
-      mode: 'default',
-      allowedTools: ['*'],
+  const [permissionContext, setPermissionContext] = useState<IPermissionContext>(() => {
+    const initialMode = getPermissionModeForConversationKey({
+      conversationKey,
+      isBypassPermissionsModeAvailable,
+    })
+    const initialConfig = MODE_CONFIGS[initialMode]
+    return {
+      mode: initialMode,
+      allowedTools: initialConfig.allowedTools,
       allowedPaths: [process.cwd()],
-      restrictions: {
-        readOnly: false,
-        requireConfirmation: true,
-        bypassValidation: false,
+      restrictions: initialConfig.restrictions,
+      metadata: {
+        transitionCount: 0,
       },
+    }
+  })
+
+  useEffect(() => {
+    const mode = getPermissionModeForConversationKey({
+      conversationKey,
+      isBypassPermissionsModeAvailable,
+    })
+    const config = MODE_CONFIGS[mode]
+    setPermissionContext({
+      mode,
+      allowedTools: config.allowedTools,
+      allowedPaths: [process.cwd()],
+      restrictions: config.restrictions,
       metadata: {
         transitionCount: 0,
       },
     })
+  }, [conversationKey, isBypassPermissionsModeAvailable])
+
+  useEffect(() => {
+    setActivePlanConversationKey(conversationKey)
+    if (permissionContext.mode === 'plan') {
+      enterPlanModeForConversationKey(conversationKey)
+    }
+  }, [conversationKey, permissionContext.mode])
 
   const cycleMode = useCallback(() => {
     setPermissionContext(prev => {
@@ -57,7 +96,12 @@ export function PermissionProvider({
       )
       const modeConfig = MODE_CONFIGS[nextMode]
 
-      console.log(`🔄 Mode cycle: ${prev.mode} → ${nextMode}`)
+      setPermissionModeForConversationKey({ conversationKey, mode: nextMode })
+      if (prev.mode !== 'plan' && nextMode === 'plan') {
+        enterPlanModeForConversationKey(conversationKey)
+      } else if (prev.mode === 'plan' && nextMode !== 'plan') {
+        exitPlanModeForConversationKey(conversationKey)
+      }
 
       return {
         ...prev,
@@ -72,11 +116,17 @@ export function PermissionProvider({
         },
       }
     })
-  }, [isBypassPermissionsModeAvailable])
+  }, [conversationKey, isBypassPermissionsModeAvailable])
 
   const setMode = useCallback((mode: PermissionMode) => {
     setPermissionContext(prev => {
       const modeConfig = MODE_CONFIGS[mode]
+      setPermissionModeForConversationKey({ conversationKey, mode })
+      if (prev.mode !== 'plan' && mode === 'plan') {
+        enterPlanModeForConversationKey(conversationKey)
+      } else if (prev.mode === 'plan' && mode !== 'plan') {
+        exitPlanModeForConversationKey(conversationKey)
+      }
 
       return {
         ...prev,
@@ -91,7 +141,7 @@ export function PermissionProvider({
         },
       }
     })
-  }, [])
+  }, [conversationKey])
 
   const isToolAllowed = useCallback(
     (toolName: string) => {
@@ -115,6 +165,7 @@ export function PermissionProvider({
   const value: PermissionContextValue = {
     permissionContext,
     currentMode: permissionContext.mode,
+    conversationKey,
     cycleMode,
     setMode,
     isToolAllowed,

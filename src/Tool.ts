@@ -13,6 +13,7 @@ export type SetToolJSXFn = (jsx: {
 
 export interface ToolUseContext {
   messageId: string | undefined
+  toolUseId?: string
   agentId?: string
   safeMode?: boolean
   abortController: AbortController
@@ -26,6 +27,8 @@ export interface ToolUseContext {
     forkNumber?: number
     messageLogName?: string
     maxThinkingTokens?: any
+    model?: string
+    commandAllowedTools?: string[]
     isKodingRequest?: boolean
     kodingContext?: string
     isCustomCommand?: boolean
@@ -53,7 +56,7 @@ export interface Tool<
   TOutput = any,
 > {
   name: string
-  description?: string | (() => Promise<string>)
+  description?: string | ((input?: z.infer<TInput>) => Promise<string>)
   inputSchema: TInput
   inputJSONSchema?: Record<string, unknown>
   prompt: (options?: { safeMode?: boolean }) => Promise<string>
@@ -62,8 +65,13 @@ export interface Tool<
   cachedDescription?: string
   isEnabled: () => Promise<boolean>
   isReadOnly: () => boolean
-  isConcurrencySafe: () => boolean
+  isConcurrencySafe: (input?: z.infer<TInput>) => boolean
   needsPermissions: (input?: z.infer<TInput>) => boolean
+  /**
+   * True when the tool requires an interactive UI round-trip with the user.
+   * Claude Code parity: these tools should still prompt even in bypass modes.
+   */
+  requiresUserInteraction?: (input?: z.infer<TInput>) => boolean
   validateInput?: (
     input: z.infer<TInput>,
     context?: ToolUseContext,
@@ -79,7 +87,15 @@ export interface Tool<
     input: z.infer<TInput>,
     context: ToolUseContext,
   ) => AsyncGenerator<
-    | { type: 'result'; data: TOutput; resultForAssistant?: string }
+    | {
+        type: 'result'
+        data: TOutput
+        resultForAssistant?: string | any[]
+        newMessages?: unknown[]
+        contextModifier?: {
+          modifyContext: (ctx: ToolUseContext) => ToolUseContext
+        }
+      }
     | { type: 'progress'; content: any; normalizedMessages?: any[]; tools?: any[] },
     void,
     unknown

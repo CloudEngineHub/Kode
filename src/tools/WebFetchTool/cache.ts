@@ -1,5 +1,9 @@
 interface CacheEntry {
+  bytes: number
+  code: number
+  codeText: string
   content: string
+  contentType: string
   timestamp: number
 }
 
@@ -7,14 +11,17 @@ class URLCache {
   private cache = new Map<string, CacheEntry>()
   private readonly CACHE_DURATION = 15 * 60 * 1000 // 15 minutes in milliseconds
 
-  set(url: string, content: string): void {
+  set(
+    url: string,
+    entry: Omit<CacheEntry, 'timestamp'>,
+  ): void {
     this.cache.set(url, {
-      content,
-      timestamp: Date.now()
+      ...entry,
+      timestamp: Date.now(),
     })
   }
 
-  get(url: string): string | null {
+  get(url: string): CacheEntry | null {
     const entry = this.cache.get(url)
     if (!entry) {
       return null
@@ -26,7 +33,7 @@ class URLCache {
       return null
     }
 
-    return entry.content
+    return entry
   }
 
   clear(): void {

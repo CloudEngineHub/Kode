@@ -2790,13 +2790,17 @@ export function ModelSelector({
                 <Text color="red">❌ API Key Validation Failed</Text>
                 <Text color="red">{modelLoadError}</Text>
                 {providerBaseUrl && (
-                  <Text dimColor marginTop={1}>
-                    Attempted endpoint: {providerBaseUrl}/v1/models
-                  </Text>
+                  <Box marginTop={1}>
+                    <Text dimColor>
+                      Attempted endpoint: {providerBaseUrl}/v1/models
+                    </Text>
+                  </Box>
                 )}
-                <Text color={theme.warning} marginTop={1}>
-                  Please check your API key and try again.
-                </Text>
+                <Box marginTop={1}>
+                  <Text color={theme.warning}>
+                    Please check your API key and try again.
+                  </Text>
+                </Box>
               </Box>
             )}
             <Box marginTop={1}>

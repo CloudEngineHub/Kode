@@ -102,8 +102,6 @@ function getActiveProfile(): ModelProfile {
   return foundModel
 }
 
-const ACTIVE_PROFILE = getActiveProfile()
-
 function expectUnifiedUsage(usage: any) {
   expect(usage).toBeDefined()
   expect(typeof usage.promptTokens).toBe('number')
@@ -115,7 +113,14 @@ function expectUnifiedUsage(usage: any) {
 }
 
 describe('🔌 Integration: Full Claude.ts Flow (Model-Agnostic)', () => {
+  if (ACTIVE_PRODUCTION_MODELS.length === 0) {
+    test.skip('✅ End-to-end flow through claude.ts path (requires API keys)', () => {})
+    return
+  }
+
   test('✅ End-to-end flow through claude.ts path', async () => {
+    const ACTIVE_PROFILE = getActiveProfile()
+
     console.log('\n🔧 TEST CONFIGURATION:')
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
     console.log(`  🧪 Test Model: ${TEST_MODEL}`)
@@ -221,10 +226,11 @@ describe('🔌 Integration: Full Claude.ts Flow (Model-Agnostic)', () => {
     }
   })
 
-  test('✅ Test with TOOLS (full tool call parsing flow)', { timeout: 15000 }, async () => {
+  test('✅ Test with TOOLS (full tool call parsing flow)', async () => {
     console.log('\n✅ INTEGRATION TEST: With Tools (Full Tool Call Parsing)')
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 
+    const ACTIVE_PROFILE = getActiveProfile()
     const adapter = ModelAdapterFactory.createAdapter(ACTIVE_PROFILE)
     const shouldUseResponses = ModelAdapterFactory.shouldUseResponsesAPI(ACTIVE_PROFILE)
 
@@ -314,12 +320,13 @@ describe('🔌 Integration: Full Claude.ts Flow (Model-Agnostic)', () => {
         throw error
       }
     }
-  })
+  }, { timeout: 15000 })
 
-  test('✅ Test with TOOLS (multi-turn conversation with tool results)', { timeout: 15000 }, async () => {
+  test('✅ Test with TOOLS (multi-turn conversation with tool results)', async () => {
     console.log('\n✅ INTEGRATION TEST: Multi-Turn Conversation with Tool Results')
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 
+    const ACTIVE_PROFILE = getActiveProfile()
     const adapter = ModelAdapterFactory.createAdapter(ACTIVE_PROFILE)
     const shouldUseResponses = ModelAdapterFactory.shouldUseResponsesAPI(ACTIVE_PROFILE)
 
@@ -445,12 +452,13 @@ describe('🔌 Integration: Full Claude.ts Flow (Model-Agnostic)', () => {
         throw error
       }
     }
-  })
+  }, { timeout: 15000 })
 
-  test('✅ Bug Regression: Empty content should never occur', { timeout: 15000 }, async () => {
+  test('✅ Bug Regression: Empty content should never occur', async () => {
     console.log('\n🔍 BUG REGRESSION TEST: Empty Content Check')
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 
+    const ACTIVE_PROFILE = getActiveProfile()
     const adapter = ModelAdapterFactory.createAdapter(ACTIVE_PROFILE)
     const shouldUseResponses = ModelAdapterFactory.shouldUseResponsesAPI(ACTIVE_PROFILE)
 
@@ -499,12 +507,13 @@ describe('🔌 Integration: Full Claude.ts Flow (Model-Agnostic)', () => {
     expect(content).not.toBe('(no content)')
 
     console.log(`  ✅ BUG REGRESSION PASSED: Content present (${content.length} chars)`)
-  })
+  }, { timeout: 15000 })
 
-  test('✅ responseId preservation across adapter chain', { timeout: 15000 }, async () => {
+  test('✅ responseId preservation across adapter chain', async () => {
     console.log('\n🔄 INTEGRATION TEST: responseId Preservation')
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 
+    const ACTIVE_PROFILE = getActiveProfile()
     const adapter = ModelAdapterFactory.createAdapter(ACTIVE_PROFILE)
     const shouldUseResponses = ModelAdapterFactory.shouldUseResponsesAPI(ACTIVE_PROFILE)
 
@@ -549,5 +558,5 @@ describe('🔌 Integration: Full Claude.ts Flow (Model-Agnostic)', () => {
     expect(unifiedResponse.responseId).not.toBe('')
 
     console.log('  ✅ responseId correctly preserved through adapter chain')
-  })
+  }, { timeout: 15000 })
 })

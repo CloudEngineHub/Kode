@@ -10,10 +10,18 @@ type Props = {
 }
 
 function BashToolResultMessage({ content, verbose }: Props): React.JSX.Element {
-  const { stdout, stdoutLines, stderr, stderrLines } = content
+  const { stdout, stdoutLines, stderr, stderrLines, bashId } = content
 
   return (
     <Box flexDirection="column">
+      {bashId ? (
+        <Box flexDirection="row">
+          <Text>&nbsp;&nbsp;⎿ &nbsp;</Text>
+          <Text color={getTheme().secondaryText}>
+            Background bash_id: {bashId}
+          </Text>
+        </Box>
+      ) : null}
       {stdout !== '' ? (
         <OutputLine content={stdout} lines={stdoutLines} verbose={verbose} />
       ) : null}

@@ -21,17 +21,18 @@ import { FileEditTool } from '@tools/FileEditTool/FileEditTool'
 import { FileWriteTool } from '@tools/FileWriteTool/FileWriteTool'
 import { GrepTool } from '@tools/GrepTool/GrepTool'
 import { GlobTool } from '@tools/GlobTool/GlobTool'
-import { LSTool } from '@tools/lsTool/lsTool'
 import { FileReadTool } from '@tools/FileReadTool/FileReadTool'
 import { NotebookEditTool } from '@tools/NotebookEditTool/NotebookEditTool'
-import { NotebookReadTool } from '@tools/NotebookReadTool/NotebookReadTool'
 import { FallbackPermissionRequest } from '@components/permissions/FallbackPermissionRequest'
 import {
-  grantWritePermissionForOriginalDir,
+  grantReadPermissionForPath,
+  grantWritePermissionForPath,
   pathInOriginalCwd,
   toAbsolutePath,
 } from '@utils/permissions/filesystem'
 import { getCwd } from '@utils/state'
+import { basename, dirname } from 'path'
+import { statSync } from 'fs'
 
 function pathArgNameForToolUse(toolUseConfirm: ToolUseConfirm): string | null {
   switch (toolUseConfirm.tool) {
@@ -41,12 +42,11 @@ function pathArgNameForToolUse(toolUseConfirm: ToolUseConfirm): string | null {
       return 'file_path'
     }
     case GlobTool:
-    case GrepTool:
-    case LSTool: {
+    case GrepTool: {
       return 'path'
     }
     case NotebookEditTool:
-    case NotebookReadTool: {
+    {
       return 'notebook_path'
     }
   }
@@ -56,12 +56,21 @@ function pathArgNameForToolUse(toolUseConfirm: ToolUseConfirm): string | null {
 function isMultiFile(toolUseConfirm: ToolUseConfirm): boolean {
   switch (toolUseConfirm.tool) {
     case GlobTool:
-    case GrepTool:
-    case LSTool: {
+    case GrepTool: {
       return true
     }
   }
   return false
+}
+
+function pathToPermissionDirectory(path: string): string {
+  try {
+    const stats = statSync(path)
+    if (stats.isDirectory()) return path
+  } catch {
+    // Treat missing/unstatable path as a file path.
+  }
+  return dirname(path)
 }
 
 function pathFromToolUse(toolUseConfirm: ToolUseConfirm): string | null {
@@ -104,20 +113,22 @@ export function FilesystemPermissionRequest({
 }
 
 function getDontAskAgainOptions(toolUseConfirm: ToolUseConfirm, path: string) {
+  const permissionDirPath = pathToPermissionDirectory(path)
+  const permissionDirName = basename(permissionDirPath) || 'this directory'
+  const isInWorkingDir = pathInOriginalCwd(permissionDirPath)
+
   if (toolUseConfirm.tool.isReadOnly()) {
-    // "Always allow" is not an option for read-only tools,
-    // because they always have write permission in the project directory.
-    return []
+    const label = isInWorkingDir
+      ? 'Yes, during this session'
+      : `Yes, allow reading from ${chalk.bold(`${permissionDirName}/`)} during this session`
+    return [{ label, value: 'yes-session' }]
   }
-  // Only show don't ask again option for edits in original working directory
-  return pathInOriginalCwd(path)
-    ? [
-        {
-          label: "Yes, and don't ask again for file edits this session",
-          value: 'yes-dont-ask-again',
-        },
-      ]
-    : []
+
+  // For write/edit tools, offer a session-scoped allow.
+  const label = isInWorkingDir
+    ? `Yes, allow all edits during this session ${chalk.bold.hex(getTheme().warning)('(auto-accept edits)')}`
+    : `Yes, allow all edits in ${chalk.bold(`${permissionDirName}/`)} during this session ${chalk.bold.hex(getTheme().warning)('(auto-accept edits)')}`
+  return [{ label, value: 'yes-session' }]
 }
 
 type Props = {
@@ -204,7 +215,7 @@ function FilesystemPermissionRequestImpl({
                 toolUseConfirm.onAllow('temporary')
                 onDone()
                 break
-              case 'yes-dont-ask-again':
+              case 'yes-session':
                 logUnaryEvent({
                   completion_type: 'tool_use_single',
                   event: 'accept',
@@ -214,7 +225,11 @@ function FilesystemPermissionRequestImpl({
                     platform: env.platform,
                   },
                 })
-                grantWritePermissionForOriginalDir()
+                if (toolUseConfirm.tool.isReadOnly()) {
+                  grantReadPermissionForPath(path)
+                } else {
+                  grantWritePermissionForPath(path)
+                }
                 toolUseConfirm.onAllow('permanent')
                 onDone()
                 break

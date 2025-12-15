@@ -1,4 +1,5 @@
 import { Box, Text } from 'ink'
+import { randomUUID } from 'crypto'
 import { extname, isAbsolute, relative, resolve } from 'path'
 import * as React from 'react'
 import { z } from 'zod'
@@ -19,13 +20,42 @@ import { hasWritePermission } from '@utils/permissions/filesystem'
 import { emitReminderEvent } from '@services/systemReminder'
 import { recordFileEdit } from '@services/fileFreshness'
 
+function getDerivedCellId(index: number): string {
+  return `cell-${index}`
+}
+
+function getCellId(cell: NotebookContent['cells'][number], index: number): string {
+  return cell.id ?? getDerivedCellId(index)
+}
+
+function parseCellIdAsIndex(cellId: string): number | undefined {
+  const trimmed = cellId.trim()
+  if (/^\d+$/.test(trimmed)) return Number(trimmed)
+  const match = trimmed.match(/^cell-(\d+)$/)
+  if (match) return Number(match[1])
+  return undefined
+}
+
+function findCellIndex(notebook: NotebookContent, cellId: string): number | null {
+  const numericIndex = parseCellIdAsIndex(cellId)
+  if (numericIndex !== undefined) return numericIndex
+
+  const index = notebook.cells.findIndex((cell, idx) => getCellId(cell, idx) === cellId)
+  return index >= 0 ? index : null
+}
+
 const inputSchema = z.strictObject({
   notebook_path: z
     .string()
     .describe(
       'The absolute path to the Jupyter notebook file to edit (must be absolute, not relative)',
     ),
-  cell_number: z.number().describe('The index of the cell to edit (0-based)'),
+  cell_id: z
+    .string()
+    .optional()
+    .describe(
+      'The ID of the cell to edit. When inserting a new cell, the new cell will be inserted after the cell with this ID, or at the beginning if not specified.',
+    ),
   new_source: z.string().describe('The new source for the cell'),
   cell_type: z
     .enum(['code', 'markdown'])
@@ -34,7 +64,7 @@ const inputSchema = z.strictObject({
       'The type of the cell (code or markdown). If not specified, it defaults to the current cell type. If using edit_mode=insert, this is required.',
     ),
   edit_mode: z
-    .string()
+    .enum(['replace', 'insert', 'delete'])
     .optional()
     .describe(
       'The type of edit to make (replace, insert, delete). Defaults to replace.',
@@ -42,7 +72,7 @@ const inputSchema = z.strictObject({
 })
 
 export const NotebookEditTool = {
-  name: 'NotebookEditCell',
+  name: 'NotebookEdit',
   async description() {
     return DESCRIPTION
   },
@@ -65,26 +95,27 @@ export const NotebookEditTool = {
   needsPermissions({ notebook_path }) {
     return !hasWritePermission(notebook_path)
   },
-  renderResultForAssistant({ cell_number, edit_mode, new_source, error }) {
+  renderResultForAssistant({ cell_id, edit_mode, new_source, error }) {
     if (error) {
       return error
     }
     switch (edit_mode) {
       case 'replace':
-        return `Updated cell ${cell_number} with ${new_source}`
+        return `Updated cell ${cell_id} with ${new_source}`
       case 'insert':
-        return `Inserted cell ${cell_number} with ${new_source}`
+        return `Inserted cell after ${cell_id ?? 'beginning'} with ${new_source}`
       case 'delete':
-        return `Deleted cell ${cell_number}`
+        return `Deleted cell ${cell_id}`
     }
   },
   renderToolUseMessage(input, { verbose }) {
-    return `notebook_path: ${verbose ? input.notebook_path : relative(getCwd(), input.notebook_path)}, cell: ${input.cell_number}, content: ${input.new_source.slice(0, 30)}…, cell_type: ${input.cell_type}, edit_mode: ${input.edit_mode ?? 'replace'}`
+    const cellRef = input.cell_id ?? '(none)'
+    return `notebook_path: ${verbose ? input.notebook_path : relative(getCwd(), input.notebook_path)}, cell_id: ${cellRef}, content: ${input.new_source.slice(0, 30)}…, cell_type: ${input.cell_type}, edit_mode: ${input.edit_mode ?? 'replace'}`
   },
   renderToolUseRejectedMessage() {
     return <FallbackToolUseRejectedMessage />
   },
-  renderToolResultMessage({ cell_number, new_source, language, error }) {
+  renderToolResultMessage({ cell_id, new_source, language, error }) {
     if (error) {
       return (
         <Box flexDirection="column">
@@ -95,7 +126,7 @@ export const NotebookEditTool = {
 
     return (
       <Box flexDirection="column">
-        <Text>Updated cell {cell_number}:</Text>
+        <Text>Updated cell {cell_id}:</Text>
         <Box marginLeft={2}>
           <HighlightedCode code={new_source} language={language} />
         </Box>
@@ -104,7 +135,7 @@ export const NotebookEditTool = {
   },
   async validateInput({
     notebook_path,
-    cell_number,
+    cell_id,
     cell_type,
     edit_mode = 'replace',
   }) {
@@ -127,24 +158,6 @@ export const NotebookEditTool = {
       }
     }
 
-    if (cell_number < 0) {
-      return {
-        result: false,
-        message: 'Cell number must be non-negative.',
-      }
-    }
-
-    if (
-      edit_mode !== 'replace' &&
-      edit_mode !== 'insert' &&
-      edit_mode !== 'delete'
-    ) {
-      return {
-        result: false,
-        message: 'Edit mode must be replace, insert, or delete.',
-      }
-    }
-
     if (edit_mode === 'insert' && !cell_type) {
       return {
         result: false,
@@ -152,7 +165,6 @@ export const NotebookEditTool = {
       }
     }
 
-    const enc = detectFileEncoding(fullPath)
     const content = await readFileBun(fullPath)
     if (!content) {
       return {
@@ -168,18 +180,20 @@ export const NotebookEditTool = {
       }
     }
 
-    if (edit_mode === 'insert' && cell_number > notebook.cells.length) {
+    if ((edit_mode === 'replace' || edit_mode === 'delete') && !cell_id) {
       return {
         result: false,
-        message: `Cell number is out of bounds. For insert mode, the maximum value is ${notebook.cells.length} (to append at the end).`,
+        message: 'cell_id is required for replace/delete edits.',
       }
-    } else if (
-      (edit_mode === 'replace' || edit_mode === 'delete') &&
-      (cell_number >= notebook.cells.length || !notebook.cells[cell_number])
-    ) {
-      return {
-        result: false,
-        message: `Cell number is out of bounds. Notebook has ${notebook.cells.length} cells.`,
+    }
+
+    if (cell_id) {
+      const index = findCellIndex(notebook, cell_id)
+      if (index === null || index < 0 || index >= notebook.cells.length) {
+        return {
+          result: false,
+          message: `Cell ID is out of bounds or not found. Notebook has ${notebook.cells.length} cells.`,
+        }
       }
     }
 
@@ -187,7 +201,7 @@ export const NotebookEditTool = {
   },
   async *call({
     notebook_path,
-    cell_number,
+    cell_id,
     new_source,
     cell_type,
     edit_mode,
@@ -195,6 +209,8 @@ export const NotebookEditTool = {
     const fullPath = isAbsolute(notebook_path)
       ? notebook_path
       : resolve(getCwd(), notebook_path)
+    const mode = edit_mode ?? 'replace'
+    let editedCellId: string | undefined = cell_id
 
     try {
       const enc = detectFileEncoding(fullPath)
@@ -205,24 +221,51 @@ export const NotebookEditTool = {
       const notebook = JSON.parse(content) as NotebookContent
       const language = notebook.metadata.language_info?.name ?? 'python'
 
-      if (edit_mode === 'delete') {
-        // Delete the specified cell
-        notebook.cells.splice(cell_number, 1)
-      } else if (edit_mode === 'insert') {
-        // Insert the new cell
-        const new_cell = {
-          cell_type: cell_type!, // validateInput ensures cell_type is not undefined
+      const resolveIndexOrThrow = (): number => {
+        if (!cell_id) {
+          throw new Error('cell_id is required for this edit')
+        }
+        const idx = findCellIndex(notebook, cell_id)
+        if (idx === null || idx < 0 || idx >= notebook.cells.length) {
+          throw new Error(`Cell not found: ${cell_id}`)
+        }
+        return idx
+      }
+
+      if (mode === 'delete') {
+        const idx = resolveIndexOrThrow()
+        editedCellId = getCellId(notebook.cells[idx]!, idx)
+        notebook.cells.splice(idx, 1)
+      } else if (mode === 'insert') {
+        if (!cell_type) {
+          throw new Error('cell_type is required for insert edits')
+        }
+
+        const afterIndex =
+          cell_id === undefined ? -1 : findCellIndex(notebook, cell_id)
+        if (afterIndex === null) {
+          throw new Error(`Cell not found: ${cell_id}`)
+        }
+
+        const insertIndex = afterIndex === -1 ? 0 : afterIndex + 1
+
+        const newCell: NotebookContent['cells'][number] = {
+          cell_type,
           source: new_source,
           metadata: {},
+          ...(cell_type === 'code' ? { outputs: [] } : {}),
         }
-        notebook.cells.splice(
-          cell_number,
-          0,
-          cell_type == 'markdown' ? new_cell : { ...new_cell, outputs: [] },
-        )
+
+        // If notebook supports cell IDs (nbformat 4.5+), ensure inserted cell has an id
+        if (notebook.nbformat === 4 && notebook.nbformat_minor >= 5) {
+          newCell.id = randomUUID()
+        }
+
+        notebook.cells.splice(insertIndex, 0, newCell)
+        editedCellId = newCell.id ?? getDerivedCellId(insertIndex)
       } else {
-        // Find the specified cell
-        const targetCell = notebook.cells[cell_number]! // validateInput ensures cell_number is in bounds
+        const idx = resolveIndexOrThrow()
+        const targetCell = notebook.cells[idx]!
         targetCell.source = new_source
         // Reset execution count and clear outputs since cell was modified
         targetCell.execution_count = undefined
@@ -230,6 +273,7 @@ export const NotebookEditTool = {
         if (cell_type && cell_type !== targetCell.cell_type) {
           targetCell.cell_type = cell_type
         }
+        editedCellId = getCellId(targetCell, idx)
       }
       // Write back to file
       const endings = detectLineEndings(fullPath)
@@ -242,19 +286,19 @@ export const NotebookEditTool = {
       // Emit file edited event for system reminders
       emitReminderEvent('file:edited', {
         filePath: fullPath,
-        cellNumber: cell_number,
+        cellId: editedCellId,
         newSource: new_source,
         cellType: cell_type,
-        editMode: edit_mode || 'replace',
+        editMode: mode,
         timestamp: Date.now(),
         operation: 'notebook_edit',
       })
       const data = {
-        cell_number,
+        cell_id: editedCellId,
         new_source,
         cell_type: cell_type ?? 'code',
         language,
-        edit_mode: edit_mode ?? 'replace',
+        edit_mode: mode,
         error: '',
       }
       yield {
@@ -265,11 +309,11 @@ export const NotebookEditTool = {
     } catch (error) {
       if (error instanceof Error) {
         const data = {
-          cell_number,
+          cell_id,
           new_source,
           cell_type: cell_type ?? 'code',
           language: 'python',
-          edit_mode: 'replace',
+          edit_mode: mode,
           error: error.message,
         }
         yield {
@@ -280,11 +324,11 @@ export const NotebookEditTool = {
         return
       }
       const data = {
-        cell_number,
+        cell_id,
         new_source,
         cell_type: cell_type ?? 'code',
         language: 'python',
-        edit_mode: 'replace',
+        edit_mode: mode,
         error: 'Unknown error occurred while editing notebook',
       }
       yield {
@@ -297,7 +341,7 @@ export const NotebookEditTool = {
 } satisfies Tool<
   typeof inputSchema,
   {
-    cell_number: number
+    cell_id?: string
     new_source: string
     cell_type: NotebookCellType
     language: string

@@ -69,8 +69,8 @@ export function MCPServerApprovalDialog({
           New MCP Server Detected
         </Text>
         <Text>
-          This project contains a .mcprc file with an MCP server that requires
-          your approval:
+          This project contains an MCP config file (.mcp.json or .mcprc) with an
+          MCP server that requires your approval:
         </Text>
         <Text bold>{serverName}</Text>
 

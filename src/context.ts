@@ -6,14 +6,13 @@ import { logError } from './utils/log'
 import { getCodeStyle } from './utils/style'
 import { getCwd } from './utils/state'
 import { memoize, omit } from 'lodash-es'
-import { LSTool } from './tools/lsTool/lsTool'
 import { getIsGit } from './utils/git'
 import { ripGrep } from './utils/ripgrep'
 import * as path from 'path'
 import { execFileNoThrow } from './utils/execFileNoThrow'
 import { join } from 'path'
 import { readFile } from 'fs/promises'
-import { existsSync } from 'fs'
+import { existsSync, readdirSync } from 'fs'
 import { getModelManager } from './utils/model'
 import { lastX } from './utils/generators'
 import { getGitEmail } from './utils/user'
@@ -236,37 +235,16 @@ export const getContext = memoize(
 
 /**
  * Approximate directory structure, to orient Claude. Claude will start with this, then use
- * tools like LS and View to get more information.
+ * tools like Glob and Read to get more information.
  */
 export const getDirectoryStructure = memoize(
   async function (): Promise<string> {
     let lines: string
     try {
-      const abortController = new AbortController()
-      setTimeout(() => {
-        abortController.abort()
-      }, 1_000)
-      // 🔧 Fix: Use ModelManager instead of legacy function
-      const model = getModelManager().getModelName('main')
-      const resultsGen = LSTool.call(
-        {
-          path: '.',
-        },
-        {
-          abortController,
-          options: {
-            commands: [],
-            tools: [],
-            forkNumber: 0,
-            messageLogName: 'unused',
-            maxThinkingTokens: 0,
-          },
-          messageId: undefined,
-          readFileTimestamps: {},
-        },
-      )
-      const result = await lastX(resultsGen)
-      lines = result.data
+      const entries = readdirSync(getCwd(), { withFileTypes: true })
+      lines = entries
+        .map(entry => `${entry.isDirectory() ? 'd' : 'f'} ${entry.name}`)
+        .join('\n')
     } catch (error) {
       logError(error)
       return ''

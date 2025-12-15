@@ -4,24 +4,66 @@ import { z } from 'zod'
 import { Cost } from '@components/Cost'
 import { FallbackToolUseRejectedMessage } from '@components/FallbackToolUseRejectedMessage'
 import { Tool, ToolUseContext } from '@tool'
-import { DESCRIPTION, TOOL_NAME_FOR_PROMPT } from './prompt'
-import { SearchResult, searchProviders } from './searchProviders'
+import { PROMPT, TOOL_NAME_FOR_PROMPT } from './prompt'
+import { searchProviders } from './searchProviders'
 
 const inputSchema = z.strictObject({
-  query: z.string().describe('The search query'),
+  query: z.string().min(2).describe('The search query to use'),
+  allowed_domains: z
+    .array(z.string())
+    .optional()
+    .describe('Only include search results from these domains'),
+  blocked_domains: z
+    .array(z.string())
+    .optional()
+    .describe('Never include search results from these domains'),
 })
 
 type Input = z.infer<typeof inputSchema>
-type Output = {
-  durationMs: number
-  results: SearchResult[]
+
+type WebSearchHit = {
+  title: string
+  url: string
 }
 
+type WebSearchResultBlock = {
+  tool_use_id: string
+  content: WebSearchHit[]
+}
+
+type Output = {
+  query: string
+  results: Array<WebSearchResultBlock | string>
+  durationSeconds: number
+}
+
+function hostnameForUrl(url: string): string | null {
+  try {
+    return new URL(url).hostname
+  } catch {
+    return null
+  }
+}
+
+function summarizeResults(results: Output['results']): {
+  searchCount: number
+  totalResultCount: number
+} {
+  let searchCount = 0
+  let totalResultCount = 0
+  for (const item of results) {
+    if (typeof item === 'string') continue
+    searchCount += 1
+    totalResultCount += item.content.length
+  }
+  return { searchCount, totalResultCount }
+}
 
 export const WebSearchTool = {
   name: TOOL_NAME_FOR_PROMPT,
-  async description() {
-    return DESCRIPTION
+  async description(input?: Input) {
+    const query = input?.query ?? ''
+    return `Claude wants to search the web for: ${query}`
   },
   userFacingName: () => 'Web Search',
   inputSchema,
@@ -31,56 +73,122 @@ export const WebSearchTool = {
     return true
   },
   needsPermissions() {
-    return false
+    return true
   },
   async prompt() {
-    return DESCRIPTION
+    return PROMPT
   },
-  renderToolUseMessage({ query }: Input) {
-    return `Searching for: "${query}" using DuckDuckGo`
+  renderToolUseMessage(
+    { query, allowed_domains, blocked_domains }: Input,
+    { verbose }: { verbose: boolean },
+  ) {
+    let summary = `"${query}"`
+    if (verbose) {
+      if (allowed_domains && allowed_domains.length > 0) {
+        summary += `, only allowing domains: ${allowed_domains.join(', ')}`
+      }
+      if (blocked_domains && blocked_domains.length > 0) {
+        summary += `, blocking domains: ${blocked_domains.join(', ')}`
+      }
+    }
+    return summary
   },
   renderToolUseRejectedMessage() {
     return <FallbackToolUseRejectedMessage />
   },
   renderToolResultMessage(output: Output) {
+    const { searchCount } = summarizeResults(output.results)
+    const duration =
+      output.durationSeconds >= 1
+        ? `${Math.round(output.durationSeconds)}s`
+        : `${Math.round(output.durationSeconds * 1000)}ms`
     return (
       <Box justifyContent="space-between" width="100%">
         <Box flexDirection="row">
-          <Text>&nbsp;&nbsp;⎿ &nbsp;Found </Text>
-          <Text bold>{output.results.length} </Text>
+          <Text>&nbsp;&nbsp;⎿ &nbsp;Did </Text>
+          <Text bold>{searchCount} </Text>
           <Text>
-            {output.results.length === 1 ? 'result' : 'results'} using DuckDuckGo
+            search{searchCount === 1 ? '' : 'es'} in {duration}
           </Text>
         </Box>
-        <Cost costUSD={0} durationMs={output.durationMs} debug={false} />
+        <Cost costUSD={0} durationMs={output.durationSeconds * 1000} debug={false} />
       </Box>
     )
   },
   renderResultForAssistant(output: Output) {
-    if (output.results.length === 0) {
-      return `No results found using DuckDuckGo.`
+    let result = `Web search results for query: "${output.query}"\n\n`
+    for (const item of output.results) {
+      if (typeof item === 'string') {
+        result += `${item}\n\n`
+        continue
+      }
+      if (item.content.length > 0) {
+        result += `Links: ${JSON.stringify(item.content)}\n\n`
+      } else {
+        result += `No links found.\n\n`
+      }
     }
-    
-    let result = `Found ${output.results.length} search results using DuckDuckGo:\n\n`
-    
-    output.results.forEach((item, index) => {
-      result += `${index + 1}. **${item.title}**\n`
-      result += `   ${item.snippet}\n`
-      result += `   Link: ${item.link}\n\n`
-    })
-    
-    result += `You can reference these results to provide current, accurate information to the user.`
-    return result
+    result +=
+      '\nREMINDER: You MUST include the sources above in your response to the user using markdown hyperlinks.'
+    return result.trim()
   },
-  async *call({ query }: Input, {}: ToolUseContext) {
+  async validateInput(input: Input) {
+    if (!input.query || !input.query.length) {
+      return {
+        result: false,
+        message: 'Error: Missing query',
+        errorCode: 1,
+      }
+    }
+
+    if (input.allowed_domains?.length && input.blocked_domains?.length) {
+      return {
+        result: false,
+        message:
+          'Error: Cannot specify both allowed_domains and blocked_domains in the same request',
+        errorCode: 2,
+      }
+    }
+    return { result: true }
+  },
+  async *call(
+    { query, allowed_domains, blocked_domains }: Input,
+    {}: ToolUseContext,
+  ) {
     const start = Date.now()
 
     try {
-      const searchResults = await searchProviders.duckduckgo.search(query)
-      
+      const rawResults = await searchProviders.duckduckgo.search(query)
+
+      const allowed = allowed_domains?.map(d => d.toLowerCase()) ?? null
+      const blocked = blocked_domains?.map(d => d.toLowerCase()) ?? null
+
+      const results = rawResults.filter(result => {
+        const host = hostnameForUrl(result.link)?.toLowerCase()
+        if (!host) return false
+        if (allowed && allowed.length > 0) {
+          return allowed.some(domain => host === domain || host.endsWith(`.${domain}`))
+        }
+        if (blocked && blocked.length > 0) {
+          return !blocked.some(domain => host === domain || host.endsWith(`.${domain}`))
+        }
+        return true
+      })
+
+      const hits: WebSearchHit[] = results.map(item => ({
+        title: item.title,
+        url: item.link,
+      }))
+
       const output: Output = {
-        results: searchResults,
-        durationMs: Date.now() - start,
+        query,
+        results: [
+          {
+            tool_use_id: 'duckduckgo',
+            content: hits,
+          },
+        ],
+        durationSeconds: (Date.now() - start) / 1000,
       }
 
       yield {
@@ -90,12 +198,13 @@ export const WebSearchTool = {
       }
     } catch (error: any) {
       const output: Output = {
-        results: [],
-        durationMs: Date.now() - start,
+        query,
+        results: [`Web search error: ${error instanceof Error ? error.message : String(error)}`],
+        durationSeconds: (Date.now() - start) / 1000,
       }
       yield {
         type: 'result' as const,
-        resultForAssistant: `An error occurred during web search with DuckDuckGo: ${error.message}`,
+        resultForAssistant: this.renderResultForAssistant(output),
         data: output,
       }
     }

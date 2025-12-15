@@ -16,7 +16,10 @@ export type CanUseToolFn = (
   input: { [key: string]: unknown },
   toolUseContext: ToolUseContext,
   assistantMessage: AssistantMessage,
-) => Promise<{ result: true } | { result: false; message: string }>
+) => Promise<
+  | { result: true }
+  | { result: false; message: string; shouldPromptUser?: boolean }
+>
 
 function useCanUseTool(
   setToolUseConfirm: SetState<ToolUseConfirm | null>,
@@ -26,10 +29,10 @@ function useCanUseTool(
       return new Promise(resolve => {
         function logCancelledEvent() {}
 
-        function resolveWithCancelledAndAbortAllToolCalls() {
+        function resolveWithCancelledAndAbortAllToolCalls(message?: string) {
           resolve({
             result: false,
-            message: REJECT_MESSAGE,
+            message: message ?? REJECT_MESSAGE,
           })
           // Trigger a synthetic assistant message in query(), to cancel
           // any other pending tool uses and stop further requests to the
@@ -48,17 +51,25 @@ function useCanUseTool(
           input,
           toolUseContext,
           assistantMessage,
-        )
+          )
           .then(async result => {
             // Has permissions to use tool, granted in config
-            if (result.result) {
-              
+            if (result.result === true) {
               resolve({ result: true })
               return
             }
 
+            const deniedResult = result as Extract<typeof result, { result: false }>
+
+            if (deniedResult.shouldPromptUser === false) {
+              resolve({ result: false, message: deniedResult.message })
+              return
+            }
+
             const [description, commandPrefix] = await Promise.all([
-              tool.description(input as never),
+              typeof tool.description === 'function'
+                ? tool.description(input as never)
+                : Promise.resolve(tool.description ?? `Tool: ${tool.name}`),
               tool === BashTool
                 ? getCommandSubcommandPrefix(
                     inputSchema.parse(input).command, // already validated upstream, so ok to parse (as opposed to safeParse)
@@ -80,6 +91,7 @@ function useCanUseTool(
               description,
               input,
               commandPrefix,
+              toolUseContext,
               riskScore: null,
               onAbort() {
                 logCancelledEvent()
@@ -91,8 +103,8 @@ function useCanUseTool(
                 }
                 resolve({ result: true })
               },
-              onReject() {
-                resolveWithCancelledAndAbortAllToolCalls()
+              onReject(rejectionMessage) {
+                resolveWithCancelledAndAbortAllToolCalls(rejectionMessage)
               },
             })
           })

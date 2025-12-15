@@ -96,7 +96,7 @@ describe('🌐 Production API Integration Tests', () => {
 
   describe(`📡 Production Tests (${testModelNames})`, () => {
     modelsToTest.forEach((model) => {
-      test(`🚀 Making real API call to ${model.name}`, { timeout: 30000 }, async () => {
+      test(`🚀 Making real API call to ${model.name}`, async () => {
         const adapter = ModelAdapterFactory.createAdapter(model)
         const shouldUseResponses = ModelAdapterFactory.shouldUseResponsesAPI(model)
 
@@ -169,7 +169,7 @@ describe('🌐 Production API Integration Tests', () => {
           console.log(`⚠️  Test completed with errors for ${model.name}`)
           expect(true).toBe(true) // Pass the test but log the error
         }
-      })
+      }, { timeout: 30000 })
     }, 30000) // 30 second timeout
   })
 

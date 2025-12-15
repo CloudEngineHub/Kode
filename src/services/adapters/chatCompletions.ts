@@ -66,7 +66,9 @@ export class ChatCompletionsAdapter extends OpenAIAdapter {
       function: {
         name: tool.name,
         description: getToolDescription(tool),
-        parameters: tool.inputJSONSchema || zodToJsonSchema(tool.inputSchema)
+        parameters:
+          tool.inputJSONSchema ||
+          (zodToJsonSchema(tool.inputSchema as any) as any)
       }
     }))
   }

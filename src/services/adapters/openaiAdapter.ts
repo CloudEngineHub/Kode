@@ -238,7 +238,7 @@ export abstract class OpenAIAdapter extends ModelAPIAdapter {
       function: {
         name: tool.name,
         description: tool.description,
-        parameters: zodToJsonSchema(tool.inputSchema)
+        parameters: zodToJsonSchema(tool.inputSchema as any) as any
       }
     }))
   }

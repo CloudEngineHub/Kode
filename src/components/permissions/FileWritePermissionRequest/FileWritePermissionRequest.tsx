@@ -1,7 +1,7 @@
 import { Box, Text } from 'ink'
 import React, { useMemo } from 'react'
 import { Select } from '@components/CustomSelect/select'
-import { basename, extname } from 'path'
+import { basename, dirname, extname } from 'path'
 import { getTheme } from '@utils/theme'
 import {
   PermissionRequestTitle,
@@ -22,6 +22,7 @@ import {
 } from '@hooks/usePermissionRequestLogging'
 import { FileWriteToolDiff } from './FileWriteToolDiff'
 import { useTerminalSize } from '@hooks/useTerminalSize'
+import { pathInOriginalCwd } from '@utils/permissions/filesystem'
 
 type Props = {
   toolUseConfirm: ToolUseConfirm
@@ -38,6 +39,14 @@ export function FileWritePermissionRequest({
     file_path: string
     content: string
   }
+  const sessionLabel = useMemo(() => {
+    const dirPath = dirname(file_path)
+    const dirName = basename(dirPath) || 'this directory'
+    const isInWorkingDir = pathInOriginalCwd(dirPath)
+    return isInWorkingDir
+      ? `Yes, allow all edits during this session ${chalk.bold.hex(getTheme().warning)('(auto-accept edits)')}`
+      : `Yes, allow all edits in ${chalk.bold(`${dirName}/`)} during this session ${chalk.bold.hex(getTheme().warning)('(auto-accept edits)')}`
+  }, [file_path])
   const fileExists = useMemo(() => existsSync(file_path), [file_path])
   const unaryEvent = useMemo<UnaryEvent>(
     () => ({
@@ -83,8 +92,8 @@ export function FileWritePermissionRequest({
               value: 'yes',
             },
             {
-              label: "Yes, and don't ask again this session",
-              value: 'yes-dont-ask-again',
+              label: sessionLabel,
+              value: 'yes-session',
             },
             {
               label: `No, and provide instructions (${chalk.bold.hex(getTheme().warning)('esc')})`,
@@ -108,7 +117,7 @@ export function FileWritePermissionRequest({
                 toolUseConfirm.onAllow('temporary')
                 onDone()
                 break
-              case 'yes-dont-ask-again':
+              case 'yes-session':
                 extractLanguageName(file_path).then(language => {
                   logUnaryEvent({
                     completion_type: 'write_file_single',

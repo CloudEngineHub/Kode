@@ -158,3 +158,61 @@ export async function launchExternalEditor(
     }
   }
 }
+
+export type ExternalEditorFileResult =
+  | { ok: true; editorLabel: string }
+  | { ok: false; editorLabel?: string; error: Error }
+
+export async function launchExternalEditorForFilePath(
+  filePath: string,
+): Promise<ExternalEditorFileResult> {
+  const editorCommand = resolveEditorCommand()
+  if (!editorCommand) {
+    return {
+      ok: false,
+      error: new Error(
+        'No editor found. Set $VISUAL or $EDITOR, or install code, nano, vim, or notepad.',
+      ),
+    }
+  }
+
+  const wasRaw = Boolean(process.stdin.isTTY && (process.stdin as any).isRaw)
+  if (process.stdin.isTTY) {
+    process.stdin.pause()
+    if (process.stdin.setRawMode) {
+      process.stdin.setRawMode(false)
+    }
+  }
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(editorCommand.command, [...editorCommand.args, filePath], {
+        stdio: 'inherit',
+        shell: editorCommand.shell ?? false,
+      })
+
+      child.on('error', reject)
+      child.on('exit', (code, signal) => {
+        if (code === 0 || code === null) {
+          resolve()
+        } else {
+          reject(
+            new Error(
+              `Editor exited with code ${code}${signal ? ` (signal ${signal})` : ''}`,
+            ),
+          )
+        }
+      })
+    })
+  } catch (error) {
+    restoreStdinState(wasRaw)
+    return {
+      ok: false,
+      editorLabel: editorCommand.displayName,
+      error: error as Error,
+    }
+  }
+
+  restoreStdinState(wasRaw)
+  return { ok: true, editorLabel: editorCommand.displayName }
+}

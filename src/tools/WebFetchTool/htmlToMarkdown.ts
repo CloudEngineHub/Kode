@@ -7,18 +7,18 @@ const turndownService = new TurndownService({
   codeBlockStyle: 'fenced',
   fence: '```',
   emDelimiter: '_',
-  strongDelimiter: '**'
+  strongDelimiter: '**',
 })
 
 // Configure rules to handle common HTML elements
 turndownService.addRule('removeScripts', {
   filter: ['script', 'style', 'noscript'],
-  replacement: () => ''
+  replacement: () => '',
 })
 
 turndownService.addRule('removeComments', {
-  filter: (node) => node.nodeType === 8, // Comment nodes
-  replacement: () => ''
+  filter: node => node.nodeType === 8, // Comment nodes
+  replacement: () => '',
 })
 
 turndownService.addRule('cleanLinks', {
@@ -29,7 +29,7 @@ turndownService.addRule('cleanLinks', {
       return content
     }
     return `[${content}](${href})`
-  }
+  },
 })
 
 export function convertHtmlToMarkdown(html: string): string {
@@ -43,13 +43,15 @@ export function convertHtmlToMarkdown(html: string): string {
       .trim()
 
     const markdown = turndownService.turndown(cleanHtml)
-    
+
     // Clean up the resulting markdown
     return markdown
       .replace(/\n{3,}/g, '\n\n') // Remove excessive line breaks
       .replace(/^\s+|\s+$/gm, '') // Remove leading/trailing spaces on each line
       .trim()
   } catch (error) {
-    throw new Error(`Failed to convert HTML to markdown: ${error instanceof Error ? error.message : String(error)}`)
+    throw new Error(
+      `Failed to convert HTML to markdown: ${error instanceof Error ? error.message : String(error)}`,
+    )
   }
 }

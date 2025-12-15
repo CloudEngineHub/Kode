@@ -5,9 +5,10 @@ import { Cost } from '@components/Cost'
 import { FallbackToolUseRejectedMessage } from '@components/FallbackToolUseRejectedMessage'
 import { Tool } from '@tool'
 import { getCwd } from '@utils/state'
-import { glob } from '@utils/file'
+import { ripGrep } from '@utils/ripgrep'
 import { DESCRIPTION, TOOL_NAME_FOR_PROMPT } from './prompt'
-import { isAbsolute, relative, resolve } from 'path'
+import { existsSync, statSync } from 'fs'
+import { isAbsolute, join, relative, resolve } from 'path'
 import { hasReadPermission } from '@utils/permissions/filesystem'
 
 const inputSchema = z.strictObject({
@@ -26,6 +27,8 @@ type Output = {
   filenames: string[]
   truncated: boolean
 }
+
+const DEFAULT_LIMIT = 100
 
 export const GlobTool = {
   name: TOOL_NAME_FOR_PROMPT,
@@ -50,6 +53,17 @@ export const GlobTool = {
   },
   async prompt() {
     return DESCRIPTION
+  },
+  async validateInput({ path }) {
+    if (!path) return { result: true }
+    const absolute = isAbsolute(path) ? path : resolve(getCwd(), path)
+    if (!existsSync(absolute)) {
+      return { result: false, message: `Directory does not exist: ${path}`, errorCode: 1 }
+    }
+    if (!statSync(absolute).isDirectory()) {
+      return { result: false, message: `Path is not a directory: ${path}`, errorCode: 2 }
+    }
+    return { result: true }
   },
   renderToolUseMessage({ pattern, path }, { verbose }) {
     const absolutePath = path
@@ -86,16 +100,27 @@ export const GlobTool = {
   },
   async *call({ pattern, path }, { abortController }) {
     const start = Date.now()
-    const { files, truncated } = await glob(
-      pattern,
-      path ?? getCwd(),
-      { limit: 100, offset: 0 },
+    const searchPath = path
+      ? isAbsolute(path)
+        ? path
+        : resolve(getCwd(), path)
+      : getCwd()
+
+    // Claude Code semantics: use ripgrep file listing with no-ignore + hidden,
+    // sorted by modified time, filtered by --glob pattern.
+    const raw = await ripGrep(
+      ['--files', '--no-ignore', '--hidden', '--sort=modified', '--glob', pattern],
+      searchPath,
       abortController.signal,
     )
+
+    const files = raw.map(p => (isAbsolute(p) ? p : join(searchPath, p)))
+    const truncated = files.length > DEFAULT_LIMIT
+    const limitedFiles = files.slice(0, DEFAULT_LIMIT)
     const output: Output = {
-      filenames: files,
+      filenames: limitedFiles,
       durationMs: Date.now() - start,
-      numFiles: files.length,
+      numFiles: limitedFiles.length,
       truncated,
     }
     yield {

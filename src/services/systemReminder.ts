@@ -147,8 +147,10 @@ class SystemReminderService {
                 ? todo.content.substring(0, 100) + '...'
                 : todo.content,
             status: todo.status,
-            priority: todo.priority,
-            id: todo.id,
+            activeForm:
+              todo.activeForm && todo.activeForm.length > 100
+                ? todo.activeForm.substring(0, 100) + '...'
+                : todo.activeForm || todo.content,
           })),
         )
 
@@ -303,7 +305,7 @@ class SystemReminderService {
 
   private getTodoStateHash(todos: TodoItem[]): string {
     return todos
-      .map(t => `${t.id}:${t.status}`)
+      .map(t => `${t.content}:${t.status}:${t.activeForm || t.content}`)
       .sort()
       .join('|')
   }

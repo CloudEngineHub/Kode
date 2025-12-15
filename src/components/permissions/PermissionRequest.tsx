@@ -2,6 +2,7 @@ import { useInput } from 'ink'
 import * as React from 'react'
 import { Tool } from '@tool'
 import { AssistantMessage } from '@query'
+import type { ToolUseContext } from '@tool'
 import { FileEditTool } from '@tools/FileEditTool/FileEditTool'
 import { FileWriteTool } from '@tools/FileWriteTool/FileWriteTool'
 import { BashTool } from '@tools/BashTool/BashTool'
@@ -15,10 +16,18 @@ import { FilesystemPermissionRequest } from './FilesystemPermissionRequest/Files
 import { NotebookEditTool } from '@tools/NotebookEditTool/NotebookEditTool'
 import { GlobTool } from '@tools/GlobTool/GlobTool'
 import { GrepTool } from '@tools/GrepTool/GrepTool'
-import { LSTool } from '@tools/lsTool/lsTool'
 import { FileReadTool } from '@tools/FileReadTool/FileReadTool'
-import { NotebookReadTool } from '@tools/NotebookReadTool/NotebookReadTool'
 import { PRODUCT_NAME } from '@constants/product'
+import { SlashCommandTool } from '@tools/SlashCommandTool/SlashCommandTool'
+import { SkillTool } from '@tools/SkillTool/SkillTool'
+import { SlashCommandPermissionRequest } from './SlashCommandPermissionRequest/SlashCommandPermissionRequest'
+import { SkillPermissionRequest } from './SkillPermissionRequest/SkillPermissionRequest'
+import { WebFetchTool } from '@tools/WebFetchTool/WebFetchTool'
+import { WebFetchPermissionRequest } from './WebFetchPermissionRequest/WebFetchPermissionRequest'
+import { EnterPlanModeTool } from '@tools/PlanModeTool/EnterPlanModeTool'
+import { ExitPlanModeTool } from '@tools/PlanModeTool/ExitPlanModeTool'
+import { EnterPlanModePermissionRequest } from './PlanModePermissionRequest/EnterPlanModePermissionRequest'
+import { ExitPlanModePermissionRequest } from './PlanModePermissionRequest/ExitPlanModePermissionRequest'
 
 function permissionComponentForTool(tool: Tool) {
   switch (tool) {
@@ -30,11 +39,19 @@ function permissionComponentForTool(tool: Tool) {
       return BashPermissionRequest
     case GlobTool:
     case GrepTool:
-    case LSTool:
     case FileReadTool:
-    case NotebookReadTool:
     case NotebookEditTool:
       return FilesystemPermissionRequest
+    case SlashCommandTool:
+      return SlashCommandPermissionRequest
+    case SkillTool:
+      return SkillPermissionRequest
+    case WebFetchTool:
+      return WebFetchPermissionRequest
+    case EnterPlanModeTool:
+      return EnterPlanModePermissionRequest
+    case ExitPlanModeTool:
+      return ExitPlanModePermissionRequest
     default:
       return FallbackPermissionRequest
   }
@@ -63,11 +80,12 @@ export type ToolUseConfirm = {
   description: string
   input: { [key: string]: unknown }
   commandPrefix: CommandSubcommandPrefixResult | null
+  toolUseContext: ToolUseContext
   // TODO: remove riskScore from ToolUseConfirm
   riskScore: number | null
   onAbort(): void
   onAllow(type: 'permanent' | 'temporary'): void
-  onReject(): void
+  onReject(rejectionMessage?: string): void
 }
 
 // TODO: Move this to Tool.renderPermissionRequest
@@ -84,7 +102,8 @@ export function PermissionRequest({
     }
   })
 
-  const toolName = toolUseConfirm.tool.userFacingName?.() || 'Tool'
+  const toolName =
+    toolUseConfirm.tool.userFacingName?.() || toolUseConfirm.tool.name || 'Tool'
   useNotifyAfterTimeout(
     `${PRODUCT_NAME} needs your permission to use ${toolName}`,
   )

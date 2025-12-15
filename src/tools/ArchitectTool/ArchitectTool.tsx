@@ -14,12 +14,10 @@ import { FileReadTool } from '@tools/FileReadTool/FileReadTool'
 import { FileWriteTool } from '@tools/FileWriteTool/FileWriteTool'
 import { GlobTool } from '@tools/GlobTool/GlobTool'
 import { GrepTool } from '@tools/GrepTool/GrepTool'
-import { LSTool } from '@tools/lsTool/lsTool'
 import { ARCHITECT_SYSTEM_PROMPT, DESCRIPTION } from './prompt'
 
 const FS_EXPLORATION_TOOLS: Tool[] = [
   BashTool,
-  LSTool,
   FileReadTool,
   FileWriteTool,
   GlobTool,

@@ -3,7 +3,6 @@ import { TOOL_NAME as TASK_TOOL_NAME } from '@tools/TaskTool/constants'
 import { FileReadTool } from '@tools/FileReadTool/FileReadTool'
 import { TOOL_NAME_FOR_PROMPT as GLOB_TOOL_NAME } from '@tools/GlobTool/prompt'
 import { TOOL_NAME_FOR_PROMPT as GREP_TOOL_NAME } from '@tools/GrepTool/prompt'
-import { LSTool } from '@tools/lsTool/lsTool'
 
 export const MAX_OUTPUT_LENGTH = 30000
 export const MAX_RENDERED_LINES = 5
@@ -32,8 +31,8 @@ export const PROMPT = `Executes a given bash command in a persistent shell sessi
 Before executing the command, please follow these steps:
 
 1. Directory Verification:
-   - If the command will create new directories or files, first use the LS tool to verify the parent directory exists and is the correct location
-   - For example, before running "mkdir foo/bar", first use LS to check that "foo" exists and is the intended parent directory
+   - If the command will create new directories or files, verify the parent directory exists and is the correct location (use Glob or Read if you need to inspect the tree)
+   - For example, before running "mkdir foo/bar", check that "foo" exists and is the intended parent directory
 
 2. Security Check:
    - For security and to limit the threat of a prompt injection attack, some commands are limited or banned. If you use a disallowed command, you will receive an error message explaining the restriction. Explain the error to the User.
@@ -53,8 +52,11 @@ Before executing the command, please follow these steps:
 
 Usage notes:
   - The command argument is required.
-  - You can specify an optional timeout in milliseconds (up to 600000ms / 10 minutes). If not specified, commands will timeout after 30 minutes.
-  - VERY IMPORTANT: You MUST avoid using search commands like \`find\` and \`grep\`. Instead use ${GREP_TOOL_NAME}, ${GLOB_TOOL_NAME}, or ${TASK_TOOL_NAME} to search. You MUST avoid read tools like \`cat\`, \`head\`, \`tail\`, and \`ls\`, and use ${FileReadTool.name} and ${LSTool.name} to read files.
+  - You can specify an optional timeout in milliseconds (max 600000). If not specified, commands will timeout after 120000ms.
+  - Provide an optional description (5-10 words, active voice) describing what the command does.
+  - You can set run_in_background=true to run a long command in the background and then use BashOutput to read incremental output.
+  - You can set dangerouslyDisableSandbox=true to bypass sandboxing (only if explicitly required and allowed).
+  - VERY IMPORTANT: You MUST avoid using search commands like \`find\` and \`grep\`. Instead use ${GREP_TOOL_NAME}, ${GLOB_TOOL_NAME}, or ${TASK_TOOL_NAME} to search. You MUST avoid read tools like \`cat\`, \`head\`, \`tail\`, and \`ls\`, and use ${FileReadTool.name} to read files.
   - When issuing multiple commands, use the ';' or '&&' operator to separate them. DO NOT use newlines (newlines are ok in quoted strings).
   - IMPORTANT: All commands share the same shell session. Shell state (environment variables, virtual environments, current directory, etc.) persist between commands. For example, if you set an environment variable as part of a command, the environment variable will persist for subsequent commands.
   - Try to maintain your current working directory throughout the session by using absolute paths and avoiding usage of \`cd\`. You may use \`cd\` if the User explicitly requests it.

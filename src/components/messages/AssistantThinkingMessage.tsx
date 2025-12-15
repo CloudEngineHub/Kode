@@ -16,7 +16,7 @@ export function AssistantThinkingMessage({
   param: { thinking },
   addMargin = false,
 }: Props): React.ReactNode {
-  if (!thinking) {
+  if (!thinking || thinking.trim().length === 0) {
     return null
   }
 

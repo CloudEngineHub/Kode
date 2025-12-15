@@ -30,15 +30,15 @@ const refreshCommands = {
       // Reload commands to get updated count and validate the refresh
       const commands = await getCommands()
       const customCommands = commands.filter(
-        cmd => cmd.name.startsWith('project:') || cmd.name.startsWith('user:'),
+        cmd => (cmd as any).scope === 'project' || (cmd as any).scope === 'user',
       )
 
       // Provide detailed feedback about the refresh operation
       return `✅ Commands refreshed successfully!
 
 Custom commands reloaded: ${customCommands.length}
-- Project commands: ${customCommands.filter(cmd => cmd.name.startsWith('project:')).length}
-- User commands: ${customCommands.filter(cmd => cmd.name.startsWith('user:')).length}
+- Project commands: ${customCommands.filter(cmd => (cmd as any).scope === 'project').length}
+- User commands: ${customCommands.filter(cmd => (cmd as any).scope === 'user').length}
 
 Use /help to see updated command list.`
     } catch (error) {
