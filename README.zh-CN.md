@@ -40,8 +40,8 @@ Kode 是一个强大的 AI 助手，运行在你的终端中。它能理解你�
 - 💾 **上下文管理** - 智能的上下文处理，保持对话连续性
 
 ### 创作便捷
-- `Ctrl+G` 将消息打开到外部编辑器（优先 `$EDITOR`/`$VISUAL`，回退 code/nano/vim/notepad），关闭后内容自动回填到终端输入框。
-- `Shift+Enter` 在输入框内换行但不发送，普通 Enter 提交；`Ctrl+M` 可快速切换模型。
+- `Option+G`（Alt+G）将消息打开到外部编辑器（优先 `$EDITOR`/`$VISUAL`，回退 code/nano/vim/notepad），关闭后内容自动回填到终端输入框。
+- `Option+Enter` 在输入框内换行但不发送，普通 Enter 提交；`Option+M` 可快速切换模型。
 
 ## 安装
 
@@ -140,9 +140,56 @@ Kode 同时使用 `~/.kode` 目录（存放额外数据，如内存文件）和 
 - `/clear` - 清除对话历史
 - `/init` - 初始化项目上下文
 
+## MCP 服务器（扩展）
+
+Kode 可通过 MCP（Model Context Protocol）接入外部工具服务器，扩展工具与上下文能力。
+
+- 配置文件：项目根目录 `.mcp.json`（推荐）或 `.mcprc`。详见 `docs/mcp.md`。
+- CLI：
+
+```bash
+kode mcp add
+kode mcp list
+kode mcp get <name>
+kode mcp remove <name>
+```
+
+示例 `.mcprc`：
+
+```json
+{
+  "my-sse-server": { "type": "sse", "url": "http://127.0.0.1:3333/sse" }
+}
+```
+
+## 权限与审批
+
+- 默认模式为 YOLO（等同于 `--dangerously-skip-permissions`），为效率跳过多数确认。
+- 安全模式：`kode --safe` 会对 Bash 命令、文件写入/编辑等高风险操作进行手动审批。
+- 计划模式（Plan Mode）：助手可能请求进入计划模式先生成方案；计划模式下仅允许只读/规划类工具（以及写入计划文件），退出计划模式后才会执行改动。
+
+## 粘贴与图片
+
+- 大段/多行文本粘贴会以占位符形式插入，发送时自动展开。
+- 粘贴多个已存在的文件路径会自动转换为 `@path` 引用（必要时自动加引号）。
+- 图片粘贴（macOS）：按 `Ctrl+V` 可附加剪贴板图片；支持一次粘贴多张后再发送。
+
+## 系统级 Sandbox（Linux）
+
+- 在 `--safe` 下（或 `KODE_SYSTEM_SANDBOX=1`），agent 触发的 Bash tool 会优先尝试在 `bwrap` 沙箱中运行（best effort）。
+- 默认禁用网络；可用 `KODE_SYSTEM_SANDBOX_NETWORK=inherit` 放开网络。
+- 可用 `KODE_SYSTEM_SANDBOX=required` 在无法启动沙箱时直接失败（fail closed）。
+- 详见 `docs/system-sandbox.md`（包含 macOS/Windows 建议方案与取舍）。
+
+## 常见排障
+
+- 模型：用 `/model`，或 `kode models import kode-models.yaml` 导入团队共享模型配置；确认所需 API Key 环境变量已设置。
+- MCP：用 `kode mcp list` 查看状态；若服务较慢可调 `MCP_CONNECTION_TIMEOUT_MS`、`MCP_SERVER_CONNECTION_BATCH_SIZE`、`MCP_TOOL_TIMEOUT`。
+- Sandbox：Linux 安装 `bwrap`（bubblewrap），或设置 `KODE_SYSTEM_SANDBOX=0` 关闭。
+
 ## 多模型智能协同
 
-与 CC 仅支持单一模型不同，Kode 实现了**真正的多模型协同工作**，让你能够充分发挥不同 AI 模型的独特优势。
+与仅支持单一模型的终端助手不同，Kode 实现了**真正的多模型协同工作**，让你能够充分发挥不同 AI 模型的独特优势。
 
 ### 🏗️ 核心技术架构
 

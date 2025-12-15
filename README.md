@@ -57,8 +57,8 @@ Kode is a powerful AI assistant that lives in your terminal. It can understand y
 - 🛠️ **Workflow Automation** - Handle complex development tasks with simple prompts
 
 ### Authoring Comfort
-- `Ctrl+G` opens your message in your preferred editor (respects `$EDITOR`/`$VISUAL`; falls back to code/nano/vim/notepad) and returns the text to the prompt when you close it.
-- `Shift+Enter` inserts a newline inside the prompt without sending; plain Enter submits. `Ctrl+M` switches the active model.
+- `Option+G` (Alt+G) opens your message in your preferred editor (respects `$EDITOR`/`$VISUAL`; falls back to code/nano/vim/notepad) and returns the text to the prompt when you close it.
+- `Option+Enter` inserts a newline inside the prompt without sending; plain Enter submits. `Option+M` cycles the active model.
 
 ### 🎯 Advanced Intelligent Completion System
 Our state-of-the-art completion system provides unparalleled coding assistance:
@@ -159,6 +159,53 @@ Kode supports a powerful @ mention system for intelligent completions:
 ```
 
 The @ mention system provides intelligent completions as you type, showing available models, agents, and files.
+
+### MCP Servers (Extensions)
+
+Kode can connect to MCP servers to extend tools and context.
+
+- Config files: `.mcp.json` (recommended) or `.mcprc` in your project root. See `docs/mcp.md`.
+- CLI:
+
+```bash
+kode mcp add
+kode mcp list
+kode mcp get <name>
+kode mcp remove <name>
+```
+
+Example `.mcprc`:
+
+```json
+{
+  "my-sse-server": { "type": "sse", "url": "http://127.0.0.1:3333/sse" }
+}
+```
+
+### Permissions & Approvals
+
+- Default mode skips most prompts for speed.
+- Safe mode: `kode --safe` requires approval for Bash commands and file writes/edits.
+- Plan mode: the assistant may ask to enter plan mode to draft a plan file; while in plan mode, only read-only/planning tools (and the plan file) are allowed until you approve exiting plan mode.
+
+### Paste & Images
+
+- Multi-line/large paste is inserted as a placeholder and expanded on submit.
+- Pasting multiple existing file paths inserts `@path` mentions automatically (quoted when needed).
+- Image paste (macOS): press `Ctrl+V` to attach clipboard images; you can paste multiple images before sending.
+
+### System Sandbox (Linux)
+
+- In safe mode (or with `KODE_SYSTEM_SANDBOX=1`), agent-triggered Bash tool calls try to run inside a `bwrap` sandbox when available.
+- Network is disabled by default; set `KODE_SYSTEM_SANDBOX_NETWORK=inherit` to allow network.
+- Set `KODE_SYSTEM_SANDBOX=required` to fail closed if sandbox cannot be started.
+- See `docs/system-sandbox.md` for details and platform notes.
+
+### Troubleshooting
+
+- Models: use `/model`, or `kode models import kode-models.yaml`, and ensure required API key env vars exist.
+- MCP: use `kode mcp list` to check server status; tune `MCP_CONNECTION_TIMEOUT_MS`, `MCP_SERVER_CONNECTION_BATCH_SIZE`, and `MCP_TOOL_TIMEOUT` if servers are slow.
+- Sandbox: install `bwrap` (bubblewrap) on Linux, or set `KODE_SYSTEM_SANDBOX=0` to disable.
 
 ### AGENTS.md Documentation Mode
 
@@ -448,7 +495,7 @@ Apache 2.0 License - see [LICENSE](LICENSE) for details.
 
 - Some code from @dnakov's anonkode
 - Some UI learned from gemini-cli  
-- Some system design learned from claude code
+- Some system design learned from upstream agent CLIs
 
 ## Support
 
