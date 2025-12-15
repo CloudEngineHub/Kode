@@ -46,6 +46,7 @@ import { getTools } from '@tools'
 import {
   getGlobalConfig,
   getCurrentProjectConfig,
+  getProjectMcpServerDefinitions,
   saveGlobalConfig,
   saveCurrentProjectConfig,
   getCustomApiKeyStatus,
@@ -88,6 +89,12 @@ import {
   getClients,
   ensureConfigScope,
 } from '@services/mcpClient'
+import {
+  looksLikeMcpUrl,
+  normalizeMcpScopeForCli,
+  normalizeMcpTransport,
+  parseMcpHeaders,
+} from '@services/mcpCliUtils'
 import { handleMcprcServerApprovals } from '@services/mcpServerApproval'
  
 import { cursorShow } from 'ansi-escapes'
@@ -535,78 +542,7 @@ ${commandList}`,
       process.exit(result.success ? 0 : 1)
     })
 
-  // claude mcp
-
-  type McpCliTransport = 'stdio' | 'sse' | 'http' | 'ws'
-
-  function looksLikeMcpUrl(value: string): boolean {
-    return (
-      value.startsWith('http://') ||
-      value.startsWith('https://') ||
-      value.startsWith('localhost') ||
-      value.endsWith('/sse') ||
-      value.endsWith('/mcp')
-    )
-  }
-
-  function parseMcpHeaders(
-    raw: string[] | undefined,
-  ): Record<string, string> | undefined {
-    if (!raw || raw.length === 0) return undefined
-    const headers: Record<string, string> = {}
-    for (const item of raw) {
-      const idx = item.indexOf(':')
-      if (idx === -1) {
-        throw new Error(
-          `Invalid header format: "${item}". Expected format: "Header-Name: value"`,
-        )
-      }
-      const key = item.slice(0, idx).trim()
-      const value = item.slice(idx + 1).trim()
-      if (!key) {
-        throw new Error(`Invalid header: "${item}". Header name cannot be empty.`)
-      }
-      headers[key] = value
-    }
-    return headers
-  }
-
-  function normalizeMcpScopeForCli(scope: string | undefined) {
-    const raw = (scope ?? 'local').trim()
-
-    // Claude Code parity mapping:
-    // - local  => per-project config (private to the user)
-    // - user   => global config (available in all projects)
-    // - project => .mcp.json (shared via repo)
-    if (raw === 'local') return ensureConfigScope('project')
-    if (raw === 'user') return ensureConfigScope('global')
-    if (raw === 'project') return ensureConfigScope('mcpjson')
-
-    // Backwards-compatible aliases
-    if (raw === 'global') return ensureConfigScope('global')
-    if (raw === 'projectConfig' || raw === 'project-config') {
-      return ensureConfigScope('project')
-    }
-
-    return ensureConfigScope(raw)
-  }
-
-  function normalizeMcpTransport(transport: string | undefined): {
-    transport: McpCliTransport
-    explicit: boolean
-  } {
-    if (!transport) return { transport: 'stdio', explicit: false }
-    const normalized = transport.trim()
-    if (normalized === 'stdio' || normalized === 'sse' || normalized === 'http') {
-      return { transport: normalized, explicit: true }
-    }
-    if (normalized === 'ws') {
-      return { transport: 'ws', explicit: true }
-    }
-    throw new Error(
-      `Invalid transport type: ${transport}. Must be one of: stdio, sse, http`,
-    )
-  }
+  // MCP
 
   const mcp = program
     .command('mcp')
@@ -638,17 +574,25 @@ ${commandList}`,
     .description('Add an SSE server')
     .option(
       '-s, --scope <scope>',
-      'Configuration scope (project, global, or mcprc)',
-      'project',
+      'Configuration scope (local, user, or project)',
+      'local',
+    )
+    .option(
+      '-H, --header <header...>',
+      'Set headers (e.g. -H "X-Api-Key: abc123" -H "X-Custom: value")',
     )
     .action(async (name, url, options) => {
       try {
-        const scope = ensureConfigScope(options.scope)
+        const scopeInfo = normalizeMcpScopeForCli(options.scope)
+        const headers = parseMcpHeaders(options.header)
 
-        addMcpServer(name, { type: 'sse', url }, scope)
+        addMcpServer(name, { type: 'sse', url, ...(headers ? { headers } : {}) }, scopeInfo.scope)
         console.log(
-          `Added SSE MCP server ${name} with URL ${url} to ${scope} config`,
+          `Added SSE MCP server ${name} with URL: ${url} to ${scopeInfo.display} config`,
         )
+        if (headers) {
+          console.log(`Headers: ${JSON.stringify(headers, null, 2)}`)
+        }
         process.exit(0)
       } catch (error) {
         console.error((error as Error).message)
@@ -661,16 +605,24 @@ ${commandList}`,
     .description('Add a Streamable HTTP MCP server')
     .option(
       '-s, --scope <scope>',
-      'Configuration scope (project, global, or mcprc)',
-      'project',
+      'Configuration scope (local, user, or project)',
+      'local',
+    )
+    .option(
+      '-H, --header <header...>',
+      'Set headers (e.g. -H "X-Api-Key: abc123" -H "X-Custom: value")',
     )
     .action(async (name, url, options) => {
       try {
-        const scope = ensureConfigScope(options.scope)
-        addMcpServer(name, { type: 'http', url }, scope)
+        const scopeInfo = normalizeMcpScopeForCli(options.scope)
+        const headers = parseMcpHeaders(options.header)
+        addMcpServer(name, { type: 'http', url, ...(headers ? { headers } : {}) }, scopeInfo.scope)
         console.log(
-          `Added HTTP MCP server ${name} with URL ${url} to ${scope} config`,
+          `Added HTTP MCP server ${name} with URL: ${url} to ${scopeInfo.display} config`,
         )
+        if (headers) {
+          console.log(`Headers: ${JSON.stringify(headers, null, 2)}`)
+        }
         process.exit(0)
       } catch (error) {
         console.error((error as Error).message)
@@ -683,15 +635,15 @@ ${commandList}`,
     .description('Add a WebSocket MCP server')
     .option(
       '-s, --scope <scope>',
-      'Configuration scope (project, global, or mcprc)',
-      'project',
+      'Configuration scope (local, user, or project)',
+      'local',
     )
     .action(async (name, url, options) => {
       try {
-        const scope = ensureConfigScope(options.scope)
-        addMcpServer(name, { type: 'ws', url }, scope)
+        const scopeInfo = normalizeMcpScopeForCli(options.scope)
+        addMcpServer(name, { type: 'ws', url }, scopeInfo.scope)
         console.log(
-          `Added WebSocket MCP server ${name} with URL ${url} to ${scope} config`,
+          `Added WebSocket MCP server ${name} with URL ${url} to ${scopeInfo.display} config`,
         )
         process.exit(0)
       } catch (error) {
@@ -705,8 +657,13 @@ ${commandList}`,
     .description('Add a server (run without arguments for interactive wizard)')
     .option(
       '-s, --scope <scope>',
-      'Configuration scope (project, global, or mcprc)',
-      'project',
+      'Configuration scope (local, user, or project)',
+      'local',
+    )
+    .option('-t, --transport <transport>', 'MCP transport (stdio, sse, or http)')
+    .option(
+      '-H, --header <header...>',
+      'Set headers (e.g. -H "X-Api-Key: abc123" -H "X-Custom: value")',
     )
     .option(
       '-e, --env <env...>',
@@ -775,27 +732,40 @@ ${commandList}`,
 
           // Get scope
           const scopeStr = await question(
-            'Configuration scope (project, global, or mcprc) [project]: ',
+            'Configuration scope (local, user, or project) [local]: ',
           )
-          const serverScope = ensureConfigScope(scopeStr || 'project')
+          const scopeInfo = normalizeMcpScopeForCli(scopeStr)
+          const serverScope = scopeInfo.scope
 
           rl.close()
 
           // Add the server
           if (type === 'http') {
-            addMcpServer(serverName, { type: 'http', url: commandOrUrlValue }, serverScope)
+            addMcpServer(
+              serverName,
+              { type: 'http', url: commandOrUrlValue },
+              serverScope,
+            )
             console.log(
-              `Added HTTP MCP server ${serverName} with URL ${commandOrUrlValue} to ${serverScope} config`,
+              `Added HTTP MCP server ${serverName} with URL ${commandOrUrlValue} to ${scopeInfo.display} config`,
             )
           } else if (type === 'sse') {
-            addMcpServer(serverName, { type: 'sse', url: commandOrUrlValue }, serverScope)
+            addMcpServer(
+              serverName,
+              { type: 'sse', url: commandOrUrlValue },
+              serverScope,
+            )
             console.log(
-              `Added SSE MCP server ${serverName} with URL ${commandOrUrlValue} to ${serverScope} config`,
+              `Added SSE MCP server ${serverName} with URL ${commandOrUrlValue} to ${scopeInfo.display} config`,
             )
           } else if (type === 'ws') {
-            addMcpServer(serverName, { type: 'ws', url: commandOrUrlValue }, serverScope)
+            addMcpServer(
+              serverName,
+              { type: 'ws', url: commandOrUrlValue },
+              serverScope,
+            )
             console.log(
-              `Added WebSocket MCP server ${serverName} with URL ${commandOrUrlValue} to ${serverScope} config`,
+              `Added WebSocket MCP server ${serverName} with URL ${commandOrUrlValue} to ${scopeInfo.display} config`,
             )
           } else {
             addMcpServer(
@@ -810,36 +780,71 @@ ${commandList}`,
             )
 
             console.log(
-              `Added stdio MCP server ${serverName} with command: ${commandOrUrlValue} ${serverArgs.join(' ')} to ${serverScope} config`,
+              `Added stdio MCP server ${serverName} with command: ${commandOrUrlValue} ${serverArgs.join(' ')} to ${scopeInfo.display} config`,
             )
           }
         } else if (name && commandOrUrl) {
           // Regular non-interactive flow
-          const scope = ensureConfigScope(options.scope)
+          const scopeInfo = normalizeMcpScopeForCli(options.scope)
+          const transportInfo = normalizeMcpTransport(options.transport)
 
-          // URL-based server configs.
-          if (commandOrUrl.match(/^wss?:\/\//)) {
-            addMcpServer(name, { type: 'ws', url: commandOrUrl }, scope)
-            console.log(
-              `Added WebSocket MCP server ${name} with URL ${commandOrUrl} to ${scope} config`,
-            )
-          } else if (commandOrUrl.match(/^https?:\/\//)) {
-            // Claude parity: prefer Streamable HTTP when given an URL. Use `mcp add-sse` for legacy SSE.
-            addMcpServer(name, { type: 'http', url: commandOrUrl }, scope)
-            console.log(
-              `Added HTTP MCP server ${name} with URL ${commandOrUrl} to ${scope} config`,
-            )
-          } else {
+          if (transportInfo.transport === 'stdio') {
+            if (options.header?.length) {
+              throw new Error(
+                '--header can only be used with --transport http or --transport sse',
+              )
+            }
+
             const env = parseEnvVars(options.env)
+            if (!transportInfo.explicit && looksLikeMcpUrl(commandOrUrl)) {
+              console.warn(
+                `Warning: "${commandOrUrl}" looks like a URL. Default transport is stdio, so it will be treated as a command.`,
+              )
+              console.warn(
+                `If you meant to add an HTTP MCP server, run: ${PRODUCT_COMMAND} mcp add ${name} ${commandOrUrl} --transport http`,
+              )
+              console.warn(
+                `If you meant to add a legacy SSE MCP server, run: ${PRODUCT_COMMAND} mcp add ${name} ${commandOrUrl} --transport sse`,
+              )
+            }
+
             addMcpServer(
               name,
               { type: 'stdio', command: commandOrUrl, args: args || [], env },
-              scope,
+              scopeInfo.scope,
             )
 
             console.log(
-              `Added stdio MCP server ${name} with command: ${commandOrUrl} ${(args || []).join(' ')} to ${scope} config`,
+              `Added stdio MCP server ${name} with command: ${commandOrUrl} ${(args || []).join(' ')} to ${scopeInfo.display} config`,
             )
+          } else {
+            if (options.env?.length) {
+              throw new Error('--env is only supported for stdio MCP servers')
+            }
+            if (args?.length) {
+              throw new Error(
+                'Unexpected arguments. URL-based MCP servers do not accept command args.',
+              )
+            }
+
+            const headers = parseMcpHeaders(options.header)
+            addMcpServer(
+              name,
+              {
+                type: transportInfo.transport,
+                url: commandOrUrl,
+                ...(headers ? { headers } : {}),
+              },
+              scopeInfo.scope,
+            )
+
+            const kind = transportInfo.transport.toUpperCase()
+            console.log(
+              `Added ${kind} MCP server ${name} with URL: ${commandOrUrl} to ${scopeInfo.display} config`,
+            )
+            if (headers) {
+              console.log(`Headers: ${JSON.stringify(headers, null, 2)}`)
+            }
           }
         } else {
           console.error(
@@ -859,16 +864,63 @@ ${commandList}`,
     .description('Remove an MCP server')
     .option(
       '-s, --scope <scope>',
-      'Configuration scope (project, global, or mcprc)',
-      'project',
+      'Configuration scope (local, user, or project)',
     )
     .action(async (name: string, options: { scope?: string }) => {
       try {
-        const scope = ensureConfigScope(options.scope)
-        
+        if (options.scope) {
+          const scopeInfo = normalizeMcpScopeForCli(options.scope)
+          removeMcpServer(name, scopeInfo.scope)
+          console.log(
+            `Removed MCP server ${name} from ${scopeInfo.display} config`,
+          )
+          process.exit(0)
+        }
 
-        removeMcpServer(name, scope)
-        console.log(`Removed MCP server ${name} from ${scope} config`)
+        const matches: Array<{ scope: ReturnType<typeof ensureConfigScope>; display: string }> = []
+
+        const projectConfig = getCurrentProjectConfig()
+        if (projectConfig.mcpServers?.[name]) {
+          matches.push({ scope: ensureConfigScope('project'), display: 'local' })
+        }
+
+        const globalConfig = getGlobalConfig()
+        if (globalConfig.mcpServers?.[name]) {
+          matches.push({ scope: ensureConfigScope('global'), display: 'user' })
+        }
+
+        const projectFileDefinitions = getProjectMcpServerDefinitions()
+        if (projectFileDefinitions.servers[name]) {
+          const source = projectFileDefinitions.sources[name]
+          if (source === '.mcp.json') {
+            matches.push({ scope: ensureConfigScope('mcpjson'), display: 'project' })
+          } else {
+            matches.push({ scope: ensureConfigScope('mcprc'), display: 'mcprc' })
+          }
+        }
+
+        if (matches.length === 0) {
+          throw new Error(`No MCP server found with name: ${name}`)
+        }
+
+        if (matches.length > 1) {
+          console.error(
+            `MCP server "${name}" exists in multiple scopes: ${matches
+              .map(m => m.display)
+              .join(', ')}`,
+          )
+          console.error('Please specify which scope to remove from:')
+          for (const match of matches) {
+            console.error(
+              `  ${PRODUCT_COMMAND} mcp remove ${name} --scope ${match.display}`,
+            )
+          }
+          process.exit(1)
+        }
+
+        const match = matches[0]!
+        removeMcpServer(name, match.scope)
+        console.log(`Removed MCP server ${name} from ${match.display} config`)
         process.exit(0)
       } catch (error) {
         console.error((error as Error).message)

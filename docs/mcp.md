@@ -2,7 +2,7 @@
 
 Kode 支持通过 MCP（Model Context Protocol）接入外部工具服务器，并将 MCP server 下发的工具映射为动态工具名：`mcp__<server>__<tool>`。
 
-## 1) 推荐：使用 `.mcp.json`（Claude Code 格式）
+## 1) 推荐：使用 `.mcp.json`（项目文件格式）
 
 在项目根目录创建 `.mcp.json`：
 
@@ -65,7 +65,6 @@ Kode 支持通过 MCP（Model Context Protocol）接入外部工具服务器，�
 
 ## 4) CLI 快速添加
 
-- `kode mcp add <name> <url>`：默认按 `http`（Streamable HTTP）添加；如果是旧版 SSE transport，请使用 `kode mcp add-sse <name> <url>`。
-- `kode mcp add <name> <command> [args...]`：添加 stdio server。
-- `kode mcp get <name>` / `kode mcp remove <name>`：查看/删除。
-
+- `kode mcp add <name> <command> [args...]`：默认添加 `stdio` server；可用 `-e KEY=value` 设置环境变量；可用 `--scope local|user|project` 选择写入位置。
+- `kode mcp add <name> <url> --transport http|sse`：显式指定 URL-based transport；可用 `-H "Header: value"` 设置请求头；也可使用 `kode mcp add-http` / `kode mcp add-sse`。
+- `kode mcp remove <name>`：未指定 `--scope` 时会自动定位；若同名 server 同时存在于多个 scope，会提示你显式选择。
