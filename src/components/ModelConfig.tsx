@@ -80,14 +80,14 @@ export function ModelConfig({ onClose }: Props): React.ReactNode {
         onChange: (value: string) => handleModelPointerChange('task', value),
       },
       {
-        id: 'reasoning',
-        label: 'Reasoning Model',
-        description: 'Model optimized for complex reasoning tasks',
-        value: config.modelPointers?.reasoning || '',
+        id: 'compact',
+        label: 'Compact Model',
+        description: 'Model used for context compression when nearing the context window',
+        value: config.modelPointers?.compact || '',
         options: availableModels,
         type: 'modelPointer' as const,
         onChange: (value: string) =>
-          handleModelPointerChange('reasoning', value),
+          handleModelPointerChange('compact', value),
       },
       {
         id: 'quick',

@@ -1126,7 +1126,7 @@ export async function queryLLM(
   if (toolUseContext && !toolUseContext.responseState) {
     const conversationId = getConversationId(toolUseContext.agentId, toolUseContext.messageId)
     const previousResponseId = responseStateManager.getPreviousResponseId(conversationId)
-    
+
     toolUseContext.responseState = {
       previousResponseId,
       conversationId
@@ -1137,7 +1137,7 @@ export async function queryLLM(
     inputParam: options.model,
     resolvedModelName: resolvedModel,
     provider: modelProfile.provider,
-    isPointer: ['main', 'task', 'reasoning', 'quick'].includes(options.model),
+    isPointer: ['main', 'task', 'compact', 'quick'].includes(options.model),
     hasResponseState: !!toolUseContext?.responseState,
     conversationId: toolUseContext?.responseState?.conversationId,
     requestId: getCurrentRequest()?.id,

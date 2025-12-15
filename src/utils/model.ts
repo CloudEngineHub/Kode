@@ -477,7 +477,7 @@ export class ModelManager {
   // New model pointer system methods
 
   /**
-   * Get model by pointer type (main, task, reasoning, quick)
+   * Get model by pointer type (main, task, compact, quick)
    */
   getModel(pointer: ModelPointerType): ModelProfile | null {
     const pointerId = this.config.modelPointers?.[pointer]
@@ -498,10 +498,10 @@ export class ModelManager {
   }
 
   /**
-   * Get reasoning model (with fallback)
+   * Get compact model (with fallback)
    */
-  getReasoningModel(): string | null {
-    return this.getModelName('reasoning') || this.getModelName('main')
+  getCompactModel(): string | null {
+    return this.getModelName('compact') || this.getModelName('main')
   }
 
   /**
@@ -550,7 +550,7 @@ export class ModelManager {
       this.config.modelPointers = {
         main: config.modelName,
         task: config.modelName,
-        reasoning: config.modelName,
+        compact: config.modelName,
         quick: config.modelName,
       }
       this.config.defaultModelName = config.modelName
@@ -560,7 +560,7 @@ export class ModelManager {
         this.config.modelPointers = {
           main: config.modelName,
           task: '',
-          reasoning: '',
+          compact: '',
           quick: '',
         }
       } else {
@@ -584,7 +584,7 @@ export class ModelManager {
       this.config.modelPointers = {
         main: '',
         task: '',
-        reasoning: '',
+        compact: '',
         quick: '',
       }
     }
@@ -721,7 +721,7 @@ export class ModelManager {
    */
   resolveModel(modelParam: string | ModelPointerType): ModelProfile | null {
     // 首先检查是否是模型指针
-    if (['main', 'task', 'reasoning', 'quick'].includes(modelParam)) {
+    if (['main', 'task', 'compact', 'quick'].includes(modelParam)) {
       const pointerId =
         this.config.modelPointers?.[modelParam as ModelPointerType]
       if (pointerId) {
@@ -769,7 +769,7 @@ export class ModelManager {
     profile: ModelProfile | null
     error?: string
   } {
-    const isPointer = ['main', 'task', 'reasoning', 'quick'].includes(
+    const isPointer = ['main', 'task', 'compact', 'quick'].includes(
       modelParam,
     )
 
@@ -880,7 +880,7 @@ export const getModelManager = (): ModelManager => {
         )
         globalModelManager = new ModelManager({
           modelProfiles: [],
-          modelPointers: { main: '', task: '', reasoning: '', quick: '' },
+          modelPointers: { main: '', task: '', compact: '', quick: '' },
         })
       } else {
         globalModelManager = new ModelManager(config)
@@ -892,7 +892,7 @@ export const getModelManager = (): ModelManager => {
     // Return a fallback ModelManager with empty configuration
     return new ModelManager({
       modelProfiles: [],
-      modelPointers: { main: '', task: '', reasoning: '', quick: '' },
+      modelPointers: { main: '', task: '', compact: '', quick: '' },
     })
   }
 }

@@ -18,7 +18,7 @@ export function ModelStatusDisplay({ onClose }: Props): React.ReactNode {
     const config = getGlobalConfig()
 
     // 显示所有模型指针的当前状态
-    const pointers = ['main', 'task', 'reasoning', 'quick'] as const
+    const pointers = ['main', 'task', 'compact', 'quick'] as const
 
     return (
       <Box

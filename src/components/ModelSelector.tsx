@@ -2863,7 +2863,7 @@ export function ModelSelector({
             <Box flexDirection="column" width={70}>
               <Text color={theme.secondaryText}>
                 This model profile can be assigned to different pointers (main,
-                task, reasoning, quick) for various use cases.
+                task, compact, quick) for various use cases.
               </Text>
             </Box>
 

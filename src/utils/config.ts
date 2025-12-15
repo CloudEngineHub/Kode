@@ -163,12 +163,12 @@ export type ModelProfile = {
   lastValidation?: number // Last validation timestamp
 }
 
-export type ModelPointerType = 'main' | 'task' | 'reasoning' | 'quick'
+export type ModelPointerType = 'main' | 'task' | 'compact' | 'quick'
 
 export type ModelPointers = {
   main: string // Main dialog model ID
   task: string // Task tool model ID
-  reasoning: string // Reasoning model ID
+  compact: string // Context compression model ID
   quick: string // Quick model ID
 }
 
@@ -231,7 +231,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfig = {
   modelPointers: {
     main: '',
     task: '',
-    reasoning: '',
+    compact: '',
     quick: '',
   },
   lastDismissedUpdateVersion: undefined,
@@ -839,19 +839,26 @@ function migrateModelProfilesRemoveId(config: GlobalConfig): GlobalConfig {
   const migratedPointers: ModelPointers = {
     main: '',
     task: '',
-    reasoning: '',
+    compact: '',
     quick: '',
   }
 
-  if (config.modelPointers) {
-    Object.entries(config.modelPointers).forEach(([pointer, value]) => {
-      if (value) {
-        // If value looks like an old ID (model_xxx), map it to modelName
-        const modelName = idToModelNameMap.get(value) || value
-        migratedPointers[pointer as ModelPointerType] = modelName
-      }
-    })
-  }
+  const rawPointers = config.modelPointers as Record<string, unknown> | undefined
+  const rawMain = typeof rawPointers?.main === 'string' ? rawPointers.main : ''
+  const rawTask = typeof rawPointers?.task === 'string' ? rawPointers.task : ''
+  const rawQuick = typeof rawPointers?.quick === 'string' ? rawPointers.quick : ''
+  const rawCompact =
+    typeof rawPointers?.compact === 'string'
+      ? rawPointers.compact
+      : typeof rawPointers?.reasoning === 'string'
+        ? rawPointers.reasoning
+        : ''
+
+  if (rawMain) migratedPointers.main = idToModelNameMap.get(rawMain) || rawMain
+  if (rawTask) migratedPointers.task = idToModelNameMap.get(rawTask) || rawTask
+  if (rawCompact)
+    migratedPointers.compact = idToModelNameMap.get(rawCompact) || rawCompact
+  if (rawQuick) migratedPointers.quick = idToModelNameMap.get(rawQuick) || rawQuick
 
   // 3. Migrate legacy config fields
   let defaultModelName: string | undefined
@@ -887,7 +894,7 @@ export function setAllPointersToModel(modelName: string): void {
     modelPointers: {
       main: modelName,
       task: modelName,
-      reasoning: modelName,
+      compact: modelName,
       quick: modelName,
     },
     defaultModelName: modelName,

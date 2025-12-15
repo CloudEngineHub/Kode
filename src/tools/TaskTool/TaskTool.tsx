@@ -86,7 +86,7 @@ function modelEnumToPointer(model?: TaskModel): string | undefined {
     case 'sonnet':
       return 'task'
     case 'opus':
-      return 'reasoning'
+      return 'main'
   }
 }
 

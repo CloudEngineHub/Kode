@@ -2,6 +2,7 @@ import { Command } from '@commands'
 import { getContext } from '@context'
 import { getMessagesGetter, getMessagesSetter } from '@messages'
 import { API_ERROR_MESSAGE_PREFIX, queryLLM } from '@services/claude'
+import { getGlobalConfig } from '@utils/config'
 import {
   createUserMessage,
   normalizeMessagesForAPI,
@@ -56,6 +57,7 @@ const compact = {
     const messages = getMessagesGetter()()
 
     const summaryRequest = createUserMessage(COMPRESSION_PROMPT)
+    const compactPointer = getGlobalConfig().modelPointers?.compact
 
     const summaryResponse = await queryLLM(
       normalizeMessagesForAPI([...messages, summaryRequest]),
@@ -67,7 +69,7 @@ const compact = {
       abortController.signal,
       {
         safeMode: false,
-        model: 'main', // 使用模型指针，让queryLLM统一解析
+        model: compactPointer ? 'compact' : 'main', // 使用模型指针，让queryLLM统一解析
         prependCLISysprompt: true,
       },
     )

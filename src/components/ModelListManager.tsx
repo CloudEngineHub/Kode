@@ -49,7 +49,7 @@ export function ModelListManager({ onClose }: Props): React.ReactNode {
   // Check which pointers are using this model
   function getModelUsage(modelName: string): ModelPointerType[] {
     const usage: ModelPointerType[] = []
-    const pointers: ModelPointerType[] = ['main', 'task', 'reasoning', 'quick']
+    const pointers: ModelPointerType[] = ['main', 'task', 'compact', 'quick']
 
     pointers.forEach(pointer => {
       if (config.modelPointers?.[pointer] === modelName) {
