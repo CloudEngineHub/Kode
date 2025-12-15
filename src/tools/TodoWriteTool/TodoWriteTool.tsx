@@ -152,21 +152,17 @@ export const TodoWriteTool = {
         )
       }
 
-      // Sort: [completed, in_progress, pending]
-      const sortedTodos = [...currentTodos].sort((a, b) => {
-        const order = ['completed', 'in_progress', 'pending']
-        return (
-          order.indexOf(a.status) - order.indexOf(b.status) ||
-          a.content.localeCompare(b.content)
-        )
-      })
+      // Render in storage order (already smart-sorted by status/priority/updatedAt)
+      const displayedTodos = currentTodos
 
-      // Find the next pending task (first pending task after sorting)
-      const nextPendingIndex = sortedTodos.findIndex(todo => todo.status === 'pending')
+      // Find the next pending task
+      const nextPendingIndex = displayedTodos.findIndex(
+        todo => todo.status === 'pending',
+      )
 
       return (
         <Box flexDirection="column" width="100%">
-          {sortedTodos.map((todo: StoredTodoItem, index: number) => {
+          {displayedTodos.map((todo: StoredTodoItem, index: number) => {
             // Determine checkbox symbol and colors
             let checkbox: string
             let textColor: string
