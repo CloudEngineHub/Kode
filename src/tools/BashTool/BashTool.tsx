@@ -14,10 +14,11 @@ import { BunShell } from '@utils/BunShell'
 import { getCwd, getOriginalCwd } from '@utils/state'
 import { getGlobalConfig } from '@utils/config'
 import { getModelManager } from '@utils/model'
+import { decideSystemSandboxForBashTool } from '@utils/systemSandbox'
 import BashToolResultMessage from './BashToolResultMessage'
 import { BANNED_COMMANDS, PROMPT } from './prompt'
 import { formatOutput, getCommandFilePaths } from './utils'
-import { type CommandSource } from './commandSource'
+import { getCommandSource, type CommandSource } from './commandSource'
 
 export const inputSchema = z.strictObject({
   command: z.string().describe('The command to execute'),
@@ -87,7 +88,7 @@ export const BashTool = {
     return true
   },
   async validateInput(
-    { command, timeout },
+    { command, timeout, dangerouslyDisableSandbox },
     context?: ToolUseContext,
   ): Promise<ValidationResult> {
     if (timeout !== undefined) {
@@ -107,6 +108,19 @@ export const BashTool = {
 
     const source = (context as any)?.commandSource || 'agent_call'
     const isUserMode = source === 'user_bash_mode'
+    const safeMode = Boolean(context?.safeMode ?? context?.options?.safeMode)
+
+    if (
+      dangerouslyDisableSandbox === true &&
+      safeMode &&
+      source === 'agent_call'
+    ) {
+      return {
+        result: false,
+        message:
+          'Sandbox cannot be disabled while safe mode is enabled.',
+      }
+    }
     const commands = splitCommand(command)
 
     for (const cmd of commands) {
@@ -185,11 +199,30 @@ export const BashTool = {
     return `${stdout.trim()}${hasBoth ? '\n' : ''}${errorMessage.trim()}`
   },
   async *call(
-    { command, timeout = 120000, run_in_background },
-    { abortController, readFileTimestamps },
+    { command, timeout = 120000, run_in_background, dangerouslyDisableSandbox },
+    context,
   ) {
+    const { abortController, readFileTimestamps } = context
     let stdout = ''
     let stderr = ''
+
+    const commandSource = getCommandSource(context as any)
+    const safeMode = Boolean(context?.safeMode ?? context?.options?.safeMode)
+    const sandboxDecision = decideSystemSandboxForBashTool({
+      safeMode,
+      commandSource,
+      dangerouslyDisableSandbox: dangerouslyDisableSandbox === true,
+    })
+
+    const sandboxOptions = sandboxDecision.enabled
+      ? {
+          enabled: true,
+          require: sandboxDecision.required,
+          allowNetwork: sandboxDecision.allowNetwork,
+          writableRoots: [getOriginalCwd()],
+          chdir: getCwd(),
+        }
+      : undefined
 
     // 🔧 Check if already cancelled before starting execution
     if (abortController.signal.aborted) {
@@ -211,10 +244,9 @@ export const BashTool = {
 
     try {
       if (run_in_background) {
-        const { bashId } = BunShell.getInstance().execInBackground(
-          command,
-          timeout,
-        )
+        const { bashId } = BunShell.getInstance().execInBackground(command, timeout, {
+          sandbox: sandboxOptions,
+        })
         const data: Out = {
           stdout: '',
           stdoutLines: 0,
@@ -236,6 +268,7 @@ export const BashTool = {
         command,
         abortController.signal,
         timeout,
+        { sandbox: sandboxOptions },
       )
       stdout += (result.stdout || '').trim() + EOL
       stderr += (result.stderr || '').trim() + EOL

@@ -10,6 +10,18 @@ type ExecResult = {
   interrupted: boolean
 }
 
+export type BunShellSandboxOptions = {
+  enabled: boolean
+  require?: boolean
+  allowNetwork?: boolean
+  writableRoots?: string[]
+  chdir?: string
+}
+
+export type BunShellExecOptions = {
+  sandbox?: BunShellSandboxOptions
+}
+
 type BackgroundProcess = {
   id: string
   command: string
@@ -70,6 +82,73 @@ export class BunShell {
       : ['sh', '-c', command]
   }
 
+  private buildSandboxCmd(
+    command: string,
+    sandbox: BunShellSandboxOptions,
+  ): { cmd: string[]; warning?: string } | null {
+    if (!sandbox.enabled) return null
+    if (process.platform !== 'linux') {
+      return null
+    }
+
+    const bwrapPath = Bun.which('bwrap')
+    if (!bwrapPath) {
+      return null
+    }
+
+    const allowNetwork = sandbox.allowNetwork === true
+    const writableRoots = (sandbox.writableRoots || []).filter(Boolean)
+    const chdir = sandbox.chdir || this.cwd
+
+    const args: string[] = [
+      '--die-with-parent',
+      '--unshare-user',
+      '--uid',
+      '0',
+      '--gid',
+      '0',
+      '--unshare-pid',
+      '--unshare-uts',
+      '--unshare-ipc',
+      ...(allowNetwork ? [] : ['--unshare-net']),
+      '--ro-bind',
+      '/',
+      '/',
+      '--dev',
+      '/dev',
+      '--proc',
+      '/proc',
+      '--tmpfs',
+      '/tmp',
+      '--setenv',
+      'HOME',
+      '/tmp',
+      '--setenv',
+      'TMPDIR',
+      '/tmp',
+      '--setenv',
+      'XDG_CACHE_HOME',
+      '/tmp/.cache',
+      '--setenv',
+      'XDG_CONFIG_HOME',
+      '/tmp/.config',
+    ]
+
+    for (const root of writableRoots) {
+      args.push('--bind', root, root)
+    }
+
+    args.push('--chdir', chdir, '--')
+    args.push(...this.getShellCmd(command))
+
+    return { cmd: [bwrapPath, ...args] }
+  }
+
+  private isSandboxInitFailure(stderr: string): boolean {
+    const s = stderr.toLowerCase()
+    return s.includes('bwrap:') || s.includes('bubblewrap') || s.includes('namespace') && s.includes('failed')
+  }
+
   private startStreamReader(
     stream: ReadableStream | null,
     append: (chunk: string) => void,
@@ -96,6 +175,7 @@ export class BunShell {
     command: string,
     abortSignal?: AbortSignal,
     timeout?: number,
+    options?: BunShellExecOptions,
   ): Promise<ExecResult> {
     const DEFAULT_TIMEOUT = 120_000
     const commandTimeout = timeout ?? DEFAULT_TIMEOUT
@@ -110,9 +190,12 @@ export class BunShell {
       })
     }
 
-    try {
+    const sandbox = options?.sandbox
+    const shouldAttemptSandbox = sandbox?.enabled === true
+
+    const runOnce = async (cmd: string[]): Promise<ExecResult> => {
       this.currentProcess = Bun.spawn({
-        cmd: this.getShellCmd(command),
+        cmd,
         cwd: this.cwd,
         stdout: 'pipe',
         stderr: 'pipe',
@@ -155,6 +238,48 @@ export class BunShell {
         code: exitCode,
         interrupted: false,
       }
+    }
+
+    try {
+      if (shouldAttemptSandbox) {
+        const sandboxCmd = this.buildSandboxCmd(command, sandbox!)
+        if (!sandboxCmd) {
+          if (sandbox?.require) {
+            return {
+              stdout: '',
+              stderr:
+                'System sandbox is required but unavailable (missing bubblewrap or unsupported platform).',
+              code: 2,
+              interrupted: false,
+            }
+          }
+          const fallback = await runOnce(this.getShellCmd(command))
+          return {
+            ...fallback,
+            stderr:
+              `[sandbox] unavailable, ran without isolation.\n${fallback.stderr}`.trim(),
+          }
+        }
+
+        const sandboxed = await runOnce(sandboxCmd.cmd)
+        if (
+          !sandboxed.interrupted &&
+          sandboxed.code !== 0 &&
+          this.isSandboxInitFailure(sandboxed.stderr) &&
+          !sandbox?.require
+        ) {
+          const fallback = await runOnce(this.getShellCmd(command))
+          return {
+            ...fallback,
+            stderr:
+              `[sandbox] failed to start, ran without isolation.\n${fallback.stderr}`.trim(),
+          }
+        }
+
+        return sandboxed
+      }
+
+      return await runOnce(this.getShellCmd(command))
     } catch (error) {
       // Handle external abort
       if (this.abortController.signal.aborted) {
@@ -182,12 +307,29 @@ export class BunShell {
     }
   }
 
-  execInBackground(command: string, timeout?: number): { bashId: string } {
+  execInBackground(
+    command: string,
+    timeout?: number,
+    options?: BunShellExecOptions,
+  ): { bashId: string } {
     const DEFAULT_TIMEOUT = 120_000
     const commandTimeout = timeout ?? DEFAULT_TIMEOUT
     const abortController = new AbortController()
+
+    const sandbox = options?.sandbox
+    const sandboxCmd =
+      sandbox?.enabled === true ? this.buildSandboxCmd(command, sandbox) : null
+
+    if (sandbox?.enabled === true && sandbox?.require && !sandboxCmd) {
+      throw new Error(
+        'System sandbox is required but unavailable (missing bubblewrap or unsupported platform).',
+      )
+    }
+
+    const cmdToRun = sandboxCmd ? sandboxCmd.cmd : this.getShellCmd(command)
+
     const process = Bun.spawn({
-      cmd: this.getShellCmd(command),
+      cmd: cmdToRun,
       cwd: this.cwd,
       stdout: 'pipe',
       stderr: 'pipe',
