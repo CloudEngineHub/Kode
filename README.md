@@ -243,9 +243,43 @@ We designed a unified `ModelManager` system that supports:
 - **Model Pointers**: Users can configure default models for different purposes in the `/model` command:
   - `main`: Default model for main Agent
   - `task`: Default model for SubAgent
-  - `reasoning`: Reserved for future ThinkTool usage
-  - `quick`: Fast model for simple NLP tasks (security identification, title generation, etc.)
+  - `compact`: Model used for automatic context compression when nearing the context window
+  - `quick`: Fast model for simple operations and utilities
 - **Dynamic Model Switching**: Support runtime model switching without restarting sessions, maintaining context continuity
+
+#### 📦 Shareable Model Config (YAML)
+
+You can export/import model profiles + pointers as a team-shareable YAML file. By default, exports do **not** include plaintext API keys (use env vars instead).
+
+```bash
+# Export to a file (or omit --output to print to stdout)
+kode models export --output kode-models.yaml
+
+# Import (merge by default)
+kode models import kode-models.yaml
+
+# Replace existing profiles instead of merging
+kode models import --replace kode-models.yaml
+```
+
+Example `kode-models.yaml`:
+
+```yaml
+version: 1
+profiles:
+  - name: OpenAI Main
+    provider: openai
+    modelName: gpt-4o
+    maxTokens: 8192
+    contextLength: 128000
+    apiKey:
+      fromEnv: OPENAI_API_KEY
+pointers:
+  main: gpt-4o
+  task: gpt-4o
+  compact: gpt-4o
+  quick: gpt-4o
+```
 
 #### 2. **TaskTool Intelligent Task Distribution**
 Our specially designed `TaskTool` (Architect tool) implements:
@@ -260,7 +294,7 @@ We specially designed the `AskExpertModel` tool:
 - **Knowledge Integration**: Integrates expert model insights into the current task
 
 #### 🎯 Flexible Model Switching
-- **Tab Key Quick Switch**: Press Tab in the input box to quickly switch the model for the current conversation
+- **Option+M Quick Switch**: Press Option+M in the input box to cycle the main conversation model
 - **`/model` Command**: Use `/model` command to configure and manage multiple model profiles, set default models for different purposes
 - **User Control**: Users can specify specific models for task processing at any time
 
@@ -314,16 +348,15 @@ We specially designed the `AskExpertModel` tool:
 ```typescript
 // Example of multi-model configuration support
 {
-  "modelProfiles": {
-    "o3": { "provider": "openai", "model": "o3", "apiKey": "..." },
-    "claude4": { "provider": "anthropic", "model": "claude-sonnet-4", "apiKey": "..." },
-    "qwen": { "provider": "alibaba", "model": "qwen-coder", "apiKey": "..." }
-  },
+  "modelProfiles": [
+    { "name": "o3", "provider": "openai", "modelName": "o3", "apiKey": "...", "maxTokens": 1024, "contextLength": 128000, "isActive": true, "createdAt": 1710000000000 },
+    { "name": "qwen", "provider": "alibaba", "modelName": "qwen-coder", "apiKey": "...", "maxTokens": 1024, "contextLength": 128000, "isActive": true, "createdAt": 1710000000001 }
+  ],
   "modelPointers": {
-    "main": "claude4",      // Main conversation model
-    "task": "qwen",         // Task execution model
-    "reasoning": "o3",      // Reasoning model
-    "quick": "glm-4.5"      // Quick response model
+    "main": "o3",           // Main conversation model
+    "task": "qwen-coder",   // Sub-agent model
+    "compact": "o3",        // Context compression model
+    "quick": "o3"           // Quick operations model
   }
 }
 ```
@@ -351,7 +384,7 @@ We specially designed the `AskExpertModel` tool:
 | Feature | Kode | Single-model CLI |
 |---------|------|-----------------|
 | Number of Supported Models | Unlimited, configurable for any model | Only supports one model |
-| Model Switching | ✅ Tab key quick switch | ❌ Requires session restart |
+| Model Switching | ✅ Option+M quick switch | ❌ Requires session restart |
 | Parallel Processing | ✅ Multiple SubAgents work in parallel | ❌ Single-threaded processing |
 | Cost Tracking | ✅ Separate statistics for multiple models | ❌ Single model cost |
 | Task Model Configuration | ✅ Different default models for different purposes | ❌ Same model for all tasks |

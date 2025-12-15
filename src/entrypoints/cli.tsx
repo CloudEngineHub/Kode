@@ -2,7 +2,7 @@
 import '@utils/sanitizeAnthropicEnv'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { initSentry } from '@services/sentry'
 import { PRODUCT_COMMAND, PRODUCT_NAME } from '@constants/product'
 initSentry() // Initialize Sentry as early as possible
@@ -66,6 +66,10 @@ import { Doctor } from '@screens/Doctor'
 import { TrustDialog } from '@components/TrustDialog'
 import { checkHasTrustDialogAccepted, McpServerConfig } from '@utils/config'
 import { isDefaultSlowAndCapableModel } from '@utils/model'
+import {
+  applyModelConfigYamlImport,
+  formatModelConfigYamlForSharing,
+} from '@utils/modelConfigYaml'
 import { LogList } from '@screens/LogList'
 import { ResumeConversation } from '@screens/ResumeConversation'
 import { startMCPServer } from './mcp'
@@ -517,6 +521,69 @@ ${commandList}`,
         JSON.stringify(global ? listConfigForCLI(true) : listConfigForCLI(false), null, 2),
       )
       process.exit(0)
+    })
+
+  // Models (YAML import/export)
+
+  const modelsCmd = program
+    .command('models')
+    .description('Import/export model profiles and pointers (YAML)')
+
+  modelsCmd
+    .command('export')
+    .description(
+      'Export shareable model config as YAML (does not include plaintext API keys)',
+    )
+    .option('-c, --cwd <cwd>', 'The current working directory', String, cwd())
+    .option('-o, --output <path>', 'Write YAML to file instead of stdout')
+    .action(async ({ cwd, output }) => {
+      try {
+        await setup(cwd, false)
+        const yamlText = formatModelConfigYamlForSharing(getGlobalConfig())
+        if (output) {
+          writeFileSync(output, yamlText, 'utf-8')
+          console.log(`Wrote model config YAML to ${output}`)
+        } else {
+          console.log(yamlText)
+        }
+        process.exit(0)
+      } catch (error) {
+        console.error((error as Error).message)
+        process.exit(1)
+      }
+    })
+
+  modelsCmd
+    .command('import <file>')
+    .description('Import model config YAML (merges by default)')
+    .option('-c, --cwd <cwd>', 'The current working directory', String, cwd())
+    .option('--replace', 'Replace existing model profiles instead of merging')
+    .action(async (file: string, { cwd, replace }) => {
+      try {
+        await setup(cwd, false)
+
+        const yamlText = readFileSync(file, 'utf-8')
+        const { nextConfig, warnings } = applyModelConfigYamlImport(
+          getGlobalConfig(),
+          yamlText,
+          { replace: !!replace },
+        )
+        saveGlobalConfig(nextConfig)
+
+        // Force ModelManager reload after config change
+        await import('@utils/model').then(({ reloadModelManager }) => {
+          reloadModelManager()
+        })
+
+        if (warnings.length > 0) {
+          console.error(warnings.join('\n'))
+        }
+        console.log(`Imported model config YAML from ${file}`)
+        process.exit(0)
+      } catch (error) {
+        console.error((error as Error).message)
+        process.exit(1)
+      }
     })
 
   // Approved tools

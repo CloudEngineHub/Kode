@@ -152,9 +152,43 @@ Kode 同时使用 `~/.kode` 目录（存放额外数据，如内存文件）和 
 - **模型指针（Model Pointers）**：用户可以在 `/model` 命令中配置不同用途的默认模型：
   - `main`：主 Agent 的默认模型
   - `task`：SubAgent 的默认模型
-  - `reasoning`：预留给未来 ThinkTool 使用
-  - `quick`：用于简单 NLP 任务（如安全性识别、生成标题描述等）的快速模型
+  - `compact`：用于接近上下文窗口上限时的自动压缩模型
+  - `quick`：用于简单操作与工具调用的快速模型
 - **动态模型切换**：支持运行时切换模型，无需重启会话，保持上下文连续性
+
+#### 📦 可分享的模型配置（YAML）
+
+你可以把模型配置（profiles + pointers）导出/导入为团队共享的 YAML 文件。默认导出不会包含明文 API Key（推荐用环境变量注入）。
+
+```bash
+# 导出到文件（也可以省略 --output 直接打印到 stdout）
+kode models export --output kode-models.yaml
+
+# 导入（默认 merge）
+kode models import kode-models.yaml
+
+# 用导入内容替换本地已有 profiles（不 merge）
+kode models import --replace kode-models.yaml
+```
+
+示例 `kode-models.yaml`：
+
+```yaml
+version: 1
+profiles:
+  - name: OpenAI Main
+    provider: openai
+    modelName: gpt-4o
+    maxTokens: 8192
+    contextLength: 128000
+    apiKey:
+      fromEnv: OPENAI_API_KEY
+pointers:
+  main: gpt-4o
+  task: gpt-4o
+  compact: gpt-4o
+  quick: gpt-4o
+```
 
 #### 2. **TaskTool 智能任务分发工具**
 专门设计的 `TaskTool`（Architect 工具）实现了：
@@ -169,7 +203,7 @@ Kode 同时使用 `~/.kode` 目录（存放额外数据，如内存文件）和 
 - **知识整合**：将专家模型的见解整合到当前任务中
 
 #### 🎯 灵活的模型切换
-- **Tab 键快速切换**：在输入框按 Tab 键即可快速切换当前对话使用的模型
+- **Option+M 快速切换**：在输入框按 Option+M 轮换主对话模型
 - **`/model` 命令**：使用 `/model` 命令配置和管理多个模型配置文件，设置不同用途的默认模型
 - **用户控制**：用户可以随时指定使用特定的模型进行任务处理
 
@@ -223,16 +257,15 @@ Kode 同时使用 `~/.kode` 目录（存放额外数据，如内存文件）和 
 ```typescript
 // 支持多模型配置的示例
 {
-  "modelProfiles": {
-    "o3": { "provider": "openai", "model": "o3", "apiKey": "..." },
-    "claude4": { "provider": "anthropic", "model": "claude-sonnet-4", "apiKey": "..." },
-    "qwen": { "provider": "alibaba", "model": "qwen-coder", "apiKey": "..." }
-  },
+  "modelProfiles": [
+    { "name": "o3", "provider": "openai", "modelName": "o3", "apiKey": "...", "maxTokens": 1024, "contextLength": 128000, "isActive": true, "createdAt": 1710000000000 },
+    { "name": "qwen", "provider": "alibaba", "modelName": "qwen-coder", "apiKey": "...", "maxTokens": 1024, "contextLength": 128000, "isActive": true, "createdAt": 1710000000001 }
+  ],
   "modelPointers": {
-    "main": "claude4",      // 主对话模型
-    "task": "qwen",         // 任务执行模型
-    "reasoning": "o3",      // 推理模型
-    "quick": "glm-4.5"      // 快速响应模型
+    "main": "o3",           // 主对话模型
+    "task": "qwen-coder",   // SubAgent 模型
+    "compact": "o3",        // 压缩模型
+    "quick": "o3"           // 快速操作模型
   }
 }
 ```
@@ -260,7 +293,7 @@ Kode 同时使用 `~/.kode` 目录（存放额外数据，如内存文件）和 
 | 特性 | Kode | 单模型 CLI |
 |------|------|---------|
 | 支持模型数量 | 无限制，可配置任意模型 | 仅支持单一模型 |
-| 模型切换 | ✅ Tab 键快速切换 | ❌ 需要重启会话 |
+| 模型切换 | ✅ Option+M 快速切换 | ❌ 需要重启会话 |
 | 并行处理 | ✅ 多个 SubAgent 并行工作 | ❌ 单线程处理 |
 | 成本追踪 | ✅ 多模型成本分别统计 | ❌ 单一模型成本 |
 | 任务模型配置 | ✅ 不同用途配置不同默认模型 | ❌ 所有任务用同一模型 |
