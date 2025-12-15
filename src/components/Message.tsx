@@ -16,6 +16,7 @@ import { UserToolResultMessage } from './messages/UserToolResultMessage/UserTool
 import { AssistantToolUseMessage } from './messages/AssistantToolUseMessage'
 import { AssistantTextMessage } from './messages/AssistantTextMessage'
 import { UserTextMessage } from './messages/UserTextMessage'
+import { UserImageMessage } from './messages/UserImageMessage'
 import { NormalizedMessage } from '@utils/messages'
 import { AssistantThinkingMessage } from './messages/AssistantThinkingMessage'
 import { AssistantRedactedThinkingMessage } from './messages/AssistantRedactedThinkingMessage'
@@ -127,6 +128,8 @@ function UserMessage({
   switch (param.type) {
     case 'text':
       return <UserTextMessage addMargin={addMargin} param={param} />
+    case 'image':
+      return <UserImageMessage addMargin={addMargin} param={param} />
     case 'tool_result':
       return (
         <UserToolResultMessage

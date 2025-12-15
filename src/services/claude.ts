@@ -64,6 +64,7 @@ import { getCompletionWithProfile, getGPT5CompletionWithProfile } from './openai
 import { getReasoningEffort } from '@utils/thinking'
 import { generateSystemReminders } from './systemReminder'
 import { parseClaudeToolUsePartialJson } from '@utils/claudeToolUseJson'
+import { convertAnthropicMessagesToOpenAIMessages as convertAnthropicMessagesToOpenAIMessagesUtil } from '@utils/openaiMessageConversion'
 
 // Helper function to check if a model is GPT-5
 function isGPT5Model(modelName: string): boolean {
@@ -517,84 +518,7 @@ function convertAnthropicMessagesToOpenAIMessages(
   | OpenAI.ChatCompletionMessageParam
   | OpenAI.ChatCompletionToolMessageParam
 )[] {
-  const openaiMessages: (
-    | OpenAI.ChatCompletionMessageParam
-    | OpenAI.ChatCompletionToolMessageParam
-  )[] = []
-
-  const toolResults: Record<string, OpenAI.ChatCompletionToolMessageParam> = {}
-
-  for (const message of messages) {
-    let contentBlocks = []
-    if (typeof message.message.content === 'string') {
-      contentBlocks = [
-        {
-          type: 'text',
-          text: message.message.content,
-        },
-      ]
-    } else if (!Array.isArray(message.message.content)) {
-      contentBlocks = [message.message.content]
-    } else {
-      contentBlocks = message.message.content
-    }
-
-    for (const block of contentBlocks) {
-      if (block.type === 'text') {
-        openaiMessages.push({
-          role: message.message.role,
-          content: block.text,
-        })
-      } else if (block.type === 'tool_use') {
-        openaiMessages.push({
-          role: 'assistant',
-          content: undefined,
-          tool_calls: [
-            {
-              type: 'function',
-              function: {
-                name: block.name,
-                arguments: JSON.stringify(block.input),
-              },
-              id: block.id,
-            },
-          ],
-        })
-      } else if (block.type === 'tool_result') {
-        // Ensure content is always a string for role:tool messages
-        let toolContent = block.content
-        if (typeof toolContent !== 'string') {
-          // Convert content to string if it's not already
-          toolContent = JSON.stringify(toolContent)
-        }
-
-        toolResults[block.tool_use_id] = {
-          role: 'tool',
-          content: toolContent,
-          tool_call_id: block.tool_use_id,
-        }
-      }
-    }
-  }
-
-  const finalMessages: (
-    | OpenAI.ChatCompletionMessageParam
-    | OpenAI.ChatCompletionToolMessageParam
-  )[] = []
-
-  for (const message of openaiMessages) {
-    finalMessages.push(message)
-
-    if ('tool_calls' in message && message.tool_calls) {
-      for (const toolCall of message.tool_calls) {
-        if (toolResults[toolCall.id]) {
-          finalMessages.push(toolResults[toolCall.id])
-        }
-      }
-    }
-  }
-
-  return finalMessages
+  return convertAnthropicMessagesToOpenAIMessagesUtil(messages as any)
 }
 
 function messageReducer(

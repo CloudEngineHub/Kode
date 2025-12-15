@@ -177,7 +177,9 @@ export async function processUserInput(
       kodingContext?: string
     }
   },
-  pastedImage: string | null,
+  pastedImages:
+    | Array<{ placeholder: string; data: string; mediaType: string }>
+    | null,
 ): Promise<Message[]> {
   // Bash commands
   if (mode === 'bash') {
@@ -229,7 +231,12 @@ export async function processUserInput(
       if (!validationResult.result) {
         return [userMessage, createAssistantMessage(validationResult.message)]
       }
-      const { data } = await lastX(BashTool.call({ command: input }, context))
+      const { data } = await lastX(
+        BashTool.call(
+          { command: input },
+          { ...(context as any), commandSource: 'user_bash_mode' } as any,
+        ),
+      )
       return [
         userMessage,
         createAssistantMessage(
@@ -332,59 +339,70 @@ export async function processUserInput(
   // Create base message
   let userMessage: UserMessage
 
-  if (pastedImage) {
-    userMessage = createUserMessage([
-      {
+  let processedInput =
+    isKodingRequest && kodingContextInfo ? `${kodingContextInfo}\n\n${input}` : input
+
+  // Process dynamic content for custom commands with ! and @ prefixes
+  // This uses the same processing functions as custom commands to maintain consistency
+  if (processedInput.includes('!`') || processedInput.includes('@')) {
+    try {
+      // Import functions from customCommands service to avoid code duplication
+      const { executeBashCommands } = await import('@services/customCommands')
+
+      // Execute bash commands if present
+      if (processedInput.includes('!`')) {
+        processedInput = await executeBashCommands(processedInput)
+      }
+
+      // Process mentions for system reminder integration
+      // Note: We don't call resolveFileReferences here anymore -
+      // @file mentions should trigger Read tool usage via reminders, not embed content
+      if (processedInput.includes('@')) {
+        const { processMentions } = await import('@services/mentionProcessor')
+        await processMentions(processedInput)
+      }
+    } catch (error) {
+      console.warn('Dynamic content processing failed:', error)
+      // Continue with original input if processing fails
+    }
+  }
+
+  if (pastedImages && pastedImages.length > 0) {
+    const occurrences = pastedImages
+      .map(img => ({ img, index: processedInput.indexOf(img.placeholder) }))
+      .filter(o => o.index >= 0)
+      .sort((a, b) => a.index - b.index)
+
+    const blocks: ContentBlockParam[] = []
+    let cursor = 0
+
+    for (const { img, index } of occurrences) {
+      const before = processedInput.slice(cursor, index)
+      if (before) {
+        blocks.push({ type: 'text', text: before })
+      }
+      blocks.push({
         type: 'image',
         source: {
           type: 'base64',
-          media_type: 'image/png',
-          data: pastedImage,
+          media_type: img.mediaType,
+          data: img.data,
         },
-      },
-      {
-        type: 'text',
-        text:
-          isKodingRequest && kodingContextInfo
-            ? `${kodingContextInfo}\n\n${input}`
-            : input,
-      },
-    ])
-  } else {
-    let processedInput =
-      isKodingRequest && kodingContextInfo
-        ? `${kodingContextInfo}\n\n${input}`
-        : input
-
-    // Process dynamic content for custom commands with ! and @ prefixes
-    // This uses the same processing functions as custom commands to maintain consistency
-    if (input.includes('!`') || input.includes('@')) {
-      try {
-        // Import functions from customCommands service to avoid code duplication
-        const { executeBashCommands } = await import(
-          '@services/customCommands'
-        )
-
-        // Execute bash commands if present
-        if (input.includes('!`')) {
-          // Note: This function is not exported from customCommands.ts, so we need to expose it
-          // For now, we'll keep the local implementation until we refactor the service
-          processedInput = await executeBashCommands(processedInput)
-        }
-
-        // Process mentions for system reminder integration
-        // Note: We don't call resolveFileReferences here anymore - 
-        // @file mentions should trigger Read tool usage via reminders, not embed content
-        if (input.includes('@')) {
-          const { processMentions } = await import('@services/mentionProcessor')
-          await processMentions(input)
-        }
-      } catch (error) {
-        console.warn('Dynamic content processing failed:', error)
-        // Continue with original input if processing fails
-      }
+      } as any)
+      cursor = index + img.placeholder.length
     }
 
+    const after = processedInput.slice(cursor)
+    if (after) {
+      blocks.push({ type: 'text', text: after })
+    }
+
+    if (!blocks.some(b => b.type === 'text')) {
+      blocks.push({ type: 'text', text: '' })
+    }
+
+    userMessage = createUserMessage(blocks)
+  } else {
     userMessage = createUserMessage(processedInput)
   }
 

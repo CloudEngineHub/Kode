@@ -24,6 +24,9 @@ import terminalSetup, {
   handleHashCommand,
 } from '@commands/terminalSetup'
 import { usePermissionContext } from '@context/PermissionContext'
+import { existsSync } from 'fs'
+import path from 'path'
+import { getCwd } from '@utils/state'
 
 // Async function to interpret the '#' command input using AI
 async function interpretHashCommand(input: string): Promise<string> {
@@ -95,9 +98,11 @@ type Props = {
   onModelChange?: () => void
 }
 
-function getPastedTextPrompt(text: string): string {
-  const newlineCount = (text.match(/\r\n|\r|\n/g) || []).length
-  return `[Pasted text +${newlineCount} lines] `
+type PastedTextSegment = { placeholder: string; text: string }
+type PastedImageAttachment = {
+  placeholder: string
+  data: string
+  mediaType: string
 }
 function PromptInput({
   commands,
@@ -138,12 +143,14 @@ function PromptInput({
   }>({
     show: false,
   })
-  const [pastedImage, setPastedImage] = useState<string | null>(null)
   const [placeholder, setPlaceholder] = useState('')
   const [cursorOffset, setCursorOffset] = useState<number>(input.length)
-  const [pastedText, setPastedText] = useState<string | null>(null)
+  const [pastedTexts, setPastedTexts] = useState<PastedTextSegment[]>([])
+  const [pastedImages, setPastedImages] = useState<PastedImageAttachment[]>([])
   const [isEditingExternally, setIsEditingExternally] = useState(false)
   const [currentPwd, setCurrentPwd] = useState<string>(process.cwd())
+  const pastedTextCounter = React.useRef(1)
+  const pastedImageCounter = React.useRef(1)
 
   // Permission context for mode management
   const { cycleMode, currentMode } = usePermissionContext()
@@ -329,9 +336,19 @@ function PromptInput({
         // Set loading state - AbortController now created in onQuery
         setIsLoading(true)
 
+        // Expand any pasted-text placeholders before sending
+        let finalInput = cleanInput
+        for (const { placeholder, text } of pastedTexts) {
+          if (!finalInput.includes(placeholder)) continue
+          finalInput = finalInput.replace(placeholder, text)
+        }
+        const imagesForMessage = pastedImages
+        setPastedImages([])
+        setPastedTexts([])
+
         // Process as a normal user input but with special handling
         const messages = await processUserInput(
-          cleanInput,
+          finalInput,
           'prompt', // Use prompt mode for processing
           setToolJSX,
           {
@@ -351,7 +368,7 @@ function PromptInput({
             readFileTimestamps,
             setForkConvoWithMessagesOnTheNextRender,
           },
-          pastedImage ?? null,
+          imagesForMessage.length > 0 ? imagesForMessage : null,
         )
 
         // Send query and capture response
@@ -413,12 +430,9 @@ function PromptInput({
     }
 
     let finalInput = input
-    if (pastedText) {
-      // Create the prompt pattern that would have been used for this pasted text
-      const pastedPrompt = getPastedTextPrompt(pastedText)
-      if (finalInput.includes(pastedPrompt)) {
-        finalInput = finalInput.replace(pastedPrompt, pastedText)
-      } // otherwise, ignore the pastedText if the user has modified the prompt
+    for (const { placeholder, text } of pastedTexts) {
+      if (!finalInput.includes(placeholder)) continue
+      finalInput = finalInput.replace(placeholder, text)
     }
     onInputChange('')
     // Keep bash mode if we're in bash mode, otherwise switch to prompt
@@ -426,8 +440,9 @@ function PromptInput({
       onModeChange('prompt')
     }
     // Suggestions are now handled by unified completion
-    setPastedImage(null)
-    setPastedText(null)
+    const imagesForMessage = pastedImages
+    setPastedImages([])
+    setPastedTexts([])
     onSubmitCountChange(_ => _ + 1)
 
     setIsLoading(true)
@@ -453,7 +468,7 @@ function PromptInput({
         readFileTimestamps,
         setForkConvoWithMessagesOnTheNextRender,
       },
-      pastedImage ?? null,
+      imagesForMessage.length > 0 ? imagesForMessage : null,
     )
 
     if (messages.length) {
@@ -483,17 +498,65 @@ function PromptInput({
     }
   }
 
-  function onImagePaste(image: string) {
+  function onImagePaste(image: string): string {
     onModeChange('prompt')
-    setPastedImage(image)
+    const placeholder = `[Image #${pastedImageCounter.current} pasted] `
+    pastedImageCounter.current += 1
+    setPastedImages(prev => [
+      ...prev,
+      { placeholder, data: image, mediaType: 'image/png' },
+    ])
+    return placeholder
   }
 
   function onTextPaste(rawText: string) {
     // Replace any \r with \n first to match useTextInput's conversion behavior
     const text = rawText.replace(/\r/g, '\n')
 
-    // Get prompt with newline count
-    const pastedPrompt = getPastedTextPrompt(text)
+    // Multi-file path paste -> convert to @file mentions (for file reminder + Read tool)
+    const tokens = [...text.matchAll(/"([^"]+)"|'([^']+)'|(\S+)/g)].map(
+      m => (m[1] ?? m[2] ?? m[3] ?? '').trim(),
+    )
+    const normalizedTokens = tokens
+      .map(t => t.replace(/\\ /g, ' ').trim())
+      .filter(Boolean)
+
+    const cwd = getCwd()
+    const resolvedExisting = normalizedTokens
+      .map(t => (path.isAbsolute(t) ? t : path.resolve(cwd, t)))
+      .filter(p => existsSync(p))
+
+    const allTokensExist =
+      normalizedTokens.length > 0 &&
+      resolvedExisting.length === normalizedTokens.length
+
+    if (allTokensExist && resolvedExisting.length >= 2) {
+      const mentionTokens = resolvedExisting.map(p => {
+        const mentionPath =
+          p.startsWith(cwd + path.sep) ? path.relative(cwd, p) : p
+        const escaped = mentionPath.replaceAll('"', '\\"')
+        return escaped.includes(' ') ? `@"${escaped}"` : escaped
+      })
+      const insertion = mentionTokens.map(t => `@${t}`).join(' ') + ' '
+      const newInput =
+        input.slice(0, cursorOffset) + insertion + input.slice(cursorOffset)
+      onInputChange(newInput)
+      setCursorOffset(cursorOffset + insertion.length)
+      return
+    }
+
+    // Small single-line paste: insert directly (no placeholder)
+    if (!text.includes('\n') && text.length <= 800) {
+      const newInput = input.slice(0, cursorOffset) + text + input.slice(cursorOffset)
+      onInputChange(newInput)
+      setCursorOffset(cursorOffset + text.length)
+      return
+    }
+
+    const newlineCount = (text.match(/\n/g) || []).length
+    const pasteId = pastedTextCounter.current
+    pastedTextCounter.current += 1
+    const pastedPrompt = `[Pasted text #${pasteId} +${newlineCount} lines] `
 
     // Update the input with a visual indicator that text has been pasted
     const newInput =
@@ -504,8 +567,13 @@ function PromptInput({
     setCursorOffset(cursorOffset + pastedPrompt.length)
 
     // Still set the pastedText state for actual submission
-    setPastedText(text)
+    setPastedTexts(prev => [...prev, { placeholder: pastedPrompt, text }])
   }
+
+  useEffect(() => {
+    setPastedTexts(prev => prev.filter(p => input.includes(p.placeholder)))
+    setPastedImages(prev => prev.filter(p => input.includes(p.placeholder)))
+  }, [input])
 
   useInput((inputChar, key) => {
     // For bash mode, only exit when deleting the last character (which would be the '!' character)

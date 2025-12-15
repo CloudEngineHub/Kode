@@ -37,7 +37,7 @@ type UseTextInputProps = {
   invert: (text: string) => string
   themeText: (text: string) => string
   columns: number
-  onImagePaste?: (base64Image: string) => void
+  onImagePaste?: (base64Image: string) => string | void
   disableCursorMovementForUpDownKeys?: boolean
   externalOffset: number
   onOffsetChange: (offset: number) => void
@@ -154,8 +154,8 @@ export function useTextInput({
       return cursor
     }
 
-    onImagePaste?.(base64Image)
-    return cursor.insert(IMAGE_PLACEHOLDER)
+    const placeholder = onImagePaste?.(base64Image)
+    return cursor.insert(typeof placeholder === 'string' ? placeholder : IMAGE_PLACEHOLDER)
   }
 
   const handleCtrl = mapInput([

@@ -32,7 +32,7 @@ class MentionProcessorService {
     runAgent: /@(run-agent-[\w\-]+)/g,
     agent: /@(agent-[\w\-]+)/g,  // Legacy support
     askModel: /@(ask-[\w\-]+)/g,
-    file: /@([a-zA-Z0-9/._-]+(?:\.[a-zA-Z0-9]+)?)/g
+    file: /@(?:"([^"\n]+)"|'([^'\n]+)'|([a-zA-Z0-9/._~:\\\\-]+))/g
   } as const
 
   private agentCache: Map<string, boolean> = new Map()
@@ -82,7 +82,8 @@ class MentionProcessorService {
     const processedAgentMentions = new Set(agentMentions.map(am => am.mention))
     
     for (const match of fileMatches) {
-      const mention = match[1]
+      const rawMention = match[0]?.slice(1) || ''
+      const mention = (match[1] ?? match[2] ?? match[3] ?? '').trim()
       
       // Skip if this is an agent or ask-model mention (already processed)
       if (mention.startsWith('run-agent-') || mention.startsWith('agent-') || mention.startsWith('ask-') || processedAgentMentions.has(mention)) {
@@ -90,11 +91,12 @@ class MentionProcessorService {
       }
       
       // Check if it's a file
-      const filePath = this.resolveFilePath(mention)
+      if (!mention) continue
+      const filePath = this.resolveFilePath(this.normalizeFileMentionPath(mention))
       if (existsSync(filePath)) {
         result.files.push({
           type: 'file',
-          mention,
+          mention: rawMention || mention,
           resolved: filePath,
           exists: true,
         })
@@ -103,7 +105,7 @@ class MentionProcessorService {
         // Emit file mention event for system reminder to handle
         emitReminderEvent('file:mentioned', {
           filePath: filePath,
-          originalMention: mention,
+          originalMention: rawMention || mention,
           timestamp: Date.now(),
         })
       }
@@ -134,6 +136,11 @@ class MentionProcessorService {
   private resolveFilePath(mention: string): string {
     // Simple consistent logic: mention is always relative to current directory
     return resolve(getCwd(), mention)
+  }
+
+  private normalizeFileMentionPath(mention: string): string {
+    // Allow common terminal escape style for spaces when paths are pasted.
+    return mention.replace(/\\ /g, ' ')
   }
 
   /**
