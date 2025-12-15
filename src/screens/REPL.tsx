@@ -16,7 +16,7 @@ import {
   type ToolUseConfirm,
 } from '@components/permissions/PermissionRequest'
 import PromptInput from '@components/PromptInput'
-import { Spinner } from '@components/Spinner'
+import { RequestStatusIndicator } from '@components/RequestStatusIndicator'
 import { getSystemPrompt } from '@constants/prompts'
 import { getContext } from '@context'
 import { getTotalCost, useCostSummary } from '@costTracker'
@@ -639,7 +639,7 @@ export function REPL({
         width="100%"
       >
         {!toolJSX && !toolUseConfirm && !binaryFeedbackContext && isLoading && (
-          <Spinner />
+          <RequestStatusIndicator />
         )}
         {toolJSX ? toolJSX.jsx : null}
         {!toolJSX && binaryFeedbackContext && !isMessageSelectorVisible && (

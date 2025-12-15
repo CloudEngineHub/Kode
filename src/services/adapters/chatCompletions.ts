@@ -2,6 +2,7 @@ import { OpenAIAdapter, StreamingEvent, normalizeTokens } from './openaiAdapter'
 import { UnifiedRequestParams, UnifiedResponse, ReasoningStreamingContext } from '@kode-types/modelCapabilities'
 import { Tool, getToolDescription } from '@tool'
 import { zodToJsonSchema } from 'zod-to-json-schema'
+import { setRequestStatus } from '@utils/requestStatus'
 
 export class ChatCompletionsAdapter extends OpenAIAdapter {
   createRequest(params: UnifiedRequestParams): any {
@@ -242,6 +243,7 @@ export class ChatCompletionsAdapter extends OpenAIAdapter {
 
     let responseId = response.id || `chatcmpl_${Date.now()}`
     const pendingToolCalls: any[] = []
+    let hasMarkedStreaming = false
 
     try {
       this.resetCumulativeUsage() // Reset usage for new request
@@ -258,6 +260,10 @@ export class ChatCompletionsAdapter extends OpenAIAdapter {
         }
 
         if (event.type === 'text_delta') {
+          if (!hasMarkedStreaming) {
+            setRequestStatus({ kind: 'streaming' })
+            hasMarkedStreaming = true
+          }
           const last = contentBlocks[contentBlocks.length - 1]
           if (!last || last.type !== 'text') {
             contentBlocks.push({ type: 'text', text: event.delta, citations: [] })
@@ -268,6 +274,7 @@ export class ChatCompletionsAdapter extends OpenAIAdapter {
         }
 
         if (event.type === 'tool_request') {
+          setRequestStatus({ kind: 'tool', detail: event.tool?.name })
           pendingToolCalls.push(event.tool)
           continue
         }

@@ -27,6 +27,7 @@ import {
   normalizeContentFromAPI,
 } from '@utils/messages'
 import { countTokens } from '@utils/tokens'
+import { setRequestStatus } from '@utils/requestStatus'
 import { withVCR } from './vcr'
 import {
   debug as debugLogger,
@@ -1518,6 +1519,7 @@ async function queryAnthropicNative(
         let usage: any = null
         let stopReason: string | null = null
         let stopSequence: string | null = null
+        let hasMarkedStreaming = false
 
         for await (const event of stream) {
 
@@ -1542,6 +1544,10 @@ async function queryAnthropicNative(
               contentBlocks[event.index] = { ...event.content_block }
               // Initialize JSON buffer for tool_use blocks
               if (event.content_block.type === 'tool_use') {
+                setRequestStatus({
+                  kind: 'tool',
+                  detail: event.content_block.name,
+                })
                 inputJSONBuffers.set(event.index, '')
               }
               break
@@ -1561,6 +1567,10 @@ async function queryAnthropicNative(
               }
               
               if (event.delta.type === 'text_delta') {
+                if (!hasMarkedStreaming) {
+                  setRequestStatus({ kind: 'streaming' })
+                  hasMarkedStreaming = true
+                }
                 contentBlocks[blockIndex].text += event.delta.text
               } else if (event.delta.type === 'input_json_delta') {
                 const currentBuffer = inputJSONBuffers.get(blockIndex) || ''

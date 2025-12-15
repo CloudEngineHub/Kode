@@ -39,6 +39,7 @@ import {
   getPlanModeSystemPromptAdditions,
   hydratePlanSlugFromMessages,
 } from '@utils/planMode'
+import { setRequestStatus } from '@utils/requestStatus'
 import { BashTool } from '@tools/BashTool/BashTool'
 import { getCwd } from './utils/state'
 import { checkAutoCompact } from './utils/autoCompactCore'
@@ -433,164 +434,170 @@ export async function* query(
     m2: AssistantMessage,
   ) => Promise<BinaryFeedbackResult>,
 ): AsyncGenerator<Message, void> {
-  const currentRequest = getCurrentRequest()
-
-  markPhase('QUERY_INIT')
-
-  // Auto-compact check
-  const { messages: processedMessages, wasCompacted } = await checkAutoCompact(
-    messages,
-    toolUseContext,
-  )
-  if (wasCompacted) {
-    messages = processedMessages
-  }
-
-  markPhase('SYSTEM_PROMPT_BUILD')
-
-  // Best-effort: recover plan slug from previous tool results (for resume flows).
-  hydratePlanSlugFromMessages(messages as any[], toolUseContext)
-  
-  const { systemPrompt: fullSystemPrompt, reminders } =
-    formatSystemPromptWithContext(systemPrompt, context, toolUseContext.agentId)
-
-  // Default behavior: plan mode reminders are injected as system-level guidance.
-  const planModeAdditions = getPlanModeSystemPromptAdditions(
-    messages as any[],
-    toolUseContext,
-  )
-  if (planModeAdditions.length > 0) {
-    fullSystemPrompt.push(...planModeAdditions)
-  }
-
-  // Emit session startup event
-  emitReminderEvent('session:startup', {
-    agentId: toolUseContext.agentId,
-    messages: messages.length,
-    timestamp: Date.now(),
-  })
-
-  // Inject reminders into the latest user message
-  if (reminders && messages.length > 0) {
-    // Find the last user message
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const msg = messages[i]
-      if (msg?.type === 'user') {
-        const lastUserMessage = msg as UserMessage
-        messages[i] = {
-          ...lastUserMessage,
-          message: {
-            ...lastUserMessage.message,
-            content:
-              typeof lastUserMessage.message.content === 'string'
-                ? reminders + lastUserMessage.message.content
-                : [
-                    ...(Array.isArray(lastUserMessage.message.content)
-                      ? lastUserMessage.message.content
-                      : []),
-                    { type: 'text', text: reminders },
-                  ],
-          },
-        }
-        break
-      }
-    }
-  }
-
-  markPhase('LLM_PREPARATION')
-
-  function getAssistantResponse() {
-    return queryLLM(
-      normalizeMessagesForAPI(messages),
-      fullSystemPrompt,
-      toolUseContext.options.maxThinkingTokens,
-      toolUseContext.options.tools,
-      toolUseContext.abortController.signal,
-      {
-        safeMode: toolUseContext.options.safeMode ?? false,
-        model: toolUseContext.options.model || 'main',
-        prependCLISysprompt: true,
-        toolUseContext: toolUseContext,
-      },
-    )
-  }
-
-  const result = await queryWithBinaryFeedback(
-    toolUseContext,
-    getAssistantResponse,
-    getBinaryFeedbackResponse,
-  )
-
-  // If request was cancelled, return immediately with interrupt message  
-  if (toolUseContext.abortController.signal.aborted) {
-    yield createAssistantMessage(INTERRUPT_MESSAGE)
-    return
-  }
-
-  if (result.message === null) {
-    yield createAssistantMessage(INTERRUPT_MESSAGE)
-    return
-  }
-
-  const assistantMessage = result.message
-  const shouldSkipPermissionCheck = result.shouldSkipPermissionCheck
-
-  yield assistantMessage
-
-  // @see https://docs.anthropic.com/en/docs/build-with-claude/tool-use
-  // Note: stop_reason === 'tool_use' is unreliable -- it's not always set correctly
-  const toolUseMessages = assistantMessage.message.content.filter(
-    _ => _.type === 'tool_use',
-  )
-
-  // If there's no more tool use, we're done
-  if (!toolUseMessages.length) {
-    return
-  }
-  const siblingToolUseIDs = new Set<string>(
-    toolUseMessages.map(_ => String((_ as any).id)),
-  )
-  const toolQueue = new ToolUseQueue({
-    toolDefinitions: toolUseContext.options.tools,
-    canUseTool,
-    toolUseContext,
-    siblingToolUseIDs,
-    shouldSkipPermissionCheck,
-  })
-
-  for (const toolUse of toolUseMessages) {
-    toolQueue.addTool(toolUse, assistantMessage)
-  }
-
-  const toolMessagesForNextTurn: (UserMessage | AssistantMessage)[] = []
-  for await (const message of toolQueue.getRemainingResults()) {
-    yield message
-    if (message.type !== 'progress') {
-      toolMessagesForNextTurn.push(message as UserMessage | AssistantMessage)
-    }
-  }
-
-  toolUseContext = toolQueue.getUpdatedContext()
-
-  if (toolUseContext.abortController.signal.aborted) {
-    yield createAssistantMessage(INTERRUPT_MESSAGE_FOR_TOOL_USE)
-    return
-  }
-
-  // Recursive query
+  setRequestStatus({ kind: 'thinking' })
 
   try {
-    yield* await query(
-      [...messages, assistantMessage, ...toolMessagesForNextTurn],
-      systemPrompt,
-      context,
-      canUseTool,
+    const currentRequest = getCurrentRequest()
+
+    markPhase('QUERY_INIT')
+
+    // Auto-compact check
+    const { messages: processedMessages, wasCompacted } = await checkAutoCompact(
+      messages,
       toolUseContext,
+    )
+    if (wasCompacted) {
+      messages = processedMessages
+    }
+
+    markPhase('SYSTEM_PROMPT_BUILD')
+
+    // Best-effort: recover plan slug from previous tool results (for resume flows).
+    hydratePlanSlugFromMessages(messages as any[], toolUseContext)
+
+    const { systemPrompt: fullSystemPrompt, reminders } =
+      formatSystemPromptWithContext(systemPrompt, context, toolUseContext.agentId)
+
+    // Default behavior: plan mode reminders are injected as system-level guidance.
+    const planModeAdditions = getPlanModeSystemPromptAdditions(
+      messages as any[],
+      toolUseContext,
+    )
+    if (planModeAdditions.length > 0) {
+      fullSystemPrompt.push(...planModeAdditions)
+    }
+
+    // Emit session startup event
+    emitReminderEvent('session:startup', {
+      agentId: toolUseContext.agentId,
+      messages: messages.length,
+      timestamp: Date.now(),
+    })
+
+    // Inject reminders into the latest user message
+    if (reminders && messages.length > 0) {
+      // Find the last user message
+      for (let i = messages.length - 1; i >= 0; i--) {
+        const msg = messages[i]
+        if (msg?.type === 'user') {
+          const lastUserMessage = msg as UserMessage
+          messages[i] = {
+            ...lastUserMessage,
+            message: {
+              ...lastUserMessage.message,
+              content:
+                typeof lastUserMessage.message.content === 'string'
+                  ? reminders + lastUserMessage.message.content
+                  : [
+                      ...(Array.isArray(lastUserMessage.message.content)
+                        ? lastUserMessage.message.content
+                        : []),
+                      { type: 'text', text: reminders },
+                    ],
+            },
+          }
+          break
+        }
+      }
+    }
+
+    markPhase('LLM_PREPARATION')
+
+    function getAssistantResponse() {
+      return queryLLM(
+        normalizeMessagesForAPI(messages),
+        fullSystemPrompt,
+        toolUseContext.options.maxThinkingTokens,
+        toolUseContext.options.tools,
+        toolUseContext.abortController.signal,
+        {
+          safeMode: toolUseContext.options.safeMode ?? false,
+          model: toolUseContext.options.model || 'main',
+          prependCLISysprompt: true,
+          toolUseContext: toolUseContext,
+        },
+      )
+    }
+
+    const result = await queryWithBinaryFeedback(
+      toolUseContext,
+      getAssistantResponse,
       getBinaryFeedbackResponse,
     )
-  } catch (error) {
-    // Re-throw the error to maintain the original behavior
-    throw error
+
+    // If request was cancelled, return immediately with interrupt message
+    if (toolUseContext.abortController.signal.aborted) {
+      yield createAssistantMessage(INTERRUPT_MESSAGE)
+      return
+    }
+
+    if (result.message === null) {
+      yield createAssistantMessage(INTERRUPT_MESSAGE)
+      return
+    }
+
+    const assistantMessage = result.message
+    const shouldSkipPermissionCheck = result.shouldSkipPermissionCheck
+
+    yield assistantMessage
+
+    // @see https://docs.anthropic.com/en/docs/build-with-claude/tool-use
+    // Note: stop_reason === 'tool_use' is unreliable -- it's not always set correctly
+    const toolUseMessages = assistantMessage.message.content.filter(
+      _ => _.type === 'tool_use',
+    )
+
+    // If there's no more tool use, we're done
+    if (!toolUseMessages.length) {
+      return
+    }
+    const siblingToolUseIDs = new Set<string>(
+      toolUseMessages.map(_ => String((_ as any).id)),
+    )
+    const toolQueue = new ToolUseQueue({
+      toolDefinitions: toolUseContext.options.tools,
+      canUseTool,
+      toolUseContext,
+      siblingToolUseIDs,
+      shouldSkipPermissionCheck,
+    })
+
+    for (const toolUse of toolUseMessages) {
+      toolQueue.addTool(toolUse, assistantMessage)
+    }
+
+    const toolMessagesForNextTurn: (UserMessage | AssistantMessage)[] = []
+    for await (const message of toolQueue.getRemainingResults()) {
+      yield message
+      if (message.type !== 'progress') {
+        toolMessagesForNextTurn.push(message as UserMessage | AssistantMessage)
+      }
+    }
+
+    toolUseContext = toolQueue.getUpdatedContext()
+
+    if (toolUseContext.abortController.signal.aborted) {
+      yield createAssistantMessage(INTERRUPT_MESSAGE_FOR_TOOL_USE)
+      return
+    }
+
+    // Recursive query
+
+    try {
+      yield* await query(
+        [...messages, assistantMessage, ...toolMessagesForNextTurn],
+        systemPrompt,
+        context,
+        canUseTool,
+        toolUseContext,
+        getBinaryFeedbackResponse,
+      )
+    } catch (error) {
+      // Re-throw the error to maintain the original behavior
+      throw error
+    }
+  } finally {
+    setRequestStatus({ kind: 'idle' })
   }
 }
 
@@ -603,6 +610,7 @@ export async function* runToolUse(
   shouldSkipPermissionCheck?: boolean,
 ): AsyncGenerator<Message, void> {
   const currentRequest = getCurrentRequest()
+  setRequestStatus({ kind: 'tool', detail: toolUse.name })
 
   // 🔍 Debug: 工具调用开始
   debugLogger.flow('TOOL_USE_START', {

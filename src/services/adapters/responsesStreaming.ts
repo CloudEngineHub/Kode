@@ -1,5 +1,6 @@
 import { StreamingEvent } from './base'
 import { AssistantMessage } from '@query'
+import { setRequestStatus } from '@utils/requestStatus'
 
 export async function processResponsesStream(
   stream: AsyncGenerator<StreamingEvent>,
@@ -14,6 +15,7 @@ export async function processResponsesStream(
 
   let responseId = fallbackResponseId
   const pendingToolCalls: any[] = []
+  let hasMarkedStreaming = false
 
   for await (const event of stream) {
     if (event.type === 'message_start') {
@@ -22,6 +24,10 @@ export async function processResponsesStream(
     }
 
     if (event.type === 'text_delta') {
+      if (!hasMarkedStreaming) {
+        setRequestStatus({ kind: 'streaming' })
+        hasMarkedStreaming = true
+      }
       const last = contentBlocks[contentBlocks.length - 1]
       if (!last || last.type !== 'text') {
         contentBlocks.push({ type: 'text', text: event.delta, citations: [] })
@@ -32,6 +38,7 @@ export async function processResponsesStream(
     }
 
     if (event.type === 'tool_request') {
+      setRequestStatus({ kind: 'tool', detail: event.tool?.name })
       pendingToolCalls.push(event.tool)
       continue
     }
