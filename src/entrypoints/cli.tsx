@@ -87,6 +87,7 @@ import {
   parseEnvVars,
   removeMcpServer,
   getClients,
+  getMcprcServerStatus,
   ensureConfigScope,
 } from '@services/mcpClient'
 import {
@@ -931,40 +932,68 @@ ${commandList}`,
   mcp
     .command('list')
     .description('List configured MCP servers')
-    .action(() => {
-      const servers = listMCPServers()
-      if (Object.keys(servers).length === 0) {
-        console.log(
-          `No MCP servers configured. Use \`${PRODUCT_COMMAND} mcp add\` to add a server.`,
-        )
-      } else {
-        for (const [name, server] of Object.entries(servers)) {
-          switch (server.type) {
-            case 'http':
-              console.log(`${name}: ${server.url} (HTTP)`)
-              break
-            case 'sse':
-              console.log(`${name}: ${server.url} (SSE)`)
-              break
-            case 'sse-ide':
-              console.log(`${name}: ${server.url} (SSE-IDE)`)
-              break
-            case 'ws':
-              console.log(`${name}: ${server.url} (WS)`)
-              break
-            case 'ws-ide':
-              console.log(`${name}: ${server.url} (WS-IDE)`)
-              break
-            case 'stdio':
-            default:
-              console.log(
-                `${name}: ${server.command} ${(server.args || []).join(' ')}`,
-              )
-              break
-          }
+    .action(async () => {
+      try {
+        const servers = listMCPServers()
+        if (Object.keys(servers).length === 0) {
+          console.log(
+            `No MCP servers configured. Use \`${PRODUCT_COMMAND} mcp add\` to add a server.`,
+          )
+          process.exit(0)
         }
+
+        const projectFileServers = getProjectMcpServerDefinitions()
+        const clients = await getClients()
+        const clientByName = new Map<string, (typeof clients)[number]>()
+        for (const client of clients) {
+          clientByName.set(client.name, client)
+        }
+
+        const names = Object.keys(servers).sort((a, b) => a.localeCompare(b))
+        for (const name of names) {
+          const server = servers[name]!
+
+          const client = clientByName.get(name)
+          const status =
+            client?.type === 'connected'
+              ? 'connected'
+              : client?.type === 'failed'
+                ? 'failed'
+                : projectFileServers.servers[name]
+                  ? (() => {
+                      const approval = getMcprcServerStatus(name)
+                      if (approval === 'pending') return 'pending'
+                      if (approval === 'rejected') return 'rejected'
+                      return 'disconnected'
+                    })()
+                  : 'disconnected'
+
+          const summary = (() => {
+            switch (server.type) {
+              case 'http':
+                return `${server.url} (http)`
+              case 'sse':
+                return `${server.url} (sse)`
+              case 'sse-ide':
+                return `${server.url} (sse-ide)`
+              case 'ws':
+                return `${server.url} (ws)`
+              case 'ws-ide':
+                return `${server.url} (ws-ide)`
+              case 'stdio':
+              default:
+                return `${server.command} ${(server.args || []).join(' ')} (stdio)`
+            }
+          })()
+
+          console.log(`${name}: ${summary} [${status}]`)
+        }
+
+        process.exit(0)
+      } catch (error) {
+        console.error((error as Error).message)
+        process.exit(1)
       }
-      process.exit(0)
     })
 
   mcp
@@ -1074,52 +1103,103 @@ ${commandList}`,
   mcp
     .command('get <name>')
     .description('Get details about an MCP server')
-    .action((name: string) => {
-      
-      const server = getMcpServer(name)
-      if (!server) {
-        console.error(`No MCP server found with name: ${name}`)
+    .action(async (name: string) => {
+      try {
+        const server = getMcpServer(name)
+        if (!server) {
+          console.error(`No MCP server found with name: ${name}`)
+          process.exit(1)
+        }
+
+        const projectFileServers = getProjectMcpServerDefinitions()
+        const clients = await getClients()
+        const client = clients.find(c => c.name === name)
+
+        const status =
+          client?.type === 'connected'
+            ? 'connected'
+            : client?.type === 'failed'
+              ? 'failed'
+              : projectFileServers.servers[name]
+                ? (() => {
+                    const approval = getMcprcServerStatus(name)
+                    if (approval === 'pending') return 'pending'
+                    if (approval === 'rejected') return 'rejected'
+                    return 'disconnected'
+                  })()
+                : 'disconnected'
+
+        const scopeDisplay = (() => {
+          switch (server.scope) {
+            case 'project':
+              return 'local'
+            case 'global':
+              return 'user'
+            case 'mcpjson':
+              return 'project'
+            case 'mcprc':
+              return 'mcprc'
+            default:
+              return server.scope
+          }
+        })()
+
+        console.log(`${name}:`)
+        console.log(`  Status: ${status}`)
+        console.log(`  Scope: ${scopeDisplay}`)
+
+        const printHeaders = (headers: Record<string, string> | undefined) => {
+          if (!headers || Object.keys(headers).length === 0) return
+          console.log('  Headers:')
+          for (const [key, value] of Object.entries(headers)) {
+            console.log(`    ${key}: ${value}`)
+          }
+        }
+
+        switch (server.type) {
+          case 'http':
+            console.log(`  Type: http`)
+            console.log(`  URL: ${server.url}`)
+            printHeaders(server.headers)
+            break
+          case 'sse':
+            console.log(`  Type: sse`)
+            console.log(`  URL: ${server.url}`)
+            printHeaders(server.headers)
+            break
+          case 'sse-ide':
+            console.log(`  Type: sse-ide`)
+            console.log(`  URL: ${server.url}`)
+            console.log(`  IDE: ${server.ideName}`)
+            printHeaders(server.headers)
+            break
+          case 'ws':
+            console.log(`  Type: ws`)
+            console.log(`  URL: ${server.url}`)
+            break
+          case 'ws-ide':
+            console.log(`  Type: ws-ide`)
+            console.log(`  URL: ${server.url}`)
+            console.log(`  IDE: ${server.ideName}`)
+            break
+          case 'stdio':
+          default:
+            console.log(`  Type: stdio`)
+            console.log(`  Command: ${server.command}`)
+            console.log(`  Args: ${(server.args || []).join(' ')}`)
+            if (server.env) {
+              console.log('  Environment:')
+              for (const [key, value] of Object.entries(server.env)) {
+                console.log(`    ${key}=${value}`)
+              }
+            }
+            break
+        }
+        process.exit(0)
+      } catch (error) {
+        console.error((error as Error).message)
         process.exit(1)
       }
-      console.log(`${name}:`)
-      console.log(`  Scope: ${server.scope}`)
-      switch (server.type) {
-        case 'http':
-          console.log(`  Type: http`)
-          console.log(`  URL: ${server.url}`)
-          break
-        case 'sse':
-          console.log(`  Type: sse`)
-          console.log(`  URL: ${server.url}`)
-          break
-        case 'sse-ide':
-          console.log(`  Type: sse-ide`)
-          console.log(`  URL: ${server.url}`)
-          console.log(`  IDE: ${server.ideName}`)
-          break
-        case 'ws':
-          console.log(`  Type: ws`)
-          console.log(`  URL: ${server.url}`)
-          break
-        case 'ws-ide':
-          console.log(`  Type: ws-ide`)
-          console.log(`  URL: ${server.url}`)
-          console.log(`  IDE: ${server.ideName}`)
-          break
-        case 'stdio':
-        default:
-          console.log(`  Type: stdio`)
-          console.log(`  Command: ${server.command}`)
-          console.log(`  Args: ${(server.args || []).join(' ')}`)
-          if (server.env) {
-            console.log('  Environment:')
-            for (const [key, value] of Object.entries(server.env)) {
-              console.log(`    ${key}=${value}`)
-            }
-          }
-          break
-      }
-      process.exit(0)
     })
 
   // Import servers from Claude Desktop

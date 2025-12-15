@@ -61,7 +61,9 @@ Kode 支持通过 MCP（Model Context Protocol）接入外部工具服务器，�
 
 - `.mcp.json` / `.mcprc` 属于“项目文件 MCP 配置”，首次启动会弹窗请求你批准这些 server；可用 `kode mcp reset-project-choices` 重置选择。
 - 查看连接状态：交互模式输入 `/mcp`，或运行 `kode mcp`（slash command）/ `kode mcp list`（CLI 子命令）。
-- 某些服务器启动较慢（例如 Python 实现）：可设置 `MCP_CONNECTION_TIMEOUT_MS=30000`（或更大）来放宽连接超时。
+- 连接超时（默认 `30000`ms）：`MCP_CONNECTION_TIMEOUT_MS=30000`；设置为 `0` 可关闭连接超时。
+- 并发连接数量（默认 `3`，最大 `50`）：`MCP_SERVER_CONNECTION_BATCH_SIZE=3`（服务器较多或较慢时可调小）。
+- 工具调用超时（默认不限制）：`MCP_TOOL_TIMEOUT=30000`（单位 ms，用于限制单次 MCP tool request 的耗时）。
 
 ## 4) CLI 快速添加
 
