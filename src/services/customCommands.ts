@@ -8,6 +8,7 @@ import { getCwd } from '@utils/state'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import matter from 'gray-matter'
+import yaml from 'js-yaml'
 
 const execFileAsync = promisify(execFile)
 
@@ -183,7 +184,15 @@ export function parseFrontmatter(content: string): {
   frontmatter: CustomCommandFrontmatter
   content: string
 } {
-  const parsed = matter(content)
+  const yamlSchema = (yaml as any).JSON_SCHEMA
+  const parsed = matter(content, {
+    engines: {
+      yaml: {
+        parse: (input: string) =>
+          yaml.load(input, yamlSchema ? { schema: yamlSchema } : undefined) ?? {},
+      },
+    },
+  })
   return {
     frontmatter: (parsed.data ?? {}) as CustomCommandFrontmatter,
     content: parsed.content ?? '',

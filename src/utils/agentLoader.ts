@@ -9,6 +9,7 @@ import { existsSync, readFileSync, readdirSync, statSync, watch, FSWatcher } fro
 import { join, resolve } from 'path'
 import { homedir } from 'os'
 import matter from 'gray-matter'
+import yaml from 'js-yaml'
 import { getCwd } from './state'
 import { memoize } from 'lodash-es'
 
@@ -192,6 +193,15 @@ async function scanAgentDirectory(dirPath: string, location: 'user' | 'project')
   }
 
   const agents: AgentConfig[] = []
+  const yamlSchema = (yaml as any).JSON_SCHEMA
+  const matterOptions = {
+    engines: {
+      yaml: {
+        parse: (input: string) =>
+          yaml.load(input, yamlSchema ? { schema: yamlSchema } : undefined) ?? {},
+      },
+    },
+  }
   
   try {
     const files = readdirSync(dirPath)
@@ -206,7 +216,7 @@ async function scanAgentDirectory(dirPath: string, location: 'user' | 'project')
       
       try {
         const content = readFileSync(filePath, 'utf-8')
-        const { data: frontmatter, content: body } = matter(content)
+        const { data: frontmatter, content: body } = matter(content, matterOptions)
         
         // Validate required fields
         if (!frontmatter.name || !frontmatter.description) {
