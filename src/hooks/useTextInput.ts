@@ -6,6 +6,7 @@ import {
   getImageFromClipboard,
   CLIPBOARD_ERROR_MESSAGE,
 } from '@utils/imagePaste'
+import { normalizeLineEndings } from '@utils/paste'
 
 const IMAGE_PLACEHOLDER = '[Image pasted]'
 
@@ -188,15 +189,13 @@ export function useTextInput({
   ])
 
   function handleEnter(key: Key) {
-    if (
-      multiline &&
-      cursor.offset > 0 &&
-      cursor.text[cursor.offset - 1] === '\\'
-    ) {
-      return cursor.backspace().insert('\n')
+    if (!multiline) {
+      onSubmit?.(originalValue)
+      return
     }
-    // Support Option+Enter for newline
-    if ('option' in key && key.option) {
+
+    // Multiline chat input: Enter submits, Option/Alt+Enter inserts newline.
+    if (key.meta || ('option' in key && (key as any).option)) {
       return cursor.insert('\n')
     }
     onSubmit?.(originalValue)
@@ -253,7 +252,7 @@ export function useTextInput({
     // This prevents cursor position issues when pasting into masked fields
     if (!key.ctrl && !key.meta && input.length > 1) {
       // Likely a paste operation
-      const nextCursor = cursor.insert(input)
+      const nextCursor = cursor.insert(normalizeLineEndings(input))
       if (!cursor.equals(nextCursor)) {
         setOffset(nextCursor.offset)
         if (cursor.text !== nextCursor.text) {
@@ -298,10 +297,10 @@ export function useTextInput({
         return () => cursor.endOfLine()
       case key.pageUp:
         return () => cursor.startOfLine()
-      case key.meta:
-        return handleMeta
       case key.return:
         return () => handleEnter(key)
+      case key.meta:
+        return handleMeta
       // Remove Tab handling - let completion system handle it
       case key.upArrow:
         return upOrHistoryUp

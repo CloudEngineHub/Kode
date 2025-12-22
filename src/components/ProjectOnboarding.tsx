@@ -10,7 +10,6 @@ import {
 import { existsSync } from 'fs'
 import { join } from 'path'
 import { homedir } from 'os'
-import terminalSetup from '@commands/terminalSetup'
 import { getTheme } from '@utils/theme'
 import { RELEASE_NOTES } from '@constants/releaseNotes'
 import { gt } from 'semver'
@@ -77,8 +76,6 @@ export default function ProjectOnboarding({
   const workspaceHasProjectGuide = existsSync(join(workspaceDir, PROJECT_FILE))
   const isWorkspaceDirEmpty = isDirEmpty(workspaceDir)
   const shouldRecommendProjectGuide = !workspaceHasProjectGuide && !isWorkspaceDirEmpty
-  const showTerminalTip =
-    terminalSetup.isEnabled && !getGlobalConfig().shiftEnterKeyBindingInstalled
 
   const theme = getTheme()
 
@@ -121,24 +118,10 @@ export default function ProjectOnboarding({
                 )
               }
 
-              if (showTerminalTip) {
-                items.push(
-                  <React.Fragment key="terminal">
-                    {/* @ts-expect-error - OrderedList.Item children prop issue */}
-                    <OrderedList.Item>
-                      <Text color={theme.secondaryText}>
-                        Run <Text color={theme.text}>/terminal-setup</Text>
-                        <Text bold={false}> to set up terminal integration</Text>
-                      </Text>
-                    </OrderedList.Item>
-                  </React.Fragment>,
-                )
-              }
-
-              items.push(
-                <React.Fragment key="questions">
-                  {/* @ts-expect-error - OrderedList.Item children prop issue */}
-                  <OrderedList.Item>
+	              items.push(
+	                <React.Fragment key="questions">
+	                  {/* @ts-expect-error - OrderedList.Item children prop issue */}
+	                  <OrderedList.Item>
                     <Text color={theme.secondaryText}>
                       Ask {PRODUCT_NAME} questions about your codebase.
                     </Text>

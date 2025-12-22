@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
 const fs = require('fs');
 const path = require('path');
@@ -6,7 +6,22 @@ const path = require('path');
 console.log('📦 Pre-publish checks...\n');
 
 // Check required files
-const requiredFiles = ['cli.js', 'package.json', 'yoga.wasm', '.npmrc'];
+const requiredFiles = [
+  'cli.js',
+  'package.json',
+  'yoga.wasm',
+  '.npmrc',
+  path.join('dist', 'index.js'),
+  path.join('dist', 'entrypoints', 'cli.js'),
+  path.join('dist', 'entrypoints', 'mcp.js'),
+  // Bundled ripgrep (fixes #144-class issues when system rg is missing)
+  path.join('vendor', 'ripgrep', 'x64-win32', 'rg.exe'),
+  path.join('vendor', 'ripgrep', 'arm64-win32', 'rg.exe'),
+  path.join('vendor', 'ripgrep', 'x64-darwin', 'rg'),
+  path.join('vendor', 'ripgrep', 'arm64-darwin', 'rg'),
+  path.join('vendor', 'ripgrep', 'x64-linux', 'rg'),
+  path.join('vendor', 'ripgrep', 'arm64-linux', 'rg'),
+];
 const missingFiles = requiredFiles.filter(file => !fs.existsSync(file));
 
 if (missingFiles.length > 0) {

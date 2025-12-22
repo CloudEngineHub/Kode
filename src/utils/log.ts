@@ -3,6 +3,9 @@ import {
   mkdirSync,
   writeFileSync,
   readFileSync,
+  readdirSync,
+  statSync,
+  copyFileSync,
   promises as fsPromises,
 } from 'fs'
 import { dirname, join } from 'path'
@@ -13,6 +16,7 @@ import type { LogOption, SerializedMessage } from '@kode-types/logs'
 import { MACRO } from '@constants/macros'
 import { PRODUCT_COMMAND } from '@constants/product'
 import { getPlanSlugForConversationKey } from '@utils/planMode'
+import { CLAUDE_BASE_DIR } from '@utils/env'
 
 const IN_MEMORY_ERROR_LOG: Array<{ error: string; timestamp: string }> = []
 const MAX_IN_MEMORY_ERRORS = 100 // Limit to prevent memory issues
@@ -61,11 +65,26 @@ function getProjectDir(cwd: string): string {
   return cwd.replace(/[^a-zA-Z0-9]/g, '-')
 }
 
+function getLegacyCacheRoot(): string {
+  return process.env.KODE_LEGACY_CACHE_ROOT ?? paths.cache
+}
+
+function getNewLogRoot(): string {
+  return process.env.KODE_LOG_ROOT ?? CLAUDE_BASE_DIR
+}
+
 export const CACHE_PATHS = {
-  errors: () => join(paths.cache, getProjectDir(process.cwd()), 'errors'),
-  messages: () => join(paths.cache, getProjectDir(process.cwd()), 'messages'),
+  errors: () => join(getNewLogRoot(), getProjectDir(process.cwd()), 'errors'),
+  messages: () => join(getNewLogRoot(), getProjectDir(process.cwd()), 'messages'),
   mcpLogs: (serverName: string) =>
-    join(paths.cache, getProjectDir(process.cwd()), `mcp-logs-${serverName}`),
+    join(getLegacyCacheRoot(), getProjectDir(process.cwd()), `mcp-logs-${serverName}`),
+}
+
+export const LEGACY_CACHE_PATHS = {
+  errors: () => join(getLegacyCacheRoot(), getProjectDir(process.cwd()), 'errors'),
+  messages: () => join(getLegacyCacheRoot(), getProjectDir(process.cwd()), 'messages'),
+  mcpLogs: (serverName: string) =>
+    join(getLegacyCacheRoot(), getProjectDir(process.cwd()), `mcp-logs-${serverName}`),
 }
 
 export function dateToFilename(date: Date): string {
@@ -89,6 +108,59 @@ export function getMessagesPath(
       sidechainNumber > 0 ? `-sidechain-${sidechainNumber}` : ''
     }.json`,
   )
+}
+
+const MIGRATION_MESSAGE_LOG_LIMIT = 50
+let didMigrateMessageLogs = false
+
+function migrateLegacyMessageLogsIfNeeded() {
+  if (didMigrateMessageLogs) return
+  didMigrateMessageLogs = true
+
+  const legacyDir = LEGACY_CACHE_PATHS.messages()
+  const newDir = CACHE_PATHS.messages()
+
+  if (!existsSync(legacyDir)) return
+
+  const newHasAny =
+    existsSync(newDir) && readdirSync(newDir).some(file => file.endsWith('.json'))
+  if (newHasAny) return
+
+  try {
+    mkdirSync(newDir, { recursive: true })
+  } catch {
+    return
+  }
+
+  let legacyFiles: string[] = []
+  try {
+    legacyFiles = readdirSync(legacyDir).filter(file => file.endsWith('.json'))
+  } catch {
+    return
+  }
+
+  const sorted = legacyFiles
+    .map(file => {
+      try {
+        const stats = statSync(join(legacyDir, file))
+        return { file, mtimeMs: stats.mtimeMs }
+      } catch {
+        return { file, mtimeMs: 0 }
+      }
+    })
+    .sort((a, b) => b.mtimeMs - a.mtimeMs)
+    .slice(0, MIGRATION_MESSAGE_LOG_LIMIT)
+
+  for (const { file } of sorted) {
+    const src = join(legacyDir, file)
+    const dest = join(newDir, file)
+    if (existsSync(dest)) continue
+    try {
+      copyFileSync(src, dest)
+    } catch {
+      // Best-effort migration; ignore per-file failures.
+    }
+  }
 }
 
 export function logError(error: unknown): void {
@@ -206,15 +278,40 @@ export function overwriteLog(
 export async function loadLogList(
   path = CACHE_PATHS.messages(),
 ): Promise<LogOption[]> {
-  if (!existsSync(path)) {
+  if (path === CACHE_PATHS.messages()) {
+    migrateLegacyMessageLogsIfNeeded()
+  }
+
+  const searchPaths =
+    path === CACHE_PATHS.messages()
+      ? [CACHE_PATHS.messages(), LEGACY_CACHE_PATHS.messages()]
+      : [path]
+
+  const existingPaths = searchPaths.filter(p => existsSync(p))
+  if (existingPaths.length === 0) {
     logError(`No logs found at ${path}`)
     return []
   }
 
-  const files = await fsPromises.readdir(path)
+  const filesWithDir = (
+    await Promise.all(
+      existingPaths.map(async dirPath => {
+        const dirFiles = await fsPromises.readdir(dirPath)
+        return dirFiles.map(file => ({ file, dirPath }))
+      }),
+    )
+  ).flat()
+
+  const seen = new Set<string>()
+  const uniqueFiles = filesWithDir.filter(({ file }) => {
+    if (seen.has(file)) return false
+    seen.add(file)
+    return true
+  })
+
   const logData = await Promise.all(
-    files.map(async (file, i) => {
-      const fullPath = join(path, file)
+    uniqueFiles.map(async ({ file, dirPath }, i) => {
+      const fullPath = join(dirPath, file)
       const content = await fsPromises.readFile(fullPath, 'utf8')
       const messages = JSON.parse(content) as SerializedMessage[]
       const firstMessage = messages[0]

@@ -1,4 +1,4 @@
-import { randomUUID, UUID } from 'crypto'
+import { createHash, randomUUID, UUID } from 'crypto'
 import { Box } from 'ink'
 import {
   AssistantMessage,
@@ -57,6 +57,11 @@ export const SYNTHETIC_ASSISTANT_MESSAGES = new Set([
   REJECT_MESSAGE,
   NO_RESPONSE_REQUESTED,
 ])
+
+function stableUuidFromSeed(seed: string): UUID {
+  const hex = createHash('sha256').update(seed).digest('hex').slice(0, 32)
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}` as UUID
+}
 
 function baseCreateAssistantMessage(
   content: ContentBlock[],
@@ -665,19 +670,25 @@ export function normalizeMessages(messages: Message[]): NormalizedMessage[] {
         ),
     )
 
-    return contentBlocks.map(_ => {
+    return contentBlocks.map((block, blockIndex) => {
       switch (message.type) {
         case 'assistant':
+          // Keep block UUIDs stable across normalization runs.
+          // When resuming from logs or other sources, uuid may be absent; fall back to the
+          // assistant message id which is stable across refreshes/reloads.
+          const baseSeed = String(
+            (message as any).uuid ?? (message as any).message?.id ?? randomUUID(),
+          )
           return {
             type: 'assistant',
-            uuid: randomUUID(),
+            uuid: stableUuidFromSeed(`${baseSeed}:${blockIndex}`),
             message: {
               ...message.message,
-              content: [_],
+              content: [block],
             },
             costUSD:
               (message as AssistantMessage).costUSD /
-              message.message.content.length,
+              contentBlocks.length,
             durationMs: (message as AssistantMessage).durationMs,
           } as NormalizedMessage
         case 'user':
@@ -689,7 +700,7 @@ export function normalizeMessages(messages: Message[]): NormalizedMessage[] {
           //   not allowed by the `NormalizedUserMessage` type, but if it's happening that was
           //   probably a bug before.
           // Maybe I'm missing something? -(ab)
-          // return createUserMessage([_]) as NormalizedMessage
+          // return createUserMessage([block]) as NormalizedMessage
           return message as NormalizedUserMessage
       }
     })
@@ -697,7 +708,22 @@ export function normalizeMessages(messages: Message[]): NormalizedMessage[] {
 }
 
 type ToolUseRequestMessage = AssistantMessage & {
-  message: { content: ToolUseBlock[] }
+  message: { content: any[] }
+}
+
+type ToolUseLikeBlockParam = ToolUseBlockParam & {
+  type: 'tool_use' | 'server_tool_use' | 'mcp_tool_use'
+}
+
+function isToolUseLikeBlockParam(block: any): block is ToolUseLikeBlockParam {
+  return (
+    block &&
+    typeof block === 'object' &&
+    (block.type === 'tool_use' ||
+      block.type === 'server_tool_use' ||
+      block.type === 'mcp_tool_use') &&
+    typeof block.id === 'string'
+  )
 }
 
 function isToolUseRequestMessage(
@@ -707,7 +733,7 @@ function isToolUseRequestMessage(
     message.type === 'assistant' &&
     'costUSD' in message &&
     // Note: stop_reason === 'tool_use' is unreliable -- it's not always set correctly
-    message.message.content.some(_ => _.type === 'tool_use')
+    message.message.content.some(isToolUseLikeBlockParam)
   )
 }
 
@@ -807,12 +833,12 @@ export function getUnresolvedToolUseIDs(
         (
           _,
         ): _ is AssistantMessage & {
-          message: { content: [ToolUseBlockParam] }
+          message: { content: [ToolUseLikeBlockParam] }
         } =>
           _.type === 'assistant' &&
           Array.isArray(_.message.content) &&
-          _.message.content[0]?.type === 'tool_use' &&
-          !(_.message.content[0]?.id in toolResults),
+          isToolUseLikeBlockParam(_.message.content[0]) &&
+          !(_.message.content[0].id in toolResults),
       )
       .map(_ => _.message.content[0].id),
   )
@@ -829,8 +855,25 @@ export function getInProgressToolUseIDs(
   normalizedMessages: NormalizedMessage[],
 ): Set<string> {
   const unresolvedToolUseIDs = getUnresolvedToolUseIDs(normalizedMessages)
+
+  function isQueuedWaitingProgressMessage(message: NormalizedMessage): boolean {
+    if (message.type !== 'progress') return false
+    const firstBlock = message.content.message.content[0]
+    if (!firstBlock || firstBlock.type !== 'text') return false
+    const rawText = String(firstBlock.text ?? '')
+    const text = rawText.startsWith('<tool-progress>')
+      ? (extractTag(rawText, 'tool-progress') ?? rawText)
+      : rawText
+    return text.trim() === 'Waiting…'
+  }
+
   const toolUseIDsThatHaveProgressMessages = new Set(
-    normalizedMessages.filter(_ => _.type === 'progress').map(_ => _.toolUseID),
+    normalizedMessages
+      .filter(
+        (_): _ is ProgressMessage =>
+          _.type === 'progress' && !isQueuedWaitingProgressMessage(_),
+      )
+      .map(_ => _.toolUseID),
   )
   return new Set(
     (
@@ -838,10 +881,9 @@ export function getInProgressToolUseIDs(
         if (_.type !== 'assistant') {
           return false
         }
-        if (_.message.content[0]?.type !== 'tool_use') {
-          return false
-        }
-        const toolUseID = _.message.content[0].id
+        const firstBlock = _.message.content[0]
+        if (!isToolUseLikeBlockParam(firstBlock)) return false
+        const toolUseID = firstBlock.id
         if (toolUseID === unresolvedToolUseIDs.values().next().value) {
           return true
         }
@@ -867,60 +909,114 @@ export function getErroredToolUseMessages(
     _ =>
       _.type === 'assistant' &&
       Array.isArray(_.message.content) &&
-      _.message.content[0]?.type === 'tool_use' &&
-      _.message.content[0]?.id in toolResults &&
-      toolResults[_.message.content[0]?.id],
+      isToolUseLikeBlockParam(_.message.content[0]) &&
+      _.message.content[0].id in toolResults &&
+      toolResults[_.message.content[0].id],
   ) as AssistantMessage[]
 }
 
 export function normalizeMessagesForAPI(
   messages: Message[],
 ): (UserMessage | AssistantMessage)[] {
-  const result: (UserMessage | AssistantMessage)[] = []
-  messages
-    .filter(_ => _.type !== 'progress')
-    .forEach(message => {
-      switch (message.type) {
-        case 'user': {
-          // If the current message is not a tool result, add it to the result
-          if (
-            !Array.isArray(message.message.content) ||
-            message.message.content[0]?.type !== 'tool_result'
-          ) {
-            result.push(message)
-            return
-          }
+  function isSyntheticApiErrorMessage(message: Message): boolean {
+    return (
+      message.type === 'assistant' &&
+      message.isApiErrorMessage === true &&
+      message.message.model === '<synthetic>'
+    )
+  }
 
-          // If the last message is not a tool result, add it to the result
-          const lastMessage = last(result)
-          if (
-            !lastMessage ||
-            lastMessage?.type === 'assistant' ||
-            !Array.isArray(lastMessage.message.content) ||
-            lastMessage.message.content[0]?.type !== 'tool_result'
-          ) {
-            result.push(message)
-            return
-          }
+  function normalizeUserContent(content: UserMessage['message']['content']): ContentBlockParam[] {
+    if (typeof content === 'string') {
+      return [{ type: 'text', text: content }]
+    }
+    return content
+  }
 
-          // Otherwise, merge the current message with the last message
-          result[result.indexOf(lastMessage)] = {
-            ...lastMessage,
-            message: {
-              ...lastMessage.message,
-              content: [
-                ...lastMessage.message.content,
-                ...message.message.content,
-              ],
-            },
-          }
-          return
-        }
-        case 'assistant':
-          result.push(message)
-          return
+  function toolResultsFirst(content: ContentBlockParam[]): ContentBlockParam[] {
+    const toolResults: ContentBlockParam[] = []
+    const rest: ContentBlockParam[] = []
+    for (const block of content) {
+      if (block.type === 'tool_result') {
+        toolResults.push(block)
+      } else {
+        rest.push(block)
       }
-    })
+    }
+    return [...toolResults, ...rest]
+  }
+
+  function mergeUserMessages(base: UserMessage, next: UserMessage): UserMessage {
+    const baseBlocks = normalizeUserContent(base.message.content)
+    const nextBlocks = normalizeUserContent(next.message.content)
+    return {
+      ...base,
+      message: {
+        ...base.message,
+        content: toolResultsFirst([...baseBlocks, ...nextBlocks]),
+      },
+    }
+  }
+
+  function isUserToolResultMessage(message: Message): message is UserMessage {
+    if (message.type !== 'user') return false
+    if (!Array.isArray(message.message.content)) return false
+    return message.message.content.some(block => block.type === 'tool_result')
+  }
+
+  const result: (UserMessage | AssistantMessage)[] = []
+  for (const message of messages) {
+    if (message.type === 'progress') continue
+    if (isSyntheticApiErrorMessage(message)) continue
+
+    switch (message.type) {
+      case 'user': {
+        const prev = last(result)
+        if (prev?.type === 'user') {
+          result[result.indexOf(prev)] = mergeUserMessages(prev, message)
+        } else {
+          result.push(message)
+        }
+        break
+      }
+      case 'assistant': {
+        // Merge assistant messages by message id, ignoring intervening tool results
+        // (reference CLI behavior).
+        let merged = false
+        for (let i = result.length - 1; i >= 0; i--) {
+          const prev = result[i]
+          if (prev.type !== 'assistant' && !isUserToolResultMessage(prev)) {
+            break
+          }
+          if (prev.type === 'assistant') {
+            if (prev.message.id === message.message.id) {
+              result[i] = {
+                ...prev,
+                message: {
+                  ...prev.message,
+                  content: [
+                    ...(Array.isArray(prev.message.content)
+                      ? prev.message.content
+                      : []),
+                    ...(Array.isArray(message.message.content)
+                      ? message.message.content
+                      : []),
+                  ],
+                },
+              }
+              merged = true
+            }
+            break
+          }
+        }
+        if (!merged) {
+          result.push(message)
+        }
+        break
+      }
+    }
+  }
+
   return result
 }
 
@@ -961,10 +1057,9 @@ export function stripSystemMessages(content: string): string {
 export function getToolUseID(message: NormalizedMessage): string | null {
   switch (message.type) {
     case 'assistant':
-      if (message.message.content[0]?.type !== 'tool_use') {
-        return null
-      }
-      return message.message.content[0].id
+      return isToolUseLikeBlockParam(message.message.content[0])
+        ? message.message.content[0].id
+        : null
     case 'user':
       if (message.message.content[0]?.type !== 'tool_result') {
         return null

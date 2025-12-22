@@ -1,5 +1,10 @@
 export const TOOL_NAME_FOR_PROMPT = 'KillShell'
-export const DESCRIPTION = `Kill a background bash shell by ID.
+export const DESCRIPTION = 'Kill a background bash shell by ID'
 
-Use this tool to stop a background command that was started with Bash using run_in_background=true.
-Provide the shell_id returned from the Bash tool.`
+export const PROMPT = `
+- Kills a running background bash shell by its ID
+- Takes a shell_id parameter identifying the shell to kill
+- Returns a success or failure status 
+- Use this tool when you need to terminate a long-running shell
+- Shell IDs can be found using the /tasks command
+`

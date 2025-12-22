@@ -1,19 +1,17 @@
 import { Select } from '@components/CustomSelect/select'
 import chalk from 'chalk'
-import { Box, Text } from 'ink'
+import { Box, Text, useInput } from 'ink'
 import { basename, dirname, extname } from 'path'
-import React, { useMemo } from 'react'
+import React, { useCallback, useMemo } from 'react'
 import {
   UnaryEvent,
   usePermissionRequestLogging,
 } from '@hooks/usePermissionRequestLogging'
-import { savePermission } from '@permissions'
 import { env } from '@utils/env'
 import { getTheme } from '@utils/theme'
 import { logUnaryEvent } from '@utils/unaryLogging'
 import {
   type ToolUseConfirm,
-  toolUseConfirmGetPrefix,
 } from '@components/permissions/PermissionRequest'
 import {
   PermissionRequestTitle,
@@ -21,30 +19,41 @@ import {
 } from '@components/permissions/PermissionRequestTitle'
 import { FileEditToolDiff } from './FileEditToolDiff'
 import { useTerminalSize } from '@hooks/useTerminalSize'
-import { pathInOriginalCwd } from '@utils/permissions/filesystem'
+import { getPermissionModeCycleShortcut } from '@utils/permissionModeCycleShortcut'
+import { usePermissionContext } from '@context/PermissionContext'
+import { isPathInWorkingDirectories } from '@utils/permissions/fileToolPermissionEngine'
 
-function getOptions(path: string) {
-  const dirPath = dirname(path)
+function getOptions(args: {
+  path: string
+  modeCycleShortcut: string
+  isInWorkingDir: boolean
+  hasSessionSuggestion: boolean
+}) {
+  const dirPath = dirname(args.path)
   const dirName = basename(dirPath) || 'this directory'
-  const isInWorkingDir = pathInOriginalCwd(dirPath)
-  const sessionLabel = isInWorkingDir
-    ? `Yes, allow all edits during this session ${chalk.bold.hex(getTheme().warning)('(auto-accept edits)')}`
-    : `Yes, allow all edits in ${chalk.bold(`${dirName}/`)} during this session ${chalk.bold.hex(getTheme().warning)('(auto-accept edits)')}`
 
-  return [
+  const options = [
     {
       label: 'Yes',
       value: 'yes',
-    },
-    {
-      label: sessionLabel,
-      value: 'yes-session',
     },
     {
       label: `No, and provide instructions (${chalk.bold.hex(getTheme().warning)('esc')})`,
       value: 'no',
     },
   ]
+
+  if (args.hasSessionSuggestion) {
+    const shortcutHint = chalk.bold.hex(getTheme().warning)(
+      `(${args.modeCycleShortcut})`,
+    )
+    const sessionLabel = args.isInWorkingDir
+      ? `Yes, allow all edits during this session ${shortcutHint}`
+      : `Yes, allow all edits in ${chalk.bold(`${dirName}/`)} during this session ${shortcutHint}`
+    options.splice(1, 0, { label: sessionLabel, value: 'yes-session' })
+  }
+
+  return options
 }
 
 type Props = {
@@ -59,11 +68,19 @@ export function FileEditPermissionRequest({
   verbose,
 }: Props): React.ReactNode {
   const { columns } = useTerminalSize()
+  const { applyToolPermissionUpdate, toolPermissionContext } =
+    usePermissionContext()
   const { file_path, new_string, old_string } = toolUseConfirm.input as {
     file_path: string
     new_string: string
     old_string: string
   }
+  const modeCycleShortcut = useMemo(() => getPermissionModeCycleShortcut(), [])
+  const hasSessionSuggestion = (toolUseConfirm.suggestions?.length ?? 0) > 0
+  const isInWorkingDir = isPathInWorkingDirectories(
+    dirname(file_path),
+    toolPermissionContext,
+  )
 
   const unaryEvent = useMemo<UnaryEvent>(
     () => ({
@@ -74,6 +91,75 @@ export function FileEditPermissionRequest({
   )
 
   usePermissionRequestLogging(toolUseConfirm, unaryEvent)
+
+  const handleChoice = useCallback(
+    (newValue: string) => {
+      switch (newValue) {
+        case 'yes':
+          extractLanguageName(file_path).then(language => {
+            logUnaryEvent({
+              completion_type: 'str_replace_single',
+              event: 'accept',
+              metadata: {
+                language_name: language,
+                message_id: toolUseConfirm.assistantMessage.message.id,
+                platform: env.platform,
+              },
+            })
+          })
+          // Note: We call onDone before onAllow to hide the
+          // permission request before we render the next message
+          onDone()
+          toolUseConfirm.onAllow('temporary')
+          return
+        case 'yes-session':
+          extractLanguageName(file_path).then(language => {
+            logUnaryEvent({
+              completion_type: 'str_replace_single',
+              event: 'accept',
+              metadata: {
+                language_name: language,
+                message_id: toolUseConfirm.assistantMessage.message.id,
+                platform: env.platform,
+              },
+            })
+          })
+          if (hasSessionSuggestion) {
+            for (const update of toolUseConfirm.suggestions ?? []) {
+              applyToolPermissionUpdate(update)
+            }
+          }
+          onDone()
+          toolUseConfirm.onAllow(hasSessionSuggestion ? 'permanent' : 'temporary')
+          return
+        case 'no':
+          extractLanguageName(file_path).then(language => {
+            logUnaryEvent({
+              completion_type: 'str_replace_single',
+              event: 'reject',
+              metadata: {
+                language_name: language,
+                message_id: toolUseConfirm.assistantMessage.message.id,
+                platform: env.platform,
+              },
+            })
+          })
+          // Note: We call onDone before onAllow to hide the
+          // permission request before we render the next message
+          onDone()
+          toolUseConfirm.onReject()
+          return
+      }
+    },
+    [applyToolPermissionUpdate, file_path, hasSessionSuggestion, onDone, toolUseConfirm],
+  )
+
+  useInput((inputChar, key) => {
+    if (!modeCycleShortcut.check(inputChar, key)) return
+    if (!hasSessionSuggestion) return
+    handleChoice('yes-session')
+    return true
+  })
 
   return (
     <Box
@@ -102,68 +188,13 @@ export function FileEditPermissionRequest({
           <Text bold>{basename(file_path)}</Text>?
         </Text>
         <Select
-          options={getOptions(file_path)}
-          onChange={newValue => {
-            switch (newValue) {
-              case 'yes':
-                extractLanguageName(file_path).then(language => {
-                  logUnaryEvent({
-                    completion_type: 'str_replace_single',
-                    event: 'accept',
-                    metadata: {
-                      language_name: language,
-                      message_id: toolUseConfirm.assistantMessage.message.id,
-                      platform: env.platform,
-                    },
-                  })
-                })
-                // Note: We call onDone before onAllow to hide the
-                // permission request before we render the next message
-                onDone()
-                toolUseConfirm.onAllow('temporary')
-                break
-              case 'yes-session':
-                extractLanguageName(file_path).then(language => {
-                  logUnaryEvent({
-                    completion_type: 'str_replace_single',
-                    event: 'accept',
-                    metadata: {
-                      language_name: language,
-                      message_id: toolUseConfirm.assistantMessage.message.id,
-                      platform: env.platform,
-                    },
-                  })
-                })
-                savePermission(
-                  toolUseConfirm.tool,
-                  toolUseConfirm.input,
-                  toolUseConfirmGetPrefix(toolUseConfirm),
-                ).then(() => {
-                  // Note: We call onDone before onAllow to hide the
-                  // permission request before we render the next message
-                  onDone()
-                  toolUseConfirm.onAllow('permanent')
-                })
-                break
-              case 'no':
-                extractLanguageName(file_path).then(language => {
-                  logUnaryEvent({
-                    completion_type: 'str_replace_single',
-                    event: 'reject',
-                    metadata: {
-                      language_name: language,
-                      message_id: toolUseConfirm.assistantMessage.message.id,
-                      platform: env.platform,
-                    },
-                  })
-                })
-                // Note: We call onDone before onAllow to hide the
-                // permission request before we render the next message
-                onDone()
-                toolUseConfirm.onReject()
-                break
-            }
-          }}
+          options={getOptions({
+            path: file_path,
+            modeCycleShortcut: modeCycleShortcut.displayText,
+            isInWorkingDir,
+            hasSessionSuggestion,
+          })}
+          onChange={handleChoice}
         />
       </Box>
     </Box>

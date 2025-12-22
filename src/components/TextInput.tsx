@@ -4,11 +4,20 @@ import chalk from 'chalk'
 import { useTextInput } from '@hooks/useTextInput'
 import { getTheme } from '@utils/theme'
 import { type Key } from 'ink'
+import {
+  normalizeLineEndings,
+  shouldTreatAsSpecialPaste,
+  shouldAggregatePasteChunk,
+} from '@utils/paste'
 
 const BRACKETED_PASTE_ENABLE = '\x1b[?2004h'
 const BRACKETED_PASTE_DISABLE = '\x1b[?2004l'
 const BRACKETED_PASTE_START = '\x1b[200~'
 const BRACKETED_PASTE_END = '\x1b[201~'
+// Some input decoders (including Ink in certain terminals) may strip the leading ESC and
+// deliver the CSI sequences as "[200~" / "[201~". Accept both forms to avoid leaking markers into input.
+const BRACKETED_PASTE_START_NO_ESC = '[200~'
+const BRACKETED_PASTE_END_NO_ESC = '[201~'
 
 let bracketedPasteRefCount = 0
 
@@ -29,38 +38,6 @@ function releaseBracketedPasteMode() {
   if (bracketedPasteRefCount === 0) {
     setBracketedPasteEnabled(false)
   }
-}
-
-function normalizePasteText(text: string): string {
-  // Match useTextInput behavior (convert CR to LF)
-  return text.replace(/\r/g, '\n')
-}
-
-function looksLikeMultiPathPaste(text: string): boolean {
-  const trimmed = text.trim()
-  if (!trimmed) return false
-  if (!/\s/.test(trimmed)) return false
-
-  const tokens = trimmed.split(/\s+/).filter(Boolean)
-  if (tokens.length < 2) return false
-
-  const looksLikePathToken = (token: string) => {
-    if (!token) return false
-    if (/^[a-zA-Z]:[\\/]/.test(token)) return true
-    if (token.startsWith('/') || token.startsWith('./') || token.startsWith('../')) return true
-    if (token.includes('/') || token.includes('\\')) return true
-    return false
-  }
-
-  return tokens.every(looksLikePathToken)
-}
-
-function shouldTreatAsSpecialPaste(text: string): boolean {
-  const normalized = normalizePasteText(text)
-  if (normalized.includes('\n')) return true
-  if (normalized.length > 800) return true
-  if (looksLikeMultiPathPaste(normalized)) return true
-  return false
 }
 
 export type Props = {
@@ -246,7 +223,7 @@ export default function TextInput({
   }>({ mode: 'normal', incomplete: '', buffer: '' })
 
   const flushBracketedPasteBuffer = (rawText: string) => {
-    const normalized = normalizePasteText(rawText)
+    const normalized = normalizeLineEndings(rawText)
     if (onPaste && shouldTreatAsSpecialPaste(normalized)) {
       // Schedule callback after current render to avoid state updates during render
       Promise.resolve().then(() => onPaste(normalized))
@@ -265,17 +242,43 @@ export default function TextInput({
     return 0
   }
 
+  const findFirstMarker = (
+    haystack: string,
+    markers: string[],
+  ): { index: number; marker: string } | null => {
+    let best: { index: number; marker: string } | null = null
+    for (const marker of markers) {
+      const index = haystack.indexOf(marker)
+      if (index === -1) continue
+      if (!best || index < best.index) {
+        best = { index, marker }
+      }
+    }
+    return best
+  }
+
+  const getSuffixKeepLength = (haystack: string, markers: string[]): number => {
+    let keep = 0
+    for (const marker of markers) {
+      keep = Math.max(keep, longestSuffixPrefix(haystack, marker))
+    }
+    return keep
+  }
+
   const handleBracketedPasteSequences = (input: string): boolean => {
     const state = bracketedPasteState.current
     let handledAny = false
     let data = state.incomplete + input
     state.incomplete = ''
 
+    const startMarkers = [BRACKETED_PASTE_START, BRACKETED_PASTE_START_NO_ESC]
+    const endMarkers = [BRACKETED_PASTE_END, BRACKETED_PASTE_END_NO_ESC]
+
     while (data) {
       if (state.mode === 'normal') {
-        const startIndex = data.indexOf(BRACKETED_PASTE_START)
-        if (startIndex === -1) {
-          const keep = longestSuffixPrefix(data, BRACKETED_PASTE_START)
+        const start = findFirstMarker(data, startMarkers)
+        if (!start) {
+          const keep = getSuffixKeepLength(data, startMarkers)
           if (keep === 0) {
             if (!handledAny) {
               return false
@@ -293,20 +296,20 @@ export default function TextInput({
           return true
         }
 
-        const before = data.slice(0, startIndex)
+        const before = data.slice(0, start.index)
         if (before) {
           onInput(before, {} as Key)
         }
 
-        data = data.slice(startIndex + BRACKETED_PASTE_START.length)
+        data = data.slice(start.index + start.marker.length)
         state.mode = 'in_paste'
         handledAny = true
         continue
       }
 
-      const endIndex = data.indexOf(BRACKETED_PASTE_END)
-      if (endIndex === -1) {
-        const keep = longestSuffixPrefix(data, BRACKETED_PASTE_END)
+      const end = findFirstMarker(data, endMarkers)
+      if (!end) {
+        const keep = getSuffixKeepLength(data, endMarkers)
         const content = keep > 0 ? data.slice(0, -keep) : data
         if (content) {
           state.buffer += content
@@ -318,14 +321,14 @@ export default function TextInput({
         return true
       }
 
-      state.buffer += data.slice(0, endIndex)
+      state.buffer += data.slice(0, end.index)
       const completedPaste = state.buffer
       state.buffer = ''
       state.mode = 'normal'
 
       flushBracketedPasteBuffer(completedPaste)
 
-      data = data.slice(endIndex + BRACKETED_PASTE_END.length)
+      data = data.slice(end.index + end.marker.length)
       handledAny = true
       continue
     }
@@ -346,10 +349,49 @@ export default function TextInput({
         Promise.resolve().then(() => onPaste!(pastedText))
         return { chunks: [], timeoutId: null }
       })
-    }, 100)
+    }, 500)
   }
 
-  const wrappedOnInput = (input: string, key: Key): void => {
+	  const wrappedOnInput = (input: string, key: Key): void => {
+	    // Some terminals (e.g. kitty/wezterm with CSI-u keyboard protocol) encode Enter with modifiers as CSI u sequences.
+	    // Example: ESC[13;3u (Alt/Option+Enter). Ink may strip the leading ESC.
+	    if (/^(?:\x1b)?\[13;2(?:u|~)$/.test(input)) {
+	      // Treat modified Enter as plain Enter to avoid leaking raw CSI sequences into the input.
+	      onInput('\r', { ...key, return: true, meta: false, shift: false } as Key)
+	      return
+	    }
+    if (/^(?:\x1b)?\[13;(?:3|4)(?:u|~)$/.test(input)) {
+      // Alt/Option+Enter (or Shift+Alt/Option+Enter) -> newline in multiline chat inputs.
+      onInput('\r', { ...key, return: true, meta: true } as Key)
+      return
+    }
+
+    // Some terminals/keybindings emit LF ("\n") for modified Enter. In multiline inputs, insert a newline.
+    // In single-line inputs, treat it as Enter for compatibility.
+    if (input === '\n') {
+      if (multiline) {
+        onInput('\n', key)
+        return
+      }
+
+      onInput('\r', { ...key, return: true } as Key)
+      return
+    }
+
+    // Some terminals/keybindings emit ESC+CR/LF for Option+Enter. Depending on the decoder,
+    // it may arrive as a raw 2-char sequence; treat it as Meta+Enter for multiline inputs.
+    if (input === '\x1b\r' || input === '\x1b\n') {
+      onInput(
+        '\r',
+        {
+          ...key,
+          return: true,
+          meta: true,
+        } as Key,
+      )
+      return
+    }
+
     // Check for special key combinations first
     if (onSpecialKey && onSpecialKey(input, key)) {
       // Special key was handled, don't process further
@@ -384,7 +426,10 @@ export default function TextInput({
     // that we would see e.g. 1024 characters and then just a few
     // more in the next frame that belong with the original paste.
     // This batching number is not consistent.
-    if (onPaste && (input.length > 800 || input.includes('\n') || input.includes('\r') || pasteState.timeoutId)) {
+    if (
+      onPaste &&
+      shouldAggregatePasteChunk(input, pasteState.timeoutId !== null)
+    ) {
       setPasteState(({ chunks, timeoutId }) => {
         return {
           chunks: [...chunks, input],

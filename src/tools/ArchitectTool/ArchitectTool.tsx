@@ -89,7 +89,8 @@ export const ArchitectTool = {
             safeMode: toolUseContext.options?.safeMode || false,
             maxThinkingTokens: toolUseContext.options?.maxThinkingTokens || 0,
             ...toolUseContext.options, 
-            tools: allowedTools 
+            tools: allowedTools,
+            persistSession: false,
           },
         },
       ),

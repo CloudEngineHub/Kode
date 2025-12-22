@@ -3,7 +3,7 @@ import React from 'react'
 import { z } from 'zod'
 import { Cost } from '@components/Cost'
 import { FallbackToolUseRejectedMessage } from '@components/FallbackToolUseRejectedMessage'
-import type { Tool } from '@tool'
+import type { Tool, ToolUseContext } from '@tool'
 import { getClients } from '@services/mcpClient'
 import { ReadResourceResultSchema } from '@modelcontextprotocol/sdk/types.js'
 import { DESCRIPTION, PROMPT, TOOL_NAME } from './prompt'
@@ -47,8 +47,9 @@ export const ReadMcpResourceTool = {
   needsPermissions() {
     return false
   },
-  async validateInput({ server }: Input) {
-    const clients = await getClients()
+  async validateInput({ server }: Input, context?: ToolUseContext) {
+    const clients =
+      (context?.options?.mcpClients as any[]) ?? (await getClients())
     const match = clients.find(c => c.name === server)
     if (!match) {
       return {
@@ -60,8 +61,16 @@ export const ReadMcpResourceTool = {
     if (match.type !== 'connected') {
       return { result: false, message: `Server "${server}" is not connected`, errorCode: 2 }
     }
-    const capabilities = await match.client.getServerCapabilities().catch(() => null)
-    if (!capabilities?.resources) {
+    let capabilities: Record<string, unknown> | null =
+      (match as any).capabilities ?? null
+    if (!capabilities) {
+      try {
+        capabilities = match.client.getServerCapabilities() as any
+      } catch {
+        capabilities = null
+      }
+    }
+    if (!(capabilities as any)?.resources) {
       return { result: false, message: `Server "${server}" does not support resources`, errorCode: 3 }
     }
     return { result: true }
@@ -89,8 +98,9 @@ export const ReadMcpResourceTool = {
   renderResultForAssistant(output: Output) {
     return JSON.stringify(output)
   },
-  async *call({ server, uri }: Input) {
-    const clients = await getClients()
+  async *call({ server, uri }: Input, context: ToolUseContext) {
+    const clients =
+      (context.options?.mcpClients as any[]) ?? (await getClients())
     const match = clients.find(c => c.name === server)
     if (!match) {
       throw new Error(
@@ -100,8 +110,16 @@ export const ReadMcpResourceTool = {
     if (match.type !== 'connected') {
       throw new Error(`Server "${server}" is not connected`)
     }
-    const capabilities = await match.client.getServerCapabilities()
-    if (!capabilities?.resources) {
+    let capabilities: Record<string, unknown> | null =
+      (match as any).capabilities ?? null
+    if (!capabilities) {
+      try {
+        capabilities = match.client.getServerCapabilities() as any
+      } catch {
+        capabilities = null
+      }
+    }
+    if (!(capabilities as any)?.resources) {
       throw new Error(`Server "${server}" does not support resources`)
     }
     const result = (await match.client.request(
@@ -115,4 +133,3 @@ export const ReadMcpResourceTool = {
     }
   },
 } satisfies Tool<typeof inputSchema, Output>
-

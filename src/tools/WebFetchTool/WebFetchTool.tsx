@@ -226,9 +226,9 @@ export const WebFetchTool = {
   async description(input?: Input) {
     const url = input?.url
     try {
-      return `Requesting fetch content from ${new URL(url || '').hostname}`
+      return `Kode Agent wants to fetch content from ${new URL(url || '').hostname}`
     } catch {
-      return 'Requesting fetch content from this URL'
+      return 'Kode Agent wants to fetch content from this URL'
     }
   },
   userFacingName: () => 'Fetch',

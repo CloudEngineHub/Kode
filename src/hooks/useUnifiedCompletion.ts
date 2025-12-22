@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { useInput } from 'ink'
+import { useInput, type Key } from 'ink'
 import { existsSync, statSync, readdirSync } from 'fs'
 import { join, dirname, basename, resolve } from 'path'
 import { getCwd } from '@utils/state'
@@ -960,8 +960,7 @@ export function useUnifiedCompletion({
 
   // Handle Tab key - simplified and unified
   useInput((input_str, key) => {
-    if (!key.tab) return false
-    if (key.shift) return false
+    if (!__shouldHandleUnifiedCompletionTabKeyForTests(key)) return false
     
     const context = getWordAtCursor()
     if (!context) return false
@@ -1069,7 +1068,13 @@ export function useUnifiedCompletion({
   // Handle navigation keys - simplified and unified  
   useInput((inputChar, key) => {
     // Enter key - confirm selection and end completion (always add space)
-    if (key.return && state.isActive && state.suggestions.length > 0) {
+    if (
+      key.return &&
+      !key.shift &&
+      !key.meta &&
+      state.isActive &&
+      state.suggestions.length > 0
+    ) {
       const selectedSuggestion = state.suggestions[state.selectedIndex]
       if (selectedSuggestion && state.context) {
         // For Enter key, always add space even for directories to indicate completion end
@@ -1402,4 +1407,8 @@ export function useUnifiedCompletion({
     isActive,
     emptyDirMessage,
   }
+}
+
+export function __shouldHandleUnifiedCompletionTabKeyForTests(key: Key): boolean {
+  return Boolean(key.tab) && !Boolean(key.shift)
 }

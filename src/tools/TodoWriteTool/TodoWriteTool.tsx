@@ -3,26 +3,33 @@ import * as React from 'react'
 import { randomUUID } from 'crypto'
 import { z } from 'zod'
 import { FallbackToolUseRejectedMessage } from '@components/FallbackToolUseRejectedMessage'
-import { TodoItem as TodoItemComponent } from '@components/TodoItem'
 import { Tool, ValidationResult } from '@tool'
 import { setTodos, getTodos, TodoItem as StoredTodoItem } from '@utils/todoStorage'
+import { getTodoRenderModel, TodoRenderModel } from '@utils/todoRenderModel'
 import { emitReminderEvent } from '@services/systemReminder'
 import { startWatchingTodoFile } from '@services/fileFreshness'
 import { DESCRIPTION, PROMPT } from './prompt'
-import { getTheme } from '@utils/theme'
+
+export function __getTodoRenderModelForTests(
+  todos: StoredTodoItem[],
+): TodoRenderModel {
+  return getTodoRenderModel(todos)
+}
 
 const TodoItemSchema = z
   .object({
-    content: z.string().min(1).describe('The task description or content'),
+    content: z
+      .string()
+      .min(1, 'Content cannot be empty')
+      .describe('The task description or content'),
     status: z
       .enum(['pending', 'in_progress', 'completed'])
       .describe('Current status of the task'),
     activeForm: z
       .string()
-      .min(1)
+      .min(1, 'Active form cannot be empty')
       .describe('The active form of the task (e.g., "Writing tests")'),
   })
-  .strict()
 
 const inputSchema = z.strictObject({
   todos: z.array(TodoItemSchema).describe('The updated todo list'),
@@ -125,99 +132,13 @@ export const TodoWriteTool = {
     return 'Todos have been modified successfully. Ensure that you continue to use the todo list to track your progress. Please proceed with the current tasks if applicable'
   },
   renderToolUseMessage(input, { verbose }) {
-    return `Update todo list (${input.todos.length} items)`
+    return null
   },
   renderToolUseRejectedMessage() {
     return <FallbackToolUseRejectedMessage />
   },
-  renderToolResultMessage(output) {
-    const isError = typeof output === 'string' && output.startsWith('Error')
-
-    // For non-error output, get current todos from storage and render them
-    if (!isError) {
-      const agentId =
-        output && typeof output === 'object' && 'agentId' in output
-          ? (output as any).agentId
-          : undefined
-      const currentTodos = getTodos(agentId)
-      
-      if (currentTodos.length === 0) {
-        return (
-          <Box flexDirection="column" width="100%">
-            <Box flexDirection="row">
-              <Text color="#6B7280">&nbsp;&nbsp;⎿ &nbsp;</Text>
-              <Text color="#9CA3AF">No todos currently</Text>
-            </Box>
-          </Box>
-        )
-      }
-
-      // Render in storage order (already smart-sorted by status/priority/updatedAt)
-      const displayedTodos = currentTodos
-
-      // Find the next pending task
-      const nextPendingIndex = displayedTodos.findIndex(
-        todo => todo.status === 'pending',
-      )
-
-      return (
-        <Box flexDirection="column" width="100%">
-          {displayedTodos.map((todo: StoredTodoItem, index: number) => {
-            // Determine checkbox symbol and colors
-            let checkbox: string
-            let textColor: string
-            let isBold = false
-            let isStrikethrough = false
-
-            if (todo.status === 'completed') {
-              checkbox = '☒'
-              textColor = '#6B7280' // Professional gray for completed
-              isStrikethrough = true
-            } else if (todo.status === 'in_progress') {
-              checkbox = '☐'
-              textColor = '#10B981' // Professional green for in progress
-              isBold = true
-            } else if (todo.status === 'pending') {
-              checkbox = '☐'
-              // Only the FIRST pending task gets purple highlight
-              if (index === nextPendingIndex) {
-                textColor = '#8B5CF6' // Professional purple for next pending
-                isBold = true
-              } else {
-                textColor = '#9CA3AF' // Muted gray for other pending
-              }
-            }
-
-            return (
-              <Box key={todo.id || index} flexDirection="row" marginBottom={0}>
-                <Text color="#6B7280">&nbsp;&nbsp;⎿ &nbsp;</Text>
-                <Box flexDirection="row" flexGrow={1}>
-                  <Text color={textColor} bold={isBold} strikethrough={isStrikethrough}>
-                    {checkbox}
-                  </Text>
-                  <Text> </Text>
-                  <Text color={textColor} bold={isBold} strikethrough={isStrikethrough}>
-                    {todo.content}
-                  </Text>
-                </Box>
-              </Box>
-            )
-          })}
-        </Box>
-      )
-    }
-
-    // Fallback to simple text rendering for errors or string output
-    return (
-      <Box justifyContent="space-between" overflowX="hidden" width="100%">
-        <Box flexDirection="row">
-          <Text color={isError ? getTheme().error : getTheme().success}>
-            &nbsp;&nbsp;⎿ &nbsp;
-            {typeof output === 'string' ? output : JSON.stringify(output)}
-          </Text>
-        </Box>
-      </Box>
-    )
+  renderToolResultMessage(_output: Output, _options: { verbose: boolean }) {
+    return null
   },
   async validateInput({ todos }: z.infer<typeof inputSchema>) {
     const validation = validateTodos(todos)
@@ -227,91 +148,58 @@ export const TodoWriteTool = {
     return { result: true }
   },
   async *call({ todos }: z.infer<typeof inputSchema>, context) {
+    // Get agent ID from context
+    const agentId = context?.agentId
+
+    // Start watching todo file for this agent if not already watching
+    if (agentId) {
+      startWatchingTodoFile(agentId)
+    }
+
+    // Store previous todos for comparison (agent-scoped)
+    const previousTodos = getTodos(agentId)
+    const oldTodos: InputTodo[] = previousTodos.map(todo => ({
+      content: todo.content,
+      status: todo.status,
+      activeForm: todo.activeForm || todo.content,
+    }))
+
+    // Default behavior: if all todos are completed, clear the list
+    const shouldClear =
+      todos.length > 0 && todos.every(todo => todo.status === 'completed')
+
+    const reusable = new Map<string, StoredTodoItem[]>()
+    for (const todo of previousTodos) {
+      const key = `${todo.content}|||${todo.activeForm || todo.content}`
+      const list = reusable.get(key) ?? []
+      list.push(todo)
+      reusable.set(key, list)
+    }
+
+    const todoItems: StoredTodoItem[] = shouldClear
+      ? []
+      : todos.map(todo => {
+          const key = `${todo.content}|||${todo.activeForm}`
+          const list = reusable.get(key)
+          const reused = list && list.length > 0 ? list.shift() : undefined
+
+          return {
+            id: reused?.id ?? randomUUID(),
+            content: todo.content,
+            status: todo.status,
+            activeForm: todo.activeForm,
+            priority: reused?.priority ?? 'medium',
+            ...(reused?.createdAt ? { createdAt: reused.createdAt } : {}),
+          }
+        })
+
     try {
-      // Get agent ID from context
-      const agentId = context?.agentId
-
-      // Start watching todo file for this agent if not already watching
-      if (agentId) {
-        startWatchingTodoFile(agentId)
-      }
-
-      // Store previous todos for comparison (agent-scoped)
-      const previousTodos = getTodos(agentId)
-      const oldTodos: InputTodo[] = previousTodos.map(todo => ({
-        content: todo.content,
-        status: todo.status,
-        activeForm: todo.activeForm || todo.content,
-      }))
-
-      // Default behavior: if all todos are completed, clear the list
-      const shouldClear =
-        todos.length > 0 && todos.every(todo => todo.status === 'completed')
-
-      const reusable = new Map<string, StoredTodoItem[]>()
-      for (const todo of previousTodos) {
-        const key = `${todo.content}|||${todo.activeForm || todo.content}`
-        const list = reusable.get(key) ?? []
-        list.push(todo)
-        reusable.set(key, list)
-      }
-
-      const todoItems: StoredTodoItem[] = shouldClear
-        ? []
-        : todos.map(todo => {
-            const key = `${todo.content}|||${todo.activeForm}`
-            const list = reusable.get(key)
-            const reused = list && list.length > 0 ? list.shift() : undefined
-
-            return {
-              id: reused?.id ?? randomUUID(),
-              content: todo.content,
-              status: todo.status,
-              activeForm: todo.activeForm,
-              priority: reused?.priority ?? 'medium',
-              ...(reused?.createdAt ? { createdAt: reused.createdAt } : {}),
-            }
-          })
-
-      // Note: Validation already done in validateInput, no need for duplicate validation
-      // This eliminates the double validation issue
-
       // Update the todos in storage (agent-scoped)
       setTodos(todoItems, agentId)
-
-      // Emit todo change event for system reminders (optimized - only if todos actually changed)
-      const hasChanged =
-        JSON.stringify(previousTodos) !== JSON.stringify(todoItems)
-      if (hasChanged) {
-        emitReminderEvent('todo:changed', {
-          previousTodos,
-          newTodos: todoItems,
-          timestamp: Date.now(),
-          agentId: agentId || 'default',
-          changeType:
-            todoItems.length > previousTodos.length
-              ? 'added'
-              : todoItems.length < previousTodos.length
-                ? 'removed'
-                : 'modified',
-        })
-      }
-
-      yield {
-        type: 'result',
-        data: {
-          oldTodos,
-          newTodos: todos,
-          agentId: agentId || undefined,
-        },
-        resultForAssistant: this.renderResultForAssistant(),
-      }
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error occurred'
-      const errorResult = `Error updating todos: ${errorMessage}`
 
-      // Emit error event for system monitoring
       emitReminderEvent('todo:error', {
         error: errorMessage,
         timestamp: Date.now(),
@@ -319,11 +207,35 @@ export const TodoWriteTool = {
         context: 'TodoWriteTool.call',
       })
 
-      yield {
-        type: 'result',
-        data: errorResult,
-        resultForAssistant: errorResult,
-      }
+      throw error instanceof Error ? error : new Error(errorMessage)
+    }
+
+    // Emit todo change event for system reminders (optimized - only if todos actually changed)
+    const hasChanged =
+      JSON.stringify(previousTodos) !== JSON.stringify(todoItems)
+    if (hasChanged) {
+      emitReminderEvent('todo:changed', {
+        previousTodos,
+        newTodos: todoItems,
+        timestamp: Date.now(),
+        agentId: agentId || 'default',
+        changeType:
+          todoItems.length > previousTodos.length
+            ? 'added'
+            : todoItems.length < previousTodos.length
+              ? 'removed'
+              : 'modified',
+      })
+    }
+
+    yield {
+      type: 'result',
+      data: {
+        oldTodos,
+        newTodos: todos,
+        agentId: agentId || undefined,
+      },
+      resultForAssistant: this.renderResultForAssistant(),
     }
   },
 } satisfies Tool<typeof inputSchema, Output>

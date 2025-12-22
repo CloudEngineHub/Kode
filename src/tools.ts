@@ -3,8 +3,7 @@ import { Tool } from './Tool'
 import { AskExpertModelTool } from './tools/AskExpertModelTool/AskExpertModelTool'
 import { AskUserQuestionTool } from './tools/AskUserQuestionTool/AskUserQuestionTool'
 import { BashTool } from './tools/BashTool/BashTool'
-import { BashOutputTool } from './tools/BashOutputTool/BashOutputTool'
-import { AgentOutputTool } from './tools/AgentOutputTool/AgentOutputTool'
+import { TaskOutputTool } from './tools/TaskOutputTool/TaskOutputTool'
 import { EnterPlanModeTool } from './tools/PlanModeTool/EnterPlanModeTool'
 import { ExitPlanModeTool } from './tools/PlanModeTool/ExitPlanModeTool'
 import { FileEditTool } from './tools/FileEditTool/FileEditTool'
@@ -30,9 +29,8 @@ export const getAllTools = (): Tool[] => [
   TaskTool as unknown as Tool,
   AskExpertModelTool as unknown as Tool,
   BashTool as unknown as Tool,
-  BashOutputTool as unknown as Tool,
+  TaskOutputTool as unknown as Tool,
   KillShellTool as unknown as Tool,
-  AgentOutputTool as unknown as Tool,
   GlobTool as unknown as Tool,
   GrepTool as unknown as Tool,
   FileReadTool as unknown as Tool,

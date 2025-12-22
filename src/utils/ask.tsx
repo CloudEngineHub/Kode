@@ -20,6 +20,8 @@ type Props = {
   cwd: string
   tools: Tool[]
   verbose?: boolean
+  initialMessages?: Message[]
+  persistSession?: boolean
 }
 
 // Sends a single prompt to the Anthropic Messages API and returns the response.
@@ -34,6 +36,8 @@ export async function ask({
   cwd,
   tools,
   verbose = false,
+  initialMessages,
+  persistSession = true,
 }: Props): Promise<{
   resultText: string
   totalCost: number
@@ -41,7 +45,7 @@ export async function ask({
 }> {
   await setCwd(cwd)
   const message = createUserMessage(prompt)
-  const messages: Message[] = [message]
+  const messages: Message[] = [...(initialMessages ?? []), message]
 
   const [systemPrompt, context, model] = await Promise.all([
     getSystemPrompt(),
@@ -63,6 +67,7 @@ export async function ask({
         forkNumber: 0,
         messageLogName: 'unused',
         maxThinkingTokens: 0,
+        persistSession,
       },
       abortController: new AbortController(),
       messageId: undefined,

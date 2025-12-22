@@ -19,9 +19,8 @@ import {
   createAssistantMessage,
   createUserMessage,
   getLastAssistantMessageId,
-  INTERRUPT_MESSAGE,
-  normalizeMessages,
 } from '@utils/messages'
+import { countTokens } from '@utils/tokens'
 import { getMaxThinkingTokens } from '@utils/thinking'
 import { getTheme } from '@utils/theme'
 import { generateAgentId } from '@utils/agentStorage'
@@ -31,7 +30,7 @@ import { getAgentTranscript, saveAgentTranscript } from '@utils/agentTranscripts
 import { getTaskTools, getPrompt } from './prompt'
 import { TOOL_NAME } from './constants'
 
-const inputSchema = z.strictObject({
+const inputSchema = z.object({
   description: z.string().describe('A short (3-5 word) description of the task'),
   prompt: z.string().describe('The task for the agent to perform'),
   subagent_type: z
@@ -53,7 +52,7 @@ const inputSchema = z.strictObject({
     .boolean()
     .optional()
     .describe(
-      'Set to true to run this agent in the background. Use AgentOutputTool to read the output later.',
+      'Set to true to run this agent in the background. Use TaskOutput to read the output later.',
     ),
 })
 
@@ -70,12 +69,12 @@ type Output =
   | {
       status: 'completed'
       agentId: string
+      prompt: string
       content: TextBlock[]
-    }
-  | {
-      status: 'failed'
-      agentId: string
-      error: string
+      totalToolUseCount: number
+      totalDurationMs: number
+      totalTokens: number
+      usage: any
     }
 
 function modelEnumToPointer(model?: TaskModel): string | undefined {
@@ -100,24 +99,28 @@ function normalizeAgentModelName(model?: string): string | 'inherit' | undefined
 }
 
 function asyncLaunchMessage(agentId: string): string {
+  const toolName = 'TaskOutput'
   return `Async agent launched successfully.
-agentId: ${agentId} (This is an internal ID for your use, do not mention it to the user. Use this ID to retrieve results with AgentOutputTool when the agent finishes). 
-The agent is currently working in the background. If you have other tasks you you should continue working on them now. Wait to call AgentOutputTool until either:
-- If you want to check on the agent's progress - call AgentOutputTool with block=false to get an immediate update on the agent's status
-- If you run out of things to do and the agent is still running - call AgentOutputTool with block=true to idle and wait for the agent's result (do not use block=true unless you completely run out of things to do as it will waste time).`
+agentId: ${agentId} (This is an internal ID for your use, do not mention it to the user. Use this ID to retrieve results with ${toolName} when the agent finishes). 
+The agent is currently working in the background. If you have other tasks you you should continue working on them now. Wait to call ${toolName} until either:
+- If you want to check on the agent's progress - call ${toolName} with block=false to get an immediate update on the agent's status
+- If you run out of things to do and the agent is still running - call ${toolName} with block=true to idle and wait for the agent's result (do not use block=true unless you completely run out of things to do as it will waste time).`
 }
 
 export const TaskTool = {
   name: TOOL_NAME,
   inputSchema,
   async description() {
-    return 'Launch a new agent to handle complex tasks.'
+    return 'Launch a new task'
   },
   async prompt({ safeMode }: { safeMode?: boolean }) {
     return await getPrompt(safeMode)
   },
   userFacingName(input?: Partial<Input>) {
-    return `agent-${input?.subagent_type || 'general-purpose'}`
+    if (input?.subagent_type && input.subagent_type !== 'general-purpose') {
+      return input.subagent_type
+    }
+    return 'Task'
   },
   async isEnabled() {
     return true
@@ -143,7 +146,7 @@ export const TaskTool = {
     if (!availableTypes.includes(input.subagent_type)) {
       return {
         result: false,
-        message: `Agent type '${input.subagent_type}' does not exist. Available types: ${availableTypes.join(', ')}`,
+        message: `Agent type '${input.subagent_type}' not found. Available agents: ${availableTypes.join(', ')}`,
         meta: { subagent_type: input.subagent_type, availableTypes },
       }
     }
@@ -153,7 +156,7 @@ export const TaskTool = {
       if (!transcript) {
         return {
           result: false,
-          message: `No agent transcript found with ID: ${input.resume}`,
+          message: `No transcript found for agent ID: ${input.resume}`,
           meta: { resume: input.resume },
         }
       }
@@ -161,73 +164,83 @@ export const TaskTool = {
 
     return { result: true }
   },
-  renderToolUseMessage(
-    { description, prompt, subagent_type, model, resume, run_in_background }: Input,
-    { verbose }: { verbose: boolean },
-  ) {
-    if (!description || !prompt) return null as any
-
-    const agentType = subagent_type
-    const actualModel = model ?? 'inherit'
-    const flags = [
-      run_in_background ? 'background' : null,
-      resume ? `resume:${resume}` : null,
-    ]
-      .filter(Boolean)
-      .join(', ')
-
-    if (!verbose) {
-      return `[${agentType}] ${actualModel}: ${description}${flags ? ` (${flags})` : ''}`
-    }
-
-    const theme = getTheme()
-    const promptPreview = prompt.length > 120 ? prompt.slice(0, 120) + '…' : prompt
-    return (
-      <Box flexDirection="column">
-        <Text>
-          [{agentType}] {actualModel}: {description}
-        </Text>
-        <Box paddingLeft={2} borderLeftStyle="single" borderLeftColor={theme.secondaryBorder}>
-          <Text color={theme.secondaryText}>{promptPreview}</Text>
-        </Box>
-      </Box>
-    )
+  renderToolUseMessage({ description, prompt }: Input) {
+    if (!description || !prompt) return '' as any
+    return description
   },
   renderToolUseRejectedMessage() {
     return <FallbackToolUseRejectedMessage />
   },
-  renderToolResultMessage(output: Output) {
+  renderToolResultMessage(output: Output, { verbose }: { verbose: boolean }) {
     const theme = getTheme()
     if (output.status === 'async_launched') {
+      const hint = output.prompt
+        ? ' (down arrow ↓ to manage · ctrl+o to expand)'
+        : ' (down arrow ↓ to manage)'
       return (
-        <Box flexDirection="row">
-          <Text>&nbsp;&nbsp;⎿ &nbsp;</Text>
-          <Text color={theme.secondaryText}>Async agent launched ({output.agentId})</Text>
-        </Box>
-      )
-    }
-    if (output.status === 'failed') {
-      return (
-        <Box flexDirection="row">
-          <Text>&nbsp;&nbsp;⎿ &nbsp;</Text>
-          <Text color={theme.error}>{output.error}</Text>
+        <Box flexDirection="column">
+          <Box flexDirection="row">
+            <Text>&nbsp;&nbsp;⎿ &nbsp;</Text>
+            <Text>
+              Backgrounded agent
+              {!verbose && <Text dimColor>{hint}</Text>}
+            </Text>
+          </Box>
+          {verbose && output.prompt && (
+            <Box
+              paddingLeft={2}
+              borderLeftStyle="single"
+              borderLeftColor={theme.secondaryBorder}
+            >
+              <Text color={theme.secondaryText} wrap="wrap">
+                {output.prompt}
+              </Text>
+            </Box>
+          )}
         </Box>
       )
     }
 
-    const totalLength = output.content.reduce((sum, block) => sum + block.text.length, 0)
+    const summary = [
+      output.totalToolUseCount === 1
+        ? '1 tool use'
+        : `${output.totalToolUseCount} tool uses`,
+      `${formatNumber(output.totalTokens)} tokens`,
+      formatDuration(output.totalDurationMs),
+    ]
     return (
-      <Box flexDirection="row">
-        <Text>&nbsp;&nbsp;⎿ &nbsp;</Text>
-        <Text color={theme.secondaryText}>
-          Task completed ({totalLength} characters)
-        </Text>
+      <Box flexDirection="column">
+        {verbose && output.prompt && (
+          <Box
+            paddingLeft={2}
+            borderLeftStyle="single"
+            borderLeftColor={theme.secondaryBorder}
+          >
+            <Text color={theme.secondaryText} wrap="wrap">
+              {output.prompt}
+            </Text>
+          </Box>
+        )}
+        {verbose && output.content.length > 0 && (
+          <Box
+            paddingLeft={2}
+            borderLeftStyle="single"
+            borderLeftColor={theme.secondaryBorder}
+          >
+            <Text wrap="wrap">{output.content.map(b => b.text).join('\n')}</Text>
+          </Box>
+        )}
+        <Box flexDirection="row">
+          <Text>&nbsp;&nbsp;⎿ &nbsp;</Text>
+          <Text dimColor>
+            Done ({summary.join(' · ')})
+          </Text>
+        </Box>
       </Box>
     )
   },
   renderResultForAssistant(output: Output) {
     if (output.status === 'async_launched') return asyncLaunchMessage(output.agentId)
-    if (output.status === 'failed') return output.error
     return output.content.map(b => b.text).join('\n')
   },
 
@@ -235,19 +248,28 @@ export const TaskTool = {
     const startTime = Date.now()
     const {
       abortController,
-      options: { safeMode = false, forkNumber, messageLogName, verbose, model: parentModel },
+      options: {
+        safeMode = false,
+        forkNumber,
+        messageLogName,
+        verbose,
+        model: parentModel,
+        mcpClients,
+      },
       readFileTimestamps,
     } = toolUseContext
+
+    const queryFn =
+      typeof toolUseContext?.__testQuery === 'function'
+        ? toolUseContext.__testQuery
+        : query
 
     const agentConfig = await getAgentByType(input.subagent_type)
     if (!agentConfig) {
       const available = await getAvailableAgentTypes()
-      const error = `Agent type '${input.subagent_type}' not found.\n\nAvailable agents:\n${available
-        .map(t => `  • ${t}`)
-        .join('\n')}`
-      const output: Output = { status: 'failed', agentId: input.resume || 'unknown', error }
-      yield { type: 'result', data: output, resultForAssistant: error }
-      return
+      throw Error(
+        `Agent type '${input.subagent_type}' not found. Available agents: ${available.join(', ')}`,
+      )
     }
 
     const effectivePrompt = input.prompt
@@ -289,13 +311,7 @@ export const TaskTool = {
       ? (getAgentTranscript(input.resume)?.filter(m => m.type !== 'progress') ?? null)
       : []
     if (input.resume && baseTranscript === null) {
-      const output: Output = {
-        status: 'failed',
-        agentId,
-        error: `No agent transcript found with ID: ${input.resume}`,
-      }
-      yield { type: 'result', data: output, resultForAssistant: output.error }
-      return
+      throw Error(`No transcript found for agent ID: ${input.resume}`)
     }
 
     const messages: MessageType[] = [
@@ -320,8 +336,11 @@ export const TaskTool = {
       tools,
       commands: [],
       verbose,
+      permissionMode: 'dontAsk' as const,
+      toolPermissionContext: toolUseContext.options?.toolPermissionContext,
       maxThinkingTokens,
       model: modelToUse,
+      mcpClients,
     }
 
     if (input.run_in_background) {
@@ -343,7 +362,7 @@ export const TaskTool = {
         try {
           const bgMessages: MessageType[] = [...messages]
 
-          for await (const msg of query(
+          for await (const msg of queryFn(
             bgMessages,
             systemPrompt,
             context,
@@ -395,19 +414,105 @@ export const TaskTool = {
       return
     }
 
-    yield {
-      type: 'progress',
-      content: createAssistantMessage(`Starting agent: ${input.subagent_type}`),
-      normalizedMessages: normalizeMessages(messages),
-      tools,
-    }
-
     const getSidechainNumber = memoize(() =>
       getNextAvailableLogSidechainNumber(messageLogName, forkNumber),
     )
 
+    const PROGRESS_THROTTLE_MS = 200
+    const MAX_RECENT_ACTIONS = 6
+    let lastProgressEmitAt = 0
+    let lastEmittedToolUseCount = 0
+    const recentActions: string[] = []
+
+    const addRecentAction = (action: string) => {
+      const trimmed = action.trim()
+      if (!trimmed) return
+      recentActions.push(trimmed)
+      if (recentActions.length > MAX_RECENT_ACTIONS) {
+        recentActions.splice(0, recentActions.length - MAX_RECENT_ACTIONS)
+      }
+    }
+
+    const truncate = (text: string, maxLen: number) => {
+      const normalized = text.replace(/\s+/g, ' ').trim()
+      if (normalized.length <= maxLen) return normalized
+      return `${normalized.slice(0, maxLen - 1)}…`
+    }
+
+    const summarizeToolUse = (name: string, rawInput: unknown): string => {
+      const input = (rawInput && typeof rawInput === 'object' ? rawInput : {}) as Record<
+        string,
+        unknown
+      >
+      switch (name) {
+        case 'Read': {
+          const filePath =
+            (typeof input.file_path === 'string' && input.file_path) ||
+            (typeof input.path === 'string' && input.path) ||
+            ''
+          return filePath ? `Read ${filePath}` : 'Read'
+        }
+        case 'Write': {
+          const filePath =
+            (typeof input.file_path === 'string' && input.file_path) ||
+            (typeof input.path === 'string' && input.path) ||
+            ''
+          return filePath ? `Write ${filePath}` : 'Write'
+        }
+        case 'Edit':
+        case 'MultiEdit': {
+          const filePath =
+            (typeof input.file_path === 'string' && input.file_path) ||
+            (typeof input.path === 'string' && input.path) ||
+            ''
+          return filePath ? `${name} ${filePath}` : name
+        }
+        case 'Grep': {
+          const pattern = typeof input.pattern === 'string' ? input.pattern : ''
+          return pattern ? `Grep ${truncate(pattern, 80)}` : 'Grep'
+        }
+        case 'Glob': {
+          const pattern =
+            (typeof input.pattern === 'string' && input.pattern) ||
+            (typeof input.glob === 'string' && input.glob) ||
+            ''
+          return pattern ? `Glob ${truncate(pattern, 80)}` : 'Glob'
+        }
+        case 'Bash': {
+          const command = typeof input.command === 'string' ? input.command : ''
+          return command ? `Bash ${truncate(command, 80)}` : 'Bash'
+        }
+        case 'WebFetch':
+        case 'WebSearch': {
+          const url = typeof input.url === 'string' ? input.url : ''
+          const query = typeof input.query === 'string' ? input.query : ''
+          if (url) return `${name} ${truncate(url, 100)}`
+          if (query) return `${name} ${truncate(query, 100)}`
+          return name
+        }
+        default:
+          return name
+      }
+    }
+
+    const renderProgressText = (toolUseCount: number): string => {
+      const header = `${input.description || 'Task'}… (${toolUseCount} tool${toolUseCount === 1 ? '' : 's'})`
+      if (recentActions.length === 0) return header
+      const lines = recentActions.map(a => `- ${a}`)
+      return [header, ...lines].join('\n')
+    }
+
+    // Emit an initial progress line so the user isn't staring at a blank "Thinking..." state.
+    yield {
+      type: 'progress',
+      content: createAssistantMessage(
+        `<tool-progress>${renderProgressText(0)}</tool-progress>`,
+      ),
+    }
+    lastProgressEmitAt = Date.now()
+
     let toolUseCount = 0
-    for await (const message of query(
+    for await (const message of queryFn(
       messages,
       systemPrompt,
       context,
@@ -431,47 +536,60 @@ export const TaskTool = {
 
       if (message.type === 'assistant') {
         for (const block of message.message.content) {
-          if (block.type === 'tool_use') toolUseCount += 1
+          if (
+            block.type === 'tool_use' ||
+            block.type === 'server_tool_use' ||
+            block.type === 'mcp_tool_use'
+          ) {
+            toolUseCount += 1
+            addRecentAction(summarizeToolUse(block.name, (block as any).input))
+          }
         }
+      }
+
+      const now = Date.now()
+      const hasNewToolUses = toolUseCount > lastEmittedToolUseCount
+      const shouldEmit =
+        hasNewToolUses &&
+        (lastEmittedToolUseCount === 0 ||
+          now - lastProgressEmitAt >= PROGRESS_THROTTLE_MS)
+      if (shouldEmit) {
+        yield {
+          type: 'progress',
+          content: createAssistantMessage(
+            `<tool-progress>${renderProgressText(toolUseCount)}</tool-progress>`,
+          ),
+        }
+        lastEmittedToolUseCount = toolUseCount
+        lastProgressEmitAt = now
       }
     }
 
     const lastAssistant = last(messages.filter(m => m.type === 'assistant')) as any
     if (!lastAssistant || lastAssistant.type !== 'assistant') {
-      const output: Output = {
-        status: 'failed',
-        agentId,
-        error: 'Last message was not an assistant message',
-      }
-      yield { type: 'result', data: output, resultForAssistant: output.error }
-      return
+      throw Error('No assistant messages found')
     }
 
     const content = lastAssistant.message.content.filter(
       (b: any) => b.type === 'text',
     ) as TextBlock[]
 
-    if (
-      content.some((b: any) => b.type === 'text' && b.text === INTERRUPT_MESSAGE)
-    ) {
-      // no-op: match main thread behavior
-    } else {
-      const summary = [
-        toolUseCount === 1 ? '1 tool use' : `${toolUseCount} tool uses`,
-        formatNumber(0) + ' tokens',
-        formatDuration(Date.now() - startTime),
-      ]
-      yield {
-        type: 'progress',
-        content: createAssistantMessage(`Task completed (${summary.join(' · ')})`),
-        normalizedMessages: normalizeMessages(messages),
-        tools,
-      }
-    }
-
     saveAgentTranscript(agentId, messages)
 
-    const output: Output = { status: 'completed', agentId, content }
+    const totalDurationMs = Date.now() - startTime
+    const totalTokens = countTokens(messages)
+    const usage = lastAssistant.message.usage
+
+    const output: Output = {
+      status: 'completed',
+      agentId,
+      prompt: effectivePrompt,
+      content,
+      totalToolUseCount: toolUseCount,
+      totalDurationMs,
+      totalTokens,
+      usage,
+    }
     const agentIdBlock: TextBlock = {
       type: 'text',
       text: `agentId: ${agentId} (for resuming to continue this agent's work if needed)`,

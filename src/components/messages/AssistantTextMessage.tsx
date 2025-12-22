@@ -17,6 +17,7 @@ import {
   INTERRUPT_MESSAGE_FOR_TOOL_USE,
   isEmptyMessageText,
   NO_RESPONSE_REQUESTED,
+  extractTag,
 } from '@utils/messages'
 import { BLACK_CIRCLE } from '@constants/figures'
 import { applyMarkdown } from '@utils/markdown'
@@ -45,6 +46,89 @@ export function AssistantTextMessage({
   const { columns } = useTerminalSize()
   if (isEmptyMessageText(text)) {
     return null
+  }
+
+  // Tool progress messages should render as raw text (no markdown parsing).
+  if (text.startsWith('<tool-progress>')) {
+    const raw = extractTag(text, 'tool-progress') ?? ''
+    if (raw.trim().length === 0) return null
+    return (
+      <Text color={getTheme().secondaryText}>
+        {raw}
+      </Text>
+    )
+  }
+
+  // Reference CLI parity: background bash completion notification (Rt1).
+  if (text.startsWith('<bash-notification>')) {
+    const status = (extractTag(text, 'status') ?? '').trim()
+    const summary = (extractTag(text, 'summary') ?? '').trim()
+    if (!summary) return null
+
+    const theme = getTheme()
+    const color =
+      status === 'completed'
+        ? theme.success
+        : status === 'failed'
+          ? theme.error
+          : status === 'killed'
+            ? theme.warning
+            : theme.secondaryText
+
+    return (
+      <Box>
+        <Text color={color}>&nbsp;&nbsp;⎿ &nbsp;</Text>
+        <Text>{summary}</Text>
+      </Box>
+    )
+  }
+
+  // Reference CLI parity: async agent completion notification.
+  if (text.startsWith('<agent-notification>')) {
+    const status = (extractTag(text, 'status') ?? '').trim()
+    const summary = (extractTag(text, 'summary') ?? '').trim()
+    if (!summary) return null
+
+    const theme = getTheme()
+    const color =
+      status === 'completed'
+        ? theme.success
+        : status === 'failed'
+          ? theme.error
+          : status === 'killed'
+            ? theme.warning
+            : theme.secondaryText
+
+    return (
+      <Box>
+        <Text color={color}>&nbsp;&nbsp;⎿ &nbsp;</Text>
+        <Text>{summary}</Text>
+      </Box>
+    )
+  }
+
+  // Reference CLI parity: remote task completion notification.
+  if (text.startsWith('<task-notification>')) {
+    const status = (extractTag(text, 'status') ?? '').trim()
+    const summary = (extractTag(text, 'summary') ?? '').trim()
+    if (!summary) return null
+
+    const theme = getTheme()
+    const color =
+      status === 'completed'
+        ? theme.success
+        : status === 'failed'
+          ? theme.error
+          : status === 'killed'
+            ? theme.warning
+            : theme.secondaryText
+
+    return (
+      <Box>
+        <Text color={color}>&nbsp;&nbsp;⎿ &nbsp;</Text>
+        <Text>{summary}</Text>
+      </Box>
+    )
   }
 
   // Show bash output
@@ -104,8 +188,7 @@ export function AssistantTextMessage({
         <Text>
           &nbsp;&nbsp;⎿ &nbsp;
           <Text color={getTheme().error}>
-            Credit balance too low &middot; Add funds:
-            https://console.anthropic.com/settings/billing
+            Credit balance too low &middot; Add funds in your provider billing settings
           </Text>
         </Text>
       )

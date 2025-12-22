@@ -1,5 +1,5 @@
 import { Hunk } from 'diff'
-import { mkdirSync, statSync } from 'fs'
+import { mkdirSync, readFileSync, statSync } from 'fs'
 import { Box, Text } from 'ink'
 import { dirname, isAbsolute, relative, resolve, sep } from 'path'
 import * as React from 'react'
@@ -27,6 +27,8 @@ import { DESCRIPTION } from './prompt'
 import { applyEdit } from './utils'
 import { hasWritePermission } from '@utils/permissions/filesystem'
 import { PROJECT_FILE } from '@constants/product'
+import { normalizeLineEndings } from '@utils/paste'
+import { getPatch } from '@utils/diff'
 
 const inputSchema = z.strictObject({
   file_path: z.string().describe('The absolute path to the file to modify'),
@@ -80,7 +82,7 @@ export const FileEditTool = {
       />
     )
   },
-  async renderToolUseRejectedMessage(
+  renderToolUseRejectedMessage(
     { file_path, old_string, new_string, replace_all }: any = {},
     { columns, verbose }: any = {},
   ) {
@@ -88,12 +90,46 @@ export const FileEditTool = {
       if (!file_path) {
         return <FallbackToolUseRejectedMessage />
       }
-      const { patch } = await applyEdit(
-        file_path,
-        old_string,
-        new_string,
-        Boolean(replace_all),
-      )
+      const fullFilePath = isAbsolute(file_path)
+        ? file_path
+        : resolve(getCwd(), file_path)
+
+      let originalFile = ''
+      let updatedFile = ''
+      if (old_string === '') {
+        originalFile = ''
+        updatedFile = normalizeLineEndings(new_string)
+      } else {
+        const enc = detectFileEncoding(fullFilePath)
+        const fileContent = readFileSync(fullFilePath, enc)
+        originalFile = normalizeLineEndings(fileContent ?? '')
+
+        const normalizedOldString = normalizeLineEndings(old_string)
+        const normalizedNewString = normalizeLineEndings(new_string)
+        const oldStringForReplace =
+          normalizedNewString === '' &&
+          !normalizedOldString.endsWith('\n') &&
+          originalFile.includes(normalizedOldString + '\n')
+            ? normalizedOldString + '\n'
+            : normalizedOldString
+
+        updatedFile = Boolean(replace_all)
+          ? originalFile.split(oldStringForReplace).join(normalizedNewString)
+          : originalFile.replace(oldStringForReplace, () => normalizedNewString)
+
+        if (updatedFile === originalFile) {
+          throw new Error(
+            'Original and edited file match exactly. Failed to apply edit.',
+          )
+        }
+      }
+
+      const patch = getPatch({
+        filePath: file_path,
+        fileContents: originalFile,
+        oldStr: originalFile,
+        newStr: updatedFile,
+      })
       return (
         <Box flexDirection="column">
           <Text>
@@ -149,17 +185,16 @@ export const FileEditTool = {
       ? file_path
       : resolve(getCwd(), file_path)
 
-    if (fileExistsBun(fullFilePath) && old_string === '') {
-      return {
-        result: false,
-        message: 'Cannot create new file - file already exists.',
+    if (old_string === '') {
+      if (!fileExistsBun(fullFilePath)) return { result: true }
+      const existingContent = await readFileBun(fullFilePath)
+      if (normalizeLineEndings(existingContent ?? '').trim() !== '') {
+        return {
+          result: false,
+          message: 'Cannot create new file - file already exists.',
+        }
       }
-    }
-
-    if (!fileExistsBun(fullFilePath) && old_string === '') {
-      return {
-        result: true,
-      }
+      return { result: true }
     }
 
     if (!fileExistsBun(fullFilePath)) {
@@ -208,8 +243,9 @@ export const FileEditTool = {
       }
     }
 
-    const enc = detectFileEncoding(fullFilePath)
     const file = await readFileBun(fullFilePath)
+    const normalizedFile = normalizeLineEndings(file ?? '')
+    const normalizedOldString = normalizeLineEndings(old_string)
     if (!file) {
       return {
         result: false,
@@ -219,21 +255,21 @@ export const FileEditTool = {
         },
       }
     }
-    if (!file.includes(old_string)) {
+    if (!normalizedFile.includes(normalizedOldString)) {
       return {
         result: false,
-        message: `String to replace not found in file.`,
+        message: `String to replace not found in file.\nString: ${old_string}`,
         meta: {
           isFilePathAbsolute: String(isAbsolute(file_path)),
         },
       }
     }
 
-    const matches = file.split(old_string).length - 1
+    const matches = normalizedFile.split(normalizedOldString).length - 1
     if (matches > 1 && !replace_all) {
       return {
         result: false,
-        message: `Found ${matches} matches of the string to replace. For safety, this tool only supports replacing exactly one occurrence at a time. Add more lines of context to your edit and try again.`,
+        message: `Found ${matches} matches of the string to replace, but replace_all is false. To replace all occurrences, set replace_all to true. To replace only one occurrence, please provide more context to uniquely identify the instance.\nString: ${old_string}`,
         meta: {
           isFilePathAbsolute: String(isAbsolute(file_path)),
         },
@@ -246,6 +282,20 @@ export const FileEditTool = {
     { file_path, old_string, new_string, replace_all },
     { readFileTimestamps },
   ) {
+    const fullFilePath = isAbsolute(file_path)
+      ? file_path
+      : resolve(getCwd(), file_path)
+
+    if (fileExistsBun(fullFilePath)) {
+      const readTimestamp = readFileTimestamps[fullFilePath]
+      const lastWriteTime = statSync(fullFilePath).mtimeMs
+      if (!readTimestamp || lastWriteTime > readTimestamp) {
+        throw new Error(
+          'File has been unexpectedly modified. Read it again before attempting to write it.',
+        )
+      }
+    }
+
     const { patch, updatedFile } = await applyEdit(
       file_path,
       old_string,
@@ -253,9 +303,6 @@ export const FileEditTool = {
       replace_all ?? false,
     )
 
-    const fullFilePath = isAbsolute(file_path)
-      ? file_path
-      : resolve(getCwd(), file_path)
     const dir = dirname(fullFilePath)
     mkdirSync(dir, { recursive: true })
     const enc = fileExistsBun(fullFilePath)
@@ -265,7 +312,7 @@ export const FileEditTool = {
       ? detectLineEndings(fullFilePath)
       : 'LF'
     const originalFile = fileExistsBun(fullFilePath)
-      ? await readFileBun(fullFilePath)
+      ? normalizeLineEndings((await readFileBun(fullFilePath)) ?? '')
       : ''
     writeTextContent(fullFilePath, updatedFile, enc, endings)
 
@@ -304,9 +351,9 @@ export const FileEditTool = {
   },
   renderResultForAssistant({ filePath, originalFile, oldString, newString }) {
     const { snippet, startLine } = getSnippet(
-      originalFile || '',
-      oldString,
-      newString,
+      normalizeLineEndings(originalFile || ''),
+      normalizeLineEndings(oldString),
+      normalizeLineEndings(newString),
     )
     return `The file ${filePath} has been updated. Here's the result of running \`cat -n\` on a snippet of the edited file:
 ${addLineNumbers({

@@ -39,6 +39,35 @@ export function setPermissionModeForConversationKey(options: {
 export function getPermissionMode(context?: ToolUseContext): PermissionMode {
   const conversationKey = getConversationKey(context)
   const safeMode = context?.options?.safeMode ?? false
+
+  const fromToolPermissionContext = context?.options?.toolPermissionContext?.mode
+  if (
+    fromToolPermissionContext === 'default' ||
+    fromToolPermissionContext === 'acceptEdits' ||
+    fromToolPermissionContext === 'plan' ||
+    fromToolPermissionContext === 'dontAsk' ||
+    fromToolPermissionContext === 'bypassPermissions'
+  ) {
+    if (fromToolPermissionContext === 'bypassPermissions' && safeMode) {
+      return 'default'
+    }
+    return fromToolPermissionContext
+  }
+
+  const override = context?.options?.permissionMode
+  if (
+    override === 'default' ||
+    override === 'acceptEdits' ||
+    override === 'plan' ||
+    override === 'dontAsk' ||
+    override === 'bypassPermissions'
+  ) {
+    if (override === 'bypassPermissions' && safeMode) {
+      return 'default'
+    }
+    return override
+  }
+
   return getPermissionModeForConversationKey({
     conversationKey,
     isBypassPermissionsModeAvailable: !safeMode,

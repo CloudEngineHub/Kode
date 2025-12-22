@@ -64,6 +64,8 @@ export type McpServerConfig =
 
 export type ProjectConfig = {
   allowedTools: string[]
+  deniedTools?: string[]
+  askedTools?: string[]
   context: Record<string, string>
   contextFiles?: string[]
   history: string[]
@@ -85,6 +87,8 @@ export type ProjectConfig = {
 
 const DEFAULT_PROJECT_CONFIG: ProjectConfig = {
   allowedTools: [],
+  deniedTools: [],
+  askedTools: [],
   context: {},
   history: [],
   dontCrawlDirectory: false,
@@ -185,6 +189,7 @@ export type GlobalConfig = {
   userID?: string
   theme: ThemeNames
   hasCompletedOnboarding?: boolean
+  lastPlanModeUse?: number
   // Tracks the last version that reset onboarding, used with MIN_VERSION_REQUIRING_ONBOARDING_RESET
   lastOnboardingVersion?: string
   // Tracks the last version for which release notes were seen, used for managing release notes
@@ -200,8 +205,6 @@ export type GlobalConfig = {
   maxTokens?: number
   hasAcknowledgedCostThreshold?: boolean
   oauthAccount?: AccountInfo
-  iterm2KeyBindingInstalled?: boolean // Legacy - keeping for backward compatibility
-  shiftEnterKeyBindingInstalled?: boolean
   proxy?: string
   stream?: boolean
 
@@ -247,7 +250,6 @@ export const GLOBAL_CONFIG_KEYS = [
   'customApiKeyResponses',
   'primaryProvider',
   'preferredNotifChannel',
-  'shiftEnterKeyBindingInstalled',
   'maxTokens',
 ] as const
 
@@ -492,6 +494,14 @@ export function getCurrentProjectConfig(): ProjectConfig {
   if (typeof projectConfig.allowedTools === 'string') {
     projectConfig.allowedTools =
       (safeParseJSON(projectConfig.allowedTools) as string[]) ?? []
+  }
+  if (typeof (projectConfig as any).deniedTools === 'string') {
+    ;(projectConfig as any).deniedTools =
+      (safeParseJSON((projectConfig as any).deniedTools) as string[]) ?? []
+  }
+  if (typeof (projectConfig as any).askedTools === 'string') {
+    ;(projectConfig as any).askedTools =
+      (safeParseJSON((projectConfig as any).askedTools) as string[]) ?? []
   }
   return projectConfig
 }

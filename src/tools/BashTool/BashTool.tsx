@@ -5,20 +5,67 @@ import * as React from 'react'
 import { z } from 'zod'
 import { FallbackToolUseRejectedMessage } from '@components/FallbackToolUseRejectedMessage'
 import { PRODUCT_NAME } from '@constants/product'
-import { queryQuick } from '@services/claude'
 import { Tool, ValidationResult, ToolUseContext } from '@tool'
 import { splitCommand } from '@utils/commands'
 import { isInDirectory } from '@utils/file'
 import { logError } from '@utils/log'
+import { createAssistantMessage } from '@utils/messages'
 import { BunShell } from '@utils/BunShell'
+import { getBunShellSandboxPlan } from '@utils/bunShellSandboxPlan'
+import { ensureSandboxNetworkInfrastructure } from '@utils/sandboxNetworkInfrastructure'
 import { getCwd, getOriginalCwd } from '@utils/state'
-import { getGlobalConfig } from '@utils/config'
-import { getModelManager } from '@utils/model'
 import { decideSystemSandboxForBashTool } from '@utils/systemSandbox'
+import { isBashCommandReadOnly } from '@utils/permissions/bashReadOnly'
+import { getBashDestructiveCommandBlock } from '@utils/destructiveCommandGuard'
+import { getTaskOutputFilePath } from '@utils/taskOutputStore'
+import {
+  formatBashLlmGateBlockMessage,
+  runBashLlmSafetyGate,
+} from './llmSafetyGate'
 import BashToolResultMessage from './BashToolResultMessage'
-import { BANNED_COMMANDS, PROMPT } from './prompt'
+import { BashToolRunInBackgroundOverlay } from './BashToolRunInBackgroundOverlay'
+import { DEFAULT_TIMEOUT_MS, getBashToolPrompt } from './prompt'
 import { formatOutput, getCommandFilePaths } from './utils'
 import { getCommandSource, type CommandSource } from './commandSource'
+import { WebFetchTool } from '@tools/WebFetchTool/WebFetchTool'
+import { WebFetchPermissionRequest } from '@components/permissions/WebFetchPermissionRequest/WebFetchPermissionRequest'
+
+function formatDuration(ms: number): string {
+  if (ms < 60_000) {
+    if (ms === 0) return '0s'
+    if (ms < 1) return `${(ms / 1000).toFixed(1)}s`
+    return `${Math.round(ms / 1000).toString()}s`
+  }
+
+  let hours = Math.floor(ms / 3_600_000)
+  let minutes = Math.floor((ms % 3_600_000) / 60_000)
+  let seconds = Math.round((ms % 60_000) / 1000)
+
+  if (seconds === 60) {
+    seconds = 0
+    minutes++
+  }
+  if (minutes === 60) {
+    minutes = 0
+    hours++
+  }
+
+  if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`
+  if (minutes > 0) return `${minutes}m ${seconds}s`
+  return `${seconds}s`
+}
+
+function normalizeLineEndings(text: string): string {
+  return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+}
+
+function countNewlines(text: string): number {
+  let count = 0
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === '\n') count++
+  }
+  return count
+}
 
 export const inputSchema = z.strictObject({
   command: z.string().describe('The command to execute'),
@@ -26,17 +73,40 @@ export const inputSchema = z.strictObject({
     .number()
     .optional()
     .describe('Optional timeout in milliseconds (max 600000)'),
+  reason: z
+    .string()
+    .optional()
+    .describe(
+      'Human-readable intent for running this command (1-2 sentences). This is used for safety/intention checks and for clearer logs/UI. Examples: "Check current git status before making changes", "Install dependencies to run tests".',
+    ),
+  intent: z
+    .string()
+    .optional()
+    .describe(
+      'Alias for `reason` (kept for compatibility). Prefer using `reason`.',
+    ),
   description: z
     .string()
     .optional()
     .describe(
-      'Clear, concise description of what this command does in 5-10 words, in active voice.',
+      `Clear, concise description of what this command does in 5-10 words, in active voice. Examples:
+Input: ls
+Output: List files in current directory
+
+Input: git status
+Output: Show working tree status
+
+Input: npm install
+Output: Install package dependencies
+
+Input: mkdir foo
+Output: Create directory 'foo'`,
     ),
   run_in_background: z
     .boolean()
     .optional()
     .describe(
-      'Set to true to run this command in the background. Use BashOutput to read the output later.',
+      'Set to true to run this command in the background. Use TaskOutput to read the output later.',
     ),
   dangerouslyDisableSandbox: z
     .boolean()
@@ -54,31 +124,42 @@ export type Out = {
   stderrLines: number // Total number of lines in original stderr, even if `stderr` is now truncated
   interrupted: boolean
   bashId?: string
+  backgroundTaskId?: string
 }
 
 export const BashTool = {
   name: 'Bash',
-  async description() {
-    return 'Executes shell commands on your computer'
+  cachedDescription: 'Run shell command',
+  async description(input?: z.infer<typeof inputSchema>) {
+    return input?.description || 'Run shell command'
   },
   async prompt() {
-    const config = getGlobalConfig()
-    // 🔧 Fix: Use ModelManager to get actual current model
-    const modelManager = getModelManager()
-    const modelName =
-      modelManager.getModelName('main') || '<No Model Configured>'
-    // Substitute the placeholder in the static PROMPT string
-    return PROMPT.replace(/{MODEL_NAME}/g, modelName)
+    return getBashToolPrompt()
   },
-  isReadOnly() {
-    return false
+  isReadOnly(input?: z.infer<typeof inputSchema>) {
+    if (!input || typeof input.command !== 'string') return false
+    return isBashCommandReadOnly(input.command)
   },
-  isConcurrencySafe() {
-    return false // BashTool modifies state/files, not safe for concurrent execution
+  isConcurrencySafe(input?: z.infer<typeof inputSchema>) {
+    // Reference CLI parity: isConcurrencySafe(input) === isReadOnly(input)
+    return this.isReadOnly(input)
   },
   inputSchema,
-  userFacingName() {
-    return 'Bash'
+  userFacingName(input?: z.infer<typeof inputSchema>) {
+    if (!input) return 'Bash'
+
+    const raw = process.env.CLAUDE_CODE_BASH_SANDBOX_SHOW_INDICATOR
+    // Reference CLI parity: only explicit truthy values enable the indicator (F0 in cli.js).
+    const showIndicator = raw
+      ? ['1', 'true', 'yes', 'on'].includes(raw.trim().toLowerCase())
+      : false
+    if (!showIndicator) return 'Bash'
+
+    const plan = getBunShellSandboxPlan({
+      command: input.command,
+      dangerouslyDisableSandbox: input.dangerouslyDisableSandbox === true,
+    })
+    return plan.willSandbox ? 'SandboxedBash' : 'Bash'
   },
   async isEnabled() {
     return true
@@ -127,14 +208,6 @@ export const BashTool = {
       const parts = cmd.split(' ')
       const baseCmd = parts[0]
 
-      // Check if command is banned (same for both modes)
-      if (baseCmd && BANNED_COMMANDS.includes(baseCmd.toLowerCase())) {
-        return {
-          result: false,
-          message: `Command '${baseCmd}' is not allowed for security reasons`,
-        }
-      }
-
       // Special handling for cd command
       if (baseCmd === 'cd' && parts[1]) {
         // In user bash mode, allow cd to any directory
@@ -163,7 +236,23 @@ export const BashTool = {
 
     return { result: true }
   },
-  renderToolUseMessage({ command, run_in_background }) {
+  renderToolUseMessage(
+    { command, run_in_background, reason, intent },
+    options?: { verbose: boolean },
+  ) {
+    // Optional: show intent in verbose mode (keeps permission keys stable).
+    const verbose = Boolean(options?.verbose)
+    const trimmedReason = (reason?.trim() || intent?.trim() || '').trim()
+    const withReason = (base: string): string => {
+      if (!verbose || !trimmedReason) return base
+      const maxLen = 160
+      const shown =
+        trimmedReason.length > maxLen
+          ? `${trimmedReason.slice(0, maxLen - 1)}…`
+          : trimmedReason
+      return `${base} — ${shown}`
+    }
+
     // Clean up any command that uses the quoted HEREDOC pattern
     if (command.includes("\"$(cat <<'EOF'")) {
       const match = command.match(
@@ -174,10 +263,13 @@ export const BashTool = {
         const content = match[2]
         const suffix = match[3] || ''
         const cleaned = `${prefix.trim()} "${content.trim()}"${suffix.trim()}`
-        return run_in_background ? `${cleaned} [background]` : cleaned
+        const base = run_in_background ? `${cleaned} [background]` : cleaned
+        return withReason(base)
       }
     }
-    return run_in_background ? `${command} [background]` : command
+
+    const base = run_in_background ? `${command} [background]` : command
+    return withReason(base)
   },
   renderToolUseRejectedMessage() {
     return <FallbackToolUseRejectedMessage />
@@ -186,43 +278,245 @@ export const BashTool = {
   renderToolResultMessage(content) {
     return <BashToolResultMessage content={content} verbose={false} />
   },
-  renderResultForAssistant({ interrupted, stdout, stderr, bashId }) {
-    if (bashId) {
-      return `Command is running in the background.\n\nUse BashOutput with bash_id="${bashId}" to retrieve the output.\nUse KillShell with shell_id="${bashId}" to stop the command.`
+  renderResultForAssistant({ interrupted, stdout, stderr, bashId, backgroundTaskId }) {
+    let trimmedStdout = stdout
+    if (trimmedStdout) {
+      trimmedStdout = trimmedStdout.replace(/^(\s*\n)+/, '')
+      trimmedStdout = trimmedStdout.trimEnd()
     }
-    let errorMessage = stderr.trim()
+
+    let trimmedStderr = stderr.trim()
     if (interrupted) {
-      if (stderr) errorMessage += EOL
-      errorMessage += '<error>Command was aborted before completion</error>'
+      if (trimmedStderr) trimmedStderr += EOL
+      trimmedStderr += '<error>Command was aborted before completion</error>'
     }
-    const hasBoth = stdout.trim() && errorMessage
-    return `${stdout.trim()}${hasBoth ? '\n' : ''}${errorMessage.trim()}`
+
+    const id = backgroundTaskId ?? bashId
+    const backgroundLine = id
+      ? `Command running in background with ID: ${id}. Output is being written to: ${getTaskOutputFilePath(id)}`
+      : ''
+
+    return [trimmedStdout, trimmedStderr, backgroundLine].filter(Boolean).join('\n')
   },
   async *call(
-    { command, timeout = 120000, run_in_background, dangerouslyDisableSandbox },
+    {
+      command,
+      timeout = DEFAULT_TIMEOUT_MS,
+      run_in_background,
+      dangerouslyDisableSandbox,
+      reason,
+      intent,
+      description,
+    },
     context,
   ) {
     const { abortController, readFileTimestamps } = context
+    const setToolJSX = (context as any).setToolJSX as
+      | ((jsx: { jsx: React.ReactNode | null; shouldHidePromptInput: boolean } | null) => void)
+      | undefined
     let stdout = ''
     let stderr = ''
 
     const commandSource = getCommandSource(context as any)
     const safeMode = Boolean(context?.safeMode ?? context?.options?.safeMode)
-    const sandboxDecision = decideSystemSandboxForBashTool({
+    const effectiveReason =
+      (typeof reason === 'string' && reason.trim()) ||
+      (typeof intent === 'string' && intent.trim()) ||
+      (typeof description === 'string' && description.trim()) ||
+      ''
+
+    const destructiveBlock = getBashDestructiveCommandBlock({
+      command,
+      cwd: getCwd(),
+      originalCwd: getOriginalCwd(),
+      commandSource,
+      platform: process.platform,
+    })
+    if (destructiveBlock) {
+      const data: Out = {
+        stdout: '',
+        stdoutLines: 0,
+        stderr: destructiveBlock.message,
+        stderrLines: destructiveBlock.message.split(/\r?\n/).length,
+        interrupted: false,
+      }
+      yield {
+        type: 'result',
+        resultForAssistant: this.renderResultForAssistant(data),
+        data,
+      }
+      return
+    }
+
+    const systemSandboxDecision = decideSystemSandboxForBashTool({
       safeMode,
       commandSource,
       dangerouslyDisableSandbox: dangerouslyDisableSandbox === true,
     })
 
-    const sandboxOptions = sandboxDecision.enabled
+    const systemSandboxOptions = systemSandboxDecision.enabled
       ? {
           enabled: true,
-          require: sandboxDecision.required,
-          allowNetwork: sandboxDecision.allowNetwork,
+          require: systemSandboxDecision.required,
+          allowNetwork: systemSandboxDecision.allowNetwork,
           writableRoots: [getOriginalCwd()],
           chdir: getCwd(),
         }
       : undefined
+
+    const sandboxPlan = getBunShellSandboxPlan({
+      command,
+      dangerouslyDisableSandbox: dangerouslyDisableSandbox === true,
+      toolUseContext: context as any,
+    })
+
+    if (sandboxPlan.shouldBlockUnsandboxedCommand) {
+      const data: Out = {
+        stdout: '',
+        stdoutLines: 0,
+        stderr: 'This command must run in the sandbox, but sandboxed execution is not available.',
+        stderrLines: 1,
+        interrupted: false,
+      }
+      yield {
+        type: 'result',
+        resultForAssistant: this.renderResultForAssistant(data),
+        data,
+      }
+      return
+    }
+
+    let sandboxOptions =
+      sandboxPlan.settings.enabled === true ? sandboxPlan.bunShellSandboxOptions : systemSandboxOptions
+
+    const llmGateResult = await runBashLlmSafetyGate({
+      command,
+      reason: effectiveReason,
+      platform: process.platform,
+      commandSource,
+      safeMode,
+      willSandbox: Boolean(sandboxOptions?.enabled),
+      sandboxRequired: Boolean(sandboxOptions?.enabled && sandboxOptions.require),
+      cwd: getCwd(),
+      originalCwd: getOriginalCwd(),
+      parentAbortSignal: abortController.signal,
+    })
+
+    if (llmGateResult.decision === 'block') {
+      const message = formatBashLlmGateBlockMessage(llmGateResult.verdict)
+      const data: Out = {
+        stdout: '',
+        stdoutLines: 0,
+        stderr: message,
+        stderrLines: message.split(/\r?\n/).length,
+        interrupted: false,
+      }
+      yield {
+        type: 'result',
+        resultForAssistant: this.renderResultForAssistant(data),
+        data,
+      }
+      return
+    }
+
+    if (llmGateResult.decision === 'error' && !llmGateResult.canFailOpen) {
+      const message = [
+        llmGateResult.willSandbox
+          ? 'Blocked: LLM safety gate failed (fail-closed policy).'
+          : 'Blocked: LLM safety gate failed and command would run unsandboxed.',
+        `Error: ${llmGateResult.error}`,
+        '',
+        llmGateResult.willSandbox
+          ? 'To allow fail-open when sandboxed, set KODE_BASH_LLM_GATE_FAIL_OPEN_SANDBOXED=1.'
+          : null,
+        'If you explicitly want to bypass this gate, set KODE_BASH_LLM_GATE_BYPASS=1 (not available in safe mode).',
+      ]
+        .filter(Boolean)
+        .join('\n')
+      const data: Out = {
+        stdout: '',
+        stdoutLines: 0,
+        stderr: message,
+        stderrLines: message.split(/\r?\n/).length,
+        interrupted: false,
+      }
+      yield {
+        type: 'result',
+        resultForAssistant: this.renderResultForAssistant(data),
+        data,
+      }
+      return
+    }
+
+    // Reference CLI parity: when running sandboxed on macOS with network restrictions enabled,
+    // start local HTTP/SOCKS proxies if ports are not explicitly configured.
+    if (
+      sandboxPlan.willSandbox &&
+      sandboxOptions?.enabled === true &&
+      'needsNetworkRestriction' in sandboxOptions &&
+      (sandboxOptions.__platformOverride ?? process.platform) === 'darwin' &&
+      sandboxOptions.needsNetworkRestriction === true
+    ) {
+      const mode = context?.options?.toolPermissionContext?.mode ?? 'default'
+      const shouldAvoidPermissionPrompts = Boolean(context?.options?.shouldAvoidPermissionPrompts)
+
+      const ports = await ensureSandboxNetworkInfrastructure({
+        runtimeConfig: sandboxPlan.runtimeConfig,
+        permissionCallback: async ({ host, port }) => {
+          if (mode === 'acceptEdits' || mode === 'bypassPermissions') return true
+          if (mode === 'dontAsk' || shouldAvoidPermissionPrompts) return false
+          if (!setToolJSX) return false
+          if (abortController.signal.aborted) return false
+
+          const hostForUrl = host.includes(':') && !host.startsWith('[') ? `[${host}]` : host
+          const url = `http://${hostForUrl}:${port}/`
+
+          return await new Promise<boolean>(resolve => {
+            const assistantMessage = createAssistantMessage('')
+            if (context.messageId) {
+              ;(assistantMessage.message as any).id = context.messageId
+            }
+
+            const toolUseConfirm: any = {
+              assistantMessage,
+              tool: WebFetchTool,
+              description: 'Network request outside of sandbox',
+              input: { url },
+              commandPrefix: null,
+              toolUseContext: context,
+              suggestions: undefined,
+              riskScore: null,
+              onAbort() {
+                resolve(false)
+              },
+              onAllow() {
+                resolve(true)
+              },
+              onReject() {
+                resolve(false)
+              },
+            }
+
+            setToolJSX({
+              jsx: (
+                <WebFetchPermissionRequest
+                  toolUseConfirm={toolUseConfirm}
+                  onDone={() => setToolJSX(null)}
+                  verbose={Boolean(context?.options?.verbose)}
+                />
+              ),
+              shouldHidePromptInput: true,
+            })
+          })
+        },
+      })
+
+      sandboxOptions = {
+        ...sandboxOptions,
+        httpProxyPort: ports.httpProxyPort,
+        socksProxyPort: ports.socksProxyPort,
+      }
+    }
 
     // 🔧 Check if already cancelled before starting execution
     if (abortController.signal.aborted) {
@@ -254,6 +548,7 @@ export const BashTool = {
           stderrLines: 0,
           interrupted: false,
           bashId,
+          backgroundTaskId: bashId,
         }
         yield {
           type: 'result',
@@ -263,64 +558,193 @@ export const BashTool = {
         return
       }
 
-      // Execute commands
-      const result = await BunShell.getInstance().exec(
+      const startedAt = Date.now()
+      const PROGRESS_INITIAL_DELAY_MS = 2000 // Reference CLI: XJ2=2000
+      const PROGRESS_INTERVAL_MS = 1000 // Reference CLI: SH5=1000
+      const PROGRESS_MAX_LINES = 5
+      const PROGRESS_TAIL_MAX_CHARS = 100_000
+
+      let combinedTail = ''
+      let totalNewlines = 0
+      let sawAnyOutput = false
+
+      const onChunk = (chunk: string) => {
+        if (!chunk) return
+        sawAnyOutput = true
+        totalNewlines += countNewlines(chunk)
+        combinedTail += chunk
+        if (combinedTail.length > PROGRESS_TAIL_MAX_CHARS) {
+          combinedTail = combinedTail.slice(-PROGRESS_TAIL_MAX_CHARS)
+        }
+      }
+
+      const exec = BunShell.getInstance().execPromotable(
         command,
         abortController.signal,
         timeout,
-        { sandbox: sandboxOptions },
+        {
+          sandbox: sandboxOptions,
+          onStdoutChunk: onChunk,
+          onStderrChunk: onChunk,
+        },
       )
-      stdout += (result.stdout || '').trim() + EOL
-      stderr += (result.stderr || '').trim() + EOL
-      if (result.code !== 0) {
-        stderr += `Exit code ${result.code}`
+
+      let backgroundRequested = false
+      let resolveBackground: ((bashId: string) => void) | null = null
+      const backgroundPromise = new Promise<string>(resolve => {
+        resolveBackground = resolve
+      })
+
+      const requestBackground = () => {
+        if (backgroundRequested) return
+        backgroundRequested = true
+        const promoted = exec.background()
+        if (!promoted) return
+        resolveBackground?.(promoted.bashId)
       }
 
-      if (!isInDirectory(getCwd(), getOriginalCwd())) {
-        // Shell directory is outside original working directory, reset it
-        await BunShell.getInstance().setCwd(getOriginalCwd())
-        stderr = `${stderr.trim()}${EOL}Shell cwd was reset to ${getOriginalCwd()}`
+      const resultPromise = exec.result
 
+      const buildProgressText = (): string => {
+        const elapsedMs = Date.now() - startedAt
+        const time = `(${formatDuration(elapsedMs)})`
+
+        const normalized = normalizeLineEndings(combinedTail).trim()
+        const lines = normalized.length
+          ? normalized.split('\n').filter(line => line.length > 0)
+          : []
+
+        if (lines.length === 0) {
+          return `Running… ${time}`
+        }
+
+        const shownLines = lines.slice(-PROGRESS_MAX_LINES)
+        const totalLines = sawAnyOutput ? totalNewlines + 1 : 0
+        const extraLines = Math.max(0, totalLines - PROGRESS_MAX_LINES)
+
+        const footerParts: string[] = []
+        if (extraLines > 0) {
+          footerParts.push(
+            `+${extraLines} more line${extraLines === 1 ? '' : 's'}`,
+          )
+        }
+        footerParts.push(time)
+
+        return `${shownLines.join('\n')}\n${footerParts.join(' ')}`
       }
 
-      // Update read timestamps for any files referenced by the command
-      // Don't block the main thread!
-      // Skip this in tests because it makes fixtures non-deterministic (they might not always get written),
-      // so will be missing in CI.
-      if (process.env.NODE_ENV !== 'test') {
-        getCommandFilePaths(command, stdout).then(filePaths => {
-          for (const filePath of filePaths) {
-            const fullFilePath = isAbsolute(filePath)
-              ? filePath
-              : resolve(getCwd(), filePath)
+      // Reference CLI parity: delay first progress paint to avoid flicker.
+      let nextTickAt = startedAt + PROGRESS_INITIAL_DELAY_MS
+      let overlayShown = false
+      while (true) {
+        const now = Date.now()
+        const waitMs = Math.max(0, nextTickAt - now)
+        const race = await Promise.race([
+          resultPromise.then(r => ({ kind: 'done' as const, r })),
+          backgroundPromise.then(bashId => ({ kind: 'background' as const, bashId })),
+          new Promise<{ kind: 'tick' }>(resolve =>
+            setTimeout(() => resolve({ kind: 'tick' }), waitMs),
+          ),
+        ])
 
-            // Try/catch in case the file doesn't exist (because Haiku didn't properly extract it)
-            try {
-              readFileTimestamps[fullFilePath] = statSync(fullFilePath).mtimeMs
-            } catch (e) {
-              logError(e)
-            }
+        if (race.kind === 'background') {
+          const data: Out = {
+            stdout: '',
+            stdoutLines: 0,
+            stderr: '',
+            stderrLines: 0,
+            interrupted: false,
+            bashId: race.bashId,
+            backgroundTaskId: race.bashId,
           }
-        })
-      }
 
-      const { totalLines: stdoutLines, truncatedContent: stdoutContent } =
-        formatOutput(stdout.trim())
-      const { totalLines: stderrLines, truncatedContent: stderrContent } =
-        formatOutput(stderr.trim())
+          yield {
+            type: 'result',
+            resultForAssistant: this.renderResultForAssistant(data),
+            data,
+          }
+          return
+        }
 
-      const data: Out = {
-        stdout: stdoutContent,
-        stdoutLines,
-        stderr: stderrContent,
-        stderrLines,
-        interrupted: result.interrupted,
-      }
+        if (race.kind === 'done') {
+          const result = race.r
 
-      yield {
-        type: 'result',
-        resultForAssistant: this.renderResultForAssistant(data),
-        data,
+          stdout += (result.stdout || '').trim() + EOL
+          stderr += (result.stderr || '').trim() + EOL
+          if (result.code !== 0) {
+            stderr += `Exit code ${result.code}`
+          }
+
+          if (!isInDirectory(getCwd(), getOriginalCwd())) {
+            // Shell directory is outside original working directory, reset it
+            await BunShell.getInstance().setCwd(getOriginalCwd())
+            stderr = `${stderr.trim()}${EOL}Shell cwd was reset to ${getOriginalCwd()}`
+
+          }
+
+          // Update read timestamps for any files referenced by the command
+          // Don't block the main thread!
+          // Skip this in tests because it makes fixtures non-deterministic (they might not always get written),
+          // so will be missing in CI.
+          if (process.env.NODE_ENV !== 'test') {
+            getCommandFilePaths(command, stdout).then(filePaths => {
+              for (const filePath of filePaths) {
+                const fullFilePath = isAbsolute(filePath)
+                  ? filePath
+                  : resolve(getCwd(), filePath)
+
+                // Try/catch in case the file doesn't exist (because Haiku didn't properly extract it)
+                try {
+                  readFileTimestamps[fullFilePath] = statSync(fullFilePath).mtimeMs
+                } catch (e) {
+                  logError(e)
+                }
+              }
+            })
+          }
+
+          const { totalLines: stdoutLines, truncatedContent: stdoutContent } =
+            formatOutput(stdout.trim())
+          const { totalLines: stderrLines, truncatedContent: stderrContent } =
+            formatOutput(stderr.trim())
+
+          const data: Out = {
+            stdout: stdoutContent,
+            stdoutLines,
+            stderr: stderrContent,
+            stderrLines,
+            interrupted: result.interrupted,
+          }
+
+          yield {
+            type: 'result',
+            resultForAssistant: this.renderResultForAssistant(data),
+            data,
+          }
+          return
+        }
+
+        if (
+          !overlayShown &&
+          setToolJSX &&
+          Date.now() - startedAt >= PROGRESS_INITIAL_DELAY_MS
+        ) {
+          overlayShown = true
+          setToolJSX({
+            jsx: (
+              <BashToolRunInBackgroundOverlay onBackground={requestBackground} />
+            ),
+            shouldHidePromptInput: false,
+          })
+        }
+
+        const text = buildProgressText()
+        yield {
+          type: 'progress',
+          content: createAssistantMessage(`<tool-progress>${text}</tool-progress>`),
+        }
+
+        nextTickAt = Date.now() + PROGRESS_INTERVAL_MS
       }
     } catch (error) {
       // 🔧 Handle cancellation or other errors properly
@@ -342,6 +766,8 @@ export const BashTool = {
         resultForAssistant: this.renderResultForAssistant(data),
         data,
       }
+    } finally {
+      setToolJSX?.(null)
     }
   },
 } satisfies Tool<In, Out>

@@ -28,6 +28,9 @@ import { EnterPlanModeTool } from '@tools/PlanModeTool/EnterPlanModeTool'
 import { ExitPlanModeTool } from '@tools/PlanModeTool/ExitPlanModeTool'
 import { EnterPlanModePermissionRequest } from './PlanModePermissionRequest/EnterPlanModePermissionRequest'
 import { ExitPlanModePermissionRequest } from './PlanModePermissionRequest/ExitPlanModePermissionRequest'
+import { AskUserQuestionTool } from '@tools/AskUserQuestionTool/AskUserQuestionTool'
+import { AskUserQuestionPermissionRequest } from './AskUserQuestionPermissionRequest/AskUserQuestionPermissionRequest'
+import type { ToolPermissionContextUpdate } from '@kode-types/toolPermissionContext'
 
 function permissionComponentForTool(tool: Tool) {
   switch (tool) {
@@ -52,6 +55,8 @@ function permissionComponentForTool(tool: Tool) {
       return EnterPlanModePermissionRequest
     case ExitPlanModeTool:
       return ExitPlanModePermissionRequest
+    case AskUserQuestionTool:
+      return AskUserQuestionPermissionRequest
     default:
       return FallbackPermissionRequest
   }
@@ -81,6 +86,7 @@ export type ToolUseConfirm = {
   input: { [key: string]: unknown }
   commandPrefix: CommandSubcommandPrefixResult | null
   toolUseContext: ToolUseContext
+  suggestions?: ToolPermissionContextUpdate[]
   // TODO: remove riskScore from ToolUseConfirm
   riskScore: number | null
   onAbort(): void

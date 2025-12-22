@@ -176,6 +176,8 @@ dist
 # Build artifacts
 cli.js
 .npmrc
+vendor/
+.tmp/
 
 # Lock files
 bun.lock

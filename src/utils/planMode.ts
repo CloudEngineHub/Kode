@@ -1,13 +1,9 @@
-import { existsSync, mkdirSync, readFileSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, realpathSync } from 'fs'
 import { randomBytes } from 'crypto'
 import { homedir } from 'os'
 import { isAbsolute, join, relative, resolve, parse } from 'path'
 import type { ToolUseContext } from '@tool'
-import {
-  CLAUDE_PLAN_SLUG_ADJECTIVES,
-  CLAUDE_PLAN_SLUG_NOUNS,
-  CLAUDE_PLAN_SLUG_VERBS,
-} from './claudePlanSlugWords'
+import { PLAN_SLUG_ADJECTIVES, PLAN_SLUG_NOUNS, PLAN_SLUG_VERBS } from './planSlugWords'
 
 const DEFAULT_CONVERSATION_KEY = 'default'
 const MAX_SLUG_ATTEMPTS = 10
@@ -64,9 +60,9 @@ function pickWord(words: readonly string[]): string {
 }
 
 function generateSlug(): string {
-  const adjective = pickWord(CLAUDE_PLAN_SLUG_ADJECTIVES)
-  const verb = pickWord(CLAUDE_PLAN_SLUG_VERBS)
-  const noun = pickWord(CLAUDE_PLAN_SLUG_NOUNS)
+  const adjective = pickWord(PLAN_SLUG_ADJECTIVES)
+  const verb = pickWord(PLAN_SLUG_VERBS)
+  const noun = pickWord(PLAN_SLUG_NOUNS)
   return `${adjective}-${verb}-${noun}`
 }
 
@@ -426,10 +422,37 @@ export function getPlanFilePath(agentId?: string, conversationKey?: string): str
   return join(dir, `${slug}-agent-${agentId}.md`)
 }
 
+function resolveExistingPath(path: string): string {
+  const resolved = resolve(path)
+  try {
+    return realpathSync(resolved)
+  } catch {
+    return resolved
+  }
+}
+
+export function isPlanFilePathForActiveConversation(path: string): boolean {
+  const key = activePlanConversationKey ?? DEFAULT_CONVERSATION_KEY
+  const planDir = resolveExistingPath(getPlanDirectory())
+  const expectedMainPlanPath = resolveExistingPath(getPlanFilePath(undefined, key))
+  const target = resolveExistingPath(path)
+
+  const rel = relative(planDir, target)
+  if (!rel || rel === '') return false
+  if (rel.startsWith('..')) return false
+  if (isAbsolute(rel)) return false
+
+  const expectedSlug = parse(expectedMainPlanPath).name
+  const targetName = parse(target).name
+  return (
+    targetName === expectedSlug || targetName.startsWith(`${expectedSlug}-agent-`)
+  )
+}
+
 export function isMainPlanFilePathForActiveConversation(path: string): boolean {
   const key = activePlanConversationKey ?? DEFAULT_CONVERSATION_KEY
-  const expected = resolve(getPlanFilePath(undefined, key))
-  const target = resolve(path)
+  const expected = resolveExistingPath(getPlanFilePath(undefined, key))
+  const target = resolveExistingPath(path)
   return target === expected
 }
 

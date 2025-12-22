@@ -5,7 +5,7 @@ import { Cost } from '@components/Cost'
 import { FallbackToolUseRejectedMessage } from '@components/FallbackToolUseRejectedMessage'
 import { Tool } from '@tool'
 import { BunShell } from '@utils/BunShell'
-import { DESCRIPTION, TOOL_NAME_FOR_PROMPT } from './prompt'
+import { DESCRIPTION, PROMPT, TOOL_NAME_FOR_PROMPT } from './prompt'
 import { formatOutput } from '@tools/BashTool/utils'
 
 const inputSchema = z.strictObject({
@@ -58,12 +58,12 @@ export const BashOutputTool = {
     return false
   },
   async prompt() {
-    return DESCRIPTION
+    return PROMPT
   },
   renderToolUseMessage({ bash_id, filter }: Input) {
     return filter
       ? `Reading shell output (filtered: ${filter})`
-      : `Reading shell output (bash_id: ${bash_id})`
+      : 'Reading shell output'
   },
   renderToolUseRejectedMessage() {
     return <FallbackToolUseRejectedMessage />
@@ -121,8 +121,10 @@ export const BashOutputTool = {
     return { result: true }
   },
   async *call({ bash_id, filter }: Input) {
-    const bg = BunShell.getInstance().getBackgroundOutput(bash_id)
-    if (!bg) {
+    const delta = BunShell.getInstance().readBackgroundOutput(bash_id, {
+      filter,
+    })
+    if (!delta) {
       yield {
         type: 'result',
         data: {
@@ -141,47 +143,19 @@ export const BashOutputTool = {
       return
     }
 
-    const baseStdout = bg.stdout.trimEnd()
-    const baseStderr = bg.stderr.trimEnd()
-    const stdoutLines = baseStdout.split('\n').length
-    const stderrLines = baseStderr.split('\n').length
-
-    let stdoutToFilter = baseStdout
-    let stderrToFilter = baseStderr
-    const trimmedFilter = filter?.trim()
-    if (trimmedFilter) {
-      const regex = new RegExp(trimmedFilter, 'i')
-      stdoutToFilter = baseStdout
-        .split('\n')
-        .filter(line => regex.test(line))
-        .join('\n')
-      stderrToFilter = baseStderr
-        .split('\n')
-        .filter(line => regex.test(line))
-        .join('\n')
-    }
-
-    const stdoutFormatted = formatOutput(stdoutToFilter)
-    const stderrFormatted = formatOutput(stderrToFilter)
-
-    const status: Output['status'] = bg.killed
-      ? 'killed'
-      : bg.code === null
-        ? 'running'
-        : bg.code === 0
-          ? 'completed'
-          : 'failed'
+    const stdoutFormatted = formatOutput(delta.stdout.trimEnd())
+    const stderrFormatted = formatOutput(delta.stderr.trimEnd())
 
     const output: Output = {
-      shellId: bash_id,
-      command: bg.command,
-      status,
-      exitCode: bg.code,
+      shellId: delta.shellId,
+      command: delta.command,
+      status: delta.status,
+      exitCode: delta.exitCode,
       stdout: stdoutFormatted.truncatedContent,
       stderr: stderrFormatted.truncatedContent,
-      stdoutLines,
-      stderrLines,
-      ...(trimmedFilter ? { filterPattern: trimmedFilter } : {}),
+      stdoutLines: delta.stdoutLines,
+      stderrLines: delta.stderrLines,
+      ...(delta.filterPattern ? { filterPattern: delta.filterPattern } : {}),
       timestamp: new Date().toISOString(),
     }
 

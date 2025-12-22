@@ -15,13 +15,55 @@ import {
   launchExternalEditor,
   launchExternalEditorForFilePath,
 } from '@utils/externalEditor'
-import { REJECT_MESSAGE_WITH_FEEDBACK_PREFIX } from '@utils/messages'
 import { writeFileSync } from 'fs'
 
 type Props = {
   toolUseConfirm: ToolUseConfirm
   onDone(): void
   verbose: boolean
+}
+
+type ExitPlanModeOptionValue =
+  | 'yes-bypass'
+  | 'yes-accept'
+  | 'yes-launch-swarm'
+  | 'yes-default'
+  | 'no'
+
+type ExitPlanModeOption = { label: string; value: ExitPlanModeOptionValue }
+
+function getExitPlanModeOptions(args: {
+  bypassAvailable: boolean
+  launchSwarmAvailable: boolean
+  teammateCount: number
+}): ExitPlanModeOption[] {
+  const options: ExitPlanModeOption[] = []
+
+  options.push(
+    args.bypassAvailable
+      ? { label: 'Yes, and bypass permissions', value: 'yes-bypass' }
+      : { label: 'Yes, and auto-accept edits', value: 'yes-accept' },
+  )
+
+  if (args.launchSwarmAvailable) {
+    options.push({
+      label: `Yes, and launch swarm (${args.teammateCount} teammates)`,
+      value: 'yes-launch-swarm',
+    })
+  }
+
+  options.push({ label: 'Yes, and manually approve edits', value: 'yes-default' })
+  options.push({ label: 'No, keep planning', value: 'no' })
+
+  return options
+}
+
+export function __getExitPlanModeOptionsForTests(args: {
+  bypassAvailable: boolean
+  launchSwarmAvailable: boolean
+  teammateCount: number
+}): ExitPlanModeOption[] {
+  return getExitPlanModeOptions(args)
 }
 
 function planPlaceholder(): string {
@@ -41,11 +83,22 @@ export function ExitPlanModePermissionRequest({
     [conversationKey],
   )
 
+  const planFromInput =
+    typeof (toolUseConfirm.input as any)?.plan === 'string' &&
+    String((toolUseConfirm.input as any).plan).trim().length > 0
+      ? String((toolUseConfirm.input as any).plan)
+      : null
+  const planSource: 'file' | 'input' = planFromInput ? 'input' : 'file'
+
   const [planText, setPlanText] = useState(() => {
+    if (planSource === 'input') {
+      return planFromInput!
+    }
     const { content, exists } = readPlanFile(undefined, conversationKey)
     return exists ? content : planPlaceholder()
   })
   const [planExists, setPlanExists] = useState(() => {
+    if (planSource === 'input') return false
     const { exists } = readPlanFile(undefined, conversationKey)
     return exists
   })
@@ -54,6 +107,9 @@ export function ExitPlanModePermissionRequest({
   const [rejectFeedback, setRejectFeedback] = useState('')
   const [rejectError, setRejectError] = useState<string | null>(null)
   const [rejectCursorOffset, setRejectCursorOffset] = useState(0)
+  const [focusedOption, setFocusedOption] =
+    useState<ExitPlanModeOptionValue | null>(null)
+  const [teammateCount, setTeammateCount] = useState(3)
 
   useEffect(() => {
     if (!planSaved) return
@@ -68,9 +124,27 @@ export function ExitPlanModePermissionRequest({
       return
     }
 
+    if (key.tab && focusedOption === 'yes-launch-swarm') {
+      setTeammateCount(prev => {
+        const allowed = [2, 3, 4, 6, 8]
+        const idx = Math.max(0, allowed.indexOf(prev))
+        return allowed[(idx + 1) % allowed.length]!
+      })
+      return
+    }
+
     if (!(key.ctrl && input.toLowerCase() === 'g')) return
 
     void (async () => {
+      if (planSource === 'input') {
+        const edited = await launchExternalEditor(planText)
+        if (edited.text !== null) {
+          setPlanText(edited.text)
+          setPlanSaved(true)
+        }
+        return
+      }
+
       if (!planExists) {
         const initial = planText === planPlaceholder() ? '# Plan\n' : planText
         try {
@@ -97,6 +171,18 @@ export function ExitPlanModePermissionRequest({
   })
 
   const bypassAvailable = toolUseConfirm.toolUseContext.options?.safeMode !== true
+  // The reference CLI's current build gates this option off (pc2 spreads an empty array),
+  // but keeps the handler branches; keep runtime behavior 1:1 by defaulting to false.
+  const launchSwarmAvailable = false
+  const options = useMemo(
+    () =>
+      getExitPlanModeOptions({
+        bypassAvailable,
+        launchSwarmAvailable,
+        teammateCount,
+      }),
+    [bypassAvailable, launchSwarmAvailable, teammateCount],
+  )
 
   if (showRejectInput) {
     return (
@@ -112,7 +198,7 @@ export function ExitPlanModePermissionRequest({
         <PermissionRequestTitle title="No, keep planning" riskScore={null} />
         <Box flexDirection="column" paddingX={2} paddingY={1}>
           <Text dimColor>
-            Type here to tell the assistant what to change (Enter submits, Esc cancels)
+            Type here to tell Kode Agent what to change (Enter submits, Esc cancels)
           </Text>
           {rejectError ? (
             <Text color={theme.error}>{rejectError}</Text>
@@ -129,9 +215,7 @@ export function ExitPlanModePermissionRequest({
                 setRejectError('Please enter what you want changed.')
                 return
               }
-              toolUseConfirm.onReject(
-                `${REJECT_MESSAGE_WITH_FEEDBACK_PREFIX}${trimmed}`,
-              )
+              toolUseConfirm.onReject(trimmed)
               onDone()
             }}
             onExit={() => {
@@ -161,12 +245,17 @@ export function ExitPlanModePermissionRequest({
       <PermissionRequestTitle title="Ready to code?" riskScore={null} />
 
       <Box flexDirection="column" paddingX={2} paddingY={1}>
-        <Text>Here is the plan:</Text>
+        <Text>Here is Kode Agent&apos;s plan:</Text>
         <Box
           borderStyle="dashed"
-          borderColor={theme.secondaryText}
+          borderColor={theme.secondaryBorder}
+          borderDimColor
+          borderLeft={false}
+          borderRight={false}
           paddingX={1}
           paddingY={0}
+          marginBottom={1}
+          flexDirection="column"
         >
           <Text>{planText}</Text>
         </Box>
@@ -174,21 +263,16 @@ export function ExitPlanModePermissionRequest({
 
       <Box flexDirection="column" paddingX={2}>
         <Text dimColor>
-          Tip: Press ctrl+g to edit plan file: {planFilePath}
+          Tip: Press ctrl+g to edit {planSource === 'file' ? `plan file: ${planFilePath}` : 'plan text'}
           {planSaved ? ' · Plan saved!' : ''}
         </Text>
       </Box>
 
       <Box flexDirection="column" marginTop={1}>
-        <Text>Would you like to proceed?</Text>
+        <Text dimColor>Would you like to proceed?</Text>
         <Select
-          options={[
-            ...(bypassAvailable
-              ? [{ label: 'Yes, and bypass permissions', value: 'yes-bypass' }]
-              : [{ label: 'Yes, and auto-accept edits', value: 'yes-accept' }]),
-            { label: 'Yes, and manually approve edits', value: 'yes-default' },
-            { label: 'No, keep planning', value: 'no' },
-          ]}
+          options={options}
+          onFocus={value => setFocusedOption(value as ExitPlanModeOptionValue)}
           onChange={value => {
             if (value === 'no') {
               setShowRejectInput(true)
@@ -200,9 +284,16 @@ export function ExitPlanModePermissionRequest({
                 ? 'bypassPermissions'
                 : value === 'yes-accept'
                   ? 'acceptEdits'
-                  : 'default'
+                  : value === 'yes-launch-swarm'
+                    ? 'bypassPermissions'
+                    : 'default'
 
             setMode(nextMode)
+
+            if (value === 'yes-launch-swarm') {
+              ;(toolUseConfirm.input as any).launchSwarm = true
+              ;(toolUseConfirm.input as any).teammateCount = teammateCount
+            }
 
             toolUseConfirm.onAllow('temporary')
             onDone()

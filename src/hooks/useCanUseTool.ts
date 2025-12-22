@@ -2,12 +2,13 @@ import React, { useCallback } from 'react'
 import { hasPermissionsToUseTool } from '@permissions'
 import { BashTool, inputSchema } from '@tools/BashTool/BashTool'
 import { getCommandSubcommandPrefix } from '@utils/commands'
-import { REJECT_MESSAGE } from '@utils/messages'
+import { REJECT_MESSAGE, REJECT_MESSAGE_WITH_FEEDBACK_PREFIX } from '@utils/messages'
 import type { Tool as ToolType, ToolUseContext } from '@tool'
 import { AssistantMessage } from '@query'
 import { ToolUseConfirm } from '@components/permissions/PermissionRequest'
 import { AbortError } from '@utils/errors'
 import { logError } from '@utils/log'
+import type { ToolPermissionContextUpdate } from '@kode-types/toolPermissionContext'
 
 type SetState<T> = React.Dispatch<React.SetStateAction<T>>
 
@@ -18,7 +19,12 @@ export type CanUseToolFn = (
   assistantMessage: AssistantMessage,
 ) => Promise<
   | { result: true }
-  | { result: false; message: string; shouldPromptUser?: boolean }
+  | {
+      result: false
+      message: string
+      shouldPromptUser?: boolean
+      suggestions?: ToolPermissionContextUpdate[]
+    }
 >
 
 function useCanUseTool(
@@ -32,7 +38,9 @@ function useCanUseTool(
         function resolveWithCancelledAndAbortAllToolCalls(message?: string) {
           resolve({
             result: false,
-            message: message ?? REJECT_MESSAGE,
+            message: message
+              ? `${REJECT_MESSAGE_WITH_FEEDBACK_PREFIX}${message}`
+              : REJECT_MESSAGE,
           })
           // Trigger a synthetic assistant message in query(), to cancel
           // any other pending tool uses and stop further requests to the
@@ -92,6 +100,7 @@ function useCanUseTool(
               input,
               commandPrefix,
               toolUseContext,
+              suggestions: deniedResult.suggestions,
               riskScore: null,
               onAbort() {
                 logCancelledEvent()

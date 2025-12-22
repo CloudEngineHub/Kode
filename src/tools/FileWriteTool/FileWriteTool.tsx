@@ -1,5 +1,5 @@
 import { Hunk } from 'diff'
-import { mkdirSync, statSync } from 'fs'
+import { mkdirSync, readFileSync, statSync } from 'fs'
 import { Box, Text } from 'ink'
 import { EOL } from 'os'
 import { dirname, extname, isAbsolute, relative, resolve, sep } from 'path'
@@ -68,7 +68,7 @@ export const FileWriteTool = {
   renderToolUseMessage(input, { verbose }) {
     return `file_path: ${verbose ? input.file_path : relative(getCwd(), input.file_path)}`
   },
-  async renderToolUseRejectedMessage({ file_path, content }: any = {}, { columns, verbose }: any = {}) {
+  renderToolUseRejectedMessage({ file_path, content }: any = {}, { columns, verbose }: any = {}) {
     try {
       if (!file_path) {
         return <FallbackToolUseRejectedMessage />
@@ -78,7 +78,7 @@ export const FileWriteTool = {
         : resolve(getCwd(), file_path)
       const oldFileExists = fileExistsBun(fullFilePath)
       const enc = oldFileExists ? detectFileEncoding(fullFilePath) : 'utf-8'
-      const oldContent = oldFileExists ? await readFileBun(fullFilePath) : null
+      const oldContent = oldFileExists ? readFileSync(fullFilePath, enc) : null
       const type = oldContent ? 'update' : 'create'
       const patch = getPatch({
         filePath: file_path,
@@ -216,6 +216,17 @@ export const FileWriteTool = {
       : resolve(getCwd(), file_path)
     const dir = dirname(fullFilePath)
     const oldFileExists = fileExistsBun(fullFilePath)
+
+    if (oldFileExists) {
+      const readTimestamp = readFileTimestamps[fullFilePath]
+      const lastWriteTime = statSync(fullFilePath).mtimeMs
+      if (!readTimestamp || lastWriteTime > readTimestamp) {
+        throw new Error(
+          'File has been unexpectedly modified. Read it again before attempting to write it.',
+        )
+      }
+    }
+
     const enc = oldFileExists ? detectFileEncoding(fullFilePath) : 'utf-8'
     const oldContent = oldFileExists ? await readFileBun(fullFilePath) : null
 

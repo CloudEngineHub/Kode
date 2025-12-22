@@ -188,8 +188,8 @@ export function ConsoleOAuthFlow({ onDone }: Props): React.ReactNode {
         return (
           <Box flexDirection="column" gap={1}>
             <Text bold>
-              {PRODUCT_NAME} is billed based on API usage through your Anthropic
-              Console account.
+              {PRODUCT_NAME} is billed based on API usage through your ShareAI Lab
+              account.
             </Text>
 
             <Box>
@@ -200,7 +200,7 @@ export function ConsoleOAuthFlow({ onDone }: Props): React.ReactNode {
 
             <Box marginTop={1}>
               <Text color={theme.permission}>
-                Press <Text bold>Enter</Text> to login to your Anthropic Console
+                Press <Text bold>Enter</Text> to login to your ShareAI Lab
                 account…
               </Text>
             </Box>

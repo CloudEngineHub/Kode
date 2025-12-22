@@ -1,67 +1,139 @@
 import { findActualExecutable } from 'spawn-rx'
 import { memoize } from 'lodash-es'
-import { fileURLToPath, resolve } from 'node:url'
+import { existsSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import * as path from 'path'
 import { logError } from './log'
 import { execFileNoThrow } from './execFileNoThrow'
 import { execFile } from 'child_process'
 import debug from 'debug'
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = resolve(
-  __filename,
-  process.env.NODE_ENV === 'test' ? '../..' : '.',
-)
+import { quote } from 'shell-quote'
+import type { BunShellSandboxOptions } from './BunShell'
+import { BunShell } from './BunShell'
 
 const d = debug('claude:ripgrep')
 
-const useBuiltinRipgrep = !!process.env.USE_BUILTIN_RIPGREP
-if (useBuiltinRipgrep) {
-  d('Using builtin ripgrep because USE_BUILTIN_RIPGREP is set')
+function shouldUseBuiltinRipgrep(): boolean {
+  return !!process.env.USE_BUILTIN_RIPGREP
 }
 
-const ripgrepPath = memoize(() => {
+function findRipgrepVendorRoot(): string | null {
+  const explicit = process.env.KODE_RIPGREP_VENDOR_ROOT
+  if (explicit && existsSync(explicit)) {
+    return explicit
+  }
+
+  const startDir = path.dirname(fileURLToPath(import.meta.url))
+  let dir = startDir
+  for (let i = 0; i < 8; i++) {
+    const direct = path.join(dir, 'vendor', 'ripgrep')
+    if (existsSync(direct)) return direct
+
+    const distVendor = path.join(dir, 'dist', 'vendor', 'ripgrep')
+    if (existsSync(distVendor)) return distVendor
+
+    const parent = path.dirname(dir)
+    if (parent === dir) break
+    dir = parent
+  }
+
+  return null
+}
+
+function resolveBundledRipgrepPathOrThrow(): string {
+  const explicit = process.env.KODE_RIPGREP_PATH
+  if (explicit) {
+    if (!existsSync(explicit)) {
+      throw new Error(`KODE_RIPGREP_PATH points to a missing file: ${explicit}`)
+    }
+    return explicit
+  }
+
+  const rgRoot = findRipgrepVendorRoot()
+  if (!rgRoot) {
+    throw new Error(
+      [
+        'ripgrep (rg) was not found on PATH, and no bundled ripgrep was found.',
+        'Fix:',
+        '- Install ripgrep: https://github.com/BurntSushi/ripgrep',
+        '- If developing Kode, run: bun run scripts/ensure-ripgrep.mjs',
+      ].join('\n'),
+    )
+  }
+
+  if (process.platform === 'win32') {
+    // Prefer native arch, but fall back to x64 (works under emulation on some Windows ARM setups).
+    const candidates = [`${process.arch}-win32`, 'x64-win32']
+    for (const dirName of candidates) {
+      const p = path.resolve(rgRoot, dirName, 'rg.exe')
+      if (existsSync(p)) {
+        d('internal ripgrep resolved as: %s', p)
+        return p
+      }
+    }
+    throw new Error(
+      `Bundled ripgrep missing for ${process.arch}-win32 under ${rgRoot}.`,
+    )
+  }
+
+  const ret = path.resolve(rgRoot, `${process.arch}-${process.platform}`, 'rg')
+  if (!existsSync(ret)) {
+    throw new Error(
+      `Bundled ripgrep missing for ${process.arch}-${process.platform} under ${rgRoot}.`,
+    )
+  }
+
+  d('internal ripgrep resolved as: %s', ret)
+  return ret
+}
+
+export const getRipgrepPath = memoize((): string => {
+  if (process.env.KODE_RIPGREP_PATH) {
+    return resolveBundledRipgrepPathOrThrow()
+  }
+
+  const useBuiltinRipgrep = shouldUseBuiltinRipgrep()
+  if (useBuiltinRipgrep) {
+    d('Using builtin ripgrep because USE_BUILTIN_RIPGREP is set')
+    return resolveBundledRipgrepPathOrThrow()
+  }
+
   const { cmd } = findActualExecutable('rg', [])
   d(`ripgrep initially resolved as: ${cmd}`)
+  if (cmd !== 'rg') return cmd
 
-  if (cmd !== 'rg' && !useBuiltinRipgrep) {
-    // NB: If we're able to find ripgrep in $PATH, cmd will be an absolute
-    // path rather than just returning 'rg'
-    return cmd
-  } else {
-    // Use the one we ship in-box
-    const rgRoot = path.resolve(__dirname, 'vendor', 'ripgrep')
-    if (process.platform === 'win32') {
-      // NB: Ripgrep doesn't ship an aarch64 binary for Windows, boooooo
-      return path.resolve(rgRoot, 'x64-win32', 'rg.exe')
-    }
-
-    const ret = path.resolve(
-      rgRoot,
-      `${process.arch}-${process.platform}`,
-      'rg',
-    )
-
-    d('internal ripgrep resolved as: %s', ret)
-    return ret
-  }
+  return resolveBundledRipgrepPathOrThrow()
 })
 
 export async function ripGrep(
   args: string[],
   target: string,
   abortSignal: AbortSignal,
+  options?: { sandbox?: BunShellSandboxOptions },
 ): Promise<string[]> {
   await codesignRipgrepIfNecessary()
-  const rg = ripgrepPath()
+  const rg = getRipgrepPath()
   d('ripgrep called: %s %o', rg, target, args)
 
   // NB: When running interactively, ripgrep does not require a path as its last
   // argument, but when run non-interactively, it will hang unless a path or file
   // pattern is provided
+  if (options?.sandbox?.enabled === true) {
+    const cmd = quote([rg, ...args, target])
+    const result = await BunShell.getInstance().exec(cmd, abortSignal, 10_000, {
+      sandbox: options.sandbox,
+    })
+    if (result.code === 1) return []
+    if (result.code !== 0) {
+      logError(`ripgrep failed with exit code ${result.code}: ${result.stderr}`)
+      return []
+    }
+    return result.stdout.trim().split('\n').filter(Boolean)
+  }
+
   return new Promise(resolve => {
     execFile(
-      ripgrepPath(),
+      getRipgrepPath(),
       [...args, target],
       {
         maxBuffer: 1_000_000,
@@ -117,7 +189,7 @@ async function codesignRipgrepIfNecessary() {
   const lines = (
     await execFileNoThrow(
       'codesign',
-      ['-vv', '-d', ripgrepPath()],
+      ['-vv', '-d', getRipgrepPath()],
       undefined,
       undefined,
       false,
@@ -137,21 +209,19 @@ async function codesignRipgrepIfNecessary() {
       '-',
       '--force',
       '--preserve-metadata=entitlements,requirements,flags,runtime',
-      ripgrepPath(),
+      getRipgrepPath(),
     ])
 
     if (signResult.code !== 0) {
       d('failed to sign ripgrep: %o', signResult)
-      logError(
-        `Failed to sign ripgrep: ${signResult.stdout} ${signResult.stderr}`,
-      )
+      logError(`Failed to sign ripgrep: ${signResult.stdout} ${signResult.stderr}`)
     }
 
     d('removing quarantine')
     const quarantineResult = await execFileNoThrow('xattr', [
       '-d',
       'com.apple.quarantine',
-      ripgrepPath(),
+      getRipgrepPath(),
     ])
 
     if (quarantineResult.code !== 0) {
@@ -165,3 +235,10 @@ async function codesignRipgrepIfNecessary() {
     logError(e)
   }
 }
+
+// Test helper: clear memoized path resolution and re-run any one-time checks.
+export function resetRipgrepPathCacheForTests(): void {
+  ;(getRipgrepPath as any).cache?.clear?.()
+  alreadyDoneSignCheck = false
+}
+

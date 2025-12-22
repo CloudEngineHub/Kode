@@ -1,5 +1,5 @@
-// Extracted from @anthropic-ai/claude-code cli.js (v2.0.62) for plan slug generation.
-export const CLAUDE_PLAN_SLUG_ADJECTIVES = [
+// Words for generating plan slugs.
+export const PLAN_SLUG_ADJECTIVES = [
   'abundant',
   'ancient',
   'bright',
@@ -221,7 +221,7 @@ export const CLAUDE_PLAN_SLUG_ADJECTIVES = [
   'virtual',
 ] as const;
 
-export const CLAUDE_PLAN_SLUG_VERBS = [
+export const PLAN_SLUG_VERBS = [
   'baking',
   'beaming',
   'booping',
@@ -333,7 +333,7 @@ export const CLAUDE_PLAN_SLUG_VERBS = [
   'zooming',
 ] as const;
 
-export const CLAUDE_PLAN_SLUG_NOUNS = [
+export const PLAN_SLUG_NOUNS = [
   'aurora',
   'avalanche',
   'blossom',
@@ -744,4 +744,3 @@ export const CLAUDE_PLAN_SLUG_NOUNS = [
   'wozniak',
   'yao',
 ] as const;
-

@@ -9,6 +9,7 @@ import doctor from './commands/doctor'
 import help from './commands/help'
 import init from './commands/init'
 import listen from './commands/listen'
+import messages_debug from './commands/messages_debug'
 import login from './commands/login'
 import logout from './commands/logout'
 import mcp from './commands/mcp'
@@ -19,7 +20,9 @@ import pr_comments from './commands/pr_comments'
 import refreshCommands from './commands/refreshCommands'
 import releaseNotes from './commands/release-notes'
 import review from './commands/review'
-import terminalSetup from './commands/terminalSetup'
+import rename from './commands/rename'
+import tag from './commands/tag'
+import todos from './commands/todos'
 import { Tool, ToolUseContext } from './Tool'
 import resume from './commands/resume'
 import agents from './commands/agents'
@@ -76,7 +79,7 @@ export type Command = {
   userFacingName(): string
 } & (PromptCommand | LocalCommand | LocalJSXCommand)
 
-const INTERNAL_ONLY_COMMANDS = [ctx_viz, resume, listen]
+const INTERNAL_ONLY_COMMANDS = [ctx_viz, resume, listen, messages_debug]
 
 // Declared as a function so that we don't run this until getCommands is called,
 // since underlying functions read from config, which can't be read at module initialization time
@@ -94,11 +97,13 @@ const COMMANDS = memoize((): Command[] => [
   modelstatus,
   onboarding,
   pr_comments,
+  rename,
+  tag,
   refreshCommands,
   releaseNotes,
   bug,
   review,
-  terminalSetup,
+  todos,
   ...(isAnthropicAuthEnabled() ? [logout, login()] : []),
   ...INTERNAL_ONLY_COMMANDS,
 ])

@@ -63,7 +63,7 @@ import { nanoid } from 'nanoid'
 import { getCompletionWithProfile, getGPT5CompletionWithProfile } from './openai'
 import { getReasoningEffort } from '@utils/thinking'
 import { generateSystemReminders } from './systemReminder'
-import { parseClaudeToolUsePartialJson } from '@utils/claudeToolUseJson'
+import { parseToolUsePartialJsonOrThrow } from '@utils/toolUsePartialJson'
 import { convertAnthropicMessagesToOpenAIMessages as convertAnthropicMessagesToOpenAIMessagesUtil } from '@utils/openaiMessageConversion'
 
 // Helper function to check if a model is GPT-5
@@ -827,7 +827,7 @@ export function getAnthropicClient(
   if (process.env.USER_TYPE === 'ant' && !apiKey && provider === 'anthropic') {
     console.error(
       chalk.red(
-        '[ANT-ONLY] Please set the ANTHROPIC_API_KEY environment variable to use the CLI. To create a new key, go to https://console.anthropic.com/settings/keys.',
+        '[ANT-ONLY] Missing API key. Configure an API key in your model profile or environment variables.',
       ),
     )
   }
@@ -1031,16 +1031,32 @@ export async function queryLLM(
     model: string | import('@utils/config').ModelPointerType
     prependCLISysprompt: boolean
     toolUseContext?: ToolUseContext
+    __testModelManager?: any
+    __testQueryLLMWithPromptCaching?: any
   },
 ): Promise<AssistantMessage> {
 
-  const modelManager = getModelManager()
+  const modelManager = options.__testModelManager ?? getModelManager()
   const modelResolution = modelManager.resolveModelWithInfo(options.model)
 
   if (!modelResolution.success || !modelResolution.profile) {
-    throw new Error(
-      modelResolution.error || `Failed to resolve model: ${options.model}`,
-    )
+    const fallbackProfile = modelManager.resolveModel(options.model)
+    if (!fallbackProfile) {
+      throw new Error(
+        modelResolution.error || `Failed to resolve model: ${options.model}`,
+      )
+    }
+
+    debugLogger.warn('MODEL_RESOLUTION_FALLBACK', {
+      inputParam: options.model,
+      error: modelResolution.error,
+      fallbackModelName: fallbackProfile.modelName,
+      fallbackProvider: fallbackProfile.provider,
+      requestId: getCurrentRequest()?.id,
+    })
+
+    modelResolution.success = true
+    modelResolution.profile = fallbackProfile
   }
 
   const modelProfile = modelResolution.profile
@@ -1081,16 +1097,30 @@ export async function queryLLM(
   markPhase('LLM_CALL')
 
   try {
-    const result = await withVCR(messages, () =>
-      queryLLMWithPromptCaching(
+    const queryFn =
+      options.__testQueryLLMWithPromptCaching ?? queryLLMWithPromptCaching
+    const cleanOptions: any = { ...options }
+    delete cleanOptions.__testModelManager
+    delete cleanOptions.__testQueryLLMWithPromptCaching
+
+    const runQuery = () =>
+      queryFn(
         messages,
         systemPrompt,
         maxThinkingTokens,
         tools,
         signal,
-        { ...options, model: resolvedModel, modelProfile, toolUseContext }, // Pass resolved ModelProfile and toolUseContext
-      ),
-    )
+        {
+          ...cleanOptions,
+          model: resolvedModel,
+          modelProfile,
+          toolUseContext,
+        }, // Pass resolved ModelProfile and toolUseContext
+      )
+
+    const result = options.__testQueryLLMWithPromptCaching
+      ? await runQuery()
+      : await withVCR(messages, runQuery)
 
     debugLogger.api('LLM_REQUEST_SUCCESS', {
       costUSD: result.costUSD,
@@ -1467,7 +1497,11 @@ async function queryAnthropicNative(
             case 'content_block_start':
               contentBlocks[event.index] = { ...event.content_block }
               // Initialize JSON buffer for tool_use blocks
-              if (event.content_block.type === 'tool_use') {
+              if (
+                event.content_block.type === 'tool_use' ||
+                event.content_block.type === 'server_tool_use' ||
+                event.content_block.type === 'mcp_tool_use'
+              ) {
                 setRequestStatus({
                   kind: 'tool',
                   detail: event.content_block.name,
@@ -1507,16 +1541,8 @@ async function queryAnthropicNative(
                   break
                 }
 
-                try {
-                  contentBlocks[blockIndex].input =
-                    parseClaudeToolUsePartialJson(nextBuffer) ?? {}
-                } catch (error) {
-                  const message =
-                    error instanceof Error ? error.message : String(error)
-                  throw new Error(
-                    `Unable to parse tool parameter JSON from model. Please retry your request or adjust your prompt. Error: ${message}. JSON: ${nextBuffer}`,
-                  )
-                }
+                contentBlocks[blockIndex].input =
+                  parseToolUsePartialJsonOrThrow(nextBuffer) ?? {}
               }
               break
               
@@ -1530,22 +1556,19 @@ async function queryAnthropicNative(
               const stopIndex = event.index
               const block = contentBlocks[stopIndex]
               
-              if (block?.type === 'tool_use' && inputJSONBuffers.has(stopIndex)) {
+              if (
+                (block?.type === 'tool_use' ||
+                  block?.type === 'server_tool_use' ||
+                  block?.type === 'mcp_tool_use') &&
+                inputJSONBuffers.has(stopIndex)
+              ) {
                 const jsonStr = inputJSONBuffers.get(stopIndex) ?? ''
                 if (block.input === undefined) {
                   const trimmed = jsonStr.trim()
                   if (trimmed.length === 0) {
                     block.input = {}
                   } else {
-                    try {
-                      block.input = parseClaudeToolUsePartialJson(jsonStr) ?? {}
-                    } catch (error) {
-                      const message =
-                        error instanceof Error ? error.message : String(error)
-                      throw new Error(
-                        `Unable to parse tool parameter JSON from model. Please retry your request or adjust your prompt. Error: ${message}. JSON: ${jsonStr}`,
-                      )
-                    }
+                    block.input = parseToolUsePartialJsonOrThrow(jsonStr) ?? {}
                   }
                 }
 

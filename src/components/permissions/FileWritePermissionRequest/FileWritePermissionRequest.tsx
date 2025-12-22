@@ -1,5 +1,5 @@
-import { Box, Text } from 'ink'
-import React, { useMemo } from 'react'
+import { Box, Text, useInput } from 'ink'
+import React, { useCallback, useMemo } from 'react'
 import { Select } from '@components/CustomSelect/select'
 import { basename, dirname, extname } from 'path'
 import { getTheme } from '@utils/theme'
@@ -9,10 +9,8 @@ import {
 } from '@components/permissions/PermissionRequestTitle'
 import { logUnaryEvent } from '@utils/unaryLogging'
 import { env } from '@utils/env'
-import { savePermission } from '@permissions'
 import {
   type ToolUseConfirm,
-  toolUseConfirmGetPrefix,
 } from '@components/permissions/PermissionRequest'
 import { existsSync } from 'fs'
 import chalk from 'chalk'
@@ -22,7 +20,9 @@ import {
 } from '@hooks/usePermissionRequestLogging'
 import { FileWriteToolDiff } from './FileWriteToolDiff'
 import { useTerminalSize } from '@hooks/useTerminalSize'
-import { pathInOriginalCwd } from '@utils/permissions/filesystem'
+import { getPermissionModeCycleShortcut } from '@utils/permissionModeCycleShortcut'
+import { usePermissionContext } from '@context/PermissionContext'
+import { isPathInWorkingDirectories } from '@utils/permissions/fileToolPermissionEngine'
 
 type Props = {
   toolUseConfirm: ToolUseConfirm
@@ -35,18 +35,28 @@ export function FileWritePermissionRequest({
   onDone,
   verbose,
 }: Props): React.ReactNode {
+  const { applyToolPermissionUpdate, toolPermissionContext } =
+    usePermissionContext()
   const { file_path, content } = toolUseConfirm.input as {
     file_path: string
     content: string
   }
+  const modeCycleShortcut = useMemo(() => getPermissionModeCycleShortcut(), [])
+  const hasSessionSuggestion = (toolUseConfirm.suggestions?.length ?? 0) > 0
+  const isInWorkingDir = isPathInWorkingDirectories(
+    dirname(file_path),
+    toolPermissionContext,
+  )
   const sessionLabel = useMemo(() => {
     const dirPath = dirname(file_path)
     const dirName = basename(dirPath) || 'this directory'
-    const isInWorkingDir = pathInOriginalCwd(dirPath)
+    const shortcutHint = chalk.bold.hex(getTheme().warning)(
+      `(${modeCycleShortcut.displayText})`,
+    )
     return isInWorkingDir
-      ? `Yes, allow all edits during this session ${chalk.bold.hex(getTheme().warning)('(auto-accept edits)')}`
-      : `Yes, allow all edits in ${chalk.bold(`${dirName}/`)} during this session ${chalk.bold.hex(getTheme().warning)('(auto-accept edits)')}`
-  }, [file_path])
+      ? `Yes, allow all edits during this session ${shortcutHint}`
+      : `Yes, allow all edits in ${chalk.bold(`${dirName}/`)} during this session ${shortcutHint}`
+  }, [file_path, isInWorkingDir, modeCycleShortcut.displayText])
   const fileExists = useMemo(() => existsSync(file_path), [file_path])
   const unaryEvent = useMemo<UnaryEvent>(
     () => ({
@@ -57,6 +67,71 @@ export function FileWritePermissionRequest({
   )
   const { columns } = useTerminalSize()
   usePermissionRequestLogging(toolUseConfirm, unaryEvent)
+
+  const handleChoice = useCallback(
+    (newValue: string) => {
+      switch (newValue) {
+        case 'yes':
+          extractLanguageName(file_path).then(language => {
+            logUnaryEvent({
+              completion_type: 'write_file_single',
+              event: 'accept',
+              metadata: {
+                language_name: language,
+                message_id: toolUseConfirm.assistantMessage.message.id,
+                platform: env.platform,
+              },
+            })
+          })
+          onDone()
+          toolUseConfirm.onAllow('temporary')
+          return
+        case 'yes-session':
+          extractLanguageName(file_path).then(language => {
+            logUnaryEvent({
+              completion_type: 'write_file_single',
+              event: 'accept',
+              metadata: {
+                language_name: language,
+                message_id: toolUseConfirm.assistantMessage.message.id,
+                platform: env.platform,
+              },
+            })
+          })
+          if (hasSessionSuggestion) {
+            for (const update of toolUseConfirm.suggestions ?? []) {
+              applyToolPermissionUpdate(update)
+            }
+          }
+          onDone()
+          toolUseConfirm.onAllow(hasSessionSuggestion ? 'permanent' : 'temporary')
+          return
+        case 'no':
+          extractLanguageName(file_path).then(language => {
+            logUnaryEvent({
+              completion_type: 'write_file_single',
+              event: 'reject',
+              metadata: {
+                language_name: language,
+                message_id: toolUseConfirm.assistantMessage.message.id,
+                platform: env.platform,
+              },
+            })
+          })
+          onDone()
+          toolUseConfirm.onReject()
+          return
+      }
+    },
+    [applyToolPermissionUpdate, file_path, hasSessionSuggestion, onDone, toolUseConfirm],
+  )
+
+  useInput((inputChar, key) => {
+    if (!modeCycleShortcut.check(inputChar, key)) return
+    if (!hasSessionSuggestion) return
+    handleChoice('yes-session')
+    return true
+  })
 
   return (
     <Box
@@ -91,70 +166,20 @@ export function FileWritePermissionRequest({
               label: 'Yes',
               value: 'yes',
             },
-            {
-              label: sessionLabel,
-              value: 'yes-session',
-            },
+            ...(hasSessionSuggestion
+              ? [
+                  {
+                    label: sessionLabel,
+                    value: 'yes-session',
+                  },
+                ]
+              : []),
             {
               label: `No, and provide instructions (${chalk.bold.hex(getTheme().warning)('esc')})`,
               value: 'no',
             },
           ]}
-          onChange={newValue => {
-            switch (newValue) {
-              case 'yes':
-                extractLanguageName(file_path).then(language => {
-                  logUnaryEvent({
-                    completion_type: 'write_file_single',
-                    event: 'accept',
-                    metadata: {
-                      language_name: language,
-                      message_id: toolUseConfirm.assistantMessage.message.id,
-                      platform: env.platform,
-                    },
-                  })
-                })
-                toolUseConfirm.onAllow('temporary')
-                onDone()
-                break
-              case 'yes-session':
-                extractLanguageName(file_path).then(language => {
-                  logUnaryEvent({
-                    completion_type: 'write_file_single',
-                    event: 'accept',
-                    metadata: {
-                      language_name: language,
-                      message_id: toolUseConfirm.assistantMessage.message.id,
-                      platform: env.platform,
-                    },
-                  })
-                })
-                savePermission(
-                  toolUseConfirm.tool,
-                  toolUseConfirm.input,
-                  toolUseConfirmGetPrefix(toolUseConfirm),
-                ).then(() => {
-                  toolUseConfirm.onAllow('permanent')
-                  onDone()
-                })
-                break
-              case 'no':
-                extractLanguageName(file_path).then(language => {
-                  logUnaryEvent({
-                    completion_type: 'write_file_single',
-                    event: 'reject',
-                    metadata: {
-                      language_name: language,
-                      message_id: toolUseConfirm.assistantMessage.message.id,
-                      platform: env.platform,
-                    },
-                  })
-                })
-                toolUseConfirm.onReject()
-                onDone()
-                break
-            }
-          }}
+          onChange={handleChoice}
         />
       </Box>
     </Box>

@@ -1,5 +1,5 @@
-import { Box, Text } from 'ink'
-import React, { useMemo } from 'react'
+import { Box, Text, useInput } from 'ink'
+import React, { useCallback, useMemo } from 'react'
 import { Select } from '@components/CustomSelect/select'
 import { getTheme } from '@utils/theme'
 import {
@@ -24,15 +24,13 @@ import { GlobTool } from '@tools/GlobTool/GlobTool'
 import { FileReadTool } from '@tools/FileReadTool/FileReadTool'
 import { NotebookEditTool } from '@tools/NotebookEditTool/NotebookEditTool'
 import { FallbackPermissionRequest } from '@components/permissions/FallbackPermissionRequest'
-import {
-  grantReadPermissionForPath,
-  grantWritePermissionForPath,
-  pathInOriginalCwd,
-  toAbsolutePath,
-} from '@utils/permissions/filesystem'
+import { toAbsolutePath } from '@utils/permissions/filesystem'
 import { getCwd } from '@utils/state'
 import { basename, dirname } from 'path'
 import { statSync } from 'fs'
+import { getPermissionModeCycleShortcut } from '@utils/permissionModeCycleShortcut'
+import { usePermissionContext } from '@context/PermissionContext'
+import { isPathInWorkingDirectories } from '@utils/permissions/fileToolPermissionEngine'
 
 function pathArgNameForToolUse(toolUseConfirm: ToolUseConfirm): string | null {
   switch (toolUseConfirm.tool) {
@@ -112,12 +110,18 @@ export function FilesystemPermissionRequest({
   )
 }
 
-function getDontAskAgainOptions(toolUseConfirm: ToolUseConfirm, path: string) {
+function getDontAskAgainOptions(
+  toolUseConfirm: ToolUseConfirm,
+  path: string,
+  modeCycleShortcut: string,
+  isInWorkingDir: boolean,
+  hasSessionSuggestion: boolean,
+) {
+  if (!hasSessionSuggestion) return []
   const permissionDirPath = pathToPermissionDirectory(path)
   const permissionDirName = basename(permissionDirPath) || 'this directory'
-  const isInWorkingDir = pathInOriginalCwd(permissionDirPath)
 
-  if (toolUseConfirm.tool.isReadOnly()) {
+  if (toolUseConfirm.tool.isReadOnly(toolUseConfirm.input as never)) {
     const label = isInWorkingDir
       ? 'Yes, during this session'
       : `Yes, allow reading from ${chalk.bold(`${permissionDirName}/`)} during this session`
@@ -125,9 +129,10 @@ function getDontAskAgainOptions(toolUseConfirm: ToolUseConfirm, path: string) {
   }
 
   // For write/edit tools, offer a session-scoped allow.
+  const shortcutHint = chalk.bold.hex(getTheme().warning)(`(${modeCycleShortcut})`)
   const label = isInWorkingDir
-    ? `Yes, allow all edits during this session ${chalk.bold.hex(getTheme().warning)('(auto-accept edits)')}`
-    : `Yes, allow all edits in ${chalk.bold(`${permissionDirName}/`)} during this session ${chalk.bold.hex(getTheme().warning)('(auto-accept edits)')}`
+    ? `Yes, allow all edits during this session ${shortcutHint}`
+    : `Yes, allow all edits in ${chalk.bold(`${permissionDirName}/`)} during this session ${shortcutHint}`
   return [{ label, value: 'yes-session' }]
 }
 
@@ -144,9 +149,13 @@ function FilesystemPermissionRequestImpl({
   onDone,
   verbose,
 }: Props): React.ReactNode {
+  const { applyToolPermissionUpdate, toolPermissionContext } =
+    usePermissionContext()
+  const modeCycleShortcut = useMemo(() => getPermissionModeCycleShortcut(), [])
   const userFacingName = toolUseConfirm.tool.userFacingName()
+  const hasSessionSuggestion = (toolUseConfirm.suggestions?.length ?? 0) > 0
 
-  const userFacingReadOrWrite = toolUseConfirm.tool.isReadOnly()
+  const userFacingReadOrWrite = toolUseConfirm.tool.isReadOnly(toolUseConfirm.input as never)
     ? 'Read'
     : 'Edit'
   const title = `${userFacingReadOrWrite} ${isMultiFile(toolUseConfirm) ? 'files' : 'file'}`
@@ -160,6 +169,72 @@ function FilesystemPermissionRequestImpl({
   )
 
   usePermissionRequestLogging(toolUseConfirm, unaryEvent)
+
+  const permissionDirPath = useMemo(() => pathToPermissionDirectory(path), [path])
+  const isInWorkingDir = useMemo(
+    () => isPathInWorkingDirectories(permissionDirPath, toolPermissionContext),
+    [permissionDirPath, toolPermissionContext],
+  )
+
+  const handleChoice = useCallback(
+    (newValue: string) => {
+      switch (newValue) {
+        case 'yes':
+          logUnaryEvent({
+            completion_type: 'tool_use_single',
+            event: 'accept',
+            metadata: {
+              language_name: 'none',
+              message_id: toolUseConfirm.assistantMessage.message.id,
+              platform: env.platform,
+            },
+          })
+          onDone()
+          toolUseConfirm.onAllow('temporary')
+          return
+        case 'yes-session':
+          logUnaryEvent({
+            completion_type: 'tool_use_single',
+            event: 'accept',
+            metadata: {
+              language_name: 'none',
+              message_id: toolUseConfirm.assistantMessage.message.id,
+              platform: env.platform,
+            },
+          })
+          if (hasSessionSuggestion) {
+            for (const update of toolUseConfirm.suggestions ?? []) {
+              applyToolPermissionUpdate(update)
+            }
+          }
+          onDone()
+          toolUseConfirm.onAllow(hasSessionSuggestion ? 'permanent' : 'temporary')
+          return
+        case 'no':
+          logUnaryEvent({
+            completion_type: 'tool_use_single',
+            event: 'reject',
+            metadata: {
+              language_name: 'none',
+              message_id: toolUseConfirm.assistantMessage.message.id,
+              platform: env.platform,
+            },
+          })
+          onDone()
+          toolUseConfirm.onReject()
+          return
+      }
+    },
+    [applyToolPermissionUpdate, hasSessionSuggestion, onDone, toolUseConfirm],
+  )
+
+  useInput((inputChar, key) => {
+    if (!modeCycleShortcut.check(inputChar, key)) return
+    if (toolUseConfirm.tool.isReadOnly(toolUseConfirm.input as never)) return
+    if (!hasSessionSuggestion) return
+    handleChoice('yes-session')
+    return true
+  })
 
   return (
     <Box
@@ -194,60 +269,19 @@ function FilesystemPermissionRequestImpl({
               label: 'Yes',
               value: 'yes',
             },
-            ...getDontAskAgainOptions(toolUseConfirm, path),
+            ...getDontAskAgainOptions(
+              toolUseConfirm,
+              path,
+              modeCycleShortcut.displayText,
+              isInWorkingDir,
+              hasSessionSuggestion,
+            ),
             {
               label: `No, and provide instructions (${chalk.bold.hex(getTheme().warning)('esc')})`,
               value: 'no',
             },
           ]}
-          onChange={newValue => {
-            switch (newValue) {
-              case 'yes':
-                logUnaryEvent({
-                  completion_type: 'tool_use_single',
-                  event: 'accept',
-                  metadata: {
-                    language_name: 'none',
-                    message_id: toolUseConfirm.assistantMessage.message.id,
-                    platform: env.platform,
-                  },
-                })
-                toolUseConfirm.onAllow('temporary')
-                onDone()
-                break
-              case 'yes-session':
-                logUnaryEvent({
-                  completion_type: 'tool_use_single',
-                  event: 'accept',
-                  metadata: {
-                    language_name: 'none',
-                    message_id: toolUseConfirm.assistantMessage.message.id,
-                    platform: env.platform,
-                  },
-                })
-                if (toolUseConfirm.tool.isReadOnly()) {
-                  grantReadPermissionForPath(path)
-                } else {
-                  grantWritePermissionForPath(path)
-                }
-                toolUseConfirm.onAllow('permanent')
-                onDone()
-                break
-              case 'no':
-                logUnaryEvent({
-                  completion_type: 'tool_use_single',
-                  event: 'reject',
-                  metadata: {
-                    language_name: 'none',
-                    message_id: toolUseConfirm.assistantMessage.message.id,
-                    platform: env.platform,
-                  },
-                })
-                toolUseConfirm.onReject()
-                onDone()
-                break
-            }
-          }}
+          onChange={handleChoice}
         />
       </Box>
     </Box>

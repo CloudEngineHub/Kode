@@ -5,6 +5,7 @@ import {
 } from '@anthropic-ai/sdk/resources/index.mjs'
 import type { UUID } from './types/common'
 import type { Tool, ToolUseContext } from './Tool'
+import type { ToolPermissionContext } from '@kode-types/toolPermissionContext'
 import {
   messagePairValidForBinaryFeedback,
   shouldUseBinaryFeedback,
@@ -35,12 +36,19 @@ import {
   NormalizedMessage,
   normalizeMessagesForAPI,
 } from '@utils/messages'
+import { appendSessionJsonlFromMessage } from '@utils/kodeAgentSessionLog'
 import {
   getPlanModeSystemPromptAdditions,
   hydratePlanSlugFromMessages,
 } from '@utils/planMode'
 import { setRequestStatus } from '@utils/requestStatus'
 import { BashTool } from '@tools/BashTool/BashTool'
+import {
+  BunShell,
+  renderBackgroundShellStatusAttachment,
+  renderBashNotification,
+} from '@utils/BunShell'
+import { resolveToolNameAlias } from '@utils/toolNameAliases'
 import { getCwd } from './utils/state'
 import { checkAutoCompact } from './utils/autoCompactCore'
 
@@ -52,11 +60,22 @@ interface ExtendedToolUseContext extends ToolUseContext {
     forkNumber: number
     messageLogName: string
     tools: Tool[]
+    mcpClients?: any[]
     verbose: boolean
     safeMode: boolean
     maxThinkingTokens: number
     isKodingRequest?: boolean
     model?: string | import('./utils/config').ModelPointerType
+    toolPermissionContext?: ToolPermissionContext
+    /**
+     * When true, the current execution context cannot show interactive permission prompts.
+     * Any permission decision that would normally prompt should be auto-denied.
+     */
+    shouldAvoidPermissionPrompts?: boolean
+    /**
+     * When false, suppress reference CLI-compatible session persistence (.jsonl under config/projects).
+     */
+    persistSession?: boolean
   }
   readFileTimestamps: { [filename: string]: number }
   setToolJSX: (jsx: any) => void
@@ -112,10 +131,27 @@ type ToolQueueEntry = {
   status: 'queued' | 'executing' | 'completed' | 'yielded'
   isConcurrencySafe: boolean
   pendingProgress: ProgressMessage[]
+  queuedProgressEmitted?: boolean
   results?: (UserMessage | AssistantMessage)[]
   contextModifiers?: Array<(ctx: ExtendedToolUseContext) => ExtendedToolUseContext>
   promise?: Promise<void>
 }
+
+type ToolUseLikeBlock = ToolUseBlock & {
+  type: 'tool_use' | 'server_tool_use' | 'mcp_tool_use'
+}
+
+function isToolUseLikeBlock(block: any): block is ToolUseLikeBlock {
+  return (
+    block &&
+    typeof block === 'object' &&
+    (block.type === 'tool_use' ||
+      block.type === 'server_tool_use' ||
+      block.type === 'mcp_tool_use')
+  )
+}
+
+export const __isToolUseLikeBlockForTests = isToolUseLikeBlock
 
 function createSyntheticToolUseErrorMessage(
   toolUseId: string,
@@ -167,13 +203,15 @@ class ToolUseQueue {
   }
 
   addTool(toolUse: ToolUseBlock, assistantMessage: AssistantMessage) {
-    const toolDefinition = this.toolDefinitions.find(t => t.name === toolUse.name)
+    const resolvedToolName = resolveToolNameAlias(toolUse.name).resolvedName
+    const toolDefinition = this.toolDefinitions.find(
+      t => t.name === resolvedToolName,
+    )
     const parsedInput = toolDefinition?.inputSchema.safeParse(toolUse.input)
-    const isConcurrencySafe = toolDefinition
-      ? toolDefinition.isConcurrencySafe(
-          parsedInput?.success ? (parsedInput.data as any) : undefined,
-        )
-      : false
+    const isConcurrencySafe =
+      toolDefinition && parsedInput?.success
+        ? toolDefinition.isConcurrencySafe(parsedInput.data as any)
+        : false
 
     this.tools.push({
       id: toolUse.id,
@@ -182,6 +220,7 @@ class ToolUseQueue {
       status: 'queued',
       isConcurrencySafe,
       pendingProgress: [],
+      queuedProgressEmitted: false,
     })
 
     void this.processQueue()
@@ -201,8 +240,28 @@ class ToolUseQueue {
 
       if (this.canExecuteTool(entry.isConcurrencySafe)) {
         await this.executeTool(entry)
-      } else if (!entry.isConcurrencySafe) {
-        break
+      } else {
+        // Reference CLI parity: show a queued "Waiting…" line for blocked tool calls.
+        if (!entry.queuedProgressEmitted) {
+          entry.queuedProgressEmitted = true
+          entry.pendingProgress.push(
+            createProgressMessage(
+              entry.id,
+              this.siblingToolUseIDs,
+              createAssistantMessage('<tool-progress>Waiting…</tool-progress>'),
+              [],
+              this.toolUseContext.options.tools,
+            ),
+          )
+          if (this.progressAvailableResolve) {
+            this.progressAvailableResolve()
+            this.progressAvailableResolve = undefined
+          }
+        }
+
+        if (!entry.isConcurrencySafe) {
+          break
+        }
       }
     }
   }
@@ -298,6 +357,7 @@ class ToolUseQueue {
   }
 
   private *getCompletedResults(): Generator<Message, void> {
+    let barrierExecuting = false
     for (const entry of this.tools) {
       while (entry.pendingProgress.length > 0) {
         yield entry.pendingProgress.shift()!
@@ -305,13 +365,17 @@ class ToolUseQueue {
 
       if (entry.status === 'yielded') continue
 
+      // Reference CLI parity: non-concurrency-safe tools act as an ordering barrier.
+      // Still allow queued progress lines (e.g. "Waiting…") to render for later tools.
+      if (barrierExecuting) continue
+
       if (entry.status === 'completed' && entry.results) {
         entry.status = 'yielded'
         for (const message of entry.results) {
           yield message
         }
       } else if (entry.status === 'executing' && !entry.isConcurrencySafe) {
-        break
+        barrierExecuting = true
       }
     }
   }
@@ -368,6 +432,8 @@ class ToolUseQueue {
     return this.toolUseContext
   }
 }
+
+export const __ToolUseQueueForTests = ToolUseQueue
 
 // Returns a message if we got one, or `null` if the user cancelled
 async function queryWithBinaryFeedback(
@@ -434,6 +500,36 @@ export async function* query(
     m2: AssistantMessage,
   ) => Promise<BinaryFeedbackResult>,
 ): AsyncGenerator<Message, void> {
+  const shouldPersistSession =
+    toolUseContext.options?.persistSession !== false &&
+    process.env.NODE_ENV !== 'test'
+
+  for await (const message of queryCore(
+    messages,
+    systemPrompt,
+    context,
+    canUseTool,
+    toolUseContext,
+    getBinaryFeedbackResponse,
+  )) {
+    if (shouldPersistSession) {
+      appendSessionJsonlFromMessage({ message, toolUseContext })
+    }
+    yield message
+  }
+}
+
+async function* queryCore(
+  messages: Message[],
+  systemPrompt: string[],
+  context: { [k: string]: string },
+  canUseTool: CanUseToolFn,
+  toolUseContext: ExtendedToolUseContext,
+  getBinaryFeedbackResponse?: (
+    m1: AssistantMessage,
+    m2: AssistantMessage,
+  ) => Promise<BinaryFeedbackResult>,
+): AsyncGenerator<Message, void> {
   setRequestStatus({ kind: 'thinking' })
 
   try {
@@ -448,6 +544,30 @@ export async function* query(
     )
     if (wasCompacted) {
       messages = processedMessages
+    }
+
+    // Reference CLI parity: bash-notification (Rt1) + background_shell_status attachments.
+    // We inject these as synthetic assistant messages so the model can decide when to call TaskOutput.
+    if (toolUseContext.agentId === 'main') {
+      const shell = BunShell.getInstance()
+
+      const notifications = shell.flushBashNotifications()
+      for (const notification of notifications) {
+        const text = renderBashNotification(notification)
+        if (text.trim().length === 0) continue
+        const msg = createAssistantMessage(text)
+        messages = [...messages, msg]
+        yield msg
+      }
+
+      const attachments = shell.flushBackgroundShellStatusAttachments()
+      for (const attachment of attachments) {
+        const text = renderBackgroundShellStatusAttachment(attachment)
+        if (text.trim().length === 0) continue
+        const msg = createAssistantMessage(`<tool-progress>${text}</tool-progress>`)
+        messages = [...messages, msg]
+        yield msg
+      }
     }
 
     markPhase('SYSTEM_PROMPT_BUILD')
@@ -543,16 +663,14 @@ export async function* query(
 
     // @see https://docs.anthropic.com/en/docs/build-with-claude/tool-use
     // Note: stop_reason === 'tool_use' is unreliable -- it's not always set correctly
-    const toolUseMessages = assistantMessage.message.content.filter(
-      _ => _.type === 'tool_use',
-    )
+    const toolUseMessages = assistantMessage.message.content.filter(isToolUseLikeBlock)
 
     // If there's no more tool use, we're done
     if (!toolUseMessages.length) {
       return
     }
     const siblingToolUseIDs = new Set<string>(
-      toolUseMessages.map(_ => String((_ as any).id)),
+      toolUseMessages.map(_ => _.id),
     )
     const toolQueue = new ToolUseQueue({
       toolDefinitions: toolUseContext.options.tools,
@@ -584,7 +702,7 @@ export async function* query(
     // Recursive query
 
     try {
-      yield* await query(
+      yield* await queryCore(
         [...messages, assistantMessage, ...toolMessagesForNextTurn],
         systemPrompt,
         context,
@@ -610,7 +728,8 @@ export async function* runToolUse(
   shouldSkipPermissionCheck?: boolean,
 ): AsyncGenerator<Message, void> {
   const currentRequest = getCurrentRequest()
-  setRequestStatus({ kind: 'tool', detail: toolUse.name })
+  const aliasResolution = resolveToolNameAlias(toolUse.name)
+  setRequestStatus({ kind: 'tool', detail: aliasResolution.resolvedName })
 
   // 🔍 Debug: 工具调用开始
   debugLogger.flow('TOOL_USE_START', {
@@ -635,7 +754,7 @@ export async function* runToolUse(
 
   
 
-  const toolName = toolUse.name
+  const toolName = aliasResolution.resolvedName
   const tool = toolUseContext.options.tools.find(t => t.name === toolName)
 
   // Check if the tool exists
@@ -721,6 +840,36 @@ export function normalizeToolInput(
   }
 }
 
+function preprocessToolInput(
+  tool: Tool,
+  input: Record<string, unknown>,
+): Record<string, unknown> {
+  if (tool.name === 'TaskOutput') {
+    const task_id =
+      (typeof input.task_id === 'string' && input.task_id) ||
+      (typeof (input as any).agentId === 'string' && String((input as any).agentId)) ||
+      (typeof (input as any).bash_id === 'string' && String((input as any).bash_id)) ||
+      ''
+
+    const block = typeof input.block === 'boolean' ? input.block : true
+
+    const timeout =
+      typeof input.timeout === 'number'
+        ? input.timeout
+        : typeof (input as any).wait_up_to === 'number'
+          ? Number((input as any).wait_up_to) * 1000
+          : undefined
+
+    return {
+      task_id,
+      block,
+      ...(timeout !== undefined ? { timeout } : {}),
+    }
+  }
+
+  return input
+}
+
 async function* checkPermissionsAndCallTool(
   tool: Tool,
   toolUseID: string,
@@ -731,15 +880,16 @@ async function* checkPermissionsAndCallTool(
   assistantMessage: AssistantMessage,
   shouldSkipPermissionCheck?: boolean,
 ): AsyncGenerator<Message, void> {
+  const preprocessedInput = preprocessToolInput(tool, input)
   // Validate input types with zod
   // (surprisingly, the model is not great at generating valid input)
-  const isValidInput = tool.inputSchema.safeParse(input)
+  const isValidInput = tool.inputSchema.safeParse(preprocessedInput)
   if (!isValidInput.success) {
     // Create a more helpful error message for common cases
     let errorMessage = `InputValidationError: ${isValidInput.error.message}`
     
     // Special handling for the "Read" tool (FileReadTool) being called with empty parameters
-    if (tool.name === 'Read' && Object.keys(input).length === 0) {
+    if (tool.name === 'Read' && Object.keys(preprocessedInput).length === 0) {
       errorMessage = `Error: The Read tool requires a 'file_path' parameter to specify which file to read. Please provide the absolute path to the file you want to read. For example: {"file_path": "/path/to/file.txt"}`
     }
     

@@ -1,11 +1,16 @@
 import { execFileNoThrow } from './execFileNoThrow'
 import { logError } from './log'
  
-import { lt, gt } from 'semver'
 import { MACRO } from '@constants/macros'
 import { PRODUCT_NAME } from '@constants/product'
-import { getGlobalConfig, saveGlobalConfig, isAutoUpdaterDisabled } from './config'
-import { env } from './env'
+
+async function getSemver() {
+  const mod: any = await import('semver')
+  return (mod?.default ?? mod) as {
+    lt: (a: string, b: string) => boolean
+    gt: (a: string, b: string) => boolean
+  }
+}
 
 export type VersionConfig = {
   minVersion: string
@@ -15,7 +20,10 @@ export type VersionConfig = {
 export async function assertMinVersion(): Promise<void> {
   try {
     const versionConfig: VersionConfig = { minVersion: '0.0.0' }
-    if (versionConfig.minVersion && lt(MACRO.VERSION, versionConfig.minVersion)) {
+    if (versionConfig.minVersion) {
+      const { lt } = await getSemver()
+      if (!lt(MACRO.VERSION, versionConfig.minVersion)) return
+
       const suggestions = await getUpdateCommandSuggestions()
       // Intentionally minimal: caller may print its own message; we just exit
       // eslint-disable-next-line no-console
@@ -85,6 +93,8 @@ export async function getUpdateCommandSuggestions(): Promise<string[]> {
 export async function checkAndNotifyUpdate(): Promise<void> {
   try {
     if (process.env.NODE_ENV === 'test') return
+    const [{ isAutoUpdaterDisabled, getGlobalConfig, saveGlobalConfig }, { env }] =
+      await Promise.all([import('./config'), import('./env')])
     if (await isAutoUpdaterDisabled()) return
     if (await env.getIsDocker()) return
     if (!(await env.hasInternetAccess())) return
@@ -101,6 +111,7 @@ export async function checkAndNotifyUpdate(): Promise<void> {
       return
     }
 
+    const { gt } = await getSemver()
     if (gt(latest, MACRO.VERSION)) {
       saveGlobalConfig({
         ...config,

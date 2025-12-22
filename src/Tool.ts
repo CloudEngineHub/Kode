@@ -1,5 +1,7 @@
 import { z } from 'zod'
 import * as React from 'react'
+import type { PermissionMode } from '@kode-types/PermissionMode'
+import type { ToolPermissionContext } from '@kode-types/toolPermissionContext'
 
 /**
  * Core Tool interface for Kode's extensible tool system
@@ -24,6 +26,8 @@ export interface ToolUseContext {
     verbose?: boolean
     slowAndCapableModel?: string
     safeMode?: boolean
+    permissionMode?: PermissionMode
+    toolPermissionContext?: ToolPermissionContext
     forkNumber?: number
     messageLogName?: string
     maxThinkingTokens?: any
@@ -32,6 +36,17 @@ export interface ToolUseContext {
     isKodingRequest?: boolean
     kodingContext?: string
     isCustomCommand?: boolean
+    mcpClients?: any[]
+    /**
+     * When false, suppress reference CLI-compatible session persistence (.jsonl under config/projects).
+     * Default: true for CLI sessions; some internal tools may opt out to avoid polluting session logs.
+     */
+    persistSession?: boolean
+    /**
+     * When true, the current execution context cannot show interactive permission prompts.
+     * Any permission decision that would normally prompt should be auto-denied.
+     */
+    shouldAvoidPermissionPrompts?: boolean
   }
   // GPT-5 Responses API state management
   responseState?: {
@@ -52,7 +67,7 @@ export interface ValidationResult {
 }
 
 export interface Tool<
-  TInput extends z.ZodObject<any> = z.ZodObject<any>,
+  TInput extends z.ZodTypeAny = z.ZodTypeAny,
   TOutput = any,
 > {
   name: string
@@ -60,11 +75,11 @@ export interface Tool<
   inputSchema: TInput
   inputJSONSchema?: Record<string, unknown>
   prompt: (options?: { safeMode?: boolean }) => Promise<string>
-  userFacingName?: () => string
+  userFacingName?: (input?: z.infer<TInput>) => string
   /** Cached description for synchronous access by adapters */
   cachedDescription?: string
   isEnabled: () => Promise<boolean>
-  isReadOnly: () => boolean
+  isReadOnly: (input?: z.infer<TInput>) => boolean
   isConcurrencySafe: (input?: z.infer<TInput>) => boolean
   needsPermissions: (input?: z.infer<TInput>) => boolean
   /**
@@ -80,9 +95,12 @@ export interface Tool<
   renderToolUseMessage: (
     input: z.infer<TInput>,
     options: { verbose: boolean },
-  ) => string
+  ) => string | React.ReactElement | null
   renderToolUseRejectedMessage?: (...args: any[]) => React.ReactElement
-  renderToolResultMessage?: (output: TOutput) => React.ReactElement
+  renderToolResultMessage?: (
+    output: TOutput,
+    options: { verbose: boolean },
+  ) => React.ReactNode
   call: (
     input: z.infer<TInput>,
     context: ToolUseContext,

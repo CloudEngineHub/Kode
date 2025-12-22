@@ -28,7 +28,6 @@ import { secureFileService } from '@utils/secureFile'
 import { readFileBun, fileExistsBun, getFileSizeBun } from '@utils/BunFile'
 
 const MAX_LINES_TO_RENDER = 5
-const DEFAULT_MAX_LINES = 2000
 const MAX_LINE_LENGTH = 2000
 const MAX_OUTPUT_SIZE = 0.25 * 1024 * 1024 // 0.25MB in bytes (post-truncation safeguard)
 
@@ -45,6 +44,86 @@ const IMAGE_EXTENSIONS = new Set([
 const MAX_WIDTH = 2000
 const MAX_HEIGHT = 2000
 const MAX_IMAGE_SIZE = 3.75 * 1024 * 1024 // 5MB in bytes, with base64 encoding
+
+// Binary extensions this tool refuses to read as text (parity with the reference CLI)
+const BINARY_EXTENSIONS = new Set([
+  '.mp3',
+  '.wav',
+  '.flac',
+  '.ogg',
+  '.aac',
+  '.m4a',
+  '.wma',
+  '.aiff',
+  '.opus',
+  '.mp4',
+  '.avi',
+  '.mov',
+  '.wmv',
+  '.flv',
+  '.mkv',
+  '.webm',
+  '.m4v',
+  '.mpeg',
+  '.mpg',
+  '.zip',
+  '.rar',
+  '.tar',
+  '.gz',
+  '.bz2',
+  '.7z',
+  '.xz',
+  '.z',
+  '.tgz',
+  '.iso',
+  '.exe',
+  '.dll',
+  '.so',
+  '.dylib',
+  '.app',
+  '.msi',
+  '.deb',
+  '.rpm',
+  '.bin',
+  '.dat',
+  '.db',
+  '.sqlite',
+  '.sqlite3',
+  '.mdb',
+  '.idx',
+  '.doc',
+  '.docx',
+  '.xls',
+  '.xlsx',
+  '.ppt',
+  '.pptx',
+  '.odt',
+  '.ods',
+  '.odp',
+  '.ttf',
+  '.otf',
+  '.woff',
+  '.woff2',
+  '.eot',
+  '.psd',
+  '.ai',
+  '.eps',
+  '.sketch',
+  '.fig',
+  '.xd',
+  '.blend',
+  '.obj',
+  '.3ds',
+  '.max',
+  '.class',
+  '.jar',
+  '.war',
+  '.pyc',
+  '.pyo',
+  '.rlib',
+  '.swf',
+  '.fla',
+])
 
 const inputSchema = z.strictObject({
   file_path: z.string().describe('The absolute path to the file to read'),
@@ -166,11 +245,38 @@ export const FileReadTool = {
     }
 
     const ext = path.extname(fullFilePath).toLowerCase()
+    const fileSize = fileCheck.stats?.size ?? 0
+
+    if (BINARY_EXTENSIONS.has(ext)) {
+      return {
+        result: false,
+        message: `This tool cannot read binary files. The file appears to be a binary ${ext} file. Please use appropriate tools for binary file analysis.`,
+      }
+    }
+
+    if (fileSize === 0 && IMAGE_EXTENSIONS.has(ext)) {
+      return {
+        result: false,
+        message: 'Empty image files cannot be processed.',
+      }
+    }
+
+    const isNotebook = ext === '.ipynb'
+    const isPdf = ext === '.pdf'
+    const isImage = IMAGE_EXTENSIONS.has(ext)
+    if (!isImage && !isNotebook && !isPdf) {
+      if (fileSize > MAX_OUTPUT_SIZE && !offset && !limit) {
+        return {
+          result: false,
+          message: formatFileSizeError(fileSize),
+        }
+      }
+    }
 
     return { result: true }
   },
   async *call(
-    { file_path, offset = 0, limit = undefined },
+    { file_path, offset = 1, limit = undefined },
     { readFileTimestamps },
   ) {
     const ext = path.extname(file_path).toLowerCase()
@@ -187,7 +293,7 @@ export const FileReadTool = {
     })
 
     // Update read timestamp, to invalidate stale writes
-    readFileTimestamps[fullFilePath] = Date.now()
+    readFileTimestamps[fullFilePath] = statSync(fullFilePath).mtimeMs
 
     // Check for file modifications and generate reminder if needed
     const modificationReminder = generateFileModificationReminder(fullFilePath)
@@ -254,11 +360,12 @@ export const FileReadTool = {
       return
     }
 
-    const maxLines = limit ?? DEFAULT_MAX_LINES
+    const startLine = offset
+    const zeroBasedOffset = startLine === 0 ? 0 : startLine - 1
     const { content, lineCount, totalLines } = readTextContent(
       fullFilePath,
-      offset,
-      maxLines,
+      zeroBasedOffset,
+      limit,
     )
 
     const truncatedLines = content
@@ -279,7 +386,7 @@ export const FileReadTool = {
         filePath: file_path,
         content: truncatedLines,
         numLines: lineCount,
-        startLine: offset + 1,
+        startLine,
         totalLines,
       },
     } as const

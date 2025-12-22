@@ -1,7 +1,6 @@
 import { Box, Text } from 'ink'
 import React from 'react'
 import { z } from 'zod'
-import { Cost } from '@components/Cost'
 import { Tool } from '@tool'
 import {
   getPlanConversationKey,
@@ -10,6 +9,18 @@ import {
 } from '@utils/planMode'
 import { EXIT_DESCRIPTION, EXIT_PROMPT, EXIT_TOOL_NAME } from './prompt'
 import { getTheme } from '@utils/theme'
+import { BLACK_CIRCLE } from '@constants/figures'
+
+function getExitPlanModePlanText(conversationKey?: string): string {
+  const { content } = readPlanFile(undefined, conversationKey)
+  return content || 'No plan found. Please write your plan to the plan file first.'
+}
+
+export function __getExitPlanModePlanTextForTests(
+  conversationKey?: string,
+): string {
+  return getExitPlanModePlanText(conversationKey)
+}
 
 const inputSchema = z
   .strictObject({
@@ -73,19 +84,24 @@ export const ExitPlanModeTool = {
         : undefined
 
     const { content } = readPlanFile(undefined, conversationKey)
-    const plan = content || 'No plan found. Please write your plan to the plan file first.'
+    const plan = getExitPlanModePlanText(conversationKey)
 
     return (
       <Box flexDirection="column" marginTop={1} width="100%">
-        <Text color={theme.error}>User rejected the plan:</Text>
-        <Box
-          borderStyle="round"
-          borderColor={theme.permission}
-          borderDimColor
-          paddingX={1}
-          overflow="hidden"
-        >
-          <Text dimColor>{plan}</Text>
+        <Box flexDirection="row">
+            <Text>&nbsp;&nbsp;⎿ &nbsp;</Text>
+          <Box flexDirection="column" width="100%">
+            <Text color={theme.error}>User rejected Kode Agent&apos;s plan:</Text>
+            <Box
+              borderStyle="round"
+              borderColor={theme.planMode}
+              borderDimColor
+              paddingX={1}
+              overflow="hidden"
+            >
+              <Text dimColor>{plan}</Text>
+            </Box>
+          </Box>
         </Box>
       </Box>
     )
@@ -97,20 +113,20 @@ export const ExitPlanModeTool = {
 
     return (
       <Box flexDirection="column" marginTop={1} width="100%">
-        <Box flexDirection="row" justifyContent="space-between">
-          <Box flexDirection="row">
-            <Text color={theme.permission}>●</Text>
-            <Text> User approved the plan</Text>
-          </Box>
-          <Cost costUSD={0} durationMs={0} debug={false} />
+        <Box flexDirection="row">
+          <Text color={theme.planMode}>{BLACK_CIRCLE}</Text>
+          <Text> User approved Kode Agent&apos;s plan</Text>
         </Box>
-        <Box flexDirection="column" marginTop={1}>
-          {planPath ? (
-            <Text dimColor>
-              Plan saved to: {planPath} · /plan to edit
-            </Text>
-          ) : null}
-          <Text dimColor>{plan}</Text>
+        <Box flexDirection="row">
+          <Text>&nbsp;&nbsp;⎿ &nbsp;</Text>
+          <Box flexDirection="column">
+            {planPath ? (
+              <Text dimColor>
+                Plan saved to: {planPath} · /plan to edit
+              </Text>
+            ) : null}
+            <Text dimColor>{plan}</Text>
+          </Box>
         </Box>
       </Box>
     )

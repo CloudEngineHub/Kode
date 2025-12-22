@@ -1,0 +1,77 @@
+import { join } from 'path'
+import { readFileSync, writeFileSync } from 'fs'
+import chalk from 'chalk'
+import { getTheme } from '@utils/theme'
+import { logError } from '@utils/log'
+
+export function handleHashCommand(interpreted: string): void {
+  // Appends the AI-interpreted content to both AGENTS.md and CLAUDE.md (if exists)
+  try {
+    const cwd = process.cwd()
+    const agentsPath = join(cwd, 'AGENTS.md')
+    const claudePath = join(cwd, 'CLAUDE.md')
+
+    const filesToUpdate: Array<{ path: string; name: string }> = []
+
+    // Always try to update AGENTS.md (create if not exists)
+    filesToUpdate.push({ path: agentsPath, name: 'AGENTS.md' })
+
+    // Update CLAUDE.md only if it exists
+    try {
+      readFileSync(claudePath, 'utf-8')
+      filesToUpdate.push({ path: claudePath, name: 'CLAUDE.md' })
+    } catch {
+      // CLAUDE.md doesn't exist, skip it
+    }
+
+    const now = new Date()
+    const timezoneMatch = now.toString().match(/\(([A-Z]+)\)/)
+    const timezone = timezoneMatch
+      ? timezoneMatch[1]
+      : now
+          .toLocaleTimeString('en-us', { timeZoneName: 'short' })
+          .split(' ')
+          .pop()
+
+    const timestamp = interpreted.includes(now.getFullYear().toString())
+      ? ''
+      : `\n\n_Added on ${now.toLocaleString()} ${timezone}_`
+
+    const updatedFiles: string[] = []
+
+    for (const file of filesToUpdate) {
+      try {
+        let existingContent = ''
+        try {
+          existingContent = readFileSync(file.path, 'utf-8').trim()
+        } catch {
+          // File doesn't exist yet, that's fine
+        }
+
+        const separator = existingContent ? '\n\n' : ''
+        const newContent = `${existingContent}${separator}${interpreted}${timestamp}`
+        writeFileSync(file.path, newContent, 'utf-8')
+        updatedFiles.push(file.name)
+      } catch (error) {
+        logError(error)
+        console.error(
+          chalk.hex(getTheme().error)(
+            `Failed to update ${file.name}: ${(error as Error).message}`,
+          ),
+        )
+      }
+    }
+
+    if (updatedFiles.length > 0) {
+      console.log(
+        chalk.hex(getTheme().success)(
+          `Added note to ${updatedFiles.join(' and ')}`,
+        ),
+      )
+    }
+  } catch (e) {
+    logError(e)
+    console.error(chalk.hex(getTheme().error)(`Failed to add note: ${(e as Error).message}`))
+  }
+}
+

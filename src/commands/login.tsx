@@ -12,8 +12,8 @@ export default () =>
     type: 'local-jsx',
     name: 'login',
     description: isLoggedInToAnthropic()
-      ? 'Switch Anthropic accounts'
-      : 'Sign in with your Anthropic account',
+      ? 'Switch ShareAI Lab accounts'
+      : 'Sign in with your ShareAI Lab account',
     isEnabled: true,
     isHidden: false,
     async call(onDone, context) {

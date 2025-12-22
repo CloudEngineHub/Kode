@@ -10,6 +10,15 @@ function postinstallNotice() {
     console.log('✅ @shareai-lab/kode installed. Commands available: kode, kwa, kd');
     console.log('   If shell cannot find them, try reloading your terminal or reinstall globally:');
     console.log('   npm i -g @shareai-lab/kode  (or use: npx @shareai-lab/kode)');
+
+    // Kode runtime is Bun-first; give a friendly hint if Bun is not on PATH.
+    try {
+      const { spawnSync } = require('child_process');
+      const ret = spawnSync('bun', ['--version'], { stdio: 'ignore' });
+      if (ret.error || ret.status !== 0) {
+        console.log('   ℹ️  Kode runs on Bun. Install Bun if you do not have it yet: https://bun.sh');
+      }
+    } catch {}
   } catch {}
 }
 

@@ -4,6 +4,7 @@ export type PermissionMode =
   | 'acceptEdits'
   | 'plan'
   | 'bypassPermissions'
+  | 'dontAsk'
 
 export interface PermissionContext {
   mode: PermissionMode
@@ -39,8 +40,8 @@ export interface ModeConfig {
 export const MODE_CONFIGS: Record<PermissionMode, ModeConfig> = {
   default: {
     name: 'default',
-    label: 'DEFAULT',
-    icon: '🔒',
+    label: 'Default',
+    icon: '',
     color: 'blue',
     description: 'Standard permission checking',
     allowedTools: ['*'],
@@ -52,8 +53,8 @@ export const MODE_CONFIGS: Record<PermissionMode, ModeConfig> = {
   },
   acceptEdits: {
     name: 'acceptEdits',
-    label: 'ACCEPT EDITS',
-    icon: '✅',
+    label: 'Accept edits',
+    icon: '⏵⏵',
     color: 'green',
     description: 'Auto-approve edit operations',
     allowedTools: ['*'],
@@ -65,8 +66,8 @@ export const MODE_CONFIGS: Record<PermissionMode, ModeConfig> = {
   },
   plan: {
     name: 'plan',
-    label: 'PLAN MODE',
-    icon: '📝',
+    label: 'Plan Mode',
+    icon: '⏸',
     color: 'yellow',
     description: 'Research and planning - read-only tools only',
     allowedTools: [
@@ -81,8 +82,7 @@ export const MODE_CONFIGS: Record<PermissionMode, ModeConfig> = {
       'Edit',
       'ExitPlanMode',
       'KillShell',
-      'BashOutput',
-      'AgentOutputTool',
+      'TaskOutput',
       'ListMcpResourcesTool',
       'ReadMcpResourceTool',
       'mcp',
@@ -95,8 +95,8 @@ export const MODE_CONFIGS: Record<PermissionMode, ModeConfig> = {
   },
   bypassPermissions: {
     name: 'bypassPermissions',
-    label: 'BYPASS PERMISSIONS',
-    icon: '🔓',
+    label: 'Bypass Permissions',
+    icon: '⏵⏵',
     color: 'red',
     description: 'All permissions bypassed',
     allowedTools: ['*'],
@@ -104,6 +104,19 @@ export const MODE_CONFIGS: Record<PermissionMode, ModeConfig> = {
       readOnly: false,
       requireConfirmation: false,
       bypassValidation: true,
+    },
+  },
+  dontAsk: {
+    name: 'dontAsk',
+    label: "Don't Ask",
+    icon: '⏵⏵',
+    color: 'red',
+    description: 'Auto-deny permission prompts',
+    allowedTools: ['*'],
+    restrictions: {
+      readOnly: false,
+      requireConfirmation: true,
+      bypassValidation: false,
     },
   },
 }
@@ -121,6 +134,8 @@ export function getNextPermissionMode(
     case 'plan':
       return isBypassAvailable ? 'bypassPermissions' : 'default'
     case 'bypassPermissions':
+      return 'default'
+    case 'dontAsk':
       return 'default'
     default:
       return 'default'

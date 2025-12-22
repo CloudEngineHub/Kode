@@ -22,6 +22,16 @@ type Output = {
   commandName: string
 }
 
+function normalizeCommandModelName(model: unknown): string | undefined {
+  if (typeof model !== 'string') return undefined
+  const trimmed = model.trim()
+  if (!trimmed || trimmed === 'inherit') return undefined
+  if (trimmed === 'haiku') return 'quick'
+  if (trimmed === 'sonnet') return 'task'
+  if (trimmed === 'opus') return 'main'
+  return trimmed
+}
+
 function getCharBudget(): number {
   const raw = Number(process.env.SLASH_COMMAND_TOOL_CHAR_BUDGET)
   return Number.isFinite(raw) && raw > 0 ? raw : 15000
@@ -203,8 +213,11 @@ ${availableLines}${truncatedNotice}
     const allowedTools: string[] = Array.isArray((cmd as any).allowedTools)
       ? (cmd as any).allowedTools
       : []
-    const model: string | undefined =
-      typeof (cmd as any).model === 'string' ? (cmd as any).model : undefined
+    const model = normalizeCommandModelName((cmd as any).model)
+    const maxThinkingTokens: number | undefined =
+      typeof (cmd as any).maxThinkingTokens === 'number'
+        ? (cmd as any).maxThinkingTokens
+        : undefined
 
     const output: Output = { success: true, commandName: parsed.commandName }
 
@@ -214,7 +227,7 @@ ${availableLines}${truncatedNotice}
       resultForAssistant: this.renderResultForAssistant(output),
       newMessages: [metaMessage, ...expandedMessages],
       contextModifier:
-        allowedTools.length > 0 || model
+        allowedTools.length > 0 || model || maxThinkingTokens !== undefined
           ? {
               modifyContext(ctx) {
                 const next = { ...ctx }
@@ -231,6 +244,13 @@ ${availableLines}${truncatedNotice}
 
                 if (model) {
                   next.options = { ...(next.options || {}), model }
+                }
+
+                if (maxThinkingTokens !== undefined) {
+                  next.options = {
+                    ...(next.options || {}),
+                    maxThinkingTokens,
+                  }
                 }
 
                 return next

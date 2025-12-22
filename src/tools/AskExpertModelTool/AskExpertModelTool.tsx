@@ -72,7 +72,7 @@ IMPORTANT: This tool is for asking questions to models, not for task execution.
 
 The expert_model parameter accepts:
 - OpenAI: gpt-4, gpt-5, o1-preview
-- Anthropic: claude-3-5-sonnet, claude-3-opus  
+- Messages API: claude-3-5-sonnet, claude-3-opus  
 - Others: kimi, gemini-pro, mixtral
 
 Example of well-structured question:

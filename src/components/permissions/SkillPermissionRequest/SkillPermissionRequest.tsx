@@ -94,7 +94,12 @@ export function SkillPermissionRequest({
                     platform: env.platform,
                   },
                 })
-                savePermission(toolUseConfirm.tool, toolUseConfirm.input, null).then(
+                savePermission(
+                  toolUseConfirm.tool,
+                  toolUseConfirm.input,
+                  null,
+                  toolUseConfirm.toolUseContext,
+                ).then(
                   () => {
                     toolUseConfirm.onAllow('permanent')
                     onDone()
@@ -121,4 +126,3 @@ export function SkillPermissionRequest({
     </Box>
   )
 }
-

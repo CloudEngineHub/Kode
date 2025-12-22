@@ -1,4 +1,4 @@
-#!/usr/bin/env -S node --no-warnings=ExperimentalWarning --enable-source-maps
+#!/usr/bin/env bun
 import '@utils/sanitizeAnthropicEnv'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
@@ -6,6 +6,11 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { initSentry } from '@services/sentry'
 import { PRODUCT_COMMAND, PRODUCT_NAME } from '@constants/product'
 initSentry() // Initialize Sentry as early as possible
+
+// Default-on safety: enable the Bash LLM gate for agent calls unless explicitly disabled.
+if (process.env.KODE_BASH_LLM_GATE === undefined) {
+  process.env.KODE_BASH_LLM_GATE = '1'
+}
 
 // Ensure YOGA_WASM_PATH is set for Ink across run modes (wrapper/dev)
 // Resolve yoga.wasm relative to this file when missing using ESM-friendly APIs
@@ -40,9 +45,7 @@ import type { RenderOptions } from 'ink'
 import { addToHistory } from '@history'
 import { getContext, setContext, removeContext } from '@context'
 import { Command } from '@commander-js/extra-typings'
-import { ask } from '@utils/ask'
 import { hasPermissionsToUseTool } from '@permissions'
-import { getTools } from '@tools'
 import {
   getGlobalConfig,
   getCurrentProjectConfig,
@@ -75,8 +78,6 @@ import { ResumeConversation } from '@screens/ResumeConversation'
 import { startMCPServer } from './mcp'
 import { env } from '@utils/env'
 import { getCwd, setCwd, setOriginalCwd } from '@utils/state'
-import { omit } from 'lodash-es'
-import { getCommands } from '@commands'
 import { getNextAvailableLogForkNumber, loadLogList } from '@utils/log'
 import { loadMessagesFromLog } from '@utils/conversationRecovery'
 import { cleanupOldMessageFilesInBackground } from '@utils/cleanup'
@@ -103,8 +104,7 @@ import {
 import { handleMcprcServerApprovals } from '@services/mcpServerApproval'
  
 import { cursorShow } from 'ansi-escapes'
-import { getLatestVersion, assertMinVersion, getUpdateCommandSuggestions } from '@utils/autoUpdater'
-import { gt } from 'semver'
+import { assertMinVersion } from '@utils/autoUpdater'
 import { CACHE_PATHS } from '@utils/log'
 // import { checkAndNotifyUpdate } from '@utils/autoUpdater'
 import { BunShell } from '@utils/BunShell'
@@ -188,6 +188,17 @@ function logStartup(): void {
   })
 }
 
+function omitKeys<T extends Record<string, any>>(
+  input: T,
+  ...keys: (keyof T | string)[]
+): Partial<T> {
+  const result = { ...input } as Partial<T>
+  for (const key of keys) {
+    delete (result as any)[key as any]
+  }
+  return result
+}
+
 async function setup(cwd: string, safeMode?: boolean): Promise<void> {
   // Set both current and original working directory if --cwd was provided
   if (cwd !== process.cwd()) {
@@ -234,21 +245,6 @@ async function setup(cwd: string, safeMode?: boolean): Promise<void> {
   cleanupOldMessageFilesInBackground()
   getContext() // Pre-fetch all context data at once
 
-  // Migrate old iterm2KeyBindingInstalled config to new shiftEnterKeyBindingInstalled
-  const globalConfig = getGlobalConfig()
-  if (
-    globalConfig.iterm2KeyBindingInstalled === true &&
-    globalConfig.shiftEnterKeyBindingInstalled !== true
-  ) {
-    const updatedConfig = {
-      ...globalConfig,
-      shiftEnterKeyBindingInstalled: true,
-    }
-    // Remove the old config property
-    delete updatedConfig.iterm2KeyBindingInstalled
-    saveGlobalConfig(updatedConfig)
-  }
-
   // Check for last session's cost and duration
   const projectConfig = getCurrentProjectConfig()
   if (
@@ -278,16 +274,15 @@ async function main() {
   try {
     enableConfigs()
     
-    // 🔧 Validate and auto-repair GPT-5 model profiles
-    try {
-      const repairResult = validateAndRepairAllGPT5Profiles()
-      if (repairResult.repaired > 0) {
-        console.log(`🔧 Auto-repaired ${repairResult.repaired} GPT-5 model configurations`)
+    // 🔧 Validate and auto-repair GPT-5 model profiles (best-effort, non-blocking)
+    // Avoid printing during interactive render; log to file on failure.
+    queueMicrotask(() => {
+      try {
+        validateAndRepairAllGPT5Profiles()
+      } catch (repairError) {
+        logError(`GPT-5 configuration validation failed: ${repairError}`)
       }
-    } catch (repairError) {
-      // Don't block startup if GPT-5 validation fails
-      console.warn('⚠️ GPT-5 configuration validation failed:', repairError)
-    }
+    })
   } catch (error: unknown) {
     if (error instanceof ConfigParseError) {
       // Show the invalid config dialog with the error object
@@ -305,11 +300,17 @@ async function main() {
     onFlicker() {},
   } as any
 
+  const wantsStreamJsonStdin =
+    process.argv.some(
+      (arg, idx, all) => arg === '--input-format' && all[idx + 1] === 'stream-json',
+    ) || process.argv.some(arg => arg.startsWith('--input-format=stream-json'))
+
   if (
     !process.stdin.isTTY &&
     !process.env.CI &&
     // Input hijacking breaks MCP.
-    !process.argv.includes('mcp')
+    !process.argv.includes('mcp') &&
+    !wantsStreamJsonStdin
   ) {
     inputPrompt = await stdin()
     if (process.platform !== 'win32') {
@@ -335,22 +336,27 @@ async function parseArgs(
     exitOnCtrlC: true,
   }
 
-  // Get the initial list of commands filtering based on user type
-  const commands = await getCommands()
-
-  // Format command list for help text (using same filter as in help.ts)
-  const commandList = commands
-    .filter(cmd => !cmd.isHidden)
-    .map(cmd => `/${cmd.name} - ${cmd.description}`)
-    .join('\n')
+  const wantsHelp = process.argv.includes('--help') || process.argv.includes('-h')
+  const commandList = wantsHelp
+    ? await (async () => {
+        const { getCommands } = await import('@commands')
+        const commands = await getCommands()
+        return commands
+          .filter(cmd => !cmd.isHidden)
+          .map(cmd => `/${cmd.name} - ${cmd.description}`)
+          .join('\n')
+      })()
+    : ''
 
   program
     .name(PRODUCT_COMMAND)
     .description(
-      `${PRODUCT_NAME} - starts an interactive session by default, use -p/--print for non-interactive output
+      wantsHelp
+        ? `${PRODUCT_NAME} - starts an interactive session by default, use -p/--print for non-interactive output
 
 Slash commands available during an interactive session:
-${commandList}`,
+${commandList}`
+        : `${PRODUCT_NAME} - starts an interactive session by default, use -p/--print for non-interactive output`,
     )
     .argument('[prompt]', 'Your prompt', String)
     .option('-c, --cwd <cwd>', 'The current working directory', String, cwd())
@@ -372,50 +378,729 @@ ${commandList}`,
       () => true,
     )
     .option(
+      '--output-format <format>',
+      'Output format (only works with --print): "text" (default), "json", or "stream-json"',
+      String,
+      'text',
+    )
+    .option(
+      '--input-format <format>',
+      'Input format (only works with --print): "text" (default) or "stream-json"',
+      String,
+      'text',
+    )
+    .option(
+      '--include-partial-messages',
+      'Include partial message chunks as they arrive (only works with --print and --output-format=stream-json)',
+      () => true,
+    )
+    .option(
+      '--replay-user-messages',
+      'Re-emit user messages from stdin back on stdout for acknowledgment (only works with --input-format=stream-json and --output-format=stream-json)',
+      () => true,
+    )
+    .option(
+      '--permission-prompt-tool <tool>',
+      'Permission prompt tool (only works with --print, --output-format=stream-json, and --input-format=stream-json): "stdio"',
+      String,
+    )
+    .option(
       '--safe',
       'Enable strict permission checking mode (default is permissive)',
       () => true,
     )
+    .option(
+      '-r, --resume [value]',
+      'Resume a conversation by session ID (optional value)',
+    )
+    .option(
+      '--continue',
+      'Continue the most recent conversation',
+      () => true,
+    )
+    .option(
+      '--fork-session',
+      'When resuming/continuing, create a new session ID instead of reusing the original (use with --resume or --continue)',
+      () => true,
+    )
+    .option(
+      '--no-session-persistence',
+      'Disable session persistence - sessions will not be saved to disk and cannot be resumed (only works with --print)',
+    )
+    .option(
+      '--session-id <uuid>',
+      'Use a specific session ID for the conversation (must be a valid UUID)',
+      String,
+    )
     .action(
-      async (prompt, { cwd, debug, verbose, enableArchitect, print, safe }) => {
+      async (
+        prompt,
+        {
+          cwd,
+          debug,
+          verbose,
+          enableArchitect,
+          print,
+          outputFormat,
+          inputFormat,
+          includePartialMessages,
+          replayUserMessages,
+          permissionPromptTool,
+          safe,
+          resume,
+          continue: continueConversation,
+          forkSession,
+          sessionId,
+          sessionPersistence,
+        },
+      ) => {
         await setup(cwd, safe)
         await showSetupScreens(safe, print)
 
         assertMinVersion()
 
+        const [{ ask }, { getTools }, { getCommands }] = await Promise.all([
+          import('@utils/ask'),
+          import('@tools'),
+          import('@commands'),
+        ])
+        const commands = await getCommands()
+
         const [tools, mcpClients] = await Promise.all([
-          getTools(
-            enableArchitect ?? getCurrentProjectConfig().enableArchitectTool,
-          ),
+          getTools(enableArchitect ?? getCurrentProjectConfig().enableArchitectTool),
           getClients(),
         ])
         const inputPrompt = [prompt, stdinContent].filter(Boolean).join('\n')
+
+        const {
+          loadKodeAgentSessionMessages,
+          findMostRecentKodeAgentSessionId,
+        } = await import('@utils/kodeAgentSessionLoad')
+        const { isUuid } = await import('@utils/uuid')
+        const { setKodeAgentSessionId, getKodeAgentSessionId } = await import(
+          '@utils/kodeAgentSessionId'
+        )
+        const { randomUUID } = await import('crypto')
+
+        const wantsContinue = Boolean(continueConversation)
+        const wantsResume = resume !== undefined
+        const wantsFork = Boolean(forkSession)
+
+        if (sessionId && !isUuid(String(sessionId))) {
+          console.error(`Error: --session-id must be a valid UUID`)
+          process.exit(1)
+        }
+
+        if (sessionId && (wantsContinue || wantsResume) && !wantsFork) {
+          console.error(
+            `Error: --session-id can only be used with --continue or --resume if --fork-session is also specified.`,
+          )
+          process.exit(1)
+        }
+
+        let initialMessages: any[] | undefined
+        let resumedFromSessionId: string | null = null
+
+        if (wantsContinue) {
+          const latest = findMostRecentKodeAgentSessionId(cwd)
+          if (!latest) {
+            console.error('No conversation found to continue')
+            process.exit(1)
+          }
+          initialMessages = loadKodeAgentSessionMessages({ cwd, sessionId: latest })
+          resumedFromSessionId = latest
+        } else if (wantsResume) {
+          if (resume === true) {
+            console.error('Error: --resume without a session ID is not supported in Kode yet.')
+            process.exit(1)
+          }
+          const resumeId = String(resume)
+          if (!isUuid(resumeId)) {
+            console.error(`No conversation found with session ID: ${resumeId}`)
+            process.exit(1)
+          }
+          initialMessages = loadKodeAgentSessionMessages({ cwd, sessionId: resumeId })
+          resumedFromSessionId = resumeId
+        }
+
+        const effectiveSessionId = (() => {
+          if (resumedFromSessionId) {
+            if (wantsFork) return sessionId ? String(sessionId) : randomUUID()
+            return resumedFromSessionId
+          }
+          if (sessionId) return String(sessionId)
+          return getKodeAgentSessionId()
+        })()
+
+        setKodeAgentSessionId(effectiveSessionId)
+
         if (print) {
-          if (!inputPrompt) {
+          const normalizedOutputFormat = String(outputFormat || 'text').toLowerCase().trim()
+          const normalizedInputFormat = String(inputFormat || 'text').toLowerCase().trim()
+
+          if (!['text', 'stream-json'].includes(normalizedInputFormat)) {
             console.error(
-              'Error: Input must be provided either through stdin or as a prompt argument when using --print',
+              `Error: Invalid --input-format "${inputFormat}". Expected one of: text, stream-json`,
             )
             process.exit(1)
           }
 
-          addToHistory(inputPrompt)
-          const { resultText: response } = await ask({
-            commands,
-            hasPermissionsToUseTool,
-            messageLogName: dateToFilename(new Date()),
-            prompt: inputPrompt,
-            cwd,
-            tools,
-            safeMode: safe,
+          if (!['text', 'json', 'stream-json'].includes(normalizedOutputFormat)) {
+            console.error(
+              `Error: Invalid --output-format "${outputFormat}". Expected one of: text, json, stream-json`,
+            )
+            process.exit(1)
+          }
+
+          if (normalizedOutputFormat === 'stream-json' && !verbose) {
+            console.error(
+              'Error: When using --print, --output-format=stream-json requires --verbose',
+            )
+            process.exit(1)
+          }
+
+          const normalizedPermissionPromptTool = permissionPromptTool
+            ? String(permissionPromptTool).trim()
+            : null
+
+          if (normalizedPermissionPromptTool) {
+            if (normalizedPermissionPromptTool !== 'stdio') {
+              console.error(
+                `Error: Unsupported --permission-prompt-tool "${normalizedPermissionPromptTool}". Only "stdio" is supported in Kode right now.`,
+              )
+              process.exit(1)
+            }
+            if (normalizedInputFormat !== 'stream-json') {
+              console.error(
+                'Error: --permission-prompt-tool=stdio requires --input-format=stream-json',
+              )
+              process.exit(1)
+            }
+            if (normalizedOutputFormat !== 'stream-json') {
+              console.error(
+                'Error: --permission-prompt-tool=stdio requires --output-format=stream-json',
+              )
+              process.exit(1)
+            }
+          }
+
+          if (normalizedInputFormat === 'stream-json' && normalizedOutputFormat !== 'stream-json') {
+            console.error(
+              'Error: --input-format=stream-json requires --output-format=stream-json',
+            )
+            process.exit(1)
+          }
+
+          if (replayUserMessages) {
+            if (
+              normalizedInputFormat !== 'stream-json' ||
+              normalizedOutputFormat !== 'stream-json'
+            ) {
+              console.error(
+                'Error: --replay-user-messages requires --input-format=stream-json and --output-format=stream-json',
+              )
+              process.exit(1)
+            }
+          }
+
+          if (normalizedInputFormat === 'stream-json') {
+            if (prompt) {
+              console.error(
+                'Error: --input-format=stream-json cannot be used with a prompt argument',
+              )
+              process.exit(1)
+            }
+            if (stdinContent) {
+              console.error(
+                'Error: --input-format=stream-json cannot be used with stdin prompt text',
+              )
+              process.exit(1)
+            }
+          } else {
+            if (!inputPrompt) {
+              console.error(
+                'Error: Input must be provided either through stdin or as a prompt argument when using --print',
+              )
+              process.exit(1)
+            }
+          }
+
+          if (normalizedOutputFormat === 'text') {
+            addToHistory(inputPrompt)
+            const { resultText: response } = await ask({
+              commands,
+              hasPermissionsToUseTool,
+              messageLogName: dateToFilename(new Date()),
+              prompt: inputPrompt,
+              cwd,
+              tools,
+              safeMode: safe,
+              initialMessages,
+              persistSession: sessionPersistence !== false,
+            })
+            console.log(response)
+            process.exit(0)
+          }
+
+          const { createUserMessage } = await import('@utils/messages')
+          const { getSystemPrompt } = await import('@constants/prompts')
+          const { getContext } = await import('@context')
+          const { getTotalCost } = await import('@costTracker')
+          const { query } = await import('@query')
+          const { getKodeAgentSessionId } = await import('@utils/kodeAgentSessionId')
+          const {
+            kodeMessageToSdkMessage,
+            makeSdkInitMessage,
+            makeSdkResultMessage,
+          } = await import('@utils/kodeAgentStreamJson')
+          const { KodeAgentStructuredStdio } = await import(
+            '@utils/kodeAgentStructuredStdio',
+          )
+          const {
+            loadToolPermissionContextFromDisk,
+            persistToolPermissionUpdateToDisk,
+          } = await import('@utils/permissions/toolPermissionSettings')
+          const { applyToolPermissionContextUpdates } = await import(
+            '@kode-types/toolPermissionContext',
+          )
+
+          const sessionIdForSdk = getKodeAgentSessionId()
+          const startedAt = Date.now()
+          const sdkMessages: any[] = []
+
+          const systemPrompt = await getSystemPrompt()
+          const ctx = await getContext()
+
+          const toolPermissionContext = loadToolPermissionContextFromDisk({
+            projectDir: cwd,
+            includeKodeProjectConfig: true,
+            isBypassPermissionsModeAvailable: !safe,
           })
-          console.log(response)
+
+          const printOptions = {
+            commands,
+            tools,
+            verbose: true,
+            safeMode: safe,
+            forkNumber: 0,
+            messageLogName: 'unused',
+            maxThinkingTokens: 0,
+            persistSession: sessionPersistence !== false,
+            toolPermissionContext,
+            model: undefined as any,
+          }
+
+          const availableTools = tools.map(t => t.name)
+          const initMsg = makeSdkInitMessage({
+            sessionId: sessionIdForSdk,
+            cwd,
+            tools: availableTools,
+          })
+
+          const writeSdkLine = (obj: any) => {
+            process.stdout.write(JSON.stringify(obj) + '\n')
+          }
+
+          if (normalizedOutputFormat === 'stream-json') {
+            writeSdkLine(initMsg)
+          } else {
+            sdkMessages.push(initMsg)
+          }
+
+          let activeTurnAbortController: AbortController | null = null
+          const structured =
+            normalizedInputFormat === 'stream-json'
+              ? new KodeAgentStructuredStdio(process.stdin, process.stdout, {
+                  onInterrupt: () => {
+                    activeTurnAbortController?.abort()
+                  },
+                  onControlRequest: async msg => {
+                    const subtype = msg.request?.subtype
+
+                    if (subtype === 'initialize') {
+                      return
+                    }
+
+                    if (subtype === 'set_permission_mode') {
+                      const mode = (msg.request as any)?.mode
+                      if (
+                        mode === 'default' ||
+                        mode === 'acceptEdits' ||
+                        mode === 'plan' ||
+                        mode === 'dontAsk' ||
+                        mode === 'bypassPermissions'
+                      ) {
+                        if (printOptions.toolPermissionContext) {
+                          printOptions.toolPermissionContext.mode = mode
+                        }
+                      }
+                      return
+                    }
+
+                    if (subtype === 'set_model') {
+                      const requested = (msg.request as any)?.model
+                      if (requested === 'default') {
+                        printOptions.model = undefined as any
+                      } else if (typeof requested === 'string' && requested.trim()) {
+                        printOptions.model = requested.trim()
+                      }
+                      return
+                    }
+
+                    if (subtype === 'set_max_thinking_tokens') {
+                      const value = (msg.request as any)?.max_thinking_tokens
+                      if (value === null) {
+                        printOptions.maxThinkingTokens = 0
+                      } else if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+                        printOptions.maxThinkingTokens = value
+                      }
+                      return
+                    }
+
+                    if (subtype === 'mcp_status') {
+                      return {
+                        mcpServers: mcpClients.map(c => ({
+                          name: c.name,
+                          status: c.type,
+                          ...(c.type === 'connected' && c.capabilities
+                            ? { serverInfo: c.capabilities }
+                            : {}),
+                        })),
+                      }
+                    }
+
+                    if (subtype === 'mcp_message') {
+                      const serverName = (msg.request as any)?.server_name
+                      const message = (msg.request as any)?.message
+                      if (typeof serverName === 'string' && serverName) {
+                        const found = mcpClients.find(c => c.name === serverName)
+                        if (found && found.type === 'connected') {
+                          const transport = (found.client as any)?.transport
+                          if (transport && typeof transport.onmessage === 'function') {
+                            transport.onmessage(message)
+                          }
+                        }
+                      }
+                      return
+                    }
+
+                    if (subtype === 'mcp_set_servers') {
+                      return { ok: true, sdkServersChanged: false }
+                    }
+
+                    if (subtype === 'rewind_files') {
+                      throw new Error('rewind_files is not supported in Kode yet.')
+                    }
+
+                    throw new Error(`Unsupported control request subtype: ${String(subtype)}`)
+                  },
+                })
+              : null
+
+          if (structured) structured.start()
+
+          const permissionTimeoutMs = (() => {
+            const raw = process.env.KODE_STDIO_PERMISSION_TIMEOUT_MS
+            const n = raw ? Number(raw) : NaN
+            return Number.isFinite(n) && n > 0 ? n : 30_000
+          })()
+
+	          const canUseTool =
+	            normalizedPermissionPromptTool === 'stdio' && structured
+	              ? (async (tool: any, input: any, toolUseContext: any, assistantMessage: any) => {
+	                  const base = await hasPermissionsToUseTool(
+	                    tool,
+	                    input,
+	                    toolUseContext,
+	                    assistantMessage,
+	                  )
+
+                  if (base.result === true) return { result: true as const }
+
+                  const denied = base as Extract<typeof base, { result: false }>
+                  if (denied.shouldPromptUser === false) {
+                    return { result: false as const, message: denied.message }
+                  }
+
+	                  try {
+	                    const blockedPath =
+	                      typeof (denied as any).blockedPath === 'string'
+	                        ? String((denied as any).blockedPath)
+	                        : typeof (input as any)?.file_path === 'string'
+	                          ? String((input as any).file_path)
+	                          : typeof (input as any)?.notebook_path === 'string'
+	                            ? String((input as any).notebook_path)
+	                            : typeof (input as any)?.path === 'string'
+	                              ? String((input as any).path)
+	                              : undefined
+
+	                    const decisionReason =
+	                      typeof (denied as any).decisionReason === 'string'
+	                        ? String((denied as any).decisionReason)
+	                        : undefined
+
+	                    const response = await structured.sendRequest<
+	                      | {
+	                          behavior: 'allow'
+	                          updatedInput: Record<string, unknown>
+	                          updatedPermissions?: unknown
+	                          toolUseID?: string
+	                        }
+	                      | {
+	                          behavior: 'deny'
+	                          message: string
+	                          interrupt?: boolean
+	                          toolUseID?: string
+	                        }
+	                    >(
+	                      {
+	                        subtype: 'can_use_tool',
+	                        tool_name: tool.name,
+	                        input,
+	                        ...(typeof toolUseContext?.toolUseId === 'string' && toolUseContext.toolUseId
+	                          ? { tool_use_id: toolUseContext.toolUseId }
+	                          : {}),
+	                        ...(typeof toolUseContext?.agentId === 'string' && toolUseContext.agentId
+	                          ? { agent_id: toolUseContext.agentId }
+	                          : {}),
+	                        ...(Array.isArray((denied as any).suggestions)
+	                          ? { permission_suggestions: (denied as any).suggestions }
+	                          : {}),
+	                        ...(blockedPath ? { blocked_path: blockedPath } : {}),
+	                        ...(decisionReason ? { decision_reason: decisionReason } : {}),
+	                      },
+	                      {
+	                        signal: toolUseContext.abortController.signal,
+	                        timeoutMs: permissionTimeoutMs,
+	                      },
+	                    )
+
+	                    if (response && (response as any).behavior === 'allow') {
+	                      const updatedInput =
+	                        (response as any).updatedInput &&
+                        typeof (response as any).updatedInput === 'object'
+                          ? (response as any).updatedInput
+                          : null
+	                      if (updatedInput) {
+	                        Object.assign(input, updatedInput)
+	                      }
+
+	                      const updatedPermissionsRaw = (response as any).updatedPermissions
+	                      const updatedPermissions =
+	                        Array.isArray(updatedPermissionsRaw) &&
+	                        updatedPermissionsRaw.every(
+	                          u => u && typeof u === 'object' && typeof (u as any).type === 'string',
+	                        )
+	                          ? (updatedPermissionsRaw as any[])
+	                          : null
+
+	                      if (updatedPermissions && printOptions.toolPermissionContext) {
+	                        const next = applyToolPermissionContextUpdates(
+	                          printOptions.toolPermissionContext,
+	                          updatedPermissions as any,
+	                        )
+	                        printOptions.toolPermissionContext = next
+	                        if (toolUseContext?.options) {
+	                          toolUseContext.options.toolPermissionContext = next
+	                        }
+	                        for (const update of updatedPermissions as any) {
+	                          persistToolPermissionUpdateToDisk({ update, projectDir: cwd })
+	                        }
+	                      }
+
+	                      return { result: true as const }
+	                    }
+
+	                    if (response && (response as any).behavior === 'deny') {
+	                      if ((response as any).interrupt === true) {
+	                        toolUseContext.abortController.abort()
+	                      }
+	                    }
+
+	                    return {
+	                      result: false as const,
+	                      message:
+	                        typeof (response as any)?.message === 'string'
+	                          ? String((response as any).message)
+	                          : denied.message,
+                    }
+                  } catch (e) {
+                    const msg = e instanceof Error ? e.message : String(e)
+                    return {
+                      result: false as const,
+                      message: `Permission prompt failed: ${msg}`,
+                      shouldPromptUser: false,
+                    }
+                  }
+                }) as any
+              : hasPermissionsToUseTool
+
+          if (normalizedInputFormat === 'stream-json') {
+            if (!structured) {
+              console.error('Error: Structured stdin is not available')
+              process.exit(1)
+            }
+
+            const { runKodeAgentStreamJsonSession } = await import(
+              '@utils/kodeAgentStreamJsonSession',
+            )
+
+            await runKodeAgentStreamJsonSession({
+              structured,
+              query,
+              writeSdkLine,
+              sessionId: sessionIdForSdk,
+              systemPrompt,
+              context: ctx,
+              canUseTool,
+              toolUseContextBase: {
+                options: printOptions,
+                messageId: undefined,
+                readFileTimestamps: {},
+                setToolJSX: () => {},
+              },
+              replayUserMessages: Boolean(replayUserMessages),
+              getTotalCostUsd: () => getTotalCost(),
+              onActiveTurnAbortControllerChanged: controller => {
+                activeTurnAbortController = controller
+              },
+              initialMessages: initialMessages as any,
+            })
+
+            process.exit(0)
+          }
+
+          const abortController = new AbortController()
+          const userMsg = await (async () => {
+            if (normalizedInputFormat !== 'stream-json') {
+              addToHistory(inputPrompt)
+              return createUserMessage(inputPrompt)
+            }
+            if (!structured) {
+              console.error('Error: Structured stdin is not available')
+              process.exit(1)
+            }
+
+            const sdkUser = await structured.nextUserMessage({
+              signal: abortController.signal,
+              timeoutMs: 30_000,
+            })
+
+            if (!sdkUser || typeof sdkUser !== 'object') {
+              console.error('Error: Invalid stream-json input (missing user message)')
+              process.exit(1)
+            }
+
+            const sdkMessage = (sdkUser as any).message
+            const sdkContent = sdkMessage?.content
+            if (typeof sdkContent !== 'string' && !Array.isArray(sdkContent)) {
+              console.error('Error: Invalid stream-json user message content')
+              process.exit(1)
+            }
+
+            const m = createUserMessage(sdkContent as any)
+            if (typeof (sdkUser as any).uuid === 'string' && (sdkUser as any).uuid) {
+              ;(m as any).uuid = String((sdkUser as any).uuid)
+            }
+            return m
+          })()
+
+          const baseMessages = [...(initialMessages ?? []), userMsg]
+
+          const sdkUser = kodeMessageToSdkMessage(userMsg as any, sessionIdForSdk)
+          if (sdkUser) {
+            if (normalizedOutputFormat === 'stream-json') {
+              writeSdkLine(sdkUser)
+            } else {
+              sdkMessages.push(sdkUser)
+            }
+          }
+
+          let lastAssistant: any | null = null
+          let queryError: unknown = null
+	          try {
+	            for await (const m of query(
+	              baseMessages,
+	              systemPrompt,
+	              ctx,
+	              canUseTool,
+	              {
+	                options: printOptions,
+	                abortController,
+	                messageId: undefined,
+	                readFileTimestamps: {},
+	                setToolJSX: () => {},
+	              },
+            )) {
+              if (m.type === 'assistant') lastAssistant = m
+              const sdk = kodeMessageToSdkMessage(m, sessionIdForSdk)
+              if (!sdk) continue
+
+              if (normalizedOutputFormat === 'stream-json') {
+                writeSdkLine(sdk)
+              } else {
+                sdkMessages.push(sdk)
+              }
+            }
+          } catch (e) {
+            abortController.abort()
+            queryError = e
+          }
+
+          const textFromAssistant =
+            lastAssistant?.message?.content?.find((c: any) => c.type === 'text')?.text
+          const text =
+            typeof textFromAssistant === 'string'
+              ? textFromAssistant
+              : queryError instanceof Error
+                ? queryError.message
+                : queryError
+                  ? String(queryError)
+                  : ''
+
+          const usage = lastAssistant?.message?.usage
+          const totalCostUsd = getTotalCost()
+          const durationMs = Date.now() - startedAt
+          const resultMsg = makeSdkResultMessage({
+            sessionId: sessionIdForSdk,
+            result: String(text),
+            numTurns: 1,
+            usage,
+            totalCostUsd,
+            durationMs,
+            durationApiMs: 0,
+            isError: Boolean(queryError),
+          })
+
+          if (normalizedOutputFormat === 'stream-json') {
+            writeSdkLine(resultMsg)
+            process.exit(0)
+          }
+
+          // json
+          sdkMessages.push(resultMsg)
+          if (verbose) {
+            console.log(JSON.stringify(sdkMessages, null, 2))
+          } else {
+            console.log(JSON.stringify(resultMsg, null, 2))
+          }
           process.exit(0)
         } else {
+          if (sessionPersistence === false) {
+            console.error('Error: --no-session-persistence only works with --print')
+            process.exit(1)
+          }
           const isDefaultModel = await isDefaultSlowAndCapableModel()
 
           // Prefetch update info before first render to place banner at top
           const updateInfo = await (async () => {
             try {
+              const [{ getLatestVersion, getUpdateCommandSuggestions }, semverMod] =
+                await Promise.all([import('@utils/autoUpdater'), import('semver')])
+              const semver: any = (semverMod as any)?.default ?? semverMod
+              const gt = semver?.gt
+              if (typeof gt !== 'function') return { version: null as string | null, commands: null as string[] | null }
+
               const latest = await getLatestVersion()
               if (latest && gt(latest, MACRO.VERSION)) {
                 const cmds = await getUpdateCommandSuggestions()
@@ -442,6 +1127,7 @@ ${commandList}`,
               isDefaultModel={isDefaultModel}
               initialUpdateVersion={updateInfo.version}
               initialUpdateCommands={updateInfo.commands}
+              initialMessages={initialMessages}
             />,
             renderContext,
             )
@@ -1630,6 +2316,9 @@ ${commandList}`,
       console.log(`Current version: ${MACRO.VERSION}`)
       console.log('Checking for updates...')
 
+      const { getLatestVersion, getUpdateCommandSuggestions } = await import(
+        '@utils/autoUpdater'
+      )
       const latestVersion = await getLatestVersion()
 
       if (!latestVersion) {
@@ -1643,7 +2332,6 @@ ${commandList}`,
       }
 
       console.log(`New version available: ${latestVersion}`)
-      const { getUpdateCommandSuggestions } = await import('@utils/autoUpdater')
       const cmds = await getUpdateCommandSuggestions()
       console.log('\nRun one of the following commands to update:')
       for (const c of cmds) console.log(`  ${c}`)
@@ -1699,6 +2387,10 @@ ${commandList}`,
       await setup(cwd, safe)
       assertMinVersion()
 
+      const [{ getTools }, { getCommands }] = await Promise.all([
+        import('@tools'),
+        import('@commands'),
+      ])
       const [tools, commands, logs, mcpClients] = await Promise.all([
         getTools(
           enableArchitect ?? getCurrentProjectConfig().enableArchitectTool,
@@ -1822,7 +2514,7 @@ ${commandList}`,
     .action(async (key, { cwd }) => {
       await setup(cwd, false)
       
-      const context = omit(
+      const context = omitKeys(
         await getContext(),
         'codeStyle',
         'directoryStructure',
@@ -1850,7 +2542,7 @@ ${commandList}`,
     .action(async ({ cwd }) => {
       await setup(cwd, false)
       
-      const context = omit(
+      const context = omitKeys(
         await getContext(),
         'codeStyle',
         'directoryStructure',

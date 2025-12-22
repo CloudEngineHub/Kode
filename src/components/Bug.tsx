@@ -324,38 +324,4 @@ async function submitFeedback(
   data: FeedbackData,
 ): Promise<{ success: boolean; feedbackId?: string }> {
   return { success: true, feedbackId: '123' }
-  // try {
-  //   const response = await fetch(
-  //     'https://api.anthropic.com/api/claude_cli_feedback',
-  //     {
-  //       method: 'POST',
-  //       headers: {
-  //         'Content-Type': 'application/json',
-  //         'User-Agent': USER_AGENT,
-  //         'x-api-key': apiKey,
-  //       },
-  //       body: JSON.stringify({
-  //         content: JSON.stringify(data),
-  //       }),
-  //     },
-  //   )
-
-  //   if (response.ok) {
-  //     const result = await response.json()
-  //     if (result?.feedback_id) {
-  //       return { success: true, feedbackId: result.feedback_id }
-  //     }
-  //     logError('Failed to submit feedback: request did not return feedback_id')
-  //     return { success: false }
-  //   }
-
-  //   logError('Failed to submit feedback:' + response.status)
-  //   return { success: false }
-  // } catch (err) {
-  //   logError(
-  //     'Error submitting feedback: ' +
-  //       (err instanceof Error ? err.message : 'Unknown error'),
-  //   )
-  //   return { success: false }
-  // }
 }

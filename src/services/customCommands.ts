@@ -122,6 +122,9 @@ export interface CustomCommandFrontmatter {
   when_to_use?: string
   version?: string
   model?: string
+  maxThinkingTokens?: number | string
+  max_thinking_tokens?: number | string
+  'max-thinking-tokens'?: number | string
   name?: string
   'disable-model-invocation'?: boolean | string
 }
@@ -140,6 +143,7 @@ export interface CustomCommandWithScope {
   userFacingName(): string
   getPromptForCommand(args: string): Promise<MessageParam[]>
   allowedTools?: string[]
+  maxThinkingTokens?: number
   argumentHint?: string
   whenToUse?: string
   version?: string
@@ -221,6 +225,18 @@ function parseAllowedTools(value: unknown): string[] {
     return [trimmed]
   }
   return []
+}
+
+function parseMaxThinkingTokens(frontmatter: CustomCommandFrontmatter): number | undefined {
+  const raw =
+    (frontmatter as any).maxThinkingTokens ??
+    (frontmatter as any).max_thinking_tokens ??
+    (frontmatter as any)['max-thinking-tokens'] ??
+    (frontmatter as any)['max_thinking_tokens']
+  if (raw === undefined || raw === null) return undefined
+  const value = typeof raw === 'number' ? raw : Number(String(raw).trim())
+  if (!Number.isFinite(value) || value < 0) return undefined
+  return Math.floor(value)
 }
 
 function sourceLabel(source: CommandSource): string {
@@ -305,6 +321,7 @@ function createPromptCommandFromFile(record: CommandFileRecord): CustomCommandWi
     extractDescriptionFromMarkdown(record.content, isSkill ? 'Skill' : 'Custom command')
 
   const allowedTools = parseAllowedTools(record.frontmatter['allowed-tools'])
+  const maxThinkingTokens = parseMaxThinkingTokens(record.frontmatter)
   const argumentHint = record.frontmatter['argument-hint']
   const whenToUse = record.frontmatter.when_to_use
   const version = record.frontmatter.version
@@ -325,6 +342,7 @@ function createPromptCommandFromFile(record: CommandFileRecord): CustomCommandWi
     aliases: [],
     progressMessage,
     allowedTools,
+    maxThinkingTokens,
     argumentHint,
     whenToUse,
     version,
@@ -438,6 +456,7 @@ function loadSkillDirectoryCommandsFromBaseDir(
         extractDescriptionFromMarkdown(content, 'Skill')
 
       const allowedTools = parseAllowedTools(frontmatter['allowed-tools'])
+      const maxThinkingTokens = parseMaxThinkingTokens(frontmatter as any)
       const argumentHint = frontmatter['argument-hint']
       const whenToUse = frontmatter.when_to_use
       const version = frontmatter.version
@@ -454,6 +473,7 @@ function loadSkillDirectoryCommandsFromBaseDir(
         aliases: [],
         progressMessage: 'running',
         allowedTools,
+        maxThinkingTokens,
         argumentHint,
         whenToUse,
         version,

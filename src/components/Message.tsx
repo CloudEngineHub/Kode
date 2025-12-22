@@ -184,9 +184,11 @@ function AssistantMessage({
 }): React.ReactNode {
   switch (param.type) {
     case 'tool_use':
+    case 'server_tool_use':
+    case 'mcp_tool_use':
       return (
         <AssistantToolUseMessage
-          param={param}
+          param={param as any}
           costUSD={costUSD}
           durationMs={durationMs}
           addMargin={addMargin}

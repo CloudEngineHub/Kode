@@ -4,6 +4,7 @@ import * as React from 'react'
 import { type Message } from '@query'
 import { processUserInput } from '@utils/messages'
 import { useArrowKeyHistory } from '@hooks/useArrowKeyHistory'
+import { useDoublePress } from '@hooks/useDoublePress'
 import { useUnifiedCompletion } from '@hooks/useUnifiedCompletion'
 import { addToHistory } from '@history'
 import TextInput from './TextInput'
@@ -19,14 +20,17 @@ import { getModelManager, reloadModelManager } from '@utils/model'
 import { saveGlobalConfig } from '@utils/config'
 import { setTerminalTitle } from '@utils/terminal'
 import { launchExternalEditor } from '@utils/externalEditor'
-import terminalSetup, {
-  isShiftEnterKeyBindingInstalled,
-  handleHashCommand,
-} from '@commands/terminalSetup'
+import {
+  countLineBreaks,
+  normalizeLineEndings,
+  shouldTreatAsSpecialPaste,
+} from '@utils/paste'
+import { handleHashCommand } from '@utils/hashCommand'
 import { usePermissionContext } from '@context/PermissionContext'
-import { existsSync } from 'fs'
-import path from 'path'
+import { getPermissionModeCycleShortcut } from '@utils/permissionModeCycleShortcut'
 import { getCwd } from '@utils/state'
+import { CompactModeIndicator } from '@components/ModeIndicator'
+import { getPromptInputSpecialKeyAction } from '@utils/promptInputSpecialKey'
 
 // Async function to interpret the '#' command input using AI
 async function interpretHashCommand(input: string): Promise<string> {
@@ -96,6 +100,7 @@ type Props = {
   readFileTimestamps: { [filename: string]: number }
   abortController: AbortController | null
   onModelChange?: () => void
+  uiRefreshCounter?: number
 }
 
 type PastedTextSegment = { placeholder: string; text: string }
@@ -134,6 +139,7 @@ function PromptInput({
     show: boolean
     key?: string
   }>({ show: false })
+  const [rewindMessagePending, setRewindMessagePending] = useState(false)
   const [message, setMessage] = useState<{ show: boolean; text?: string }>({
     show: false,
   })
@@ -153,14 +159,21 @@ function PromptInput({
   const pastedImageCounter = React.useRef(1)
 
   // Permission context for mode management
-  const { cycleMode, currentMode } = usePermissionContext()
+  const { cycleMode, currentMode, toolPermissionContext } = usePermissionContext()
+  const modeCycleShortcut = useMemo(() => getPermissionModeCycleShortcut(), [])
+  const showQuickModelSwitchShortcut = modeCycleShortcut.displayText !== 'alt+m'
+
+  const handleRewindConversation = useDoublePress(
+    setRewindMessagePending,
+    () => onShowMessageSelector(),
+  )
 
   // useEffect(() => {
   //   getExampleCommands().then(commands => {
   //     setPlaceholder(`Try "${sample(commands)}"`)
   //   })
   // }, [])
-  const { columns } = useTerminalSize()
+  const { columns, rows } = useTerminalSize()
 
   const commandWidth = useMemo(
     () => Math.max(...commands.map(cmd => cmd.userFacingName().length)) + 5,
@@ -303,6 +316,11 @@ function PromptInput({
   }
 
   async function onSubmit(input: string, isSubmittingSlashCommand = false) {
+    // When unified completion is open, Enter confirms the selection; avoid submitting the prompt.
+    if (!isSubmittingSlashCommand && completionActive && suggestions.length > 0) {
+      return
+    }
+
     // Special handling for "put a verbose summary" and similar action prompts in koding mode
     if (
       (mode === 'koding' || input.startsWith('#')) &&
@@ -359,6 +377,8 @@ function PromptInput({
               tools,
               verbose,
               maxThinkingTokens: 0,
+              permissionMode: currentMode,
+              toolPermissionContext,
               // Add context flag for koding mode
               isKodingRequest: true,
               kodingContext,
@@ -416,14 +436,6 @@ function PromptInput({
       return
     }
     
-    // Handle Enter key when completions are active
-    // If there are suggestions showing, Enter should complete the selection, not send the message
-    if (suggestions.length > 0 && completionActive) {
-      // The completion is handled by useUnifiedCompletion hook
-      // Just return to prevent message sending
-      return
-    }
-
     // Handle exit commands
     if (['exit', 'quit', ':q', ':q!', ':wq', ':wq!'].includes(input.trim())) {
       exit()
@@ -462,6 +474,8 @@ function PromptInput({
           tools,
           verbose,
           maxThinkingTokens: 0,
+          permissionMode: currentMode,
+          toolPermissionContext,
         },
         messageId: undefined,
         abortController: newAbortController,
@@ -500,7 +514,7 @@ function PromptInput({
 
   function onImagePaste(image: string): string {
     onModeChange('prompt')
-    const placeholder = `[Image #${pastedImageCounter.current} pasted] `
+    const placeholder = `[Image #${pastedImageCounter.current}]`
     pastedImageCounter.current += 1
     setPastedImages(prev => [
       ...prev,
@@ -510,53 +524,24 @@ function PromptInput({
   }
 
   function onTextPaste(rawText: string) {
-    // Replace any \r with \n first to match useTextInput's conversion behavior
-    const text = rawText.replace(/\r/g, '\n')
+    const text = normalizeLineEndings(rawText)
+    const newlineCount = countLineBreaks(text)
 
-    // Multi-file path paste -> convert to @file mentions (for file reminder + Read tool)
-    const tokens = [...text.matchAll(/"([^"]+)"|'([^']+)'|(\S+)/g)].map(
-      m => (m[1] ?? m[2] ?? m[3] ?? '').trim(),
-    )
-    const normalizedTokens = tokens
-      .map(t => t.replace(/\\ /g, ' ').trim())
-      .filter(Boolean)
-
-    const cwd = getCwd()
-    const resolvedExisting = normalizedTokens
-      .map(t => (path.isAbsolute(t) ? t : path.resolve(cwd, t)))
-      .filter(p => existsSync(p))
-
-    const allTokensExist =
-      normalizedTokens.length > 0 &&
-      resolvedExisting.length === normalizedTokens.length
-
-    if (allTokensExist && resolvedExisting.length >= 2) {
-      const mentionTokens = resolvedExisting.map(p => {
-        const mentionPath =
-          p.startsWith(cwd + path.sep) ? path.relative(cwd, p) : p
-        const escaped = mentionPath.replaceAll('"', '\\"')
-        return escaped.includes(' ') ? `@"${escaped}"` : escaped
-      })
-      const insertion = mentionTokens.map(t => `@${t}`).join(' ') + ' '
-      const newInput =
-        input.slice(0, cursorOffset) + insertion + input.slice(cursorOffset)
-      onInputChange(newInput)
-      setCursorOffset(cursorOffset + insertion.length)
-      return
-    }
-
-    // Small single-line paste: insert directly (no placeholder)
-    if (!text.includes('\n') && text.length <= 800) {
+    // Reference CLI gating: only use a pasted-text placeholder when the paste is large or
+    // has more than a small number of newlines (threshold depends on terminal rows).
+    if (!shouldTreatAsSpecialPaste(text, { terminalRows: rows })) {
       const newInput = input.slice(0, cursorOffset) + text + input.slice(cursorOffset)
       onInputChange(newInput)
       setCursorOffset(cursorOffset + text.length)
       return
     }
 
-    const newlineCount = (text.match(/\n/g) || []).length
     const pasteId = pastedTextCounter.current
     pastedTextCounter.current += 1
-    const pastedPrompt = `[Pasted text #${pasteId} +${newlineCount} lines] `
+    const pastedPrompt =
+      newlineCount === 0
+        ? `[Pasted text #${pasteId}]`
+        : `[Pasted text #${pasteId} +${newlineCount} lines]`
 
     // Update the input with a visual indicator that text has been pasted
     const newInput =
@@ -605,13 +590,8 @@ function PromptInput({
     // - otherwise, it's used to show the message selector
     // - when double pressed, it's used to clear the input
     if (key.escape && messages.length > 0 && !input && !isLoading) {
-      onShowMessageSelector()
-    }
-
-    // Shift+Tab for mode cycling (retains legacy keyboard behavior)
-    if (key.shift && key.tab) {
-      cycleMode()
-      return true // Explicitly handled
+      handleRewindConversation()
+      return true
     }
 
     return false // Not handled, allow other hooks
@@ -652,40 +632,47 @@ function PromptInput({
     setMessage,
   ])
 
-  const insertNewlineAtCursor = useCallback(() => {
-    const next = input.slice(0, cursorOffset) + '\n' + input.slice(cursorOffset)
-    onInputChange(next)
-    setCursorOffset(cursorOffset + 1)
-  }, [cursorOffset, input, onInputChange])
-
   // Handle special key combinations before character input
   const handleSpecialKey = useCallback((inputChar: string, key: any): boolean => {
     if (isEditingExternally) return true
 
-    // Option+M (Alt+M) switches model - check both option and meta keys
-    // Block the µ character from being inserted
-    if (inputChar === 'µ' || ((key.option || key.meta) && (inputChar === 'm' || inputChar === 'M'))) {
+    const action = getPromptInputSpecialKeyAction({
+      inputChar,
+      key,
+      modeCycleShortcut,
+    })
+
+    if (action === 'modeCycle') {
+      cycleMode()
+      return true
+    }
+
+    if (action === 'modelSwitch') {
       if (!isLoading) {
         handleQuickModelSwitch()
       }
-      return true // Block character insertion
+      return true
     }
 
     // Note: Option + Enter is now handled in useTextInput
 
-    // Option+G (Alt+G) -> open external editor
-    // Block the © character from being inserted
-    if (inputChar === '©' || ((key.option || key.meta) && (inputChar === 'g' || inputChar === 'G'))) {
+    if (action === 'externalEditor') {
       void handleExternalEdit()
       return true // Block character insertion
     }
 
     return false // Not handled, allow normal processing
-  }, [handleQuickModelSwitch, handleExternalEdit, isEditingExternally, isLoading])
+  }, [
+    cycleMode,
+    handleQuickModelSwitch,
+    handleExternalEdit,
+    isEditingExternally,
+    isLoading,
+    modeCycleShortcut,
+  ])
 
-  const textInputColumns = useTerminalSize().columns - 6
-  const tokenUsage = useMemo(() => countTokens(messages), [messages])
-
+  const textInputColumns = columns - 6
+	  const tokenUsage = useMemo(() => countTokens(messages), [messages])
   // 🔧 Fix: Track model ID changes to detect external config updates
   const modelManager = getModelManager()
   const currentModelId = (modelManager.getModel('main') as any)?.id || null
@@ -767,13 +754,13 @@ function PromptInput({
             </Text>
           )}
         </Box>
-        <Box paddingRight={1}>
-          <TextInput
-            multiline
-            focus={!isEditingExternally}
-            onSubmit={onSubmit}
-            onChange={onChange}
-            value={input}
+	        <Box paddingRight={1}>
+	          <TextInput
+	            multiline
+	            focus={!isEditingExternally}
+	            onSubmit={onSubmit}
+	            onChange={onChange}
+	            value={input}
             onHistoryUp={handleHistoryUp}
             onHistoryDown={handleHistoryDown}
             onHistoryReset={() => resetHistory()}
@@ -805,24 +792,31 @@ function PromptInput({
                 <Text dimColor>Press {exitMessage.key} again to exit</Text>
               ) : message.show ? (
                 <Text dimColor>{message.text}</Text>
+              ) : rewindMessagePending ? (
+                <Text dimColor>Press Escape again to undo</Text>
               ) : modelSwitchMessage.show ? (
                 <Text color={theme.success}>{modelSwitchMessage.text}</Text>
               ) : (
-                <>
-                  <Text
-                    color={mode === 'bash' ? theme.bashBorder : undefined}
-                    dimColor={mode !== 'bash'}
-                  >
-                    ! run some shell command
-                  </Text>
-                  <Text dimColor>· / for commands</Text>
-                  <Text
-                    color={mode === 'koding' ? theme.noting : undefined}
-                    dimColor={mode !== 'koding'}
-                  >
-                    · # tell agent something to remember forever
-                  </Text>
-                </>
+                mode === 'prompt' && currentMode !== 'default' ? (
+                  <CompactModeIndicator />
+                ) : (
+                  <>
+                    <Text
+                      color={mode === 'bash' ? theme.bashBorder : undefined}
+                      dimColor={mode !== 'bash'}
+                    >
+                      ! run some shell command
+                    </Text>
+                    <Text dimColor> · / for commands</Text>
+                    <Text
+                      color={mode === 'koding' ? theme.noting : undefined}
+                      dimColor={mode !== 'koding'}
+                    >
+                      {' '}
+                      · # tell agent something to remember forever
+                    </Text>
+                  </>
+                )
               )}
             </Box>
             <Box justifyContent="flex-end">
@@ -831,15 +825,18 @@ function PromptInput({
           </Box>
 
           {/* Second line: Shortcuts */}
-          {!exitMessage.show && !message.show && !modelSwitchMessage.show && (
-            <Box flexDirection="row" justifyContent="space-between">
-              <Box justifyContent="flex-start" gap={1}>
-                <Text dimColor>
-                  option+m to switch model · option+g edit prompt with system editor · option+enter for newline
-                </Text>
-              </Box>
-              <SentryErrorBoundary children={
-                <Box justifyContent="flex-end" gap={1}>
+          {!exitMessage.show &&
+	            !message.show &&
+	            !modelSwitchMessage.show &&
+	            !rewindMessagePending && (
+	            <Box flexDirection="row" justifyContent="space-between">
+	              <Box justifyContent="flex-start" gap={1}>
+	                <Text dimColor wrap="truncate-end">
+		                  option+enter: newline · {showQuickModelSwitchShortcut ? 'option+m: switch model · ' : ''}option+g: external editor · {modeCycleShortcut.displayText}: switch mode
+		                </Text>
+	              </Box>
+	              <SentryErrorBoundary children={
+	                <Box justifyContent="flex-end" gap={1}>
                   <TokenWarning tokenUsage={tokenUsage} />
                 </Box>
               } />

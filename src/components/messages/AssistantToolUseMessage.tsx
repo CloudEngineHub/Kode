@@ -10,6 +10,7 @@ import { BLACK_CIRCLE } from '@constants/figures'
 import { ThinkTool } from '@tools/ThinkTool/ThinkTool'
 import { AssistantThinkingMessage } from './AssistantThinkingMessage'
 import { TaskToolMessage } from './TaskToolMessage'
+import { resolveToolNameAlias } from '@utils/toolNameAliases'
 
 type Props = {
   param: ToolUseBlockParam
@@ -40,7 +41,8 @@ export function AssistantToolUseMessage({
   shouldAnimate,
   shouldShowDot,
 }: Props): React.ReactNode {
-  const tool = tools.find(_ => _.name === param.name)
+  const resolvedName = resolveToolNameAlias(param.name).resolvedName
+  const tool = tools.find(_ => _.name === resolvedName)
   if (!tool) {
     logError(`Tool ${param.name} not found`)
     return null
@@ -61,7 +63,28 @@ export function AssistantToolUseMessage({
     )
   }
 
-  const userFacingToolName = tool.userFacingName ? tool.userFacingName() : tool.name
+  const parsedInput = tool.inputSchema.safeParse(param.input)
+  const userFacingToolName = tool.userFacingName
+    ? tool.userFacingName(parsedInput.success ? (parsedInput.data as any) : undefined)
+    : tool.name
+
+  const hasToolName = userFacingToolName.trim().length > 0
+  const hasInputObject =
+    param.input &&
+    typeof param.input === 'object' &&
+    Object.keys(param.input as { [key: string]: unknown }).length > 0
+  const toolMessage = hasInputObject
+    ? tool.renderToolUseMessage(param.input as never, { verbose })
+    : null
+  const hasToolMessage =
+    React.isValidElement(toolMessage) ||
+    (typeof toolMessage === 'string' && toolMessage.trim().length > 0)
+
+  // Reference CLI parity: tools with empty userFacingName and null/empty tool message
+  // should not render a tool-use line at all (e.g., AskUserQuestion/TodoWrite).
+  if (!hasToolName && !hasToolMessage) {
+    return null
+  }
   return (
     <Box
       flexDirection="row"
@@ -88,28 +111,28 @@ export function AssistantToolUseMessage({
             ))}
           {tool.name === 'Task' && param.input ? (
             <TaskToolMessage
-              agentType={String((param.input as any).subagent_type || 'general-purpose')}
+              agentType={
+                parsedInput.success
+                  ? String((parsedInput.data as any).subagent_type || 'general-purpose')
+                  : 'general-purpose'
+              }
               bold={Boolean(!isQueued)}
               children={String(userFacingToolName || '')}
             />
           ) : (
-            <Text color={color} bold={!isQueued}>
-              {userFacingToolName}
-            </Text>
+            hasToolName && (
+              <Text color={color} bold={!isQueued}>
+                {userFacingToolName}
+              </Text>
+            )
           )}
         </Box>
         <Box flexWrap="nowrap">
-          {Object.keys(param.input as { [key: string]: unknown }).length > 0 &&
+          {hasToolMessage &&
             (() => {
-              const toolMessage = tool.renderToolUseMessage(
-                param.input as never,
-                {
-                  verbose,
-                },
-              )
-
               // If the tool returns a React component, render it directly
               if (React.isValidElement(toolMessage)) {
+                if (!hasToolName) return toolMessage
                 return (
                   <Box flexDirection="row">
                     <Text color={color}>(</Text>
@@ -117,6 +140,12 @@ export function AssistantToolUseMessage({
                     <Text color={color}>)</Text>
                   </Box>
                 )
+              }
+
+              if (typeof toolMessage !== 'string') return null
+
+              if (!hasToolName) {
+                return <Text color={color}>{toolMessage}</Text>
               }
 
               // If it's a string, wrap it in Text

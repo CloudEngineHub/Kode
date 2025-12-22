@@ -551,6 +551,7 @@ async function connectToServer(
 
 type ConnectedClient = {
   client: Client
+  capabilities?: Record<string, unknown> | null
   name: string
   type: 'connected'
 }
@@ -606,7 +607,13 @@ export const getClients = memoize(async (): Promise<WrappedClient[]> => {
       batch.map(async ([name, serverRef]) => {
         try {
           const client = await connectToServer(name, serverRef as McpServerConfig)
-          return { name, client, type: 'connected' as const }
+          let capabilities: Record<string, unknown> | null = null
+          try {
+            capabilities = client.getServerCapabilities() as any
+          } catch {
+            capabilities = null
+          }
+          return { name, client, capabilities, type: 'connected' as const }
         } catch (error) {
           logMCPError(
             name,
@@ -639,8 +646,19 @@ async function requestAll<
       let timeoutSignal: TimeoutSignal | null = null
 
       try {
-        const capabilities = await client.client.getServerCapabilities()
-        if (!capabilities?.[requiredCapability]) {
+        let capabilities: Record<string, unknown> | null =
+          client.capabilities ?? null
+
+        if (!capabilities) {
+          try {
+            capabilities = client.client.getServerCapabilities() as any
+          } catch {
+            capabilities = null
+          }
+          client.capabilities = capabilities
+        }
+
+        if (!(capabilities as any)?.[requiredCapability]) {
           return null
         }
 

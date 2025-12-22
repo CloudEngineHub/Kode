@@ -3,7 +3,7 @@ import React from 'react'
 import { z } from 'zod'
 import { Cost } from '@components/Cost'
 import { FallbackToolUseRejectedMessage } from '@components/FallbackToolUseRejectedMessage'
-import type { Tool } from '@tool'
+import type { Tool, ToolUseContext } from '@tool'
 import { getClients } from '@services/mcpClient'
 import { ListResourcesResultSchema } from '@modelcontextprotocol/sdk/types.js'
 import { DESCRIPTION, PROMPT, TOOL_NAME } from './prompt'
@@ -48,9 +48,10 @@ export const ListMcpResourcesTool = {
   needsPermissions() {
     return false
   },
-  async validateInput({ server }: Input) {
+  async validateInput({ server }: Input, context?: ToolUseContext) {
     if (!server) return { result: true }
-    const clients = await getClients()
+    const clients =
+      (context?.options?.mcpClients as any[]) ?? (await getClients())
     const found = clients.some(c => c.name === server)
     if (!found) {
       return {
@@ -84,8 +85,9 @@ export const ListMcpResourcesTool = {
   renderResultForAssistant(output: Output) {
     return JSON.stringify(output)
   },
-  async *call({ server }: Input) {
-    const clients = await getClients()
+  async *call({ server }: Input, context: ToolUseContext) {
+    const clients =
+      (context.options?.mcpClients as any[]) ?? (await getClients())
     const selected = server ? clients.filter(c => c.name === server) : clients
     if (server && selected.length === 0) {
       throw new Error(
@@ -97,8 +99,16 @@ export const ListMcpResourcesTool = {
     for (const wrapped of selected) {
       if (wrapped.type !== 'connected') continue
       try {
-        const capabilities = await wrapped.client.getServerCapabilities()
-        if (!capabilities?.resources) continue
+        let capabilities: Record<string, unknown> | null =
+          (wrapped as any).capabilities ?? null
+        if (!capabilities) {
+          try {
+            capabilities = wrapped.client.getServerCapabilities() as any
+          } catch {
+            capabilities = null
+          }
+        }
+        if (!(capabilities as any)?.resources) continue
         const result = await wrapped.client.request(
           { method: 'resources/list' },
           ListResourcesResultSchema,
@@ -122,4 +132,3 @@ export const ListMcpResourcesTool = {
     }
   },
 } satisfies Tool<typeof inputSchema, Output>
-

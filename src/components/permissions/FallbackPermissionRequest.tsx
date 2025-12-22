@@ -126,6 +126,7 @@ export function FallbackPermissionRequest({
                   toolUseConfirm.tool,
                   toolUseConfirm.input,
                   toolUseConfirmGetPrefix(toolUseConfirm),
+                  toolUseConfirm.toolUseContext,
                 ).then(() => {
                   toolUseConfirm.onAllow('permanent')
                   onDone()

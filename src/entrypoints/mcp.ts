@@ -1,4 +1,9 @@
 // @ts-nocheck
+// Default-on safety: enable the Bash LLM gate for agent calls unless explicitly disabled.
+if (process.env.KODE_BASH_LLM_GATE === undefined) {
+  process.env.KODE_BASH_LLM_GATE = '1'
+}
+
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import {

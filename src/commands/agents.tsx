@@ -757,7 +757,7 @@ function MultilineTextInput({
       {/* Instructions */}
       <Box marginTop={1}>
         <Text dimColor>
-          Press Enter to submit · Shift+Enter for new line
+          Press Enter to submit · Option+Enter for new line
         </Text>
       </Box>
     </Box>

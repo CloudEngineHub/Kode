@@ -7,9 +7,11 @@ type Props = {
 
 export function MessageResponse({ children }: Props): React.ReactNode {
   return (
-    <Box flexDirection="row" height={1} overflow="hidden">
+    <Box flexDirection="row">
       <Text>{'  '}⎿ &nbsp;</Text>
-      {children}
+      <Box flexDirection="column" flexGrow={1}>
+        {children}
+      </Box>
     </Box>
   )
 }

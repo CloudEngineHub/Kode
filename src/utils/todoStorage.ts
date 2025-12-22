@@ -176,24 +176,6 @@ export function setTodos(todos: TodoItem[], agentId?: string): void {
       }
     })
 
-    // Smart sorting for agent todos
-    updatedTodos.sort((a, b) => {
-      // 1. Status priority: in_progress > pending > completed
-      const statusOrder = { in_progress: 3, pending: 2, completed: 1 }
-      const statusDiff = statusOrder[b.status] - statusOrder[a.status]
-      if (statusDiff !== 0) return statusDiff
-
-      // 2. For same status, sort by priority: high > medium > low
-      const priorityOrder = { high: 3, medium: 2, low: 1 }
-      const priorityDiff = priorityOrder[b.priority] - priorityOrder[a.priority]
-      if (priorityDiff !== 0) return priorityDiff
-
-      // 3. For same status and priority, sort by updatedAt (newest first)
-      const aTime = a.updatedAt || 0
-      const bTime = b.updatedAt || 0
-      return bTime - aTime
-    })
-
     // Write to agent-specific storage
     writeAgentData(resolvedAgentId, updatedTodos)
     updateMetrics('setTodos')
@@ -228,24 +210,6 @@ export function setTodos(todos: TodoItem[], agentId?: string): void {
           ? existingTodo?.status
           : todo.previousStatus,
     }
-  })
-
-  // Smart sorting: status -> priority -> updatedAt
-  updatedTodos.sort((a, b) => {
-    // 1. Status priority: in_progress > pending > completed
-    const statusOrder = { in_progress: 3, pending: 2, completed: 1 }
-    const statusDiff = statusOrder[b.status] - statusOrder[a.status]
-    if (statusDiff !== 0) return statusDiff
-
-    // 2. For same status, sort by priority: high > medium > low
-    const priorityOrder = { high: 3, medium: 2, low: 1 }
-    const priorityDiff = priorityOrder[b.priority] - priorityOrder[a.priority]
-    if (priorityDiff !== 0) return priorityDiff
-
-    // 3. For same status and priority, sort by updatedAt (newest first)
-    const aTime = a.updatedAt || 0
-    const bTime = b.updatedAt || 0
-    return bTime - aTime
   })
 
   setSessionState({

@@ -883,7 +883,7 @@ export const providers = {
     baseURL: 'https://api.moonshot.cn/v1',
   },
   anthropic: {
-    name: 'Claude',
+    name: 'Messages API (Native)',
     baseURL: 'https://api.anthropic.com',
   },
   burncloud: {

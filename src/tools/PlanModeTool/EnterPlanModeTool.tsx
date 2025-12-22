@@ -1,11 +1,12 @@
 import { Box, Text } from 'ink'
 import React from 'react'
 import { z } from 'zod'
-import { Cost } from '@components/Cost'
 import { Tool } from '@tool'
 import { enterPlanMode } from '@utils/planMode'
 import { ENTER_DESCRIPTION, ENTER_PROMPT, ENTER_TOOL_NAME } from './prompt'
 import { getTheme } from '@utils/theme'
+import { BLACK_CIRCLE } from '@constants/figures'
+import { setPermissionMode } from '@utils/permissionModeState'
 
 const inputSchema = z.strictObject({})
 
@@ -44,26 +45,25 @@ export const EnterPlanModeTool = {
     return ''
   },
   renderToolUseRejectedMessage() {
+    const theme = getTheme()
     return (
-      <Box flexDirection="row" marginTop={1} width="100%">
-        <Text>&nbsp;&nbsp;⎿ &nbsp;</Text>
-        <Text color={getTheme().secondaryText}>User declined to enter plan mode</Text>
+      <Box flexDirection="row" marginTop={1}>
+        <Text color={theme.text}>{BLACK_CIRCLE}</Text>
+        <Text> User declined to enter plan mode</Text>
       </Box>
     )
   },
-  renderToolResultMessage(output: Output) {
+  renderToolResultMessage(_output: Output) {
+    const theme = getTheme()
     return (
-      <Box flexDirection="column" marginTop={1} width="100%">
-        <Box flexDirection="row" justifyContent="space-between">
-          <Box flexDirection="row">
-            <Text>&nbsp;&nbsp;⎿ &nbsp;</Text>
-            <Text bold>Entered plan mode</Text>
-          </Box>
-          <Cost costUSD={0} durationMs={0} debug={false} />
+      <Box flexDirection="column" marginTop={1}>
+        <Box flexDirection="row">
+          <Text color={theme.planMode}>{BLACK_CIRCLE}</Text>
+          <Text> Entered plan mode</Text>
         </Box>
-        <Box paddingLeft={4}>
+        <Box paddingLeft={2}>
           <Text dimColor>
-            Plan mode is now active. Exploring and designing an implementation approach.
+            Kode Agent is now exploring and designing an implementation approach.
           </Text>
         </Box>
       </Box>
@@ -87,7 +87,9 @@ Remember: DO NOT write or edit any files yet. This is a read-only exploration an
       throw new Error('EnterPlanMode tool cannot be used in agent contexts')
     }
 
+    setPermissionMode(context, 'plan')
     enterPlanMode(context)
+
     const output: Output = {
       message:
         'Entered plan mode. You should now focus on exploring the codebase and designing an implementation approach.',

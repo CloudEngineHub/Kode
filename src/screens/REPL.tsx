@@ -27,7 +27,6 @@ import { useCancelRequest } from '@hooks/useCancelRequest'
 import useCanUseTool from '@hooks/useCanUseTool'
 import { useLogMessages } from '@hooks/useLogMessages'
 import { PermissionProvider } from '@context/PermissionContext'
-import { ModeIndicator } from '@components/ModeIndicator'
 import {
   setMessagesGetter,
   setMessagesSetter,
@@ -62,13 +61,15 @@ import {
   extractTag,
   createAssistantMessage,
 } from '@utils/messages'
+import { getReplStaticPrefixLength } from '@utils/replStaticSplit'
 import { getModelManager, ModelManager } from '@utils/model'
 import { clearTerminal, updateTerminalTitle } from '@utils/terminal'
 import { BinaryFeedback } from '@components/binary-feedback/BinaryFeedback'
 import { getMaxThinkingTokens } from '@utils/thinking'
 import { getOriginalCwd } from '@utils/state'
-import { handleHashCommand } from '@commands/terminalSetup'
+import { handleHashCommand } from '@utils/hashCommand'
 import { debug as debugLogger } from '@utils/debugLogger'
+import { getToolPermissionContextForConversationKey } from '@utils/toolPermissionContextState'
 
 type Props = {
   commands: Command[]
@@ -122,6 +123,7 @@ export function REPL({
   const [forkNumber, setForkNumber] = useState(
     getNextAvailableLogForkNumber(messageLogName, initialForkNumber, 0),
   )
+  const [uiRefreshCounter, setUiRefreshCounter] = useState(0)
 
   const [
     forkConvoWithMessagesOnTheNextRender,
@@ -247,8 +249,13 @@ export function REPL({
           forkNumber,
           messageLogName,
           tools,
+          mcpClients,
           verbose,
           maxThinkingTokens: 0,
+          toolPermissionContext: getToolPermissionContextForConversationKey({
+            conversationKey: `${messageLogName}:${forkNumber}`,
+            isBypassPermissionsModeAvailable: !(safeMode ?? false),
+          }),
         },
         messageId: getLastAssistantMessageId(messages),
         setForkConvoWithMessagesOnTheNextRender,
@@ -294,9 +301,14 @@ export function REPL({
             forkNumber,
             messageLogName,
             tools,
+            mcpClients,
             verbose,
             safeMode,
             maxThinkingTokens,
+            toolPermissionContext: getToolPermissionContextForConversationKey({
+              conversationKey: `${messageLogName}:${forkNumber}`,
+              isBypassPermissionsModeAvailable: !(safeMode ?? false),
+            }),
           },
           messageId: getLastAssistantMessageId([...messages, ...newMessages]),
           readFileTimestamps: readFileTimestamps.current,
@@ -379,11 +391,16 @@ export function REPL({
           forkNumber,
           messageLogName,
           tools,
+          mcpClients,
           verbose,
           safeMode,
           maxThinkingTokens,
           // If this came from Koding mode, pass that along
           isKodingRequest: isKodingRequest || undefined,
+          toolPermissionContext: getToolPermissionContextForConversationKey({
+            conversationKey: `${messageLogName}:${forkNumber}`,
+            isBypassPermissionsModeAvailable: !(safeMode ?? false),
+          }),
         },
         messageId: getLastAssistantMessageId([...messages, lastMessage]),
         readFileTimestamps: readFileTimestamps.current,
@@ -441,7 +458,7 @@ export function REPL({
   // Register model config change handler for UI refresh
   useEffect(() => {
     setModelConfigChangeHandler(() => {
-      setForkNumber(prev => prev + 1)
+      setUiRefreshCounter(prev => prev + 1)
     })
   }, [])
 
@@ -483,45 +500,46 @@ export function REPL({
     [normalizedMessages],
   )
 
+  const orderedMessages = useMemo(
+    () => reorderMessages(normalizedMessages),
+    [normalizedMessages],
+  )
+
+  const replStaticPrefixLength = useMemo(
+    () =>
+      getReplStaticPrefixLength(
+        orderedMessages,
+        normalizedMessages,
+        unresolvedToolUseIDs,
+      ),
+    [orderedMessages, normalizedMessages, unresolvedToolUseIDs],
+  )
+
   const messagesJSX = useMemo(() => {
-    return [
-      {
-        type: 'static',
-        jsx: (
-          <Box flexDirection="column" key={`logo${forkNumber}`}>
-            <Logo
-              mcpClients={mcpClients}
-              isDefaultModel={isDefaultModel}
-              updateBannerVersion={updateAvailableVersion}
-              updateBannerCommands={updateCommands}
+    return orderedMessages.map((_, index) => {
+      const toolUseID = getToolUseID(_)
+      const message =
+        _.type === 'progress' ? (
+          _.content.message.content[0]?.type === 'text' &&
+          // TaskTool interrupts use Progress messages without extra ⎿
+          // since <Message /> component already adds the margin
+          _.content.message.content[0].text === INTERRUPT_MESSAGE ? (
+            <Message
+              message={_.content}
+              messages={_.normalizedMessages}
+              addMargin={false}
+              tools={_.tools}
+              verbose={verbose ?? false}
+              debug={debug}
+              erroredToolUseIDs={new Set()}
+              inProgressToolUseIDs={new Set()}
+              unresolvedToolUseIDs={new Set()}
+              shouldAnimate={false}
+              shouldShowDot={false}
             />
-            <ProjectOnboarding workspaceDir={getOriginalCwd()} />
-          </Box>
-        ),
-      },
-      ...reorderMessages(normalizedMessages).map(_ => {
-        const toolUseID = getToolUseID(_)
-        const message =
-          _.type === 'progress' ? (
-            _.content.message.content[0]?.type === 'text' &&
-            // TaskTool interrupts use Progress messages without extra ⎿ 
-            // since <Message /> component already adds the margin
-            _.content.message.content[0].text === INTERRUPT_MESSAGE ? (
-              <Message
-                message={_.content}
-                messages={_.normalizedMessages}
-                addMargin={false}
-                tools={_.tools}
-                verbose={verbose ?? false}
-                debug={debug}
-                erroredToolUseIDs={new Set()}
-                inProgressToolUseIDs={new Set()}
-                unresolvedToolUseIDs={new Set()}
-                shouldAnimate={false}
-                shouldShowDot={false}
-              />
-            ) : (
-              <MessageResponse children={
+          ) : (
+            <MessageResponse
+              children={
                 <Message
                   message={_.content}
                   messages={_.normalizedMessages}
@@ -539,66 +557,59 @@ export function REPL({
                   shouldAnimate={false}
                   shouldShowDot={false}
                 />
-              } />
-            )
-          ) : (
-            <Message
-              message={_}
-              messages={normalizedMessages}
-              addMargin={true}
-              tools={tools}
-              verbose={verbose}
-              debug={debug}
-              erroredToolUseIDs={erroredToolUseIDs}
-              inProgressToolUseIDs={inProgressToolUseIDs}
-              shouldAnimate={
-                !toolJSX &&
-                !toolUseConfirm &&
-                !isMessageSelectorVisible &&
-                (!toolUseID || inProgressToolUseIDs.has(toolUseID))
               }
-              shouldShowDot={true}
-              unresolvedToolUseIDs={unresolvedToolUseIDs}
             />
           )
-
-        const type = shouldRenderStatically(
-          _,
-          normalizedMessages,
-          unresolvedToolUseIDs,
+        ) : (
+          <Message
+            message={_}
+            messages={normalizedMessages}
+            addMargin={true}
+            tools={tools}
+            verbose={verbose}
+            debug={debug}
+            erroredToolUseIDs={erroredToolUseIDs}
+            inProgressToolUseIDs={inProgressToolUseIDs}
+            shouldAnimate={
+              !toolJSX &&
+              !toolUseConfirm &&
+              !isMessageSelectorVisible &&
+              (!toolUseID || inProgressToolUseIDs.has(toolUseID))
+            }
+            shouldShowDot={true}
+            unresolvedToolUseIDs={unresolvedToolUseIDs}
+          />
         )
-          ? 'static'
-          : 'transient'
 
-        if (debug) {
-          return {
-            type,
-            jsx: (
-              <Box
-                borderStyle="single"
-                borderColor={type === 'static' ? 'green' : 'red'}
-                key={_.uuid}
-                width="100%"
-              >
-                {message}
-              </Box>
-            ),
-          }
-        }
+      const isInStaticPrefix = index < replStaticPrefixLength
 
+      if (debug) {
         return {
-          type,
           jsx: (
-            <Box key={_.uuid} width="100%">
+            <Box
+              borderStyle="single"
+              borderColor={isInStaticPrefix ? 'green' : 'red'}
+              key={_.uuid}
+              width="100%"
+            >
               {message}
             </Box>
           ),
         }
-      }),
-    ]
+      }
+
+      return {
+        jsx: (
+          <Box key={_.uuid} width="100%">
+            {message}
+          </Box>
+        ),
+      }
+    })
   }, [
     forkNumber,
     normalizedMessages,
+    orderedMessages,
     tools,
     verbose,
     debug,
@@ -610,7 +621,41 @@ export function REPL({
     unresolvedToolUseIDs,
     mcpClients,
     isDefaultModel,
+    replStaticPrefixLength,
   ])
+
+  const staticItems = useMemo(
+    () => [
+      {
+        jsx: (
+          <Box flexDirection="column" key={`logo${forkNumber}`}>
+            <Logo
+              mcpClients={mcpClients}
+              isDefaultModel={isDefaultModel}
+              updateBannerVersion={updateAvailableVersion}
+              updateBannerCommands={updateCommands}
+            />
+            <ProjectOnboarding workspaceDir={getOriginalCwd()} />
+          </Box>
+        ),
+      },
+      ...messagesJSX.slice(0, replStaticPrefixLength),
+    ],
+    [
+      forkNumber,
+      messagesJSX,
+      replStaticPrefixLength,
+      mcpClients,
+      isDefaultModel,
+      updateAvailableVersion,
+      updateCommands,
+    ],
+  )
+
+  const transientItems = useMemo(
+    () => messagesJSX.slice(replStaticPrefixLength),
+    [messagesJSX, replStaticPrefixLength],
+  )
 
   // only show the dialog once not loading
   const showingCostDialog = !isLoading && showCostDialog
@@ -623,15 +668,13 @@ export function REPL({
       isBypassPermissionsModeAvailable={!safeMode}
     >
       <React.Fragment>
-        {/* Update banner now renders inside Logo for stable placement */}
-        <ModeIndicator />
       <React.Fragment key={`static-messages-${forkNumber}`}>
         <Static
-          items={messagesJSX.filter(_ => _.type === 'static')}
+          items={staticItems}
           children={(item: any) => item.jsx}
         />
       </React.Fragment>
-      {messagesJSX.filter(_ => _.type === 'transient').map(_ => _.jsx)}
+      {transientItems.map(_ => _.jsx)}
       <Box
         borderColor="red"
         borderStyle={debug ? 'single' : undefined}
@@ -715,6 +758,7 @@ export function REPL({
                 onSubmitCountChange={setSubmitCount}
                 setIsLoading={setIsLoading}
                 setAbortController={setAbortController}
+                uiRefreshCounter={uiRefreshCounter}
                 onShowMessageSelector={() =>
                   setIsMessageSelectorVisible(prev => !prev)
                 }
@@ -723,7 +767,6 @@ export function REPL({
                 }
                 readFileTimestamps={readFileTimestamps.current}
                 abortController={abortController}
-                onModelChange={() => setForkNumber(prev => prev + 1)}
               />
             </>
           )}
@@ -771,41 +814,4 @@ export function REPL({
       </React.Fragment>
     </PermissionProvider>
   )
-}
-
-function shouldRenderStatically(
-  message: NormalizedMessage,
-  messages: NormalizedMessage[],
-  unresolvedToolUseIDs: Set<string>,
-): boolean {
-  switch (message.type) {
-    case 'user':
-    case 'assistant': {
-      const toolUseID = getToolUseID(message)
-      if (!toolUseID) {
-        return true
-      }
-      if (unresolvedToolUseIDs.has(toolUseID)) {
-        return false
-      }
-
-      const correspondingProgressMessage = messages.find(
-        _ => _.type === 'progress' && _.toolUseID === toolUseID,
-      ) as ProgressMessage | null
-      if (!correspondingProgressMessage) {
-        return true
-      }
-
-      return !intersects(
-        unresolvedToolUseIDs,
-        correspondingProgressMessage.siblingToolUseIDs,
-      )
-    }
-    case 'progress':
-      return !intersects(unresolvedToolUseIDs, message.siblingToolUseIDs)
-  }
-}
-
-function intersects<A>(a: Set<A>, b: Set<A>): boolean {
-  return a.size > 0 && b.size > 0 && [...a].some(_ => b.has(_))
 }

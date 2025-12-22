@@ -9,6 +9,7 @@ import { Tool } from '@tool'
 import { getCwd } from '@utils/state'
 import { getAbsoluteAndRelativePaths, getAbsolutePath } from '@utils/file'
 import { ripGrep } from '@utils/ripgrep'
+import { getBunShellSandboxPlan } from '@utils/bunShellSandboxPlan'
 import { DESCRIPTION, TOOL_NAME_FOR_PROMPT } from './prompt'
 import { hasReadPermission } from '@utils/permissions/filesystem'
 import { isAbsolute, relative } from 'path'
@@ -70,7 +71,7 @@ const inputSchema = z.strictObject({
     .number()
     .optional()
     .describe(
-      'Limit output to first N lines/entries, equivalent to "| head -N". Works across all output modes: content (limits output lines), files_with_matches (limits file paths), count (limits count entries). Defaults to 100.',
+      'Limit output to first N lines/entries, equivalent to "| head -N". Works across all output modes: content (limits output lines), files_with_matches (limits file paths), count (limits count entries). Defaults based on "cap" experiment value: 0 (unlimited), 20, or 100.',
     ),
   offset: z
     .number()
@@ -279,8 +280,9 @@ export const GrepTool = {
       offset = 0,
       multiline = false,
     }: any,
-    { abortController }: any,
+    toolUseContext: any,
   ) {
+    const { abortController } = toolUseContext
     const start = Date.now()
     const absolutePath = getAbsolutePath(path) || getCwd()
 
@@ -324,7 +326,13 @@ export const GrepTool = {
     if (String(pattern).startsWith('-')) args.push('-e', String(pattern))
     else args.push(String(pattern))
 
-    const lines = await ripGrep(args, absolutePath, abortController.signal)
+    const sandboxPlan = getBunShellSandboxPlan({
+      command: 'rg',
+      toolUseContext,
+    })
+    const lines = await ripGrep(args, absolutePath, abortController.signal, {
+      sandbox: sandboxPlan.settings.enabled ? sandboxPlan.bunShellSandboxOptions : undefined,
+    })
 
     if (output_mode === 'content') {
       const rewritten = lines.map(line => {

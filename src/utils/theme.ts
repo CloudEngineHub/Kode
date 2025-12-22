@@ -6,6 +6,8 @@ export interface Theme {
   noting: string
   notingBorder: string
   permission: string
+  autoAccept: string
+  planMode: string
   secondaryBorder: string
   inputBorder: string
   text: string
@@ -30,6 +32,8 @@ const lightTheme: Theme = {
   noting: '#222222',
   notingBorder: '#10b981',
   permission: '#e9c61aff',
+  autoAccept: '#8700ff',
+  planMode: '#006666',
   secondaryBorder: '#999',
   inputBorder: '#a5b4fc',
   text: '#000',
@@ -54,6 +58,8 @@ const lightDaltonizedTheme: Theme = {
   noting: '#222222',
   notingBorder: '#059669',
   permission: '#3366ff',
+  autoAccept: '#8700ff',
+  planMode: '#006666',
   secondaryBorder: '#999',
   inputBorder: '#93a5f5',
   text: '#000',
@@ -78,6 +84,8 @@ const darkTheme: Theme = {
   noting: '#222222',
   notingBorder: '#34d399',
   permission: '#b1b9f9',
+  autoAccept: '#af87ff',
+  planMode: '#48968c',
   secondaryBorder: '#888',
   inputBorder: '#818cf8',
   text: '#fff',
@@ -102,6 +110,8 @@ const darkDaltonizedTheme: Theme = {
   noting: '#222222',
   notingBorder: '#10b981',
   permission: '#99ccff',
+  autoAccept: '#af87ff',
+  planMode: '#48968c',
   secondaryBorder: '#888',
   inputBorder: '#7c8ff5',
   text: '#fff',

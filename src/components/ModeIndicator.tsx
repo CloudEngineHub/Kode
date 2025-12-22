@@ -1,7 +1,9 @@
 import React from 'react'
 import { Box, Text } from 'ink'
 import { usePermissionContext } from '@context/PermissionContext'
-import { getTheme } from '@utils/theme'
+import { getTheme, type Theme } from '@utils/theme'
+import { getPermissionModeCycleShortcut } from '@utils/permissionModeCycleShortcut'
+import type { PermissionMode } from '@kode-types/PermissionMode'
 
 interface ModeIndicatorProps {
   showTransitionCount?: boolean
@@ -10,79 +12,135 @@ interface ModeIndicatorProps {
 export function ModeIndicator({
   showTransitionCount = false,
 }: ModeIndicatorProps) {
-  const { currentMode, permissionContext, getModeConfig } =
-    usePermissionContext()
+  const { currentMode, permissionContext } = usePermissionContext()
   const theme = getTheme()
-  const modeConfig = getModeConfig()
+  const shortcut = getPermissionModeCycleShortcut()
 
   // Don't show indicator for default mode unless explicitly requested
   if (currentMode === 'default' && !showTransitionCount) {
     return null
   }
 
+  const indicator = __getModeIndicatorDisplayForTests({
+    mode: currentMode,
+    shortcutDisplayText: shortcut.displayText,
+    theme,
+  })
+
   return (
-    <Box borderStyle="single" padding={1} marginY={1}>
-      <Box flexDirection="column">
-        <Box flexDirection="row" alignItems="center">
-          <Text color={getThemeColor(modeConfig.color, theme)} bold>
-            {modeConfig.icon} {modeConfig.label}
-          </Text>
-        </Box>
-
+    <Box
+      flexDirection="row"
+      justifyContent="space-between"
+      width="100%"
+    >
+      <Text color={indicator.color}>
+        {indicator.mainText}
+        {indicator.shortcutHintText ? (
+          <Text dimColor>{indicator.shortcutHintText}</Text>
+        ) : null}
+      </Text>
+      {showTransitionCount && (
         <Text color="gray" dimColor>
-          {modeConfig.description}
+          Switches: {permissionContext.metadata.transitionCount}
         </Text>
-
-        <Box flexDirection="row" justifyContent="space-between" marginTop={1}>
-          <Text color="gray" dimColor>
-            Press Shift+Tab to cycle modes
-          </Text>
-          {showTransitionCount && (
-            <Text color="gray" dimColor>
-              Switches: {permissionContext.metadata.transitionCount}
-            </Text>
-          )}
-        </Box>
-
-        {currentMode === 'plan' && (
-          <Box marginTop={1}>
-            <Text color="cyan" dimColor>
-              Available tools: {permissionContext.allowedTools.join(', ')}
-            </Text>
-            <Text color="yellow" dimColor>
-              Use ExitPlanMode tool when ready to execute
-            </Text>
-          </Box>
-        )}
-      </Box>
+      )}
     </Box>
   )
 }
 
-function getThemeColor(colorName: string, theme: any): string {
-  const colorMap: Record<string, string> = {
-    blue: theme.primary || 'blue',
-    green: theme.success || 'green',
-    yellow: theme.warning || 'yellow',
-    red: theme.error || 'red',
+export function __getModeIndicatorDisplayForTests(args: {
+  mode: PermissionMode
+  shortcutDisplayText: string
+  theme: Theme
+}): {
+  shouldRender: boolean
+  color: string
+  mainText: string
+  shortcutHintText: string
+} {
+  if (args.mode === 'default') {
+    return {
+      shouldRender: false,
+      color: args.theme.text,
+      mainText: '',
+      shortcutHintText: '',
+    }
   }
 
-  return colorMap[colorName] || colorName
+  const icon = getModeIndicatorIcon(args.mode)
+  const label = getModeIndicatorLabel(args.mode).toLowerCase()
+  const color = getModeIndicatorColor(args.theme, args.mode)
+
+  return {
+    shouldRender: true,
+    color,
+    mainText: `${icon} ${label} on`,
+    shortcutHintText: ` (${args.shortcutDisplayText} to cycle)`,
+  }
+}
+
+function getModeIndicatorLabel(mode: PermissionMode): string {
+  switch (mode) {
+    case 'default':
+      return 'Default'
+    case 'plan':
+      return 'Plan Mode'
+    case 'acceptEdits':
+      return 'Accept edits'
+    case 'bypassPermissions':
+      return 'Bypass Permissions'
+    case 'dontAsk':
+      return "Don't Ask"
+  }
+}
+
+function getModeIndicatorIcon(mode: PermissionMode): string {
+  switch (mode) {
+    case 'default':
+      return ''
+    case 'plan':
+      return '⏸'
+    case 'acceptEdits':
+    case 'bypassPermissions':
+    case 'dontAsk':
+      return '⏵⏵'
+  }
+}
+
+function getModeIndicatorColor(theme: Theme, mode: PermissionMode): string {
+  switch (mode) {
+    case 'default':
+      return theme.text
+    case 'plan':
+      return theme.planMode
+    case 'acceptEdits':
+      return theme.autoAccept
+    case 'bypassPermissions':
+    case 'dontAsk':
+      return theme.error
+  }
 }
 
 // Compact mode indicator for status bar
 export function CompactModeIndicator() {
-  const { currentMode, getModeConfig } = usePermissionContext()
-  const modeConfig = getModeConfig()
+  const { currentMode } = usePermissionContext()
   const theme = getTheme()
+  const shortcut = getPermissionModeCycleShortcut()
 
   if (currentMode === 'default') {
     return null
   }
 
+  const indicator = __getModeIndicatorDisplayForTests({
+    mode: currentMode,
+    shortcutDisplayText: shortcut.displayText,
+    theme,
+  })
+
   return (
-    <Text color={getThemeColor(modeConfig.color, theme)}>
-      {modeConfig.icon} {modeConfig.name}
+    <Text color={indicator.color}>
+      {indicator.mainText}
+      <Text dimColor>{indicator.shortcutHintText}</Text>
     </Text>
   )
 }

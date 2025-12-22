@@ -38,6 +38,9 @@ export function WebFetchPermissionRequest({
   usePermissionRequestLogging(toolUseConfirm, unaryEvent)
 
   const hostname = hostnameForUrl(toolUseConfirm.input.url)
+  const hostLabel =
+    hostname ??
+    (typeof toolUseConfirm.input.url === 'string' ? toolUseConfirm.input.url : 'unknown')
 
   const reject = () => {
     logUnaryEvent({
@@ -69,76 +72,74 @@ export function WebFetchPermissionRequest({
       paddingRight={1}
       paddingBottom={1}
     >
-      <PermissionRequestTitle title="Fetch" riskScore={null} />
+      <PermissionRequestTitle title="Network request outside of sandbox" riskScore={null} />
       <Box flexDirection="column" paddingX={2} paddingY={1}>
-        <Text>
-          {toolUseConfirm.tool.userFacingName?.() || 'Fetch'}(
-          {toolUseConfirm.tool.renderToolUseMessage(toolUseConfirm.input as any, {
-            verbose,
-          })}
-          )
-        </Text>
-        <Text color={theme.secondaryText}>{toolUseConfirm.description}</Text>
-      </Box>
-
-      <Box flexDirection="column">
-        <Text>Do you want to allow the assistant to fetch this content?</Text>
-        <Select
-          options={[
-            { label: 'Yes', value: 'yes' },
-            ...(hostname
-              ? [
-                  {
-                    label: `Yes, and don't ask again for ${chalk.bold(hostname)}`,
-                    value: 'yes-dont-ask-again-domain',
-                  },
-                ]
-              : []),
-            {
-              label: `No, and tell the assistant what to do differently (${chalk.bold.hex(
-                getTheme().warning,
-              )('esc')})`,
-              value: 'no',
-            },
-          ]}
-          onChange={newValue => {
-            switch (newValue) {
-              case 'yes':
-                logUnaryEvent({
-                  completion_type: 'tool_use_single',
-                  event: 'accept',
-                  metadata: {
-                    language_name: 'none',
-                    message_id: toolUseConfirm.assistantMessage.message.id,
-                    platform: env.platform,
-                  },
-                })
-                toolUseConfirm.onAllow('temporary')
-                onDone()
-                break
-              case 'yes-dont-ask-again-domain':
-                logUnaryEvent({
-                  completion_type: 'tool_use_single',
-                  event: 'accept',
-                  metadata: {
-                    language_name: 'none',
-                    message_id: toolUseConfirm.assistantMessage.message.id,
-                    platform: env.platform,
-                  },
-                })
-                savePermission(toolUseConfirm.tool, toolUseConfirm.input, null).then(
-                  () => {
+        <Box>
+          <Text dimColor>Host:</Text>
+          <Text> {hostLabel}</Text>
+        </Box>
+        <Box marginTop={1}>
+          <Text>Do you want to allow this connection?</Text>
+        </Box>
+        <Box marginTop={1}>
+          <Select
+            options={[
+              { label: 'Yes', value: 'yes' },
+              ...(hostname
+                ? [
+                    {
+                      label: `Yes, and don't ask again for ${chalk.bold(hostname)}`,
+                      value: 'yes-dont-ask-again',
+                    },
+                  ]
+                : []),
+              {
+                label: `No, and tell Kode Agent what to do differently ${chalk.bold('(esc)')}`,
+                value: 'no',
+              },
+            ]}
+            onChange={newValue => {
+              switch (newValue) {
+                case 'yes':
+                  logUnaryEvent({
+                    completion_type: 'tool_use_single',
+                    event: 'accept',
+                    metadata: {
+                      language_name: 'none',
+                      message_id: toolUseConfirm.assistantMessage.message.id,
+                      platform: env.platform,
+                    },
+                  })
+                  toolUseConfirm.onAllow('temporary')
+                  onDone()
+                  break
+                case 'yes-dont-ask-again':
+                  logUnaryEvent({
+                    completion_type: 'tool_use_single',
+                    event: 'accept',
+                    metadata: {
+                      language_name: 'none',
+                      message_id: toolUseConfirm.assistantMessage.message.id,
+                      platform: env.platform,
+                    },
+                  })
+                  savePermission(
+                    toolUseConfirm.tool,
+                    toolUseConfirm.input,
+                    null,
+                    toolUseConfirm.toolUseContext,
+                  ).then(() => {
                     toolUseConfirm.onAllow('permanent')
                     onDone()
-                  },
-                )
-                break
-              case 'no':
-                reject()
-                break
-            }
-          }}
-        />
+                  })
+                  break
+                case 'no':
+                  reject()
+                  break
+              }
+            }}
+          />
+        </Box>
       </Box>
     </Box>
   )

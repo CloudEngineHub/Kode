@@ -1,14 +1,13 @@
 import { Box, Text } from 'ink'
 import React from 'react'
 import { z } from 'zod'
-import { Cost } from '@components/Cost'
 import { FallbackToolUseRejectedMessage } from '@components/FallbackToolUseRejectedMessage'
 import { Tool } from '@tool'
 import { BunShell } from '@utils/BunShell'
-import { DESCRIPTION, TOOL_NAME_FOR_PROMPT } from './prompt'
+import { DESCRIPTION, PROMPT, TOOL_NAME_FOR_PROMPT } from './prompt'
 
 const inputSchema = z.strictObject({
-  shell_id: z.string().describe('The shell_id returned from a background Bash command'),
+  shell_id: z.string().describe('The ID of the background shell to kill'),
 })
 
 type Input = z.infer<typeof inputSchema>
@@ -39,22 +38,19 @@ export const KillShellTool = {
     return false
   },
   async prompt() {
-    return DESCRIPTION
+    return PROMPT
   },
   renderToolUseMessage({ shell_id }: Input) {
-    return `Terminate background shell ${shell_id}`
+    return `Kill shell: ${shell_id}`
   },
   renderToolUseRejectedMessage() {
     return <FallbackToolUseRejectedMessage />
   },
   renderToolResultMessage(output: Output) {
     return (
-      <Box justifyContent="space-between" width="100%">
-        <Box flexDirection="row">
-          <Text>&nbsp;&nbsp;⎿ &nbsp;</Text>
-          <Text bold>Shell killed</Text>
-        </Box>
-        <Cost costUSD={0} durationMs={0} debug={false} />
+      <Box flexDirection="row">
+        <Text>&nbsp;&nbsp;⎿ &nbsp;</Text>
+        <Text>Shell {output.shell_id} killed</Text>
       </Box>
     )
   },
@@ -70,20 +66,32 @@ export const KillShellTool = {
         errorCode: 1,
       }
     }
-    if (!bg.running) {
-      return {
-        result: false,
-        message: `Shell ${shell_id} is not running, so cannot be killed`,
-        errorCode: 2,
-      }
-    }
     return { result: true }
   },
   async *call({ shell_id }: Input) {
+    const bg = BunShell.getInstance().getBackgroundOutput(shell_id)
+    if (!bg) {
+      throw new Error(`No shell found with ID: ${shell_id}`)
+    }
+
+    const status = bg.killed
+      ? 'killed'
+      : bg.code === null
+        ? 'running'
+        : bg.code === 0
+          ? 'completed'
+          : 'failed'
+
+    if (status !== 'running') {
+      throw new Error(
+        `Shell ${shell_id} is not running, so cannot be killed (status: ${status})`,
+      )
+    }
+
     const killed = BunShell.getInstance().killBackgroundShell(shell_id)
     const output: Output = {
       message: killed
-        ? `Successfully killed shell: ${shell_id}`
+        ? `Successfully killed shell: ${shell_id} (${bg.command})`
         : `No shell found with ID: ${shell_id}`,
       shell_id,
     }

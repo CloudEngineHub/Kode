@@ -338,7 +338,7 @@ export function ModelSelector({
   // Define main menu structure
   const mainMenuOptions = [
     { value: 'custom-openai', label: 'Custom OpenAI-Compatible API' },
-    { value: 'custom-anthropic', label: 'Custom Anthropic-Compatible API' },
+    { value: 'custom-anthropic', label: 'Custom Messages API (v1/messages)' },
     { value: 'partnerProviders', label: 'Partner Providers →' },
     { value: 'partnerCodingPlans', label: 'Partner Coding Plans →' },
     { value: 'ollama', label: getProviderLabel('ollama', models.ollama?.length || 0) },
@@ -748,7 +748,7 @@ export function ModelSelector({
     } catch (error) {
       lastError = error as Error
       console.log(
-        `Anthropic API failed for ${provider}, trying OpenAI format:`,
+        `Native API failed for ${provider}, trying OpenAI format:`,
         error,
       )
     }
@@ -773,7 +773,7 @@ export function ModelSelector({
     }
 
     // 第三层：抛出错误，触发手动输入模式
-    let errorMessage = `Failed to fetch ${provider} models using both Anthropic and OpenAI API formats`
+    let errorMessage = `Failed to fetch ${provider} models using both native and OpenAI-compatible API formats`
 
     if (lastError) {
       errorMessage = lastError.message
@@ -781,7 +781,9 @@ export function ModelSelector({
 
     // 添加有用的建议
     if (errorMessage.includes('API key')) {
-      errorMessage += `\n\n💡 Tip: Get your API key from ${apiKeyUrl}`
+      errorMessage += apiKeyUrl
+        ? `\n\n💡 Tip: Get your API key from ${apiKeyUrl}`
+        : '\n\n💡 Tip: Check that your API key is set and valid for this provider'
     } else if (errorMessage.includes('permission')) {
       errorMessage += `\n\n💡 Tip: Make sure your API key has access to the ${provider} API`
     } else if (errorMessage.includes('connection')) {
@@ -796,7 +798,7 @@ export function ModelSelector({
   async function fetchAnthropicCompatibleProviderModels() {
     // For anthropic, use defaults
     let defaultBaseURL = 'https://api.anthropic.com'
-    let apiKeyUrl = 'https://console.anthropic.com/settings/keys'
+    let apiKeyUrl = ''
     let actualProvider = 'anthropic'
     const baseURL = providerBaseUrl || defaultBaseURL
     return await fetchAnthropicCompatibleModelsWithFallback(
@@ -2066,7 +2068,7 @@ export function ModelSelector({
     if (selectedProvider === 'anthropic' || selectedProvider === 'bigdream') {
       try {
         console.log(
-          `[DEBUG] Testing ${selectedProvider} connection using official Anthropic SDK...`,
+          `[DEBUG] Testing ${selectedProvider} connection using native SDK...`,
         )
 
         // Determine the baseURL for testing
@@ -2089,7 +2091,7 @@ export function ModelSelector({
             success: true,
             message: `✅ ${selectedProvider} connection test passed`,
             endpoint: '/messages',
-            details: 'API key verified using official Anthropic SDK',
+            details: 'API key verified using native SDK',
           }
         } else {
           return {
@@ -2711,10 +2713,7 @@ export function ModelSelector({
                 )}
                 {selectedProvider === 'anthropic' && (
                   <>
-                    💡 Get your API key from:{' '}
-                    <Text color={theme.suggestion}>
-                      https://console.anthropic.com/settings/keys
-                    </Text>
+                    💡 Get your API key from your provider dashboard.
                   </>
                 )}
                 {selectedProvider === 'openai' && (
@@ -3294,8 +3293,8 @@ export function ModelSelector({
       examples = 'For example: "gpt-4", "gpt-35-turbo", etc.'
       placeholder = 'gpt-4'
     } else if (selectedProvider === 'anthropic') {
-      screenTitle = 'Anthropic Model Setup'
-      description = `Enter the Anthropic model name for ${modelTypeText}:`
+      screenTitle = 'Model Setup'
+      description = `Enter the model name for ${modelTypeText}:`
       examples =
         'For example: "claude-3-5-sonnet-latest", "claude-3-5-haiku-latest", etc.'
       placeholder = 'claude-3-5-sonnet-latest'
@@ -3384,7 +3383,7 @@ export function ModelSelector({
                 {selectedProvider === 'azure'
                   ? 'This is the deployment name you configured in your Azure OpenAI resource.'
                   : selectedProvider === 'anthropic'
-                    ? 'This should be a valid model identifier supported by Anthropic.'
+                    ? 'This should match a model identifier supported by your API endpoint.'
                     : selectedProvider === 'bigdream'
                       ? 'This should be a valid model identifier supported by BigDream.'
                       : selectedProvider === 'kimi'

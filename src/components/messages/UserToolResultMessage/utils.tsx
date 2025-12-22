@@ -18,7 +18,12 @@ function getToolUseFromMessages(
       continue
     }
     for (const content of message.message.content) {
-      if (content.type === 'tool_use' && content.id === toolUseID) {
+      if (
+        (content.type === 'tool_use' ||
+          content.type === 'server_tool_use' ||
+          content.type === 'mcp_tool_use') &&
+        content.id === toolUseID
+      ) {
         toolUse = content
       }
     }

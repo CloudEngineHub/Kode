@@ -42,13 +42,13 @@ describe('Tool registry', () => {
     expect(toolNames).toContain('AskUserQuestion')
     expect(toolNames).toContain('EnterPlanMode')
     expect(toolNames).toContain('ExitPlanMode')
-    expect(toolNames).toContain('BashOutput')
+    expect(toolNames).toContain('TaskOutput')
     expect(toolNames).toContain('KillShell')
   })
 })
 
 describe('Plan mode gating', () => {
-  test('blocks write tool while in plan mode', async () => {
+  test('does not auto-deny write tool while in plan mode', async () => {
     process.env.CLAUDE_CONFIG_DIR = join(process.cwd(), '.tmp-claude-config')
     __resetPlanModeForTests()
     const ctx = makeContext()
@@ -62,6 +62,7 @@ describe('Plan mode gating', () => {
       {} as any,
     )
     expect(result.result).toBe(false)
+    expect((result as any).shouldPromptUser).not.toBe(false)
     exitPlanMode(ctx as any)
   })
 
@@ -98,18 +99,59 @@ describe('Plan mode gating', () => {
     expect(result.result).toBe(true)
     exitPlanMode(ctx as any)
   })
+
+  test('allows writing agent plan files while in plan mode', async () => {
+    process.env.CLAUDE_CONFIG_DIR = join(process.cwd(), '.tmp-claude-config')
+    __resetPlanModeForTests()
+    const ctx = makeContext()
+    const conversationKey = getPlanConversationKey(ctx as any)
+    setActivePlanConversationKey(conversationKey)
+    enterPlanMode(ctx as any)
+    const agentPlanFilePath = getPlanFilePath('agent-1', conversationKey)
+    const result = await hasPermissionsToUseTool(
+      FileWriteTool as any,
+      { file_path: agentPlanFilePath, content: '# Agent plan\n' },
+      ctx as any,
+      {} as any,
+    )
+    expect(result.result).toBe(false)
+    expect((result as any).shouldPromptUser).not.toBe(false)
+    exitPlanMode(ctx as any)
+  })
 })
 
 describe('Bash background execution', () => {
   test('executes background command and reports output', async () => {
     const { bashId } = BunShell.getInstance().execInBackground('echo hello')
     expect(bashId).toBeTruthy()
+    expect(bashId).toMatch(/^b[0-9a-f]{6}$/i)
     // Allow process to finish
     await new Promise(resolve => setTimeout(resolve, 200))
     const output = BunShell.getInstance().getBackgroundOutput(bashId)
     expect(output).not.toBeNull()
     if (output) {
       expect(output.stdout.trim()).toBe('hello')
+    }
+  })
+
+  test('readBackgroundOutput returns only new output', async () => {
+    const { bashId } = BunShell.getInstance().execInBackground('printf "a\\nb\\n"')
+    expect(bashId).toBeTruthy()
+    expect(bashId).toMatch(/^b[0-9a-f]{6}$/i)
+    await new Promise(resolve => setTimeout(resolve, 200))
+
+    const first = BunShell.getInstance().readBackgroundOutput(bashId)
+    expect(first).not.toBeNull()
+    if (first) {
+      expect(first.stdout).toContain('a')
+      expect(first.stdout).toContain('b')
+    }
+
+    const second = BunShell.getInstance().readBackgroundOutput(bashId)
+    expect(second).not.toBeNull()
+    if (second) {
+      expect(second.stdout).toBe('')
+      expect(second.stderr).toBe('')
     }
   })
 })

@@ -189,10 +189,19 @@ function tokensToJson(tokens: PartialJsonToken[]): string {
   return out
 }
 
-export function parseClaudeToolUsePartialJson(input: string): unknown {
+export function parseToolUsePartialJson(input: string): unknown {
   const tokens = tokenizePartialJson(input)
   const trimmed = trimTrailingIncompleteTokens(tokens)
   const completed = closeOpenBrackets(trimmed)
   return JSON.parse(tokensToJson(completed))
 }
 
+export function parseToolUsePartialJsonOrThrow(input: string): unknown {
+  try {
+    return parseToolUsePartialJson(input)
+  } catch (error) {
+    throw new Error(
+      `Unable to parse tool parameter JSON from model. Please retry your request or adjust your prompt. Error: ${String(error)}. JSON: ${input}`,
+    )
+  }
+}
