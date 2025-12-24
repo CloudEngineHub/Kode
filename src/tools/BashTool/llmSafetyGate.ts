@@ -16,7 +16,7 @@ export type BashLlmGateVerdict = {
 
 // Gate calls must be fast in the common case, but some reasoning models can be slow.
 // Keep this generous enough to avoid spurious timeouts, while still bounded.
-const DEFAULT_GATE_TIMEOUT_MS = 120_000
+const DEFAULT_GATE_TIMEOUT_MS = 300_000
 const DEFAULT_GATE_STOP_SEQUENCES = ['</final>']
 
 export type BashLlmGateErrorType =
@@ -130,7 +130,6 @@ type GateQueryFn = (args: {
   userInput: string
   signal: AbortSignal
   model?: 'quick' | 'main'
-  maxTokens?: number
 }) => Promise<string>
 
 function collectTextBlocks(content: any): string {
@@ -167,7 +166,6 @@ async function defaultGateQuery(args: {
   userInput: string
   signal: AbortSignal
   model?: 'quick' | 'main'
-  maxTokens?: number
 }): Promise<string> {
   const { API_ERROR_MESSAGE_PREFIX, queryLLM } = await import('@services/llm')
   const messages: any[] = [
@@ -190,7 +188,6 @@ async function defaultGateQuery(args: {
       safeMode: false,
       model: args.model ?? 'quick',
       prependCLISysprompt: false,
-      ...(args.maxTokens !== undefined ? { maxTokens: args.maxTokens } : {}),
       stopSequences: DEFAULT_GATE_STOP_SEQUENCES,
     },
   )
