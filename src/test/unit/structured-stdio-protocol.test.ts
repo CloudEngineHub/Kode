@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { PassThrough } from 'node:stream'
 import { createInterface } from 'node:readline'
-import { KodeAgentStructuredStdio } from '@utils/kodeAgentStructuredStdio'
+import { KodeAgentStructuredStdio } from '@utils/protocol/kodeAgentStructuredStdio'
 
 function makeLineReader(
   rl: ReturnType<typeof createInterface>,
@@ -37,7 +37,10 @@ describe('structured stdin/stdout (stdio)', () => {
     const channel = new KodeAgentStructuredStdio(stdin, stdout)
     channel.start()
 
-    const pending = channel.sendRequest<{ behavior: string; updatedInput?: any }>({
+    const pending = channel.sendRequest<{
+      behavior: string
+      updatedInput?: any
+    }>({
       subtype: 'can_use_tool',
       tool_name: 'Bash',
       input: { command: 'ls' },
@@ -150,7 +153,11 @@ describe('structured stdin/stdout (stdio)', () => {
 
     const ac = new AbortController()
     const pending = channel.sendRequest(
-      { subtype: 'can_use_tool', tool_name: 'Bash', input: { command: 'rm -rf /' } },
+      {
+        subtype: 'can_use_tool',
+        tool_name: 'Bash',
+        input: { command: 'rm -rf /' },
+      },
       { signal: ac.signal, timeoutMs: 10_000 },
     )
 

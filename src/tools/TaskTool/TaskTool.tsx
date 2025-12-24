@@ -26,12 +26,18 @@ import { getTheme } from '@utils/theme'
 import { generateAgentId } from '@utils/agentStorage'
 import { getAgentByType, getAvailableAgentTypes } from '@utils/agentLoader'
 import { upsertBackgroundAgentTask } from '@utils/backgroundTasks'
-import { getAgentTranscript, saveAgentTranscript } from '@utils/agentTranscripts'
+import { maybeTruncateVerboseToolOutput } from '@utils/toolOutputDisplay'
+import {
+  getAgentTranscript,
+  saveAgentTranscript,
+} from '@utils/agentTranscripts'
 import { getTaskTools, getPrompt } from './prompt'
 import { TOOL_NAME } from './constants'
 
 const inputSchema = z.object({
-  description: z.string().describe('A short (3-5 word) description of the task'),
+  description: z
+    .string()
+    .describe('A short (3-5 word) description of the task'),
   prompt: z.string().describe('The task for the agent to perform'),
   subagent_type: z
     .string()
@@ -89,7 +95,9 @@ function modelEnumToPointer(model?: TaskModel): string | undefined {
   }
 }
 
-function normalizeAgentModelName(model?: string): string | 'inherit' | undefined {
+function normalizeAgentModelName(
+  model?: string,
+): string | 'inherit' | undefined {
   if (!model) return undefined
   if (model === 'inherit') return 'inherit'
   if (model === 'haiku' || model === 'sonnet' || model === 'opus') {
@@ -136,10 +144,16 @@ export const TaskTool = {
   },
   async validateInput(input: Input) {
     if (!input.description || typeof input.description !== 'string') {
-      return { result: false, message: 'Description is required and must be a string' }
+      return {
+        result: false,
+        message: 'Description is required and must be a string',
+      }
     }
     if (!input.prompt || typeof input.prompt !== 'string') {
-      return { result: false, message: 'Prompt is required and must be a string' }
+      return {
+        result: false,
+        message: 'Prompt is required and must be a string',
+      }
     }
 
     const availableTypes = await getAvailableAgentTypes()
@@ -217,7 +231,12 @@ export const TaskTool = {
             borderLeftColor={theme.secondaryBorder}
           >
             <Text color={theme.secondaryText} wrap="wrap">
-              {output.prompt}
+              {
+                maybeTruncateVerboseToolOutput(output.prompt, {
+                  maxLines: 120,
+                  maxChars: 20_000,
+                }).text
+              }
             </Text>
           </Box>
         )}
@@ -227,20 +246,29 @@ export const TaskTool = {
             borderLeftStyle="single"
             borderLeftColor={theme.secondaryBorder}
           >
-            <Text wrap="wrap">{output.content.map(b => b.text).join('\n')}</Text>
+            <Text wrap="wrap">
+              {
+                maybeTruncateVerboseToolOutput(
+                  output.content.map(b => b.text).join('\n'),
+                  {
+                    maxLines: 200,
+                    maxChars: 40_000,
+                  },
+                ).text
+              }
+            </Text>
           </Box>
         )}
         <Box flexDirection="row">
           <Text>&nbsp;&nbsp;⎿ &nbsp;</Text>
-          <Text dimColor>
-            Done ({summary.join(' · ')})
-          </Text>
+          <Text dimColor>Done ({summary.join(' · ')})</Text>
         </Box>
       </Box>
     )
   },
   renderResultForAssistant(output: Output) {
-    if (output.status === 'async_launched') return asyncLaunchMessage(output.agentId)
+    if (output.status === 'async_launched')
+      return asyncLaunchMessage(output.agentId)
     return output.content.map(b => b.text).join('\n')
   },
 
@@ -291,7 +319,9 @@ export const TaskTool = {
     let tools = await getTaskTools(safeMode)
     if (toolFilter) {
       const isAllArray =
-        Array.isArray(toolFilter) && toolFilter.length === 1 && toolFilter[0] === '*'
+        Array.isArray(toolFilter) &&
+        toolFilter.length === 1 &&
+        toolFilter[0] === '*'
       if (toolFilter === '*' || isAllArray) {
         // Keep all tools
       } else if (Array.isArray(toolFilter)) {
@@ -308,7 +338,8 @@ export const TaskTool = {
 
     const agentId = input.resume || generateAgentId()
     const baseTranscript = input.resume
-      ? (getAgentTranscript(input.resume)?.filter(m => m.type !== 'progress') ?? null)
+      ? (getAgentTranscript(input.resume)?.filter(m => m.type !== 'progress') ??
+        null)
       : []
     if (input.resume && baseTranscript === null) {
       throw Error(`No transcript found for agent ID: ${input.resume}`)
@@ -410,7 +441,11 @@ export const TaskTool = {
         description: input.description,
         prompt: effectivePrompt,
       }
-      yield { type: 'result', data: output, resultForAssistant: asyncLaunchMessage(agentId) }
+      yield {
+        type: 'result',
+        data: output,
+        resultForAssistant: asyncLaunchMessage(agentId),
+      }
       return
     }
 
@@ -440,10 +475,9 @@ export const TaskTool = {
     }
 
     const summarizeToolUse = (name: string, rawInput: unknown): string => {
-      const input = (rawInput && typeof rawInput === 'object' ? rawInput : {}) as Record<
-        string,
-        unknown
-      >
+      const input = (
+        rawInput && typeof rawInput === 'object' ? rawInput : {}
+      ) as Record<string, unknown>
       switch (name) {
         case 'Read': {
           const filePath =
@@ -565,7 +599,9 @@ export const TaskTool = {
       }
     }
 
-    const lastAssistant = last(messages.filter(m => m.type === 'assistant')) as any
+    const lastAssistant = last(
+      messages.filter(m => m.type === 'assistant'),
+    ) as any
     if (!lastAssistant || lastAssistant.type !== 'assistant') {
       throw Error('No assistant messages found')
     }

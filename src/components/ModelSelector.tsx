@@ -1,61 +1,43 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { Box, Text, useInput, useStdout } from 'ink'
-import { getTheme } from '@utils/theme'
-import { Select } from './CustomSelect/select'
-import { Newline } from 'ink'
-import { getModelManager } from '@utils/model'
-import { CardNavigator, useCardNavigation } from './CardNavigator'
+import React, { useCallback, useEffect, useState } from 'react'
+import { Box, Newline, Text, useInput, useStdout } from 'ink'
+import OpenAI from 'openai'
 import figures from 'figures'
 
-// 共享的屏幕容器组件，避免重复边框
-function ScreenContainer({
-  title,
-  exitState,
-  children,
-  paddingY = 1,
-  gap = 1,
-}: {
-  title: string
-  exitState: { pending: boolean; keyName: string }
-  children: React.ReactNode
-  paddingY?: number
-  gap?: number
-}) {
-  const theme = getTheme()
-  return (
-    <Box
-      flexDirection="column"
-      gap={gap}
-      borderStyle="round"
-      borderColor={theme.secondaryBorder}
-      paddingX={2}
-      paddingY={paddingY}
-    >
-      <Text bold>
-        {title}{' '}
-        {exitState.pending ? `(press ${exitState.keyName} again to exit)` : ''}
-      </Text>
-      {children}
-    </Box>
-  )
-}
+import models, { providers } from '@constants/models'
 import { PRODUCT_NAME } from '@constants/product'
 import { useExitOnCtrlCD } from '@hooks/useExitOnCtrlCD'
+import { verifyApiKey } from '@services/llmLazy'
+import {
+  testGPT5Connection,
+  validateGPT5Config,
+} from '@services/gpt5ConnectionTest'
 import {
   getGlobalConfig,
-  saveGlobalConfig,
-  ProviderType,
   ModelPointerType,
+  ProviderType,
+  saveGlobalConfig,
   setAllPointersToModel,
   setModelPointer,
 } from '@utils/config'
-import models, { providers } from '@constants/models'
+import { getModelManager } from '@utils/model'
+import { getTheme } from '@utils/theme'
+
+import { CardNavigator, useCardNavigation } from './CardNavigator'
+import { Select } from './CustomSelect/select'
+import { ScreenContainer } from './ModelSelector/ScreenContainer'
+import {
+  CONTEXT_LENGTH_OPTIONS,
+  DEFAULT_CONTEXT_LENGTH,
+  DEFAULT_MAX_TOKENS,
+  MAX_TOKENS_OPTIONS,
+  REASONING_EFFORT_OPTIONS,
+  ReasoningEffortOption,
+} from './ModelSelector/options'
+import { printModelConfig } from './ModelSelector/printModelConfig'
+import type { ModelInfo } from './ModelSelector/types'
+import { useEscapeNavigation } from './ModelSelector/useEscapeNavigation'
+import * as modelFetchers from './ModelSelector/modelFetchers'
 import TextInput from './TextInput'
-import OpenAI from 'openai'
-import chalk from 'chalk'
-import { fetchAnthropicModels, verifyApiKey } from '@services/claude'
-import { fetchCustomModels, getModelFeatures } from '@services/openai'
-import { testGPT5Connection, validateGPT5Config } from '@services/gpt5ConnectionTest'
 type Props = {
   onDone: () => void
   abortController?: AbortController
@@ -63,97 +45,6 @@ type Props = {
   isOnboarding?: boolean // NEW: Whether this is first-time setup
   onCancel?: () => void // NEW: Cancel callback (different from onDone)
   skipModelType?: boolean // NEW: Skip model type selection
-}
-
-type ModelInfo = {
-  model: string
-  provider: string
-  [key: string]: any
-}
-
-// Define reasoning effort options
-type ReasoningEffortOption = 'low' | 'medium' | 'high'
-
-// Define context length options (in tokens)
-type ContextLengthOption = {
-  label: string
-  value: number
-}
-
-const CONTEXT_LENGTH_OPTIONS: ContextLengthOption[] = [
-  { label: '32K tokens', value: 32000 },
-  { label: '64K tokens', value: 64000 },
-  { label: '128K tokens', value: 128000 },
-  { label: '200K tokens', value: 200000 },
-  { label: '256K tokens', value: 256000 },
-  { label: '300K tokens', value: 300000 },
-  { label: '512K tokens', value: 512000 },
-  { label: '1000K tokens', value: 1000000 },
-  { label: '2000K tokens', value: 2000000 },
-  { label: '3000K tokens', value: 3000000 },
-  { label: '5000K tokens', value: 5000000 },
-  { label: '10000K tokens', value: 10000000 },
-]
-
-const DEFAULT_CONTEXT_LENGTH = 128000
-
-// Define max tokens options
-type MaxTokensOption = {
-  label: string
-  value: number
-}
-
-const MAX_TOKENS_OPTIONS: MaxTokensOption[] = [
-  { label: '1K tokens', value: 1024 },
-  { label: '2K tokens', value: 2048 },
-  { label: '4K tokens', value: 4096 },
-  { label: '8K tokens (recommended)', value: 8192 },
-  { label: '16K tokens', value: 16384 },
-  { label: '32K tokens', value: 32768 },
-  { label: '64K tokens', value: 65536 },
-  { label: '128K tokens', value: 131072 },
-]
-
-const DEFAULT_MAX_TOKENS = 8192
-
-// Custom hook to handle Escape key navigation
-function useEscapeNavigation(
-  onEscape: () => void,
-  abortController?: AbortController,
-) {
-  // Use a ref to track if we've handled the escape key
-  const handledRef = useRef(false)
-
-  useInput(
-    (input, key) => {
-      if (key.escape && !handledRef.current) {
-        handledRef.current = true
-        // Reset after a short delay to allow for multiple escapes
-        setTimeout(() => {
-          handledRef.current = false
-        }, 100)
-        onEscape()
-      }
-    },
-    { isActive: true },
-  )
-}
-
-function printModelConfig() {
-  const config = getGlobalConfig()
-  // Only show ModelProfile information - no legacy fields
-  const modelProfiles = config.modelProfiles || []
-  const activeProfiles = modelProfiles.filter(p => p.isActive)
-
-  if (activeProfiles.length === 0) {
-    console.log(chalk.gray('  ⎿  No active model profiles configured'))
-    return
-  }
-
-  const profileSummary = activeProfiles
-    .map(p => `${p.name} (${p.provider}: ${p.modelName})`)
-    .join(' | ')
-  console.log(chalk.gray(`  ⎿  ${profileSummary}`))
 }
 
 export function ModelSelector({
@@ -267,7 +158,8 @@ export function ModelSelector({
   const [maxTokensCursorOffset, setMaxTokensCursorOffset] = useState<number>(0)
 
   // UI state
-  const [apiKeyCleanedNotification, setApiKeyCleanedNotification] = useState<boolean>(false)
+  const [apiKeyCleanedNotification, setApiKeyCleanedNotification] =
+    useState<boolean>(false)
 
   // Search and model loading state
   const [availableModels, setAvailableModels] = useState<ModelInfo[]>([])
@@ -280,8 +172,7 @@ export function ModelSelector({
   const [apiKeyEdited, setApiKeyEdited] = useState<boolean>(false)
   // Menu focus state for windowed lists
   const [providerFocusIndex, setProviderFocusIndex] = useState(0)
-  const [partnerProviderFocusIndex, setPartnerProviderFocusIndex] =
-    useState(0)
+  const [partnerProviderFocusIndex, setPartnerProviderFocusIndex] = useState(0)
   const [codingPlanFocusIndex, setCodingPlanFocusIndex] = useState(0)
 
   // Retry logic state
@@ -325,15 +216,7 @@ export function ModelSelector({
   const [providerBaseUrlCursorOffset, setProviderBaseUrlCursorOffset] =
     useState<number>(0)
 
-  // Reasoning effort options
-  const reasoningEffortOptions = [
-    { label: 'Low - Faster responses, less thorough reasoning', value: 'low' },
-    { label: 'Medium - Balanced speed and reasoning depth', value: 'medium' },
-    {
-      label: 'High - Slower responses, more thorough reasoning',
-      value: 'high',
-    },
-  ]
+  const reasoningEffortOptions = REASONING_EFFORT_OPTIONS
 
   // Define main menu structure
   const mainMenuOptions = [
@@ -341,21 +224,24 @@ export function ModelSelector({
     { value: 'custom-anthropic', label: 'Custom Messages API (v1/messages)' },
     { value: 'partnerProviders', label: 'Partner Providers →' },
     { value: 'partnerCodingPlans', label: 'Partner Coding Plans →' },
-    { value: 'ollama', label: getProviderLabel('ollama', models.ollama?.length || 0) },
+    {
+      value: 'ollama',
+      label: getProviderLabel('ollama', models.ollama?.length || 0),
+    },
   ]
 
   // Define partner providers with custom ranking
   const rankedProviders = [
-    'openai',      // OpenAI first
-    'anthropic',   // Claude after OpenAI
-    'gemini',      // Gemini after Claude
-    'glm',         // GLM
-    'kimi',        // Kimi
-    'minimax',     // MiniMax
-    'qwen',        // Qwen (Alibaba)
-    'deepseek',    // DeepSeek
-    'openrouter',  // OpenRouter
-    'burncloud',   // BurnCloud after OpenRouter
+    'openai', // OpenAI first
+    'anthropic', // Claude after OpenAI
+    'gemini', // Gemini after Claude
+    'glm', // GLM
+    'kimi', // Kimi
+    'minimax', // MiniMax
+    'qwen', // Qwen (Alibaba)
+    'deepseek', // DeepSeek
+    'openrouter', // OpenRouter
+    'burncloud', // BurnCloud after OpenRouter
     'siliconflow', // SiliconFlow
     // Other providers follow
     'baidu-qianfan',
@@ -366,16 +252,17 @@ export function ModelSelector({
   ]
 
   // Filter to only include providers that exist and aren't coding/custom
-  const partnerProviders = rankedProviders.filter(provider =>
-    providers[provider] &&
-    !provider.includes('coding') &&
-    provider !== 'custom-openai' &&
-    provider !== 'ollama'
+  const partnerProviders = rankedProviders.filter(
+    provider =>
+      providers[provider] &&
+      !provider.includes('coding') &&
+      provider !== 'custom-openai' &&
+      provider !== 'ollama',
   )
 
   // Define partner coding plans
-  const codingPlanProviders = Object.keys(providers).filter(
-    provider => provider.includes('coding')
+  const codingPlanProviders = Object.keys(providers).filter(provider =>
+    provider.includes('coding'),
   )
 
   // Create provider options for partner providers submenu
@@ -519,9 +406,7 @@ export function ModelSelector({
   }, [partnerProviderOptions.length])
 
   useEffect(() => {
-    setCodingPlanFocusIndex(prev =>
-      clampIndex(prev, codingPlanOptions.length),
-    )
+    setCodingPlanFocusIndex(prev => clampIndex(prev, codingPlanOptions.length))
   }, [codingPlanOptions.length])
 
   function formatNumber(num: number): string {
@@ -608,10 +493,7 @@ export function ModelSelector({
     const half = Math.floor(visibleCount / 2)
     const start = Math.max(
       0,
-      Math.min(
-        focusedIndex - half,
-        Math.max(0, options.length - visibleCount),
-      ),
+      Math.min(focusedIndex - half, Math.max(0, options.length - visibleCount)),
     )
     const end = Math.min(options.length, start + visibleCount)
     const showUp = start > 0
@@ -620,9 +502,7 @@ export function ModelSelector({
     return (
       <Box flexDirection="column" gap={0}>
         {showUp && (
-          <Text color={theme.secondaryText}>
-            {figures.arrowUp} More
-          </Text>
+          <Text color={theme.secondaryText}>{figures.arrowUp} More</Text>
         )}
         {options.slice(start, end).map((opt, idx) => {
           const absoluteIndex = start + idx
@@ -643,522 +523,13 @@ export function ModelSelector({
           )
         })}
         {showDown && (
-          <Text color={theme.secondaryText}>
-            {figures.arrowDown} More
-          </Text>
+          <Text color={theme.secondaryText}>{figures.arrowDown} More</Text>
         )}
       </Box>
     )
   }
 
-  // Local implementation of fetchAnthropicModels for UI
-  async function fetchAnthropicModels(baseURL: string, apiKey: string) {
-    try {
-      const response = await fetch(`${baseURL}/v1/models`, {
-        method: 'GET',
-        headers: {
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-      })
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error(
-            'Invalid API key. Please check your API key and try again.',
-          )
-        } else if (response.status === 403) {
-          throw new Error('API key does not have permission to access models.')
-        } else if (response.status === 404) {
-          throw new Error(
-            'API endpoint not found. This provider may not support model listing.',
-          )
-        } else if (response.status === 429) {
-          throw new Error(
-            'Too many requests. Please wait a moment and try again.',
-          )
-        } else if (response.status >= 500) {
-          throw new Error(
-            'API service is temporarily unavailable. Please try again later.',
-          )
-        } else {
-          throw new Error(`Unable to connect to API (${response.status}).`)
-        }
-      }
-
-      const data = await response.json()
-
-      // Handle different response formats
-      let models = []
-      if (data && data.data && Array.isArray(data.data)) {
-        models = data.data
-      } else if (Array.isArray(data)) {
-        models = data
-      } else if (data && data.models && Array.isArray(data.models)) {
-        models = data.models
-      } else {
-        throw new Error('API returned unexpected response format.')
-      }
-
-      return models
-    } catch (error) {
-      if (
-        error instanceof Error &&
-        (error.message.includes('API key') ||
-          error.message.includes('API endpoint') ||
-          error.message.includes('API service') ||
-          error.message.includes('response format'))
-      ) {
-        throw error
-      }
-
-      if (error instanceof Error && error.message.includes('fetch')) {
-        throw new Error(
-          'Unable to connect to the API. Please check the base URL and your internet connection.',
-        )
-      }
-
-      throw new Error(
-        'Failed to fetch models from API. Please check your configuration and try again.',
-      )
-    }
-  }
-
-  // 通用的Anthropic兼容模型获取函数，实现三层降级策略
-  async function fetchAnthropicCompatibleModelsWithFallback(
-    baseURL: string,
-    provider: string,
-    apiKeyUrl: string,
-  ) {
-    let lastError: Error | null = null
-
-    // 第一层：尝试使用 Anthropic 风格的 API
-    try {
-      const models = await fetchAnthropicModels(baseURL, apiKey)
-      return models.map((model: any) => ({
-        model: model.modelName || model.id || model.name || model.model || 'unknown',
-        provider: provider,
-        max_tokens: model.max_tokens || 8192,
-        supports_vision: model.supports_vision || true,
-        supports_function_calling: model.supports_function_calling || true,
-        supports_reasoning_effort: false,
-      }))
-    } catch (error) {
-      lastError = error as Error
-      console.log(
-        `Native API failed for ${provider}, trying OpenAI format:`,
-        error,
-      )
-    }
-
-    // 第二层：尝试使用 OpenAI 风格的 API
-    try {
-      const models = await fetchCustomModels(baseURL, apiKey)
-      return models.map((model: any) => ({
-        model: model.modelName || model.id || model.name || model.model || 'unknown',
-        provider: provider,
-        max_tokens: model.max_tokens || 8192,
-        supports_vision: model.supports_vision || false,
-        supports_function_calling: model.supports_function_calling || true,
-        supports_reasoning_effort: false,
-      }))
-    } catch (error) {
-      lastError = error as Error
-      console.log(
-        `OpenAI API failed for ${provider}, falling back to manual input:`,
-        error,
-      )
-    }
-
-    // 第三层：抛出错误，触发手动输入模式
-    let errorMessage = `Failed to fetch ${provider} models using both native and OpenAI-compatible API formats`
-
-    if (lastError) {
-      errorMessage = lastError.message
-    }
-
-    // 添加有用的建议
-    if (errorMessage.includes('API key')) {
-      errorMessage += apiKeyUrl
-        ? `\n\n💡 Tip: Get your API key from ${apiKeyUrl}`
-        : '\n\n💡 Tip: Check that your API key is set and valid for this provider'
-    } else if (errorMessage.includes('permission')) {
-      errorMessage += `\n\n💡 Tip: Make sure your API key has access to the ${provider} API`
-    } else if (errorMessage.includes('connection')) {
-      errorMessage += '\n\n💡 Tip: Check your internet connection and try again'
-    }
-
-    setModelLoadError(errorMessage)
-    throw new Error(errorMessage)
-  }
-
-  // 统一处理所有Anthropic兼容提供商的模型获取
-  async function fetchAnthropicCompatibleProviderModels() {
-    // For anthropic, use defaults
-    let defaultBaseURL = 'https://api.anthropic.com'
-    let apiKeyUrl = ''
-    let actualProvider = 'anthropic'
-    const baseURL = providerBaseUrl || defaultBaseURL
-    return await fetchAnthropicCompatibleModelsWithFallback(
-      baseURL,
-      actualProvider,
-      apiKeyUrl,
-    )
-  }
-
-  // Remove duplicate function definitions - using unified fetchAnthropicCompatibleProviderModels instead
-
-  async function fetchKimiModels() {
-    try {
-      const baseURL = providerBaseUrl || 'https://api.moonshot.cn/v1'
-      const models = await fetchCustomModels(baseURL, apiKey)
-
-      const kimiModels = models.map((model: any) => ({
-        model: model.modelName || model.id || model.name || model.model || 'unknown',
-        provider: 'kimi',
-        max_tokens: model.max_tokens || 8192,
-        supports_vision: false, // Default to false, could be enhanced
-        supports_function_calling: true,
-        supports_reasoning_effort: false,
-      }))
-
-      return kimiModels
-    } catch (error) {
-      let errorMessage = 'Failed to fetch Kimi models'
-
-      if (error instanceof Error) {
-        errorMessage = error.message
-      }
-
-      // Add helpful suggestions based on error type
-      if (errorMessage.includes('API key')) {
-        errorMessage +=
-          '\n\n💡 Tip: Get your API key from https://platform.moonshot.cn/console/api-keys'
-      } else if (errorMessage.includes('permission')) {
-        errorMessage +=
-          '\n\n💡 Tip: Make sure your API key has access to the Kimi API'
-      } else if (errorMessage.includes('connection')) {
-        errorMessage +=
-          '\n\n💡 Tip: Check your internet connection and try again'
-      }
-
-      setModelLoadError(errorMessage)
-      throw error
-    }
-  }
-
-  async function fetchDeepSeekModels() {
-    try {
-      const baseURL = providerBaseUrl || 'https://api.deepseek.com'
-      const models = await fetchCustomModels(baseURL, apiKey)
-
-      const deepseekModels = models.map((model: any) => ({
-        model: model.modelName || model.id || model.name || model.model || 'unknown',
-        provider: 'deepseek',
-        max_tokens: model.max_tokens || 8192,
-        supports_vision: false, // Default to false, could be enhanced
-        supports_function_calling: true,
-        supports_reasoning_effort: false,
-      }))
-
-      return deepseekModels
-    } catch (error) {
-      let errorMessage = 'Failed to fetch DeepSeek models'
-
-      if (error instanceof Error) {
-        errorMessage = error.message
-      }
-
-      // Add helpful suggestions based on error type
-      if (errorMessage.includes('API key')) {
-        errorMessage +=
-          '\n\n💡 Tip: Get your API key from https://platform.deepseek.com/api_keys'
-      } else if (errorMessage.includes('permission')) {
-        errorMessage +=
-          '\n\n💡 Tip: Make sure your API key has access to the DeepSeek API'
-      } else if (errorMessage.includes('connection')) {
-        errorMessage +=
-          '\n\n💡 Tip: Check your internet connection and try again'
-      }
-
-      setModelLoadError(errorMessage)
-      throw error
-    }
-  }
-
-  async function fetchSiliconFlowModels() {
-    try {
-      const baseURL = providerBaseUrl || 'https://api.siliconflow.cn/v1'
-      const models = await fetchCustomModels(baseURL, apiKey)
-
-      const siliconflowModels = models.map((model: any) => ({
-        model: model.modelName || model.id || model.name || model.model || 'unknown',
-        provider: 'siliconflow',
-        max_tokens: model.max_tokens || 8192,
-        supports_vision: false, // Default to false, could be enhanced
-        supports_function_calling: true,
-        supports_reasoning_effort: false,
-      }))
-
-      return siliconflowModels
-    } catch (error) {
-      let errorMessage = 'Failed to fetch SiliconFlow models'
-
-      if (error instanceof Error) {
-        errorMessage = error.message
-      }
-
-      // Add helpful suggestions based on error type
-      if (errorMessage.includes('API key')) {
-        errorMessage +=
-          '\n\n💡 Tip: Get your API key from https://cloud.siliconflow.cn/i/oJWsm6io'
-      } else if (errorMessage.includes('permission')) {
-        errorMessage +=
-          '\n\n💡 Tip: Make sure your API key has access to the SiliconFlow API'
-      } else if (errorMessage.includes('connection')) {
-        errorMessage +=
-          '\n\n💡 Tip: Check your internet connection and try again'
-      }
-
-      setModelLoadError(errorMessage)
-      throw error
-    }
-  }
-
-  async function fetchQwenModels() {
-    try {
-      const baseURL =
-        providerBaseUrl || 'https://dashscope.aliyuncs.com/compatible-mode/v1'
-      const models = await fetchCustomModels(baseURL, apiKey)
-
-      const qwenModels = models.map((model: any) => ({
-        model: model.modelName || model.id || model.name || model.model || 'unknown',
-        provider: 'qwen',
-        max_tokens: model.max_tokens || 8192,
-        supports_vision: false,
-        supports_function_calling: true,
-        supports_reasoning_effort: false,
-      }))
-
-      return qwenModels
-    } catch (error) {
-      let errorMessage = 'Failed to fetch Qwen models'
-
-      if (error instanceof Error) {
-        errorMessage = error.message
-      }
-
-      if (errorMessage.includes('API key')) {
-        errorMessage +=
-          '\n\n💡 Tip: Get your API key from https://bailian.console.aliyun.com/?tab=model#/api-key'
-      } else if (errorMessage.includes('permission')) {
-        errorMessage +=
-          '\n\n💡 Tip: Make sure your API key has access to the Qwen API'
-      } else if (errorMessage.includes('connection')) {
-        errorMessage +=
-          '\n\n💡 Tip: Check your internet connection and try again'
-      }
-
-      setModelLoadError(errorMessage)
-      throw error
-    }
-  }
-
-  async function fetchGLMModels() {
-    try {
-      const baseURL = providerBaseUrl || 'https://open.bigmodel.cn/api/paas/v4'
-      const models = await fetchCustomModels(baseURL, apiKey)
-
-      const glmModels = models.map((model: any) => ({
-        model: model.modelName || model.id || model.name || model.model || 'unknown',
-        provider: 'glm',
-        max_tokens: model.max_tokens || 8192,
-        supports_vision: false,
-        supports_function_calling: true,
-        supports_reasoning_effort: false,
-      }))
-
-      return glmModels
-    } catch (error) {
-      let errorMessage = 'Failed to fetch GLM models'
-
-      if (error instanceof Error) {
-        errorMessage = error.message
-      }
-
-      if (errorMessage.includes('API key')) {
-        errorMessage +=
-          '\n\n💡 Tip: Get your API key from https://open.bigmodel.cn (API Keys section)'
-      } else if (errorMessage.includes('permission')) {
-        errorMessage +=
-          '\n\n💡 Tip: Make sure your API key has access to the GLM API'
-      } else if (errorMessage.includes('connection')) {
-        errorMessage +=
-          '\n\n💡 Tip: Check your internet connection and try again'
-      }
-
-      setModelLoadError(errorMessage)
-      throw error
-    }
-  }
-
-  async function fetchMinimaxModels() {
-    try {
-      const baseURL = providerBaseUrl || 'https://api.minimaxi.com/v1'
-      const models = await fetchCustomModels(baseURL, apiKey)
-
-      const minimaxModels = models.map((model: any) => ({
-        model: model.modelName || model.id || model.name || model.model || 'unknown',
-        provider: 'minimax',
-        max_tokens: model.max_tokens || 8192,
-        supports_vision: false,
-        supports_function_calling: true,
-        supports_reasoning_effort: false,
-      }))
-
-      return minimaxModels
-    } catch (error) {
-      let errorMessage = 'Failed to fetch MiniMax models'
-
-      if (error instanceof Error) {
-        errorMessage = error.message
-      }
-
-      if (errorMessage.includes('API key')) {
-        errorMessage +=
-          '\n\n💡 Tip: Get your API key from https://www.minimax.io/platform/user-center/basic-information'
-      } else if (errorMessage.includes('permission')) {
-        errorMessage +=
-          '\n\n💡 Tip: Make sure your API key has access to the MiniMax API'
-      } else if (errorMessage.includes('connection')) {
-        errorMessage +=
-          '\n\n💡 Tip: Check your internet connection and try again'
-      }
-
-      setModelLoadError(errorMessage)
-      throw error
-    }
-  }
-
-  async function fetchBaiduQianfanModels() {
-    try {
-      const baseURL = providerBaseUrl || 'https://qianfan.baidubce.com/v2'
-      const models = await fetchCustomModels(baseURL, apiKey)
-
-      const baiduModels = models.map((model: any) => ({
-        model: model.modelName || model.id || model.name || model.model || 'unknown',
-        provider: 'baidu-qianfan',
-        max_tokens: model.max_tokens || 8192,
-        supports_vision: false,
-        supports_function_calling: true,
-        supports_reasoning_effort: false,
-      }))
-
-      return baiduModels
-    } catch (error) {
-      let errorMessage = 'Failed to fetch Baidu Qianfan models'
-
-      if (error instanceof Error) {
-        errorMessage = error.message
-      }
-
-      if (errorMessage.includes('API key')) {
-        errorMessage +=
-          '\n\n💡 Tip: Get your API key from https://console.bce.baidu.com/iam/#/iam/accesslist'
-      } else if (errorMessage.includes('permission')) {
-        errorMessage +=
-          '\n\n💡 Tip: Make sure your API key has access to the Baidu Qianfan API'
-      } else if (errorMessage.includes('connection')) {
-        errorMessage +=
-          '\n\n💡 Tip: Check your internet connection and try again'
-      }
-
-      setModelLoadError(errorMessage)
-      throw error
-    }
-  }
-
-  async function fetchCustomOpenAIModels() {
-    try {
-      const models = await fetchCustomModels(customBaseUrl, apiKey)
-
-      const customModels = models.map((model: any) => ({
-        model: model.modelName || model.id || model.name || model.model || 'unknown',
-        provider: 'custom-openai',
-        max_tokens: model.max_tokens || 4096,
-        supports_vision: false, // Default to false, could be enhanced
-        supports_function_calling: true,
-        supports_reasoning_effort: false,
-      }))
-
-      return customModels
-    } catch (error) {
-      let errorMessage = 'Failed to fetch custom API models'
-
-      if (error instanceof Error) {
-        errorMessage = error.message
-      }
-
-      // Add helpful suggestions based on error type
-      if (errorMessage.includes('API key')) {
-        errorMessage +=
-          '\n\n💡 Tip: Check that your API key is valid for this endpoint'
-      } else if (errorMessage.includes('endpoint not found')) {
-        errorMessage +=
-          '\n\n💡 Tip: Make sure the base URL ends with /v1 and supports OpenAI-compatible API'
-      } else if (errorMessage.includes('connect')) {
-        errorMessage +=
-          '\n\n💡 Tip: Verify the base URL is correct and accessible'
-      } else if (errorMessage.includes('response format')) {
-        errorMessage +=
-          '\n\n💡 Tip: This API may not be fully OpenAI-compatible'
-      }
-
-      setModelLoadError(errorMessage)
-      throw error
-    }
-  }
-
-  async function fetchGeminiModels() {
-    try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`,
-      )
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(
-          errorData.error?.message || `API error: ${response.status}`,
-        )
-      }
-
-      const { models } = await response.json()
-
-      const geminiModels = models
-        .filter((model: any) =>
-          model.supportedGenerationMethods.includes('generateContent'),
-        )
-        .map((model: any) => ({
-          model: model.name.replace('models/', ''),
-          provider: 'gemini',
-          max_tokens: model.outputTokenLimit,
-          supports_vision:
-            model.supportedGenerationMethods.includes('generateContent'),
-          supports_function_calling:
-            model.supportedGenerationMethods.includes('generateContent'),
-        }))
-
-      return geminiModels
-    } catch (error) {
-      setModelLoadError(
-        error instanceof Error ? error.message : 'Unknown error',
-      )
-      throw error
-    }
-  }
-
+  // Provider model fetchers live in `./src/components/ModelSelector/modelFetchers.ts`.
   async function fetchOllamaModels() {
     try {
       const response = await fetch(`${ollamaBaseUrl}/models`)
@@ -1226,13 +597,16 @@ export function ModelSelector({
       // Helper: extract num_ctx/context_length from /api/show response
       const extractContextTokens = (data: any): number | null => {
         if (!data || typeof data !== 'object') return null
-        
+
         // First check model_info for architecture-specific context_length fields
         // Example: qwen2.context_length, llama.context_length, etc.
         if (data.model_info && typeof data.model_info === 'object') {
           const modelInfo = data.model_info
           for (const key of Object.keys(modelInfo)) {
-            if (key.endsWith('.context_length') || key.endsWith('_context_length')) {
+            if (
+              key.endsWith('.context_length') ||
+              key.endsWith('_context_length')
+            ) {
               const val = modelInfo[key]
               if (typeof val === 'number' && isFinite(val) && val > 0) {
                 return val
@@ -1240,7 +614,7 @@ export function ModelSelector({
             }
           }
         }
-        
+
         // Fallback to other common fields
         const candidates = [
           (data as any)?.parameters?.num_ctx,
@@ -1250,12 +624,12 @@ export function ModelSelector({
           (data as any)?.context_length,
           (data as any)?.num_ctx,
           (data as any)?.max_tokens,
-          (data as any)?.max_new_tokens
+          (data as any)?.max_new_tokens,
         ].filter((v: any) => typeof v === 'number' && isFinite(v) && v > 0)
         if (candidates.length > 0) {
           return Math.max(...candidates)
         }
-        
+
         // parameters may be a string like "num_ctx=4096 ..."
         if (typeof (data as any)?.parameters === 'string') {
           const m = (data as any).parameters.match(/num_ctx\s*[:=]\s*(\d+)/i)
@@ -1276,7 +650,7 @@ export function ModelSelector({
             const showResp = await fetch(`${ollamaRoot}/api/show`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ name: m.model })
+              body: JSON.stringify({ name: m.model }),
             })
             if (showResp.ok) {
               const showData = await showResp.json()
@@ -1291,7 +665,7 @@ export function ModelSelector({
           } catch {
             return m
           }
-        })
+        }),
       )
 
       setAvailableModels(enrichedModels)
@@ -1375,7 +749,7 @@ export function ModelSelector({
 
     // Don't auto-navigate on API key failure - show error and stay on API key screen
     setModelLoadError(
-      `Failed to validate API key after ${MAX_RETRIES} attempts: ${errorMessage}\n\nPlease check your API key and try again, or press Tab to manually enter model name.`
+      `Failed to validate API key after ${MAX_RETRIES} attempts: ${errorMessage}\n\nPlease check your API key and try again, or press Tab to manually enter model name.`,
     )
 
     // Don't navigate anywhere - user must fix API key or manually skip with Tab
@@ -1390,7 +764,12 @@ export function ModelSelector({
     try {
       // For Anthropic provider (including official and community proxies via sub-menu), use the same logic
       if (selectedProvider === 'anthropic') {
-        const anthropicModels = await fetchAnthropicCompatibleProviderModels()
+        const anthropicModels =
+          await modelFetchers.fetchAnthropicCompatibleProviderModels({
+            apiKey,
+            providerBaseUrl,
+            setModelLoadError,
+          })
         setAvailableModels(anthropicModels)
         navigateTo('model')
         return anthropicModels
@@ -1398,7 +777,11 @@ export function ModelSelector({
 
       // For custom OpenAI-compatible APIs, use the fetchCustomOpenAIModels function
       if (selectedProvider === 'custom-openai') {
-        const customModels = await fetchCustomOpenAIModels()
+        const customModels = await modelFetchers.fetchCustomOpenAIModels({
+          apiKey,
+          customBaseUrl,
+          setModelLoadError,
+        })
         setAvailableModels(customModels)
         navigateTo('model')
         return customModels
@@ -1406,7 +789,10 @@ export function ModelSelector({
 
       // For Gemini, use the separate fetchGeminiModels function
       if (selectedProvider === 'gemini') {
-        const geminiModels = await fetchGeminiModels()
+        const geminiModels = await modelFetchers.fetchGeminiModels({
+          apiKey,
+          setModelLoadError,
+        })
         setAvailableModels(geminiModels)
         navigateTo('model')
         return geminiModels
@@ -1414,7 +800,11 @@ export function ModelSelector({
 
       // For Kimi, use the fetchKimiModels function
       if (selectedProvider === 'kimi') {
-        const kimiModels = await fetchKimiModels()
+        const kimiModels = await modelFetchers.fetchKimiModels({
+          apiKey,
+          providerBaseUrl,
+          setModelLoadError,
+        })
         setAvailableModels(kimiModels)
         navigateTo('model')
         return kimiModels
@@ -1422,7 +812,11 @@ export function ModelSelector({
 
       // For DeepSeek, use the fetchDeepSeekModels function
       if (selectedProvider === 'deepseek') {
-        const deepseekModels = await fetchDeepSeekModels()
+        const deepseekModels = await modelFetchers.fetchDeepSeekModels({
+          apiKey,
+          providerBaseUrl,
+          setModelLoadError,
+        })
         setAvailableModels(deepseekModels)
         navigateTo('model')
         return deepseekModels
@@ -1430,7 +824,11 @@ export function ModelSelector({
 
       // For SiliconFlow, use the fetchSiliconFlowModels function
       if (selectedProvider === 'siliconflow') {
-        const siliconflowModels = await fetchSiliconFlowModels()
+        const siliconflowModels = await modelFetchers.fetchSiliconFlowModels({
+          apiKey,
+          providerBaseUrl,
+          setModelLoadError,
+        })
         setAvailableModels(siliconflowModels)
         navigateTo('model')
         return siliconflowModels
@@ -1438,7 +836,11 @@ export function ModelSelector({
 
       // For Qwen, use the fetchQwenModels function
       if (selectedProvider === 'qwen') {
-        const qwenModels = await fetchQwenModels()
+        const qwenModels = await modelFetchers.fetchQwenModels({
+          apiKey,
+          providerBaseUrl,
+          setModelLoadError,
+        })
         setAvailableModels(qwenModels)
         navigateTo('model')
         return qwenModels
@@ -1446,7 +848,11 @@ export function ModelSelector({
 
       // For GLM, use the fetchGLMModels function
       if (selectedProvider === 'glm') {
-        const glmModels = await fetchGLMModels()
+        const glmModels = await modelFetchers.fetchGLMModels({
+          apiKey,
+          providerBaseUrl,
+          setModelLoadError,
+        })
         setAvailableModels(glmModels)
         navigateTo('model')
         return glmModels
@@ -1454,7 +860,11 @@ export function ModelSelector({
 
       // For Baidu Qianfan, use the fetchBaiduQianfanModels function
       if (selectedProvider === 'baidu-qianfan') {
-        const baiduModels = await fetchBaiduQianfanModels()
+        const baiduModels = await modelFetchers.fetchBaiduQianfanModels({
+          apiKey,
+          providerBaseUrl,
+          setModelLoadError,
+        })
         setAvailableModels(baiduModels)
         navigateTo('model')
         return baiduModels
@@ -1486,7 +896,12 @@ export function ModelSelector({
       // Transform the response into our ModelInfo format
       const fetchedModels = []
       for (const model of response.data) {
-        const modelName = (model as any).modelName || (model as any).id || (model as any).name || (model as any).model || 'unknown'
+        const modelName =
+          (model as any).modelName ||
+          (model as any).id ||
+          (model as any).name ||
+          (model as any).model ||
+          'unknown'
         const modelInfo = models[selectedProvider as keyof typeof models]?.find(
           m => m.model === modelName,
         )
@@ -1599,7 +1014,6 @@ export function ModelSelector({
       navigateTo('apiKey')
     }
   }
-
 
   function handleCustomModelSubmit(model: string) {
     setCustomModelName(model)
@@ -1720,10 +1134,12 @@ export function ModelSelector({
       if (isOpenAICompatible) {
         // 🔥 Use specialized GPT-5 connection test for GPT-5 models
         const isGPT5 = selectedModel?.toLowerCase().includes('gpt-5')
-        
+
         if (isGPT5) {
-          console.log(`🚀 Using specialized GPT-5 connection test for model: ${selectedModel}`)
-          
+          console.log(
+            `🚀 Using specialized GPT-5 connection test for model: ${selectedModel}`,
+          )
+
           // Validate configuration first
           const configValidation = validateGPT5Config({
             model: selectedModel,
@@ -1732,7 +1148,7 @@ export function ModelSelector({
             maxTokens: parseInt(maxTokens) || 8192,
             provider: selectedProvider,
           })
-          
+
           if (!configValidation.valid) {
             return {
               success: false,
@@ -1740,7 +1156,7 @@ export function ModelSelector({
               details: configValidation.errors.join('\n'),
             }
           }
-          
+
           // Use specialized GPT-5 test service
           const gpt5Result = await testGPT5Connection({
             model: selectedModel,
@@ -1749,10 +1165,10 @@ export function ModelSelector({
             maxTokens: parseInt(maxTokens) || 8192,
             provider: selectedProvider,
           })
-          
+
           return gpt5Result
         }
-        
+
         // For non-GPT-5 OpenAI-compatible models, use existing logic
         const endpointsToTry = []
 
@@ -1779,7 +1195,7 @@ export function ModelSelector({
               endpoint.path,
               endpoint.name,
             )
-            
+
             if (testResult.success) {
               return testResult
             }
@@ -1846,17 +1262,24 @@ export function ModelSelector({
     // GPT-5 parameter compatibility fix
     if (selectedModel && selectedModel.toLowerCase().includes('gpt-5')) {
       console.log(`Applying GPT-5 parameter fix for model: ${selectedModel}`)
-      
+
       // GPT-5 requires max_completion_tokens instead of max_tokens
       if (testPayload.max_tokens) {
         testPayload.max_completion_tokens = testPayload.max_tokens
         delete testPayload.max_tokens
-        console.log(`Transformed max_tokens → max_completion_tokens: ${testPayload.max_completion_tokens}`)
+        console.log(
+          `Transformed max_tokens → max_completion_tokens: ${testPayload.max_completion_tokens}`,
+        )
       }
-      
+
       // GPT-5 temperature handling - ensure it's 1 or undefined
-      if (testPayload.temperature !== undefined && testPayload.temperature !== 1) {
-        console.log(`Adjusting temperature from ${testPayload.temperature} to 1 for GPT-5`)
+      if (
+        testPayload.temperature !== undefined &&
+        testPayload.temperature !== 1
+      ) {
+        console.log(
+          `Adjusting temperature from ${testPayload.temperature} to 1 for GPT-5`,
+        )
         testPayload.temperature = 1
       }
     }
@@ -1977,7 +1400,7 @@ export function ModelSelector({
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
+      Authorization: `Bearer ${apiKey}`,
     }
 
     try {
@@ -1996,11 +1419,14 @@ export function ModelSelector({
 
         // Extract content from Responses API format
         let responseContent = ''
-        
+
         if (data.output_text) {
           responseContent = data.output_text
         } else if (data.output) {
-          responseContent = typeof data.output === 'string' ? data.output : data.output.text || ''
+          responseContent =
+            typeof data.output === 'string'
+              ? data.output
+              : data.output.text || ''
         }
 
         console.log('[DEBUG] Extracted response content:', responseContent)
@@ -2028,19 +1454,24 @@ export function ModelSelector({
         const errorData = await response.json().catch(() => null)
         const errorMessage =
           errorData?.error?.message || errorData?.message || response.statusText
-        
-        console.log(`🚨 GPT-5 Responses API Error (${response.status}):`, errorData)
-        
+
+        console.log(
+          `🚨 GPT-5 Responses API Error (${response.status}):`,
+          errorData,
+        )
+
         // 🔧 Provide specific guidance for common GPT-5 errors
         let details = `Responses API Error: ${errorMessage}`
         if (response.status === 400 && errorMessage.includes('max_tokens')) {
-          details += '\n🔧 Note: This appears to be a parameter compatibility issue. The fallback to Chat Completions should handle this.'
+          details +=
+            '\n🔧 Note: This appears to be a parameter compatibility issue. The fallback to Chat Completions should handle this.'
         } else if (response.status === 404) {
-          details += '\n🔧 Note: Responses API endpoint may not be available for this model or provider.'
+          details +=
+            '\n🔧 Note: Responses API endpoint may not be available for this model or provider.'
         } else if (response.status === 401) {
           details += '\n🔧 Note: API key authentication failed.'
         }
-        
+
         return {
           success: false,
           message: `❌ ${endpointName} failed (${response.status})`,
@@ -2084,7 +1515,11 @@ export function ModelSelector({
         }
 
         // Use the verifyApiKey function which uses the official Anthropic SDK
-        const isValid = await verifyApiKey(apiKey, testBaseURL, selectedProvider)
+        const isValid = await verifyApiKey(
+          apiKey,
+          testBaseURL,
+          selectedProvider,
+        )
 
         if (isValid) {
           return {
@@ -2168,7 +1603,8 @@ export function ModelSelector({
       // Generate a unique name for the model
       // If model is empty (for providers without model selection), use provider name
       const displayModel = model || 'default'
-      const modelDisplayName = `${providers[actualProvider]?.name || actualProvider} ${displayModel}`.trim()
+      const modelDisplayName =
+        `${providers[actualProvider]?.name || actualProvider} ${displayModel}`.trim()
 
       const modelConfig = {
         name: modelDisplayName,
@@ -2223,7 +1659,10 @@ export function ModelSelector({
   // Handle back navigation based on current screen
   const handleBack = () => {
     // Special handling for submenus - they should go back to main menu
-    if (currentScreen === 'partnerProviders' || currentScreen === 'partnerCodingPlans') {
+    if (
+      currentScreen === 'partnerProviders' ||
+      currentScreen === 'partnerCodingPlans'
+    ) {
       // Go back to the provider (main menu) screen
       setProviderFocusIndex(0)
       setScreenStack(['provider'])
@@ -2243,7 +1682,10 @@ export function ModelSelector({
     // For API key screen that came from a submenu, go back to the submenu
     if (currentScreen === 'apiKey' && screenStack.length >= 2) {
       const previousScreen = screenStack[screenStack.length - 2]
-      if (previousScreen === 'partnerProviders' || previousScreen === 'partnerCodingPlans') {
+      if (
+        previousScreen === 'partnerProviders' ||
+        previousScreen === 'partnerCodingPlans'
+      ) {
         // Go back to the submenu
         setScreenStack(prev => prev.slice(0, -1))
         return
@@ -2374,8 +1816,7 @@ export function ModelSelector({
         setCodingPlanFocusIndex(prev =>
           codingPlanOptions.length === 0
             ? 0
-            : (prev - 1 + codingPlanOptions.length) %
-              codingPlanOptions.length,
+            : (prev - 1 + codingPlanOptions.length) % codingPlanOptions.length,
         )
         return
       }
@@ -2712,9 +2153,7 @@ export function ModelSelector({
                   </>
                 )}
                 {selectedProvider === 'anthropic' && (
-                  <>
-                    💡 Get your API key from your provider dashboard.
-                  </>
+                  <>💡 Get your API key from your provider dashboard.</>
                 )}
                 {selectedProvider === 'openai' && (
                   <>
@@ -2764,10 +2203,7 @@ export function ModelSelector({
                 <Text color={theme.suggestion} dimColor={!apiKey}>
                   [Submit API Key]
                 </Text>
-                <Text>
-                  {' '}
-                  - Press Enter to validate and continue
-                </Text>
+                <Text> - Press Enter to validate and continue</Text>
               </Text>
             </Box>
 
@@ -2777,9 +2213,7 @@ export function ModelSelector({
                   Validating API key and fetching models...
                 </Text>
                 {providerBaseUrl && (
-                  <Text dimColor>
-                    Endpoint: {providerBaseUrl}/v1/models
-                  </Text>
+                  <Text dimColor>Endpoint: {providerBaseUrl}/v1/models</Text>
                 )}
               </Box>
             )}
@@ -3690,7 +3124,9 @@ export function ModelSelector({
               {apiKey && showsApiKey && (
                 <Text>
                   <Text bold>API Key: </Text>
-                  <Text color={theme.suggestion}>{formatApiKeyDisplay(apiKey)}</Text>
+                  <Text color={theme.suggestion}>
+                    {formatApiKeyDisplay(apiKey)}
+                  </Text>
                 </Text>
               )}
 
@@ -3805,19 +3241,22 @@ export function ModelSelector({
           </Text>
           <Box flexDirection="column" gap={containerGap}>
             <Text bold>
-              Select a partner coding plan for specialized programming assistance:
+              Select a partner coding plan for specialized programming
+              assistance:
             </Text>
             <Box flexDirection="column" width={70}>
               <Text color={theme.secondaryText}>
-                {compactLayout
-                  ? 'Specialized coding models from partners.'
-                  : (
-                    <>
-                      These are specialized models optimized for coding and development tasks.
-                      <Newline />
-                      They require specific coding plan subscriptions from the respective providers.
-                    </>
-                  )}
+                {compactLayout ? (
+                  'Specialized coding models from partners.'
+                ) : (
+                  <>
+                    These are specialized models optimized for coding and
+                    development tasks.
+                    <Newline />
+                    They require specific coding plan subscriptions from the
+                    respective providers.
+                  </>
+                )}
               </Text>
             </Box>
 
@@ -3845,8 +3284,8 @@ export function ModelSelector({
 
   // Render Provider Selection Screen
   return (
-    <ScreenContainer 
-      title="Provider Selection" 
+    <ScreenContainer
+      title="Provider Selection"
       exitState={exitState}
       paddingY={containerPaddingY}
       gap={containerGap}
@@ -3857,15 +3296,15 @@ export function ModelSelector({
           </Text>
           <Box flexDirection="column" width={70}>
             <Text color={theme.secondaryText}>
-              {compactLayout
-                ? 'Choose the provider to use for this profile.'
-                : (
-                  <>
-                    Choose the provider you want to use for this model profile.
-                    <Newline />
-                    This will determine which models are available to you.
-                  </>
-                )}
+              {compactLayout ? (
+                'Choose the provider to use for this profile.'
+              ) : (
+                <>
+                  Choose the provider you want to use for this model profile.
+                  <Newline />
+                  This will determine which models are available to you.
+                </>
+              )}
             </Text>
           </Box>
 

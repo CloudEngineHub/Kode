@@ -11,7 +11,9 @@ import type {
 import type { ToolUseContext } from '@tool'
 import { getCwd, getOriginalCwd } from '@utils/state'
 import { getPlanConversationKey, getPlanFilePath } from '@utils/planMode'
-import { getClaudeSettingsFilePath } from '@utils/permissions/toolPermissionSettings'
+import { getSettingsFileCandidates } from '@utils/settingsFiles'
+import { PRODUCT_NAME } from '@constants/product'
+import { getKodeBaseDir } from '@utils/env'
 
 type ToolRuleValue = {
   toolName: string
@@ -30,7 +32,14 @@ type FilePermissionBehavior = ToolPermissionRuleBehavior
 
 const POSIX = path.posix
 const POSIX_SEP = POSIX.sep
-const SENSITIVE_DIR_NAMES = new Set(['.git', '.vscode', '.idea', '.claude', '.ssh'])
+const SENSITIVE_DIR_NAMES = new Set([
+  '.git',
+  '.vscode',
+  '.idea',
+  '.claude',
+  '.kode',
+  '.ssh',
+])
 const SENSITIVE_FILE_NAMES = new Set([
   '.gitconfig',
   '.gitmodules',
@@ -43,13 +52,18 @@ const SENSITIVE_FILE_NAMES = new Set([
   '.mcp.json',
 ])
 
-export function resolveLikeClaudePath(inputPath: string, baseDir?: string): string {
+export function resolveLikeCliPath(
+  inputPath: string,
+  baseDir?: string,
+): string {
   const base = baseDir ?? getCwd()
   if (typeof inputPath !== 'string') {
     throw new TypeError(`Path must be a string, received ${typeof inputPath}`)
   }
   if (typeof base !== 'string') {
-    throw new TypeError(`Base directory must be a string, received ${typeof base}`)
+    throw new TypeError(
+      `Base directory must be a string, received ${typeof base}`,
+    )
   }
   if (inputPath.includes('\0') || base.includes('\0')) {
     throw new Error('Path contains null bytes')
@@ -69,7 +83,9 @@ export function resolveLikeClaudePath(inputPath: string, baseDir?: string): stri
     return path.resolve(`${driveLetter}:\\`, rest.replace(/\//g, '\\'))
   }
 
-  return path.isAbsolute(trimmed) ? path.resolve(trimmed) : path.resolve(base, trimmed)
+  return path.isAbsolute(trimmed)
+    ? path.resolve(trimmed)
+    : path.resolve(base, trimmed)
 }
 
 function toLower(value: string): string {
@@ -131,7 +147,9 @@ export function hasSuspiciousWindowsPathPattern(inputPath: string): boolean {
   return false
 }
 
-function matchesSuspiciousWindowsNetworkPathPatterns(inputPath: string): boolean {
+function matchesSuspiciousWindowsNetworkPathPatterns(
+  inputPath: string,
+): boolean {
   if (process.platform !== 'win32') return false
   const p = String(inputPath)
   if (/\\\\[a-zA-Z0-9._\-:[\]%]+(?:@(?:\d+|ssl))?\\/i.test(p)) return true
@@ -149,7 +167,7 @@ export function isSensitiveFilePath(inputPath: string): boolean {
   const p = String(inputPath)
   if (p.startsWith('\\\\') || p.startsWith('//')) return true
 
-  const absolutePath = resolveLikeClaudePath(p)
+  const absolutePath = resolveLikeCliPath(p)
   const parts = toPosixPath(absolutePath).split(POSIX_SEP)
   const basename = parts[parts.length - 1] ?? ''
 
@@ -160,7 +178,7 @@ export function isSensitiveFilePath(inputPath: string): boolean {
   return false
 }
 
-function getClaudeSettingsPathsForWriteProtection(options?: {
+function getSettingsPathsForWriteProtection(options?: {
   projectDir?: string
   homeDir?: string
 }): string[] {
@@ -171,38 +189,52 @@ function getClaudeSettingsPathsForWriteProtection(options?: {
     'projectSettings',
     'localSettings',
   ]
-  const paths = destinations
-    .map(destination =>
-      getClaudeSettingsFilePath({ destination, projectDir, homeDir }),
-    )
-    .filter((p): p is string => typeof p === 'string')
-  return paths
+  const out: string[] = []
+  for (const destination of destinations) {
+    const candidates = getSettingsFileCandidates({
+      destination: destination as any,
+      projectDir,
+      homeDir,
+    })
+    if (!candidates) continue
+    out.push(candidates.primary)
+    out.push(...candidates.legacy)
+  }
+  return Array.from(new Set(out))
 }
 
-export function isWriteProtectedPath(inputPath: string, options?: {
-  projectDir?: string
-  homeDir?: string
-}): boolean {
-  const absolutePath = resolveLikeClaudePath(inputPath)
+export function isWriteProtectedPath(
+  inputPath: string,
+  options?: {
+    projectDir?: string
+    homeDir?: string
+  },
+): boolean {
+  const absolutePath = resolveLikeCliPath(inputPath)
   const normalized = toLower(toPosixPath(absolutePath))
 
   const settingsPaths = new Set(
-    getClaudeSettingsPathsForWriteProtection(options).map(p =>
-      toLower(toPosixPath(resolveLikeClaudePath(p))),
+    getSettingsPathsForWriteProtection(options).map(p =>
+      toLower(toPosixPath(resolveLikeCliPath(p))),
     ),
   )
 
   // Explicit project-local settings
   if (normalized.endsWith('/.claude/settings.json')) return true
   if (normalized.endsWith('/.claude/settings.local.json')) return true
+  if (normalized.endsWith('/.kode/settings.json')) return true
+  if (normalized.endsWith('/.kode/settings.local.json')) return true
   if (settingsPaths.has(normalized)) return true
 
   const projectRoot = options?.projectDir ?? getOriginalCwd()
-  const projectRootPosix = toPosixPath(resolveLikeClaudePath(projectRoot))
+  const projectRootPosix = toPosixPath(resolveLikeCliPath(projectRoot))
   const protectedDirs = [
     POSIX.join(projectRootPosix, '.claude', 'commands'),
     POSIX.join(projectRootPosix, '.claude', 'agents'),
     POSIX.join(projectRootPosix, '.claude', 'skills'),
+    POSIX.join(projectRootPosix, '.kode', 'commands'),
+    POSIX.join(projectRootPosix, '.kode', 'agents'),
+    POSIX.join(projectRootPosix, '.kode', 'skills'),
   ]
 
   for (const dir of protectedDirs) {
@@ -241,11 +273,16 @@ export function isPathInWorkingDirectories(
 
   return expandSymlinkPaths(inputPath).every(candidate => {
     return Array.from(roots).some(root => {
-      const resolvedCandidate = resolveLikeClaudePath(candidate)
-      const resolvedRoot = resolveLikeClaudePath(root)
-      const candidatePosix = normalizeMacPrivatePrefix(toPosixPath(resolvedCandidate))
+      const resolvedCandidate = resolveLikeCliPath(candidate)
+      const resolvedRoot = resolveLikeCliPath(root)
+      const candidatePosix = normalizeMacPrivatePrefix(
+        toPosixPath(resolvedCandidate),
+      )
       const rootPosix = normalizeMacPrivatePrefix(toPosixPath(resolvedRoot))
-      const relative = posixRelative(toLower(rootPosix), toLower(candidatePosix))
+      const relative = posixRelative(
+        toLower(rootPosix),
+        toLower(candidatePosix),
+      )
       if (relative === '') return true
       if (hasParentTraversalSegment(relative)) return false
       if (POSIX.isAbsolute(relative)) return false
@@ -254,7 +291,9 @@ export function isPathInWorkingDirectories(
   })
 }
 
-function operationToolName(operation: FilePermissionOperation): 'Read' | 'Edit' {
+function operationToolName(
+  operation: FilePermissionOperation,
+): 'Read' | 'Edit' {
   return operation === 'read' ? 'Read' : 'Edit'
 }
 
@@ -307,18 +346,16 @@ function rootPathForSource(source: ToolPermissionUpdateDestination): string {
     case 'cliArg':
     case 'command':
     case 'session':
-      return resolveLikeClaudePath(getOriginalCwd())
+      return resolveLikeCliPath(getOriginalCwd())
     case 'userSettings':
-      return resolveLikeClaudePath(
-        process.env.CLAUDE_CONFIG_DIR?.trim() || path.join(homedir(), '.claude'),
-      )
+      return resolveLikeCliPath(getKodeBaseDir())
     case 'policySettings':
     case 'projectSettings':
     case 'localSettings':
     case 'flagSettings':
-      return resolveLikeClaudePath(getOriginalCwd())
+      return resolveLikeCliPath(getOriginalCwd())
     default:
-      return resolveLikeClaudePath(getOriginalCwd())
+      return resolveLikeCliPath(getOriginalCwd())
   }
 }
 
@@ -334,7 +371,9 @@ function splitRulePatternByRoot(args: {
       const driveLetter = rest[1]?.toUpperCase() ?? 'C'
       const remaining = rest.slice(2)
       return {
-        relativePattern: remaining.startsWith('/') ? remaining.slice(1) : remaining,
+        relativePattern: remaining.startsWith('/')
+          ? remaining.slice(1)
+          : remaining,
         root: `${driveLetter}:\\`,
       }
     }
@@ -349,13 +388,13 @@ function splitRulePatternByRoot(args: {
     return { relativePattern: pattern, root: rootPathForSource(args.source) }
   }
 
-  const withoutDot = pattern.startsWith(`.${POSIX_SEP}`) ? pattern.slice(2) : pattern
+  const withoutDot = pattern.startsWith(`.${POSIX_SEP}`)
+    ? pattern.slice(2)
+    : pattern
   return { relativePattern: withoutDot, root: null }
 }
 
-function buildIgnoreMatcher(
-  patterns: string[],
-): Ignore {
+function buildIgnoreMatcher(patterns: string[]): Ignore {
   return ignore().add(patterns)
 }
 
@@ -365,7 +404,7 @@ export function matchPermissionRuleForPath(args: {
   operation: FilePermissionOperation
   behavior: FilePermissionBehavior
 }): string | null {
-  const resolved = resolveLikeClaudePath(args.inputPath)
+  const resolved = resolveLikeCliPath(args.inputPath)
   const targetPosix = toPosixPath(resolved)
 
   const entries = collectRuleEntries({
@@ -445,7 +484,7 @@ export function getWriteSafetyCheckForPath(
     if (hasSuspiciousWindowsPathPattern(candidate)) {
       return {
         safe: false,
-        message: `Claude requested permissions to write to ${inputPath}, which contains a suspicious Windows path pattern that requires manual approval.`,
+        message: `${PRODUCT_NAME} requested permissions to write to ${inputPath}, which contains a suspicious Windows path pattern that requires manual approval.`,
       }
     }
   }
@@ -454,7 +493,7 @@ export function getWriteSafetyCheckForPath(
     if (isWriteProtectedPath(candidate)) {
       return {
         safe: false,
-        message: `Claude requested permissions to write to ${inputPath}, but you haven't granted it yet.`,
+        message: `${PRODUCT_NAME} requested permissions to write to ${inputPath}, but you haven't granted it yet.`,
       }
     }
   }
@@ -463,7 +502,7 @@ export function getWriteSafetyCheckForPath(
     if (isSensitiveFilePath(candidate)) {
       return {
         safe: false,
-        message: `Claude requested permissions to edit ${inputPath} which is a sensitive file.`,
+        message: `${PRODUCT_NAME} requested permissions to edit ${inputPath} which is a sensitive file.`,
       }
     }
   }
@@ -471,7 +510,9 @@ export function getWriteSafetyCheckForPath(
   return { safe: true }
 }
 
-export function getPlanFileWritePrivilegeForContext(context: ToolUseContext): string {
+export function getPlanFileWritePrivilegeForContext(
+  context: ToolUseContext,
+): string {
   const conversationKey = getPlanConversationKey(context)
   return getPlanFilePath(context.agentId, conversationKey)
 }
@@ -480,13 +521,15 @@ export function isPlanFileForContext(args: {
   inputPath: string
   context: ToolUseContext
 }): boolean {
-  const expected = resolveLikeClaudePath(getPlanFileWritePrivilegeForContext(args.context))
-  const actual = resolveLikeClaudePath(args.inputPath)
+  const expected = resolveLikeCliPath(
+    getPlanFileWritePrivilegeForContext(args.context),
+  )
+  const actual = resolveLikeCliPath(args.inputPath)
   return actual === expected
 }
 
 function getDirectoryForSuggestions(inputPath: string): string {
-  const absolute = resolveLikeClaudePath(inputPath)
+  const absolute = resolveLikeCliPath(inputPath)
   try {
     if (statSync(absolute).isDirectory()) return absolute
   } catch {
@@ -505,7 +548,9 @@ function makeReadAllowRuleForDirectory(dirPath: string): string | null {
   const posixDir = toPosixPath(dirPath)
   if (posixDir === POSIX_SEP) return null
 
-  const ruleContent = POSIX.isAbsolute(posixDir) ? `/${posixDir}/**` : `${posixDir}/**`
+  const ruleContent = POSIX.isAbsolute(posixDir)
+    ? `/${posixDir}/**`
+    : `${posixDir}/**`
   return `Read(${ruleContent})`
 }
 
@@ -556,17 +601,13 @@ export function getSpecialAllowedReadReason(args: {
   inputPath: string
   context: ToolUseContext
 }): string | null {
-  const absolute = resolveLikeClaudePath(args.inputPath)
+  const absolute = resolveLikeCliPath(args.inputPath)
 
   const conversationKey = getPlanConversationKey(args.context)
 
-  const baseDir =
-    process.env.KODE_CONFIG_DIR ??
-    process.env.CLAUDE_CONFIG_DIR ??
-    path.join(homedir(), '.kode')
-  const baseDirResolved = resolveLikeClaudePath(baseDir)
+  const baseDirResolved = resolveLikeCliPath(getKodeBaseDir())
 
-  const bashOutputsDir = resolveLikeClaudePath(
+  const bashOutputsDir = resolveLikeCliPath(
     path.join(baseDirResolved, 'bash-outputs', conversationKey),
   )
   const bashOutputsDirPosix = toPosixPath(bashOutputsDir)
@@ -582,13 +623,16 @@ export function getSpecialAllowedReadReason(args: {
     return 'Plan files for current session are allowed for reading'
   }
 
-  const memoryDir = resolveLikeClaudePath(path.join(baseDirResolved, 'memory'))
+  const memoryDir = resolveLikeCliPath(path.join(baseDirResolved, 'memory'))
   const memoryDirPosix = toPosixPath(memoryDir)
-  if (absPosix === memoryDirPosix || absPosix.startsWith(`${memoryDirPosix}${POSIX_SEP}`)) {
+  if (
+    absPosix === memoryDirPosix ||
+    absPosix.startsWith(`${memoryDirPosix}${POSIX_SEP}`)
+  ) {
     return 'Session memory files are allowed for reading'
   }
 
-  const toolResultsDir = resolveLikeClaudePath(
+  const toolResultsDir = resolveLikeCliPath(
     path.join(baseDirResolved, 'tool-results', conversationKey),
   )
   const toolResultsDirPosix = toPosixPath(toolResultsDir)
@@ -601,9 +645,14 @@ export function getSpecialAllowedReadReason(args: {
 
   // Reference CLI parity: task output files live under the per-project temp directory (tasks/*.output).
   const projectDir = process.cwd().replace(/[^a-zA-Z0-9]/g, '-')
-  const tasksDir = resolveLikeClaudePath(path.join(baseDirResolved, projectDir, 'tasks'))
+  const tasksDir = resolveLikeCliPath(
+    path.join(baseDirResolved, projectDir, 'tasks'),
+  )
   const tasksDirPosix = toPosixPath(tasksDir)
-  if (absPosix === tasksDirPosix || absPosix.startsWith(`${tasksDirPosix}${POSIX_SEP}`)) {
+  if (
+    absPosix === tasksDirPosix ||
+    absPosix.startsWith(`${tasksDirPosix}${POSIX_SEP}`)
+  ) {
     return 'Project temp directory files are allowed for reading'
   }
 

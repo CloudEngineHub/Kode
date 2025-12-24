@@ -5,6 +5,5 @@
 import { MACRO } from '@constants/macros'
 import { PRODUCT_COMMAND } from '@constants/product'
 
-// WARNING: We rely on `claude-cli` in the user agent for log filtering.
-// Please do NOT change this without making sure that logging also gets updated!
+// Keep the user agent stable so upstream providers can reliably attribute requests.
 export const USER_AGENT = `${PRODUCT_COMMAND}/${MACRO.VERSION} (${process.env.USER_TYPE})`

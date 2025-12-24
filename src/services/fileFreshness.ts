@@ -42,8 +42,6 @@ class FileFreshnessService {
       (context: any) => {
         // Reset session state on startup
         this.resetSession()
-
-        
       },
     )
   }

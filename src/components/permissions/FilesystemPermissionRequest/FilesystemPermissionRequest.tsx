@@ -43,8 +43,7 @@ function pathArgNameForToolUse(toolUseConfirm: ToolUseConfirm): string | null {
     case GrepTool: {
       return 'path'
     }
-    case NotebookEditTool:
-    {
+    case NotebookEditTool: {
       return 'notebook_path'
     }
   }
@@ -129,7 +128,9 @@ function getDontAskAgainOptions(
   }
 
   // For write/edit tools, offer a session-scoped allow.
-  const shortcutHint = chalk.bold.hex(getTheme().warning)(`(${modeCycleShortcut})`)
+  const shortcutHint = chalk.bold.hex(getTheme().warning)(
+    `(${modeCycleShortcut})`,
+  )
   const label = isInWorkingDir
     ? `Yes, allow all edits during this session ${shortcutHint}`
     : `Yes, allow all edits in ${chalk.bold(`${permissionDirName}/`)} during this session ${shortcutHint}`
@@ -155,7 +156,9 @@ function FilesystemPermissionRequestImpl({
   const userFacingName = toolUseConfirm.tool.userFacingName()
   const hasSessionSuggestion = (toolUseConfirm.suggestions?.length ?? 0) > 0
 
-  const userFacingReadOrWrite = toolUseConfirm.tool.isReadOnly(toolUseConfirm.input as never)
+  const userFacingReadOrWrite = toolUseConfirm.tool.isReadOnly(
+    toolUseConfirm.input as never,
+  )
     ? 'Read'
     : 'Edit'
   const title = `${userFacingReadOrWrite} ${isMultiFile(toolUseConfirm) ? 'files' : 'file'}`
@@ -170,7 +173,10 @@ function FilesystemPermissionRequestImpl({
 
   usePermissionRequestLogging(toolUseConfirm, unaryEvent)
 
-  const permissionDirPath = useMemo(() => pathToPermissionDirectory(path), [path])
+  const permissionDirPath = useMemo(
+    () => pathToPermissionDirectory(path),
+    [path],
+  )
   const isInWorkingDir = useMemo(
     () => isPathInWorkingDirectories(permissionDirPath, toolPermissionContext),
     [permissionDirPath, toolPermissionContext],
@@ -208,7 +214,9 @@ function FilesystemPermissionRequestImpl({
             }
           }
           onDone()
-          toolUseConfirm.onAllow(hasSessionSuggestion ? 'permanent' : 'temporary')
+          toolUseConfirm.onAllow(
+            hasSessionSuggestion ? 'permanent' : 'temporary',
+          )
           return
         case 'no':
           logUnaryEvent({

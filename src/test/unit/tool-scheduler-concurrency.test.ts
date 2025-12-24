@@ -385,7 +385,9 @@ describe('Tool scheduler (ToolUseQueue) parity', () => {
         started.push(ctx.toolUseId)
         yield {
           type: 'progress',
-          content: createAssistantMessage('<tool-progress>Running…</tool-progress>'),
+          content: createAssistantMessage(
+            '<tool-progress>Running…</tool-progress>',
+          ),
         }
         await afterGate.promise
         yield { type: 'result', data: { ok: true }, resultForAssistant: 'ok' }
@@ -424,13 +426,20 @@ describe('Tool scheduler (ToolUseQueue) parity', () => {
       consumePromise = (async () => {
         for await (const msg of queue.getRemainingResults()) {
           if (msg.type === 'progress') {
-            const text = msg.content.message.content[0]?.type === 'text'
-              ? msg.content.message.content[0].text
-              : ''
-            if (msg.toolUseID === 'after' && String(text).includes('Waiting…')) {
+            const text =
+              msg.content.message.content[0]?.type === 'text'
+                ? msg.content.message.content[0].text
+                : ''
+            if (
+              msg.toolUseID === 'after' &&
+              String(text).includes('Waiting…')
+            ) {
               sawWaiting.resolve()
             }
-            if (msg.toolUseID === 'after' && String(text).includes('Running…')) {
+            if (
+              msg.toolUseID === 'after' &&
+              String(text).includes('Running…')
+            ) {
               sawRunning.resolve()
             }
           }

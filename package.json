@@ -1,6 +1,6 @@
 {
   "name": "@shareai-lab/kode",
-  "version": "1.1.23",
+  "version": "2.0.0",
   "bin": {
     "kode": "cli.js",
     "kwa": "cli.js",
@@ -26,12 +26,15 @@
     "yoga.wasm",
     "dist/**/*",
     "vendor/**/*",
+    "scripts/binary-utils.cjs",
+    "scripts/cli-wrapper.cjs",
     "scripts/postinstall.js",
     ".npmrc"
   ],
   "scripts": {
     "dev": "bun run ./src/entrypoints/cli.tsx --verbose",
     "build": "bun run scripts/build.mjs",
+    "build:binary": "bun run scripts/build-binary.mjs",
     "clean": "bun run scripts/clean.mjs",
     "prepublishOnly": "bun run scripts/ensure-ripgrep.mjs && bun run scripts/build.mjs && bun run scripts/prepublish-check.js",
     "postinstall": "node scripts/postinstall.js || true",
@@ -41,11 +44,13 @@
     "lint:fix": "eslint . --ext .ts,.tsx,.js --fix",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "prepare": "",
+    "prepare": "bun run scripts/install-hooks.mjs",
     "publish:dev": "bun run scripts/publish-dev.js",
-    "publish:release": "bun run scripts/publish-release.js"
+    "publish:release": "bun run scripts/publish-release.js",
+    "bench:startup": "bun run scripts/bench-startup.mjs"
   },
   "dependencies": {
+    "ajv": "^8.17.1",
     "@anthropic-ai/bedrock-sdk": "^0.12.6",
     "@anthropic-ai/sdk": "^0.39.0",
     "@anthropic-ai/vertex-sdk": "^0.7.0",
@@ -65,6 +70,7 @@
     "dotenv": "^16.6.1",
     "env-paths": "^3.0.0",
     "figures": "^6.1.0",
+    "fflate": "^0.8.2",
     "glob": "^11.0.3",
     "gray-matter": "^4.0.3",
     "highlight.js": "^11.11.1",
@@ -101,6 +107,7 @@
     "bun-types": "latest",
     "esbuild": "^0.25.9",
     "prettier": "^3.6.2",
+    "react-devtools-core": "^7.0.1",
     "typescript": "^5.9.2"
   },
   "overrides": {

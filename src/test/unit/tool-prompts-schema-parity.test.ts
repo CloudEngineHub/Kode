@@ -22,7 +22,7 @@ describe('Tool prompt/description/schema parity', () => {
       'Executes a given bash command in a persistent shell session with optional timeout, ensuring proper handling and security measures.',
     )
     expect(prompt).toContain(
-      "IMPORTANT: This tool is for terminal operations like git, npm, docker, etc. DO NOT use it for file operations (reading, writing, editing, searching, finding files) - use the specialized tools for this instead.",
+      'IMPORTANT: This tool is for terminal operations like git, npm, docker, etc. DO NOT use it for file operations (reading, writing, editing, searching, finding files) - use the specialized tools for this instead.',
     )
     expect(prompt).toContain('# Committing changes with git')
     expect(prompt).toContain('# Creating pull requests')
@@ -35,6 +35,20 @@ describe('Tool prompt/description/schema parity', () => {
     expect(description).toContain('Examples:')
     expect(description).toContain('Input: ls')
     expect(description).toContain("Output: Create directory 'foo'")
+  })
+
+  test('BashTool schema matches reference CLI keys', () => {
+    const schema: any = BashTool.inputSchema as any
+    const keys = Object.keys(schema.shape).sort()
+    expect(keys).toEqual(
+      [
+        'command',
+        'dangerouslyDisableSandbox',
+        'description',
+        'run_in_background',
+        'timeout',
+      ].sort(),
+    )
   })
 
   test('BashTool validateInput rejects timeouts above 600000ms', async () => {
@@ -59,8 +73,12 @@ describe('Tool prompt/description/schema parity', () => {
 
   test('TodoWriteTool description matches reference wording', async () => {
     const description = await TodoWriteTool.description()
-    expect(description).toContain('Update the todo list for the current session.')
-    expect(description).toContain('Always provide both content (imperative) and activeForm')
+    expect(description).toContain(
+      'Update the todo list for the current session.',
+    )
+    expect(description).toContain(
+      'Always provide both content (imperative) and activeForm',
+    )
   })
 
   test('WebFetchTool description matches reference wording', async () => {

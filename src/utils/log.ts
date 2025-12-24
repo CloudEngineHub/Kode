@@ -16,7 +16,7 @@ import type { LogOption, SerializedMessage } from '@kode-types/logs'
 import { MACRO } from '@constants/macros'
 import { PRODUCT_COMMAND } from '@constants/product'
 import { getPlanSlugForConversationKey } from '@utils/planMode'
-import { CLAUDE_BASE_DIR } from '@utils/env'
+import { getKodeBaseDir } from '@utils/env'
 
 const IN_MEMORY_ERROR_LOG: Array<{ error: string; timestamp: string }> = []
 const MAX_IN_MEMORY_ERRORS = 100 // Limit to prevent memory issues
@@ -45,7 +45,11 @@ function safeMkdir(dir: string): boolean {
   }
 }
 
-function safeWriteFile(path: string, data: string, encoding: BufferEncoding = 'utf8'): boolean {
+function safeWriteFile(
+  path: string,
+  data: string,
+  encoding: BufferEncoding = 'utf8',
+): boolean {
   try {
     writeFileSync(path, data, encoding)
     return true
@@ -70,21 +74,32 @@ function getLegacyCacheRoot(): string {
 }
 
 function getNewLogRoot(): string {
-  return process.env.KODE_LOG_ROOT ?? CLAUDE_BASE_DIR
+  return process.env.KODE_LOG_ROOT ?? getKodeBaseDir()
 }
 
 export const CACHE_PATHS = {
   errors: () => join(getNewLogRoot(), getProjectDir(process.cwd()), 'errors'),
-  messages: () => join(getNewLogRoot(), getProjectDir(process.cwd()), 'messages'),
+  messages: () =>
+    join(getNewLogRoot(), getProjectDir(process.cwd()), 'messages'),
   mcpLogs: (serverName: string) =>
-    join(getLegacyCacheRoot(), getProjectDir(process.cwd()), `mcp-logs-${serverName}`),
+    join(
+      getLegacyCacheRoot(),
+      getProjectDir(process.cwd()),
+      `mcp-logs-${serverName}`,
+    ),
 }
 
 export const LEGACY_CACHE_PATHS = {
-  errors: () => join(getLegacyCacheRoot(), getProjectDir(process.cwd()), 'errors'),
-  messages: () => join(getLegacyCacheRoot(), getProjectDir(process.cwd()), 'messages'),
+  errors: () =>
+    join(getLegacyCacheRoot(), getProjectDir(process.cwd()), 'errors'),
+  messages: () =>
+    join(getLegacyCacheRoot(), getProjectDir(process.cwd()), 'messages'),
   mcpLogs: (serverName: string) =>
-    join(getLegacyCacheRoot(), getProjectDir(process.cwd()), `mcp-logs-${serverName}`),
+    join(
+      getLegacyCacheRoot(),
+      getProjectDir(process.cwd()),
+      `mcp-logs-${serverName}`,
+    ),
 }
 
 export function dateToFilename(date: Date): string {
@@ -123,7 +138,8 @@ function migrateLegacyMessageLogsIfNeeded() {
   if (!existsSync(legacyDir)) return
 
   const newHasAny =
-    existsSync(newDir) && readdirSync(newDir).some(file => file.endsWith('.json'))
+    existsSync(newDir) &&
+    readdirSync(newDir).some(file => file.endsWith('.json'))
   if (newHasAny) return
 
   try {

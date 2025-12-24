@@ -44,12 +44,16 @@ export function normalizeMcpScopeForCli(scope: string | undefined): {
   // - local  => per-project config (private to the user)
   // - user   => global config (available in all projects)
   // - project => .mcp.json (shared via repo)
-  if (raw === 'local') return { scope: ensureConfigScope('project'), display: 'local' }
-  if (raw === 'user') return { scope: ensureConfigScope('global'), display: 'user' }
-  if (raw === 'project') return { scope: ensureConfigScope('mcpjson'), display: 'project' }
+  if (raw === 'local')
+    return { scope: ensureConfigScope('project'), display: 'local' }
+  if (raw === 'user')
+    return { scope: ensureConfigScope('global'), display: 'user' }
+  if (raw === 'project')
+    return { scope: ensureConfigScope('mcpjson'), display: 'project' }
 
   // Backwards-compatible aliases
-  if (raw === 'global') return { scope: ensureConfigScope('global'), display: 'user' }
+  if (raw === 'global')
+    return { scope: ensureConfigScope('global'), display: 'user' }
   if (raw === 'projectConfig' || raw === 'project-config') {
     return { scope: ensureConfigScope('project'), display: 'local' }
   }

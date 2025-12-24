@@ -62,7 +62,10 @@ describe('messages normalization + reordering parity', () => {
     const a1 = createAssistantMessage('part 1')
     const a2 = {
       ...createAssistantMessage('part 2'),
-      message: { ...createAssistantMessage('part 2').message, id: a1.message.id },
+      message: {
+        ...createAssistantMessage('part 2').message,
+        id: a1.message.id,
+      },
     }
 
     const out = normalizeMessagesForAPI([a1, makeToolResult('t1'), a2 as any])
@@ -88,7 +91,11 @@ describe('messages normalization + reordering parity', () => {
     const normalized = normalizeMessages([toolUse, toolResult, progress])
     const reordered = reorderMessages(normalized)
 
-    expect(reordered.map(m => m.type)).toEqual(['assistant', 'progress', 'user'])
+    expect(reordered.map(m => m.type)).toEqual([
+      'assistant',
+      'progress',
+      'user',
+    ])
     expect(getUnresolvedToolUseIDs(reordered)).toEqual(new Set())
   })
 

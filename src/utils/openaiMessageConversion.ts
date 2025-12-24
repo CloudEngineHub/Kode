@@ -8,7 +8,12 @@ type AnthropicImageBlock = {
 }
 
 type AnthropicTextBlock = { type: 'text'; text: string }
-type AnthropicToolUseBlock = { type: 'tool_use'; id: string; name: string; input: unknown }
+type AnthropicToolUseBlock = {
+  type: 'tool_use'
+  id: string
+  name: string
+  input: unknown
+}
 type AnthropicToolResultBlock = {
   type: 'tool_result'
   tool_use_id: string
@@ -57,7 +62,8 @@ export function convertAnthropicMessagesToOpenAIMessages(
 
     for (const block of blocks) {
       if (block.type === 'text') {
-        const text = typeof (block as any).text === 'string' ? (block as any).text : ''
+        const text =
+          typeof (block as any).text === 'string' ? (block as any).text : ''
         if (!text) continue
         if (role === 'user') {
           userContentParts.push({ type: 'text', text })
@@ -72,7 +78,9 @@ export function convertAnthropicMessagesToOpenAIMessages(
         if (source?.type === 'base64') {
           userContentParts.push({
             type: 'image_url',
-            image_url: { url: `data:${source.media_type};base64,${source.data}` },
+            image_url: {
+              url: `data:${source.media_type};base64,${source.data}`,
+            },
           })
         } else if (source?.type === 'url') {
           userContentParts.push({
@@ -112,8 +120,14 @@ export function convertAnthropicMessagesToOpenAIMessages(
     }
 
     if (role === 'user') {
-      if (userContentParts.length === 1 && userContentParts[0]?.type === 'text') {
-        openaiMessages.push({ role: 'user', content: userContentParts[0].text } as any)
+      if (
+        userContentParts.length === 1 &&
+        userContentParts[0]?.type === 'text'
+      ) {
+        openaiMessages.push({
+          role: 'user',
+          content: userContentParts[0].text,
+        } as any)
       } else if (userContentParts.length > 0) {
         openaiMessages.push({ role: 'user', content: userContentParts } as any)
       }

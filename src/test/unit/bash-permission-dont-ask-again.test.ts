@@ -6,11 +6,17 @@ import { createDefaultToolPermissionContext } from '@kode-types/toolPermissionCo
 import { hasPermissionsToUseTool, savePermission } from '@permissions'
 import { BashTool } from '@tools/BashTool/BashTool'
 import { checkBashPermissions } from '@utils/permissions/bashToolPermissionEngine'
-import { __resetToolPermissionContextStateForTests, setToolPermissionContextForConversationKey } from '@utils/toolPermissionContextState'
+import {
+  __resetToolPermissionContextStateForTests,
+  setToolPermissionContextForConversationKey,
+} from '@utils/toolPermissionContextState'
 import { BunShell } from '@utils/BunShell'
 import { getCwd, setCwd } from '@utils/state'
 import { loadToolPermissionContextFromDisk } from '@utils/permissions/toolPermissionSettings'
-import { getCurrentProjectConfig, saveCurrentProjectConfig } from '@utils/config'
+import {
+  getCurrentProjectConfig,
+  saveCurrentProjectConfig,
+} from '@utils/config'
 
 function makeToolUseContext(toolPermissionContext: any) {
   return {
@@ -80,16 +86,17 @@ describe('Bash permission dont-ask-again (prefix) parity', () => {
         {} as any,
       )
       expect(after).toEqual({ result: true })
-      expect(ctx.options?.toolPermissionContext?.alwaysAllowRules?.localSettings ?? []).toContain(
-        'Bash(python3:*)',
-      )
+      expect(
+        ctx.options?.toolPermissionContext?.alwaysAllowRules?.localSettings ??
+          [],
+      ).toContain('Bash(python3:*)')
     } finally {
       await setCwd(originalCwd)
       rmSync(projectDir, { recursive: true, force: true })
     }
   })
 
-  test('prefix allow persists to .claude/settings.local.json and reloads on restart', async () => {
+  test('prefix allow persists to .kode/settings.local.json and reloads on restart', async () => {
     if (process.platform === 'win32') return
 
     const originalCwd = getCwd()
@@ -112,7 +119,7 @@ describe('Bash permission dont-ask-again (prefix) parity', () => {
 
       await savePermission(BashTool as any, input as any, 'python3', ctx)
 
-      const settingsPath = join(projectDir, '.claude', 'settings.local.json')
+      const settingsPath = join(projectDir, '.kode', 'settings.local.json')
       const raw = readFileSync(settingsPath, 'utf-8')
       const parsed = JSON.parse(raw)
       expect(parsed.permissions.allow).toContain('Bash(python3:*)')
@@ -153,4 +160,3 @@ describe('Bash permission dont-ask-again (prefix) parity', () => {
     expect((result as any).shouldPromptUser).not.toBe(false)
   })
 })
-

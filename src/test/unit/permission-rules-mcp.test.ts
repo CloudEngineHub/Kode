@@ -1,6 +1,9 @@
 import { describe, expect, test, beforeEach } from 'bun:test'
 import { hasPermissionsToUseTool } from '@permissions'
-import { saveCurrentProjectConfig, getCurrentProjectConfig } from '@utils/config'
+import {
+  saveCurrentProjectConfig,
+  getCurrentProjectConfig,
+} from '@utils/config'
 import { SlashCommandTool } from '@tools/SlashCommandTool/SlashCommandTool'
 
 const makeContext = () => ({
@@ -115,6 +118,101 @@ describe('Permission rule matching (MCP + allow/deny/ask)', () => {
     expect((result as any).shouldPromptUser).not.toBe(false)
   })
 
+  test('MCP wildcard mcp__server__* allows all tools from that server', async () => {
+    const ctx = makeContext()
+    setToolRules({ allow: ['mcp__srv__*'] })
+
+    const fakeTool = {
+      name: 'mcp__srv__toolA',
+      needsPermissions() {
+        return true
+      },
+      isReadOnly() {
+        return false
+      },
+    } as any
+
+    const result = await hasPermissionsToUseTool(
+      fakeTool,
+      {},
+      ctx as any,
+      {} as any,
+    )
+    expect(result.result).toBe(true)
+  })
+
+  test('MCP wildcard does not apply across servers', async () => {
+    const ctx = makeContext()
+    setToolRules({ allow: ['mcp__srv1__*'] })
+
+    const fakeTool = {
+      name: 'mcp__srv2__tool',
+      needsPermissions() {
+        return true
+      },
+      isReadOnly() {
+        return false
+      },
+    } as any
+
+    const result = await hasPermissionsToUseTool(
+      fakeTool,
+      {},
+      ctx as any,
+      {} as any,
+    )
+    expect(result.result).toBe(false)
+    expect((result as any).shouldPromptUser).not.toBe(false)
+  })
+
+  test('deny wildcard overrides allow exact for MCP tools', async () => {
+    const ctx = makeContext()
+    setToolRules({ allow: ['mcp__srv__tool'], deny: ['mcp__srv__*'] })
+
+    const fakeTool = {
+      name: 'mcp__srv__tool',
+      needsPermissions() {
+        return true
+      },
+      isReadOnly() {
+        return false
+      },
+    } as any
+
+    const result = await hasPermissionsToUseTool(
+      fakeTool,
+      {},
+      ctx as any,
+      {} as any,
+    )
+    expect(result.result).toBe(false)
+    expect((result as any).shouldPromptUser).toBe(false)
+  })
+
+  test('ask wildcard overrides allow wildcard for MCP tools', async () => {
+    const ctx = makeContext()
+    setToolRules({ allow: ['mcp__srv__*'], ask: ['mcp__srv__*'] })
+
+    const fakeTool = {
+      name: 'mcp__srv__tool',
+      needsPermissions() {
+        return true
+      },
+      isReadOnly() {
+        return false
+      },
+    } as any
+
+    const result = await hasPermissionsToUseTool(
+      fakeTool,
+      {},
+      ctx as any,
+      {} as any,
+    )
+    expect(result.result).toBe(false)
+    expect((result as any).shouldPromptUser).not.toBe(false)
+  })
+
   test('deny prefix rules apply to SlashCommand', async () => {
     const ctx = makeContext()
     setToolRules({ deny: ['SlashCommand(/review-pr:*)'] })
@@ -148,4 +246,3 @@ describe('Permission rule matching (MCP + allow/deny/ask)', () => {
     expect((result as any).shouldPromptUser).not.toBe(false)
   })
 })
-

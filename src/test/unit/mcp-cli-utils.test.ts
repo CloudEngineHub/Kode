@@ -62,7 +62,10 @@ describe('mcpCliUtils', () => {
       transport: 'stdio',
       explicit: true,
     })
-    expect(normalizeMcpTransport('sse')).toEqual({ transport: 'sse', explicit: true })
+    expect(normalizeMcpTransport('sse')).toEqual({
+      transport: 'sse',
+      explicit: true,
+    })
     expect(normalizeMcpTransport('http')).toEqual({
       transport: 'http',
       explicit: true,

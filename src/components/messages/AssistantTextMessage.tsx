@@ -10,7 +10,7 @@ import {
   CREDIT_BALANCE_TOO_LOW_ERROR_MESSAGE,
   INVALID_API_KEY_ERROR_MESSAGE,
   PROMPT_TOO_LONG_ERROR_MESSAGE,
-} from '@services/claude'
+} from '@services/llmConstants'
 import {
   CANCEL_MESSAGE,
   INTERRUPT_MESSAGE,
@@ -52,11 +52,7 @@ export function AssistantTextMessage({
   if (text.startsWith('<tool-progress>')) {
     const raw = extractTag(text, 'tool-progress') ?? ''
     if (raw.trim().length === 0) return null
-    return (
-      <Text color={getTheme().secondaryText}>
-        {raw}
-      </Text>
-    )
+    return <Text color={getTheme().secondaryText}>{raw}</Text>
   }
 
   // Reference CLI parity: background bash completion notification (Rt1).
@@ -188,7 +184,8 @@ export function AssistantTextMessage({
         <Text>
           &nbsp;&nbsp;⎿ &nbsp;
           <Text color={getTheme().error}>
-            Credit balance too low &middot; Add funds in your provider billing settings
+            Credit balance too low &middot; Add funds in your provider billing
+            settings
           </Text>
         </Text>
       )

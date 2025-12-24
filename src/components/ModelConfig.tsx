@@ -82,12 +82,12 @@ export function ModelConfig({ onClose }: Props): React.ReactNode {
       {
         id: 'compact',
         label: 'Compact Model',
-        description: 'Model used for context compression when nearing the context window',
+        description:
+          'Model used for context compression when nearing the context window',
         value: config.modelPointers?.compact || '',
         options: availableModels,
         type: 'modelPointer' as const,
-        onChange: (value: string) =>
-          handleModelPointerChange('compact', value),
+        onChange: (value: string) => handleModelPointerChange('compact', value),
       },
       {
         id: 'quick',
@@ -191,7 +191,9 @@ export function ModelConfig({ onClose }: Props): React.ReactNode {
     [selectedIndex, menuItems, onClose, isDeleteMode, modelManager],
   )
 
-  useInput(handleInput, { isActive: !showModelSelector && !showModelListManager })
+  useInput(handleInput, {
+    isActive: !showModelSelector && !showModelListManager,
+  })
 
   // If showing ModelListManager, render it directly
   if (showModelListManager) {

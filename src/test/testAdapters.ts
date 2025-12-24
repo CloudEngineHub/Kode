@@ -12,7 +12,7 @@ export const testModels: ModelProfile[] = [
     contextLength: 128000,
     reasoningEffort: 'medium',
     isActive: true,
-    createdAt: Date.now()
+    createdAt: Date.now(),
   },
   {
     name: 'GPT-4o Test',
@@ -22,7 +22,7 @@ export const testModels: ModelProfile[] = [
     maxTokens: 4096,
     contextLength: 128000,
     isActive: true,
-    createdAt: Date.now()
+    createdAt: Date.now(),
   },
   {
     name: 'Claude Test',
@@ -32,7 +32,7 @@ export const testModels: ModelProfile[] = [
     maxTokens: 4096,
     contextLength: 200000,
     isActive: true,
-    createdAt: Date.now()
+    createdAt: Date.now(),
   },
   {
     name: 'O1 Test',
@@ -42,7 +42,7 @@ export const testModels: ModelProfile[] = [
     maxTokens: 4096,
     contextLength: 128000,
     isActive: true,
-    createdAt: Date.now()
+    createdAt: Date.now(),
   },
   {
     name: 'GLM-5 Test',
@@ -53,7 +53,7 @@ export const testModels: ModelProfile[] = [
     contextLength: 128000,
     baseURL: 'https://api.glm.ai/v1',
     isActive: true,
-    createdAt: Date.now()
+    createdAt: Date.now(),
   },
   {
     name: 'MiniMax Codex Test',
@@ -64,7 +64,7 @@ export const testModels: ModelProfile[] = [
     contextLength: 128000,
     baseURL: 'https://api.minimaxi.com/v1',
     isActive: true,
-    createdAt: Date.now()
+    createdAt: Date.now(),
   },
   {
     name: 'DeepSeek Test',
@@ -75,7 +75,7 @@ export const testModels: ModelProfile[] = [
     contextLength: 128000,
     baseURL: 'https://api.deepseek.com/v1',
     isActive: true,
-    createdAt: Date.now()
+    createdAt: Date.now(),
   },
   {
     name: 'Qwen Test',
@@ -86,8 +86,8 @@ export const testModels: ModelProfile[] = [
     contextLength: 128000,
     baseURL: 'https://dashscope.aliyuncs.com/api/v1',
     isActive: true,
-    createdAt: Date.now()
-  }
+    createdAt: Date.now(),
+  },
 ]
 
 // Production test models with environment variables
@@ -103,7 +103,7 @@ export const productionTestModels: ModelProfile[] = [
     contextLength: 128000,
     reasoningEffort: 'high',
     isActive: !!process.env.TEST_GPT5_API_KEY, // Only active if API key is provided
-    createdAt: Date.now()
+    createdAt: Date.now(),
   },
   {
     name: 'MiniMax Codex Production',
@@ -114,53 +114,60 @@ export const productionTestModels: ModelProfile[] = [
     maxTokens: 8192,
     contextLength: 128000,
     isActive: !!process.env.TEST_MINIMAX_API_KEY, // Only active if API key is provided
-    createdAt: Date.now()
+    createdAt: Date.now(),
   },
   {
     name: 'DeepSeek Production',
     modelName: process.env.TEST_DEEPSEEK_MODEL_NAME || 'deepseek-chat',
     provider: 'custom',
     apiKey: process.env.TEST_DEEPSEEK_API_KEY || '',
-    baseURL: process.env.TEST_DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1',
+    baseURL:
+      process.env.TEST_DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1',
     maxTokens: 4096,
     contextLength: 128000,
     isActive: !!process.env.TEST_DEEPSEEK_API_KEY, // Only active if API key is provided
-    createdAt: Date.now()
+    createdAt: Date.now(),
   },
   {
     name: 'Anthropic Claude Production',
-    modelName: process.env.TEST_CLAUDE_MODEL_NAME || 'claude-3-5-sonnet-20241022',
+    modelName:
+      process.env.TEST_CLAUDE_MODEL_NAME || 'claude-3-5-sonnet-20241022',
     provider: 'anthropic',
     apiKey: process.env.TEST_CLAUDE_API_KEY || '',
     baseURL: process.env.TEST_CLAUDE_BASE_URL || 'https://api.anthropic.com',
     maxTokens: 4096,
     contextLength: 200000,
     isActive: !!process.env.TEST_CLAUDE_API_KEY, // Only active if API key is provided
-    createdAt: Date.now()
+    createdAt: Date.now(),
   },
   {
     name: 'GLM Production',
     modelName: process.env.TEST_GLM_MODEL_NAME || 'glm-4.5-air',
     provider: 'custom',
     apiKey: process.env.TEST_GLM_API_KEY || '',
-    baseURL: process.env.TEST_GLM_BASE_URL || 'https://open.bigmodel.cn/api/paas/v4',
+    baseURL:
+      process.env.TEST_GLM_BASE_URL || 'https://open.bigmodel.cn/api/paas/v4',
     maxTokens: 8192,
     contextLength: 128000,
     reasoningEffort: 'medium',
     isActive: !!process.env.TEST_GLM_API_KEY, // Only active if API key is provided
-    createdAt: Date.now()
-  }
+    createdAt: Date.now(),
+  },
 ]
 
 // Filter models by adapter type
-export function getChatCompletionsModels(models: ModelProfile[] = testModels): ModelProfile[] {
+export function getChatCompletionsModels(
+  models: ModelProfile[] = testModels,
+): ModelProfile[] {
   return models.filter(model => {
     const shouldUseResponses = ModelAdapterFactory.shouldUseResponsesAPI(model)
     return !shouldUseResponses // Only Chat Completions models
   })
 }
 
-export function getResponsesAPIModels(models: ModelProfile[] = testModels): ModelProfile[] {
+export function getResponsesAPIModels(
+  models: ModelProfile[] = testModels,
+): ModelProfile[] {
   return models.filter(model => {
     const shouldUseResponses = ModelAdapterFactory.shouldUseResponsesAPI(model)
     return shouldUseResponses // Only Responses API models

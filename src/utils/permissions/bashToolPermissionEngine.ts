@@ -2,14 +2,18 @@ import { homedir } from 'os'
 import path from 'path'
 import { parse, quote, type ParseEntry } from 'shell-quote'
 import type { ToolUseContext } from '@tool'
-import type { ToolPermissionContext, ToolPermissionContextUpdate } from '@kode-types/toolPermissionContext'
+import type {
+  ToolPermissionContext,
+  ToolPermissionContextUpdate,
+} from '@kode-types/toolPermissionContext'
 import { getCwd } from '@utils/state'
 import { getOriginalCwd } from '@utils/state'
+import { PRODUCT_NAME } from '@constants/product'
 import {
   getWriteSafetyCheckForPath,
   isPathInWorkingDirectories,
   matchPermissionRuleForPath,
-  resolveLikeClaudePath,
+  resolveLikeCliPath,
   suggestFilePermissionUpdates,
 } from './fileToolPermissionEngine'
 
@@ -41,8 +45,6 @@ export type BashPermissionResult =
       suggestions?: ToolPermissionContextUpdate[]
     }
 
-const PRODUCT_NAME_FOR_MESSAGES = 'Claude'
-
 const SINGLE_QUOTE = '__SINGLE_QUOTE__'
 const DOUBLE_QUOTE = '__DOUBLE_QUOTE__'
 const NEW_LINE = '__NEW_LINE__'
@@ -53,7 +55,10 @@ type ParsedShellTokens =
   | { success: true; tokens: ParseEntry[] }
   | { success: false; error: string }
 
-function parseShellTokens(command: string, options?: { preserveNewlines?: boolean }): ParsedShellTokens {
+function parseShellTokens(
+  command: string,
+  options?: { preserveNewlines?: boolean },
+): ParsedShellTokens {
   try {
     const input = options?.preserveNewlines
       ? command
@@ -77,12 +82,13 @@ function parseShellTokens(command: string, options?: { preserveNewlines?: boolea
 }
 
 function restoreShellStringToken(token: string): string {
-  return token
-    .replaceAll(SINGLE_QUOTE, "'")
-    .replaceAll(DOUBLE_QUOTE, '"')
+  return token.replaceAll(SINGLE_QUOTE, "'").replaceAll(DOUBLE_QUOTE, '"')
 }
 
-function tokensToParts(tokens: ParseEntry[], options?: { preserveNewlines?: boolean }): Array<string | null> {
+function tokensToParts(
+  tokens: ParseEntry[],
+  options?: { preserveNewlines?: boolean },
+): Array<string | null> {
   const collapsed: Array<ParseEntry | null> = []
 
   for (const token of tokens) {
@@ -93,18 +99,32 @@ function tokensToParts(tokens: ParseEntry[], options?: { preserveNewlines?: bool
         continue
       }
 
-      if (collapsed.length > 0 && typeof collapsed[collapsed.length - 1] === 'string') {
-        collapsed[collapsed.length - 1] = `${collapsed[collapsed.length - 1]} ${restored}`
+      if (
+        collapsed.length > 0 &&
+        typeof collapsed[collapsed.length - 1] === 'string'
+      ) {
+        collapsed[collapsed.length - 1] =
+          `${collapsed[collapsed.length - 1]} ${restored}`
         continue
       }
       collapsed.push(restored)
       continue
     }
 
-    if (token && typeof token === 'object' && 'op' in token && token.op === 'glob' && 'pattern' in token) {
+    if (
+      token &&
+      typeof token === 'object' &&
+      'op' in token &&
+      token.op === 'glob' &&
+      'pattern' in token
+    ) {
       const pattern = String((token as any).pattern)
-      if (collapsed.length > 0 && typeof collapsed[collapsed.length - 1] === 'string') {
-        collapsed[collapsed.length - 1] = `${collapsed[collapsed.length - 1]} ${pattern}`
+      if (
+        collapsed.length > 0 &&
+        typeof collapsed[collapsed.length - 1] === 'string'
+      ) {
+        collapsed[collapsed.length - 1] =
+          `${collapsed[collapsed.length - 1]} ${pattern}`
         continue
       }
       collapsed.push(pattern)
@@ -168,7 +188,12 @@ type RedirectionParseResult = {
 }
 
 function isOpToken(entry: unknown, op: string): entry is { op: string } {
-  return !!entry && typeof entry === 'object' && 'op' in (entry as any) && (entry as any).op === op
+  return (
+    !!entry &&
+    typeof entry === 'object' &&
+    'op' in (entry as any) &&
+    (entry as any).op === op
+  )
 }
 
 function isSafeFd(value: string): boolean {
@@ -187,7 +212,11 @@ function isSimplePathToken(value: unknown): value is string {
   return true
 }
 
-function hasUnescapedVarSuffixToken(token: unknown, tokens: ParseEntry[], index: number): boolean {
+function hasUnescapedVarSuffixToken(
+  token: unknown,
+  tokens: ParseEntry[],
+  index: number,
+): boolean {
   if (typeof token !== 'string') return false
   const t = token
   if (t === '$') return true
@@ -214,12 +243,19 @@ function isWeirdTokenNeedingQuotes(value: string): boolean {
   return false
 }
 
-function joinTokensWithMinimalSpacing(out: string, next: string, noSpace: boolean): string {
+function joinTokensWithMinimalSpacing(
+  out: string,
+  next: string,
+  noSpace: boolean,
+): string {
   if (!out || noSpace) return `${out}${next}`
   return `${out} ${next}`
 }
 
-function rebuildCommandFromTokens(tokens: ParseEntry[], fallback: string): string {
+function rebuildCommandFromTokens(
+  tokens: ParseEntry[],
+  fallback: string,
+): string {
   if (tokens.length === 0) return fallback
   let out = ''
   let parenDepth = 0
@@ -233,7 +269,8 @@ function rebuildCommandFromTokens(tokens: ParseEntry[], fallback: string): strin
     if (typeof token === 'string') {
       const raw = token
       const restored = restoreShellStringToken(raw)
-      const cameFromQuotedString = raw.includes(SINGLE_QUOTE) || raw.includes(DOUBLE_QUOTE)
+      const cameFromQuotedString =
+        raw.includes(SINGLE_QUOTE) || raw.includes(DOUBLE_QUOTE)
       const needsQuoting = cameFromQuotedString
         ? restored
         : /[|&;]/.test(restored)
@@ -243,11 +280,18 @@ function rebuildCommandFromTokens(tokens: ParseEntry[], fallback: string): strin
             : restored
 
       const endsWithDollar = needsQuoting.endsWith('$')
-      const nextIsParen = !!next && typeof next === 'object' && 'op' in (next as any) && (next as any).op === '('
+      const nextIsParen =
+        !!next &&
+        typeof next === 'object' &&
+        'op' in (next as any) &&
+        (next as any).op === '('
       const noSpace =
         out.endsWith('(') ||
         prev === '$' ||
-        (!!prev && typeof prev === 'object' && 'op' in (prev as any) && (prev as any).op === ')')
+        (!!prev &&
+          typeof prev === 'object' &&
+          'op' in (prev as any) &&
+          (prev as any).op === ')')
 
       if (out.endsWith('<(')) {
         out += ` ${needsQuoting}`
@@ -263,11 +307,21 @@ function rebuildCommandFromTokens(tokens: ParseEntry[], fallback: string): strin
 
     const op = String((token as any).op)
     if (op === 'glob' && 'pattern' in token) {
-      out = joinTokensWithMinimalSpacing(out, String((token as any).pattern), false)
+      out = joinTokensWithMinimalSpacing(
+        out,
+        String((token as any).pattern),
+        false,
+      )
       continue
     }
 
-    if (op === '>&' && typeof prev === 'string' && /^\d+$/.test(prev) && typeof next === 'string' && /^\d+$/.test(next)) {
+    if (
+      op === '>&' &&
+      typeof prev === 'string' &&
+      /^\d+$/.test(prev) &&
+      typeof next === 'string' &&
+      /^\d+$/.test(next)
+    ) {
       const idx = out.lastIndexOf(prev)
       if (idx !== -1) {
         out = out.slice(0, idx) + `${prev}${op}${next}`
@@ -335,9 +389,12 @@ function rebuildCommandFromTokens(tokens: ParseEntry[], fallback: string): strin
   return out.trim() || fallback
 }
 
-export function stripOutputRedirections(command: string): RedirectionParseResult {
+export function stripOutputRedirections(
+  command: string,
+): RedirectionParseResult {
   const parsed = parseShellTokens(command)
-  if (!parsed.success) return { commandWithoutRedirections: command, redirections: [] }
+  if (!parsed.success)
+    return { commandWithoutRedirections: command, redirections: [] }
 
   const tokens = parsed.tokens
   const redirections: Redirection[] = []
@@ -376,18 +433,32 @@ export function stripOutputRedirections(command: string): RedirectionParseResult
     const next = tokens[i + 1]
     const afterNext = tokens[i + 2]
 
-    if ((isOpToken(token, '(') || isOpToken(token, ')')) && parenToStrip.has(i)) {
+    if (
+      (isOpToken(token, '(') || isOpToken(token, ')')) &&
+      parenToStrip.has(i)
+    ) {
       continue
     }
 
-    if (isOpToken(token, '(') && typeof prev === 'string' && prev.endsWith('$')) {
+    if (
+      isOpToken(token, '(') &&
+      typeof prev === 'string' &&
+      prev.endsWith('$')
+    ) {
       dollarParenDepth++
     } else if (isOpToken(token, ')') && dollarParenDepth > 0) {
       dollarParenDepth--
     }
 
     if (dollarParenDepth === 0) {
-      const { skip } = maybeConsumeRedirection(token, prev, next, afterNext, redirections, outTokens)
+      const { skip } = maybeConsumeRedirection(
+        token,
+        prev,
+        next,
+        afterNext,
+        redirections,
+        outTokens,
+      )
       if (skip > 0) {
         i += skip
         continue
@@ -416,7 +487,13 @@ function maybeConsumeRedirection(
   if (isOpToken(token, '>') || isOpToken(token, '>>')) {
     const operator = String((token as any).op) as '>' | '>>'
     if (isFd(prev)) {
-      return consumeRedirectionWithFd(prev.trim(), operator, next, redirections, outputTokens)
+      return consumeRedirectionWithFd(
+        prev.trim(),
+        operator,
+        next,
+        redirections,
+        outputTokens,
+      )
     }
 
     if (isOpToken(next, '|') && isSimplePathToken(afterNext)) {
@@ -476,7 +553,10 @@ const WILDCARD_PATTERN = /[*?[\]{}]/
 
 type BashPathOp = 'read' | 'write' | 'create'
 
-const PATH_COMMAND_ARG_EXTRACTORS: Record<string, (args: string[]) => string[]> = {
+const PATH_COMMAND_ARG_EXTRACTORS: Record<
+  string,
+  (args: string[]) => string[]
+> = {
   cd: args => (args.length === 0 ? [homedir()] : [args.join(' ')]),
   ls: args => {
     const cleaned = args.filter(a => a && !a.startsWith('-'))
@@ -546,51 +626,65 @@ const PATH_COMMAND_ARG_EXTRACTORS: Record<string, (args: string[]) => string[]> 
   sha1sum: args => args.filter(a => a && !a.startsWith('-')),
   md5sum: args => args.filter(a => a && !a.startsWith('-')),
   tr: args => {
-    const hasDelete = args.some(a => a === '-d' || a === '--delete' || (a.startsWith('-') && a.includes('d')))
+    const hasDelete = args.some(
+      a =>
+        a === '-d' ||
+        a === '--delete' ||
+        (a.startsWith('-') && a.includes('d')),
+    )
     const cleaned = args.filter(a => a && !a.startsWith('-'))
     return cleaned.slice(hasDelete ? 1 : 2)
   },
-  grep: args => extractPathArgsLikeClaude(args, new Set([
-    '-e',
-    '--regexp',
-    '-f',
-    '--file',
-    '--exclude',
-    '--include',
-    '--exclude-dir',
-    '--include-dir',
-    '-m',
-    '--max-count',
-    '-A',
-    '--after-context',
-    '-B',
-    '--before-context',
-    '-C',
-    '--context',
-  ])),
-  rg: args => extractPathArgsLikeClaude(args, new Set([
-    '-e',
-    '--regexp',
-    '-f',
-    '--file',
-    '-t',
-    '--type',
-    '-T',
-    '--type-not',
-    '-g',
-    '--glob',
-    '-m',
-    '--max-count',
-    '--max-depth',
-    '-r',
-    '--replace',
-    '-A',
-    '--after-context',
-    '-B',
-    '--before-context',
-    '-C',
-    '--context',
-  ]), ['.']),
+  grep: args =>
+    extractPathArgsLikeClaude(
+      args,
+      new Set([
+        '-e',
+        '--regexp',
+        '-f',
+        '--file',
+        '--exclude',
+        '--include',
+        '--exclude-dir',
+        '--include-dir',
+        '-m',
+        '--max-count',
+        '-A',
+        '--after-context',
+        '-B',
+        '--before-context',
+        '-C',
+        '--context',
+      ]),
+    ),
+  rg: args =>
+    extractPathArgsLikeClaude(
+      args,
+      new Set([
+        '-e',
+        '--regexp',
+        '-f',
+        '--file',
+        '-t',
+        '--type',
+        '-T',
+        '--type-not',
+        '-g',
+        '--glob',
+        '-m',
+        '--max-count',
+        '--max-depth',
+        '-r',
+        '--replace',
+        '-A',
+        '--after-context',
+        '-B',
+        '--before-context',
+        '-C',
+        '--context',
+      ]),
+      ['.'],
+    ),
   sed: args => {
     const out: string[] = []
     let skipNext = false
@@ -650,7 +744,8 @@ const PATH_COMMAND_ARG_EXTRACTORS: Record<string, (args: string[]) => string[]> 
       if (token === undefined || token === null) continue
       if (token.startsWith('-')) {
         const flag = token.split('=')[0]
-        if (flag && (flag === '-e' || flag === '--expression')) sawExpression = true
+        if (flag && (flag === '-e' || flag === '--expression'))
+          sawExpression = true
         if (flag && flags.has(flag) && !token.includes('=')) i++
         continue
       }
@@ -755,7 +850,11 @@ const COMMAND_DESCRIPTIONS: Record<string, string> = {
   md5sum: 'compute MD5 checksums for files in',
 }
 
-function extractPathArgsLikeClaude(args: string[], flagsTakingValues: Set<string>, defaultIfEmpty: string[] = []): string[] {
+function extractPathArgsLikeClaude(
+  args: string[],
+  flagsTakingValues: Set<string>,
+  defaultIfEmpty: string[] = [],
+): string[] {
   const out: string[] = []
   let sawPatternOrExpr = false
 
@@ -764,7 +863,13 @@ function extractPathArgsLikeClaude(args: string[], flagsTakingValues: Set<string
     if (token === undefined || token === null) continue
     if (token.startsWith('-')) {
       const flag = token.split('=')[0]
-      if (flag && (flag === '-e' || flag === '--regexp' || flag === '-f' || flag === '--file')) {
+      if (
+        flag &&
+        (flag === '-e' ||
+          flag === '--regexp' ||
+          flag === '-f' ||
+          flag === '--file')
+      ) {
         sawPatternOrExpr = true
       }
       if (flag && flagsTakingValues.has(flag) && !token.includes('=')) {
@@ -782,11 +887,17 @@ function extractPathArgsLikeClaude(args: string[], flagsTakingValues: Set<string
   return out.length > 0 ? out : defaultIfEmpty
 }
 
-type PathPermissionCheck = { allowed: boolean; resolvedPath: string; decisionReason?: DecisionReason }
+type PathPermissionCheck = {
+  allowed: boolean
+  resolvedPath: string
+  decisionReason?: DecisionReason
+}
 
-function getAllowedWorkingDirectories(context: ToolPermissionContext): string[] {
+function getAllowedWorkingDirectories(
+  context: ToolPermissionContext,
+): string[] {
   return [
-    resolveLikeClaudePath(getOriginalCwd()),
+    resolveLikeCliPath(getOriginalCwd()),
     ...Array.from(context.additionalWorkingDirectories.keys()),
   ]
 }
@@ -794,7 +905,10 @@ function getAllowedWorkingDirectories(context: ToolPermissionContext): string[] 
 function formatAllowedDirs(dirs: string[], max = 5): string {
   const count = dirs.length
   if (count <= max) return dirs.map(d => `'${d}'`).join(', ')
-  return `${dirs.slice(0, max).map(d => `'${d}'`).join(', ')}, and ${count - max} more`
+  return `${dirs
+    .slice(0, max)
+    .map(d => `'${d}'`)
+    .join(', ')}, and ${count - max} more`
 }
 
 function resolveTildeLikeClaude(value: string): string {
@@ -813,7 +927,11 @@ function baseDirForGlobPattern(pattern: string): string {
   return before.slice(0, lastSlash) || '/'
 }
 
-function checkPathPermission(resolvedPath: string, toolPermissionContext: ToolPermissionContext, op: BashPathOp): { allowed: boolean; decisionReason?: DecisionReason } {
+function checkPathPermission(
+  resolvedPath: string,
+  toolPermissionContext: ToolPermissionContext,
+  op: BashPathOp,
+): { allowed: boolean; decisionReason?: DecisionReason } {
   const operation = op === 'read' ? 'read' : 'edit'
 
   const deniedRule = matchPermissionRuleForPath({
@@ -822,7 +940,11 @@ function checkPathPermission(resolvedPath: string, toolPermissionContext: ToolPe
     operation,
     behavior: 'deny',
   })
-  if (deniedRule) return { allowed: false, decisionReason: { type: 'rule', rule: deniedRule } }
+  if (deniedRule)
+    return {
+      allowed: false,
+      decisionReason: { type: 'rule', rule: deniedRule },
+    }
 
   if (op !== 'read') {
     const safety = getWriteSafetyCheckForPath(resolvedPath)
@@ -834,7 +956,8 @@ function checkPathPermission(resolvedPath: string, toolPermissionContext: ToolPe
     }
   }
 
-  if (isPathInWorkingDirectories(resolvedPath, toolPermissionContext)) return { allowed: true }
+  if (isPathInWorkingDirectories(resolvedPath, toolPermissionContext))
+    return { allowed: true }
 
   const allowRule = matchPermissionRuleForPath({
     inputPath: resolvedPath,
@@ -842,7 +965,8 @@ function checkPathPermission(resolvedPath: string, toolPermissionContext: ToolPe
     operation,
     behavior: 'allow',
   })
-  if (allowRule) return { allowed: true, decisionReason: { type: 'rule', rule: allowRule } }
+  if (allowRule)
+    return { allowed: true, decisionReason: { type: 'rule', rule: allowRule } }
 
   return { allowed: false }
 }
@@ -873,7 +997,8 @@ function checkPathArgAllowed(
         resolvedPath: unquoted,
         decisionReason: {
           type: 'other',
-          reason: 'Glob patterns are not allowed in write operations. Please specify an exact file path.',
+          reason:
+            'Glob patterns are not allowed in write operations. Please specify an exact file path.',
         },
       }
     }
@@ -882,15 +1007,23 @@ function checkPathArgAllowed(
       ? unquoted
       : baseDirForGlobPattern(unquoted)
     const abs = path.isAbsolute(base) ? base : path.resolve(cwd, base)
-    const resolved = resolveLikeClaudePath(abs)
+    const resolved = resolveLikeCliPath(abs)
     const check = checkPathPermission(resolved, toolPermissionContext, op)
-    return { allowed: check.allowed, resolvedPath: resolved, decisionReason: check.decisionReason }
+    return {
+      allowed: check.allowed,
+      resolvedPath: resolved,
+      decisionReason: check.decisionReason,
+    }
   }
 
   const abs = path.isAbsolute(unquoted) ? unquoted : path.resolve(cwd, unquoted)
-  const resolved = resolveLikeClaudePath(abs)
+  const resolved = resolveLikeCliPath(abs)
   const check = checkPathPermission(resolved, toolPermissionContext, op)
-  return { allowed: check.allowed, resolvedPath: resolved, decisionReason: check.decisionReason }
+  return {
+    allowed: check.allowed,
+    resolvedPath: resolved,
+    decisionReason: check.decisionReason,
+  }
 }
 
 function isCriticalRemovalTarget(absPath: string): boolean {
@@ -914,7 +1047,11 @@ function validatePathRestrictedCommand(
   hasCdInCompound: boolean,
 ): BashPermissionDecision {
   const op = COMMAND_PATH_BEHAVIOR[baseCommand]
-  if (!op) return { behavior: 'passthrough', message: 'Command is not path-restricted' }
+  if (!op)
+    return {
+      behavior: 'passthrough',
+      message: 'Command is not path-restricted',
+    }
 
   const extractor = PATH_COMMAND_ARG_EXTRACTORS[baseCommand]
   const extracted = extractor ? extractor(args) : []
@@ -926,7 +1063,8 @@ function validatePathRestrictedCommand(
         "Commands that change directories and perform write operations require explicit approval to ensure paths are evaluated correctly. For security, Kode Agent cannot automatically determine the final working directory when 'cd' is used in compound commands.",
       decisionReason: {
         type: 'other',
-        reason: "Compound command contains cd with write operation - manual approval required to prevent path resolution bypass",
+        reason:
+          'Compound command contains cd with write operation - manual approval required to prevent path resolution bypass',
       },
     }
   }
@@ -939,7 +1077,7 @@ function validatePathRestrictedCommand(
       const fallback =
         check.decisionReason?.type === 'other'
           ? check.decisionReason.reason
-          : `${baseCommand} in '${check.resolvedPath}' was blocked. For security, ${PRODUCT_NAME_FOR_MESSAGES} may only ${COMMAND_DESCRIPTIONS[baseCommand] ?? 'access'} the allowed working directories for this session: ${formatted}.`
+          : `${baseCommand} in '${check.resolvedPath}' was blocked. For security, ${PRODUCT_NAME} may only ${COMMAND_DESCRIPTIONS[baseCommand] ?? 'access'} the allowed working directories for this session: ${formatted}.`
 
       if (check.decisionReason?.type === 'rule') {
         return {
@@ -961,8 +1099,10 @@ function validatePathRestrictedCommand(
   if (baseCommand === 'rm' || baseCommand === 'rmdir') {
     for (const rawPath of extracted) {
       const unquoted = resolveTildeLikeClaude(stripQuotes(rawPath))
-      const abs = path.isAbsolute(unquoted) ? unquoted : path.resolve(cwd, unquoted)
-      const resolved = resolveLikeClaudePath(abs)
+      const abs = path.isAbsolute(unquoted)
+        ? unquoted
+        : path.resolve(cwd, unquoted)
+      const resolved = resolveLikeCliPath(abs)
       if (isCriticalRemovalTarget(resolved)) {
         return {
           behavior: 'ask',
@@ -977,7 +1117,10 @@ function validatePathRestrictedCommand(
     }
   }
 
-  return { behavior: 'passthrough', message: `Path validation passed for ${baseCommand} command` }
+  return {
+    behavior: 'passthrough',
+    message: `Path validation passed for ${baseCommand} command`,
+  }
 }
 
 function parseCommandPathArgs(command: string): string[] {
@@ -986,7 +1129,13 @@ function parseCommandPathArgs(command: string): string[] {
   const out: string[] = []
   for (const token of parsed.tokens) {
     if (typeof token === 'string') out.push(restoreShellStringToken(token))
-    else if (token && typeof token === 'object' && 'op' in token && (token as any).op === 'glob' && 'pattern' in token) {
+    else if (
+      token &&
+      typeof token === 'object' &&
+      'op' in token &&
+      (token as any).op === 'glob' &&
+      'pattern' in token
+    ) {
       out.push(String((token as any).pattern))
     }
   }
@@ -1006,14 +1155,20 @@ function validateOutputRedirections(
         "Commands that change directories and write via output redirection require explicit approval to ensure paths are evaluated correctly. For security, Kode Agent cannot automatically determine the final working directory when 'cd' is used in compound commands.",
       decisionReason: {
         type: 'other',
-        reason: 'Compound command contains cd with output redirection - manual approval required to prevent path resolution bypass',
+        reason:
+          'Compound command contains cd with output redirection - manual approval required to prevent path resolution bypass',
       },
     }
   }
 
   for (const { target } of redirections) {
     if (target === '/dev/null') continue
-    const check = checkPathArgAllowed(target, cwd, toolPermissionContext, 'create')
+    const check = checkPathArgAllowed(
+      target,
+      cwd,
+      toolPermissionContext,
+      'create',
+    )
     if (!check.allowed) {
       const allowedDirs = getAllowedWorkingDirectories(toolPermissionContext)
       const formatted = formatAllowedDirs(allowedDirs)
@@ -1022,10 +1177,14 @@ function validateOutputRedirections(
           ? check.decisionReason.reason
           : check.decisionReason?.type === 'rule'
             ? `Output redirection to '${check.resolvedPath}' was blocked by a deny rule.`
-            : `Output redirection to '${check.resolvedPath}' was blocked. For security, ${PRODUCT_NAME_FOR_MESSAGES} may only write to files in the allowed working directories for this session: ${formatted}.`
+            : `Output redirection to '${check.resolvedPath}' was blocked. For security, ${PRODUCT_NAME} may only write to files in the allowed working directories for this session: ${formatted}.`
 
       if (check.decisionReason?.type === 'rule') {
-        return { behavior: 'deny', message, decisionReason: check.decisionReason }
+        return {
+          behavior: 'deny',
+          message,
+          decisionReason: check.decisionReason,
+        }
       }
 
       return {
@@ -1054,7 +1213,10 @@ export function validateBashCommandPaths(args: {
     return {
       behavior: 'ask',
       message: 'Shell expansion syntax in paths requires manual approval',
-      decisionReason: { type: 'other', reason: 'Shell expansion syntax in paths requires manual approval' },
+      decisionReason: {
+        type: 'other',
+        reason: 'Shell expansion syntax in paths requires manual approval',
+      },
     }
   }
 
@@ -1094,7 +1256,10 @@ export function validateBashCommandPaths(args: {
     }
   }
 
-  return { behavior: 'passthrough', message: 'All path commands validated successfully' }
+  return {
+    behavior: 'passthrough',
+    message: 'All path commands validated successfully',
+  }
 }
 
 type ToolRuleValue = { toolName: string; ruleContent?: string }
@@ -1118,12 +1283,16 @@ type ParsedBashRuleContent =
   | { type: 'prefix'; prefix: string }
 
 function parseBashRuleContent(ruleContent: string): ParsedBashRuleContent {
-  const match = ruleContent.match(/^(.+):\*$/)
+  const normalized = ruleContent.trim().replace(/\s*\[background\]\s*$/i, '')
+  const match = normalized.match(/^(.+):\*$/)
   if (match && match[1]) return { type: 'prefix', prefix: match[1] }
-  return { type: 'exact', command: ruleContent }
+  return { type: 'exact', command: normalized }
 }
 
-function collectBashRuleStrings(context: ToolPermissionContext, behavior: 'allow' | 'deny' | 'ask'): string[] {
+function collectBashRuleStrings(
+  context: ToolPermissionContext,
+  behavior: 'allow' | 'deny' | 'ask',
+): string[] {
   const groups =
     behavior === 'allow'
       ? context.alwaysAllowRules
@@ -1145,10 +1314,17 @@ function findMatchingBashRules(args: {
   matchType: BashRuleMatchType
 }): string[] {
   const trimmed = args.command.trim()
-  const withoutRedirections = stripOutputRedirections(trimmed).commandWithoutRedirections
-  const candidates = args.matchType === 'exact' ? [trimmed, withoutRedirections] : [withoutRedirections]
+  const withoutRedirections =
+    stripOutputRedirections(trimmed).commandWithoutRedirections
+  const candidates =
+    args.matchType === 'exact'
+      ? [trimmed, withoutRedirections]
+      : [withoutRedirections]
 
-  const rules = collectBashRuleStrings(args.toolPermissionContext, args.behavior)
+  const rules = collectBashRuleStrings(
+    args.toolPermissionContext,
+    args.behavior,
+  )
   const matches: string[] = []
 
   for (const ruleString of rules) {
@@ -1162,7 +1338,8 @@ function findMatchingBashRules(args: {
         case 'exact':
           return ruleContent.command === candidate
         case 'prefix':
-          if (args.matchType === 'exact') return ruleContent.prefix === candidate
+          if (args.matchType === 'exact')
+            return ruleContent.prefix === candidate
           if (candidate === ruleContent.prefix) return true
           return candidate.startsWith(`${ruleContent.prefix} `)
       }
@@ -1174,7 +1351,9 @@ function findMatchingBashRules(args: {
   return matches
 }
 
-function buildBashRuleSuggestionExact(command: string): ToolPermissionContextUpdate[] {
+function buildBashRuleSuggestionExact(
+  command: string,
+): ToolPermissionContextUpdate[] {
   return [
     {
       type: 'addRules',
@@ -1185,7 +1364,9 @@ function buildBashRuleSuggestionExact(command: string): ToolPermissionContextUpd
   ]
 }
 
-function buildBashRuleSuggestionPrefix(prefix: string): ToolPermissionContextUpdate[] {
+function buildBashRuleSuggestionPrefix(
+  prefix: string,
+): ToolPermissionContextUpdate[] {
   return [
     {
       type: 'addRules',
@@ -1196,7 +1377,10 @@ function buildBashRuleSuggestionPrefix(prefix: string): ToolPermissionContextUpd
   ]
 }
 
-function checkExactBashRules(command: string, toolPermissionContext: ToolPermissionContext): BashPermissionDecision {
+function checkExactBashRules(
+  command: string,
+  toolPermissionContext: ToolPermissionContext,
+): BashPermissionDecision {
   const trimmed = command.trim()
   const denyRules = findMatchingBashRules({
     command: trimmed,
@@ -1221,7 +1405,7 @@ function checkExactBashRules(command: string, toolPermissionContext: ToolPermiss
   if (askRules[0]) {
     return {
       behavior: 'ask',
-      message: `${PRODUCT_NAME_FOR_MESSAGES} requested permissions to use Bash, but you haven't granted it yet.`,
+      message: `${PRODUCT_NAME} requested permissions to use Bash, but you haven't granted it yet.`,
       decisionReason: { type: 'rule', rule: askRules[0] },
     }
   }
@@ -1242,13 +1426,16 @@ function checkExactBashRules(command: string, toolPermissionContext: ToolPermiss
 
   return {
     behavior: 'passthrough',
-    message: `${PRODUCT_NAME_FOR_MESSAGES} requested permissions to use Bash, but you haven't granted it yet.`,
+    message: `${PRODUCT_NAME} requested permissions to use Bash, but you haven't granted it yet.`,
     decisionReason: { type: 'other', reason: 'This command requires approval' },
     suggestions: buildBashRuleSuggestionExact(trimmed),
   }
 }
 
-function checkPrefixBashRules(command: string, toolPermissionContext: ToolPermissionContext): { deny?: string; ask?: string; allow?: string } {
+function checkPrefixBashRules(
+  command: string,
+  toolPermissionContext: ToolPermissionContext,
+): { deny?: string; ask?: string; allow?: string } {
   const deny = findMatchingBashRules({
     command,
     toolPermissionContext,
@@ -1280,20 +1467,33 @@ const ACCEPT_EDITS_AUTO_ALLOW_BASE_COMMANDS = new Set([
   'sed',
 ])
 
-function modeSpecificBashDecision(command: string, toolPermissionContext: ToolPermissionContext): BashPermissionDecision {
+function modeSpecificBashDecision(
+  command: string,
+  toolPermissionContext: ToolPermissionContext,
+): BashPermissionDecision {
   if (toolPermissionContext.mode !== 'acceptEdits') {
-    return { behavior: 'passthrough', message: 'No mode-specific validation required' }
+    return {
+      behavior: 'passthrough',
+      message: 'No mode-specific validation required',
+    }
   }
   const base = command.trim().split(/\s+/)[0] ?? ''
-  if (!base) return { behavior: 'passthrough', message: 'Base command not found' }
+  if (!base)
+    return { behavior: 'passthrough', message: 'Base command not found' }
   if (ACCEPT_EDITS_AUTO_ALLOW_BASE_COMMANDS.has(base)) {
     return {
       behavior: 'allow',
       updatedInput: { command },
-      decisionReason: { type: 'other', reason: 'Auto-allowed in acceptEdits mode' },
+      decisionReason: {
+        type: 'other',
+        reason: 'Auto-allowed in acceptEdits mode',
+      },
     }
   }
-  return { behavior: 'passthrough', message: `No mode-specific handling for '${base}' in ${toolPermissionContext.mode} mode` }
+  return {
+    behavior: 'passthrough',
+    message: `No mode-specific handling for '${base}' in ${toolPermissionContext.mode} mode`,
+  }
 }
 
 // Port of the reference CLI's `k02` helper (validates allowed flags, expanding combined short flags).
@@ -1330,7 +1530,8 @@ function sedIsSafePrintCommand(command: string, scripts: string[]): boolean {
 
   const flags: string[] = []
   for (const token of parsed.tokens) {
-    if (typeof token === 'string' && token.startsWith('-') && token !== '--') flags.push(token)
+    if (typeof token === 'string' && token.startsWith('-') && token !== '--')
+      flags.push(token)
   }
 
   if (
@@ -1349,7 +1550,13 @@ function sedIsSafePrintCommand(command: string, scripts: string[]): boolean {
     return false
   }
 
-  const hasNoPrint = flags.some(f => f === '-n' || f === '--quiet' || f === '--silent' || (f.startsWith('-') && !f.startsWith('--') && f.includes('n')))
+  const hasNoPrint = flags.some(
+    f =>
+      f === '-n' ||
+      f === '--quiet' ||
+      f === '--silent' ||
+      (f.startsWith('-') && !f.startsWith('--') && f.includes('n')),
+  )
   if (!hasNoPrint) return false
 
   if (scripts.length === 0) return false
@@ -1378,7 +1585,8 @@ function sedIsSafeSimpleSubstitution(
 
   const flags: string[] = []
   for (const token of parsed.tokens) {
-    if (typeof token === 'string' && token.startsWith('-') && token !== '--') flags.push(token)
+    if (typeof token === 'string' && token.startsWith('-') && token !== '--')
+      flags.push(token)
   }
 
   const allowedFlags = ['-E', '--regexp-extended', '-r', '--posix']
@@ -1424,10 +1632,19 @@ function sedHasExtraExpressions(command: string): boolean {
     let sawExpressionFlag = false
     for (let i = 0; i < tokens.length; i++) {
       const token = tokens[i]
-      if (token && typeof token === 'object' && 'op' in token && (token as any).op === 'glob') return true
+      if (
+        token &&
+        typeof token === 'object' &&
+        'op' in token &&
+        (token as any).op === 'glob'
+      )
+        return true
       if (typeof token !== 'string') continue
 
-      if ((token === '-e' || token === '--expression') && i + 1 < tokens.length) {
+      if (
+        (token === '-e' || token === '--expression') &&
+        i + 1 < tokens.length
+      ) {
         sawExpressionFlag = true
         i++
         continue
@@ -1475,7 +1692,10 @@ function extractSedScripts(command: string): string[] {
       const token = tokens[i]
       if (typeof token !== 'string') continue
 
-      if ((token === '-e' || token === '--expression') && i + 1 < tokens.length) {
+      if (
+        (token === '-e' || token === '--expression') &&
+        i + 1 < tokens.length
+      ) {
         sawExpressionFlag = true
         const next = tokens[i + 1]
         if (typeof next === 'string') {
@@ -1503,7 +1723,9 @@ function extractSedScripts(command: string): string[] {
       break
     }
   } catch (error) {
-    throw new Error(`Failed to parse sed command: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    throw new Error(
+      `Failed to parse sed command: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    )
   }
 
   return scripts
@@ -1517,7 +1739,8 @@ function sedScriptContainsDangerousOperations(script: string): boolean {
   if (s.includes('\n')) return true
 
   const commentIndex = s.indexOf('#')
-  if (commentIndex !== -1 && !(commentIndex > 0 && s[commentIndex - 1] === 's')) return true
+  if (commentIndex !== -1 && !(commentIndex > 0 && s[commentIndex - 1] === 's'))
+    return true
 
   if (/^!/.test(s) || /[/\d$]!/.test(s)) return true
   if (/\d\s*~\s*\d|,\s*~\s*\d|\$\s*~\s*\d/.test(s)) return true
@@ -1570,7 +1793,10 @@ function sedScriptContainsDangerousOperations(script: string): boolean {
   return false
 }
 
-function sedCommandIsSafe(command: string, options?: { allowFileWrites?: boolean }): boolean {
+function sedCommandIsSafe(
+  command: string,
+  options?: { allowFileWrites?: boolean },
+): boolean {
   const allowFileWrites = options?.allowFileWrites ?? false
   let scripts: string[]
   try {
@@ -1584,7 +1810,12 @@ function sedCommandIsSafe(command: string, options?: { allowFileWrites?: boolean
   let safePrint = false
   let safeSub = false
   if (allowFileWrites) {
-    safeSub = sedIsSafeSimpleSubstitution(command, scripts, hasExtraExpressions, { allowFileWrites: true })
+    safeSub = sedIsSafeSimpleSubstitution(
+      command,
+      scripts,
+      hasExtraExpressions,
+      { allowFileWrites: true },
+    )
   } else {
     safePrint = sedIsSafePrintCommand(command, scripts)
     safeSub = sedIsSafeSimpleSubstitution(command, scripts, hasExtraExpressions)
@@ -1614,15 +1845,20 @@ export function checkSedCommandSafety(args: {
     if (!sedCommandIsSafe(trimmed, { allowFileWrites })) {
       return {
         behavior: 'ask',
-        message: 'sed command requires approval (contains potentially dangerous operations)',
+        message:
+          'sed command requires approval (contains potentially dangerous operations)',
         decisionReason: {
           type: 'other',
-          reason: 'sed command contains operations that require explicit approval (e.g., write commands, execute commands)',
+          reason:
+            'sed command contains operations that require explicit approval (e.g., write commands, execute commands)',
         },
       }
     }
   }
-  return { behavior: 'passthrough', message: 'No dangerous sed operations detected' }
+  return {
+    behavior: 'passthrough',
+    message: 'No dangerous sed operations detected',
+  }
 }
 
 function parseBoolLikeEnv(value: string | undefined): boolean {
@@ -1642,7 +1878,10 @@ type XiDecision =
   | { behavior: 'passthrough'; message: string }
   | { behavior: 'ask'; message: string }
 
-function qQ5(input: string, keepDoubleQuotes = false): { withDoubleQuotes: string; fullyUnquoted: string } {
+function qQ5(
+  input: string,
+  keepDoubleQuotes = false,
+): { withDoubleQuotes: string; fullyUnquoted: string } {
   let withDoubleQuotes = ''
   let fullyUnquoted = ''
   let inSingle = false
@@ -1686,7 +1925,8 @@ function NQ5(input: string): string {
 }
 
 function hasUnescapedChar(input: string, ch: string): boolean {
-  if (ch.length !== 1) throw new Error('hasUnescapedChar only works with single characters')
+  if (ch.length !== 1)
+    throw new Error('hasUnescapedChar only works with single characters')
   let i = 0
   while (i < input.length) {
     if (input[i] === '\\\\' && i + 1 < input.length) {
@@ -1699,7 +1939,10 @@ function hasUnescapedChar(input: string, ch: string): boolean {
   return false
 }
 
-function MQ5(ctx: XiContext): { behavior: 'allow' | 'passthrough'; message?: string } {
+function MQ5(ctx: XiContext): {
+  behavior: 'allow' | 'passthrough'
+  message?: string
+} {
   if (!ctx.originalCommand.trim()) {
     return { behavior: 'allow', message: 'Empty command is safe' }
   }
@@ -1709,10 +1952,23 @@ function MQ5(ctx: XiContext): { behavior: 'allow' | 'passthrough'; message?: str
 function OQ5(ctx: XiContext): XiDecision {
   const cmd = ctx.originalCommand
   const trimmed = cmd.trim()
-  if (/^\\s*\\t/.test(cmd)) return { behavior: 'ask', message: 'Command appears to be an incomplete fragment (starts with tab)' }
-  if (trimmed.startsWith('-')) return { behavior: 'ask', message: 'Command appears to be an incomplete fragment (starts with flags)' }
+  if (/^\\s*\\t/.test(cmd))
+    return {
+      behavior: 'ask',
+      message: 'Command appears to be an incomplete fragment (starts with tab)',
+    }
+  if (trimmed.startsWith('-'))
+    return {
+      behavior: 'ask',
+      message:
+        'Command appears to be an incomplete fragment (starts with flags)',
+    }
   if (/^\\s*(&&|\\|\\||;|>>?|<)/.test(cmd)) {
-    return { behavior: 'ask', message: 'Command appears to be a continuation line (starts with operator)' }
+    return {
+      behavior: 'ask',
+      message:
+        'Command appears to be a continuation line (starts with operator)',
+    }
   }
   return { behavior: 'passthrough', message: 'Command appears complete' }
 }
@@ -1734,7 +1990,8 @@ function RQ5(command: string): boolean {
     for (const { start, delimiter } of matches) {
       const tail = command.substring(start)
       const escaped = delimiter.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')
-      if (!new RegExp(`(?:\\n|^[^\\\\n]*\\n)${escaped}\\\\s*\\\\)`).test(tail)) return false
+      if (!new RegExp(`(?:\\n|^[^\\\\n]*\\n)${escaped}\\\\s*\\\\)`).test(tail))
+        return false
       const full = new RegExp(
         `^\\\\$\\\\(cat\\\\s*<<-?\\\\s*(?:'+${escaped}'+|\\\\\\\\${escaped})[^\\\\n]*\\\\n(?:[\\\\s\\\\S]*?\\\\n)?${escaped}\\\\s*\\\\)`,
       )
@@ -1758,54 +2015,96 @@ function RQ5(command: string): boolean {
   }
 }
 
-function TQ5(ctx: XiContext): { behavior: 'allow' | 'passthrough'; message?: string } {
+function TQ5(ctx: XiContext): {
+  behavior: 'allow' | 'passthrough'
+  message?: string
+} {
   if (!HEREDOC_IN_SUBSTITUTION.test(ctx.originalCommand)) {
     return { behavior: 'passthrough', message: 'No heredoc in substitution' }
   }
   if (RQ5(ctx.originalCommand)) {
-    return { behavior: 'allow', message: 'Safe command substitution: cat with quoted/escaped heredoc delimiter' }
+    return {
+      behavior: 'allow',
+      message:
+        'Safe command substitution: cat with quoted/escaped heredoc delimiter',
+    }
   }
-  return { behavior: 'passthrough', message: 'Command substitution needs validation' }
+  return {
+    behavior: 'passthrough',
+    message: 'Command substitution needs validation',
+  }
 }
 
-function jQ5(ctx: XiContext): { behavior: 'allow' | 'ask' | 'passthrough'; message: string } {
+function jQ5(ctx: XiContext): {
+  behavior: 'allow' | 'ask' | 'passthrough'
+  message: string
+} {
   const cmd = ctx.originalCommand
   if (ctx.baseCommand !== 'git' || !/^git\s+commit\s+/.test(cmd)) {
     return { behavior: 'passthrough', message: 'Not a git commit' }
   }
   const match = cmd.match(/^git\s+commit\s+.*-m\s+(["'])([\s\S]*?)\1(.*)$/)
-  if (!match) return { behavior: 'passthrough', message: 'Git commit needs validation' }
+  if (!match)
+    return { behavior: 'passthrough', message: 'Git commit needs validation' }
 
   const [, quoteChar, message, tail] = match
   if (quoteChar === '"' && message && /\$\(|`|\$\{/.test(message)) {
-    return { behavior: 'ask', message: 'Git commit message contains command substitution patterns' }
+    return {
+      behavior: 'ask',
+      message: 'Git commit message contains command substitution patterns',
+    }
   }
   if (tail && /\$\(|`|\$\{/.test(tail)) {
     return { behavior: 'passthrough', message: 'Check patterns in flags' }
   }
-  return { behavior: 'allow', message: 'Git commit with simple quoted message is allowed' }
+  return {
+    behavior: 'allow',
+    message: 'Git commit with simple quoted message is allowed',
+  }
 }
 
-function PQ5(ctx: XiContext): { behavior: 'allow' | 'passthrough'; message: string } {
+function PQ5(ctx: XiContext): {
+  behavior: 'allow' | 'passthrough'
+  message: string
+} {
   if (HEREDOC_IN_SUBSTITUTION.test(ctx.originalCommand)) {
     return { behavior: 'passthrough', message: 'Heredoc in substitution' }
   }
   const safeQuoted = /<<-?\s*'[^']+'/
   const safeEscaped = /<<-?\s*\\\w+/
-  if (safeQuoted.test(ctx.originalCommand) || safeEscaped.test(ctx.originalCommand)) {
-    return { behavior: 'allow', message: 'Heredoc with quoted/escaped delimiter is safe' }
+  if (
+    safeQuoted.test(ctx.originalCommand) ||
+    safeEscaped.test(ctx.originalCommand)
+  ) {
+    return {
+      behavior: 'allow',
+      message: 'Heredoc with quoted/escaped delimiter is safe',
+    }
   }
   return { behavior: 'passthrough', message: 'No heredoc patterns' }
 }
 
 function SQ5(ctx: XiContext): XiDecision {
-  if (ctx.baseCommand !== 'jq') return { behavior: 'passthrough', message: 'Not jq' }
+  if (ctx.baseCommand !== 'jq')
+    return { behavior: 'passthrough', message: 'Not jq' }
   if (/\bsystem\s*\(/.test(ctx.originalCommand)) {
-    return { behavior: 'ask', message: 'jq command contains system() function which executes arbitrary commands' }
+    return {
+      behavior: 'ask',
+      message:
+        'jq command contains system() function which executes arbitrary commands',
+    }
   }
   const rest = ctx.originalCommand.substring(3).trim()
-  if (/(?:^|\s)(?:-f\b|--from-file|--rawfile|--slurpfile|-L\b|--library-path)/.test(rest)) {
-    return { behavior: 'ask', message: 'jq command contains dangerous flags that could execute code or read arbitrary files' }
+  if (
+    /(?:^|\s)(?:-f\b|--from-file|--rawfile|--slurpfile|-L\b|--library-path)/.test(
+      rest,
+    )
+  ) {
+    return {
+      behavior: 'ask',
+      message:
+        'jq command contains dangerous flags that could execute code or read arbitrary files',
+    }
   }
   return { behavior: 'passthrough', message: 'jq command is safe' }
 }
@@ -1813,22 +2112,33 @@ function SQ5(ctx: XiContext): XiDecision {
 function _Q5(ctx: XiContext): XiDecision {
   const q = ctx.unquotedContent
   const msg = 'Command contains shell metacharacters (;, |, or &) in arguments'
-  if (/(?:^|\\s)[\"'][^\"']*[;&][^\"']*[\"'](?:\\s|$)/.test(q)) return { behavior: 'ask', message: msg }
+  if (/(?:^|\\s)[\"'][^\"']*[;&][^\"']*[\"'](?:\\s|$)/.test(q))
+    return { behavior: 'ask', message: msg }
   if (
-    [/-name\\s+[\"'][^\"']*[;|&][^\"']*[\"']/, /-path\\s+[\"'][^\"']*[;|&][^\"']*[\"']/, /-iname\\s+[\"'][^\"']*[;|&][^\"']*[\"']/].some(
-      re => re.test(q),
-    )
+    [
+      /-name\\s+[\"'][^\"']*[;|&][^\"']*[\"']/,
+      /-path\\s+[\"'][^\"']*[;|&][^\"']*[\"']/,
+      /-iname\\s+[\"'][^\"']*[;|&][^\"']*[\"']/,
+    ].some(re => re.test(q))
   ) {
     return { behavior: 'ask', message: msg }
   }
-  if (/-regex\\s+[\"'][^\"']*[;&][^\"']*[\"']/.test(q)) return { behavior: 'ask', message: msg }
+  if (/-regex\\s+[\"'][^\"']*[;&][^\"']*[\"']/.test(q))
+    return { behavior: 'ask', message: msg }
   return { behavior: 'passthrough', message: 'No metacharacters' }
 }
 
 function yQ5(ctx: XiContext): XiDecision {
   const q = ctx.fullyUnquotedContent
-  if (/[<>|]\s*\$[A-Za-z_]/.test(q) || /\$[A-Za-z_][A-Za-z0-9_]*\s*[|<>]/.test(q)) {
-    return { behavior: 'ask', message: 'Command contains variables in dangerous contexts (redirections or pipes)' }
+  if (
+    /[<>|]\s*\$[A-Za-z_]/.test(q) ||
+    /\$[A-Za-z_][A-Za-z0-9_]*\s*[|<>]/.test(q)
+  ) {
+    return {
+      behavior: 'ask',
+      message:
+        'Command contains variables in dangerous contexts (redirections or pipes)',
+    }
   }
   return { behavior: 'passthrough', message: 'No dangerous variables' }
 }
@@ -1846,31 +2156,63 @@ const DANGEROUS_PATTERNS = [
 function kQ5(ctx: XiContext): XiDecision {
   const unquoted = ctx.unquotedContent
   const fully = ctx.fullyUnquotedContent
-  if (hasUnescapedChar(unquoted, '`')) return { behavior: 'ask', message: 'Command contains backticks (`) for command substitution' }
+  if (hasUnescapedChar(unquoted, '`'))
+    return {
+      behavior: 'ask',
+      message: 'Command contains backticks (`) for command substitution',
+    }
   for (const { pattern, message } of DANGEROUS_PATTERNS) {
-    if (pattern.test(unquoted)) return { behavior: 'ask', message: `Command contains ${message}` }
+    if (pattern.test(unquoted))
+      return { behavior: 'ask', message: `Command contains ${message}` }
   }
-  if (/</.test(fully)) return { behavior: 'ask', message: 'Command contains input redirection (<) which could read sensitive files' }
-  if (/>/.test(fully)) return { behavior: 'ask', message: 'Command contains output redirection (>) which could write to arbitrary files' }
+  if (/</.test(fully))
+    return {
+      behavior: 'ask',
+      message:
+        'Command contains input redirection (<) which could read sensitive files',
+    }
+  if (/>/.test(fully))
+    return {
+      behavior: 'ask',
+      message:
+        'Command contains output redirection (>) which could write to arbitrary files',
+    }
   return { behavior: 'passthrough', message: 'No dangerous patterns' }
 }
 
 function xQ5(ctx: XiContext): XiDecision {
   const q = ctx.fullyUnquotedContent
-  if (!/[\n\r]/.test(q)) return { behavior: 'passthrough', message: 'No newlines' }
-  if (/[\n\r]\s*[a-zA-Z/.~]/.test(q)) return { behavior: 'ask', message: 'Command contains newlines that could separate multiple commands' }
-  return { behavior: 'passthrough', message: 'Newlines appear to be within data' }
+  if (!/[\n\r]/.test(q))
+    return { behavior: 'passthrough', message: 'No newlines' }
+  if (/[\n\r]\s*[a-zA-Z/.~]/.test(q))
+    return {
+      behavior: 'ask',
+      message:
+        'Command contains newlines that could separate multiple commands',
+    }
+  return {
+    behavior: 'passthrough',
+    message: 'Newlines appear to be within data',
+  }
 }
 
 function vQ5(ctx: XiContext): XiDecision {
   if (/\$IFS|\$\{[^}]*IFS/.test(ctx.originalCommand)) {
-    return { behavior: 'ask', message: 'Command contains IFS variable usage which could bypass security validation' }
+    return {
+      behavior: 'ask',
+      message:
+        'Command contains IFS variable usage which could bypass security validation',
+    }
   }
   return { behavior: 'passthrough', message: 'No IFS injection detected' }
 }
 
 function bQ5(ctx: XiContext): XiDecision {
-  if (ctx.baseCommand === 'echo') return { behavior: 'passthrough', message: 'echo command is safe and has no dangerous flags' }
+  if (ctx.baseCommand === 'echo')
+    return {
+      behavior: 'passthrough',
+      message: 'echo command is safe and has no dangerous flags',
+    }
 
   const cmd = ctx.originalCommand
   let inSingle = false
@@ -1915,14 +2257,25 @@ function bQ5(ctx: XiContext): XiDecision {
         j++
       }
       if (current.includes('"') || current.includes("'")) {
-        return { behavior: 'ask', message: 'Command contains quoted characters in flag names' }
+        return {
+          behavior: 'ask',
+          message: 'Command contains quoted characters in flag names',
+        }
       }
     }
   }
 
   const fully = ctx.fullyUnquotedContent
-  if (/\s['\"`]-/.test(fully)) return { behavior: 'ask', message: 'Command contains quoted characters in flag names' }
-  if (/['\"`]{2}-/.test(fully)) return { behavior: 'ask', message: 'Command contains quoted characters in flag names' }
+  if (/\s['\"`]-/.test(fully))
+    return {
+      behavior: 'ask',
+      message: 'Command contains quoted characters in flag names',
+    }
+  if (/['\"`]{2}-/.test(fully))
+    return {
+      behavior: 'ask',
+      message: 'Command contains quoted characters in flag names',
+    }
 
   return { behavior: 'passthrough', message: 'No obfuscated flags detected' }
 }
@@ -1940,7 +2293,11 @@ export function xi(command: string): XiDecision {
   const allowChecks = [MQ5, OQ5, TQ5, PQ5, jQ5]
   for (const check of allowChecks) {
     const res: any = check(ctx as any)
-    if (res.behavior === 'allow') return { behavior: 'passthrough', message: res.message ?? 'Command allowed' }
+    if (res.behavior === 'allow')
+      return {
+        behavior: 'passthrough',
+        message: res.message ?? 'Command allowed',
+      }
     if (res.behavior !== 'passthrough') return res
   }
 
@@ -1950,7 +2307,10 @@ export function xi(command: string): XiDecision {
     if (res.behavior === 'ask') return res
   }
 
-  return { behavior: 'passthrough', message: 'Command passed all security checks' }
+  return {
+    behavior: 'passthrough',
+    message: 'Command passed all security checks',
+  }
 }
 
 function isSafeCommandList(command: string): boolean {
@@ -1980,13 +2340,18 @@ function isSafeCommandList(command: string): boolean {
 
 function isUnsafeCompoundCommand(command: string): boolean {
   try {
-    return splitBashCommandIntoSubcommands(command).length > 1 && !isSafeCommandList(command)
+    return (
+      splitBashCommandIntoSubcommands(command).length > 1 &&
+      !isSafeCommandList(command)
+    )
   } catch {
     return true
   }
 }
 
-export function checkBashCommandSyntax(command: string): BashPermissionDecision {
+export function checkBashCommandSyntax(
+  command: string,
+): BashPermissionDecision {
   const parsed = parseShellTokens(command)
   if ('error' in parsed) {
     const reason: DecisionReason = {
@@ -1995,7 +2360,7 @@ export function checkBashCommandSyntax(command: string): BashPermissionDecision 
     }
     return {
       behavior: 'ask',
-      message: `${PRODUCT_NAME_FOR_MESSAGES} requested permissions to use Bash, but you haven't granted it yet.`,
+      message: `${PRODUCT_NAME} requested permissions to use Bash, but you haven't granted it yet.`,
       decisionReason: reason,
     }
   }
@@ -2013,7 +2378,10 @@ function h02(args: {
   const exact = checkExactBashRules(trimmed, args.toolPermissionContext)
   if (exact.behavior === 'deny' || exact.behavior === 'ask') return exact
 
-  const prefixMatches = checkPrefixBashRules(trimmed, args.toolPermissionContext)
+  const prefixMatches = checkPrefixBashRules(
+    trimmed,
+    args.toolPermissionContext,
+  )
   if (prefixMatches.deny) {
     return {
       behavior: 'deny',
@@ -2024,7 +2392,7 @@ function h02(args: {
   if (prefixMatches.ask) {
     return {
       behavior: 'ask',
-      message: `${PRODUCT_NAME_FOR_MESSAGES} requested permissions to use Bash, but you haven't granted it yet.`,
+      message: `${PRODUCT_NAME} requested permissions to use Bash, but you haven't granted it yet.`,
       decisionReason: { type: 'rule', rule: prefixMatches.ask },
     }
   }
@@ -2053,19 +2421,31 @@ function h02(args: {
   })
   if (sedDecision.behavior !== 'passthrough') return sedDecision
 
-  const modeDecision = modeSpecificBashDecision(trimmed, args.toolPermissionContext)
+  const modeDecision = modeSpecificBashDecision(
+    trimmed,
+    args.toolPermissionContext,
+  )
   if (modeDecision.behavior !== 'passthrough') return modeDecision
 
-  if (!parseBoolLikeEnv(process.env.CLAUDE_CODE_DISABLE_COMMAND_INJECTION_CHECK)) {
+  if (
+    !parseBoolLikeEnv(
+      process.env.KODE_DISABLE_COMMAND_INJECTION_CHECK ??
+        process.env.CLAUDE_CODE_DISABLE_COMMAND_INJECTION_CHECK,
+    )
+  ) {
     const security = xi(trimmed)
     if (security.behavior !== 'passthrough') {
       const reason: DecisionReason = {
         type: 'other',
-        reason: security.message || 'This command contains patterns that could pose security risks and requires approval',
+        reason:
+          security.message ||
+          'This command contains patterns that could pose security risks and requires approval',
       }
       return {
         behavior: 'ask',
-        message: security.message || `${PRODUCT_NAME_FOR_MESSAGES} requested permissions to use Bash, but you haven't granted it yet.`,
+        message:
+          security.message ||
+          `${PRODUCT_NAME} requested permissions to use Bash, but you haven't granted it yet.`,
         decisionReason: reason,
         suggestions: [],
       }
@@ -2074,7 +2454,7 @@ function h02(args: {
 
   return {
     behavior: 'passthrough',
-    message: `${PRODUCT_NAME_FOR_MESSAGES} requested permissions to use Bash, but you haven't granted it yet.`,
+    message: `${PRODUCT_NAME} requested permissions to use Bash, but you haven't granted it yet.`,
     decisionReason: { type: 'other', reason: 'This command requires approval' },
     suggestions: buildBashRuleSuggestionExact(trimmed),
   }
@@ -2096,33 +2476,45 @@ export async function checkBashPermissions(args: {
       message:
         'message' in syntax
           ? syntax.message
-          : `${PRODUCT_NAME_FOR_MESSAGES} requested permissions to use Bash, but you haven't granted it yet.`,
+          : `${PRODUCT_NAME} requested permissions to use Bash, but you haven't granted it yet.`,
     }
   }
 
   // Reference CLI parity: unsafe compound commands require explicit approval.
-  if (!parseBoolLikeEnv(process.env.CLAUDE_CODE_DISABLE_COMMAND_INJECTION_CHECK) && isUnsafeCompoundCommand(trimmed)) {
+  if (
+    !parseBoolLikeEnv(
+      process.env.KODE_DISABLE_COMMAND_INJECTION_CHECK ??
+        process.env.CLAUDE_CODE_DISABLE_COMMAND_INJECTION_CHECK,
+    ) &&
+    isUnsafeCompoundCommand(trimmed)
+  ) {
     const security = xi(trimmed)
     return {
       result: false,
       message:
         security.behavior === 'ask' && security.message
           ? security.message
-          : `${PRODUCT_NAME_FOR_MESSAGES} requested permissions to use Bash, but you haven't granted it yet.`,
+          : `${PRODUCT_NAME} requested permissions to use Bash, but you haven't granted it yet.`,
     }
   }
 
   const fullExact = checkExactBashRules(trimmed, args.toolPermissionContext)
   if (fullExact.behavior === 'deny') {
-    return { result: false, message: fullExact.message, shouldPromptUser: false }
+    return {
+      result: false,
+      message: fullExact.message,
+      shouldPromptUser: false,
+    }
   }
 
-  const subcommands = splitBashCommandIntoSubcommands(trimmed).filter(cmd => cmd !== `cd ${cwd}`)
+  const subcommands = splitBashCommandIntoSubcommands(trimmed).filter(
+    cmd => cmd !== `cd ${cwd}`,
+  )
   const cdCommands = subcommands.filter(cmd => cmd.trim().startsWith('cd '))
   if (cdCommands.length > 1) {
     return {
       result: false,
-      message: `${PRODUCT_NAME_FOR_MESSAGES} requested permissions to use Bash, but you haven't granted it yet.`,
+      message: `${PRODUCT_NAME} requested permissions to use Bash, but you haven't granted it yet.`,
     }
   }
   const hasCdInCompound = cdCommands.length > 0
@@ -2156,15 +2548,27 @@ export async function checkBashPermissions(args: {
     hasCdInCompound,
   })
   if (fullPathDecision.behavior === 'deny') {
-    return { result: false, message: fullPathDecision.message, shouldPromptUser: false }
+    return {
+      result: false,
+      message: fullPathDecision.message,
+      shouldPromptUser: false,
+    }
   }
   if (fullPathDecision.behavior === 'ask') {
-    return { result: false, message: fullPathDecision.message, suggestions: fullPathDecision.suggestions }
+    return {
+      result: false,
+      message: fullPathDecision.message,
+      suggestions: fullPathDecision.suggestions,
+    }
   }
 
   for (const decision of subResults.values()) {
     if (decision.behavior === 'ask') {
-      return { result: false, message: decision.message, suggestions: decision.suggestions }
+      return {
+        result: false,
+        message: decision.message,
+        suggestions: decision.suggestions,
+      }
     }
   }
 
@@ -2177,7 +2581,7 @@ export async function checkBashPermissions(args: {
 
   return {
     result: false,
-    message: `${PRODUCT_NAME_FOR_MESSAGES} requested permissions to use Bash, but you haven't granted it yet.`,
+    message: `${PRODUCT_NAME} requested permissions to use Bash, but you haven't granted it yet.`,
     suggestions: buildBashRuleSuggestionExact(trimmed),
   }
 }
@@ -2189,7 +2593,10 @@ export function checkBashPermissionsAutoAllowedBySandbox(args: {
   toolPermissionContext: ToolPermissionContext
 }): BashPermissionResult {
   const trimmed = args.command.trim()
-  const prefixMatches = checkPrefixBashRules(trimmed, args.toolPermissionContext)
+  const prefixMatches = checkPrefixBashRules(
+    trimmed,
+    args.toolPermissionContext,
+  )
 
   if (prefixMatches.deny) {
     return {
@@ -2202,7 +2609,7 @@ export function checkBashPermissionsAutoAllowedBySandbox(args: {
   if (prefixMatches.ask) {
     return {
       result: false,
-      message: `${PRODUCT_NAME_FOR_MESSAGES} requested permissions to use Bash, but you haven't granted it yet.`,
+      message: `${PRODUCT_NAME} requested permissions to use Bash, but you haven't granted it yet.`,
     }
   }
 

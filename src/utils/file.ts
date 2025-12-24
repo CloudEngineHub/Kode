@@ -43,7 +43,11 @@ export async function glob(
 ): Promise<{ files: string[]; truncated: boolean }> {
   try {
     // Try Bun.Glob first for better performance
-    const allFiles = await BunSearcher.glob(filePattern, cwd, limit + offset + 100)
+    const allFiles = await BunSearcher.glob(
+      filePattern,
+      cwd,
+      limit + offset + 100,
+    )
 
     // Sort by modification time (newest first for relevance)
     const resolvedFiles = allFiles
@@ -62,8 +66,7 @@ export async function glob(
       .map((file, i) => [file, stats[i]] as const)
       .filter(([, stat]) => stat !== null)
       .sort((a, b) => {
-        const timeComparison =
-          (b[1]!.mtimeMs ?? 0) - (a[1]!.mtimeMs ?? 0)
+        const timeComparison = (b[1]!.mtimeMs ?? 0) - (a[1]!.mtimeMs ?? 0)
         if (timeComparison !== 0) return timeComparison
         return a[0].localeCompare(b[0])
       })

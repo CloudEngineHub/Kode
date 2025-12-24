@@ -32,16 +32,16 @@ export interface LogOption {
   date: string
   fullPath: string
   value: number // Index in the logs array
-  
+
   // Timestamps for sorting
   created: Date
   modified: Date
-  
+
   // Content metadata
   firstPrompt: string
   messageCount: number
   messages: SerializedMessage[]
-  
+
   // Fork and branch info
   forkNumber?: number
   sidechainNumber?: number

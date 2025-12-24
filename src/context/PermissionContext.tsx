@@ -20,9 +20,7 @@ import type {
   ToolPermissionContext as IToolPermissionContext,
   ToolPermissionContextUpdate,
 } from '@kode-types/toolPermissionContext'
-import {
-  applyToolPermissionContextUpdate,
-} from '@kode-types/toolPermissionContext'
+import { applyToolPermissionContextUpdate } from '@kode-types/toolPermissionContext'
 import {
   applyToolPermissionContextUpdateForConversationKey,
   getToolPermissionContextForConversationKey,
@@ -99,22 +97,23 @@ export function PermissionProvider({
         isBypassPermissionsModeAvailable,
       }),
     )
-  const [permissionContext, setPermissionContext] = useState<IPermissionContext>(() => {
-    const initialMode = getToolPermissionContextForConversationKey({
-      conversationKey,
-      isBypassPermissionsModeAvailable,
-    }).mode
-    const initialConfig = MODE_CONFIGS[initialMode]
-    return {
-      mode: initialMode,
-      allowedTools: initialConfig.allowedTools,
-      allowedPaths: [process.cwd()],
-      restrictions: initialConfig.restrictions,
-      metadata: {
-        transitionCount: 0,
-      },
-    }
-  })
+  const [permissionContext, setPermissionContext] =
+    useState<IPermissionContext>(() => {
+      const initialMode = getToolPermissionContextForConversationKey({
+        conversationKey,
+        isBypassPermissionsModeAvailable,
+      }).mode
+      const initialConfig = MODE_CONFIGS[initialMode]
+      return {
+        mode: initialMode,
+        allowedTools: initialConfig.allowedTools,
+        allowedPaths: [process.cwd()],
+        restrictions: initialConfig.restrictions,
+        metadata: {
+          transitionCount: 0,
+        },
+      }
+    })
 
   useEffect(() => {
     const toolCtx = getToolPermissionContextForConversationKey({
@@ -179,39 +178,42 @@ export function PermissionProvider({
     })
   }, [conversationKey, isBypassPermissionsModeAvailable])
 
-  const setMode = useCallback((mode: PermissionMode) => {
-    setPermissionContext(prev => {
-      const modeConfig = MODE_CONFIGS[mode]
+  const setMode = useCallback(
+    (mode: PermissionMode) => {
+      setPermissionContext(prev => {
+        const modeConfig = MODE_CONFIGS[mode]
 
-      __applyPermissionModeSideEffectsForTests({
-        conversationKey,
-        previousMode: prev.mode,
-        nextMode: mode,
-        recordPlanModeUse: false,
-      })
-
-      const updatedToolPermissionContext =
-        applyToolPermissionContextUpdateForConversationKey({
+        __applyPermissionModeSideEffectsForTests({
           conversationKey,
-          isBypassPermissionsModeAvailable,
-          update: { type: 'setMode', mode, destination: 'session' },
-        })
-      setToolPermissionContext(updatedToolPermissionContext)
-
-      return {
-        ...prev,
-        mode,
-        allowedTools: modeConfig.allowedTools,
-        restrictions: modeConfig.restrictions,
-        metadata: {
-          ...prev.metadata,
           previousMode: prev.mode,
-          activatedAt: new Date().toISOString(),
-          transitionCount: prev.metadata.transitionCount + 1,
-        },
-      }
-    })
-  }, [conversationKey])
+          nextMode: mode,
+          recordPlanModeUse: false,
+        })
+
+        const updatedToolPermissionContext =
+          applyToolPermissionContextUpdateForConversationKey({
+            conversationKey,
+            isBypassPermissionsModeAvailable,
+            update: { type: 'setMode', mode, destination: 'session' },
+          })
+        setToolPermissionContext(updatedToolPermissionContext)
+
+        return {
+          ...prev,
+          mode,
+          allowedTools: modeConfig.allowedTools,
+          restrictions: modeConfig.restrictions,
+          metadata: {
+            ...prev.metadata,
+            previousMode: prev.mode,
+            activatedAt: new Date().toISOString(),
+            transitionCount: prev.metadata.transitionCount + 1,
+          },
+        }
+      })
+    },
+    [conversationKey],
+  )
 
   const applyToolPermissionUpdate = useCallback(
     (update: ToolPermissionContextUpdate) => {

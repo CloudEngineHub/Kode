@@ -43,7 +43,10 @@ describe('TodoWriteTool UI parity (Reference CLI)', () => {
       activeForm: `Doing todo ${i}`,
     }))
 
-    const gen = TodoWriteTool.call({ todos: tooManyTodos } as any, makeContext() as any)
+    const gen = TodoWriteTool.call(
+      { todos: tooManyTodos } as any,
+      makeContext() as any,
+    )
     await expect(gen.next()).rejects.toThrow('Todo limit exceeded')
   })
 })

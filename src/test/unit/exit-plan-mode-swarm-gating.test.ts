@@ -9,7 +9,11 @@ describe('ExitPlanMode swarm option gating', () => {
       teammateCount: 3,
     })
 
-    expect(options.map(o => o.value)).toEqual(['yes-bypass', 'yes-default', 'no'])
+    expect(options.map(o => o.value)).toEqual([
+      'yes-bypass',
+      'yes-default',
+      'no',
+    ])
   })
 
   test('includes launch swarm option when gated on', () => {
@@ -28,4 +32,3 @@ describe('ExitPlanMode swarm option gating', () => {
     expect(options[1]?.label).toContain('4')
   })
 })
-

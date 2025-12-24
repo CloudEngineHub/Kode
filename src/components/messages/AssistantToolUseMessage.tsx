@@ -65,7 +65,9 @@ export function AssistantToolUseMessage({
 
   const parsedInput = tool.inputSchema.safeParse(param.input)
   const userFacingToolName = tool.userFacingName
-    ? tool.userFacingName(parsedInput.success ? (parsedInput.data as any) : undefined)
+    ? tool.userFacingName(
+        parsedInput.success ? (parsedInput.data as any) : undefined,
+      )
     : tool.name
 
   const hasToolName = userFacingToolName.trim().length > 0
@@ -113,7 +115,10 @@ export function AssistantToolUseMessage({
             <TaskToolMessage
               agentType={
                 parsedInput.success
-                  ? String((parsedInput.data as any).subagent_type || 'general-purpose')
+                  ? String(
+                      (parsedInput.data as any).subagent_type ||
+                        'general-purpose',
+                    )
                   : 'general-purpose'
               }
               bold={Boolean(!isQueued)}

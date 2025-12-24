@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { getBashDestructiveCommandBlock } from '@utils/destructiveCommandGuard'
+import { getBashDestructiveCommandBlock } from '@utils/sandbox/destructiveCommandGuard'
 
 describe('destructiveCommandGuard (BashTool)', () => {
   const ENV_ALLOW = 'KODE_ALLOW_DESTRUCTIVE_RM'
@@ -113,4 +113,3 @@ describe('destructiveCommandGuard (BashTool)', () => {
     expect(block).toBeNull()
   })
 })
-

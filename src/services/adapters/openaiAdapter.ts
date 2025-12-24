@@ -1,5 +1,10 @@
 import { ModelAPIAdapter, StreamingEvent, normalizeTokens } from './base'
-import { UnifiedRequestParams, UnifiedResponse, ModelCapabilities, ReasoningStreamingContext } from '@kode-types/modelCapabilities'
+import {
+  UnifiedRequestParams,
+  UnifiedResponse,
+  ModelCapabilities,
+  ReasoningStreamingContext,
+} from '@kode-types/modelCapabilities'
 import { ModelProfile } from '@utils/config'
 import { Tool, getToolDescription } from '@tool'
 import { zodToJsonSchema } from 'zod-to-json-schema'
@@ -23,7 +28,8 @@ export abstract class OpenAIAdapter extends ModelAPIAdapter {
     // Check if this is a streaming response (has ReadableStream body)
     if (response?.body instanceof ReadableStream) {
       // Use streaming helper for streaming responses
-      const { assistantMessage } = await this.parseStreamingOpenAIResponse(response)
+      const { assistantMessage } =
+        await this.parseStreamingOpenAIResponse(response)
 
       return {
         id: assistantMessage.responseId,
@@ -35,11 +41,11 @@ export abstract class OpenAIAdapter extends ModelAPIAdapter {
             type: 'function',
             function: {
               name: block.name,
-              arguments: JSON.stringify(block.input)
-            }
+              arguments: JSON.stringify(block.input),
+            },
           })),
         usage: this.normalizeUsageForAdapter(assistantMessage.message.usage),
-        responseId: assistantMessage.responseId
+        responseId: assistantMessage.responseId,
       }
     }
 
@@ -64,7 +70,7 @@ export abstract class OpenAIAdapter extends ModelAPIAdapter {
       thinkOpen: false,
       thinkClosed: false,
       sawAnySummary: false,
-      pendingSummaryParagraph: false
+      pendingSummaryParagraph: false,
     }
 
     try {
@@ -86,10 +92,19 @@ export abstract class OpenAIAdapter extends ModelAPIAdapter {
               }
 
               // Delegate to subclass for specific processing
-              yield* this.processStreamingChunk(parsed, responseId, hasStarted, accumulatedContent, reasoningContext)
+              yield* this.processStreamingChunk(
+                parsed,
+                responseId,
+                hasStarted,
+                accumulatedContent,
+                reasoningContext,
+              )
 
               // Update state based on subclass processing
-              const stateUpdate = this.updateStreamingState(parsed, accumulatedContent)
+              const stateUpdate = this.updateStreamingState(
+                parsed,
+                accumulatedContent,
+              )
               if (stateUpdate.content) accumulatedContent = stateUpdate.content
               if (stateUpdate.hasStarted) hasStarted = true
             }
@@ -100,7 +115,7 @@ export abstract class OpenAIAdapter extends ModelAPIAdapter {
       console.error('Error reading streaming response:', error)
       yield {
         type: 'error',
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       }
     } finally {
       reader.releaseLock()
@@ -118,8 +133,8 @@ export abstract class OpenAIAdapter extends ModelAPIAdapter {
         id: responseId,
         role: 'assistant',
         content: finalContent,
-        responseId
-      }
+        responseId,
+      },
     }
   }
 
@@ -147,7 +162,11 @@ export abstract class OpenAIAdapter extends ModelAPIAdapter {
   /**
    * Common helper for processing text deltas
    */
-  protected handleTextDelta(delta: string, responseId: string, hasStarted: boolean): StreamingEvent[] {
+  protected handleTextDelta(
+    delta: string,
+    responseId: string,
+    hasStarted: boolean,
+  ): StreamingEvent[] {
     const events: StreamingEvent[] = []
 
     if (!hasStarted && delta) {
@@ -155,9 +174,9 @@ export abstract class OpenAIAdapter extends ModelAPIAdapter {
         type: 'message_start',
         message: {
           role: 'assistant',
-          content: []
+          content: [],
         },
-        responseId
+        responseId,
       })
     }
 
@@ -165,7 +184,7 @@ export abstract class OpenAIAdapter extends ModelAPIAdapter {
       events.push({
         type: 'text_delta',
         delta,
-        responseId
+        responseId,
       })
     }
 
@@ -183,15 +202,12 @@ export abstract class OpenAIAdapter extends ModelAPIAdapter {
         promptTokens: 0,
         completionTokens: 0,
         totalTokens: 0,
-        reasoningTokens: 0
+        reasoningTokens: 0,
       }
     }
 
     const inputTokens =
-      usage.input_tokens ??
-      usage.prompt_tokens ??
-      usage.promptTokens ??
-      0
+      usage.input_tokens ?? usage.prompt_tokens ?? usage.promptTokens ?? 0
     const outputTokens =
       usage.output_tokens ??
       usage.completion_tokens ??
@@ -204,8 +220,8 @@ export abstract class OpenAIAdapter extends ModelAPIAdapter {
       output_tokens: outputTokens,
       promptTokens: inputTokens,
       completionTokens: outputTokens,
-      totalTokens: usage.totalTokens ?? (inputTokens + outputTokens),
-      reasoningTokens: usage.reasoningTokens ?? 0
+      totalTokens: usage.totalTokens ?? inputTokens + outputTokens,
+      reasoningTokens: usage.reasoningTokens ?? 0,
     }
   }
 
@@ -217,17 +233,19 @@ export abstract class OpenAIAdapter extends ModelAPIAdapter {
     responseId: string,
     hasStarted: boolean,
     accumulatedContent: string,
-    reasoningContext?: ReasoningStreamingContext
+    reasoningContext?: ReasoningStreamingContext,
   ): AsyncGenerator<StreamingEvent>
 
   protected abstract updateStreamingState(
     parsed: any,
-    accumulatedContent: string
+    accumulatedContent: string,
   ): { content?: string; hasStarted?: boolean }
 
   protected abstract parseNonStreamingResponse(response: any): UnifiedResponse
 
-  protected abstract parseStreamingOpenAIResponse(response: any): Promise<{ assistantMessage: any; rawResponse: any }>
+  protected abstract parseStreamingOpenAIResponse(
+    response: any,
+  ): Promise<{ assistantMessage: any; rawResponse: any }>
 
   /**
    * Common tool building logic
@@ -238,8 +256,8 @@ export abstract class OpenAIAdapter extends ModelAPIAdapter {
       function: {
         name: tool.name,
         description: getToolDescription(tool),
-        parameters: zodToJsonSchema(tool.inputSchema as any) as any
-      }
+        parameters: zodToJsonSchema(tool.inputSchema as any) as any,
+      },
     }))
   }
 }

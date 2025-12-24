@@ -39,4 +39,3 @@ describe('BunShell.execPromotable', () => {
     expect(bg?.code).toBe(0)
   })
 })
-

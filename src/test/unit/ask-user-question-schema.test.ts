@@ -20,9 +20,9 @@ function makeValidInput(overrides?: Partial<any>) {
 
 describe('AskUserQuestionTool schema parity', () => {
   test('accepts 1-4 questions and 2-4 options', () => {
-    expect(AskUserQuestionTool.inputSchema.safeParse(makeValidInput()).success).toBe(
-      true,
-    )
+    expect(
+      AskUserQuestionTool.inputSchema.safeParse(makeValidInput()).success,
+    ).toBe(true)
 
     expect(
       AskUserQuestionTool.inputSchema.safeParse(

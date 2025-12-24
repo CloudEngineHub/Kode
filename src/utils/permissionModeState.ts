@@ -6,7 +6,8 @@ const DEFAULT_CONVERSATION_KEY = 'default'
 const permissionModeByConversationKey = new Map<string, PermissionMode>()
 
 function getConversationKey(context?: Pick<ToolUseContext, 'options'>): string {
-  const messageLogName = context?.options?.messageLogName ?? DEFAULT_CONVERSATION_KEY
+  const messageLogName =
+    context?.options?.messageLogName ?? DEFAULT_CONVERSATION_KEY
   const forkNumber = context?.options?.forkNumber ?? 0
   return `${messageLogName}:${forkNumber}`
 }
@@ -17,7 +18,10 @@ export function getPermissionModeForConversationKey(options: {
 }): PermissionMode {
   const existing = permissionModeByConversationKey.get(options.conversationKey)
   if (existing) {
-    if (existing === 'bypassPermissions' && !options.isBypassPermissionsModeAvailable) {
+    if (
+      existing === 'bypassPermissions' &&
+      !options.isBypassPermissionsModeAvailable
+    ) {
       permissionModeByConversationKey.set(options.conversationKey, 'default')
       return 'default'
     }
@@ -40,7 +44,8 @@ export function getPermissionMode(context?: ToolUseContext): PermissionMode {
   const conversationKey = getConversationKey(context)
   const safeMode = context?.options?.safeMode ?? false
 
-  const fromToolPermissionContext = context?.options?.toolPermissionContext?.mode
+  const fromToolPermissionContext =
+    context?.options?.toolPermissionContext?.mode
   if (
     fromToolPermissionContext === 'default' ||
     fromToolPermissionContext === 'acceptEdits' ||

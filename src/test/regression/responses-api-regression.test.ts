@@ -30,7 +30,9 @@ describe('Regression Tests: Responses API Bug Fixes', () => {
     console.log('\n🐛 REGRESSION TEST: responseId Preservation')
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
     console.log('This test would FAIL before the refactoring!')
-    console.log('Bug: responseId was lost when mixing AssistantMessage and ChatCompletion types')
+    console.log(
+      'Bug: responseId was lost when mixing AssistantMessage and ChatCompletion types',
+    )
 
     const adapter = ModelAdapterFactory.createAdapter(GPT5_CODEX_PROFILE)
 
@@ -42,7 +44,7 @@ describe('Regression Tests: Responses API Bug Fixes', () => {
       maxTokens: 50,
       reasoningEffort: 'medium' as const,
       temperature: 1,
-      verbosity: 'medium' as const
+      verbosity: 'medium' as const,
     })
 
     const response = await callGPT5ResponsesAPI(GPT5_CODEX_PROFILE, request)
@@ -58,7 +60,7 @@ describe('Regression Tests: Responses API Bug Fixes', () => {
       usage: {
         prompt_tokens: unifiedResponse.usage.promptTokens,
         completion_tokens: unifiedResponse.usage.completionTokens,
-      }
+      },
     }
     const assistantMsg = {
       type: 'assistant',
@@ -66,7 +68,7 @@ describe('Regression Tests: Responses API Bug Fixes', () => {
       costUSD: 0,
       durationMs: Date.now(),
       uuid: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}` as any,
-      responseId: unifiedResponse.responseId  // ← This is what gets LOST in the bug!
+      responseId: unifiedResponse.responseId, // ← This is what gets LOST in the bug!
     }
 
     console.log(`  📦 AssistantMessage responseId: ${assistantMsg.responseId}`)
@@ -94,7 +96,7 @@ describe('Regression Tests: Responses API Bug Fixes', () => {
       maxTokens: 50,
       reasoningEffort: 'medium' as const,
       temperature: 1,
-      verbosity: 'medium' as const
+      verbosity: 'medium' as const,
     })
 
     const response = await callGPT5ResponsesAPI(GPT5_CODEX_PROFILE, request)
@@ -109,7 +111,9 @@ describe('Regression Tests: Responses API Bug Fixes', () => {
     if (Array.isArray(unifiedResponse.content)) {
       console.log(`  📦 Content blocks: ${unifiedResponse.content.length}`)
       console.log(`  📦 First block type: ${unifiedResponse.content[0]?.type}`)
-      console.log(`  📦 First block text: ${unifiedResponse.content[0]?.text?.substring(0, 50)}...`)
+      console.log(
+        `  📦 First block text: ${unifiedResponse.content[0]?.text?.substring(0, 50)}...`,
+      )
     }
 
     // Content should have text blocks
@@ -123,8 +127,12 @@ describe('Regression Tests: Responses API Bug Fixes', () => {
   test('[BUG FIXED] AssistantMessage must not be overwritten', async () => {
     console.log('\n🐛 REGRESSION TEST: AssistantMessage Overwrite')
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-    console.log('This test would FAIL with the old code that continued after adapter return!')
-    console.log('Bug: Outer function created new AssistantMessage, overwriting the original')
+    console.log(
+      'This test would FAIL with the old code that continued after adapter return!',
+    )
+    console.log(
+      'Bug: Outer function created new AssistantMessage, overwriting the original',
+    )
 
     const adapter = ModelAdapterFactory.createAdapter(GPT5_CODEX_PROFILE)
 
@@ -135,7 +143,7 @@ describe('Regression Tests: Responses API Bug Fixes', () => {
       maxTokens: 50,
       reasoningEffort: 'medium' as const,
       temperature: 1,
-      verbosity: 'medium' as const
+      verbosity: 'medium' as const,
     })
 
     const response = await callGPT5ResponsesAPI(GPT5_CODEX_PROFILE, request)
@@ -151,12 +159,12 @@ describe('Regression Tests: Responses API Bug Fixes', () => {
         usage: {
           prompt_tokens: unifiedResponse.usage.promptTokens,
           completion_tokens: unifiedResponse.usage.completionTokens,
-        }
+        },
       },
       costUSD: 123,
       durationMs: 456,
       uuid: 'original-uuid-123',
-      responseId: unifiedResponse.responseId
+      responseId: unifiedResponse.responseId,
     }
 
     console.log(`  📦 Original AssistantMessage:`)
@@ -168,7 +176,7 @@ describe('Regression Tests: Responses API Bug Fixes', () => {
     const oldBuggyCode = {
       message: {
         role: 'assistant',
-        content: unifiedResponse.content,  // Would try to access response.choices
+        content: unifiedResponse.content, // Would try to access response.choices
         usage: {
           input_tokens: 0,
           output_tokens: 0,
@@ -176,15 +184,17 @@ describe('Regression Tests: Responses API Bug Fixes', () => {
           cache_creation_input_tokens: 0,
         },
       },
-      costUSD: 999,  // Different value
-      durationMs: 999,  // Different value
+      costUSD: 999, // Different value
+      durationMs: 999, // Different value
       type: 'assistant',
-      uuid: 'new-uuid-456',  // Different value
+      uuid: 'new-uuid-456', // Different value
       // responseId: MISSING!
     }
 
     console.log(`\n  📦 Old Buggy Code (what it would have created):`)
-    console.log(`     responseId: ${(oldBuggyCode as any).responseId || 'MISSING!'}`)
+    console.log(
+      `     responseId: ${(oldBuggyCode as any).responseId || 'MISSING!'}`,
+    )
     console.log(`     costUSD: ${oldBuggyCode.costUSD}`)
     console.log(`     uuid: ${oldBuggyCode.uuid}`)
 
@@ -198,7 +208,9 @@ describe('Regression Tests: Responses API Bug Fixes', () => {
     expect(originalMsg.uuid).toBe('original-uuid-123')
 
     console.log('\n  ✅ Original AssistantMessage NOT overwritten (bug fixed!)')
-    console.log('  ❌ Buggy version would have lost responseId and changed properties')
+    console.log(
+      '  ❌ Buggy version would have lost responseId and changed properties',
+    )
   })
 
   test('[RESPONSES API] Real conversation: Name remembering test', async () => {
@@ -218,10 +230,13 @@ describe('Regression Tests: Responses API Bug Fixes', () => {
       maxTokens: 50,
       reasoningEffort: 'medium' as const,
       temperature: 1,
-      verbosity: 'medium' as const
+      verbosity: 'medium' as const,
     })
 
-    const turn1Response = await callGPT5ResponsesAPI(GPT5_CODEX_PROFILE, turn1Request)
+    const turn1Response = await callGPT5ResponsesAPI(
+      GPT5_CODEX_PROFILE,
+      turn1Request,
+    )
     const turn1Unified = await adapter.parseResponse(turn1Response)
 
     console.log(`     Response: ${JSON.stringify(turn1Unified.content)}`)
@@ -236,11 +251,14 @@ describe('Regression Tests: Responses API Bug Fixes', () => {
       reasoningEffort: 'medium' as const,
       temperature: 1,
       verbosity: 'medium' as const,
-      previousResponseId: turn1Unified.responseId  // ← CRITICAL: Use state!
+      previousResponseId: turn1Unified.responseId, // ← CRITICAL: Use state!
     })
 
     try {
-      const turn2Response = await callGPT5ResponsesAPI(GPT5_CODEX_PROFILE, turn2Request)
+      const turn2Response = await callGPT5ResponsesAPI(
+        GPT5_CODEX_PROFILE,
+        turn2Request,
+      )
       const turn2Unified = await adapter.parseResponse(turn2Response)
 
       const turn2Content = Array.isArray(turn2Unified.content)
@@ -265,9 +283,13 @@ describe('Regression Tests: Responses API Bug Fixes', () => {
       expect(turn2Unified.responseId).toBeDefined()
       expect(turn2Unified.responseId).not.toBe(turn1Unified.responseId)
 
-      console.log('\n  ✅ Both turns have responseIds (state mechanism working)')
+      console.log(
+        '\n  ✅ Both turns have responseIds (state mechanism working)',
+      )
     } catch (error: any) {
-      if (error.message.includes('Unsupported parameter: previous_response_id')) {
+      if (
+        error.message.includes('Unsupported parameter: previous_response_id')
+      ) {
         console.log('\n  ⚠️  Test API does not support previous_response_id')
         console.log('     (This is expected for mock/test APIs)')
         console.log('     ✅ But the code correctly tries to use it!')

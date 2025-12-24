@@ -28,17 +28,19 @@ export function TaskToolMessage({ agentType, children, bold = true }: Props) {
 
     // Load and cache agent configuration
     let mounted = true
-    getAgentByType(agentType).then(config => {
-      if (mounted) {
-        agentConfigCache.set(agentType, config)
-        setAgentConfig(config)
-      }
-    }).catch(() => {
-      // Silently handle errors to prevent console noise
-      if (mounted) {
-        agentConfigCache.set(agentType, null)
-      }
-    })
+    getAgentByType(agentType)
+      .then(config => {
+        if (mounted) {
+          agentConfigCache.set(agentType, config)
+          setAgentConfig(config)
+        }
+      })
+      .catch(() => {
+        // Silently handle errors to prevent console noise
+        if (mounted) {
+          agentConfigCache.set(agentType, null)
+        }
+      })
 
     return () => {
       mounted = false

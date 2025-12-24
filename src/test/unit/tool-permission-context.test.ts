@@ -93,7 +93,9 @@ describe('toolPermissionContext (Reference CLI xC + mW parity)', () => {
       directories: ['/tmp/a'],
     })
     expect(withoutOne.additionalWorkingDirectories.size).toBe(1)
-    expect(withoutOne.additionalWorkingDirectories.get('/tmp/a')).toBeUndefined()
+    expect(
+      withoutOne.additionalWorkingDirectories.get('/tmp/a'),
+    ).toBeUndefined()
   })
 
   test('applyToolPermissionContextUpdates applies updates in order', () => {

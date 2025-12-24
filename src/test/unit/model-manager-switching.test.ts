@@ -73,7 +73,9 @@ describe('ModelManager model switching', () => {
 
     expect(result.success).toBe(true)
     expect(config.modelPointers.main).toBe(modelB.modelName)
-    expect(manager.resolveModelWithInfo('main').profile?.modelName).toBe(modelB.modelName)
+    expect(manager.resolveModelWithInfo('main').profile?.modelName).toBe(
+      modelB.modelName,
+    )
   })
 
   test('switchToNextModel skips incompatible models when possible', () => {
@@ -149,4 +151,3 @@ describe('ModelManager model switching', () => {
     expect(result.message).toContain('Keeping')
   })
 })
-

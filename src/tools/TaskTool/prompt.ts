@@ -22,13 +22,13 @@ export async function getPrompt(safeMode: boolean): Promise<string> {
   const agents = await getActiveAgents()
 
   // Format exactly as in original: (Tools: tool1, tool2)
-  const agentDescriptions = agents.map(agent => {
-    const toolsStr = Array.isArray(agent.tools) 
-      ? agent.tools.join(', ')
-      : '*'
-    return `- ${agent.agentType}: ${agent.whenToUse} (Tools: ${toolsStr})`
-  }).join('\n')
-  
+  const agentDescriptions = agents
+    .map(agent => {
+      const toolsStr = Array.isArray(agent.tools) ? agent.tools.join(', ') : '*'
+      return `- ${agent.agentType}: ${agent.whenToUse} (Tools: ${toolsStr})`
+    })
+    .join('\n')
+
   // Keep the wording aligned so shared `.claude` agent packs behave identically
   return `Launch a new agent to handle complex, multi-step tasks autonomously. 
 

@@ -5,8 +5,8 @@ import type { BunShellSandboxOptions } from '@utils/BunShell'
 import {
   __resetSandboxNetworkInfrastructureForTests,
   ensureSandboxNetworkInfrastructure,
-} from '@utils/sandboxNetworkInfrastructure'
-import type { SandboxRuntimeConfig } from '@utils/sandboxConfig'
+} from '@utils/sandbox/sandboxNetworkInfrastructure'
+import type { SandboxRuntimeConfig } from '@utils/sandbox/sandboxConfig'
 
 function createRuntimeConfig(): SandboxRuntimeConfig {
   return {

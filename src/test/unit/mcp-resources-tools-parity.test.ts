@@ -41,7 +41,11 @@ describe('MCP resource tools parity: use context.options.mcpClients', () => {
     expect((first.value as any)?.type).toBe('result')
     const data = (first.value as any).data as any[]
     expect(data).toHaveLength(1)
-    expect(data[0]).toMatchObject({ uri: 'uri://one', name: 'one', server: 'srv' })
+    expect(data[0]).toMatchObject({
+      uri: 'uri://one',
+      name: 'one',
+      server: 'srv',
+    })
   })
 
   test('ReadMcpResourceTool reads resources using context.options.mcpClients', async () => {
@@ -61,7 +65,10 @@ describe('MCP resource tools parity: use context.options.mcpClients', () => {
       },
     ])
 
-    const gen = ReadMcpResourceTool.call({ server: 'srv', uri: 'uri://one' } as any, ctx as any)
+    const gen = ReadMcpResourceTool.call(
+      { server: 'srv', uri: 'uri://one' } as any,
+      ctx as any,
+    )
     const first = await gen.next()
     expect((first.value as any)?.type).toBe('result')
     expect((first.value as any).data).toMatchObject({
@@ -69,4 +76,3 @@ describe('MCP resource tools parity: use context.options.mcpClients', () => {
     })
   })
 })
-

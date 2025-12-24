@@ -39,6 +39,8 @@ describe('BashTool validateInput does not hard-ban base commands (Reference CLI 
     )
     expect(permission.result).toBe(false)
     expect((permission as any).shouldPromptUser).not.toBe(false)
-    expect((permission as any).message).toContain('requested permissions to use Bash')
+    expect((permission as any).message).toContain(
+      'requested permissions to use Bash',
+    )
   })
 })

@@ -49,7 +49,8 @@ export async function processResponsesStream(
       usage.completion_tokens = event.usage.output
       usage.promptTokens = event.usage.input
       usage.completionTokens = event.usage.output
-      usage.totalTokens = event.usage.total ?? (event.usage.input + event.usage.output)
+      usage.totalTokens =
+        event.usage.total ?? event.usage.input + event.usage.output
       if (event.usage.reasoning !== undefined) {
         usage.reasoningTokens = event.usage.reasoning
       }

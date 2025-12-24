@@ -23,7 +23,9 @@ let bracketedPasteRefCount = 0
 
 function setBracketedPasteEnabled(enabled: boolean) {
   if (!process.stdout?.isTTY) return
-  process.stdout.write(enabled ? BRACKETED_PASTE_ENABLE : BRACKETED_PASTE_DISABLE)
+  process.stdout.write(
+    enabled ? BRACKETED_PASTE_ENABLE : BRACKETED_PASTE_DISABLE,
+  )
 }
 
 function acquireBracketedPasteMode() {
@@ -141,7 +143,7 @@ export type Props = {
    * Whether to disable cursor movement for up/down arrow keys
    */
   readonly disableCursorMovementForUpDownKeys?: boolean
-  
+
   /**
    * Optional callback to handle special key combinations before input processing
    * Return true to prevent default handling
@@ -352,14 +354,14 @@ export default function TextInput({
     }, 500)
   }
 
-	  const wrappedOnInput = (input: string, key: Key): void => {
-	    // Some terminals (e.g. kitty/wezterm with CSI-u keyboard protocol) encode Enter with modifiers as CSI u sequences.
-	    // Example: ESC[13;3u (Alt/Option+Enter). Ink may strip the leading ESC.
-	    if (/^(?:\x1b)?\[13;2(?:u|~)$/.test(input)) {
-	      // Treat modified Enter as plain Enter to avoid leaking raw CSI sequences into the input.
-	      onInput('\r', { ...key, return: true, meta: false, shift: false } as Key)
-	      return
-	    }
+  const wrappedOnInput = (input: string, key: Key): void => {
+    // Some terminals (e.g. kitty/wezterm with CSI-u keyboard protocol) encode Enter with modifiers as CSI u sequences.
+    // Example: ESC[13;3u (Alt/Option+Enter). Ink may strip the leading ESC.
+    if (/^(?:\x1b)?\[13;2(?:u|~)$/.test(input)) {
+      // Treat modified Enter as plain Enter to avoid leaking raw CSI sequences into the input.
+      onInput('\r', { ...key, return: true, meta: false, shift: false } as Key)
+      return
+    }
     if (/^(?:\x1b)?\[13;(?:3|4)(?:u|~)$/.test(input)) {
       // Alt/Option+Enter (or Shift+Alt/Option+Enter) -> newline in multiline chat inputs.
       onInput('\r', { ...key, return: true, meta: true } as Key)
@@ -381,14 +383,11 @@ export default function TextInput({
     // Some terminals/keybindings emit ESC+CR/LF for Option+Enter. Depending on the decoder,
     // it may arrive as a raw 2-char sequence; treat it as Meta+Enter for multiline inputs.
     if (input === '\x1b\r' || input === '\x1b\n') {
-      onInput(
-        '\r',
-        {
-          ...key,
-          return: true,
-          meta: true,
-        } as Key,
-      )
+      onInput('\r', {
+        ...key,
+        return: true,
+        meta: true,
+      } as Key)
       return
     }
 
@@ -397,7 +396,7 @@ export default function TextInput({
       // Special key was handled, don't process further
       return
     }
-    
+
     // Special handling for backspace or delete
     if (
       key.backspace ||

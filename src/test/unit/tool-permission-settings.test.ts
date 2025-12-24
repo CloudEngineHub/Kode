@@ -33,14 +33,14 @@ describe('tool permission settings (multi-source load/merge/persist)', () => {
     rmSync(homeDir, { recursive: true, force: true })
   })
 
-  test('loads .claude/settings.json + .claude/settings.local.json across sources', () => {
-    writeJson(join(homeDir, '.claude', 'settings.json'), {
+  test('loads .kode/settings.json + .kode/settings.local.json across sources', () => {
+    writeJson(join(homeDir, '.kode', 'settings.json'), {
       permissions: { allow: ['Bash(ls:*)'] },
     })
-    writeJson(join(projectDir, '.claude', 'settings.json'), {
+    writeJson(join(projectDir, '.kode', 'settings.json'), {
       permissions: { allow: ['Bash(git:*)'] },
     })
-    writeJson(join(projectDir, '.claude', 'settings.local.json'), {
+    writeJson(join(projectDir, '.kode', 'settings.local.json'), {
       permissions: { allow: ['Read(~/**)'] },
     })
 
@@ -56,10 +56,10 @@ describe('tool permission settings (multi-source load/merge/persist)', () => {
   })
 
   test('merges same rule across multiple sources without dropping either', () => {
-    writeJson(join(homeDir, '.claude', 'settings.json'), {
+    writeJson(join(homeDir, '.kode', 'settings.json'), {
       permissions: { allow: ['Bash(ls:*)'] },
     })
-    writeJson(join(projectDir, '.claude', 'settings.local.json'), {
+    writeJson(join(projectDir, '.kode', 'settings.local.json'), {
       permissions: { allow: ['Bash(ls:*)'] },
     })
 
@@ -71,6 +71,24 @@ describe('tool permission settings (multi-source load/merge/persist)', () => {
 
     expect(ctx.alwaysAllowRules.userSettings).toEqual(['Bash(ls:*)'])
     expect(ctx.alwaysAllowRules.localSettings).toEqual(['Bash(ls:*)'])
+  })
+
+  test('migrates legacy .claude settings to .kode when .kode is missing', () => {
+    writeJson(join(projectDir, '.claude', 'settings.local.json'), {
+      permissions: { allow: ['Bash(ls:*)'] },
+    })
+
+    const ctx = loadToolPermissionContextFromDisk({
+      projectDir,
+      homeDir,
+      includeKodeProjectConfig: false,
+    })
+    expect(ctx.alwaysAllowRules.localSettings).toEqual(['Bash(ls:*)'])
+
+    const migratedPath = join(projectDir, '.kode', 'settings.local.json')
+    expect(existsSync(migratedPath)).toBe(true)
+    const migrated = JSON.parse(readFileSync(migratedPath, 'utf-8'))
+    expect(migrated.permissions.allow).toEqual(['Bash(ls:*)'])
   })
 
   test('session updates are not persisted; policySettings is never persisted', () => {
@@ -85,7 +103,7 @@ describe('tool permission settings (multi-source load/merge/persist)', () => {
       homeDir,
     })
     expect(session.persisted).toBe(false)
-    expect(existsSync(join(projectDir, '.claude', 'settings.local.json'))).toBe(
+    expect(existsSync(join(projectDir, '.kode', 'settings.local.json'))).toBe(
       false,
     )
 
@@ -102,7 +120,7 @@ describe('tool permission settings (multi-source load/merge/persist)', () => {
     expect(policy.persisted).toBe(false)
   })
 
-  test('persists allow rules to localSettings (.claude/settings.local.json)', () => {
+  test('persists allow rules to localSettings (.kode/settings.local.json)', () => {
     const added = persistToolPermissionUpdateToDisk({
       update: {
         type: 'addRules',
@@ -115,8 +133,11 @@ describe('tool permission settings (multi-source load/merge/persist)', () => {
     })
     expect(added.persisted).toBe(true)
 
-    const settingsPath = join(projectDir, '.claude', 'settings.local.json')
+    const settingsPath = join(projectDir, '.kode', 'settings.local.json')
     expect(existsSync(settingsPath)).toBe(true)
+    expect(existsSync(join(projectDir, '.claude', 'settings.local.json'))).toBe(
+      false,
+    )
     const parsed = JSON.parse(readFileSync(settingsPath, 'utf-8'))
     expect(parsed.permissions.allow).toContain('Bash(ls:*)')
 
@@ -133,5 +154,23 @@ describe('tool permission settings (multi-source load/merge/persist)', () => {
     expect(removed.persisted).toBe(true)
     const parsedAfter = JSON.parse(readFileSync(settingsPath, 'utf-8'))
     expect(parsedAfter.permissions.allow).toEqual([])
+  })
+
+  test('persists MCP wildcard rules without rewriting', () => {
+    const added = persistToolPermissionUpdateToDisk({
+      update: {
+        type: 'addRules',
+        destination: 'localSettings',
+        behavior: 'allow',
+        rules: ['mcp__srv__*'],
+      },
+      projectDir,
+      homeDir,
+    })
+    expect(added.persisted).toBe(true)
+
+    const settingsPath = join(projectDir, '.kode', 'settings.local.json')
+    const parsed = JSON.parse(readFileSync(settingsPath, 'utf-8'))
+    expect(parsed.permissions.allow).toContain('mcp__srv__*')
   })
 })

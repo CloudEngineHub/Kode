@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![AGENTS.md](https://img.shields.io/badge/AGENTS.md-Compatible-brightgreen)](https://agents.md)
 
-[中文文档](README.zh-CN.md) | [Contributing](CONTRIBUTING.md) | [Documentation](docs/)
+[中文文档](README.zh-CN.md) | [Contributing](CONTRIBUTING.md) | [Documentation](docs/README.md)
 
 <img width="90%" alt="image" src="https://github.com/user-attachments/assets/fdce7017-8095-429d-b74e-07f43a6919e1" />
 
@@ -18,21 +18,28 @@
 
 ## 📢 Update Log
 
-**2025-08-29**: We've added Windows support! All Windows users can now run Kode using Git Bash, Unix subsystems, or WSL (Windows Subsystem for Linux) on their computers.
+**2025-12-22**: Native-first distribution (Windows OOTB). Kode will prefer a cached native binary and fall back to Bun when needed. See `docs/binary-distribution.md`.
 
 
 ## 🤝 AGENTS.md Standard Support
 
-**Kode proudly supports the [AGENTS.md standard protocol](https://agents.md) initiated by OpenAI** - a simple, open format for guiding programming agents that's used by 20k+ open source projects.
+Kode supports the [AGENTS.md standard](https://agents.md): a simple, open format for guiding coding agents, used by 60k+ open-source projects.
 
 ### Full Compatibility with Multiple Standards
 
 - ✅ **AGENTS.md** - Native support for the OpenAI-initiated standard format
-- ✅ **CLAUDE.md** - Full backward compatibility with `.claude` configurations  
+- ✅ **Claude Code compatibility (legacy)** - Reads `.claude` directories and `CLAUDE.md` when present (see `docs/compatibility.md`)
 - ✅ **Subagent System** - Advanced agent delegation and task orchestration
 - ✅ **Cross-platform** - Works with 20+ AI models and providers
 
-Use `# Your documentation request` to generate and maintain your AGENTS.md file automatically, while preserving compatibility with existing `.claude` workflows.
+Use `# Your documentation request` to generate and maintain your AGENTS.md file automatically, while preserving compatibility with existing `.claude` (Claude Code-compatible) workflows.
+
+### Instruction Discovery (Codex-compatible)
+
+- Kode reads project instructions by walking from the Git repo root → current working directory.
+- In each directory, it prefers `AGENTS.override.md` over `AGENTS.md` (at most one file per directory).
+- Discovered files are concatenated root → leaf (combined size capped at 32 KiB by default; override with `KODE_PROJECT_DOC_MAX_BYTES`).
+- If `CLAUDE.md` exists in the current directory, Kode also reads it as a legacy instruction file.
 
 ## Overview
 
@@ -41,6 +48,15 @@ Kode is a powerful AI assistant that lives in your terminal. It can understand y
 > **⚠️ Security Notice**: Kode runs in YOLO mode by default (equivalent to the `--dangerously-skip-permissions` flag), bypassing all permission checks for maximum productivity. YOLO mode is recommended only for trusted, secure environments when working on non-critical projects. If you're working with important files or using models of questionable capability, we strongly recommend using `kode --safe` to enable permission checks and manual approval for all operations.
 > 
 > **📊 Model Performance**: For optimal performance, we recommend using newer, more capable models designed for autonomous task completion. Avoid older Q&A-focused models like GPT-4o or Gemini 2.5 Pro, which are optimized for answering questions rather than sustained independent task execution. Choose models specifically trained for agentic workflows and extended reasoning capabilities.
+
+## Network & Privacy
+
+- Kode does not send product telemetry/analytics by default.
+- Network requests happen only when you explicitly use networked features:
+  - Model provider requests (Anthropic/OpenAI-compatible endpoints you configure)
+  - Web tools (`WebFetch`, `WebSearch`)
+  - Plugin marketplace downloads (GitHub/URL sources) and OAuth flows (when used)
+  - Optional update checks (opt-in via `autoUpdaterStatus: enabled`)
 
 <img width="600" height="577" alt="image" src="https://github.com/user-attachments/assets/8b46a39d-1ab6-4669-9391-14ccc6c5234c" />
 
@@ -93,22 +109,34 @@ Our state-of-the-art completion system provides unparalleled coding assistance:
 npm install -g @shareai-lab/kode
 ```
 
+Dev channel (latest features):
+
+```bash
+npm install -g @shareai-lab/kode@dev
+```
+
 After installation, you can use any of these commands:
 - `kode` - Primary command
 - `kwa` - Kode With Agent (alternative)
 - `kd` - Ultra-short alias
 
-### Windows Notes
+### Native binaries (Windows OOTB)
 
-- Install Git for Windows to provide a Bash (Unix‑like) environment: https://git-scm.com/download/win
-  - Kode automatically prefers Git Bash/MSYS or WSL Bash when available.
-  - If neither is available, it will fall back to your default shell, but many features work best with Bash.
-- Use VS Code’s integrated terminal rather than legacy Command Prompt (cmd):
-  - Better font rendering and icon support.
-  - Fewer path and encoding quirks compared to cmd.
-  - Select “Git Bash” as the VS Code terminal shell when possible.
-- Optional: If you install globally via npm, avoid spaces in the global prefix path to prevent shim issues.
-  - Example: `npm config set prefix "C:\\npm"` and reinstall global packages.
+- No WSL/Git Bash required.
+- On `postinstall`, Kode will best-effort download a native binary from GitHub Releases into `${KODE_BIN_DIR:-~/.kode/bin}/<version>/<platform>-<arch>/kode(.exe)`.
+- The wrapper (`cli.js`) prefers the native binary and falls back to Bun (`bun dist/index.js`) when needed.
+
+Overrides:
+- Mirror downloads: `KODE_BINARY_BASE_URL`
+- Disable download: `KODE_SKIP_BINARY_DOWNLOAD=1`
+- Cache directory: `KODE_BIN_DIR`
+
+See `docs/binary-distribution.md`.
+
+### Configuration / API keys
+
+- Configure models and API keys via `~/.kode.json` / `./.kode.json` and environment variables.
+- See `docs/develop/configuration.md`.
 
 ## Usage
 
@@ -204,6 +232,7 @@ Example `.mcprc`:
 ### Troubleshooting
 
 - Models: use `/model`, or `kode models import kode-models.yaml`, and ensure required API key env vars exist.
+- Windows: if the native binary download is blocked/offline, set `KODE_BINARY_BASE_URL` (mirror) or install Bun for fallback.
 - MCP: use `kode mcp list` to check server status; tune `MCP_CONNECTION_TIMEOUT_MS`, `MCP_SERVER_CONNECTION_BATCH_SIZE`, and `MCP_TOOL_TIMEOUT` if servers are slow.
 - Sandbox: install `bwrap` (bubblewrap) on Linux, or set `KODE_SYSTEM_SANDBOX=0` to disable.
 
@@ -274,9 +303,87 @@ As long as you have an openai-like endpoint, it should work.
 - `/help` - Show available commands
 - `/model` - Change AI model settings
 - `/config` - Open configuration panel
+- `/output-style` - Set the output style (deprecated compatibility feature)
+- `/statusline` - Configure a custom status line command
 - `/cost` - Show token usage and costs
 - `/clear` - Clear conversation history
 - `/init` - Initialize project context
+- `/plugin` - Manage plugins/marketplaces (skills, commands)
+
+## Skills & Plugins
+
+Kode supports:
+- **Agent Skills** format (`SKILL.md`) for reusable skill packs
+- **Marketplace compatibility** (`.kode-plugin/marketplace.json`, legacy `.claude-plugin/marketplace.json`) for sharing/installing skill packs
+
+### Install skills from a marketplace
+
+```bash
+# Add a marketplace (local path, GitHub owner/repo, or URL)
+kode plugin marketplace add ./path/to/marketplace-repo
+kode plugin marketplace add owner/repo
+kode plugin marketplace list
+
+# Install a plugin pack (installs skills/commands)
+kode plugin install document-skills@anthropic-agent-skills --scope user
+
+# Project-scoped install (writes to ./.kode/...)
+kode plugin install document-skills@anthropic-agent-skills --scope project
+
+# Disable/enable an installed plugin
+kode plugin disable document-skills@anthropic-agent-skills --scope user
+kode plugin enable document-skills@anthropic-agent-skills --scope user
+```
+
+Interactive equivalents:
+
+```text
+/plugin marketplace add owner/repo
+/plugin install document-skills@anthropic-agent-skills --scope user
+```
+
+### Use skills
+
+- In interactive mode, run a skill as a slash command: `/pdf`, `/xlsx`, etc.
+- Kode can also invoke skills automatically via the `Skill` tool when relevant.
+
+### Create a skill (Agent Skills)
+
+Create `./.kode/skills/<skill-name>/SKILL.md` (project) or `~/.kode/skills/<skill-name>/SKILL.md` (user):
+
+```md
+---
+name: my-skill
+description: Describe what this skill does and when to use it.
+allowed-tools: Read Bash(git:*) Bash(jq:*)
+---
+
+# Skill instructions
+```
+
+Naming rules:
+- `name` must match the folder name
+- Lowercase letters/numbers/hyphens only, 1–64 chars
+
+Compatibility:
+- Kode also discovers `.claude/skills` and `.claude/commands` for legacy compatibility.
+
+### Distribute skills
+
+- Marketplace repo: publish a repo containing `.kode-plugin/marketplace.json` listing plugin packs and their `skills` directories (legacy `.claude-plugin/marketplace.json` is also supported).
+- Plugin repo: for full plugins (beyond skills), include `.kode-plugin/plugin.json` at the plugin root and keep all paths relative (`./...`).
+
+See `docs/skills.md` for a compact reference and examples.
+
+### Output styles (deprecated)
+
+Kode supports legacy output styles for backward compatibility.
+
+- Select: `/output-style` (menu) or `/output-style <style>`
+- Stored per-project in `./.kode/settings.local.json` as `outputStyle` (legacy `.claude/settings.local.json` is read-compatible)
+- Plugins can provide styles under `output-styles/` (Markdown with optional YAML `name`/`description`; body is appended to the system prompt). Plugin styles are namespaced as `<plugin>:<style>`.
+
+For new workflows, prefer plugins (custom commands + hooks) instead of output styles.
 
 ## Multi-Model Intelligent Collaboration
 

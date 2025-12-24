@@ -1,21 +1,109 @@
-name: Build and Publish
+name: Stable Release (tags)
 
 on:
   push:
     tags:
       - 'v*'
 
+concurrency:
+  group: stable-release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  build-and-publish:
+  verify:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      tag_name: ${{ steps.ver.outputs.tag_name }}
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20.18.1'
+
+      - name: Validate tag matches package.json version
+        id: ver
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="${GITHUB_REF_NAME}"
+          if [ "v${VERSION}" != "${TAG}" ]; then
+            echo "Tag '${TAG}' does not match package.json version '${VERSION}'"
+            exit 1
+          fi
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "tag_name=${TAG}" >> "${GITHUB_OUTPUT}"
+
+  build-binaries:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      KODE_SKIP_BINARY_DOWNLOAD: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.18.1'
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install
+        run: bun install
+
+      - name: Build binary
+        run: bun run build:binary
+
+      - name: Prepare release asset
+        id: asset
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs')
+          const path = require('node:path')
+          const platform = process.platform
+          const arch = process.arch
+          const ext = platform === 'win32' ? '.exe' : ''
+          const src = path.join('dist', 'bin', `${platform}-${arch}`, `kode${ext}`)
+          const dest = `kode-${platform}-${arch}${ext}`
+          fs.copyFileSync(src, dest)
+          if (platform !== 'win32') {
+            try { fs.chmodSync(dest, 0o755) } catch {}
+          }
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `asset=${dest}\n`)
+          console.log(`Prepared ${dest}`)
+          NODE
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.asset.outputs.asset }}
+          path: ${{ steps.asset.outputs.asset }}
+          if-no-files-found: error
+
+  publish-npm:
+    needs: verify
+    runs-on: ubuntu-latest
+    env:
+      KODE_SKIP_BINARY_DOWNLOAD: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.18.1'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Setup Bun
@@ -23,18 +111,53 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: latest
+      - name: Install
+        run: bun install
 
-      - name: Install dependencies
-        run: pnpm install
+      - name: Ensure bundled ripgrep
+        run: bun run scripts/ensure-ripgrep.mjs
 
-      - name: Build
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Test
+        run: bun test
+
+      - name: Build (all-in-bun)
         run: bun run build
 
-      - name: Publish to npm
-        run: pnpm publish --no-git-checks
+      - name: Prepublish check
+        run: bun run scripts/prepublish-check.js
+
+      - name: Publish npm (dist-tag: latest)
+        run: npm publish --access public --ignore-scripts
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  release:
+    needs: [verify, build-binaries, publish-npm]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download binary artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create checksums
+        run: |
+          find artifacts -type f -maxdepth 2 -print0 | sort -z | xargs -0 shasum -a 256 > checksums-sha256.txt
+          echo "Checksums:"
+          head -n 20 checksums-sha256.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.verify.outputs.tag_name }}
+          name: ${{ needs.verify.outputs.tag_name }}
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            artifacts/**/*
+            checksums-sha256.txt

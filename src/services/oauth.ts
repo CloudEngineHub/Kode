@@ -6,7 +6,6 @@ import * as url from 'url'
 import { OAUTH_CONFIG } from '@constants/oauth'
 import { openBrowser } from '@utils/browser'
 import { logError } from '@utils/log'
-import { resetAnthropicClient } from './claude'
 import {
   AccountInfo,
   getGlobalConfig,
@@ -179,8 +178,6 @@ export class OAuthService {
           })
           res.end()
 
-          
-
           this.processCallback({
             authorizationCode,
             state,
@@ -307,8 +304,6 @@ export async function createAndStoreApiKey(
       errorText = await createApiKeyResp.text()
     }
 
-    
-
     if (createApiKeyResp.ok && apiKeyData && apiKeyData.raw_key) {
       const apiKey = apiKeyData.raw_key
 
@@ -334,14 +329,16 @@ export async function createAndStoreApiKey(
       saveGlobalConfig(config)
 
       // Reset the Anthropic client to force creation with new API key
-      resetAnthropicClient()
+      try {
+        const { resetAnthropicClient } = await import('./llm')
+        resetAnthropicClient()
+      } catch {}
 
       return apiKey
     }
 
     return null
   } catch (error) {
-    
     throw error
   }
 }

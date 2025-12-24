@@ -30,7 +30,8 @@ const refreshCommands = {
       // Reload commands to get updated count and validate the refresh
       const commands = await getCommands()
       const customCommands = commands.filter(
-        cmd => (cmd as any).scope === 'project' || (cmd as any).scope === 'user',
+        cmd =>
+          (cmd as any).scope === 'project' || (cmd as any).scope === 'user',
       )
 
       // Provide detailed feedback about the refresh operation

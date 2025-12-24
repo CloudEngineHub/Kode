@@ -11,6 +11,7 @@ const requiredFiles = [
   'package.json',
   'yoga.wasm',
   '.npmrc',
+  path.join('scripts', 'binary-utils.cjs'),
   path.join('dist', 'index.js'),
   path.join('dist', 'entrypoints', 'cli.js'),
   path.join('dist', 'entrypoints', 'mcp.js'),

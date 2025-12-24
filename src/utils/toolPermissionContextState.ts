@@ -2,9 +2,7 @@ import type {
   ToolPermissionContext,
   ToolPermissionContextUpdate,
 } from '@kode-types/toolPermissionContext'
-import {
-  applyToolPermissionContextUpdate,
-} from '@kode-types/toolPermissionContext'
+import { applyToolPermissionContextUpdate } from '@kode-types/toolPermissionContext'
 import { loadToolPermissionContextFromDisk } from '@utils/permissions/toolPermissionSettings'
 
 const toolPermissionContextByConversationKey = new Map<
@@ -28,7 +26,8 @@ export function getToolPermissionContextForConversationKey(options: {
     ) {
       next = {
         ...next,
-        isBypassPermissionsModeAvailable: options.isBypassPermissionsModeAvailable,
+        isBypassPermissionsModeAvailable:
+          options.isBypassPermissionsModeAvailable,
       }
     }
 
@@ -57,7 +56,10 @@ export function setToolPermissionContextForConversationKey(options: {
   conversationKey: string
   context: ToolPermissionContext
 }): void {
-  toolPermissionContextByConversationKey.set(options.conversationKey, options.context)
+  toolPermissionContextByConversationKey.set(
+    options.conversationKey,
+    options.context,
+  )
 }
 
 export function applyToolPermissionContextUpdateForConversationKey(options: {

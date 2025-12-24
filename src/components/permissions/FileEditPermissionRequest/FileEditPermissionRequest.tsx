@@ -10,9 +10,7 @@ import {
 import { env } from '@utils/env'
 import { getTheme } from '@utils/theme'
 import { logUnaryEvent } from '@utils/unaryLogging'
-import {
-  type ToolUseConfirm,
-} from '@components/permissions/PermissionRequest'
+import { type ToolUseConfirm } from '@components/permissions/PermissionRequest'
 import {
   PermissionRequestTitle,
   textColorForRiskScore,
@@ -130,7 +128,9 @@ export function FileEditPermissionRequest({
             }
           }
           onDone()
-          toolUseConfirm.onAllow(hasSessionSuggestion ? 'permanent' : 'temporary')
+          toolUseConfirm.onAllow(
+            hasSessionSuggestion ? 'permanent' : 'temporary',
+          )
           return
         case 'no':
           extractLanguageName(file_path).then(language => {
@@ -151,7 +151,13 @@ export function FileEditPermissionRequest({
           return
       }
     },
-    [applyToolPermissionUpdate, file_path, hasSessionSuggestion, onDone, toolUseConfirm],
+    [
+      applyToolPermissionUpdate,
+      file_path,
+      hasSessionSuggestion,
+      onDone,
+      toolUseConfirm,
+    ],
   )
 
   useInput((inputChar, key) => {

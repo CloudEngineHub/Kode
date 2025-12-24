@@ -2,7 +2,10 @@ import React, { useCallback } from 'react'
 import { hasPermissionsToUseTool } from '@permissions'
 import { BashTool, inputSchema } from '@tools/BashTool/BashTool'
 import { getCommandSubcommandPrefix } from '@utils/commands'
-import { REJECT_MESSAGE, REJECT_MESSAGE_WITH_FEEDBACK_PREFIX } from '@utils/messages'
+import {
+  REJECT_MESSAGE,
+  REJECT_MESSAGE_WITH_FEEDBACK_PREFIX,
+} from '@utils/messages'
 import type { Tool as ToolType, ToolUseContext } from '@tool'
 import { AssistantMessage } from '@query'
 import { ToolUseConfirm } from '@components/permissions/PermissionRequest'
@@ -59,7 +62,7 @@ function useCanUseTool(
           input,
           toolUseContext,
           assistantMessage,
-          )
+        )
           .then(async result => {
             // Has permissions to use tool, granted in config
             if (result.result === true) {
@@ -67,7 +70,10 @@ function useCanUseTool(
               return
             }
 
-            const deniedResult = result as Extract<typeof result, { result: false }>
+            const deniedResult = result as Extract<
+              typeof result,
+              { result: false }
+            >
 
             if (deniedResult.shouldPromptUser === false) {
               resolve({ result: false, message: deniedResult.message })

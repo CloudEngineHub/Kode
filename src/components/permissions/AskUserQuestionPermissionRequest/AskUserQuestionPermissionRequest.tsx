@@ -135,7 +135,10 @@ function getTabHeaders(args: {
     )
   }
 
-  const total = headers.reduce((sum, header) => sum + 4 + stringWidth(header), 0)
+  const total = headers.reduce(
+    (sum, header) => sum + 4 + stringWidth(header),
+    0,
+  )
   if (total <= available) return headers
 
   const currentHeader = headers[args.currentQuestionIndex] ?? ''
@@ -143,10 +146,14 @@ function getTabHeaders(args: {
   const currentBudget = Math.min(currentTabWidth, Math.floor(available / 2))
   const remaining = available - currentBudget
   const otherCount = args.questions.length - 1
-  const otherBudget = Math.max(6, Math.floor(remaining / Math.max(otherCount, 1)))
+  const otherBudget = Math.max(
+    6,
+    Math.floor(remaining / Math.max(otherCount, 1)),
+  )
 
   return headers.map((header, index) => {
-    const labelBudget = (index === args.currentQuestionIndex ? currentBudget : otherBudget) - 4
+    const labelBudget =
+      (index === args.currentQuestionIndex ? currentBudget : otherBudget) - 4
     if (stringWidth(header) <= labelBudget) return header
 
     const truncated = truncateWithEllipsis(header, labelBudget)
@@ -156,7 +163,10 @@ function getTabHeaders(args: {
   })
 }
 
-function formatMultiSelectAnswer(selectedValues: string[], otherText: string): string {
+function formatMultiSelectAnswer(
+  selectedValues: string[],
+  otherText: string,
+): string {
   const selections = selectedValues.filter(value => value !== '__other__')
   const trimmedOther = otherText.trim()
   if (selectedValues.includes('__other__') && trimmedOther) {
@@ -206,7 +216,9 @@ export function __isTextInputCharForTests(
   return isTextInputChar(input, key)
 }
 
-export function __getTrimmedOtherAnswerForTests(otherText: string): string | null {
+export function __getTrimmedOtherAnswerForTests(
+  otherText: string,
+): string | null {
   return getTrimmedOtherAnswer(otherText)
 }
 
@@ -218,11 +230,18 @@ export function AskUserQuestionPermissionRequest({
   const { columns } = useTerminalSize()
 
   const parsed = useMemo(() => {
-    const result = AskUserQuestionTool.inputSchema.safeParse(toolUseConfirm.input)
-    if (!result.success) return { questions: [] as Question[], initialAnswers: {} as Record<string, string> }
+    const result = AskUserQuestionTool.inputSchema.safeParse(
+      toolUseConfirm.input,
+    )
+    if (!result.success)
+      return {
+        questions: [] as Question[],
+        initialAnswers: {} as Record<string, string>,
+      }
     return {
       questions: (result.data.questions as Question[]) ?? [],
-      initialAnswers: (result.data.answers as Record<string, string> | undefined) ?? {},
+      initialAnswers:
+        (result.data.answers as Record<string, string> | undefined) ?? {},
     }
   }, [toolUseConfirm.input])
 
@@ -232,14 +251,20 @@ export function AskUserQuestionPermissionRequest({
   const [focusedOptionIndex, setFocusedOptionIndex] = useState(0)
   const [isMultiSelectSubmitFocused, setIsMultiSelectSubmitFocused] =
     useState(false)
-  const [answers, setAnswers] = useState<Record<string, string>>(parsed.initialAnswers)
-  const [questionStates, setQuestionStates] = useState<Record<string, QuestionState>>({})
+  const [answers, setAnswers] = useState<Record<string, string>>(
+    parsed.initialAnswers,
+  )
+  const [questionStates, setQuestionStates] = useState<
+    Record<string, QuestionState>
+  >({})
 
   const currentQuestion = questions[currentQuestionIndex]
   const isSubmitTab = currentQuestionIndex === questions.length
   const hideSubmitTab = questions.length === 1 && !questions[0]?.multiSelect
 
-  const maxTabIndex = hideSubmitTab ? Math.max(0, questions.length - 1) : questions.length
+  const maxTabIndex = hideSubmitTab
+    ? Math.max(0, questions.length - 1)
+    : questions.length
   const tabHeaders = useMemo(
     () =>
       getTabHeaders({
@@ -251,9 +276,10 @@ export function AskUserQuestionPermissionRequest({
     [questions, currentQuestionIndex, columns, hideSubmitTab],
   )
 
-  const activeQuestionState: QuestionState | undefined = currentQuestion?.question
-    ? questionStates[currentQuestion.question]
-    : undefined
+  const activeQuestionState: QuestionState | undefined =
+    currentQuestion?.question
+      ? questionStates[currentQuestion.question]
+      : undefined
   const isOtherFocused =
     !isSubmitTab &&
     currentQuestion &&
@@ -274,14 +300,19 @@ export function AskUserQuestionPermissionRequest({
   }, [toolUseConfirm, answers, onDone])
 
   const setQuestionState = useCallback(
-    (questionText: string, next: Partial<QuestionState>, isMultiSelect: boolean) => {
+    (
+      questionText: string,
+      next: Partial<QuestionState>,
+      isMultiSelect: boolean,
+    ) => {
       setQuestionStates(prev => {
         const existing = prev[questionText]
         const selectedValue =
           next.selectedValue ??
           existing?.selectedValue ??
           (isMultiSelect ? ([] as string[]) : '')
-        const textInputValue = next.textInputValue ?? existing?.textInputValue ?? ''
+        const textInputValue =
+          next.textInputValue ?? existing?.textInputValue ?? ''
         return {
           ...prev,
           [questionText]: { selectedValue, textInputValue },
@@ -308,7 +339,8 @@ export function AskUserQuestionPermissionRequest({
       return
     }
 
-    const isMultiSelectQuestion = Boolean(currentQuestion?.multiSelect) && !isSubmitTab
+    const isMultiSelectQuestion =
+      Boolean(currentQuestion?.multiSelect) && !isSubmitTab
     const allowQuestionTabNav = !(isInTextInput && !isSubmitTab)
 
     if (!key.return && allowQuestionTabNav) {
@@ -380,7 +412,9 @@ export function AskUserQuestionPermissionRequest({
           const existing = questionStates[questionText]?.textInputValue ?? ''
           const nextText = existing.slice(0, -1)
           const existingSelected = questionStates[questionText]?.selectedValue
-          const selected = Array.isArray(existingSelected) ? existingSelected : []
+          const selected = Array.isArray(existingSelected)
+            ? existingSelected
+            : []
           const trimmed = nextText.trim()
           const nextSelected = trimmed
             ? selected.includes('__other__')
@@ -404,7 +438,9 @@ export function AskUserQuestionPermissionRequest({
           const existing = questionStates[questionText]?.textInputValue ?? ''
           const nextText = existing + input
           const existingSelected = questionStates[questionText]?.selectedValue
-          const selected = Array.isArray(existingSelected) ? existingSelected : []
+          const selected = Array.isArray(existingSelected)
+            ? existingSelected
+            : []
           const trimmed = nextText.trim()
           const nextSelected = trimmed
             ? selected.includes('__other__')
@@ -463,13 +499,21 @@ export function AskUserQuestionPermissionRequest({
     if (isOtherFocused) {
       if (key.backspace || key.delete) {
         const existing = questionStates[questionText]?.textInputValue ?? ''
-        setQuestionState(questionText, { textInputValue: existing.slice(0, -1) }, false)
+        setQuestionState(
+          questionText,
+          { textInputValue: existing.slice(0, -1) },
+          false,
+        )
         return
       }
 
       if (isTextInputChar(input, key)) {
         const existing = questionStates[questionText]?.textInputValue ?? ''
-        setQuestionState(questionText, { textInputValue: existing + input }, false)
+        setQuestionState(
+          questionText,
+          { textInputValue: existing + input },
+          false,
+        )
         return
       }
     }
@@ -498,8 +542,7 @@ export function AskUserQuestionPermissionRequest({
         return
       }
 
-      const selectedValue =
-        currentQuestion.options[focusedOptionIndex]?.label
+      const selectedValue = currentQuestion.options[focusedOptionIndex]?.label
       if (!selectedValue) return
 
       setQuestionState(questionText, { selectedValue }, false)
@@ -534,10 +577,19 @@ export function AskUserQuestionPermissionRequest({
 
   return (
     <Box flexDirection="column" marginTop={1}>
-      <Box borderTop borderColor={theme.secondaryText} flexDirection="column" paddingTop={0}>
+      <Box
+        borderTop
+        borderColor={theme.secondaryText}
+        flexDirection="column"
+        paddingTop={0}
+      >
         <Box flexDirection="row" marginBottom={1}>
           {showArrows && (
-            <Text color={currentQuestionIndex === 0 ? theme.secondaryText : undefined}>
+            <Text
+              color={
+                currentQuestionIndex === 0 ? theme.secondaryText : undefined
+              }
+            >
               ←{' '}
             </Text>
           )}
@@ -547,7 +599,8 @@ export function AskUserQuestionPermissionRequest({
               question.question && answers[question.question]
                 ? figures.checkboxOn
                 : figures.checkboxOff
-            const headerText = tabHeaders[index] ?? question.header ?? `Q${index + 1}`
+            const headerText =
+              tabHeaders[index] ?? question.header ?? `Q${index + 1}`
             const tabText = ` ${checkbox} ${headerText} `
 
             return (
@@ -585,7 +638,9 @@ export function AskUserQuestionPermissionRequest({
             <Box flexDirection="column" marginTop={1}>
               {(() => {
                 const rawSelected = activeQuestionState?.selectedValue
-                const selectedValues = Array.isArray(rawSelected) ? rawSelected : []
+                const selectedValues = Array.isArray(rawSelected)
+                  ? rawSelected
+                  : []
                 const otherSelected = currentQuestion.multiSelect
                   ? selectedValues.includes('__other__')
                   : rawSelected === '__other__'
@@ -603,75 +658,80 @@ export function AskUserQuestionPermissionRequest({
 
                 return (
                   <>
-              {currentQuestion.options.map((option, index) => {
-                const isFocused =
-                  !isMultiSelectSubmitFocused && index === focusedOptionIndex
-                const isSelected = currentQuestion.multiSelect
-                  ? selectedValues.includes(option.label)
-                  : rawSelected === option.label
-                const pointer = isFocused ? figures.pointer : ' '
-                const color = isFocused ? theme.kode : theme.text
-                const indicator = currentQuestion.multiSelect
-                  ? isSelected
-                    ? figures.checkboxOn
-                    : figures.checkboxOff
-                  : isSelected
-                    ? figures.tick
-                    : ' '
-                return (
-                  <Box key={option.label} flexDirection="column">
-                    <Text color={color}>
-                      {pointer} {indicator} {option.label}
-                    </Text>
-                    <Text color={theme.secondaryText}>
-                      {'  '}
-                      {option.description}
-                    </Text>
-                  </Box>
-                )
-              })}
+                    {currentQuestion.options.map((option, index) => {
+                      const isFocused =
+                        !isMultiSelectSubmitFocused &&
+                        index === focusedOptionIndex
+                      const isSelected = currentQuestion.multiSelect
+                        ? selectedValues.includes(option.label)
+                        : rawSelected === option.label
+                      const pointer = isFocused ? figures.pointer : ' '
+                      const color = isFocused ? theme.kode : theme.text
+                      const indicator = currentQuestion.multiSelect
+                        ? isSelected
+                          ? figures.checkboxOn
+                          : figures.checkboxOff
+                        : isSelected
+                          ? figures.tick
+                          : ' '
+                      return (
+                        <Box key={option.label} flexDirection="column">
+                          <Text color={color}>
+                            {pointer} {indicator} {option.label}
+                          </Text>
+                          <Text color={theme.secondaryText}>
+                            {'  '}
+                            {option.description}
+                          </Text>
+                        </Box>
+                      )
+                    })}
 
-              {/* Other option */}
-              <Box flexDirection="column">
-                <Text color={isOtherFocused ? theme.kode : theme.text}>
-                  {isOtherFocused ? figures.pointer : ' '}{' '}
-                  {currentQuestion.multiSelect
-                    ? otherSelected
-                      ? figures.checkboxOn
-                      : figures.checkboxOff
-                    : otherSelected
-                      ? figures.tick
-                      : ' '}{' '}
-                  Other
-                </Text>
-                {(isOtherFocused || otherSelected || otherText.trim().length > 0) && (
-                  <Text color={theme.secondaryText}>
-                    {otherLine}
-                    {isOtherFocused && <Text color="gray">▌</Text>}
-                  </Text>
-                )}
-              </Box>
+                    {/* Other option */}
+                    <Box flexDirection="column">
+                      <Text color={isOtherFocused ? theme.kode : theme.text}>
+                        {isOtherFocused ? figures.pointer : ' '}{' '}
+                        {currentQuestion.multiSelect
+                          ? otherSelected
+                            ? figures.checkboxOn
+                            : figures.checkboxOff
+                          : otherSelected
+                            ? figures.tick
+                            : ' '}{' '}
+                        Other
+                      </Text>
+                      {(isOtherFocused ||
+                        otherSelected ||
+                        otherText.trim().length > 0) && (
+                        <Text color={theme.secondaryText}>
+                          {otherLine}
+                          {isOtherFocused && <Text color="gray">▌</Text>}
+                        </Text>
+                      )}
+                    </Box>
 
-              {currentQuestion.multiSelect && (
-                <Box marginTop={0}>
-                  <Text
-                    color={isMultiSelectSubmitFocused ? theme.kode : theme.text}
-                    bold={isMultiSelectSubmitFocused}
-                  >
-                    {isMultiSelectSubmitFocused ? figures.pointer : ' '}
-                    {' '}
-                    {currentQuestionIndex === questions.length - 1
-                      ? 'Submit'
-                      : 'Next'}
-                  </Text>
-                </Box>
-              )}
+                    {currentQuestion.multiSelect && (
+                      <Box marginTop={0}>
+                        <Text
+                          color={
+                            isMultiSelectSubmitFocused ? theme.kode : theme.text
+                          }
+                          bold={isMultiSelectSubmitFocused}
+                        >
+                          {isMultiSelectSubmitFocused ? figures.pointer : ' '}{' '}
+                          {currentQuestionIndex === questions.length - 1
+                            ? 'Submit'
+                            : 'Next'}
+                        </Text>
+                      </Box>
+                    )}
 
-              <Box marginTop={1}>
-                <Text color={theme.secondaryText} dimColor>
-                  Enter to select · Tab/Arrow keys to navigate · Esc to cancel
-                </Text>
-              </Box>
+                    <Box marginTop={1}>
+                      <Text color={theme.secondaryText} dimColor>
+                        Enter to select · Tab/Arrow keys to navigate · Esc to
+                        cancel
+                      </Text>
+                    </Box>
                   </>
                 )
               })()}
@@ -707,7 +767,9 @@ export function AskUserQuestionPermissionRequest({
             </Box>
 
             <Box marginTop={1}>
-              <Text color={theme.secondaryText}>Ready to submit your answers?</Text>
+              <Text color={theme.secondaryText}>
+                Ready to submit your answers?
+              </Text>
             </Box>
 
             <Box marginTop={1}>

@@ -1,6 +1,6 @@
 import { Command } from '@commands'
-import { getKodeAgentSessionId } from '@utils/kodeAgentSessionId'
-import { appendSessionTagRecord } from '@utils/kodeAgentSessionLog'
+import { getKodeAgentSessionId } from '@utils/protocol/kodeAgentSessionId'
+import { appendSessionTagRecord } from '@utils/protocol/kodeAgentSessionLog'
 
 const tag = {
   type: 'local',

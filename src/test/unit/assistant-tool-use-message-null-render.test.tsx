@@ -76,7 +76,14 @@ describe('AssistantToolUseMessage (null tool-use message parity)', () => {
 
     const out = await renderToText(
       <AssistantToolUseMessage
-        param={{ type: 'tool_use', id: 't1', name: 'HiddenTool', input: { foo: 'bar' } } as any}
+        param={
+          {
+            type: 'tool_use',
+            id: 't1',
+            name: 'HiddenTool',
+            input: { foo: 'bar' },
+          } as any
+        }
         costUSD={0}
         durationMs={0}
         addMargin={false}
@@ -131,7 +138,14 @@ describe('AssistantToolUseMessage (null tool-use message parity)', () => {
 
     const out = await renderToText(
       <AssistantToolUseMessage
-        param={{ type: 'tool_use', id: 't2', name: 'Read', input: { file_path: '/tmp/a.txt' } } as any}
+        param={
+          {
+            type: 'tool_use',
+            id: 't2',
+            name: 'Read',
+            input: { file_path: '/tmp/a.txt' },
+          } as any
+        }
         costUSD={0}
         durationMs={0}
         addMargin={false}
@@ -150,4 +164,3 @@ describe('AssistantToolUseMessage (null tool-use message parity)', () => {
     expect(out).toContain('…')
   })
 })
-

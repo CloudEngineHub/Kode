@@ -4,7 +4,11 @@ import { randomUUID } from 'crypto'
 import { z } from 'zod'
 import { FallbackToolUseRejectedMessage } from '@components/FallbackToolUseRejectedMessage'
 import { Tool, ValidationResult } from '@tool'
-import { setTodos, getTodos, TodoItem as StoredTodoItem } from '@utils/todoStorage'
+import {
+  setTodos,
+  getTodos,
+  TodoItem as StoredTodoItem,
+} from '@utils/todoStorage'
 import { getTodoRenderModel, TodoRenderModel } from '@utils/todoRenderModel'
 import { emitReminderEvent } from '@services/systemReminder'
 import { startWatchingTodoFile } from '@services/fileFreshness'
@@ -16,20 +20,19 @@ export function __getTodoRenderModelForTests(
   return getTodoRenderModel(todos)
 }
 
-const TodoItemSchema = z
-  .object({
-    content: z
-      .string()
-      .min(1, 'Content cannot be empty')
-      .describe('The task description or content'),
-    status: z
-      .enum(['pending', 'in_progress', 'completed'])
-      .describe('Current status of the task'),
-    activeForm: z
-      .string()
-      .min(1, 'Active form cannot be empty')
-      .describe('The active form of the task (e.g., "Writing tests")'),
-  })
+const TodoItemSchema = z.object({
+  content: z
+    .string()
+    .min(1, 'Content cannot be empty')
+    .describe('The task description or content'),
+  status: z
+    .enum(['pending', 'in_progress', 'completed'])
+    .describe('Current status of the task'),
+  activeForm: z
+    .string()
+    .min(1, 'Active form cannot be empty')
+    .describe('The active form of the task (e.g., "Writing tests")'),
+})
 
 const inputSchema = z.strictObject({
   todos: z.array(TodoItemSchema).describe('The updated todo list'),

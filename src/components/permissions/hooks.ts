@@ -2,7 +2,6 @@ import { useEffect } from 'react'
 import { logUnaryEvent, CompletionType } from '@utils/unaryLogging'
 import { ToolUseConfirm } from '@components/permissions/PermissionRequest'
 import { env } from '@utils/env'
- 
 
 type UnaryEventType = {
   completion_type: CompletionType
@@ -18,8 +17,6 @@ export function usePermissionRequestLogging(
   unaryEvent: UnaryEventType,
 ): void {
   useEffect(() => {
-    
-
     // Handle string or Promise language name
     const languagePromise = Promise.resolve(unaryEvent.language_name)
 

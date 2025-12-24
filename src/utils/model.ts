@@ -1,5 +1,5 @@
 import { memoize } from 'lodash-es'
- 
+
 import { logError } from './log'
 import {
   getGlobalConfig,
@@ -8,8 +8,12 @@ import {
   saveGlobalConfig,
 } from './config'
 
-export const USE_BEDROCK = !!process.env.CLAUDE_CODE_USE_BEDROCK
-export const USE_VERTEX = !!process.env.CLAUDE_CODE_USE_VERTEX
+export const USE_BEDROCK = !!(
+  process.env.KODE_USE_BEDROCK ?? process.env.CLAUDE_CODE_USE_BEDROCK
+)
+export const USE_VERTEX = !!(
+  process.env.KODE_USE_VERTEX ?? process.env.CLAUDE_CODE_USE_VERTEX
+)
 
 export interface ModelConfig {
   bedrock: string
@@ -189,7 +193,11 @@ export class ModelManager {
 
     const budgetForModel = (
       model: ModelProfile,
-    ): { budgetTokens: number | null; usagePercentage: number; compatible: boolean } => {
+    ): {
+      budgetTokens: number | null
+      usagePercentage: number
+      compatible: boolean
+    } => {
       const contextLength = Number(model.contextLength)
       if (!Number.isFinite(contextLength) || contextLength <= 0) {
         return { budgetTokens: null, usagePercentage: 0, compatible: true }
@@ -200,7 +208,8 @@ export class ModelManager {
       return {
         budgetTokens,
         usagePercentage,
-        compatible: budgetTokens > 0 ? currentContextTokens <= budgetTokens : true,
+        compatible:
+          budgetTokens > 0 ? currentContextTokens <= budgetTokens : true,
       }
     }
 
@@ -225,7 +234,9 @@ export class ModelManager {
     const maxOffsets =
       startIndex === -1 ? allProfiles.length : allProfiles.length - 1
     const skippedModels: NonNullable<
-      ReturnType<ModelManager['switchToNextModelWithContextCheck']>['skippedModels']
+      ReturnType<
+        ModelManager['switchToNextModelWithContextCheck']
+      >['skippedModels']
     > = []
 
     let selected: ModelProfile | null = null
@@ -324,7 +335,9 @@ export class ModelManager {
 
     // Convert the detailed result to the simple interface
     const currentModel = this.findModelProfile(this.config.modelPointers?.main)
-    const modelsSorted = [...allModels].sort((a, b) => a.createdAt - b.createdAt)
+    const modelsSorted = [...allModels].sort(
+      (a, b) => a.createdAt - b.createdAt,
+    )
     const currentIndex = modelsSorted.findIndex(
       m => m.modelName === currentModel?.modelName,
     )
@@ -351,7 +364,8 @@ export class ModelManager {
       const attempted = result.skippedModels?.[0]
       const attemptedContext = attempted?.contextLength
       const attemptedBudget = attempted?.budgetTokens
-      const currentLabel = currentModel?.name || currentModel?.modelName || 'current model'
+      const currentLabel =
+        currentModel?.name || currentModel?.modelName || 'current model'
 
       const attemptedText = attempted
         ? `Can't switch to ${attempted.name}: current ~${formatTokens(result.currentContextTokens)} tokens exceeds safe budget (~${formatTokens(attemptedBudget ?? 0)} tokens, 90% of ${formatTokens(attemptedContext ?? 0)}).`
@@ -681,7 +695,7 @@ export class ModelManager {
     currentMainModel: string | null
     availableModels: Array<{
       name: string
-      modelName: string 
+      modelName: string
       provider: string
       isActive: boolean
       lastUsed?: number
@@ -690,7 +704,7 @@ export class ModelManager {
   } {
     const availableModels = this.getAvailableModels()
     const currentMainModelName = this.config.modelPointers?.main
-    
+
     return {
       totalModels: this.modelProfiles.length,
       activeModels: availableModels.length,
@@ -819,9 +833,7 @@ export class ModelManager {
     profile: ModelProfile | null
     error?: string
   } {
-    const isPointer = ['main', 'task', 'compact', 'quick'].includes(
-      modelParam,
-    )
+    const isPointer = ['main', 'task', 'compact', 'quick'].includes(modelParam)
 
     if (isPointer) {
       const pointerId =

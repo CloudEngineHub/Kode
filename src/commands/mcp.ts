@@ -1,5 +1,9 @@
 import type { Command } from '@commands'
-import { getClients, getMcprcServerStatus, listMCPServers } from '@services/mcpClient'
+import {
+  getClients,
+  getMcprcServerStatus,
+  listMCPServers,
+} from '@services/mcpClient'
 import { PRODUCT_COMMAND } from '@constants/product'
 import chalk from 'chalk'
 import { getTheme } from '@utils/theme'

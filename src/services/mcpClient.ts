@@ -11,9 +11,10 @@ import {
   removeMcprcServerForTesting,
 } from '@utils/config'
 import { existsSync, readFileSync, writeFileSync } from 'fs'
-import { join } from 'path'
+import { join, resolve } from 'path'
 import { getCwd } from '@utils/state'
 import { safeParseJSON } from '@utils/json'
+import { getSessionPlugins } from '@utils/sessionPlugins'
 import {
   ImageBlockParam,
   MessageParam,
@@ -42,6 +43,195 @@ import { Command } from '@commands'
 import { PRODUCT_COMMAND } from '@constants/product'
 
 type McpName = string
+
+function stripJsonComments(input: string): string {
+  let out = ''
+  let inString = false
+  let escaped = false
+  let inLineComment = false
+  let inBlockComment = false
+
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i]!
+    const next = i + 1 < input.length ? input[i + 1]! : ''
+
+    if (inLineComment) {
+      if (ch === '\n') {
+        inLineComment = false
+        out += ch
+      }
+      continue
+    }
+
+    if (inBlockComment) {
+      if (ch === '*' && next === '/') {
+        inBlockComment = false
+        i++
+      }
+      continue
+    }
+
+    if (inString) {
+      out += ch
+      if (escaped) {
+        escaped = false
+        continue
+      }
+      if (ch === '\\') {
+        escaped = true
+        continue
+      }
+      if (ch === '"') inString = false
+      continue
+    }
+
+    if (ch === '"') {
+      inString = true
+      out += ch
+      continue
+    }
+
+    if (ch === '/' && next === '/') {
+      inLineComment = true
+      i++
+      continue
+    }
+
+    if (ch === '/' && next === '*') {
+      inBlockComment = true
+      i++
+      continue
+    }
+
+    out += ch
+  }
+
+  return out
+}
+
+function parseJsonOrJsonc(text: string): unknown {
+  const raw = String(text ?? '')
+  if (!raw.trim()) return null
+  try {
+    return JSON.parse(raw)
+  } catch {
+    try {
+      return JSON.parse(stripJsonComments(raw))
+    } catch {
+      return null
+    }
+  }
+}
+
+function expandTemplateString(value: string, pluginRoot: string): string {
+  return value.replace(/\$\{([^}]+)\}/g, (match, key) => {
+    const k = String(key ?? '').trim()
+    if (!k) return match
+    if (k === 'CLAUDE_PLUGIN_ROOT') return pluginRoot
+    const env = process.env[k]
+    return env !== undefined ? env : match
+  })
+}
+
+function expandTemplateDeep(value: unknown, pluginRoot: string): unknown {
+  if (typeof value === 'string') return expandTemplateString(value, pluginRoot)
+  if (Array.isArray(value))
+    return value.map(v => expandTemplateDeep(v, pluginRoot))
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(value)) {
+      out[k] = expandTemplateDeep(v, pluginRoot)
+    }
+    return out
+  }
+  return value
+}
+
+export function listPluginMCPServers(): Record<string, McpServerConfig> {
+  const plugins = getSessionPlugins()
+  if (plugins.length === 0) return {}
+
+  const out: Record<string, McpServerConfig> = {}
+
+  for (const plugin of plugins) {
+    const pluginRoot = plugin.rootDir
+    const pluginName = plugin.name
+
+    const configs: Array<Record<string, McpServerConfig>> = []
+
+    // Files: .mcp.json/.mcp.jsonc + manifest-provided mcp server files
+    for (const configPath of plugin.mcpConfigFiles ?? []) {
+      try {
+        const raw = readFileSync(configPath, 'utf8')
+        const parsed = parseJsonOrJsonc(raw)
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+          continue
+        const rawServers =
+          (parsed as any).mcpServers &&
+          typeof (parsed as any).mcpServers === 'object' &&
+          !Array.isArray((parsed as any).mcpServers)
+            ? (parsed as any).mcpServers
+            : parsed
+
+        if (
+          !rawServers ||
+          typeof rawServers !== 'object' ||
+          Array.isArray(rawServers)
+        )
+          continue
+
+        const servers: Record<string, McpServerConfig> = {}
+        for (const [name, cfg] of Object.entries(rawServers as any)) {
+          if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) continue
+          servers[name] = expandTemplateDeep(cfg, pluginRoot) as McpServerConfig
+        }
+        configs.push(servers)
+      } catch {
+        continue
+      }
+    }
+
+    // Inline manifest config: plugin.json `mcpServers` object.
+    const manifestRaw = (plugin.manifest as any)?.mcpServers
+    if (
+      manifestRaw &&
+      typeof manifestRaw === 'object' &&
+      !Array.isArray(manifestRaw)
+    ) {
+      const rawServers =
+        (manifestRaw as any).mcpServers &&
+        typeof (manifestRaw as any).mcpServers === 'object' &&
+        !Array.isArray((manifestRaw as any).mcpServers)
+          ? (manifestRaw as any).mcpServers
+          : manifestRaw
+
+      if (
+        rawServers &&
+        typeof rawServers === 'object' &&
+        !Array.isArray(rawServers)
+      ) {
+        const servers: Record<string, McpServerConfig> = {}
+        for (const [name, cfg] of Object.entries(rawServers as any)) {
+          if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) continue
+          servers[name] = expandTemplateDeep(cfg, pluginRoot) as McpServerConfig
+        }
+        configs.push(servers)
+      }
+    }
+
+    const merged: Record<string, McpServerConfig> = Object.assign(
+      {},
+      ...configs,
+    )
+
+    for (const [serverName, cfg] of Object.entries(merged)) {
+      const fullName = `plugin_${pluginName}_${serverName}`
+      out[fullName] = cfg
+    }
+  }
+
+  return out
+}
 
 function sanitizeMcpIdentifierPart(value: string): string {
   return value.replace(/[^a-zA-Z0-9_-]/g, '_')
@@ -127,7 +317,12 @@ export function parseEnvVars(
 
 const VALID_SCOPES = ['project', 'global', 'mcprc', 'mcpjson'] as const
 type ConfigScope = (typeof VALID_SCOPES)[number]
-const EXTERNAL_SCOPES = ['project', 'global', 'mcprc', 'mcpjson'] as ConfigScope[]
+const EXTERNAL_SCOPES = [
+  'project',
+  'global',
+  'mcprc',
+  'mcpjson',
+] as ConfigScope[]
 
 export function ensureConfigScope(scope?: string): ConfigScope {
   if (!scope) return 'project'
@@ -277,7 +472,11 @@ export function removeMcpServer(
       }
 
       const rawServers = (parsed as { mcpServers?: unknown }).mcpServers
-      if (!rawServers || typeof rawServers !== 'object' || Array.isArray(rawServers)) {
+      if (
+        !rawServers ||
+        typeof rawServers !== 'object' ||
+        Array.isArray(rawServers)
+      ) {
         throw new Error('Invalid .mcp.json format (missing mcpServers)')
       }
 
@@ -311,10 +510,12 @@ export function removeMcpServer(
 }
 
 export function listMCPServers(): Record<string, McpServerConfig> {
+  const pluginServers = listPluginMCPServers()
   const globalConfig = getGlobalConfig()
   const projectFileConfig = getProjectMcpServerDefinitions().servers
   const projectConfig = getCurrentProjectConfig()
   return {
+    ...(pluginServers ?? {}),
     ...(globalConfig.mcpServers ?? {}),
     ...(projectFileConfig ?? {}), // Project-file configs override global ones
     ...(projectConfig.mcpServers ?? {}), // Project configs override project-file ones
@@ -581,6 +782,7 @@ export const getClients = memoize(async (): Promise<WrappedClient[]> => {
     return []
   }
 
+  const pluginServers = listPluginMCPServers()
   const globalServers = getGlobalConfig().mcpServers ?? {}
   const projectFileServers = getProjectMcpServerDefinitions().servers
   const projectServers = getCurrentProjectConfig().mcpServers ?? {}
@@ -592,6 +794,7 @@ export const getClients = memoize(async (): Promise<WrappedClient[]> => {
   )
 
   const allServers = {
+    ...pluginServers,
     ...globalServers,
     ...approvedProjectFileServers, // Approved project-file servers override global ones
     ...projectServers, // Project servers take highest precedence
@@ -606,7 +809,10 @@ export const getClients = memoize(async (): Promise<WrappedClient[]> => {
     const batchResults = await Promise.all(
       batch.map(async ([name, serverRef]) => {
         try {
-          const client = await connectToServer(name, serverRef as McpServerConfig)
+          const client = await connectToServer(
+            name,
+            serverRef as McpServerConfig,
+          )
           let capabilities: Record<string, unknown> | null = null
           try {
             capabilities = client.getServerCapabilities() as any
@@ -628,6 +834,129 @@ export const getClients = memoize(async (): Promise<WrappedClient[]> => {
 
   return results
 })
+
+function parseMcpServersFromCliConfigEntries(options: {
+  entries: string[]
+  projectDir: string
+}): Record<string, McpServerConfig> {
+  const out: Record<string, McpServerConfig> = {}
+
+  for (const rawEntry of options.entries) {
+    const entry = String(rawEntry ?? '').trim()
+    if (!entry) continue
+
+    const resolvedPath = resolve(options.projectDir, entry)
+    const payload = existsSync(resolvedPath)
+      ? readFileSync(resolvedPath, 'utf8')
+      : existsSync(entry)
+        ? readFileSync(entry, 'utf8')
+        : entry
+
+    const parsed = parseJsonOrJsonc(payload)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) continue
+
+    const rawServers =
+      (parsed as any).mcpServers &&
+      typeof (parsed as any).mcpServers === 'object' &&
+      !Array.isArray((parsed as any).mcpServers)
+        ? (parsed as any).mcpServers
+        : parsed
+
+    if (
+      !rawServers ||
+      typeof rawServers !== 'object' ||
+      Array.isArray(rawServers)
+    )
+      continue
+
+    for (const [name, cfg] of Object.entries(rawServers as any)) {
+      if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) continue
+      out[name] = cfg as McpServerConfig
+    }
+  }
+
+  return out
+}
+
+export async function getClientsForCliMcpConfig(options: {
+  mcpConfig?: string[]
+  strictMcpConfig?: boolean
+  projectDir?: string
+}): Promise<WrappedClient[]> {
+  const projectDir = options.projectDir ?? getCwd()
+  const entries =
+    Array.isArray(options.mcpConfig) && options.mcpConfig.length > 0
+      ? options.mcpConfig
+      : []
+  const strict = options.strictMcpConfig === true
+
+  if (entries.length === 0 && !strict) {
+    return getClients()
+  }
+
+  const cliServers = parseMcpServersFromCliConfigEntries({
+    entries,
+    projectDir,
+  })
+
+  const pluginServers = strict ? {} : listPluginMCPServers()
+  const globalServers = strict ? {} : (getGlobalConfig().mcpServers ?? {})
+  const projectFileServers = strict
+    ? {}
+    : getProjectMcpServerDefinitions().servers
+  const projectServers = strict
+    ? {}
+    : (getCurrentProjectConfig().mcpServers ?? {})
+
+  const approvedProjectFileServers = strict
+    ? {}
+    : pickBy(
+        projectFileServers,
+        (_, name) => getMcprcServerStatus(name) === 'approved',
+      )
+
+  const allServers = {
+    ...(pluginServers ?? {}),
+    ...(globalServers ?? {}),
+    ...(approvedProjectFileServers ?? {}),
+    ...(projectServers ?? {}),
+    ...(cliServers ?? {}),
+  }
+
+  const batchSize = getMcpServerConnectionBatchSize()
+  const entriesToConnect = Object.entries(allServers)
+  const results: WrappedClient[] = []
+
+  for (let i = 0; i < entriesToConnect.length; i += batchSize) {
+    const batch = entriesToConnect.slice(i, i + batchSize)
+    const batchResults = await Promise.all(
+      batch.map(async ([name, serverRef]) => {
+        try {
+          const client = await connectToServer(
+            name,
+            serverRef as McpServerConfig,
+          )
+          let capabilities: Record<string, unknown> | null = null
+          try {
+            capabilities = client.getServerCapabilities() as any
+          } catch {
+            capabilities = null
+          }
+          return { name, client, capabilities, type: 'connected' as const }
+        } catch (error) {
+          logMCPError(
+            name,
+            `Connection failed: ${error instanceof Error ? error.message : String(error)}`,
+          )
+          return { name, type: 'failed' as const }
+        }
+      }),
+    )
+    results.push(...batchResults)
+  }
+
+  return results
+}
 
 async function requestAll<
   ResultT extends Result,
@@ -719,55 +1048,56 @@ export const getMCPTools = memoize(async (): Promise<Tool[]> => {
     const serverPart = sanitizeMcpIdentifierPart(client.name)
 
     return tools
-      .map(
-        (tool): Tool | null => {
-          const toolPart = sanitizeMcpIdentifierPart(tool.name)
-          const name = `mcp__${serverPart}__${toolPart}`
+      .map((tool): Tool | null => {
+        const toolPart = sanitizeMcpIdentifierPart(tool.name)
+        const name = `mcp__${serverPart}__${toolPart}`
 
-          if (name.startsWith('mcp__ide__') && !IDE_MCP_TOOL_ALLOWLIST.has(name)) {
-            return null
-          }
+        if (
+          name.startsWith('mcp__ide__') &&
+          !IDE_MCP_TOOL_ALLOWLIST.has(name)
+        ) {
+          return null
+        }
 
-          return {
-            ...MCPTool,
-            name,
-            isConcurrencySafe() {
-              return tool.annotations?.readOnlyHint ?? false
-            },
-            isReadOnly() {
-              return tool.annotations?.readOnlyHint ?? false
-            },
-            async description() {
-              return tool.description ?? ''
-            },
-            async prompt() {
-              return tool.description ?? ''
-            },
-            inputJSONSchema: tool.inputSchema as Tool['inputJSONSchema'],
-            async validateInput() {
-              return { result: true }
-            },
-            async *call(args: Record<string, unknown>, context) {
-              const data = await callMCPTool({
-                client,
-                tool: tool.name,
-                args,
-                toolUseId: context.toolUseId,
-                signal: context.abortController.signal,
-              })
-              yield {
-                type: 'result' as const,
-                data,
-                resultForAssistant: data,
-              }
-            },
-            userFacingName() {
-              const title = tool.annotations?.title || tool.name
-              return `${client.name} - ${title} (MCP)`
-            },
-          }
-        },
-      )
+        return {
+          ...MCPTool,
+          name,
+          isConcurrencySafe() {
+            return tool.annotations?.readOnlyHint ?? false
+          },
+          isReadOnly() {
+            return tool.annotations?.readOnlyHint ?? false
+          },
+          async description() {
+            return tool.description ?? ''
+          },
+          async prompt() {
+            return tool.description ?? ''
+          },
+          inputJSONSchema: tool.inputSchema as Tool['inputJSONSchema'],
+          async validateInput() {
+            return { result: true }
+          },
+          async *call(args: Record<string, unknown>, context) {
+            const data = await callMCPTool({
+              client,
+              tool: tool.name,
+              args,
+              toolUseId: context.toolUseId,
+              signal: context.abortController.signal,
+            })
+            yield {
+              type: 'result' as const,
+              data,
+              resultForAssistant: data,
+            }
+          },
+          userFacingName() {
+            const title = tool.annotations?.title || tool.name
+            return `${client.name} - ${title} (MCP)`
+          },
+        }
+      })
       .filter((tool): tool is Tool => tool !== null)
   })
 })
@@ -812,11 +1142,11 @@ async function callMCPTool({
           : null
 
       const rawMessage =
-        (contentText && typeof (contentText as any).text === 'string'
+        contentText && typeof (contentText as any).text === 'string'
           ? String((contentText as any).text)
           : 'error' in result && result.error
             ? String(result.error)
-            : '')
+            : ''
 
       const message = rawMessage || `Error calling tool ${tool}`
       logMCPError(name, `Error calling tool ${tool}: ${message}`)
@@ -883,7 +1213,8 @@ export const getMCPCommands = memoize(async (): Promise<Command[]> => {
         isHidden: false,
         progressMessage: 'running',
         userFacingName() {
-          const title = typeof (_ as any).title === 'string' ? (_ as any).title : _.name
+          const title =
+            typeof (_ as any).title === 'string' ? (_ as any).title : _.name
           return `${client.name}:${title} (MCP)`
         },
         argNames,

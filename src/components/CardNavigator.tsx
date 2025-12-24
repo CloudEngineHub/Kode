@@ -1,4 +1,10 @@
-import React, { useState, useRef, ReactNode, createContext, useContext } from 'react'
+import React, {
+  useState,
+  useRef,
+  ReactNode,
+  createContext,
+  useContext,
+} from 'react'
 import { useInput } from 'ink'
 
 // Navigation context for sharing state between parent and children
@@ -81,14 +87,14 @@ export function CardNavigator({ onExit, children }: CardNavigatorProps) {
         }
       }
     },
-    { isActive: true }
+    { isActive: true },
   )
 
   const contextValue: NavigationContextType = {
     pushCard,
     popCard,
     replaceCard,
-    currentDepth: cardStack.length
+    currentDepth: cardStack.length,
   }
 
   // Show the top card if there is one, otherwise show children

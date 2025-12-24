@@ -103,7 +103,7 @@ describe('AskUserQuestionTool UI parity (Reference CLI)', () => {
     })
 
     expect(text).toBe(
-      "User has answered your questions: \"Q\"=\"A\", \"R\"=\"B\". You can now continue with the user's answers in mind.",
+      'User has answered your questions: "Q"="A", "R"="B". You can now continue with the user\'s answers in mind.',
     )
   })
 })

@@ -75,6 +75,7 @@ type Props = {
   commands: Command[]
   safeMode?: boolean
   debug?: boolean
+  disableSlashCommands?: boolean
   initialForkNumber?: number | undefined
   initialPrompt: string | undefined
   // A unique name for the message log file, used to identify the fork
@@ -103,6 +104,7 @@ export function REPL({
   commands,
   safeMode,
   debug = false,
+  disableSlashCommands = false,
   initialForkNumber = 0,
   initialPrompt,
   messageLogName,
@@ -116,7 +118,9 @@ export function REPL({
   initialUpdateCommands,
 }: Props): React.ReactNode {
   // Cache verbose config to avoid synchronous file reads on every render
-  const [verboseConfig] = useState(() => verboseFromCLI ?? getGlobalConfig().verbose)
+  const [verboseConfig] = useState(
+    () => verboseFromCLI ?? getGlobalConfig().verbose,
+  )
   const verbose = verboseConfig
 
   // Used to force the logo to re-render and conversation log to use a new file
@@ -131,7 +135,8 @@ export function REPL({
   ] = useState<MessageType[] | null>(null)
 
   // 🔧 Simplified AbortController management - inspired by reference system
-  const [abortController, setAbortController] = useState<AbortController | null>(null)
+  const [abortController, setAbortController] =
+    useState<AbortController | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   // No auto-updater state
   const [toolJSX, setToolJSX] = useState<{
@@ -215,7 +220,6 @@ export function REPL({
   useEffect(() => {
     const totalCost = getTotalCost()
     if (totalCost >= 5 /* $5 */ && !showCostDialog && !haveShownCostDialog) {
-      
       setShowCostDialog(true)
     }
   }, [messages, showCostDialog, haveShownCostDialog])
@@ -284,7 +288,7 @@ export function REPL({
 
       const [systemPrompt, context, model, maxThinkingTokens] =
         await Promise.all([
-          getSystemPrompt(),
+          getSystemPrompt({ disableSlashCommands }),
           getContext(),
           new ModelManager(getGlobalConfig()).getModelName('main'),
           getMaxThinkingTokens([...messages, ...newMessages]),
@@ -333,7 +337,10 @@ export function REPL({
     setAbortController(null)
   }
 
-  async function onQuery(newMessages: MessageType[], passedAbortController?: AbortController) {
+  async function onQuery(
+    newMessages: MessageType[],
+    passedAbortController?: AbortController,
+  ) {
     // Use passed AbortController or create new one
     const controllerToUse = passedAbortController || new AbortController()
     if (!passedAbortController) {
@@ -369,13 +376,14 @@ export function REPL({
       return
     }
 
-    const [systemPrompt, context, model, maxThinkingTokens] =
-      await Promise.all([
-        getSystemPrompt(),
+    const [systemPrompt, context, model, maxThinkingTokens] = await Promise.all(
+      [
+        getSystemPrompt({ disableSlashCommands }),
         getContext(),
         new ModelManager(getGlobalConfig()).getModelName('main'),
         getMaxThinkingTokens([...messages, lastMessage]),
-      ])
+      ],
+    )
 
     let lastAssistantMessage: MessageType | null = null
 
@@ -418,7 +426,7 @@ export function REPL({
     }
 
     // If this was a Koding request and we got an assistant message back,
-    // save it to AGENTS.md (and CLAUDE.md if exists)
+    // save it to project instruction files (AGENTS.md; legacy CLAUDE.md if present).
     if (
       isKodingRequest &&
       lastAssistantMessage &&
@@ -433,7 +441,7 @@ export function REPL({
                 .map(block => (block.type === 'text' ? block.text : ''))
                 .join('\n')
 
-        // Add the content to AGENTS.md (and CLAUDE.md if exists)
+        // Add the content to project instruction files.
         if (content && content.trim().length > 0) {
           handleHashCommand(content)
         }
@@ -668,149 +676,147 @@ export function REPL({
       isBypassPermissionsModeAvailable={!safeMode}
     >
       <React.Fragment>
-      <React.Fragment key={`static-messages-${forkNumber}`}>
-        <Static
-          items={staticItems}
-          children={(item: any) => item.jsx}
-        />
-      </React.Fragment>
-      {transientItems.map(_ => _.jsx)}
-      <Box
-        borderColor="red"
-        borderStyle={debug ? 'single' : undefined}
-        flexDirection="column"
-        width="100%"
-      >
-        {!toolJSX && !toolUseConfirm && !binaryFeedbackContext && isLoading && (
-          <RequestStatusIndicator />
-        )}
-        {toolJSX ? toolJSX.jsx : null}
-        {!toolJSX && binaryFeedbackContext && !isMessageSelectorVisible && (
-          <BinaryFeedback
-            m1={binaryFeedbackContext.m1}
-            m2={binaryFeedbackContext.m2}
-            resolve={result => {
-              binaryFeedbackContext.resolve(result)
-              setTimeout(() => setBinaryFeedbackContext(null), 0)
-            }}
-            verbose={verbose}
-            normalizedMessages={normalizedMessages}
-            tools={tools}
-            debug={debug}
+        <React.Fragment key={`static-messages-${forkNumber}`}>
+          <Static items={staticItems} children={(item: any) => item.jsx} />
+        </React.Fragment>
+        {transientItems.map(_ => _.jsx)}
+        <Box
+          borderColor="red"
+          borderStyle={debug ? 'single' : undefined}
+          flexDirection="column"
+          width="100%"
+        >
+          {!toolJSX &&
+            !toolUseConfirm &&
+            !binaryFeedbackContext &&
+            isLoading && <RequestStatusIndicator />}
+          {toolJSX ? toolJSX.jsx : null}
+          {!toolJSX && binaryFeedbackContext && !isMessageSelectorVisible && (
+            <BinaryFeedback
+              m1={binaryFeedbackContext.m1}
+              m2={binaryFeedbackContext.m2}
+              resolve={result => {
+                binaryFeedbackContext.resolve(result)
+                setTimeout(() => setBinaryFeedbackContext(null), 0)
+              }}
+              verbose={verbose}
+              normalizedMessages={normalizedMessages}
+              tools={tools}
+              debug={debug}
+              erroredToolUseIDs={erroredToolUseIDs}
+              inProgressToolUseIDs={inProgressToolUseIDs}
+              unresolvedToolUseIDs={unresolvedToolUseIDs}
+            />
+          )}
+          {!toolJSX &&
+            toolUseConfirm &&
+            !isMessageSelectorVisible &&
+            !binaryFeedbackContext && (
+              <PermissionRequest
+                toolUseConfirm={toolUseConfirm}
+                onDone={() => setToolUseConfirm(null)}
+                verbose={verbose}
+              />
+            )}
+          {!toolJSX &&
+            !toolUseConfirm &&
+            !isMessageSelectorVisible &&
+            !binaryFeedbackContext &&
+            showingCostDialog && (
+              <CostThresholdDialog
+                onDone={() => {
+                  setShowCostDialog(false)
+                  setHaveShownCostDialog(true)
+                  const projectConfig = getGlobalConfig()
+                  saveGlobalConfig({
+                    ...projectConfig,
+                    hasAcknowledgedCostThreshold: true,
+                  })
+                }}
+              />
+            )}
+
+          {!toolUseConfirm &&
+            !toolJSX?.shouldHidePromptInput &&
+            shouldShowPromptInput &&
+            !isMessageSelectorVisible &&
+            !binaryFeedbackContext &&
+            !showingCostDialog && (
+              <>
+                <PromptInput
+                  commands={commands}
+                  forkNumber={forkNumber}
+                  messageLogName={messageLogName}
+                  tools={tools}
+                  disableSlashCommands={disableSlashCommands}
+                  isDisabled={apiKeyStatus === 'invalid'}
+                  isLoading={isLoading}
+                  onQuery={onQuery}
+                  debug={debug}
+                  verbose={verbose}
+                  messages={messages}
+                  setToolJSX={setToolJSX}
+                  input={inputValue}
+                  onInputChange={setInputValue}
+                  mode={inputMode}
+                  onModeChange={setInputMode}
+                  submitCount={submitCount}
+                  onSubmitCountChange={setSubmitCount}
+                  setIsLoading={setIsLoading}
+                  setAbortController={setAbortController}
+                  uiRefreshCounter={uiRefreshCounter}
+                  onShowMessageSelector={() =>
+                    setIsMessageSelectorVisible(prev => !prev)
+                  }
+                  setForkConvoWithMessagesOnTheNextRender={
+                    setForkConvoWithMessagesOnTheNextRender
+                  }
+                  readFileTimestamps={readFileTimestamps.current}
+                  abortController={abortController}
+                />
+              </>
+            )}
+        </Box>
+        {isMessageSelectorVisible && (
+          <MessageSelector
             erroredToolUseIDs={erroredToolUseIDs}
-            inProgressToolUseIDs={inProgressToolUseIDs}
             unresolvedToolUseIDs={unresolvedToolUseIDs}
+            messages={normalizeMessagesForAPI(messages)}
+            onSelect={async message => {
+              setIsMessageSelectorVisible(false)
+
+              // If the user selected the current prompt, do nothing
+              if (!messages.includes(message)) {
+                return
+              }
+
+              // Cancel tool use calls/requests
+              onCancel()
+
+              // Hack: make sure the "Interrupted by user" message is
+              // rendered in response to the cancellation. Otherwise,
+              // the screen will be cleared but there will remain a
+              // vestigial "Interrupted by user" message at the top.
+              setImmediate(async () => {
+                // Clear messages, and re-render
+                await clearTerminal()
+                setMessages([])
+                setForkConvoWithMessagesOnTheNextRender(
+                  messages.slice(0, messages.indexOf(message)),
+                )
+
+                // Populate/reset the prompt input
+                if (typeof message.message.content === 'string') {
+                  setInputValue(message.message.content)
+                }
+              })
+            }}
+            onEscape={() => setIsMessageSelectorVisible(false)}
+            tools={tools}
           />
         )}
-        {!toolJSX &&
-          toolUseConfirm &&
-          !isMessageSelectorVisible &&
-          !binaryFeedbackContext && (
-            <PermissionRequest
-              toolUseConfirm={toolUseConfirm}
-              onDone={() => setToolUseConfirm(null)}
-              verbose={verbose}
-            />
-          )}
-        {!toolJSX &&
-          !toolUseConfirm &&
-          !isMessageSelectorVisible &&
-          !binaryFeedbackContext &&
-          showingCostDialog && (
-            <CostThresholdDialog
-              onDone={() => {
-                setShowCostDialog(false)
-                setHaveShownCostDialog(true)
-                const projectConfig = getGlobalConfig()
-                saveGlobalConfig({
-                  ...projectConfig,
-                  hasAcknowledgedCostThreshold: true,
-                })
-                
-              }}
-            />
-          )}
-
-        {!toolUseConfirm &&
-          !toolJSX?.shouldHidePromptInput &&
-          shouldShowPromptInput &&
-          !isMessageSelectorVisible &&
-          !binaryFeedbackContext &&
-          !showingCostDialog && (
-            <>
-              <PromptInput
-                commands={commands}
-                forkNumber={forkNumber}
-                messageLogName={messageLogName}
-                tools={tools}
-                isDisabled={apiKeyStatus === 'invalid'}
-                isLoading={isLoading}
-                onQuery={onQuery}
-                debug={debug}
-                verbose={verbose}
-                messages={messages}
-                setToolJSX={setToolJSX}
-                input={inputValue}
-                onInputChange={setInputValue}
-                mode={inputMode}
-                onModeChange={setInputMode}
-                submitCount={submitCount}
-                onSubmitCountChange={setSubmitCount}
-                setIsLoading={setIsLoading}
-                setAbortController={setAbortController}
-                uiRefreshCounter={uiRefreshCounter}
-                onShowMessageSelector={() =>
-                  setIsMessageSelectorVisible(prev => !prev)
-                }
-                setForkConvoWithMessagesOnTheNextRender={
-                  setForkConvoWithMessagesOnTheNextRender
-                }
-                readFileTimestamps={readFileTimestamps.current}
-                abortController={abortController}
-              />
-            </>
-          )}
-      </Box>
-      {isMessageSelectorVisible && (
-        <MessageSelector
-          erroredToolUseIDs={erroredToolUseIDs}
-          unresolvedToolUseIDs={unresolvedToolUseIDs}
-          messages={normalizeMessagesForAPI(messages)}
-          onSelect={async message => {
-            setIsMessageSelectorVisible(false)
-
-            // If the user selected the current prompt, do nothing
-            if (!messages.includes(message)) {
-              return
-            }
-
-            // Cancel tool use calls/requests
-            onCancel()
-
-            // Hack: make sure the "Interrupted by user" message is
-            // rendered in response to the cancellation. Otherwise,
-            // the screen will be cleared but there will remain a
-            // vestigial "Interrupted by user" message at the top.
-            setImmediate(async () => {
-              // Clear messages, and re-render
-              await clearTerminal()
-              setMessages([])
-              setForkConvoWithMessagesOnTheNextRender(
-                messages.slice(0, messages.indexOf(message)),
-              )
-
-              // Populate/reset the prompt input
-              if (typeof message.message.content === 'string') {
-                setInputValue(message.message.content)
-              }
-            })
-          }}
-          onEscape={() => setIsMessageSelectorVisible(false)}
-          tools={tools}
-        />
-      )}
-      {/** Fix occasional rendering artifact */}
-      <Newline />
+        {/** Fix occasional rendering artifact */}
+        <Newline />
       </React.Fragment>
     </PermissionProvider>
   )

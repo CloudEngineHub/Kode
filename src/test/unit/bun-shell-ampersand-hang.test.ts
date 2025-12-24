@@ -33,4 +33,3 @@ describe('BunShell.exec ampersand backgrounding', () => {
     }
   })
 })
-

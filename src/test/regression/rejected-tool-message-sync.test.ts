@@ -26,4 +26,3 @@ describe('Regression: rejected tool messages are sync', () => {
     expect(result).not.toBeInstanceOf(Promise)
   })
 })
-

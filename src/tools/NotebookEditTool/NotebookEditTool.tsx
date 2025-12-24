@@ -24,7 +24,10 @@ function getDerivedCellId(index: number): string {
   return `cell-${index}`
 }
 
-function getCellId(cell: NotebookContent['cells'][number], index: number): string {
+function getCellId(
+  cell: NotebookContent['cells'][number],
+  index: number,
+): string {
   return cell.id ?? getDerivedCellId(index)
 }
 
@@ -36,11 +39,16 @@ function parseCellIdAsIndex(cellId: string): number | undefined {
   return undefined
 }
 
-function findCellIndex(notebook: NotebookContent, cellId: string): number | null {
+function findCellIndex(
+  notebook: NotebookContent,
+  cellId: string,
+): number | null {
   const numericIndex = parseCellIdAsIndex(cellId)
   if (numericIndex !== undefined) return numericIndex
 
-  const index = notebook.cells.findIndex((cell, idx) => getCellId(cell, idx) === cellId)
+  const index = notebook.cells.findIndex(
+    (cell, idx) => getCellId(cell, idx) === cellId,
+  )
   return index >= 0 ? index : null
 }
 
@@ -199,13 +207,7 @@ export const NotebookEditTool = {
 
     return { result: true }
   },
-  async *call({
-    notebook_path,
-    cell_id,
-    new_source,
-    cell_type,
-    edit_mode,
-  }) {
+  async *call({ notebook_path, cell_id, new_source, cell_type, edit_mode }) {
     const fullPath = isAbsolute(notebook_path)
       ? notebook_path
       : resolve(getCwd(), notebook_path)

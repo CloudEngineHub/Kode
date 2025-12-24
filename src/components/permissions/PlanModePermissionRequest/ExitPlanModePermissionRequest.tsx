@@ -52,7 +52,10 @@ function getExitPlanModeOptions(args: {
     })
   }
 
-  options.push({ label: 'Yes, and manually approve edits', value: 'yes-default' })
+  options.push({
+    label: 'Yes, and manually approve edits',
+    value: 'yes-default',
+  })
   options.push({ label: 'No, keep planning', value: 'no' })
 
   return options
@@ -170,7 +173,8 @@ export function ExitPlanModePermissionRequest({
     })()
   })
 
-  const bypassAvailable = toolUseConfirm.toolUseContext.options?.safeMode !== true
+  const bypassAvailable =
+    toolUseConfirm.toolUseContext.options?.safeMode !== true
   // The reference CLI's current build gates this option off (pc2 spreads an empty array),
   // but keeps the handler branches; keep runtime behavior 1:1 by defaulting to false.
   const launchSwarmAvailable = false
@@ -198,11 +202,10 @@ export function ExitPlanModePermissionRequest({
         <PermissionRequestTitle title="No, keep planning" riskScore={null} />
         <Box flexDirection="column" paddingX={2} paddingY={1}>
           <Text dimColor>
-            Type here to tell Kode Agent what to change (Enter submits, Esc cancels)
+            Type here to tell Kode Agent what to change (Enter submits, Esc
+            cancels)
           </Text>
-          {rejectError ? (
-            <Text color={theme.error}>{rejectError}</Text>
-          ) : null}
+          {rejectError ? <Text color={theme.error}>{rejectError}</Text> : null}
           <TextInput
             value={rejectFeedback}
             onChange={value => {
@@ -263,7 +266,8 @@ export function ExitPlanModePermissionRequest({
 
       <Box flexDirection="column" paddingX={2}>
         <Text dimColor>
-          Tip: Press ctrl+g to edit {planSource === 'file' ? `plan file: ${planFilePath}` : 'plan text'}
+          Tip: Press ctrl+g to edit{' '}
+          {planSource === 'file' ? `plan file: ${planFilePath}` : 'plan text'}
           {planSaved ? ' · Plan saved!' : ''}
         </Text>
       </Box>

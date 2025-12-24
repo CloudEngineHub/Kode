@@ -39,6 +39,9 @@ describe('Background shell tools integration (no sibling tool errors)', () => {
         verbose: false,
         safeMode: false,
         maxThinkingTokens: 0,
+        bashLlmGateQuery: async () => {
+          return 'ALLOW'
+        },
       },
     }
 
@@ -51,7 +54,13 @@ describe('Background shell tools integration (no sibling tool errors)', () => {
 
     const assistantMessage = createAssistantMessage('tools')
 
-    queue.addTool(makeToolUse('sleep', 'Bash', { command: 'sleep 0.3' }), assistantMessage)
+    queue.addTool(
+      makeToolUse('sleep', 'Bash', {
+        command: 'sleep 0.3',
+        description: 'Wait briefly',
+      }),
+      assistantMessage,
+    )
     queue.addTool(
       makeToolUse('out', 'TaskOutput', { task_id: bashId, block: false }),
       assistantMessage,
@@ -82,6 +91,8 @@ describe('Background shell tools integration (no sibling tool errors)', () => {
 
     const contents = toolResults.map((b: any) => String(b.content ?? ''))
     expect(contents.some(c => c.includes('No shell found with ID'))).toBe(false)
-    expect(contents.some(c => c.includes('Sibling tool call errored'))).toBe(false)
+    expect(contents.some(c => c.includes('Sibling tool call errored'))).toBe(
+      false,
+    )
   })
 })

@@ -29,7 +29,7 @@ export function useCancelRequest(
       // Esc closes the message selector
       return
     }
-  
+
     setToolJSX(null)
     setToolUseConfirm(null)
     setBinaryFeedbackContext(null)

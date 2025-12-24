@@ -9,7 +9,7 @@ import { Tool } from '@tool'
 import { getCwd } from '@utils/state'
 import { getAbsoluteAndRelativePaths, getAbsolutePath } from '@utils/file'
 import { ripGrep } from '@utils/ripgrep'
-import { getBunShellSandboxPlan } from '@utils/bunShellSandboxPlan'
+import { getBunShellSandboxPlan } from '@utils/sandbox/bunShellSandboxPlan'
 import { DESCRIPTION, TOOL_NAME_FOR_PROMPT } from './prompt'
 import { hasReadPermission } from '@utils/permissions/filesystem'
 import { isAbsolute, relative } from 'path'
@@ -103,7 +103,11 @@ type Output = {
   durationMs: number
 }
 
-function paginate<T>(items: T[], limit: number | undefined, offset: number): T[] {
+function paginate<T>(
+  items: T[],
+  limit: number | undefined,
+  offset: number,
+): T[] {
   if (offset > 0) {
     items = items.slice(offset)
   }
@@ -129,7 +133,10 @@ function toProjectRelativeIfPossible(p: string): string {
   return rel
 }
 
-function formatPagination(limit: number | undefined, offset: number | undefined): string {
+function formatPagination(
+  limit: number | undefined,
+  offset: number | undefined,
+): string {
   if (!limit && !offset) return ''
   return `limit: ${limit}, offset: ${offset ?? 0}`
 }
@@ -208,7 +215,13 @@ export const GrepTool = {
       <Box justifyContent="space-between" width="100%">
         <Box flexDirection="row">
           <Text>&nbsp;&nbsp;⎿ &nbsp;Found </Text>
-          <Text bold>{output.mode === 'content' ? output.numLines ?? 0 : output.mode === 'count' ? output.numMatches ?? 0 : output.numFiles} </Text>
+          <Text bold>
+            {output.mode === 'content'
+              ? (output.numLines ?? 0)
+              : output.mode === 'count'
+                ? (output.numMatches ?? 0)
+                : output.numFiles}{' '}
+          </Text>
           <Text>
             {output.mode === 'content'
               ? (output.numLines ?? 0) === 1
@@ -228,11 +241,16 @@ export const GrepTool = {
     )
   },
   renderResultForAssistant(result: Output) {
-    const pagination = formatPagination(result.appliedLimit, result.appliedOffset)
+    const pagination = formatPagination(
+      result.appliedLimit,
+      result.appliedOffset,
+    )
 
     if (result.mode === 'content') {
       const base = truncateToCharBudget(result.content || 'No matches found')
-      return pagination ? `${base}\n\n[Showing results with pagination = ${pagination}]` : base
+      return pagination
+        ? `${base}\n\n[Showing results with pagination = ${pagination}]`
+        : base
     }
 
     if (result.mode === 'count') {
@@ -331,7 +349,9 @@ export const GrepTool = {
       toolUseContext,
     })
     const lines = await ripGrep(args, absolutePath, abortController.signal, {
-      sandbox: sandboxPlan.settings.enabled ? sandboxPlan.bunShellSandboxOptions : undefined,
+      sandbox: sandboxPlan.settings.enabled
+        ? sandboxPlan.bunShellSandboxOptions
+        : undefined,
     })
 
     if (output_mode === 'content') {
@@ -356,7 +376,11 @@ export const GrepTool = {
         ...(appliedOffset > 0 ? { appliedOffset } : {}),
         durationMs: Date.now() - start,
       }
-      yield { type: 'result', data: output, resultForAssistant: this.renderResultForAssistant(output) }
+      yield {
+        type: 'result',
+        data: output,
+        resultForAssistant: this.renderResultForAssistant(output),
+      }
       return
     }
 
@@ -396,7 +420,11 @@ export const GrepTool = {
         ...(appliedOffset > 0 ? { appliedOffset } : {}),
         durationMs: Date.now() - start,
       }
-      yield { type: 'result', data: output, resultForAssistant: this.renderResultForAssistant(output) }
+      yield {
+        type: 'result',
+        data: output,
+        resultForAssistant: this.renderResultForAssistant(output),
+      }
       return
     }
 
@@ -420,7 +448,9 @@ export const GrepTool = {
       })
       .map(([filePath]) => filePath)
 
-    const window = paginate(sorted, appliedLimit, appliedOffset).map(toProjectRelativeIfPossible)
+    const window = paginate(sorted, appliedLimit, appliedOffset).map(
+      toProjectRelativeIfPossible,
+    )
     const output: Output = {
       mode: 'files_with_matches',
       filenames: window,
@@ -429,6 +459,10 @@ export const GrepTool = {
       ...(appliedOffset > 0 ? { appliedOffset } : {}),
       durationMs: Date.now() - start,
     }
-    yield { type: 'result', data: output, resultForAssistant: this.renderResultForAssistant(output) }
+    yield {
+      type: 'result',
+      data: output,
+      resultForAssistant: this.renderResultForAssistant(output),
+    }
   },
 } satisfies Tool<Input, Output>

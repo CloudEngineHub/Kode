@@ -69,7 +69,9 @@ function resolveEditorCommand(): EditorCommand | null {
     })
   }
 
-  return candidates.find(candidate => isCommandAvailable(candidate.command)) ?? null
+  return (
+    candidates.find(candidate => isCommandAvailable(candidate.command)) ?? null
+  )
 }
 
 function restoreStdinState(previouslyRaw: boolean): void {
@@ -115,10 +117,14 @@ export async function launchExternalEditor(
 
   try {
     await new Promise<void>((resolve, reject) => {
-      const child = spawn(editorCommand.command, [...editorCommand.args, filePath], {
-        stdio: 'inherit',
-        shell: editorCommand.shell ?? false,
-      })
+      const child = spawn(
+        editorCommand.command,
+        [...editorCommand.args, filePath],
+        {
+          stdio: 'inherit',
+          shell: editorCommand.shell ?? false,
+        },
+      )
 
       child.on('error', reject)
       child.on('exit', (code, signal) => {
@@ -186,10 +192,14 @@ export async function launchExternalEditorForFilePath(
 
   try {
     await new Promise<void>((resolve, reject) => {
-      const child = spawn(editorCommand.command, [...editorCommand.args, filePath], {
-        stdio: 'inherit',
-        shell: editorCommand.shell ?? false,
-      })
+      const child = spawn(
+        editorCommand.command,
+        [...editorCommand.args, filePath],
+        {
+          stdio: 'inherit',
+          shell: editorCommand.shell ?? false,
+        },
+      )
 
       child.on('error', reject)
       child.on('exit', (code, signal) => {

@@ -47,11 +47,17 @@ export function SelectOption({
     focusIndicator: () => ({
       color: appTheme.kode,
     }),
-    label: ({ isFocused, isSelected }: { isFocused: boolean; isSelected: boolean }) => ({
-      color: isSelected 
-        ? appTheme.success 
-        : isFocused 
-          ? appTheme.kode 
+    label: ({
+      isFocused,
+      isSelected,
+    }: {
+      isFocused: boolean
+      isSelected: boolean
+    }) => ({
+      color: isSelected
+        ? appTheme.success
+        : isFocused
+          ? appTheme.kode
           : appTheme.text,
       bold: isSelected,
     }),

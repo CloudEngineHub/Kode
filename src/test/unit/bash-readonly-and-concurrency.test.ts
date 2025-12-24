@@ -16,9 +16,7 @@ function deferred<T = void>() {
   return { promise, resolve, reject }
 }
 
-function makeBashLikeTool(options: {
-  callImpl: Tool['call']
-}): Tool {
+function makeBashLikeTool(options: { callImpl: Tool['call'] }): Tool {
   const inputSchema = z.strictObject({
     command: z.string(),
   })
@@ -33,7 +31,10 @@ function makeBashLikeTool(options: {
       return true
     },
     isReadOnly(input?: any) {
-      return typeof input?.command === 'string' && isBashCommandReadOnly(input.command)
+      return (
+        typeof input?.command === 'string' &&
+        isBashCommandReadOnly(input.command)
+      )
     },
     isConcurrencySafe(input?: any) {
       return this.isReadOnly(input)
@@ -71,7 +72,9 @@ describe('Bash read-only detection + scheduler concurrency parity', () => {
     expect(BashTool.isReadOnly({ command: 'pwd' } as any)).toBe(true)
     expect(BashTool.isConcurrencySafe({ command: 'pwd' } as any)).toBe(true)
     expect(BashTool.isReadOnly({ command: 'cat foo > bar' } as any)).toBe(false)
-    expect(BashTool.isConcurrencySafe({ command: 'cat foo > bar' } as any)).toBe(false)
+    expect(
+      BashTool.isConcurrencySafe({ command: 'cat foo > bar' } as any),
+    ).toBe(false)
   })
 
   test('two read-only Bash tool uses can start concurrently', async () => {
@@ -176,7 +179,10 @@ describe('Bash read-only detection + scheduler concurrency parity', () => {
 
     let consumePromise: Promise<any[]> | null = null
     try {
-      queue.addTool(makeToolUse('a', { command: 'cat foo > bar' }), assistantMessage)
+      queue.addTool(
+        makeToolUse('a', { command: 'cat foo > bar' }),
+        assistantMessage,
+      )
       queue.addTool(makeToolUse('b', { command: 'pwd' }), assistantMessage)
 
       consumePromise = (async () => {

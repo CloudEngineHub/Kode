@@ -1,10 +1,7 @@
 import { FileEditTool } from '@tools/FileEditTool/FileEditTool'
 import { FileEditToolDiff } from '@components/permissions/FileEditPermissionRequest/FileEditToolDiff'
 import { Message } from '@components/Message'
-import {
-  normalizeMessages,
-  type NormalizedMessage,
-} from '@utils/messages'
+import { normalizeMessages, type NormalizedMessage } from '@utils/messages'
 import type { Tool } from '@tool'
 import { useTerminalSize } from '@hooks/useTerminalSize'
 import { FileWriteTool } from '@tools/FileWriteTool/FileWriteTool'

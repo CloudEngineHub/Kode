@@ -35,7 +35,9 @@ export function Doctor({ onDone, doctorMode = false }: Props): React.ReactNode {
   return (
     <Box flexDirection="column" gap={1} paddingX={1} paddingTop={1}>
       <Text color={theme.success}>✓ Installation checks passed</Text>
-      <Text dimColor>Note: Auto-update is disabled by design. Use npm/bun to update.</Text>
+      <Text dimColor>
+        Note: Auto-update is disabled by design. Use npm/bun to update.
+      </Text>
       <PressEnterToContinue />
     </Box>
   )

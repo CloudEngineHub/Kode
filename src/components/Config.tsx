@@ -3,11 +3,7 @@ import * as React from 'react'
 import { useState } from 'react'
 import figures from 'figures'
 import { getTheme } from '@utils/theme'
-import {
-  GlobalConfig,
-  saveGlobalConfig,
-  getGlobalConfig,
-} from '@utils/config'
+import { GlobalConfig, saveGlobalConfig, getGlobalConfig } from '@utils/config'
 import chalk from 'chalk'
 import { useExitOnCtrlCD } from '@hooks/useExitOnCtrlCD'
 import { getModelManager } from '@utils/model'

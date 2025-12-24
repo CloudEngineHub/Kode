@@ -1,8 +1,10 @@
-import { useEffect } from 'react'
- 
+import { useRef } from 'react'
+import { logStartupProfile } from '@utils/startupProfile'
 
 export function useLogStartupTime(): void {
-  useEffect(() => {
-    const startupTimeMs = Math.round(process.uptime() * 1000)
-  }, [])
+  const didLog = useRef(false)
+  if (!didLog.current) {
+    didLog.current = true
+    logStartupProfile('first_render')
+  }
 }

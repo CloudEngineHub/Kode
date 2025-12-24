@@ -69,10 +69,8 @@ export function ConsoleOAuthFlow({ onDone }: Props): React.ReactNode {
   useInput(async (_, key) => {
     if (key.return) {
       if (oauthStatus.state === 'idle') {
-        
         setOAuthStatus({ state: 'ready_to_start' })
       } else if (oauthStatus.state === 'success') {
-        
         await clearTerminal() // needed to clear out Static components
         onDone()
       } else if (oauthStatus.state === 'error' && oauthStatus.toRetry) {
@@ -100,7 +98,7 @@ export function ConsoleOAuthFlow({ onDone }: Props): React.ReactNode {
       }
 
       // Track which path the user is taking (manual code entry)
-      
+
       oauthService.processCallback({
         authorizationCode,
         state,
@@ -132,7 +130,6 @@ export function ConsoleOAuthFlow({ onDone }: Props): React.ReactNode {
                 'Failed to exchange authorization code for access token. Please try again.',
               toRetry: { state: 'ready_to_start' },
             })
-            
           } else {
             // Handle other errors
             setOAuthStatus({
@@ -153,7 +150,7 @@ export function ConsoleOAuthFlow({ onDone }: Props): React.ReactNode {
             message: 'Failed to create API key: ' + err.message,
             toRetry: { state: 'ready_to_start' },
           })
-          
+
           throw err
         },
       )
@@ -168,7 +165,6 @@ export function ConsoleOAuthFlow({ onDone }: Props): React.ReactNode {
             "Unable to create API key. The server accepted the request but didn't return a key.",
           toRetry: { state: 'ready_to_start' },
         })
-        
       }
     } catch (err) {
       const errorMessage = (err as Error).message
@@ -188,8 +184,8 @@ export function ConsoleOAuthFlow({ onDone }: Props): React.ReactNode {
         return (
           <Box flexDirection="column" gap={1}>
             <Text bold>
-              {PRODUCT_NAME} is billed based on API usage through your ShareAI Lab
-              account.
+              {PRODUCT_NAME} is billed based on API usage through your ShareAI
+              Lab account.
             </Text>
 
             <Box>
@@ -311,7 +307,7 @@ export function ConsoleOAuthFlow({ onDone }: Props): React.ReactNode {
   }
   return (
     <Box flexDirection="column" gap={1}>
-      <Static 
+      <Static
         items={Object.keys(staticItems)}
         children={(item: string) => staticItems[item]}
       />

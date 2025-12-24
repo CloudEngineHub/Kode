@@ -463,10 +463,7 @@ interface QueryMetrics {
 }
 
 function trackQuery(metrics: QueryMetrics): void {
-  // 记录到分析
-  analytics.track('query_completed', metrics)
-  
-  // 更新成本跟踪
+  // 仅本地：更新成本跟踪，并在需要时记录性能诊断信息
   updateCostTracking(metrics.tokensUsed, metrics.modelUsed)
   
   // 性能监控

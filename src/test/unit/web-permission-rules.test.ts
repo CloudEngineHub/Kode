@@ -3,9 +3,15 @@ import { createDefaultToolPermissionContext } from '@kode-types/toolPermissionCo
 import { hasPermissionsToUseTool } from '@permissions'
 import { WebFetchTool } from '@tools/WebFetchTool/WebFetchTool'
 import { WebSearchTool } from '@tools/WebSearchTool/WebSearchTool'
-import { getCurrentProjectConfig, saveCurrentProjectConfig } from '@utils/config'
+import {
+  getCurrentProjectConfig,
+  saveCurrentProjectConfig,
+} from '@utils/config'
 
-function makeToolUseContext(toolPermissionContext: any, permissionMode: string = 'default') {
+function makeToolUseContext(
+  toolPermissionContext: any,
+  permissionMode: string = 'default',
+) {
   return {
     abortController: new AbortController(),
     messageId: 'test',
@@ -37,7 +43,9 @@ describe('Web tool permission rules (Reference CLI parity)', () => {
 
   test('WebFetch uses domain:<hostname> key for valid URLs', async () => {
     const toolPermissionContext = createDefaultToolPermissionContext()
-    toolPermissionContext.alwaysAllowRules.localSettings = ['WebFetch(domain:example.com)']
+    toolPermissionContext.alwaysAllowRules.localSettings = [
+      'WebFetch(domain:example.com)',
+    ]
 
     const result = await hasPermissionsToUseTool(
       WebFetchTool as any,
@@ -51,7 +59,9 @@ describe('Web tool permission rules (Reference CLI parity)', () => {
 
   test('WebFetch supports wildcard domain rules', async () => {
     const toolPermissionContext = createDefaultToolPermissionContext()
-    toolPermissionContext.alwaysAllowRules.localSettings = ['WebFetch(domain:*.example.com)']
+    toolPermissionContext.alwaysAllowRules.localSettings = [
+      'WebFetch(domain:*.example.com)',
+    ]
 
     const result = await hasPermissionsToUseTool(
       WebFetchTool as any,
@@ -65,8 +75,12 @@ describe('Web tool permission rules (Reference CLI parity)', () => {
 
   test('WebFetch deny rules override allow rules', async () => {
     const toolPermissionContext = createDefaultToolPermissionContext()
-    toolPermissionContext.alwaysAllowRules.localSettings = ['WebFetch(domain:*.example.com)']
-    toolPermissionContext.alwaysDenyRules.localSettings = ['WebFetch(domain:api.example.com)']
+    toolPermissionContext.alwaysAllowRules.localSettings = [
+      'WebFetch(domain:*.example.com)',
+    ]
+    toolPermissionContext.alwaysDenyRules.localSettings = [
+      'WebFetch(domain:api.example.com)',
+    ]
 
     const result = await hasPermissionsToUseTool(
       WebFetchTool as any,
@@ -94,12 +108,16 @@ describe('Web tool permission rules (Reference CLI parity)', () => {
 
     expect(result.result).toBe(false)
     expect((result as any).shouldPromptUser).not.toBe(false)
-    expect((result as any).message).toContain('requested permissions to use WebFetch')
+    expect((result as any).message).toContain(
+      'requested permissions to use WebFetch',
+    )
   })
 
   test('WebFetch falls back to input:<raw> when schema parsing fails', async () => {
     const toolPermissionContext = createDefaultToolPermissionContext()
-    toolPermissionContext.alwaysAllowRules.localSettings = ['WebFetch(input:hello)']
+    toolPermissionContext.alwaysAllowRules.localSettings = [
+      'WebFetch(input:hello)',
+    ]
 
     const result = await hasPermissionsToUseTool(
       WebFetchTool as any,
@@ -113,7 +131,9 @@ describe('Web tool permission rules (Reference CLI parity)', () => {
 
   test('WebSearch uses query-based keys (WebSearch(<query>)) with WebSearch allow-all fallback', async () => {
     const toolPermissionContext = createDefaultToolPermissionContext()
-    toolPermissionContext.alwaysAllowRules.localSettings = ['WebSearch(claude ai)']
+    toolPermissionContext.alwaysAllowRules.localSettings = [
+      'WebSearch(claude ai)',
+    ]
 
     const allowed = await hasPermissionsToUseTool(
       WebSearchTool as any,

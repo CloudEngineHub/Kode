@@ -13,7 +13,9 @@ export function getRequestStatus(): RequestStatus {
   return current
 }
 
-export function setRequestStatus(status: Omit<RequestStatus, 'updatedAt'>): void {
+export function setRequestStatus(
+  status: Omit<RequestStatus, 'updatedAt'>,
+): void {
   current = { ...status, updatedAt: Date.now() }
   for (const listener of listeners) listener(current)
 }
@@ -24,4 +26,3 @@ export function subscribeRequestStatus(
   listeners.add(listener)
   return () => listeners.delete(listener)
 }
-

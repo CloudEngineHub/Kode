@@ -91,28 +91,10 @@ async function main() {
     )
   }
 
-  // Generate Bun-first CLI shim (npm bin points here)
-  const cliWrapper = `#!/usr/bin/env bun
-
-import { existsSync } from "node:fs";
-import { join } from "node:path";
-
-const distPath = join(import.meta.dir, "dist", "index.js");
-if (!existsSync(distPath)) {
-  console.error('❌ Built files not found. Run: bun run build');
-  process.exit(1);
-}
-
-try {
-  await import("./dist/index.js");
-} catch (err) {
-  const message = err && typeof err === "object" && "message" in err ? err.message : String(err);
-  console.error("❌ Failed to start Kode:", message);
-  process.exit(1);
-}
-`
-
-  writeFileSync('cli.js', cliWrapper)
+  // Generate Node-based CLI shim (npm bin points here)
+  // - Prefer cached native binary (Windows OOTB)
+  // - Fallback to Bun runtime (preserve current behavior)
+  cpSync(join('scripts', 'cli-wrapper.cjs'), 'cli.js')
   try {
     chmodSync('cli.js', 0o755)
   } catch (err) {

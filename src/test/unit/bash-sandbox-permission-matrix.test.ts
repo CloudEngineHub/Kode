@@ -11,7 +11,10 @@ function writeJson(filePath: string, value: unknown) {
   writeFileSync(filePath, JSON.stringify(value, null, 2), 'utf-8')
 }
 
-function makeToolUseContext(toolPermissionContext: any, overrides: { projectDir: string; homeDir: string }) {
+function makeToolUseContext(
+  toolPermissionContext: any,
+  overrides: { projectDir: string; homeDir: string },
+) {
   return {
     abortController: new AbortController(),
     messageId: 'test',
@@ -50,7 +53,11 @@ describe('Bash sandbox permission matrix (Reference CLI parity)', () => {
 
   test('autoAllowBashIfSandboxed: sandboxed Bash is allowed by default (no allow rule needed)', async () => {
     writeJson(join(projectDir, '.claude', 'settings.json'), {
-      sandbox: { enabled: true, autoAllowBashIfSandboxed: true, allowUnsandboxedCommands: true },
+      sandbox: {
+        enabled: true,
+        autoAllowBashIfSandboxed: true,
+        allowUnsandboxedCommands: true,
+      },
     })
 
     const toolPermissionContext = createDefaultToolPermissionContext()
@@ -104,7 +111,9 @@ describe('Bash sandbox permission matrix (Reference CLI parity)', () => {
 
     expect(result.result).toBe(false)
     expect((result as any).shouldPromptUser).not.toBe(false)
-    expect((result as any).message).toContain('requested permissions to use Bash')
+    expect((result as any).message).toContain(
+      'requested permissions to use Bash',
+    )
   })
 
   test('excludedCommands disables auto-allow (falls back to normal Bash permission prompts)', async () => {
@@ -123,7 +132,9 @@ describe('Bash sandbox permission matrix (Reference CLI parity)', () => {
 
     expect(result.result).toBe(false)
     expect((result as any).shouldPromptUser).not.toBe(false)
-    expect((result as any).message).toContain('requested permissions to use Bash')
+    expect((result as any).message).toContain(
+      'requested permissions to use Bash',
+    )
   })
 
   test('allowUnsandboxedCommands=false ignores dangerouslyDisableSandbox and stays sandboxed', async () => {

@@ -13,7 +13,9 @@ import { BLACK_CIRCLE } from '@constants/figures'
 
 function getExitPlanModePlanText(conversationKey?: string): string {
   const { content } = readPlanFile(undefined, conversationKey)
-  return content || 'No plan found. Please write your plan to the plan file first.'
+  return (
+    content || 'No plan found. Please write your plan to the plan file first.'
+  )
 }
 
 export function __getExitPlanModePlanTextForTests(
@@ -79,7 +81,8 @@ export const ExitPlanModeTool = {
   ) {
     const theme = getTheme()
     const conversationKey =
-      typeof options.conversationKey === 'string' && options.conversationKey.trim()
+      typeof options.conversationKey === 'string' &&
+      options.conversationKey.trim()
         ? options.conversationKey.trim()
         : undefined
 
@@ -89,9 +92,11 @@ export const ExitPlanModeTool = {
     return (
       <Box flexDirection="column" marginTop={1} width="100%">
         <Box flexDirection="row">
-            <Text>&nbsp;&nbsp;⎿ &nbsp;</Text>
+          <Text>&nbsp;&nbsp;⎿ &nbsp;</Text>
           <Box flexDirection="column" width="100%">
-            <Text color={theme.error}>User rejected Kode Agent&apos;s plan:</Text>
+            <Text color={theme.error}>
+              User rejected Kode Agent&apos;s plan:
+            </Text>
             <Box
               borderStyle="round"
               borderColor={theme.planMode}
@@ -108,7 +113,8 @@ export const ExitPlanModeTool = {
   },
   renderToolResultMessage(output: Output) {
     const theme = getTheme()
-    const planPath = typeof output.filePath === 'string' ? output.filePath : null
+    const planPath =
+      typeof output.filePath === 'string' ? output.filePath : null
     const plan = output.plan || 'No plan found'
 
     return (
@@ -121,9 +127,7 @@ export const ExitPlanModeTool = {
           <Text>&nbsp;&nbsp;⎿ &nbsp;</Text>
           <Box flexDirection="column">
             {planPath ? (
-              <Text dimColor>
-                Plan saved to: {planPath} · /plan to edit
-              </Text>
+              <Text dimColor>Plan saved to: {planPath} · /plan to edit</Text>
             ) : null}
             <Text dimColor>{plan}</Text>
           </Box>

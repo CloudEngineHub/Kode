@@ -26,7 +26,7 @@ const makeContext = () => ({
 
 describe('ExitPlanModeTool', () => {
   beforeEach(() => {
-    process.env.CLAUDE_CONFIG_DIR = join(process.cwd(), '.tmp-claude-config')
+    process.env.KODE_CONFIG_DIR = join(process.cwd(), '.tmp-kode-config')
     __resetPlanModeForTests()
   })
 

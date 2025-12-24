@@ -8,16 +8,17 @@ import {
   getKodeAgentSessionId,
   resetKodeAgentSessionIdForTests,
   setKodeAgentSessionId,
-} from '@utils/kodeAgentSessionId'
+} from '@utils/protocol/kodeAgentSessionId'
 import {
   appendSessionJsonlFromMessage,
   getSessionLogFilePath,
   resetSessionJsonlStateForTests,
   sanitizeProjectNameForSessionStore,
-} from '@utils/kodeAgentSessionLog'
+} from '@utils/protocol/kodeAgentSessionLog'
 
 describe('JSONL session persistence (projects/*.jsonl)', () => {
   const originalConfigDir = process.env.KODE_CONFIG_DIR
+  const runnerCwd = process.cwd()
 
   let configDir: string
   let projectDir: string
@@ -31,7 +32,8 @@ describe('JSONL session persistence (projects/*.jsonl)', () => {
     await setCwd(projectDir)
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await setCwd(runnerCwd)
     resetSessionJsonlStateForTests()
     resetKodeAgentSessionIdForTests()
     if (originalConfigDir === undefined) {
@@ -44,8 +46,12 @@ describe('JSONL session persistence (projects/*.jsonl)', () => {
   })
 
   test('sanitizeProjectNameForSessionStore matches reference bc() behavior', () => {
-    expect(sanitizeProjectNameForSessionStore('/Users/me/my repo')).toBe('-Users-me-my-repo')
-    expect(sanitizeProjectNameForSessionStore('C:\\Users\\me\\repo')).toBe('C--Users-me-repo')
+    expect(sanitizeProjectNameForSessionStore('/Users/me/my repo')).toBe(
+      '-Users-me-my-repo',
+    )
+    expect(sanitizeProjectNameForSessionStore('C:\\Users\\me\\repo')).toBe(
+      'C--Users-me-repo',
+    )
   })
 
   test('writes file-history-snapshot then user/assistant records with parentUuid chaining', async () => {
@@ -55,7 +61,10 @@ describe('JSONL session persistence (projects/*.jsonl)', () => {
     appendSessionJsonlFromMessage({ message: user, toolUseContext: {} })
     appendSessionJsonlFromMessage({ message: assistant, toolUseContext: {} })
 
-    const logPath = getSessionLogFilePath({ cwd: projectDir, sessionId: getKodeAgentSessionId() })
+    const logPath = getSessionLogFilePath({
+      cwd: projectDir,
+      sessionId: getKodeAgentSessionId(),
+    })
     const lines = readFileSync(logPath, 'utf8')
       .split('\n')
       .filter(Boolean)
@@ -104,15 +113,23 @@ describe('JSONL session persistence (projects/*.jsonl)', () => {
       },
     )
 
-    appendSessionJsonlFromMessage({ message: toolResultMessage, toolUseContext: {} })
+    appendSessionJsonlFromMessage({
+      message: toolResultMessage,
+      toolUseContext: {},
+    })
 
-    const logPath = getSessionLogFilePath({ cwd: projectDir, sessionId: getKodeAgentSessionId() })
+    const logPath = getSessionLogFilePath({
+      cwd: projectDir,
+      sessionId: getKodeAgentSessionId(),
+    })
     const lines = readFileSync(logPath, 'utf8')
       .split('\n')
       .filter(Boolean)
       .map(l => JSON.parse(l))
 
-    const userLine = lines.find(l => l.type === 'user' && l.uuid === toolResultMessage.uuid)
+    const userLine = lines.find(
+      l => l.type === 'user' && l.uuid === toolResultMessage.uuid,
+    )
     expect(userLine).toBeTruthy()
     expect(userLine.toolUseResult).toEqual({ filenames: ['a.ts'], numFiles: 1 })
   })

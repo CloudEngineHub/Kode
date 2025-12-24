@@ -13,6 +13,7 @@ import { GlobTool } from './tools/GlobTool/GlobTool'
 import { GrepTool } from './tools/GrepTool/GrepTool'
 import { KillShellTool } from './tools/KillShellTool/KillShellTool'
 import { ListMcpResourcesTool } from './tools/ListMcpResourcesTool/ListMcpResourcesTool'
+import { LspTool } from './tools/LspTool/LspTool'
 import { MCPTool } from './tools/MCPTool/MCPTool'
 import { NotebookEditTool } from './tools/NotebookEditTool/NotebookEditTool'
 import { ReadMcpResourceTool } from './tools/ReadMcpResourceTool/ReadMcpResourceTool'
@@ -33,6 +34,7 @@ export const getAllTools = (): Tool[] => [
   KillShellTool as unknown as Tool,
   GlobTool as unknown as Tool,
   GrepTool as unknown as Tool,
+  LspTool as unknown as Tool,
   FileReadTool as unknown as Tool,
   FileEditTool as unknown as Tool,
   FileWriteTool as unknown as Tool,

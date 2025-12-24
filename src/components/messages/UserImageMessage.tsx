@@ -24,7 +24,9 @@ function formatBytes(bytes: number): string {
 export function UserImageMessage({ addMargin, param }: Props): React.ReactNode {
   const theme = getTheme()
   const mediaType =
-    param.source && typeof param.source === 'object' && 'media_type' in param.source
+    param.source &&
+    typeof param.source === 'object' &&
+    'media_type' in param.source
       ? (param.source as any).media_type
       : undefined
 
@@ -50,4 +52,3 @@ export function UserImageMessage({ addMargin, param }: Props): React.ReactNode {
     </Box>
   )
 }
-

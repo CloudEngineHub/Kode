@@ -1,5 +1,13 @@
 import { describe, expect, test } from 'bun:test'
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, statSync, writeFileSync } from 'fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { BunShell, buildLinuxBwrapCommand } from '@utils/BunShell'
@@ -17,14 +25,17 @@ describe('BunShell Linux bwrap sandbox (Reference CLI parity)', () => {
       mkdirSync(denyWithinAllow, { recursive: true })
       mkdirSync(denyReadDir, { recursive: true })
       writeFileSync(denyReadFile, 'secret', 'utf-8')
-      mkdirSync('/tmp/claude', { recursive: true })
+      mkdirSync('/tmp/kode', { recursive: true })
 
       const cmd = buildLinuxBwrapCommand({
         bwrapPath: '/usr/bin/bwrap',
         command: 'echo hi',
         needsNetworkRestriction: true,
         readConfig: { denyOnly: [denyReadDir, denyReadFile] },
-        writeConfig: { allowOnly: [allowDir], denyWithinAllow: [denyWithinAllow] },
+        writeConfig: {
+          allowOnly: [allowDir],
+          denyWithinAllow: [denyWithinAllow],
+        },
         enableWeakerNestedSandbox: false,
         binShellPath: '/bin/bash',
         cwd: root,
@@ -42,8 +53,8 @@ describe('BunShell Linux bwrap sandbox (Reference CLI parity)', () => {
         '/',
         '/',
         '--bind',
-        '/tmp/claude',
-        '/tmp/claude',
+        '/tmp/kode',
+        '/tmp/kode',
         '--bind',
         realpathSync(allowDir),
         realpathSync(allowDir),
@@ -59,7 +70,8 @@ describe('BunShell Linux bwrap sandbox (Reference CLI parity)', () => {
 
       if (existsSync('/etc/ssh/ssh_config.d')) {
         const sshConfigD = realpathSync('/etc/ssh/ssh_config.d')
-        if (statSync(sshConfigD).isDirectory()) expected.push('--tmpfs', sshConfigD)
+        if (statSync(sshConfigD).isDirectory())
+          expected.push('--tmpfs', sshConfigD)
         else expected.push('--ro-bind', '/dev/null', sshConfigD)
       }
 
@@ -71,7 +83,7 @@ describe('BunShell Linux bwrap sandbox (Reference CLI parity)', () => {
         '1',
         '--setenv',
         'TMPDIR',
-        '/tmp/claude',
+        '/tmp/kode',
         '--proc',
         '/proc',
         '--',
@@ -102,7 +114,9 @@ describe('BunShell Linux bwrap sandbox (Reference CLI parity)', () => {
         },
       })
       expect(required.code).toBe(2)
-      expect(required.stderr).toContain('System sandbox is required but unavailable')
+      expect(required.stderr).toContain(
+        'System sandbox is required but unavailable',
+      )
 
       const optional = await shell.exec('echo ok', undefined, 5_000, {
         sandbox: {
@@ -115,7 +129,9 @@ describe('BunShell Linux bwrap sandbox (Reference CLI parity)', () => {
         },
       })
       expect(optional.stdout.trim()).toBe('ok')
-      expect(optional.stderr).toContain('[sandbox] unavailable, ran without isolation.')
+      expect(optional.stderr).toContain(
+        '[sandbox] unavailable, ran without isolation.',
+      )
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
@@ -146,7 +162,9 @@ describe('BunShell Linux bwrap sandbox (Reference CLI parity)', () => {
       })
 
       expect(result.stdout.trim()).toBe('ok')
-      expect(result.stderr).toContain('[sandbox] failed to start, ran without isolation.')
+      expect(result.stderr).toContain(
+        '[sandbox] failed to start, ran without isolation.',
+      )
     } finally {
       rmSync(root, { recursive: true, force: true })
     }

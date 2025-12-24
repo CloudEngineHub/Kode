@@ -16,7 +16,7 @@ export const TodoItem: React.FC<TodoItemProps> = ({ todo, children }) => {
 
   const statusColorMap = {
     completed: '#008000',
-    in_progress: '#FFA500', 
+    in_progress: '#FFA500',
     pending: '#FFD700',
   }
 
@@ -34,7 +34,7 @@ export const TodoItem: React.FC<TodoItemProps> = ({ todo, children }) => {
     <Box flexDirection="row" gap={1}>
       <Text color={color}>{icon}</Text>
       {priorityIcon && <Text>{priorityIcon}</Text>}
-      <Text 
+      <Text
         color={color}
         strikethrough={todo.status === 'completed'}
         bold={todo.status === 'in_progress'}

@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { Cost } from '@components/Cost'
 import { FallbackToolUseRejectedMessage } from '@components/FallbackToolUseRejectedMessage'
 import { Tool, ToolUseContext } from '@tool'
-import { queryQuick } from '@services/claude'
+import { queryQuick } from '@services/llmLazy'
 import { PROMPT, TOOL_NAME_FOR_PROMPT } from './prompt'
 import { convertHtmlToMarkdown } from './htmlToMarkdown'
 import { urlCache } from './cache'
@@ -61,13 +61,19 @@ function isSameHost(originalUrl: string, redirectUrl: string): boolean {
     if (redirect.protocol !== original.protocol) return false
     if (redirect.port !== original.port) return false
     if (redirect.username || redirect.password) return false
-    return normalizeHostname(original.hostname) === normalizeHostname(redirect.hostname)
+    return (
+      normalizeHostname(original.hostname) ===
+      normalizeHostname(redirect.hostname)
+    )
   } catch {
     return false
   }
 }
 
-function createTimeoutSignal(parent: AbortSignal, timeoutMs: number): {
+function createTimeoutSignal(
+  parent: AbortSignal,
+  timeoutMs: number,
+): {
   signal: AbortSignal
   cleanup: () => void
 } {
@@ -108,7 +114,9 @@ async function readResponseTextLimited(
         } catch {
           // ignore
         }
-        throw new Error(`Response exceeded maximum allowed size (${maxBytes} bytes)`)
+        throw new Error(
+          `Response exceeded maximum allowed size (${maxBytes} bytes)`,
+        )
       }
       chunks.push(value)
     }
@@ -179,7 +187,12 @@ async function fetchWithRedirectDetection(
   url: string,
   signal: AbortSignal,
 ): Promise<
-  | { type: 'redirect'; originalUrl: string; redirectUrl: string; statusCode: number }
+  | {
+      type: 'redirect'
+      originalUrl: string
+      redirectUrl: string
+      statusCode: number
+    }
   | { type: 'response'; response: Response; finalUrl: string }
 > {
   let current = url
@@ -188,8 +201,7 @@ async function fetchWithRedirectDetection(
       method: 'GET',
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; WebFetch/1.0)',
-        Accept:
-          'text/markdown, text/html, */*',
+        Accept: 'text/markdown, text/html, */*',
         'Accept-Language': 'en-US,en;q=0.5',
       },
       signal,
@@ -360,10 +372,8 @@ To complete your request, I need to fetch content from the redirected URL. Pleas
 
         contentType = response.headers.get('content-type') || ''
 
-        const { text: raw, bytes: responseBytes } = await readResponseTextLimited(
-          response,
-          MAX_RESPONSE_BYTES,
-        )
+        const { text: raw, bytes: responseBytes } =
+          await readResponseTextLimited(response, MAX_RESPONSE_BYTES)
         bytes = responseBytes
 
         const converted = contentType.toLowerCase().includes('text/html')
@@ -380,7 +390,11 @@ To complete your request, I need to fetch content from the redirected URL. Pleas
       }
 
       const allowBroaderQuoting = isMarkdownHost(normalizedUrl, contentType)
-      const userPrompt = buildWebFetchApplyPrompt(markdown, prompt, allowBroaderQuoting)
+      const userPrompt = buildWebFetchApplyPrompt(
+        markdown,
+        prompt,
+        allowBroaderQuoting,
+      )
       const aiResponse = await queryQuick({
         systemPrompt: [],
         userPrompt,

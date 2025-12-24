@@ -3,10 +3,10 @@ import { mkdirSync } from 'fs'
 import { buildLinuxBwrapCommand } from '@utils/BunShell'
 
 describe('Linux bwrap command construction', () => {
-  test('includes /tmp/claude bind + TMPDIR env when write-restricted', () => {
+  test('includes /tmp/kode bind + TMPDIR env when write-restricted', () => {
     // This is a pure command-construction test; it can run on any platform.
     try {
-      mkdirSync('/tmp/claude', { recursive: true })
+      mkdirSync('/tmp/kode', { recursive: true })
     } catch {}
 
     const cmd = buildLinuxBwrapCommand({
@@ -26,8 +26,7 @@ describe('Linux bwrap command construction', () => {
     expect(cmd).toContain('--die-with-parent')
     expect(cmd).toContain('--unshare-ipc')
     expect(cmd).toContain('--bind')
-    expect(cmd.join(' ')).toContain('/tmp/claude')
-    expect(cmd.join(' ')).toContain('--setenv TMPDIR /tmp/claude')
+    expect(cmd.join(' ')).toContain('/tmp/kode')
+    expect(cmd.join(' ')).toContain('--setenv TMPDIR /tmp/kode')
   })
 })
-

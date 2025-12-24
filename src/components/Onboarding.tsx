@@ -67,25 +67,28 @@ export function Onboarding({ onDone }: Props): React.ReactNode {
 
   const exitState = useExitOnCtrlCD(() => process.exit(0))
 
-  useInput(async (_, key) => {
-    const currentStep = steps[currentStepIndex]
-    if (
-      key.return &&
-      currentStep &&
-      ['usage', 'providers', 'model'].includes(currentStep.id)
-    ) {
-      if (currentStep.id === 'model') {
-        // Navigate to ModelSelector component
-        setShowModelSelector(true)
-      } else if (currentStepIndex === steps.length - 1) {
-        onDone()
-      } else {
-        // HACK: for some reason there's now a jump here otherwise :(
-        await clearTerminal()
-        goToNextStep()
+  useInput(
+    async (_, key) => {
+      const currentStep = steps[currentStepIndex]
+      if (
+        key.return &&
+        currentStep &&
+        ['usage', 'providers', 'model'].includes(currentStep.id)
+      ) {
+        if (currentStep.id === 'model') {
+          // Navigate to ModelSelector component
+          setShowModelSelector(true)
+        } else if (currentStepIndex === steps.length - 1) {
+          onDone()
+        } else {
+          // HACK: for some reason there's now a jump here otherwise :(
+          await clearTerminal()
+          goToNextStep()
+        }
       }
-    }
-  }, { isActive: !showModelSelector })
+    },
+    { isActive: !showModelSelector },
+  )
 
   // Define all onboarding steps
   const themeStep = (

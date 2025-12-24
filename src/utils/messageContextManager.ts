@@ -148,7 +148,7 @@ export class MessageContextManager {
       },
       costUSD: 0,
       durationMs: 0,
-      uuid: crypto.randomUUID() as UUID
+      uuid: crypto.randomUUID() as UUID,
     }
 
     const truncatedMessages = [summaryMessage, ...recentMessages]

@@ -130,7 +130,11 @@ const darkDaltonizedTheme: Theme = {
   },
 }
 
-export type ThemeNames = 'dark' | 'light' | 'light-daltonized' | 'dark-daltonized'
+export type ThemeNames =
+  | 'dark'
+  | 'light'
+  | 'light-daltonized'
+  | 'dark-daltonized'
 
 export function getTheme(overrideTheme?: ThemeNames): Theme {
   const config = getGlobalConfig()

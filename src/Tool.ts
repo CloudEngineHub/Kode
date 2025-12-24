@@ -8,10 +8,12 @@ import type { ToolPermissionContext } from '@kode-types/toolPermissionContext'
  * Provides standardized contract for all tool implementations
  */
 
-export type SetToolJSXFn = (jsx: {
-  jsx: React.ReactNode | null
-  shouldHidePromptInput: boolean
-} | null) => void
+export type SetToolJSXFn = (
+  jsx: {
+    jsx: React.ReactNode | null
+    shouldHidePromptInput: boolean
+  } | null,
+) => void
 
 export interface ToolUseContext {
   messageId: string | undefined
@@ -28,6 +30,11 @@ export interface ToolUseContext {
     safeMode?: boolean
     permissionMode?: PermissionMode
     toolPermissionContext?: ToolPermissionContext
+    /**
+     * Plain-text content of the most recent user message before any internal
+     * reminder injections. Used for intent-alignment checks (e.g. Bash gate).
+     */
+    lastUserPrompt?: string
     forkNumber?: number
     messageLogName?: string
     maxThinkingTokens?: any
@@ -37,6 +44,7 @@ export interface ToolUseContext {
     kodingContext?: string
     isCustomCommand?: boolean
     mcpClients?: any[]
+    disableSlashCommands?: boolean
     /**
      * When false, suppress reference CLI-compatible session persistence (.jsonl under config/projects).
      * Default: true for CLI sessions; some internal tools may opt out to avoid polluting session logs.
@@ -114,7 +122,12 @@ export interface Tool<
           modifyContext: (ctx: ToolUseContext) => ToolUseContext
         }
       }
-    | { type: 'progress'; content: any; normalizedMessages?: any[]; tools?: any[] },
+    | {
+        type: 'progress'
+        content: any
+        normalizedMessages?: any[]
+        tools?: any[]
+      },
     void,
     unknown
   >

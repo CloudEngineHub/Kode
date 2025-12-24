@@ -1,6 +1,9 @@
 import { describe, expect, test, beforeEach } from 'bun:test'
 import { hasPermissionsToUseTool } from '@permissions'
-import { getCurrentProjectConfig, saveCurrentProjectConfig } from '@utils/config'
+import {
+  getCurrentProjectConfig,
+  saveCurrentProjectConfig,
+} from '@utils/config'
 
 const makeContext = (permissionMode: string) => ({
   abortController: new AbortController(),
@@ -51,8 +54,8 @@ describe('dontAsk permission mode', () => {
     expect(result).toEqual({
       result: false,
       shouldPromptUser: false,
-      message: 'Permission to use FakeTool has been auto-denied in dontAsk mode.',
+      message:
+        'Permission to use FakeTool has been auto-denied in dontAsk mode.',
     })
   })
 })
-

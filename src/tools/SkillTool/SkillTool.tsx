@@ -5,13 +5,22 @@ import * as React from 'react'
 import type { Message } from '@query'
 import { createUserMessage } from '@utils/messages'
 import { getCommands } from '@commands'
-import { loadCustomCommands, type CustomCommandWithScope } from '@services/customCommands'
+import {
+  loadCustomCommands,
+  type CustomCommandWithScope,
+} from '@services/customCommands'
 import { TOOL_NAME_FOR_PROMPT } from './prompt'
 
 const inputSchema = z.strictObject({
   skill: z
     .string()
-    .describe('The skill name (no arguments). E.g., "pdf" or "xlsx"'),
+    .describe(
+      'The skill name (no arguments). Use a value from <available_skills>.',
+    ),
+  args: z
+    .string()
+    .optional()
+    .describe('Optional arguments for the skill (freeform text)'),
 })
 
 type Input = z.infer<typeof inputSchema>
@@ -58,7 +67,6 @@ export const SkillTool = {
     const skills = all.filter(
       cmd =>
         cmd.type === 'prompt' &&
-        cmd.isSkill === true &&
         cmd.disableModelInvocation !== true &&
         (cmd.hasUserSpecifiedDescription || cmd.whenToUse),
     )
@@ -84,11 +92,19 @@ export const SkillTool = {
 <skills_instructions>
 When users ask you to perform tasks, check if any of the available skills below can help complete the task more effectively. Skills provide specialized capabilities and domain knowledge.
 
+When users ask you to run a "slash command" or reference "/<something>" (e.g., "/commit", "/review-pr"), they are referring to a skill. Use this tool to invoke the corresponding skill.
+
+<example>
+User: "run /commit"
+Assistant: [Calls Skill tool with skill: "commit"]
+</example>
+
 How to invoke:
-- Use this tool with the skill name only (no arguments)
+- Use this tool with the skill name and optional arguments
 - Examples:
   - \`skill: "pdf"\` - invoke the pdf skill
-  - \`skill: "xlsx"\` - invoke the xlsx skill
+  - \`skill: "commit", args: "-m 'Fix bug'"\` - invoke with arguments
+  - \`skill: "review-pr", args: "123"\` - invoke with arguments
   - \`skill: "ms-office-suite:pdf"\` - invoke using fully qualified name
 
 Important:
@@ -117,15 +133,22 @@ ${availableSkills}${truncatedNotice}
   async validateInput({ skill }: Input, context) {
     const raw = skill.trim()
     if (!raw) {
-      return { result: false, message: `Invalid skill format: ${skill}`, errorCode: 1 }
+      return {
+        result: false,
+        message: `Invalid skill format: ${skill}`,
+        errorCode: 1,
+      }
     }
     const skillName = raw.startsWith('/') ? raw.slice(1) : raw
 
-    const commands =
-      context?.options?.commands ?? (await getCommands())
+    const commands = context?.options?.commands ?? (await getCommands())
     const cmd = findCommand(skillName, commands)
     if (!cmd) {
-      return { result: false, message: `Unknown skill: ${skillName}`, errorCode: 2 }
+      return {
+        result: false,
+        message: `Unknown skill: ${skillName}. No matching skill is available in <available_skills>.`,
+        errorCode: 2,
+      }
     }
 
     if ((cmd as any).disableModelInvocation) {
@@ -146,7 +169,7 @@ ${availableSkills}${truncatedNotice}
 
     return { result: true }
   },
-  async *call({ skill }: Input, context) {
+  async *call({ skill, args }: Input, context) {
     const raw = skill.trim()
     const skillName = raw.startsWith('/') ? raw.slice(1) : raw
 
@@ -164,7 +187,7 @@ ${availableSkills}${truncatedNotice}
       throw new Error(`Skill ${skillName} is not a prompt-based skill`)
     }
 
-    const prompt = await cmd.getPromptForCommand('')
+    const prompt = await cmd.getPromptForCommand(args ?? '')
     const expandedMessages: Message[] = prompt.map(msg => {
       const userMessage = createUserMessage(
         typeof msg.content === 'string'
@@ -210,12 +233,16 @@ ${availableSkills}${truncatedNotice}
                 const next = { ...ctx }
 
                 if (allowedTools.length > 0) {
-                  const prev = Array.isArray((next.options as any)?.commandAllowedTools)
+                  const prev = Array.isArray(
+                    (next.options as any)?.commandAllowedTools,
+                  )
                     ? ((next.options as any).commandAllowedTools as string[])
                     : []
                   next.options = {
                     ...(next.options || {}),
-                    commandAllowedTools: [...new Set([...prev, ...allowedTools])],
+                    commandAllowedTools: [
+                      ...new Set([...prev, ...allowedTools]),
+                    ],
                   }
                 }
 
@@ -239,16 +266,12 @@ ${availableSkills}${truncatedNotice}
 } satisfies Tool<typeof inputSchema, Output>
 
 function formatSkillBlock(skill: CustomCommandWithScope): string {
-  const name = skill.name
+  const name = skill.userFacingName?.() ?? skill.name
   const description = skill.whenToUse
     ? `${skill.description} - ${skill.whenToUse}`
     : skill.description
-  const location =
-    skill.source === 'localSettings'
-      ? 'project'
-      : skill.source === 'userSettings'
-        ? 'user'
-        : 'managed'
+
+  const location = skill.filePath ?? ''
 
   return `<skill>
 <name>

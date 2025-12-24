@@ -16,6 +16,9 @@ function makeContext(overrides?: Partial<any>): any {
       forkNumber: 0,
       messageLogName: 'bash-tool-ctrl-b-test',
       maxThinkingTokens: 0,
+      bashLlmGateQuery: async () => {
+        return 'ALLOW'
+      },
     },
     readFileTimestamps: {},
     ...overrides,
@@ -25,7 +28,7 @@ function makeContext(overrides?: Partial<any>): any {
 describe('BashTool ctrl+b backgrounding parity (Reference CLI K41 + gH5)', () => {
   test('shows ctrl+b hint after the initial delay', async () => {
     if (process.platform === 'win32') return
-    process.env.CLAUDE_CONFIG_DIR = join(process.cwd(), '.tmp-claude-config')
+    process.env.KODE_CONFIG_DIR = join(process.cwd(), '.tmp-kode-config')
 
     BunShell.restart()
 
@@ -37,7 +40,10 @@ describe('BashTool ctrl+b backgrounding parity (Reference CLI K41 + gH5)', () =>
       },
     })
 
-    const gen = BashTool.call({ command: 'sleep 3', timeout: 10_000 }, ctx)
+    const gen = BashTool.call(
+      { command: 'sleep 3', description: 'Wait briefly', timeout: 10_000 },
+      ctx,
+    )
     for await (const _ev of gen) {
       // drain
     }
@@ -50,7 +56,7 @@ describe('BashTool ctrl+b backgrounding parity (Reference CLI K41 + gH5)', () =>
 
   test('can request background and returns a background id', async () => {
     if (process.platform === 'win32') return
-    process.env.CLAUDE_CONFIG_DIR = join(process.cwd(), '.tmp-claude-config')
+    process.env.KODE_CONFIG_DIR = join(process.cwd(), '.tmp-kode-config')
 
     BunShell.restart()
 
@@ -71,6 +77,7 @@ describe('BashTool ctrl+b backgrounding parity (Reference CLI K41 + gH5)', () =>
       {
         command:
           'i=0; while [ $i -lt 30 ]; do i=$((i+1)); echo "tick-$i"; sleep 0.1; done',
+        description: 'Emit progress ticks',
         timeout: 30_000,
       },
       ctx,
@@ -102,13 +109,16 @@ describe('BashTool ctrl+b backgrounding parity (Reference CLI K41 + gH5)', () =>
   })
 
   test('foreground execution still works when not backgrounded', async () => {
-    process.env.CLAUDE_CONFIG_DIR = join(process.cwd(), '.tmp-claude-config')
+    process.env.KODE_CONFIG_DIR = join(process.cwd(), '.tmp-kode-config')
 
     BunShell.restart()
     const ctx = makeContext()
 
     const events: any[] = []
-    for await (const ev of BashTool.call({ command: 'echo hello', timeout: 10_000 }, ctx)) {
+    for await (const ev of BashTool.call(
+      { command: 'echo hello', description: 'Print greeting', timeout: 10_000 },
+      ctx,
+    )) {
       events.push(ev)
     }
 

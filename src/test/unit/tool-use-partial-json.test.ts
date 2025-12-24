@@ -31,7 +31,9 @@ describe('tool_use input_json_delta partial JSON parsing', () => {
       /Unable to parse tool parameter JSON from model\. Please retry your request or adjust your prompt\. Error: SyntaxError:/,
     )
     expect(() => parseToolUsePartialJsonOrThrow(bad)).toThrow(
-      new RegExp(`\\. JSON: ${bad.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}$`),
+      new RegExp(
+        `\\. JSON: ${bad.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}$`,
+      ),
     )
   })
 })

@@ -65,6 +65,18 @@ bun test
 - No Chinese in code or comments
 - Follow existing patterns
 
+## Git Hooks & CI Gating
+
+This repo uses Husky to keep changes consistent:
+
+- Pre-commit runs `bun run format:check` and `bun run typecheck`.
+- CI runs `bun run format:check`, `bun run typecheck`, `bun test`, and `bun run build` on macOS/Linux/Windows.
+
+If you need to bypass hooks locally (not recommended), you can use:
+
+- `git commit --no-verify`
+- or `HUSKY=0 git commit ...`
+
 ## Publishing
 
 See [docs/PUBLISH.md](docs/PUBLISH.md) for publishing instructions.

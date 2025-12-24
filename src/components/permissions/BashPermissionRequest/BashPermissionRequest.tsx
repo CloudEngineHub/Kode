@@ -26,14 +26,8 @@ export function BashPermissionRequest({
   const theme = getTheme()
 
   // ok to use parse since we've already validated args earliers
-  const { command, reason, intent, description } = BashTool.inputSchema.parse(
-    toolUseConfirm.input,
-  )
-  const displayIntent =
-    (typeof reason === 'string' && reason.trim()) ||
-    (typeof intent === 'string' && intent.trim()) ||
-    (typeof description === 'string' && description.trim()) ||
-    ''
+  const { command, run_in_background, description } =
+    BashTool.inputSchema.parse(toolUseConfirm.input)
 
   const unaryEvent = useMemo<UnaryEvent>(
     () => ({ completion_type: 'tool_use_single', language_name: 'none' }),
@@ -57,10 +51,13 @@ export function BashPermissionRequest({
         riskScore={toolUseConfirm.riskScore}
       />
       <Box flexDirection="column" paddingX={2} paddingY={1}>
-        <Text>{BashTool.renderToolUseMessage({ command })}</Text>
-        {displayIntent ? (
-          <Text color={theme.secondaryText}>{displayIntent}</Text>
-        ) : null}
+        <Text>
+          {BashTool.renderToolUseMessage({
+            command,
+            run_in_background,
+            description,
+          })}
+        </Text>
         <Text color={theme.secondaryText}>{toolUseConfirm.description}</Text>
       </Box>
 

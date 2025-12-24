@@ -2,11 +2,11 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import type { ClaudeSettingsFile } from '@utils/sandboxConfig'
+import type { KodeSettingsFile } from '@utils/sandbox/sandboxConfig'
 import {
   getLinuxSandboxGlobPatternWarnings,
   normalizeSandboxRuntimeConfigFromSettings,
-} from '@utils/sandboxConfig'
+} from '@utils/sandbox/sandboxConfig'
 
 describe('sandbox config (Reference CLI parity: YC1 + z34)', () => {
   let projectDir: string
@@ -23,10 +23,14 @@ describe('sandbox config (Reference CLI parity: YC1 + z34)', () => {
   })
 
   test('normalizes network + filesystem config from settings + permissions rules', () => {
-    const settings: ClaudeSettingsFile = {
+    const settings: KodeSettingsFile = {
       permissions: {
         allow: ['WebFetch(domain:api.example.com)', 'Edit(src/**)'],
-        deny: ['WebFetch(domain:blocked.example.com)', 'Read(secrets/**)', 'Edit(vendor/**)'],
+        deny: [
+          'WebFetch(domain:blocked.example.com)',
+          'Read(secrets/**)',
+          'Edit(vendor/**)',
+        ],
       },
       sandbox: {
         network: {
@@ -50,7 +54,10 @@ describe('sandbox config (Reference CLI parity: YC1 + z34)', () => {
       defaultRipgrep: { command: 'rg', args: ['--smart-case'] },
     })
 
-    expect(runtime.network.allowedDomains).toEqual(['example.org', 'api.example.com'])
+    expect(runtime.network.allowedDomains).toEqual([
+      'example.org',
+      'api.example.com',
+    ])
     expect(runtime.network.deniedDomains).toEqual(['blocked.example.com'])
     expect(runtime.network.allowUnixSockets).toEqual(['/var/run/docker.sock'])
     expect(runtime.network.allowAllUnixSockets).toBe(false)
@@ -60,19 +67,37 @@ describe('sandbox config (Reference CLI parity: YC1 + z34)', () => {
 
     expect(runtime.filesystem.allowWrite).toEqual(['.', 'src/**'])
     expect(runtime.filesystem.denyRead).toEqual(['secrets/**'])
-    expect(runtime.filesystem.denyWrite).toContain(join(homeDir, '.claude', 'settings.json'))
-    expect(runtime.filesystem.denyWrite).toContain(join(projectDir, '.claude', 'settings.json'))
-    expect(runtime.filesystem.denyWrite).toContain(join(projectDir, '.claude', 'settings.local.json'))
+    expect(runtime.filesystem.denyWrite).toContain(
+      join(homeDir, '.kode', 'settings.json'),
+    )
+    expect(runtime.filesystem.denyWrite).toContain(
+      join(projectDir, '.kode', 'settings.json'),
+    )
+    expect(runtime.filesystem.denyWrite).toContain(
+      join(projectDir, '.kode', 'settings.local.json'),
+    )
+    expect(runtime.filesystem.denyWrite).toContain(
+      join(homeDir, '.claude', 'settings.json'),
+    )
+    expect(runtime.filesystem.denyWrite).toContain(
+      join(projectDir, '.claude', 'settings.json'),
+    )
+    expect(runtime.filesystem.denyWrite).toContain(
+      join(projectDir, '.claude', 'settings.local.json'),
+    )
     expect(runtime.filesystem.denyWrite).toContain('vendor/**')
 
     expect(runtime.ignoreViolations).toBe(true)
     expect(runtime.enableWeakerNestedSandbox).toBe(false)
     expect(runtime.excludedCommands).toEqual(['git'])
-    expect(runtime.ripgrep).toEqual({ command: 'rg-custom', args: ['--hidden'] })
+    expect(runtime.ripgrep).toEqual({
+      command: 'rg-custom',
+      args: ['--hidden'],
+    })
   })
 
   test('normalizes ripgrep to default when not specified', () => {
-    const settings: ClaudeSettingsFile = {
+    const settings: KodeSettingsFile = {
       permissions: { allow: [], deny: [] },
       sandbox: { network: { allowedDomains: [] } },
     }
@@ -87,7 +112,7 @@ describe('sandbox config (Reference CLI parity: YC1 + z34)', () => {
   })
 
   test('Linux glob warnings: only when sandbox.enabled === true and platform is linux', () => {
-    const settings: ClaudeSettingsFile = {
+    const settings: KodeSettingsFile = {
       permissions: {
         allow: ['Edit(src/*)', 'Read(~/**)', 'Bash(ls)'],
         deny: ['Read(secrets/*)', 'Edit(docs/**)'],
@@ -95,12 +120,18 @@ describe('sandbox config (Reference CLI parity: YC1 + z34)', () => {
       sandbox: { enabled: true },
     }
 
-    expect(getLinuxSandboxGlobPatternWarnings(settings, { platform: 'darwin' })).toEqual([])
-    expect(getLinuxSandboxGlobPatternWarnings({ ...settings, sandbox: { enabled: false } }, { platform: 'linux' })).toEqual([])
+    expect(
+      getLinuxSandboxGlobPatternWarnings(settings, { platform: 'darwin' }),
+    ).toEqual([])
+    expect(
+      getLinuxSandboxGlobPatternWarnings(
+        { ...settings, sandbox: { enabled: false } },
+        { platform: 'linux' },
+      ),
+    ).toEqual([])
 
-    expect(getLinuxSandboxGlobPatternWarnings(settings, { platform: 'linux' })).toEqual([
-      'Edit(src/*)',
-      'Read(secrets/*)',
-    ])
+    expect(
+      getLinuxSandboxGlobPatternWarnings(settings, { platform: 'linux' }),
+    ).toEqual(['Edit(src/*)', 'Read(secrets/*)'])
   })
 })

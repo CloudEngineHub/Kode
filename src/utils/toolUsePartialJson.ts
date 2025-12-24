@@ -121,7 +121,9 @@ function tokenizePartialJson(input: string): PartialJsonToken[] {
   return tokens
 }
 
-function trimTrailingIncompleteTokens(tokens: PartialJsonToken[]): PartialJsonToken[] {
+function trimTrailingIncompleteTokens(
+  tokens: PartialJsonToken[],
+): PartialJsonToken[] {
   if (tokens.length === 0) return tokens
   const last = tokens[tokens.length - 1]!
 

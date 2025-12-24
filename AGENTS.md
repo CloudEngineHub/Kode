@@ -99,7 +99,7 @@ Each tool follows a consistent pattern in `src/tools/[ToolName]/`:
 - Permission-aware execution
 
 ### Service Layer
-- **Anthropic Service** (`src/services/claude.ts`): Claude API integration
+- **LLM Service** (`src/services/llm.ts`): Main LLM integration (Anthropic/OpenAI-compatible)
 - **OpenAI Service** (`src/services/openai.ts`): OpenAI-compatible models
 - **Model Adapter Factory** (`src/services/modelAdapterFactory.ts`): Unified model interface
 - **MCP Client** (`src/services/mcpClient.ts`): Model Context Protocol for tool extensions
@@ -175,9 +175,50 @@ const description = typeof tool.description === 'function'
 - `src/utils/agentLoader.ts`: Dynamic agent configuration loading
 
 ### Services & Integrations
-- `src/services/claude.ts`: Main AI service integration
+- `src/services/llm.ts`: Main AI service integration
 - `src/services/mcpClient.ts`: MCP tool integration
 - `src/utils/messageContextManager.ts`: Context window management
+
+## Debugging & Forensics (Bash Tool / LLM Gate / Session Storage)
+
+When debugging “Bash tool didn’t run / background task didn’t start / LLM gate blocked unexpectedly”, inspect the persisted session artifacts under `~/.kode/`.
+
+### Per-project data root
+Kode stores data in a per-project directory derived from the working directory:
+- `~/.kode/-Users-<you>-<path-to-project>/`
+- Example for this repo: `~/.kode/-Users-baicai-Desktop-MyT-Kode-pr-Kode-cli/`
+
+Useful subdirectories:
+- `messages/`: conversation transcripts (includes tool_use + tool_result)
+- `errors/`: error logs and structured dumps
+- `tasks/`: background shell output files (`<bashId>.output`)
+
+### Conversation transcripts (what actually happened)
+- `~/.kode/.../messages/*.json`
+- Each file contains the full turn history including `tool_use` blocks (e.g. `Bash`) and the corresponding `tool_result` content.
+
+How to confirm whether a background Bash command truly started:
+- Look for `Bash` tool_use with `run_in_background: true`.
+- Confirm the tool result contains `toolUseResult.data.backgroundTaskId` / `bashId`.
+- Then confirm `~/.kode/.../tasks/<bashId>.output` exists and is being appended.
+
+If the tool result contains “Blocked: LLM intent gate …”, the command did not execute (fail-closed gate).
+
+### Bash LLM intent gate debug dumps (why the gate failed)
+When the gate fails closed (timeout / invalid output / API error), Kode writes a dedicated dump:
+- `~/.kode/.../errors/bash-llm-gate/*.txt`
+
+These dumps include:
+- the gate input (USER_PROMPT / DESCRIPTION / COMMAND / CONTEXT)
+- the raw gate output (and retry outputs, if any)
+- the parse/timeout error that caused the fail-closed block
+
+This is the canonical artifact to diagnose “model responded with analysis/markdown and did not follow the required format”.
+
+### Quick triage recipe
+1. Open the latest `messages/*.json` for the failing turn and determine whether the `Bash` tool_use was blocked vs executed.
+2. If blocked by gate, open the newest `errors/bash-llm-gate/*.txt` and inspect gate I/O.
+3. If executed in background, inspect `tasks/<bashId>.output`, then verify TaskOutput/KillShell sequencing.
 
 ## Development Patterns
 

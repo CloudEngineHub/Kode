@@ -3,7 +3,7 @@
 [![npm version](https://badge.fury.io/js/@shareai-lab%2Fkode.svg)](https://www.npmjs.com/package/@shareai-lab/kode)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-[English](README.md) | [贡献指南](CONTRIBUTING.md) | [文档](docs/)
+[English](README.md) | [贡献指南](CONTRIBUTING.md) | [文档](docs/README.md)
 
 ## 🎉 重磅消息：我们已切换至 Apache 2.0 开源协议！
 
@@ -19,13 +19,33 @@
 
 ## 📢 更新日志
 
-**2025-08-29**：我们添加了 Windows 电脑的运行支持！所有的 Windows 用户现在可以使用你电脑上的 Git Bash、Unix 子系统或 WSL（Windows Subsystem for Linux）来运行 Kode。
+**2025-12-22**：原生优先分发（Windows 开箱即用）。Kode 会优先使用缓存的原生二进制文件，并在需要时回退到 Bun。详见 `docs/binary-distribution.md`。
+
+## 🤝 AGENTS.md 标准支持
+
+Kode 支持 [AGENTS.md 标准](https://agents.md)：一个简单、开放的“项目指令”格式，用于指导各类 coding agent，在 60k+ 开源项目中被使用。
+
+### 指令文件发现规则（兼容 Codex）
+
+- Kode 会从 Git 仓库根目录一路走到当前工作目录（`cwd`）读取项目指令。
+- 每一层目录最多读取一个文件：优先 `AGENTS.override.md`，否则读取 `AGENTS.md`。
+- 指令会按 root → leaf 拼接（默认合并上限 32KiB；可通过 `KODE_PROJECT_DOC_MAX_BYTES` 覆盖）。
+- 如果当前目录存在 `CLAUDE.md`，Kode 也会将其作为 legacy 指令文件读取（用于 Claude Code 兼容项目）。
 
 Kode 是一个强大的 AI 助手，运行在你的终端中。它能理解你的代码库、编辑文件、运行命令，并为你处理整个开发工作流。
 
 > **⚠️ 安全提示**：Kode 默认以 YOLO 模式运行（等同于 `--dangerously-skip-permissions` 标志），跳过所有权限检查以获得最大生产力。YOLO 模式仅建议在安全可信的环境中处理非重要项目时使用。如果您正在处理重要文件或使用能力存疑的模型，我们强烈建议使用 `kode --safe` 启用权限检查和手动审批所有操作。
 > 
 > **📊 模型性能建议**：为获得最佳体验，建议使用专为自主任务完成设计的新一代强大模型。避免使用 GPT-4o、Gemini 2.5 Pro 等较老的问答型模型，它们主要针对回答问题进行优化，而非持续的独立任务执行。请选择专门训练用于智能体工作流和扩展推理能力的模型。
+
+## 网络与隐私
+
+- 默认不发送产品遥测/分析数据。
+- 仅在你显式使用相关能力时才会产生网络请求：
+  - 模型提供商请求（你配置的 Anthropic/OpenAI-compatible 等端点）
+  - Web 工具（`WebFetch`、`WebSearch`）
+  - 插件市场下载（GitHub/URL 来源）与 OAuth 流程（使用时）
+  - 可选的更新检查（需显式开启 `autoUpdaterStatus: enabled`）
 
 ## 功能特性
 
@@ -49,21 +69,34 @@ Kode 是一个强大的 AI 助手，运行在你的终端中。它能理解你�
 npm install -g @shareai-lab/kode
 ```
 
+开发版（最新特性）：
+
+```bash
+npm install -g @shareai-lab/kode@dev
+```
+
 安装后，你可以使用以下任一命令：
 - `kode` - 主命令
 - `kwa` - Kode With Agent（备选）
 - `kd` - 超短别名
 
-### Windows 提示
+### 原生二进制（Windows 开箱即用）
 
-- 请安装 Git for Windows（包含 Git Bash 类 Unix 终端）：https://git-scm.com/download/win
-  - Kode 会优先使用 Git Bash/MSYS 或 WSL Bash；没有时会回退到默认终端，但在 Bash 下体验更佳。
-- 推荐在 VS Code 的集成终端中运行（而非系统默认的 cmd）：
-  - 字体与图标显示更稳定，UI 体验更好。
-  - 相比 cmd 路径/编码等兼容性问题更少。
-  - 在 VS Code 终端中选择 “Git Bash” 作为默认 Shell。
-- 可选：若通过 npm 全局安装，建议避免将 npm 全局 prefix 设置在含空格的路径，以免生成的可执行 shim 出现路径解析问题。
-  - 示例：`npm config set prefix "C:\\npm"`，然后重新安装全局包。
+- 无需 WSL / Git Bash。
+- `postinstall` 会尽力从 GitHub Releases 下载原生二进制文件到 `${KODE_BIN_DIR:-~/.kode/bin}/<version>/<platform>-<arch>/kode(.exe)`。
+- 入口包装器（`cli.js`）会优先使用原生二进制，并在需要时回退到 Bun（`bun dist/index.js`）。
+
+可选覆盖：
+- 镜像下载源：`KODE_BINARY_BASE_URL`
+- 禁用下载：`KODE_SKIP_BINARY_DOWNLOAD=1`
+- 缓存目录：`KODE_BIN_DIR`
+
+详见 `docs/binary-distribution.md`。
+
+### 配置 / API Key
+
+- 模型与 API key 可通过 `~/.kode.json` / `./.kode.json` 与环境变量配置。
+- 详见 `docs/develop/configuration.md`。
 
 ## 使用方法
 
@@ -136,9 +169,87 @@ Kode 同时使用 `~/.kode` 目录（存放额外数据，如内存文件）和 
 - `/help` - 显示可用命令
 - `/model` - 更改 AI 模型设置
 - `/config` - 打开配置面板
+- `/output-style` - 设置输出风格（兼容特性，已弃用）
+- `/statusline` - 配置自定义状态栏命令
 - `/cost` - 显示 token 使用量和成本
 - `/clear` - 清除对话历史
 - `/init` - 初始化项目上下文
+- `/plugin` - 管理插件/市场（技能、命令）
+
+## 技能与插件
+
+Kode 支持：
+- **Agent Skills** 格式（`SKILL.md`）用于分发可复用技能包
+- **Marketplace 兼容**（`.kode-plugin/marketplace.json`，legacy `.claude-plugin/marketplace.json`（Claude Code 兼容））用于分享/安装技能包
+
+### 从 marketplace 安装技能
+
+```bash
+# 添加 marketplace（本地路径、GitHub owner/repo、或 URL）
+kode plugin marketplace add ./path/to/marketplace-repo
+kode plugin marketplace add owner/repo
+kode plugin marketplace list
+
+# 安装插件包（会安装 skills/commands）
+kode plugin install document-skills@anthropic-agent-skills --scope user
+
+# 项目范围安装（写入到当前项目的 ./.kode/...）
+kode plugin install document-skills@anthropic-agent-skills --scope project
+
+# 禁用/启用已安装插件
+kode plugin disable document-skills@anthropic-agent-skills --scope user
+kode plugin enable document-skills@anthropic-agent-skills --scope user
+```
+
+交互模式等价命令：
+
+```text
+/plugin marketplace add owner/repo
+/plugin install document-skills@anthropic-agent-skills --scope user
+```
+
+### 使用技能
+
+- 交互模式下可直接运行：`/pdf`、`/xlsx` 等
+- Kode 也可在合适时机通过 `Skill` 工具自动调用技能
+
+### 创建技能（Agent Skills）
+
+创建 `./.kode/skills/<skill-name>/SKILL.md`（项目）或 `~/.kode/skills/<skill-name>/SKILL.md`（用户）：
+
+```md
+---
+name: my-skill
+description: 描述这个技能做什么、何时使用。
+allowed-tools: Read Bash(git:*) Bash(jq:*)
+---
+
+# 技能说明
+```
+
+命名规则：
+- `name` 必须与文件夹名一致
+- 仅允许小写字母/数字/连字符，长度 1–64
+
+兼容性：
+- Kode 也会自动发现 `.claude/skills` 与 `.claude/commands`（legacy 兼容）。
+
+### 分发技能
+
+- Marketplace 仓库：在仓库根目录放置 `.kode-plugin/marketplace.json`，列出插件包与其 `skills` 目录（legacy `.claude-plugin/marketplace.json` 兼容）。
+- Plugin 仓库：完整插件需在插件根目录包含 `.kode-plugin/plugin.json`，并确保路径均为相对路径（`./...`）。
+
+详见 `docs/skills.md`。
+
+### 输出风格（已弃用）
+
+Kode 提供 legacy 输出风格能力（主要用于兼容历史用法）。
+
+- 选择：`/output-style`（菜单）或 `/output-style <style>`
+- 按项目存储在 `./.kode/settings.local.json` 的 `outputStyle`（legacy `.claude/settings.local.json` 兼容读取）
+- 插件可在 `output-styles/` 提供风格（Markdown 文件，可选 YAML `name`/`description`；正文会追加到 system prompt）。插件风格命名为 `<plugin>:<style>`。
+
+新的工作流建议优先使用插件（自定义命令 + hooks）来替代输出风格。
 
 ## MCP 服务器（扩展）
 
@@ -184,6 +295,7 @@ kode mcp remove <name>
 ## 常见排障
 
 - 模型：用 `/model`，或 `kode models import kode-models.yaml` 导入团队共享模型配置；确认所需 API Key 环境变量已设置。
+- Windows：若原生二进制下载失败/被阻断，可设置 `KODE_BINARY_BASE_URL`（镜像）或安装 Bun 以启用回退方案。
 - MCP：用 `kode mcp list` 查看状态；若服务较慢可调 `MCP_CONNECTION_TIMEOUT_MS`、`MCP_SERVER_CONNECTION_BATCH_SIZE`、`MCP_TOOL_TIMEOUT`。
 - Sandbox：Linux 安装 `bwrap`（bubblewrap），或设置 `KODE_SYSTEM_SANDBOX=0` 关闭。
 

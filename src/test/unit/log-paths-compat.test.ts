@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { dirname, join } from 'path'
-import { CACHE_PATHS, LEGACY_CACHE_PATHS, getMessagesPath, loadLogList } from '@utils/log'
+import {
+  CACHE_PATHS,
+  LEGACY_CACHE_PATHS,
+  getMessagesPath,
+  loadLogList,
+} from '@utils/log'
 
 function writeJson(filePath: string, value: unknown) {
   mkdirSync(dirname(filePath), { recursive: true })
@@ -80,4 +85,3 @@ describe('log paths (messages)', () => {
     )
   })
 })
-

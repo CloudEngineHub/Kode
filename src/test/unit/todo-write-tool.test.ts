@@ -17,7 +17,9 @@ async function runTodoWrite(input: any) {
   }
   expect(first.value.type).toBe('result')
   if (first.value.type !== 'result') {
-    throw new Error(`Expected TodoWriteTool to yield result, got: ${first.value.type}`)
+    throw new Error(
+      `Expected TodoWriteTool to yield result, got: ${first.value.type}`,
+    )
   }
   return first.value
 }
@@ -85,8 +87,8 @@ describe('TodoWriteTool', () => {
       ],
     })
 
-	    const result = await runTodoWrite({
-	      todos: [
+    const result = await runTodoWrite({
+      todos: [
         {
           content: 'First task',
           status: 'completed',
@@ -97,17 +99,19 @@ describe('TodoWriteTool', () => {
           status: 'completed',
           activeForm: 'Working on second task',
         },
-	      ],
-	    })
+      ],
+    })
 
-	    if (typeof result.data === 'string') {
-	      throw new Error(`Expected structured TodoWriteTool output, got string: ${result.data}`)
-	    }
+    if (typeof result.data === 'string') {
+      throw new Error(
+        `Expected structured TodoWriteTool output, got string: ${result.data}`,
+      )
+    }
 
-	    expect(result.data.oldTodos).toEqual([
-	      {
-	        content: 'First task',
-	        status: 'in_progress',
+    expect(result.data.oldTodos).toEqual([
+      {
+        content: 'First task',
+        status: 'in_progress',
         activeForm: 'Working on first task',
       },
     ])
@@ -145,7 +149,9 @@ describe('TodoWriteTool', () => {
     const firstStored = getTodos()
     expect(firstStored.map(todo => todo.content)).toEqual(['Todo A', 'Todo B'])
 
-    const idsByContent = new Map(firstStored.map(todo => [todo.content, todo.id]))
+    const idsByContent = new Map(
+      firstStored.map(todo => [todo.content, todo.id]),
+    )
 
     await runTodoWrite({
       todos: [

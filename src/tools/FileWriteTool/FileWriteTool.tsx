@@ -68,7 +68,10 @@ export const FileWriteTool = {
   renderToolUseMessage(input, { verbose }) {
     return `file_path: ${verbose ? input.file_path : relative(getCwd(), input.file_path)}`
   },
-  renderToolUseRejectedMessage({ file_path, content }: any = {}, { columns, verbose }: any = {}) {
+  renderToolUseRejectedMessage(
+    { file_path, content }: any = {},
+    { columns, verbose }: any = {},
+  ) {
     try {
       if (!file_path) {
         return <FallbackToolUseRejectedMessage />
@@ -123,9 +126,7 @@ export const FileWriteTool = {
       )
     }
   },
-  renderToolResultMessage(
-    { filePath, content, structuredPatch, type }
-  ) {
+  renderToolResultMessage({ filePath, content, structuredPatch, type }) {
     const verbose = false // Default to false since verbose is no longer passed
     switch (type) {
       case 'create': {
@@ -242,10 +243,6 @@ export const FileWriteTool = {
 
     // Update read timestamp, to invalidate stale writes
     readFileTimestamps[fullFilePath] = statSync(fullFilePath).mtimeMs
-
-    // Log when writing to CLAUDE.md
-    if (fullFilePath.endsWith(`${sep}${PROJECT_FILE}`)) {
-    }
 
     // Emit file edited event for system reminders
     emitReminderEvent('file:edited', {

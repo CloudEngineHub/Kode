@@ -607,15 +607,15 @@ class StdioTransport extends Transport {
 
 ## 集成示例
 
-### Claude Desktop 导入
+### Desktop 配置导入
 
 ```typescript
-class ClaudeDesktopImporter {
+class DesktopConfigImporter {
   async importServers(): Promise<ImportResult> {
-    const configPath = this.getClaudeDesktopConfigPath()
+    const configPath = this.getDesktopConfigPath()
     
     if (!existsSync(configPath)) {
-      throw new Error('未找到 Claude Desktop 配置')
+      throw new Error('未找到 Desktop MCP host 配置')
     }
     
     const config = JSON.parse(

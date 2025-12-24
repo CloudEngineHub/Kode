@@ -7,7 +7,7 @@ import {
   writeFileSync,
 } from 'fs'
 import { dirname, join } from 'path'
-import { CLAUDE_BASE_DIR } from '@utils/env'
+import { getKodeBaseDir } from '@utils/env'
 
 // Reference CLI parity: project directory is a sanitized cwd string.
 function getProjectDir(cwd: string): string {
@@ -18,7 +18,7 @@ function getProjectDir(cwd: string): string {
 const PROJECT_ROOT = process.cwd()
 
 export function getTaskOutputsDir(): string {
-  return join(CLAUDE_BASE_DIR, getProjectDir(PROJECT_ROOT), 'tasks')
+  return join(getKodeBaseDir(), getProjectDir(PROJECT_ROOT), 'tasks')
 }
 
 export function getTaskOutputFilePath(taskId: string): string {
@@ -51,7 +51,10 @@ export function appendTaskOutput(taskId: string, chunk: string): void {
   }
 }
 
-export function readTaskOutputDelta(taskId: string, offset: number): {
+export function readTaskOutputDelta(
+  taskId: string,
+  offset: number,
+): {
   content: string
   newOffset: number
 } {

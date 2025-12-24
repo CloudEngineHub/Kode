@@ -24,10 +24,7 @@ function supportsShiftTabOnWindows(runtime: RuntimeInfo): boolean {
     const nodeVersion = runtime.nodeVersion
     if (!nodeVersion) return false
 
-    return semver.satisfies(
-      nodeVersion,
-      '>=22.17.0 <23.0.0 || >=24.2.0',
-    )
+    return semver.satisfies(nodeVersion, '>=22.17.0 <23.0.0 || >=24.2.0')
   } catch {
     return false
   }

@@ -23,7 +23,7 @@ export function AssistantLocalCommandOutputMessage({
     insides = [
       <React.Fragment key="0">
         <Text>(No output)</Text>
-      </React.Fragment>
+      </React.Fragment>,
     ]
   }
 

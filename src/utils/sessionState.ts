@@ -1,4 +1,3 @@
- 
 type SessionState = {
   modelErrors: Record<string, unknown>
   currentError: string | null

@@ -219,7 +219,7 @@ export const PLAN_SLUG_ADJECTIVES = [
   'validated',
   'vectorized',
   'virtual',
-] as const;
+] as const
 
 export const PLAN_SLUG_VERBS = [
   'baking',
@@ -331,7 +331,7 @@ export const PLAN_SLUG_VERBS = [
   'wondering',
   'yawning',
   'zooming',
-] as const;
+] as const
 
 export const PLAN_SLUG_NOUNS = [
   'aurora',
@@ -743,4 +743,4 @@ export const PLAN_SLUG_NOUNS = [
   'wirth',
   'wozniak',
   'yao',
-] as const;
+] as const

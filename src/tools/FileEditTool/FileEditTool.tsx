@@ -322,10 +322,6 @@ export const FileEditTool = {
     // Update read timestamp, to invalidate stale writes
     readFileTimestamps[fullFilePath] = statSync(fullFilePath).mtimeMs
 
-    // Log when editing CLAUDE.md
-    if (fullFilePath.endsWith(`${sep}${PROJECT_FILE}`)) {
-    }
-
     // Emit file edited event for system reminders
     emitReminderEvent('file:edited', {
       filePath: fullFilePath,

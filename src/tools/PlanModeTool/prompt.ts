@@ -90,7 +90,8 @@ User: "What files handle routing?"
 - If unsure whether to use it, err on the side of planning - it's better to get alignment upfront than to redo work
 - Users appreciate being consulted before significant changes are made to their codebase`
 
-export const EXIT_DESCRIPTION = 'Prompts the user to exit plan mode and start coding'
+export const EXIT_DESCRIPTION =
+  'Prompts the user to exit plan mode and start coding'
 
 export const EXIT_PROMPT = `Use this tool when you are in plan mode and have finished writing your plan to the plan file and are ready for user approval.
 

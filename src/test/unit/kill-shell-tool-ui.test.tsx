@@ -21,7 +21,12 @@ test('KillShellTool UI strings match reference CLI (uW9/pW9)', async () => {
   })
 
   const instance = render(
-    <>{KillShellTool.renderToolResultMessage({ message: 'ok', shell_id: 'abc123' })}</>,
+    <>
+      {KillShellTool.renderToolResultMessage({
+        message: 'ok',
+        shell_id: 'abc123',
+      })}
+    </>,
     { stdout: stdout as any, exitOnCtrlC: false },
   )
 

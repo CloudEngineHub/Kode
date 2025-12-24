@@ -1,4 +1,3 @@
-
 export type CompletionType =
   | 'str_replace_single'
   | 'write_file_single'

@@ -178,6 +178,11 @@ cli.js
 .npmrc
 vendor/
 .tmp/
+.tmp-kode-config/
+
+# Local per-project settings
+.kode/settings.local.json
+.claude/settings.local.json
 
 # Lock files
 bun.lock

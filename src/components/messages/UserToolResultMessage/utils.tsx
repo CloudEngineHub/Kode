@@ -50,7 +50,6 @@ export function useGetToolFromMessages(
       _ => _.name === toolUse.name,
     )
     if (tool === GlobTool || tool === GrepTool) {
-      
     }
     if (!tool) {
       throw new ReferenceError(`Tool not found for ${toolUse.name}`)

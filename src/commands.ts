@@ -13,6 +13,8 @@ import messages_debug from './commands/messages_debug'
 import login from './commands/login'
 import logout from './commands/logout'
 import mcp from './commands/mcp'
+import plugin from './commands/plugin'
+import outputStyle from './commands/output-style'
 import * as model from './commands/model'
 import modelstatus from './commands/modelstatus'
 import onboarding from './commands/onboarding'
@@ -21,6 +23,7 @@ import refreshCommands from './commands/refreshCommands'
 import releaseNotes from './commands/release-notes'
 import review from './commands/review'
 import rename from './commands/rename'
+import statusline from './commands/statusline'
 import tag from './commands/tag'
 import todos from './commands/todos'
 import { Tool, ToolUseContext } from './Tool'
@@ -67,6 +70,7 @@ type LocalJSXCommand = {
         forkConvoWithMessages: Message[],
       ) => void
     },
+    args?: string,
   ): Promise<React.ReactNode>
 }
 
@@ -76,6 +80,15 @@ export type Command = {
   isHidden: boolean
   name: string
   aliases?: string[]
+  /**
+   * If true, this command must not be invoked via non-interactive tool calls
+   * (e.g. SlashCommandTool / SkillTool).
+   */
+  disableNonInteractive?: boolean
+  /**
+   * Optional pre-approved tools for command execution (compatibility).
+   */
+  allowedTools?: string[]
   userFacingName(): string
 } & (PromptCommand | LocalCommand | LocalJSXCommand)
 
@@ -92,7 +105,10 @@ const COMMANDS = memoize((): Command[] => [
   doctor,
   help,
   init,
+  outputStyle,
+  statusline,
   mcp,
+  plugin,
   model,
   modelstatus,
   onboarding,

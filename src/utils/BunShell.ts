@@ -63,12 +63,17 @@ function maybeAnnotateMacosSandboxStderr(
   return [
     stderr.trimEnd(),
     '',
-    '[sandbox] This failure looks like a macOS sandbox denial. Adjust sandbox settings (e.g. /sandbox or .claude/settings.json) to grant the minimal required access.',
+    '[sandbox] This failure looks like a macOS sandbox denial. Adjust sandbox settings (e.g. /sandbox or .kode/settings.json) to grant the minimal required access.',
   ].join('\n')
 }
 
 function hasGlobPattern(value: string): boolean {
-  return value.includes('*') || value.includes('?') || value.includes('[') || value.includes(']')
+  return (
+    value.includes('*') ||
+    value.includes('?') ||
+    value.includes('[') ||
+    value.includes(']')
+  )
 }
 
 // Reference CLI parity: YT() in cli.js (Linux sandbox path normalization)
@@ -82,7 +87,8 @@ export function normalizeLinuxSandboxPath(
   let resolved = input
   if (input === '~') resolved = homeDir
   else if (input.startsWith('~/')) resolved = homeDir + input.slice(1)
-  else if (input.startsWith('./') || input.startsWith('../')) resolved = resolve(cwd, input)
+  else if (input.startsWith('./') || input.startsWith('../'))
+    resolved = resolve(cwd, input)
   else if (!isAbsolute(input)) resolved = resolve(cwd, input)
 
   if (hasGlobPattern(resolved)) {
@@ -127,11 +133,11 @@ export function buildLinuxBwrapFilesystemArgs(options: {
 
     const allowedRoots: string[] = []
 
-    // Reference CLI parity: /tmp/claude is the dedicated temp directory for sandboxed runs.
+    // Dedicated temp directory for sandboxed runs.
     // Bind it explicitly so tools can create temp files even when '/' is ro-bound.
-    if (existsSync('/tmp/claude')) {
-      args.push('--bind', '/tmp/claude', '/tmp/claude')
-      allowedRoots.push('/tmp/claude')
+    if (existsSync('/tmp/kode')) {
+      args.push('--bind', '/tmp/kode', '/tmp/kode')
+      allowedRoots.push('/tmp/kode')
     }
     for (const raw of writeConfig.allowOnly ?? []) {
       const resolved = normalizeLinuxSandboxPath(raw, { cwd, homeDir })
@@ -141,12 +147,17 @@ export function buildLinuxBwrapFilesystemArgs(options: {
       allowedRoots.push(resolved)
     }
 
-    const denyWithinAllow = [...(writeConfig.denyWithinAllow ?? []), ...(options.extraDenyWithinAllow ?? [])]
+    const denyWithinAllow = [
+      ...(writeConfig.denyWithinAllow ?? []),
+      ...(options.extraDenyWithinAllow ?? []),
+    ]
     for (const raw of denyWithinAllow) {
       const resolved = normalizeLinuxSandboxPath(raw, { cwd, homeDir })
       if (resolved.startsWith('/dev/')) continue
       if (!existsSync(resolved)) continue
-      const withinAllowed = allowedRoots.some(root => resolved === root || resolved.startsWith(root + '/'))
+      const withinAllowed = allowedRoots.some(
+        root => resolved === root || resolved.startsWith(root + '/'),
+      )
       if (!withinAllowed) continue
       args.push('--ro-bind', resolved, resolved)
     }
@@ -155,7 +166,8 @@ export function buildLinuxBwrapFilesystemArgs(options: {
   }
 
   const denyRead = [...(options.readConfig?.denyOnly ?? [])]
-  if (existsSync('/etc/ssh/ssh_config.d')) denyRead.push('/etc/ssh/ssh_config.d')
+  if (existsSync('/etc/ssh/ssh_config.d'))
+    denyRead.push('/etc/ssh/ssh_config.d')
 
   for (const raw of denyRead) {
     const resolved = normalizeLinuxSandboxPath(raw, { cwd, homeDir })
@@ -182,7 +194,13 @@ export function buildLinuxBwrapCommand(options: {
   const args: string[] = []
 
   // Safer defaults: isolate namespaces and ensure sandbox dies with the parent.
-  args.push('--die-with-parent', '--new-session', '--unshare-pid', '--unshare-uts', '--unshare-ipc')
+  args.push(
+    '--die-with-parent',
+    '--new-session',
+    '--unshare-pid',
+    '--unshare-uts',
+    '--unshare-ipc',
+  )
   if (options.needsNetworkRestriction) args.push('--unshare-net')
 
   args.push(
@@ -195,7 +213,16 @@ export function buildLinuxBwrapCommand(options: {
   )
 
   // Provide a minimal /dev and reference CLI temp env.
-  args.push('--dev', '/dev', '--setenv', 'SANDBOX_RUNTIME', '1', '--setenv', 'TMPDIR', '/tmp/claude')
+  args.push(
+    '--dev',
+    '/dev',
+    '--setenv',
+    'SANDBOX_RUNTIME',
+    '1',
+    '--setenv',
+    'TMPDIR',
+    '/tmp/kode',
+  )
   if (!options.enableWeakerNestedSandbox) args.push('--proc', '/proc')
 
   args.push('--', options.binShellPath, '-c', options.command)
@@ -203,7 +230,7 @@ export function buildLinuxBwrapCommand(options: {
   return [options.bwrapPath, ...args]
 }
 
-function buildClaudeSandboxEnvAssignments(options?: {
+function buildSandboxEnvAssignments(options?: {
   httpProxyPort?: number
   socksProxyPort?: number
   platform?: NodeJS.Platform
@@ -212,7 +239,7 @@ function buildClaudeSandboxEnvAssignments(options?: {
   const socksProxyPort = options?.socksProxyPort
   const platform = options?.platform ?? process.platform
 
-  const env: string[] = ['SANDBOX_RUNTIME=1', 'TMPDIR=/tmp/claude']
+  const env: string[] = ['SANDBOX_RUNTIME=1', 'TMPDIR=/tmp/kode']
   if (!httpProxyPort && !socksProxyPort) return env
 
   const noProxy = [
@@ -240,13 +267,19 @@ function buildClaudeSandboxEnvAssignments(options?: {
     env.push(`ALL_PROXY=socks5h://localhost:${socksProxyPort}`)
     env.push(`all_proxy=socks5h://localhost:${socksProxyPort}`)
     if (platform === 'darwin') {
-      env.push(`GIT_SSH_COMMAND="ssh -o ProxyCommand='nc -X 5 -x localhost:${socksProxyPort} %h %p'"`)
+      env.push(
+        `GIT_SSH_COMMAND="ssh -o ProxyCommand='nc -X 5 -x localhost:${socksProxyPort} %h %p'"`,
+      )
     }
     env.push(`FTP_PROXY=socks5h://localhost:${socksProxyPort}`)
     env.push(`ftp_proxy=socks5h://localhost:${socksProxyPort}`)
     env.push(`RSYNC_PROXY=localhost:${socksProxyPort}`)
-    env.push(`DOCKER_HTTP_PROXY=http://localhost:${httpProxyPort || socksProxyPort}`)
-    env.push(`DOCKER_HTTPS_PROXY=http://localhost:${httpProxyPort || socksProxyPort}`)
+    env.push(
+      `DOCKER_HTTP_PROXY=http://localhost:${httpProxyPort || socksProxyPort}`,
+    )
+    env.push(
+      `DOCKER_HTTPS_PROXY=http://localhost:${httpProxyPort || socksProxyPort}`,
+    )
     if (httpProxyPort) {
       env.push('CLOUDSDK_PROXY_TYPE=https')
       env.push('CLOUDSDK_PROXY_ADDRESS=localhost')
@@ -278,24 +311,35 @@ function escapeRegexForSandboxGlobPattern(pattern: string): string {
 function getMacosTmpDirWriteAllowPaths(): string[] {
   const tmpdirValue = process.env.TMPDIR
   if (!tmpdirValue) return []
-  if (!tmpdirValue.match(/^\/(private\/)?var\/folders\/[^/]{2}\/[^/]+\/T\/?$/)) return []
+  if (!tmpdirValue.match(/^\/(private\/)?var\/folders\/[^/]{2}\/[^/]+\/T\/?$/))
+    return []
   const base = tmpdirValue.replace(/\/T\/?$/, '')
-  if (base.startsWith('/private/var/')) return [base, base.replace('/private', '')]
+  if (base.startsWith('/private/var/'))
+    return [base, base.replace('/private', '')]
   if (base.startsWith('/var/')) return [base, '/private' + base]
   return [base]
 }
 
-function buildMacosSandboxDenyUnlinkRules(paths: string[], logTag: string): string[] {
+function buildMacosSandboxDenyUnlinkRules(
+  paths: string[],
+  logTag: string,
+): string[] {
   const lines: string[] = []
   for (const raw of paths) {
     const normalized = normalizeLinuxSandboxPath(raw)
     if (hasGlobPattern(normalized)) {
       const regex = escapeRegexForSandboxGlobPattern(normalized)
-      lines.push('(deny file-write-unlink', `  (regex ${JSON.stringify(regex)})`, `  (with message "${logTag}"))`)
+      lines.push(
+        '(deny file-write-unlink',
+        `  (regex ${JSON.stringify(regex)})`,
+        `  (with message "${logTag}"))`,
+      )
 
       const prefix = normalized.split(/[*?[\]]/)[0]
       if (prefix && prefix !== '/') {
-        const literal = prefix.endsWith('/') ? prefix.slice(0, -1) : dirname(prefix)
+        const literal = prefix.endsWith('/')
+          ? prefix.slice(0, -1)
+          : dirname(prefix)
         lines.push(
           '(deny file-write-unlink',
           `  (literal ${JSON.stringify(literal)})`,
@@ -305,7 +349,11 @@ function buildMacosSandboxDenyUnlinkRules(paths: string[], logTag: string): stri
       continue
     }
 
-    lines.push('(deny file-write-unlink', `  (subpath ${JSON.stringify(normalized)})`, `  (with message "${logTag}"))`)
+    lines.push(
+      '(deny file-write-unlink',
+      `  (subpath ${JSON.stringify(normalized)})`,
+      `  (with message "${logTag}"))`,
+    )
   }
   return lines
 }
@@ -321,13 +369,23 @@ function buildMacosSandboxFileReadRules(
     const normalized = normalizeLinuxSandboxPath(raw)
     if (hasGlobPattern(normalized)) {
       const regex = escapeRegexForSandboxGlobPattern(normalized)
-      lines.push('(deny file-read*', `  (regex ${JSON.stringify(regex)})`, `  (with message "${logTag}"))`)
+      lines.push(
+        '(deny file-read*',
+        `  (regex ${JSON.stringify(regex)})`,
+        `  (with message "${logTag}"))`,
+      )
     } else {
-      lines.push('(deny file-read*', `  (subpath ${JSON.stringify(normalized)})`, `  (with message "${logTag}"))`)
+      lines.push(
+        '(deny file-read*',
+        `  (subpath ${JSON.stringify(normalized)})`,
+        `  (with message "${logTag}"))`,
+      )
     }
   }
 
-  lines.push(...buildMacosSandboxDenyUnlinkRules(readConfig.denyOnly ?? [], logTag))
+  lines.push(
+    ...buildMacosSandboxDenyUnlinkRules(readConfig.denyOnly ?? [], logTag),
+  )
   return lines
 }
 
@@ -340,20 +398,36 @@ function buildMacosSandboxFileWriteRules(
   const lines: string[] = []
 
   // Common safe sink used by shells and CLI tools.
-  lines.push('(allow file-write*', `  (literal "/dev/null")`, `  (with message "${logTag}"))`)
+  lines.push(
+    '(allow file-write*',
+    `  (literal "/dev/null")`,
+    `  (with message "${logTag}"))`,
+  )
 
   for (const raw of getMacosTmpDirWriteAllowPaths()) {
     const normalized = normalizeLinuxSandboxPath(raw)
-    lines.push('(allow file-write*', `  (subpath ${JSON.stringify(normalized)})`, `  (with message "${logTag}"))`)
+    lines.push(
+      '(allow file-write*',
+      `  (subpath ${JSON.stringify(normalized)})`,
+      `  (with message "${logTag}"))`,
+    )
   }
 
   for (const raw of writeConfig.allowOnly ?? []) {
     const normalized = normalizeLinuxSandboxPath(raw)
     if (hasGlobPattern(normalized)) {
       const regex = escapeRegexForSandboxGlobPattern(normalized)
-      lines.push('(allow file-write*', `  (regex ${JSON.stringify(regex)})`, `  (with message "${logTag}"))`)
+      lines.push(
+        '(allow file-write*',
+        `  (regex ${JSON.stringify(regex)})`,
+        `  (with message "${logTag}"))`,
+      )
     } else {
-      lines.push('(allow file-write*', `  (subpath ${JSON.stringify(normalized)})`, `  (with message "${logTag}"))`)
+      lines.push(
+        '(allow file-write*',
+        `  (subpath ${JSON.stringify(normalized)})`,
+        `  (with message "${logTag}"))`,
+      )
     }
   }
 
@@ -361,13 +435,26 @@ function buildMacosSandboxFileWriteRules(
     const normalized = normalizeLinuxSandboxPath(raw)
     if (hasGlobPattern(normalized)) {
       const regex = escapeRegexForSandboxGlobPattern(normalized)
-      lines.push('(deny file-write*', `  (regex ${JSON.stringify(regex)})`, `  (with message "${logTag}"))`)
+      lines.push(
+        '(deny file-write*',
+        `  (regex ${JSON.stringify(regex)})`,
+        `  (with message "${logTag}"))`,
+      )
     } else {
-      lines.push('(deny file-write*', `  (subpath ${JSON.stringify(normalized)})`, `  (with message "${logTag}"))`)
+      lines.push(
+        '(deny file-write*',
+        `  (subpath ${JSON.stringify(normalized)})`,
+        `  (with message "${logTag}"))`,
+      )
     }
   }
 
-  lines.push(...buildMacosSandboxDenyUnlinkRules(writeConfig.denyWithinAllow ?? [], logTag))
+  lines.push(
+    ...buildMacosSandboxDenyUnlinkRules(
+      writeConfig.denyWithinAllow ?? [],
+      logTag,
+    ),
+  )
   return lines
 }
 
@@ -414,35 +501,55 @@ export function buildMacosSandboxExecCommand(options: {
     } else if (allowUnixSockets.length > 0) {
       for (const socketPath of allowUnixSockets) {
         const normalized = normalizeLinuxSandboxPath(socketPath)
-        profileLines.push(`(allow network* (subpath ${JSON.stringify(normalized)}))`)
+        profileLines.push(
+          `(allow network* (subpath ${JSON.stringify(normalized)}))`,
+        )
       }
     }
     if (options.httpProxyPort !== undefined) {
-      profileLines.push(`(allow network-bind (local ip "localhost:${options.httpProxyPort}"))`)
-      profileLines.push(`(allow network-inbound (local ip "localhost:${options.httpProxyPort}"))`)
-      profileLines.push(`(allow network-outbound (remote ip "localhost:${options.httpProxyPort}"))`)
+      profileLines.push(
+        `(allow network-bind (local ip "localhost:${options.httpProxyPort}"))`,
+      )
+      profileLines.push(
+        `(allow network-inbound (local ip "localhost:${options.httpProxyPort}"))`,
+      )
+      profileLines.push(
+        `(allow network-outbound (remote ip "localhost:${options.httpProxyPort}"))`,
+      )
     }
     if (options.socksProxyPort !== undefined) {
-      profileLines.push(`(allow network-bind (local ip "localhost:${options.socksProxyPort}"))`)
-      profileLines.push(`(allow network-inbound (local ip "localhost:${options.socksProxyPort}"))`)
-      profileLines.push(`(allow network-outbound (remote ip "localhost:${options.socksProxyPort}"))`)
+      profileLines.push(
+        `(allow network-bind (local ip "localhost:${options.socksProxyPort}"))`,
+      )
+      profileLines.push(
+        `(allow network-inbound (local ip "localhost:${options.socksProxyPort}"))`,
+      )
+      profileLines.push(
+        `(allow network-outbound (remote ip "localhost:${options.socksProxyPort}"))`,
+      )
     }
   }
 
   profileLines.push('')
   profileLines.push('; File read')
-  profileLines.push(...buildMacosSandboxFileReadRules(options.readConfig, logTag))
+  profileLines.push(
+    ...buildMacosSandboxFileReadRules(options.readConfig, logTag),
+  )
   profileLines.push('')
   profileLines.push('; File write')
-  profileLines.push(...buildMacosSandboxFileWriteRules(options.writeConfig, logTag))
+  profileLines.push(
+    ...buildMacosSandboxFileWriteRules(options.writeConfig, logTag),
+  )
 
   const profile = profileLines.join('\n')
-  const envAssignments = buildClaudeSandboxEnvAssignments({
+  const envAssignments = buildSandboxEnvAssignments({
     httpProxyPort: options.httpProxyPort,
     socksProxyPort: options.socksProxyPort,
     platform: 'darwin',
   })
-  const envPrefix = envAssignments.length ? `export ${envAssignments.join(' ')} && ` : ''
+  const envPrefix = envAssignments.length
+    ? `export ${envAssignments.join(' ')} && `
+    : ''
 
   return [
     options.sandboxExecPath,
@@ -614,7 +721,10 @@ export class BunShell {
     env: NodeJS.ProcessEnv = process.env,
   ): string[] {
     if (platform === 'win32') {
-      const comspec = typeof env.ComSpec === 'string' && env.ComSpec.length > 0 ? env.ComSpec : 'cmd'
+      const comspec =
+        typeof env.ComSpec === 'string' && env.ComSpec.length > 0
+          ? env.ComSpec
+          : 'cmd'
       return [comspec, '/c', command]
     }
     const sh = existsSync('/bin/sh') ? '/bin/sh' : 'sh'
@@ -622,7 +732,11 @@ export class BunShell {
   }
 
   private getShellCmd(command: string): string[] {
-    return BunShell.getShellCmdForPlatform(process.platform, command, process.env)
+    return BunShell.getShellCmdForPlatform(
+      process.platform,
+      command,
+      process.env,
+    )
   }
 
   private buildSandboxCmd(
@@ -652,12 +766,15 @@ export class BunShell {
     const hasNetworkRestrictions = needsNetworkRestriction === true
 
     // Reference CLI parity: if there are no restrictions, do not wrap.
-    if (!hasReadRestrictions && !hasWriteRestrictions && !hasNetworkRestrictions) {
+    if (
+      !hasReadRestrictions &&
+      !hasWriteRestrictions &&
+      !hasNetworkRestrictions
+    ) {
       return null
     }
 
-    const binShell =
-      sandbox.binShell ?? (Bun.which('bash') ? 'bash' : 'sh')
+    const binShell = sandbox.binShell ?? (Bun.which('bash') ? 'bash' : 'sh')
     const binShellPath = Bun.which(binShell) ?? binShell
 
     const cwd = sandbox.chdir || this.cwd
@@ -666,13 +783,13 @@ export class BunShell {
       const bwrapPath =
         sandbox.__bwrapPathOverride !== undefined
           ? sandbox.__bwrapPathOverride
-          : Bun.which('bwrap') ?? Bun.which('bubblewrap')
+          : (Bun.which('bwrap') ?? Bun.which('bubblewrap'))
       if (!bwrapPath) {
         return null
       }
 
       try {
-        mkdirSync('/tmp/claude', { recursive: true })
+        mkdirSync('/tmp/kode', { recursive: true })
       } catch {}
 
       const cmd = buildLinuxBwrapCommand({
@@ -701,10 +818,10 @@ export class BunShell {
       }
 
       try {
-        mkdirSync('/tmp/claude', { recursive: true })
+        mkdirSync('/tmp/kode', { recursive: true })
       } catch {}
       try {
-        mkdirSync('/private/tmp/claude', { recursive: true })
+        mkdirSync('/private/tmp/kode', { recursive: true })
       } catch {}
 
       return {
@@ -729,7 +846,11 @@ export class BunShell {
 
   private isSandboxInitFailure(stderr: string): boolean {
     const s = stderr.toLowerCase()
-    return s.includes('bwrap:') || s.includes('bubblewrap') || s.includes('namespace') && s.includes('failed')
+    return (
+      s.includes('bwrap:') ||
+      s.includes('bubblewrap') ||
+      (s.includes('namespace') && s.includes('failed'))
+    )
   }
 
   private startStreamReader(
@@ -838,7 +959,8 @@ export class BunShell {
 
     const sandbox = options?.sandbox
     const shouldAttemptSandbox = sandbox?.enabled === true
-    const executionCwd = shouldAttemptSandbox && sandbox?.chdir ? sandbox.chdir : this.cwd
+    const executionCwd =
+      shouldAttemptSandbox && sandbox?.chdir ? sandbox.chdir : this.cwd
 
     if (abortSignal?.aborted) {
       return {
@@ -856,7 +978,9 @@ export class BunShell {
       }
     }
 
-    const sandboxCmd = shouldAttemptSandbox ? this.buildSandboxCmd(command, sandbox!) : null
+    const sandboxCmd = shouldAttemptSandbox
+      ? this.buildSandboxCmd(command, sandbox!)
+      : null
     if (shouldAttemptSandbox && sandbox?.require && !sandboxCmd) {
       return {
         get status(): BunShellPromotableExecStatus {
@@ -1044,7 +1168,8 @@ export class BunShell {
       try {
         await spawnedProcess.exited
 
-        if (status === 'running' || status === 'backgrounded') status = 'completed'
+        if (status === 'running' || status === 'backgrounded')
+          status = 'completed'
 
         if (backgroundProcess) {
           backgroundProcess.code = spawnedProcess.exitCode ?? 0
@@ -1059,7 +1184,10 @@ export class BunShell {
             Promise.allSettled([stdoutCollector.done, stderrCollector.done]),
             new Promise(resolve => setTimeout(resolve, 250)),
           ])
-          await Promise.allSettled([stdoutCollector.cancel(), stderrCollector.cancel()])
+          await Promise.allSettled([
+            stdoutCollector.cancel(),
+            stderrCollector.cancel(),
+          ])
         }
 
         const interrupted =
@@ -1152,9 +1280,13 @@ export class BunShell {
 
     const sandbox = options?.sandbox
     const shouldAttemptSandbox = sandbox?.enabled === true
-    const executionCwd = shouldAttemptSandbox && sandbox?.chdir ? sandbox.chdir : this.cwd
+    const executionCwd =
+      shouldAttemptSandbox && sandbox?.chdir ? sandbox.chdir : this.cwd
 
-    const runOnce = async (cmd: string[], cwdOverride?: string): Promise<ExecResult> => {
+    const runOnce = async (
+      cmd: string[],
+      cwdOverride?: string,
+    ): Promise<ExecResult> => {
       this.currentProcess = Bun.spawn({
         cmd,
         cwd: cwdOverride ?? executionCwd,
@@ -1202,7 +1334,10 @@ export class BunShell {
           Promise.allSettled([stdoutCollector.done, stderrCollector.done]),
           new Promise(resolve => setTimeout(resolve, 250)),
         ])
-        await Promise.allSettled([stdoutCollector.cancel(), stderrCollector.cancel()])
+        await Promise.allSettled([
+          stdoutCollector.cancel(),
+          stderrCollector.cancel(),
+        ])
         return {
           stdout: '',
           stderr: 'Command timed out',
@@ -1219,7 +1354,10 @@ export class BunShell {
         Promise.allSettled([stdoutCollector.done, stderrCollector.done]),
         new Promise(resolve => setTimeout(resolve, 250)),
       ])
-      await Promise.allSettled([stdoutCollector.cancel(), stderrCollector.cancel()])
+      await Promise.allSettled([
+        stdoutCollector.cancel(),
+        stderrCollector.cancel(),
+      ])
 
       const stdout = stdoutCollector.getText()
       const stderr = stderrCollector.getText()
@@ -1227,8 +1365,7 @@ export class BunShell {
         wasAborted ||
         abortSignal?.aborted === true ||
         this.abortController?.signal.aborted === true
-      const exitCode =
-        this.currentProcess.exitCode ?? (interrupted ? 143 : 0)
+      const exitCode = this.currentProcess.exitCode ?? (interrupted ? 143 : 0)
 
       return {
         stdout,
@@ -1260,7 +1397,10 @@ export class BunShell {
         }
 
         const sandboxed = await runOnce(sandboxCmd.cmd)
-        sandboxed.stderr = maybeAnnotateMacosSandboxStderr(sandboxed.stderr, sandbox)
+        sandboxed.stderr = maybeAnnotateMacosSandboxStderr(
+          sandboxed.stderr,
+          sandbox,
+        )
         if (
           !sandboxed.interrupted &&
           sandboxed.code !== 0 &&
@@ -1321,7 +1461,8 @@ export class BunShell {
     const sandbox = options?.sandbox
     const sandboxCmd =
       sandbox?.enabled === true ? this.buildSandboxCmd(command, sandbox) : null
-    const executionCwd = sandbox?.enabled === true && sandbox?.chdir ? sandbox.chdir : this.cwd
+    const executionCwd =
+      sandbox?.enabled === true && sandbox?.chdir ? sandbox.chdir : this.cwd
 
     if (sandbox?.enabled === true && sandbox?.require && !sandboxCmd) {
       throw new Error(
@@ -1410,22 +1551,20 @@ export class BunShell {
    * Return current buffered output for a background command WITHOUT consuming it.
    * Prefer `readBackgroundOutput()` for "only new output" semantics.
    */
-  getBackgroundOutput(shellId: string):
-    | {
-        stdout: string
-        stderr: string
-        code: number | null
-        interrupted: boolean
-        killed: boolean
-        timedOut: boolean
-        running: boolean
-        command: string
-        cwd: string
-        startedAt: number
-        timeoutAt: number
-        outputFile: string
-      }
-    | null {
+  getBackgroundOutput(shellId: string): {
+    stdout: string
+    stderr: string
+    code: number | null
+    interrupted: boolean
+    killed: boolean
+    timedOut: boolean
+    running: boolean
+    command: string
+    cwd: string
+    startedAt: number
+    timeoutAt: number
+    outputFile: string
+  } | null {
     const proc = this.backgroundProcesses.get(shellId)
     if (!proc) return null
     const running = proc.code === null && !proc.interrupted
@@ -1453,22 +1592,20 @@ export class BunShell {
   readBackgroundOutput(
     bashId: string,
     options?: { filter?: string },
-  ):
-    | {
-        shellId: string
-        command: string
-        cwd: string
-        startedAt: number
-        timeoutAt: number
-        status: 'running' | 'completed' | 'failed' | 'killed'
-        exitCode: number | null
-        stdout: string
-        stderr: string
-        stdoutLines: number
-        stderrLines: number
-        filterPattern?: string
-      }
-    | null {
+  ): {
+    shellId: string
+    command: string
+    cwd: string
+    startedAt: number
+    timeoutAt: number
+    status: 'running' | 'completed' | 'failed' | 'killed'
+    exitCode: number | null
+    stdout: string
+    stderr: string
+    stdoutLines: number
+    stderrLines: number
+    filterPattern?: string
+  } | null {
     const proc = this.backgroundProcesses.get(bashId)
     if (!proc) return null
 
@@ -1575,7 +1712,13 @@ export class BunShell {
     const statusFor = (
       proc: BackgroundProcess,
     ): 'running' | 'completed' | 'failed' | 'killed' =>
-      proc.killed ? 'killed' : proc.code === null ? 'running' : proc.code === 0 ? 'completed' : 'failed'
+      proc.killed
+        ? 'killed'
+        : proc.code === null
+          ? 'running'
+          : proc.code === 0
+            ? 'completed'
+            : 'failed'
 
     const notifications: BashNotification[] = []
 
@@ -1605,7 +1748,13 @@ export class BunShell {
     const statusFor = (
       proc: BackgroundProcess,
     ): 'running' | 'completed' | 'failed' | 'killed' =>
-      proc.killed ? 'killed' : proc.code === null ? 'running' : proc.code === 0 ? 'completed' : 'failed'
+      proc.killed
+        ? 'killed'
+        : proc.code === null
+          ? 'running'
+          : proc.code === 0
+            ? 'completed'
+            : 'failed'
 
     const progressAttachments: BackgroundShellStatusAttachment[] = []
 

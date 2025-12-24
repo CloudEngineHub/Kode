@@ -1,5 +1,9 @@
 import { OpenAIAdapter, StreamingEvent, normalizeTokens } from './openaiAdapter'
-import { UnifiedRequestParams, UnifiedResponse, ReasoningStreamingContext } from '@kode-types/modelCapabilities'
+import {
+  UnifiedRequestParams,
+  UnifiedResponse,
+  ReasoningStreamingContext,
+} from '@kode-types/modelCapabilities'
 import { Tool, getToolDescription } from '@tool'
 import { zodToJsonSchema } from 'zod-to-json-schema'
 import { setRequestStatus } from '@utils/requestStatus'
@@ -7,32 +11,35 @@ import { setRequestStatus } from '@utils/requestStatus'
 export class ChatCompletionsAdapter extends OpenAIAdapter {
   createRequest(params: UnifiedRequestParams): any {
     const { messages, systemPrompt, tools, maxTokens, stream } = params
-    
+
     // Build complete message list (including system prompts)
     const fullMessages = this.buildMessages(systemPrompt, messages)
-    
+
     // Build request
     const request: any = {
       model: this.modelProfile.modelName,
       messages: fullMessages,
       [this.getMaxTokensParam()]: maxTokens,
-      temperature: this.getTemperature()
+      temperature: this.getTemperature(),
     }
-    
+
     // Add tools
     if (tools && tools.length > 0) {
       request.tools = this.buildTools(tools)
       request.tool_choice = 'auto'
     }
-    
+
     // Add reasoning effort using model capabilities
-    if (this.capabilities.parameters.supportsReasoningEffort && params.reasoningEffort) {
-      request.reasoning_effort = params.reasoningEffort  // Chat Completions format
+    if (
+      this.capabilities.parameters.supportsReasoningEffort &&
+      params.reasoningEffort
+    ) {
+      request.reasoning_effort = params.reasoningEffort // Chat Completions format
     }
 
     // Add verbosity using model capabilities
     if (this.capabilities.parameters.supportsVerbosity && params.verbosity) {
-      request.verbosity = params.verbosity  // Chat Completions format
+      request.verbosity = params.verbosity // Chat Completions format
     }
 
     // Add streaming options using model capabilities
@@ -40,7 +47,7 @@ export class ChatCompletionsAdapter extends OpenAIAdapter {
       request.stream = true
       if (this.capabilities.streaming.includesUsage) {
         request.stream_options = {
-          include_usage: true
+          include_usage: true,
         }
       }
     }
@@ -56,10 +63,10 @@ export class ChatCompletionsAdapter extends OpenAIAdapter {
       delete request.stream
       delete request.stream_options
     }
-    
+
     return request
   }
-  
+
   buildTools(tools: Tool[]): any[] {
     // Use tool calling capabilities from model configuration
     return tools.map(tool => ({
@@ -69,11 +76,11 @@ export class ChatCompletionsAdapter extends OpenAIAdapter {
         description: getToolDescription(tool),
         parameters:
           tool.inputJSONSchema ||
-          (zodToJsonSchema(tool.inputSchema as any) as any)
-      }
+          (zodToJsonSchema(tool.inputSchema as any) as any),
+      },
     }))
   }
-  
+
   // parseResponse is now handled by the base OpenAIAdapter class
 
   // Implement abstract method from OpenAIAdapter - Chat Completions specific non-streaming
@@ -91,7 +98,9 @@ export class ChatCompletionsAdapter extends OpenAIAdapter {
     // Extract message content safely
     const message = choice.message || {}
     const content = typeof message.content === 'string' ? message.content : ''
-    const toolCalls = Array.isArray(message.tool_calls) ? message.tool_calls : []
+    const toolCalls = Array.isArray(message.tool_calls)
+      ? message.tool_calls
+      : []
 
     // Extract usage safely
     const usage = response.usage || {}
@@ -104,16 +113,16 @@ export class ChatCompletionsAdapter extends OpenAIAdapter {
       toolCalls,
       usage: {
         promptTokens,
-        completionTokens
-      }
+        completionTokens,
+      },
     }
   }
-  
+
   private buildMessages(systemPrompt: string[], messages: any[]): any[] {
     // Merge system prompts and messages
     const systemMessages = systemPrompt.map(prompt => ({
       role: 'system',
-      content: prompt
+      content: prompt,
     }))
 
     // Normalize tool messages (logic from original openai.ts:527-550)
@@ -162,7 +171,7 @@ export class ChatCompletionsAdapter extends OpenAIAdapter {
     responseId: string,
     hasStarted: boolean,
     accumulatedContent: string,
-    reasoningContext?: ReasoningStreamingContext
+    reasoningContext?: ReasoningStreamingContext,
   ): AsyncGenerator<StreamingEvent> {
     // Validate input
     if (!parsed || typeof parsed !== 'object') {
@@ -172,12 +181,20 @@ export class ChatCompletionsAdapter extends OpenAIAdapter {
     // Handle content deltas (Chat Completions format)
     const choice = parsed.choices?.[0]
     if (choice?.delta && typeof choice.delta === 'object') {
-      const delta = typeof choice.delta.content === 'string' ? choice.delta.content : ''
-      const reasoningDelta = typeof choice.delta.reasoning_content === 'string' ? choice.delta.reasoning_content : ''
+      const delta =
+        typeof choice.delta.content === 'string' ? choice.delta.content : ''
+      const reasoningDelta =
+        typeof choice.delta.reasoning_content === 'string'
+          ? choice.delta.reasoning_content
+          : ''
       const fullDelta = delta + reasoningDelta
 
       if (fullDelta) {
-        const textEvents = this.handleTextDelta(fullDelta, responseId, hasStarted)
+        const textEvents = this.handleTextDelta(
+          fullDelta,
+          responseId,
+          hasStarted,
+        )
         for (const event of textEvents) {
           yield event
         }
@@ -193,8 +210,8 @@ export class ChatCompletionsAdapter extends OpenAIAdapter {
             tool: {
               id: toolCall.id || `tool_${Date.now()}`,
               name: toolCall.function?.name || 'unknown',
-              input: toolCall.function?.arguments || '{}'
-            }
+              input: toolCall.function?.arguments || '{}',
+            },
           }
         }
       }
@@ -206,14 +223,14 @@ export class ChatCompletionsAdapter extends OpenAIAdapter {
       this.updateCumulativeUsage(normalizedUsage)
       yield {
         type: 'usage',
-        usage: { ...this.cumulativeUsage }
+        usage: { ...this.cumulativeUsage },
       }
     }
   }
 
   protected updateStreamingState(
     parsed: any,
-    accumulatedContent: string
+    accumulatedContent: string,
   ): { content?: string; hasStarted?: boolean } {
     const state: { content?: string; hasStarted?: boolean } = {}
 
@@ -234,7 +251,10 @@ export class ChatCompletionsAdapter extends OpenAIAdapter {
   }
 
   // Implement abstract method for parsing streaming OpenAI responses
-  protected async parseStreamingOpenAIResponse(response: any, signal?: AbortSignal): Promise<{ assistantMessage: any; rawResponse: any }> {
+  protected async parseStreamingOpenAIResponse(
+    response: any,
+    signal?: AbortSignal,
+  ): Promise<{ assistantMessage: any; rawResponse: any }> {
     const contentBlocks: any[] = []
     const usage: any = {
       prompt_tokens: 0,
@@ -266,7 +286,11 @@ export class ChatCompletionsAdapter extends OpenAIAdapter {
           }
           const last = contentBlocks[contentBlocks.length - 1]
           if (!last || last.type !== 'text') {
-            contentBlocks.push({ type: 'text', text: event.delta, citations: [] })
+            contentBlocks.push({
+              type: 'text',
+              text: event.delta,
+              citations: [],
+            })
           } else {
             last.text += event.delta
           }
@@ -283,7 +307,8 @@ export class ChatCompletionsAdapter extends OpenAIAdapter {
           // Usage is now in canonical format - just extract the values
           usage.prompt_tokens = event.usage.input
           usage.completion_tokens = event.usage.output
-          usage.totalTokens = event.usage.total ?? (event.usage.input + event.usage.output)
+          usage.totalTokens =
+            event.usage.total ?? event.usage.input + event.usage.output
           usage.promptTokens = event.usage.input
           usage.completionTokens = event.usage.output
           continue
@@ -302,7 +327,8 @@ export class ChatCompletionsAdapter extends OpenAIAdapter {
               output_tokens: usage.completion_tokens ?? 0,
               prompt_tokens: usage.prompt_tokens ?? 0,
               completion_tokens: usage.completion_tokens ?? 0,
-              totalTokens: (usage.prompt_tokens || 0) + (usage.completion_tokens || 0),
+              totalTokens:
+                (usage.prompt_tokens || 0) + (usage.completion_tokens || 0),
             },
           },
           costUSD: 0,

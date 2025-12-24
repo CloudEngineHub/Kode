@@ -9,7 +9,10 @@ import { ListResourcesResultSchema } from '@modelcontextprotocol/sdk/types.js'
 import { DESCRIPTION, PROMPT, TOOL_NAME } from './prompt'
 
 const inputSchema = z.strictObject({
-  server: z.string().optional().describe('Optional server name to filter resources by'),
+  server: z
+    .string()
+    .optional()
+    .describe('Optional server name to filter resources by'),
 })
 
 type Input = z.infer<typeof inputSchema>

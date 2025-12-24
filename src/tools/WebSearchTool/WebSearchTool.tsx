@@ -111,7 +111,11 @@ export const WebSearchTool = {
             search{searchCount === 1 ? '' : 'es'} in {duration}
           </Text>
         </Box>
-        <Cost costUSD={0} durationMs={output.durationSeconds * 1000} debug={false} />
+        <Cost
+          costUSD={0}
+          durationMs={output.durationSeconds * 1000}
+          debug={false}
+        />
       </Box>
     )
   },
@@ -167,10 +171,14 @@ export const WebSearchTool = {
         const host = hostnameForUrl(result.link)?.toLowerCase()
         if (!host) return false
         if (allowed && allowed.length > 0) {
-          return allowed.some(domain => host === domain || host.endsWith(`.${domain}`))
+          return allowed.some(
+            domain => host === domain || host.endsWith(`.${domain}`),
+          )
         }
         if (blocked && blocked.length > 0) {
-          return !blocked.some(domain => host === domain || host.endsWith(`.${domain}`))
+          return !blocked.some(
+            domain => host === domain || host.endsWith(`.${domain}`),
+          )
         }
         return true
       })
@@ -199,7 +207,9 @@ export const WebSearchTool = {
     } catch (error: any) {
       const output: Output = {
         query,
-        results: [`Web search error: ${error instanceof Error ? error.message : String(error)}`],
+        results: [
+          `Web search error: ${error instanceof Error ? error.message : String(error)}`,
+        ],
         durationSeconds: (Date.now() - start) / 1000,
       }
       yield {

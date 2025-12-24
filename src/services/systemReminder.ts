@@ -97,7 +97,6 @@ class SystemReminderService {
     }
 
     // Log aggregated metrics instead of individual events for performance
-    
 
     return reminders
   }
@@ -329,8 +328,6 @@ class SystemReminderService {
       this.sessionState.sessionStartTime = Date.now()
       this.sessionState.contextPresent =
         Object.keys(context.context || {}).length > 0
-
-      
     })
 
     // Todo change events
@@ -377,7 +374,7 @@ class SystemReminderService {
         category: 'task',
         priority: 'high',
         content: `The user mentioned @${context.originalMention}. You MUST use the Task tool with subagent_type="${context.agentType}" to delegate this task to the specified agent. Provide a detailed, self-contained task description that fully captures the user's intent for the ${context.agentType} agent to execute.`,
-        timestamp: context.timestamp
+        timestamp: context.timestamp,
       })
     })
 
@@ -388,7 +385,7 @@ class SystemReminderService {
         category: 'general',
         priority: 'high',
         content: `The user mentioned @${context.originalMention}. You MUST read the entire content of the file at path: ${context.filePath} using the Read tool to understand the full context before proceeding with the user's request.`,
-        timestamp: context.timestamp
+        timestamp: context.timestamp,
       })
     })
 
@@ -399,7 +396,7 @@ class SystemReminderService {
         category: 'task',
         priority: 'high',
         content: `The user mentioned @${context.modelName}. You MUST use the AskExpertModelTool to consult this specific model for expert opinions and analysis. Provide the user's question or context clearly to get the most relevant response from ${context.modelName}.`,
-        timestamp: context.timestamp
+        timestamp: context.timestamp,
       })
     })
   }
@@ -439,15 +436,15 @@ class SystemReminderService {
   }): void {
     if (!this.sessionState.remindersSent.has(params.key)) {
       this.sessionState.remindersSent.add(params.key)
-      
+
       const reminder = this.createReminderMessage(
         params.type,
         params.category,
         params.priority,
         params.content,
-        params.timestamp
+        params.timestamp,
       )
-      
+
       this.reminderCache.set(params.key, reminder)
     }
   }

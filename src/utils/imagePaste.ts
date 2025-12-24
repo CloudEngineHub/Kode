@@ -1,7 +1,7 @@
 import { execSync } from 'child_process'
 import { readFileSync } from 'fs'
 
-const SCREENSHOT_PATH = '/tmp/claude_cli_latest_screenshot.png'
+const SCREENSHOT_PATH = '/tmp/kode_cli_latest_screenshot.png'
 
 export const CLIPBOARD_ERROR_MESSAGE =
   'No image found in clipboard. Use Cmd + Ctrl + Shift + 4 to copy a screenshot to clipboard.'

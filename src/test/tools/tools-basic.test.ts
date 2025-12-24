@@ -34,7 +34,7 @@ const makeContext = (safeMode = true) => ({
 
 describe('Tool registry', () => {
   test('includes core built-in tools', () => {
-    process.env.CLAUDE_CONFIG_DIR = join(process.cwd(), '.tmp-claude-config')
+    process.env.KODE_CONFIG_DIR = join(process.cwd(), '.tmp-kode-config')
     const toolNames = getAllTools().map(t => t.name)
     expect(toolNames).toContain('Bash')
     expect(toolNames).toContain('WebFetch')
@@ -49,7 +49,7 @@ describe('Tool registry', () => {
 
 describe('Plan mode gating', () => {
   test('does not auto-deny write tool while in plan mode', async () => {
-    process.env.CLAUDE_CONFIG_DIR = join(process.cwd(), '.tmp-claude-config')
+    process.env.KODE_CONFIG_DIR = join(process.cwd(), '.tmp-kode-config')
     __resetPlanModeForTests()
     const ctx = makeContext()
     setActivePlanConversationKey(getPlanConversationKey(ctx as any))
@@ -67,7 +67,7 @@ describe('Plan mode gating', () => {
   })
 
   test('allows read tool while in plan mode', async () => {
-    process.env.CLAUDE_CONFIG_DIR = join(process.cwd(), '.tmp-claude-config')
+    process.env.KODE_CONFIG_DIR = join(process.cwd(), '.tmp-kode-config')
     __resetPlanModeForTests()
     const ctx = makeContext(false)
     setActivePlanConversationKey(getPlanConversationKey(ctx as any))
@@ -84,12 +84,15 @@ describe('Plan mode gating', () => {
   })
 
   test('allows writing the plan file while in plan mode', async () => {
-    process.env.CLAUDE_CONFIG_DIR = join(process.cwd(), '.tmp-claude-config')
+    process.env.KODE_CONFIG_DIR = join(process.cwd(), '.tmp-kode-config')
     __resetPlanModeForTests()
     const ctx = makeContext()
     setActivePlanConversationKey(getPlanConversationKey(ctx as any))
     enterPlanMode(ctx as any)
-    const planFilePath = getPlanFilePath(undefined, getPlanConversationKey(ctx as any))
+    const planFilePath = getPlanFilePath(
+      undefined,
+      getPlanConversationKey(ctx as any),
+    )
     const result = await hasPermissionsToUseTool(
       FileWriteTool as any,
       { file_path: planFilePath, content: '# Plan\n' },
@@ -101,7 +104,7 @@ describe('Plan mode gating', () => {
   })
 
   test('allows writing agent plan files while in plan mode', async () => {
-    process.env.CLAUDE_CONFIG_DIR = join(process.cwd(), '.tmp-claude-config')
+    process.env.KODE_CONFIG_DIR = join(process.cwd(), '.tmp-kode-config')
     __resetPlanModeForTests()
     const ctx = makeContext()
     const conversationKey = getPlanConversationKey(ctx as any)
@@ -135,7 +138,8 @@ describe('Bash background execution', () => {
   })
 
   test('readBackgroundOutput returns only new output', async () => {
-    const { bashId } = BunShell.getInstance().execInBackground('printf "a\\nb\\n"')
+    const { bashId } =
+      BunShell.getInstance().execInBackground('printf "a\\nb\\n"')
     expect(bashId).toBeTruthy()
     expect(bashId).toMatch(/^b[0-9a-f]{6}$/i)
     await new Promise(resolve => setTimeout(resolve, 200))

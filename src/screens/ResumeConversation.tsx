@@ -1,58 +1,87 @@
 import React from 'react'
 import { render } from 'ink'
 import { REPL } from './REPL'
-import { deserializeMessages } from '@utils/conversationRecovery'
-import { LogSelector } from '@components/LogSelector'
-import type { LogOption } from '@kode-types/logs'
-import { logError, getNextAvailableLogForkNumber } from '@utils/log'
+import { SessionSelector } from '@components/SessionSelector'
+import type { KodeAgentSessionListItem } from '@utils/protocol/kodeAgentSessionResume'
+import { logError } from '@utils/log'
 import type { Tool } from '@tool'
 import { Command } from '@commands'
 import { isDefaultSlowAndCapableModel } from '@utils/model'
+import type { WrappedClient } from '@services/mcpClient'
+import { loadKodeAgentSessionMessages } from '@utils/protocol/kodeAgentSessionLoad'
+import { setKodeAgentSessionId } from '@utils/protocol/kodeAgentSessionId'
+import { randomUUID } from 'crypto'
+import { dateToFilename } from '@utils/log'
 
 type Props = {
+  cwd: string
   commands: Command[]
   context: { unmount?: () => void }
-  logs: LogOption[]
+  sessions: KodeAgentSessionListItem[]
   tools: Tool[]
   verbose: boolean | undefined
+  safeMode?: boolean
+  debug?: boolean
+  disableSlashCommands?: boolean
+  mcpClients?: WrappedClient[]
+  initialPrompt?: string
+  forkSession?: boolean
+  forkSessionId?: string | null
+  initialUpdateVersion?: string | null
+  initialUpdateCommands?: string[] | null
 }
 
 export function ResumeConversation({
+  cwd,
   context,
   commands,
-  logs,
+  sessions,
   tools,
   verbose,
+  safeMode,
+  debug,
+  disableSlashCommands,
+  mcpClients,
+  initialPrompt,
+  forkSession,
+  forkSessionId,
+  initialUpdateVersion,
+  initialUpdateCommands,
 }: Props): React.ReactNode {
   async function onSelect(index: number) {
-    const log = logs[index]
-    if (!log) {
-      return
-    }
-
-    // Load and deserialize the messages
     try {
+      const selected = sessions[index]
+      if (!selected) return
       context.unmount?.()
-      // Start a new REPL with the loaded messages
-      // Increment the fork number by 1 to generate a new transcript
-      // Check if using default model before rendering
+
+      const resumedFromSessionId = selected.sessionId
+      const effectiveSessionId = forkSession
+        ? forkSessionId?.trim() || randomUUID()
+        : resumedFromSessionId
+      setKodeAgentSessionId(effectiveSessionId)
+
+      const messages = loadKodeAgentSessionMessages({
+        cwd,
+        sessionId: resumedFromSessionId,
+      })
       const isDefaultModel = await isDefaultSlowAndCapableModel()
 
       render(
         <REPL
-          messageLogName={log.date}
-          initialPrompt=""
+          commands={commands}
+          debug={debug}
+          disableSlashCommands={disableSlashCommands}
+          initialPrompt={initialPrompt ?? ''}
+          messageLogName={dateToFilename(new Date())}
           shouldShowPromptInput={true}
           verbose={verbose}
-          commands={commands}
           tools={tools}
-          initialMessages={deserializeMessages(log.messages, tools)}
-          initialForkNumber={getNextAvailableLogForkNumber(
-            log.date,
-            log.forkNumber ?? 1,
-            0,
-          )}
+          safeMode={safeMode}
+          mcpClients={mcpClients}
+          initialMessages={messages as any}
           isDefaultModel={isDefaultModel}
+          initialUpdateVersion={initialUpdateVersion}
+          initialUpdateCommands={initialUpdateCommands}
         />,
         {
           exitOnCtrlC: false,
@@ -64,5 +93,5 @@ export function ResumeConversation({
     }
   }
 
-  return <LogSelector logs={logs} onSelect={onSelect} />
+  return <SessionSelector sessions={sessions} onSelect={onSelect} />
 }

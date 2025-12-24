@@ -58,10 +58,18 @@ export const GlobTool = {
     if (!path) return { result: true }
     const absolute = isAbsolute(path) ? path : resolve(getCwd(), path)
     if (!existsSync(absolute)) {
-      return { result: false, message: `Directory does not exist: ${path}`, errorCode: 1 }
+      return {
+        result: false,
+        message: `Directory does not exist: ${path}`,
+        errorCode: 1,
+      }
     }
     if (!statSync(absolute).isDirectory()) {
-      return { result: false, message: `Path is not a directory: ${path}`, errorCode: 2 }
+      return {
+        result: false,
+        message: `Path is not a directory: ${path}`,
+        errorCode: 2,
+      }
     }
     return { result: true }
   },
@@ -109,7 +117,14 @@ export const GlobTool = {
     // Default semantics: use ripgrep file listing with no-ignore + hidden,
     // sorted by modified time, filtered by --glob pattern.
     const raw = await ripGrep(
-      ['--files', '--no-ignore', '--hidden', '--sort=modified', '--glob', pattern],
+      [
+        '--files',
+        '--no-ignore',
+        '--hidden',
+        '--sort=modified',
+        '--glob',
+        pattern,
+      ],
       searchPath,
       abortController.signal,
     )

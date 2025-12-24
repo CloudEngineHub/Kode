@@ -21,4 +21,3 @@ describe('shell command selection', () => {
     expect(cmd[2]).toBe('echo hi')
   })
 })
-

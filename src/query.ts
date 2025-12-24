@@ -11,12 +11,10 @@ import {
   shouldUseBinaryFeedback,
 } from '@components/binary-feedback/utils'
 import { CanUseToolFn } from './hooks/useCanUseTool'
-import {
-  formatSystemPromptWithContext,
-  queryLLM,
-  queryModel,
-} from '@services/claude'
+import { queryLLM } from '@services/llmLazy'
+import { formatSystemPromptWithContext } from '@services/systemPrompt'
 import { emitReminderEvent } from '@services/systemReminder'
+import { getOutputStyleSystemPromptAdditions } from '@services/outputStyles'
 import { logError } from '@utils/log'
 import {
   debug as debugLogger,
@@ -36,7 +34,7 @@ import {
   NormalizedMessage,
   normalizeMessagesForAPI,
 } from '@utils/messages'
-import { appendSessionJsonlFromMessage } from '@utils/kodeAgentSessionLog'
+import { appendSessionJsonlFromMessage } from '@utils/protocol/kodeAgentSessionLog'
 import {
   getPlanModeSystemPromptAdditions,
   hydratePlanSlugFromMessages,
@@ -51,6 +49,17 @@ import {
 import { resolveToolNameAlias } from '@utils/toolNameAliases'
 import { getCwd } from './utils/state'
 import { checkAutoCompact } from './utils/autoCompactCore'
+import {
+  drainHookSystemPromptAdditions,
+  getHookTranscriptPath,
+  queueHookAdditionalContexts,
+  queueHookSystemMessages,
+  runPostToolUseHooks,
+  runPreToolUseHooks,
+  runStopHooks,
+  runUserPromptSubmitHooks,
+  updateHookTranscriptForMessages,
+} from '@utils/kodeHooks'
 
 // Extended ToolUseContext for query functions
 interface ExtendedToolUseContext extends ToolUseContext {
@@ -65,6 +74,7 @@ interface ExtendedToolUseContext extends ToolUseContext {
     safeMode: boolean
     maxThinkingTokens: number
     isKodingRequest?: boolean
+    lastUserPrompt?: string
     model?: string | import('./utils/config').ModelPointerType
     toolPermissionContext?: ToolPermissionContext
     /**
@@ -133,7 +143,9 @@ type ToolQueueEntry = {
   pendingProgress: ProgressMessage[]
   queuedProgressEmitted?: boolean
   results?: (UserMessage | AssistantMessage)[]
-  contextModifiers?: Array<(ctx: ExtendedToolUseContext) => ExtendedToolUseContext>
+  contextModifiers?: Array<
+    (ctx: ExtendedToolUseContext) => ExtendedToolUseContext
+  >
   promise?: Promise<void>
 }
 
@@ -268,7 +280,8 @@ class ToolUseQueue {
 
   private getAbortReason(): 'sibling_error' | 'user_interrupted' | null {
     if (this.hasErrored) return 'sibling_error'
-    if (this.toolUseContext.abortController.signal.aborted) return 'user_interrupted'
+    if (this.toolUseContext.abortController.signal.aborted)
+      return 'user_interrupted'
     return null
   }
 
@@ -529,6 +542,7 @@ async function* queryCore(
     m1: AssistantMessage,
     m2: AssistantMessage,
   ) => Promise<BinaryFeedbackResult>,
+  hookState?: { stopHookActive?: boolean; stopHookAttempts?: number },
 ): AsyncGenerator<Message, void> {
   setRequestStatus({ kind: 'thinking' })
 
@@ -536,12 +550,12 @@ async function* queryCore(
     const currentRequest = getCurrentRequest()
 
     markPhase('QUERY_INIT')
+    const stopHookActive = hookState?.stopHookActive === true
+    const stopHookAttempts = hookState?.stopHookAttempts ?? 0
 
     // Auto-compact check
-    const { messages: processedMessages, wasCompacted } = await checkAutoCompact(
-      messages,
-      toolUseContext,
-    )
+    const { messages: processedMessages, wasCompacted } =
+      await checkAutoCompact(messages, toolUseContext)
     if (wasCompacted) {
       messages = processedMessages
     }
@@ -564,9 +578,64 @@ async function* queryCore(
       for (const attachment of attachments) {
         const text = renderBackgroundShellStatusAttachment(attachment)
         if (text.trim().length === 0) continue
-        const msg = createAssistantMessage(`<tool-progress>${text}</tool-progress>`)
+        const msg = createAssistantMessage(
+          `<tool-progress>${text}</tool-progress>`,
+        )
         messages = [...messages, msg]
         yield msg
+      }
+    }
+
+    // Hooks: keep an up-to-date transcript for hook scripts.
+    updateHookTranscriptForMessages(toolUseContext, messages)
+
+    // Hooks: UserPromptSubmit
+    {
+      const last = messages[messages.length - 1]
+      let userPromptText: string | null = null
+      if (last && typeof last === 'object' && (last as any).type === 'user') {
+        const content = (last as any).message?.content
+        if (typeof content === 'string') {
+          userPromptText = content
+        } else if (Array.isArray(content)) {
+          const hasToolResult = content.some(
+            (b: any) => b && typeof b === 'object' && b.type === 'tool_result',
+          )
+          if (!hasToolResult) {
+            userPromptText = content
+              .filter(
+                (b: any) => b && typeof b === 'object' && b.type === 'text',
+              )
+              .map((b: any) => String(b.text ?? ''))
+              .join('')
+          }
+        }
+      }
+
+      if (userPromptText !== null) {
+        // Keep a stable copy of the user's last prompt (pre-reminder injection) so
+        // tools can do intent-alignment checks against the actual user request.
+        toolUseContext.options.lastUserPrompt = userPromptText
+
+        const promptOutcome = await runUserPromptSubmitHooks({
+          prompt: userPromptText,
+          permissionMode: toolUseContext.options?.toolPermissionContext?.mode,
+          cwd: getCwd(),
+          transcriptPath: getHookTranscriptPath(toolUseContext),
+          safeMode: toolUseContext.options?.safeMode ?? false,
+          signal: toolUseContext.abortController.signal,
+        })
+
+        queueHookSystemMessages(toolUseContext, promptOutcome.systemMessages)
+        queueHookAdditionalContexts(
+          toolUseContext,
+          promptOutcome.additionalContexts,
+        )
+
+        if (promptOutcome.decision === 'block') {
+          yield createAssistantMessage(promptOutcome.message)
+          return
+        }
       }
     }
 
@@ -576,7 +645,11 @@ async function* queryCore(
     hydratePlanSlugFromMessages(messages as any[], toolUseContext)
 
     const { systemPrompt: fullSystemPrompt, reminders } =
-      formatSystemPromptWithContext(systemPrompt, context, toolUseContext.agentId)
+      formatSystemPromptWithContext(
+        systemPrompt,
+        context,
+        toolUseContext.agentId,
+      )
 
     // Default behavior: plan mode reminders are injected as system-level guidance.
     const planModeAdditions = getPlanModeSystemPromptAdditions(
@@ -585,6 +658,18 @@ async function* queryCore(
     )
     if (planModeAdditions.length > 0) {
       fullSystemPrompt.push(...planModeAdditions)
+    }
+
+    const hookAdditions = drainHookSystemPromptAdditions(toolUseContext)
+    if (hookAdditions.length > 0) {
+      fullSystemPrompt.push(...hookAdditions)
+    }
+
+    if (toolUseContext.agentId === 'main') {
+      const outputStyleAdditions = getOutputStyleSystemPromptAdditions()
+      if (outputStyleAdditions.length > 0) {
+        fullSystemPrompt.push(...outputStyleAdditions)
+      }
     }
 
     // Emit session startup event
@@ -659,19 +744,70 @@ async function* queryCore(
     const assistantMessage = result.message
     const shouldSkipPermissionCheck = result.shouldSkipPermissionCheck
 
-    yield assistantMessage
-
     // @see https://docs.anthropic.com/en/docs/build-with-claude/tool-use
     // Note: stop_reason === 'tool_use' is unreliable -- it's not always set correctly
-    const toolUseMessages = assistantMessage.message.content.filter(isToolUseLikeBlock)
+    const toolUseMessages =
+      assistantMessage.message.content.filter(isToolUseLikeBlock)
 
     // If there's no more tool use, we're done
     if (!toolUseMessages.length) {
+      const stopHookEvent =
+        toolUseContext.agentId && toolUseContext.agentId !== 'main'
+          ? ('SubagentStop' as const)
+          : ('Stop' as const)
+      const stopReason =
+        (assistantMessage.message as any)?.stop_reason ||
+        (assistantMessage.message as any)?.stopReason ||
+        'end_turn'
+
+      const stopOutcome = await runStopHooks({
+        hookEvent: stopHookEvent,
+        reason: String(stopReason ?? ''),
+        agentId: toolUseContext.agentId,
+        permissionMode: toolUseContext.options?.toolPermissionContext?.mode,
+        cwd: getCwd(),
+        transcriptPath: getHookTranscriptPath(toolUseContext),
+        safeMode: toolUseContext.options?.safeMode ?? false,
+        stopHookActive,
+        signal: toolUseContext.abortController.signal,
+      })
+
+      if (stopOutcome.systemMessages.length > 0) {
+        queueHookSystemMessages(toolUseContext, stopOutcome.systemMessages)
+      }
+      if (stopOutcome.additionalContexts.length > 0) {
+        queueHookAdditionalContexts(
+          toolUseContext,
+          stopOutcome.additionalContexts,
+        )
+      }
+
+      if (stopOutcome.decision === 'block') {
+        queueHookSystemMessages(toolUseContext, [stopOutcome.message])
+        const MAX_STOP_HOOK_ATTEMPTS = 5
+        if (stopHookAttempts < MAX_STOP_HOOK_ATTEMPTS) {
+          yield* await queryCore(
+            [...messages, assistantMessage],
+            systemPrompt,
+            context,
+            canUseTool,
+            toolUseContext,
+            getBinaryFeedbackResponse,
+            {
+              stopHookActive: true,
+              stopHookAttempts: stopHookAttempts + 1,
+            },
+          )
+          return
+        }
+      }
+
+      yield assistantMessage
       return
     }
-    const siblingToolUseIDs = new Set<string>(
-      toolUseMessages.map(_ => _.id),
-    )
+
+    yield assistantMessage
+    const siblingToolUseIDs = new Set<string>(toolUseMessages.map(_ => _.id))
     const toolQueue = new ToolUseQueue({
       toolDefinitions: toolUseContext.options.tools,
       canUseTool,
@@ -709,6 +845,7 @@ async function* queryCore(
         canUseTool,
         toolUseContext,
         getBinaryFeedbackResponse,
+        hookState,
       )
     } catch (error) {
       // Re-throw the error to maintain the original behavior
@@ -751,9 +888,6 @@ export async function* runToolUse(
     currentRequest?.id,
   )
 
-
-  
-
   const toolName = aliasResolution.resolvedName
   const tool = toolUseContext.options.tools.find(t => t.name === toolName)
 
@@ -765,8 +899,6 @@ export async function* runToolUse(
       toolUseID: toolUse.id,
       requestId: currentRequest?.id,
     })
-
-    
 
     yield createUserMessage([
       {
@@ -803,7 +935,7 @@ export async function* runToolUse(
     }
   } catch (e) {
     logError(e)
-    
+
     // 🔧 Even on error, ensure we yield a tool result to clear UI state
     const errorMessage = createUserMessage([
       {
@@ -825,10 +957,17 @@ export function normalizeToolInput(
   switch (tool) {
     case BashTool: {
       const parsed = BashTool.inputSchema.parse(input) // already validated upstream, won't throw
-      const { command, timeout, description, run_in_background, dangerouslyDisableSandbox } =
-        parsed
+      const {
+        command,
+        timeout,
+        description,
+        run_in_background,
+        dangerouslyDisableSandbox,
+      } = parsed
       return {
-        command: command.replace(`cd ${getCwd()} && `, '').replace(/\\\\;/g, '\\;'),
+        command: command
+          .replace(`cd ${getCwd()} && `, '')
+          .replace(/\\\\;/g, '\\;'),
         ...(timeout !== undefined ? { timeout } : {}),
         ...(description ? { description } : {}),
         ...(run_in_background ? { run_in_background } : {}),
@@ -847,8 +986,10 @@ function preprocessToolInput(
   if (tool.name === 'TaskOutput') {
     const task_id =
       (typeof input.task_id === 'string' && input.task_id) ||
-      (typeof (input as any).agentId === 'string' && String((input as any).agentId)) ||
-      (typeof (input as any).bash_id === 'string' && String((input as any).bash_id)) ||
+      (typeof (input as any).agentId === 'string' &&
+        String((input as any).agentId)) ||
+      (typeof (input as any).bash_id === 'string' &&
+        String((input as any).bash_id)) ||
       ''
 
     const block = typeof input.block === 'boolean' ? input.block : true
@@ -887,13 +1028,12 @@ async function* checkPermissionsAndCallTool(
   if (!isValidInput.success) {
     // Create a more helpful error message for common cases
     let errorMessage = `InputValidationError: ${isValidInput.error.message}`
-    
+
     // Special handling for the "Read" tool (FileReadTool) being called with empty parameters
     if (tool.name === 'Read' && Object.keys(preprocessedInput).length === 0) {
       errorMessage = `Error: The Read tool requires a 'file_path' parameter to specify which file to read. Please provide the absolute path to the file you want to read. For example: {"file_path": "/path/to/file.txt"}`
     }
-    
-    
+
     yield createUserMessage([
       {
         type: 'tool_result',
@@ -905,7 +1045,7 @@ async function* checkPermissionsAndCallTool(
     return
   }
 
-  const normalizedInput = normalizeToolInput(tool, isValidInput.data)
+  let normalizedInput = normalizeToolInput(tool, isValidInput.data)
 
   // Validate input values. Each tool has its own validation logic
   const isValidCall = await tool.validateInput?.(
@@ -924,11 +1064,117 @@ async function* checkPermissionsAndCallTool(
     return
   }
 
+  // Hooks: PreToolUse command hooks (project settings)
+  const hookOutcome = await runPreToolUseHooks({
+    toolName: tool.name,
+    toolInput: normalizedInput,
+    toolUseId: toolUseID,
+    permissionMode: context.options?.toolPermissionContext?.mode,
+    cwd: getCwd(),
+    transcriptPath: getHookTranscriptPath(context),
+    safeMode: context.options?.safeMode ?? false,
+    signal: context.abortController.signal,
+  })
+  if (hookOutcome.kind === 'block') {
+    yield createUserMessage([
+      {
+        type: 'tool_result',
+        content: hookOutcome.message,
+        is_error: true,
+        tool_use_id: toolUseID,
+      },
+    ])
+    return
+  }
+  if (hookOutcome.warnings.length > 0) {
+    const warningText = hookOutcome.warnings.join('\n')
+    yield createProgressMessage(
+      toolUseID,
+      siblingToolUseIDs,
+      createAssistantMessage(warningText),
+      [],
+      context.options?.tools ?? [],
+    )
+  }
+
+  if (hookOutcome.systemMessages && hookOutcome.systemMessages.length > 0) {
+    queueHookSystemMessages(context, hookOutcome.systemMessages)
+  }
+  if (
+    hookOutcome.additionalContexts &&
+    hookOutcome.additionalContexts.length > 0
+  ) {
+    queueHookAdditionalContexts(context, hookOutcome.additionalContexts)
+  }
+
+  if (hookOutcome.updatedInput) {
+    const merged = { ...normalizedInput, ...hookOutcome.updatedInput }
+    const parsed = tool.inputSchema.safeParse(merged)
+    if (!parsed.success) {
+      yield createUserMessage([
+        {
+          type: 'tool_result',
+          content: `Hook updatedInput failed validation: ${parsed.error.message}`,
+          is_error: true,
+          tool_use_id: toolUseID,
+        },
+      ])
+      return
+    }
+    normalizedInput = normalizeToolInput(tool, parsed.data)
+    const isValidUpdate = await tool.validateInput?.(
+      normalizedInput as never,
+      context,
+    )
+    if (isValidUpdate?.result === false) {
+      yield createUserMessage([
+        {
+          type: 'tool_result',
+          content: isValidUpdate.message,
+          is_error: true,
+          tool_use_id: toolUseID,
+        },
+      ])
+      return
+    }
+  }
+
   // Check whether we have permission to use the tool,
   // and ask the user for permission if we don't
-  const permissionResult = shouldSkipPermissionCheck
+  const hookPermissionDecision =
+    hookOutcome.kind === 'allow' ? hookOutcome.permissionDecision : undefined
+
+  const effectiveShouldSkipPermissionCheck =
+    hookPermissionDecision === 'allow'
+      ? true
+      : hookPermissionDecision === 'ask'
+        ? false
+        : shouldSkipPermissionCheck
+
+  const permissionContextForCall =
+    hookPermissionDecision === 'ask' &&
+    context.options?.toolPermissionContext &&
+    context.options.toolPermissionContext.mode !== 'default'
+      ? ({
+          ...context,
+          options: {
+            ...context.options,
+            toolPermissionContext: {
+              ...context.options.toolPermissionContext,
+              mode: 'default',
+            },
+          },
+        } as const)
+      : context
+
+  const permissionResult = effectiveShouldSkipPermissionCheck
     ? ({ result: true } as const)
-    : await canUseTool(tool, normalizedInput, context, assistantMessage)
+    : await canUseTool(
+        tool,
+        normalizedInput,
+        permissionContextForCall,
+        assistantMessage,
+      )
   if (permissionResult.result === false) {
     yield createUserMessage([
       {
@@ -954,6 +1200,37 @@ async function* checkPermissionsAndCallTool(
             const content =
               result.resultForAssistant ??
               tool.renderResultForAssistant(result.data as never)
+
+            const postOutcome = await runPostToolUseHooks({
+              toolName: tool.name,
+              toolInput: normalizedInput,
+              toolResult: result.data,
+              toolUseId: toolUseID,
+              permissionMode: context.options?.toolPermissionContext?.mode,
+              cwd: getCwd(),
+              transcriptPath: getHookTranscriptPath(context),
+              safeMode: context.options?.safeMode ?? false,
+              signal: context.abortController.signal,
+            })
+            if (postOutcome.systemMessages.length > 0) {
+              queueHookSystemMessages(context, postOutcome.systemMessages)
+            }
+            if (postOutcome.additionalContexts.length > 0) {
+              queueHookAdditionalContexts(
+                context,
+                postOutcome.additionalContexts,
+              )
+            }
+            if (postOutcome.warnings.length > 0) {
+              const warningText = postOutcome.warnings.join('\n')
+              yield createProgressMessage(
+                toolUseID,
+                siblingToolUseIDs,
+                createAssistantMessage(warningText),
+                [],
+                context.options?.tools ?? [],
+              )
+            }
 
             yield createUserMessage(
               [
@@ -989,7 +1266,6 @@ async function* checkPermissionsAndCallTool(
           }
           return
         case 'progress':
-          
           yield createProgressMessage(
             toolUseID,
             siblingToolUseIDs,
@@ -1003,7 +1279,7 @@ async function* checkPermissionsAndCallTool(
   } catch (error) {
     const content = formatError(error)
     logError(error)
-    
+
     yield createUserMessage([
       {
         type: 'tool_result',

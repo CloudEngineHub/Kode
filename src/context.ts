@@ -7,8 +7,6 @@ import { getCodeStyle } from './utils/style'
 import { getCwd } from './utils/state'
 import { memoize, omit } from 'lodash-es'
 import { getIsGit } from './utils/git'
-import { ripGrep } from './utils/ripgrep'
-import * as path from 'path'
 import { execFileNoThrow } from './utils/execFileNoThrow'
 import { join } from 'path'
 import { readFile } from 'fs/promises'
@@ -16,48 +14,39 @@ import { existsSync, readdirSync } from 'fs'
 import { getModelManager } from './utils/model'
 import { lastX } from './utils/generators'
 import { getGitEmail } from './utils/user'
-import { PROJECT_FILE } from './constants/product'
+import {
+  getProjectInstructionFiles,
+  readAndConcatProjectInstructionFiles,
+} from './utils/projectInstructions'
 /**
- * Locate AGENTS.md and CLAUDE.md files for backward compatibility with
- * existing documentation workflows.
+ * Locate project instruction files.
  */
-export async function getClaudeFiles(): Promise<string | null> {
-  const abortController = new AbortController()
-  const timeout = setTimeout(() => abortController.abort(), 3000)
+export async function getInstructionFilesNote(): Promise<string | null> {
   try {
-    // Search for both AGENTS.md and CLAUDE.md files
-    const [codeContextFiles, claudeFiles] = await Promise.all([
-      ripGrep(
-        ['--files', '--glob', join('**', '*', PROJECT_FILE)],
-        getCwd(),
-        abortController.signal,
-      ).catch(() => []),
-      ripGrep(
-        ['--files', '--glob', join('**', '*', 'CLAUDE.md')],
-        getCwd(),
-        abortController.signal,
-      ).catch(() => []),
-    ])
+    const cwd = getCwd()
+    const instructionFiles = getProjectInstructionFiles(cwd)
+    const legacyPath = join(cwd, 'CLAUDE.md')
+    const hasLegacy = existsSync(legacyPath)
 
-    const allFiles = [...codeContextFiles, ...claudeFiles]
-    if (!allFiles.length) {
+    if (instructionFiles.length === 0 && !hasLegacy) {
       return null
     }
 
-    // Add instructions for additional project files
-    const fileTypes = []
-    if (codeContextFiles.length > 0) fileTypes.push('AGENTS.md')
-    if (claudeFiles.length > 0) fileTypes.push('CLAUDE.md')
+    const fileTypes = new Set<string>()
+    for (const f of instructionFiles) fileTypes.add(f.filename)
+    if (hasLegacy) fileTypes.add('CLAUDE.md (Claude Code-compatible)')
 
-    return `NOTE: Additional project documentation files (${fileTypes.join(', ')}) were found. When working in these directories, make sure to read and follow the instructions in the corresponding files:\n${allFiles
-      .map(_ => path.join(getCwd(), _))
+    const allFiles = [
+      ...instructionFiles.map(f => f.absolutePath),
+      ...(hasLegacy ? [legacyPath] : []),
+    ]
+
+    return `NOTE: Additional project instruction files (${Array.from(fileTypes).join(', ')}) were found. When working in these directories, make sure to read and follow the instructions in the corresponding files:\n${allFiles
       .map(_ => `- ${_}`)
       .join('\n')}`
   } catch (error) {
     logError(error)
     return null
-  } finally {
-    clearTimeout(timeout)
   }
 }
 
@@ -97,31 +86,32 @@ export const getReadme = memoize(async (): Promise<string | null> => {
 })
 
 /**
- * Get project documentation content (AGENTS.md and CLAUDE.md)
+ * Get project documentation content (AGENTS.md and legacy CLAUDE.md)
  */
-export const getProjectDocs = memoize(async (): Promise<string | null> => {
+export async function getProjectDocsForCwd(
+  cwd: string,
+): Promise<string | null> {
   try {
-    const cwd = getCwd()
-    const codeContextPath = join(cwd, 'AGENTS.md')
-    const claudePath = join(cwd, 'CLAUDE.md')
+    const instructionFiles = getProjectInstructionFiles(cwd)
+    const legacyPath = join(cwd, 'CLAUDE.md')
 
     const docs = []
 
-    // Try to read AGENTS.md
-    if (existsSync(codeContextPath)) {
-      try {
-        const content = await readFile(codeContextPath, 'utf-8')
-        docs.push(`# AGENTS.md\n\n${content}`)
-      } catch (e) {
-        logError(e)
-      }
+    if (instructionFiles.length > 0) {
+      const { content } = readAndConcatProjectInstructionFiles(
+        instructionFiles,
+        { includeHeadings: true },
+      )
+      if (content.trim().length > 0) docs.push(content)
     }
 
-    // Try to read CLAUDE.md
-    if (existsSync(claudePath)) {
+    // Try to read legacy CLAUDE.md (Claude Code-compatible).
+    if (existsSync(legacyPath)) {
       try {
-        const content = await readFile(claudePath, 'utf-8')
-        docs.push(`# CLAUDE.md\n\n${content}`)
+        const content = await readFile(legacyPath, 'utf-8')
+        docs.push(
+          `# Legacy instructions (CLAUDE.md, Claude Code-compatible)\n\n${content}`,
+        )
       } catch (e) {
         logError(e)
       }
@@ -132,6 +122,10 @@ export const getProjectDocs = memoize(async (): Promise<string | null> => {
     logError(e)
     return null
   }
+}
+
+export const getProjectDocs = memoize(async (): Promise<string | null> => {
+  return getProjectDocsForCwd(getCwd())
 })
 
 export const getGitStatus = memoize(async (): Promise<string | null> => {
@@ -213,20 +207,25 @@ export const getContext = memoize(
     const codeStyle = getCodeStyle()
     const projectConfig = getCurrentProjectConfig()
     const dontCrawl = projectConfig.dontCrawlDirectory
-    const [gitStatus, directoryStructure, claudeFiles, readme, projectDocs] =
-      await Promise.all([
-        getGitStatus(),
-        dontCrawl ? Promise.resolve('') : getDirectoryStructure(),
-        dontCrawl ? Promise.resolve('') : getClaudeFiles(),
-        getReadme(),
-        getProjectDocs(),
-      ])
+    const [
+      gitStatus,
+      directoryStructure,
+      instructionFilesNote,
+      readme,
+      projectDocs,
+    ] = await Promise.all([
+      getGitStatus(),
+      dontCrawl ? Promise.resolve('') : getDirectoryStructure(),
+      dontCrawl ? Promise.resolve('') : getInstructionFilesNote(),
+      getReadme(),
+      getProjectDocs(),
+    ])
     return {
       ...projectConfig.context,
       ...(directoryStructure ? { directoryStructure } : {}),
       ...(gitStatus ? { gitStatus } : {}),
       ...(codeStyle ? { codeStyle } : {}),
-      ...(claudeFiles ? { claudeFiles } : {}),
+      ...(instructionFilesNote ? { instructionFilesNote } : {}),
       ...(readme ? { readme } : {}),
       ...(projectDocs ? { projectDocs } : {}),
     }

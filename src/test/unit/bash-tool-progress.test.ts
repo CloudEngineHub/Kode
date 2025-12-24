@@ -15,6 +15,9 @@ function makeContext(): any {
       forkNumber: 0,
       messageLogName: 'bash-tool-progress-test',
       maxThinkingTokens: 0,
+      bashLlmGateQuery: async () => {
+        return 'ALLOW'
+      },
     },
     readFileTimestamps: {},
   }
@@ -22,11 +25,15 @@ function makeContext(): any {
 
 describe('BashTool progress parity (Reference CLI gH5)', () => {
   test('yields progress for long-running commands and then yields final result', async () => {
-    process.env.CLAUDE_CONFIG_DIR = join(process.cwd(), '.tmp-claude-config')
+    process.env.KODE_CONFIG_DIR = join(process.cwd(), '.tmp-kode-config')
 
     const ctx = makeContext()
     const gen = BashTool.call(
-      { command: 'echo a; sleep 3; echo b', timeout: 10_000 },
+      {
+        command: 'echo a; sleep 3; echo b',
+        description: 'Produce output with a delay',
+        timeout: 10_000,
+      },
       ctx,
     )
 
@@ -45,10 +52,17 @@ describe('BashTool progress parity (Reference CLI gH5)', () => {
   })
 
   test('abort still produces a final tool result (interrupted=true)', async () => {
-    process.env.CLAUDE_CONFIG_DIR = join(process.cwd(), '.tmp-claude-config')
+    process.env.KODE_CONFIG_DIR = join(process.cwd(), '.tmp-kode-config')
 
     const ctx = makeContext()
-    const gen = BashTool.call({ command: 'echo a; sleep 10', timeout: 60_000 }, ctx)
+    const gen = BashTool.call(
+      {
+        command: 'echo a; sleep 10',
+        description: 'Test abort handling',
+        timeout: 60_000,
+      },
+      ctx,
+    )
 
     const events: any[] = []
     for await (const ev of gen) {

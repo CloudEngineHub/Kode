@@ -1,6 +1,6 @@
 import { Command } from '@commands'
-import { getKodeAgentSessionId } from '@utils/kodeAgentSessionId'
-import { appendSessionCustomTitleRecord } from '@utils/kodeAgentSessionLog'
+import { getKodeAgentSessionId } from '@utils/protocol/kodeAgentSessionId'
+import { appendSessionCustomTitleRecord } from '@utils/protocol/kodeAgentSessionLog'
 
 const rename = {
   type: 'local',

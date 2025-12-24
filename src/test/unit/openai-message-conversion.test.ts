@@ -81,4 +81,3 @@ describe('openaiMessageConversion', () => {
     expect((converted[3] as any)?.content).toBe('Done')
   })
 })
-

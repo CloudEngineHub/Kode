@@ -17,7 +17,9 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'fs'
 import { join } from 'path'
 
 function isDebugMode(): boolean {
-  return process.argv.includes('--debug') || process.argv.includes('--debug-verbose')
+  return (
+    process.argv.includes('--debug') || process.argv.includes('--debug-verbose')
+  )
 }
 
 function safeStringify(value: unknown): string {
@@ -146,7 +148,8 @@ function summarizeOrderedMessages(ordered: NormalizedMessage[]): Array<{
       preview = getProgressText(m).trim() || null
     } else if (m.type === 'assistant') {
       const first = m.message.content[0] as any
-      if (first?.type === 'text') preview = String(first.text ?? '').slice(0, 120)
+      if (first?.type === 'text')
+        preview = String(first.text ?? '').slice(0, 120)
       if (first?.type === 'tool_use') {
         const name = typeof first.name === 'string' ? first.name : 'UnknownTool'
         preview = `${name}(${safeStringify(first.input ?? {}).slice(0, 120)})`

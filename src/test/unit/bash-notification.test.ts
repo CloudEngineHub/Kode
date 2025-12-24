@@ -28,7 +28,9 @@ describe('bash-notification parity (Reference CLI Rt1)', () => {
     const text = renderBashNotification(notification!)
     expect(text).toContain('<bash-notification>')
     expect(text).toContain(`<shell-id>${bashId}</shell-id>`)
-    expect(text).toContain(`<output-file>${notification!.outputFile}</output-file>`)
+    expect(text).toContain(
+      `<output-file>${notification!.outputFile}</output-file>`,
+    )
     expect(text).toContain('<status>completed</status>')
     expect(text).toContain('Read the output file to retrieve the output.')
 

@@ -22,9 +22,14 @@ describe('autoCompactThreshold', () => {
     const result = calculateAutoCompactThresholds(tokenCount, contextLimit)
 
     expect(result.contextLimit).toBe(contextLimit)
-    expect(result.autoCompactThreshold).toBe(contextLimit * AUTO_COMPACT_THRESHOLD_RATIO)
-    expect(result.percentUsed).toBe(Math.round((tokenCount / contextLimit) * 100))
-    expect(result.tokensRemaining).toBe(result.autoCompactThreshold - tokenCount)
+    expect(result.autoCompactThreshold).toBe(
+      contextLimit * AUTO_COMPACT_THRESHOLD_RATIO,
+    )
+    expect(result.percentUsed).toBe(
+      Math.round((tokenCount / contextLimit) * 100),
+    )
+    expect(result.tokensRemaining).toBe(
+      result.autoCompactThreshold - tokenCount,
+    )
   })
 })
-

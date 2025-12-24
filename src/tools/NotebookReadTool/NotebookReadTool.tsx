@@ -36,7 +36,6 @@ const inputSchema = z.strictObject({
 type In = typeof inputSchema
 type Out = NotebookCellSource[]
 
-
 export const NotebookReadTool = {
   name: 'ReadNotebook',
   async description() {
@@ -130,16 +129,21 @@ export const NotebookReadTool = {
   },
   renderResultForAssistant(data: NotebookCellSource[]) {
     // Convert the complex structure to a string representation for the assistant
-    return data.map((cell, index) => {
-      let content = `Cell ${index + 1} (${cell.cellType}):\n${cell.source}`
-      if (cell.outputs && cell.outputs.length > 0) {
-        const outputText = cell.outputs.map(output => output.text).filter(Boolean).join('\n')
-        if (outputText) {
-          content += `\nOutput:\n${outputText}`
+    return data
+      .map((cell, index) => {
+        let content = `Cell ${index + 1} (${cell.cellType}):\n${cell.source}`
+        if (cell.outputs && cell.outputs.length > 0) {
+          const outputText = cell.outputs
+            .map(output => output.text)
+            .filter(Boolean)
+            .join('\n')
+          if (outputText) {
+            content += `\nOutput:\n${outputText}`
+          }
         }
-      }
-      return content
-    }).join('\n\n')
+        return content
+      })
+      .join('\n\n')
   },
 } satisfies Tool<In, Out>
 
@@ -179,7 +183,9 @@ function processOutput(output: NotebookCellOutput) {
     case 'display_data':
       return {
         output_type: output.output_type,
-        text: processOutputText(output.data?.['text/plain'] as string | string[] | undefined),
+        text: processOutputText(
+          output.data?.['text/plain'] as string | string[] | undefined,
+        ),
         image: output.data && extractImage(output.data),
       }
     case 'error':

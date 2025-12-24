@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test'
-import { BunShell, renderBackgroundShellStatusAttachment } from '@utils/BunShell'
+import {
+  BunShell,
+  renderBackgroundShellStatusAttachment,
+} from '@utils/BunShell'
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))

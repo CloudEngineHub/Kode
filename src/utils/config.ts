@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { resolve, join } from 'path'
 import { cloneDeep, memoize, pick } from 'lodash-es'
 import { homedir } from 'os'
-import { GLOBAL_CLAUDE_FILE } from './env'
+import { getGlobalConfigFilePath } from './env'
 import { getCwd } from './state'
 import { randomBytes } from 'crypto'
 import { safeParseJSON } from './json'
@@ -270,7 +270,7 @@ export type ProjectConfigKey = (typeof PROJECT_CONFIG_KEYS)[number]
 
 export function checkHasTrustDialogAccepted(): boolean {
   let currentPath = getCwd()
-  const config = getConfig(GLOBAL_CLAUDE_FILE, DEFAULT_GLOBAL_CONFIG)
+  const config = getConfig(getGlobalConfigFilePath(), DEFAULT_GLOBAL_CONFIG)
 
   while (true) {
     const projectConfig = config.projects?.[currentPath]
@@ -311,10 +311,11 @@ export function saveGlobalConfig(config: GlobalConfig): void {
 
   // 直接保存配置（无需清除缓存，因为已移除缓存）
   saveConfig(
-    GLOBAL_CLAUDE_FILE,
+    getGlobalConfigFilePath(),
     {
       ...config,
-      projects: getConfig(GLOBAL_CLAUDE_FILE, DEFAULT_GLOBAL_CONFIG).projects,
+      projects: getConfig(getGlobalConfigFilePath(), DEFAULT_GLOBAL_CONFIG)
+        .projects,
     },
     DEFAULT_GLOBAL_CONFIG,
   )
@@ -325,7 +326,7 @@ export function getGlobalConfig(): GlobalConfig {
   if (process.env.NODE_ENV === 'test') {
     return TEST_GLOBAL_CONFIG_FOR_TESTING
   }
-  const config = getConfig(GLOBAL_CLAUDE_FILE, DEFAULT_GLOBAL_CONFIG)
+  const config = getConfig(getGlobalConfigFilePath(), DEFAULT_GLOBAL_CONFIG)
   return migrateModelProfilesRemoveId(config)
 }
 
@@ -362,7 +363,11 @@ function saveConfig<A extends object>(
     writeFileSync(file, JSON.stringify(filteredConfig, null, 2), 'utf-8')
   } catch (error) {
     const err = error as NodeJS.ErrnoException
-    if (err?.code === 'EACCES' || err?.code === 'EPERM' || err?.code === 'EROFS') {
+    if (
+      err?.code === 'EACCES' ||
+      err?.code === 'EPERM' ||
+      err?.code === 'EROFS'
+    ) {
       debugLogger.state('CONFIG_SAVE_SKIPPED', {
         file,
         reason: String(err.code),
@@ -382,7 +387,7 @@ export function enableConfigs(): void {
   configReadingAllowed = true
   // We only check the global config because currently all the configs share a file
   getConfig(
-    GLOBAL_CLAUDE_FILE,
+    getGlobalConfigFilePath(),
     DEFAULT_GLOBAL_CONFIG,
     true /* throw on invalid */,
   )
@@ -481,7 +486,7 @@ export function getCurrentProjectConfig(): ProjectConfig {
   }
 
   const absolutePath = resolve(getCwd())
-  const config = getConfig(GLOBAL_CLAUDE_FILE, DEFAULT_GLOBAL_CONFIG)
+  const config = getConfig(getGlobalConfigFilePath(), DEFAULT_GLOBAL_CONFIG)
 
   if (!config.projects) {
     return defaultConfigForProject(absolutePath)
@@ -513,9 +518,9 @@ export function saveCurrentProjectConfig(projectConfig: ProjectConfig): void {
     }
     return
   }
-  const config = getConfig(GLOBAL_CLAUDE_FILE, DEFAULT_GLOBAL_CONFIG)
+  const config = getConfig(getGlobalConfigFilePath(), DEFAULT_GLOBAL_CONFIG)
   saveConfig(
-    GLOBAL_CLAUDE_FILE,
+    getGlobalConfigFilePath(),
     {
       ...config,
       projects: {
@@ -528,7 +533,9 @@ export function saveCurrentProjectConfig(projectConfig: ProjectConfig): void {
 }
 
 export async function isAutoUpdaterDisabled(): Promise<boolean> {
-  return getGlobalConfig().autoUpdaterStatus === 'disabled'
+  const status = getGlobalConfig().autoUpdaterStatus
+  // Privacy-first default: only allow background update checks when explicitly enabled.
+  return status !== 'enabled'
 }
 
 export const TEST_MCPRC_CONFIG_FOR_TESTING: Record<string, McpServerConfig> = {}
@@ -619,7 +626,11 @@ function parseMcpServersFromMcprc(
 ): Record<string, McpServerConfig> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
   const maybeNested = (value as { mcpServers?: unknown }).mcpServers
-  if (maybeNested && typeof maybeNested === 'object' && !Array.isArray(maybeNested)) {
+  if (
+    maybeNested &&
+    typeof maybeNested === 'object' &&
+    !Array.isArray(maybeNested)
+  ) {
     return maybeNested as Record<string, McpServerConfig>
   }
   return value as Record<string, McpServerConfig>
@@ -717,7 +728,6 @@ export function getOrCreateUserID(): string {
 }
 
 export function getConfigForCLI(key: string, global: boolean): unknown {
-  
   if (global) {
     if (!isGlobalConfigKey(key)) {
       console.error(
@@ -742,7 +752,6 @@ export function setConfigForCLI(
   value: unknown,
   global: boolean,
 ): void {
-  
   if (global) {
     if (!isGlobalConfigKey(key)) {
       console.error(
@@ -784,7 +793,6 @@ export function setConfigForCLI(
 }
 
 export function deleteConfigForCLI(key: string, global: boolean): void {
-  
   if (global) {
     if (!isGlobalConfigKey(key)) {
       console.error(
@@ -811,7 +819,6 @@ export function deleteConfigForCLI(key: string, global: boolean): void {
 export function listConfigForCLI(global: true): GlobalConfig
 export function listConfigForCLI(global: false): ProjectConfig
 export function listConfigForCLI(global: boolean): object {
-  
   if (global) {
     const currentConfig = pick(getGlobalConfig(), GLOBAL_CONFIG_KEYS)
     return currentConfig
@@ -853,10 +860,13 @@ function migrateModelProfilesRemoveId(config: GlobalConfig): GlobalConfig {
     quick: '',
   }
 
-  const rawPointers = config.modelPointers as Record<string, unknown> | undefined
+  const rawPointers = config.modelPointers as
+    | Record<string, unknown>
+    | undefined
   const rawMain = typeof rawPointers?.main === 'string' ? rawPointers.main : ''
   const rawTask = typeof rawPointers?.task === 'string' ? rawPointers.task : ''
-  const rawQuick = typeof rawPointers?.quick === 'string' ? rawPointers.quick : ''
+  const rawQuick =
+    typeof rawPointers?.quick === 'string' ? rawPointers.quick : ''
   const rawCompact =
     typeof rawPointers?.compact === 'string'
       ? rawPointers.compact
@@ -868,7 +878,8 @@ function migrateModelProfilesRemoveId(config: GlobalConfig): GlobalConfig {
   if (rawTask) migratedPointers.task = idToModelNameMap.get(rawTask) || rawTask
   if (rawCompact)
     migratedPointers.compact = idToModelNameMap.get(rawCompact) || rawCompact
-  if (rawQuick) migratedPointers.quick = idToModelNameMap.get(rawQuick) || rawQuick
+  if (rawQuick)
+    migratedPointers.quick = idToModelNameMap.get(rawQuick) || rawQuick
 
   // 3. Migrate legacy config fields
   let defaultModelName: string | undefined
@@ -947,78 +958,102 @@ export function isGPT5ModelName(modelName: string): boolean {
 /**
  * Validate and auto-repair GPT-5 model configuration
  */
-export function validateAndRepairGPT5Profile(profile: ModelProfile): ModelProfile {
+export function validateAndRepairGPT5Profile(
+  profile: ModelProfile,
+): ModelProfile {
   const isGPT5 = isGPT5ModelName(profile.modelName)
   const now = Date.now()
-  
+
   // Create a working copy
   const repairedProfile: ModelProfile = { ...profile }
   let wasRepaired = false
-  
+
   // 🔧 Set GPT-5 detection flag
   if (isGPT5 !== profile.isGPT5) {
     repairedProfile.isGPT5 = isGPT5
     wasRepaired = true
   }
-  
+
   if (isGPT5) {
     // 🔧 GPT-5 Parameter Validation and Repair
-    
+
     // 1. Reasoning effort validation
     const validReasoningEfforts = ['minimal', 'low', 'medium', 'high']
-    if (!profile.reasoningEffort || !validReasoningEfforts.includes(profile.reasoningEffort)) {
+    if (
+      !profile.reasoningEffort ||
+      !validReasoningEfforts.includes(profile.reasoningEffort)
+    ) {
       repairedProfile.reasoningEffort = 'medium' // Default for coding tasks
       wasRepaired = true
-      console.log(`🔧 GPT-5 Config: Set reasoning effort to 'medium' for ${profile.modelName}`)
+      console.log(
+        `🔧 GPT-5 Config: Set reasoning effort to 'medium' for ${profile.modelName}`,
+      )
     }
-    
+
     // 2. Context length validation (GPT-5 models typically have 128k context)
     if (profile.contextLength < 128000) {
       repairedProfile.contextLength = 128000
       wasRepaired = true
-      console.log(`🔧 GPT-5 Config: Updated context length to 128k for ${profile.modelName}`)
+      console.log(
+        `🔧 GPT-5 Config: Updated context length to 128k for ${profile.modelName}`,
+      )
     }
-    
+
     // 3. Output tokens validation (reasonable defaults for GPT-5)
     if (profile.maxTokens < 4000) {
       repairedProfile.maxTokens = 8192 // Good default for coding tasks
       wasRepaired = true
-      console.log(`🔧 GPT-5 Config: Updated max tokens to 8192 for ${profile.modelName}`)
+      console.log(
+        `🔧 GPT-5 Config: Updated max tokens to 8192 for ${profile.modelName}`,
+      )
     }
-    
+
     // 4. Provider validation
-    if (profile.provider !== 'openai' && profile.provider !== 'custom-openai' && profile.provider !== 'azure') {
-      console.warn(`⚠️  GPT-5 Config: Unexpected provider '${profile.provider}' for GPT-5 model ${profile.modelName}. Consider using 'openai' or 'custom-openai'.`)
+    if (
+      profile.provider !== 'openai' &&
+      profile.provider !== 'custom-openai' &&
+      profile.provider !== 'azure'
+    ) {
+      console.warn(
+        `⚠️  GPT-5 Config: Unexpected provider '${profile.provider}' for GPT-5 model ${profile.modelName}. Consider using 'openai' or 'custom-openai'.`,
+      )
     }
-    
+
     // 5. Base URL validation for official models
     if (profile.modelName.includes('gpt-5') && !profile.baseURL) {
       repairedProfile.baseURL = 'https://api.openai.com/v1'
       wasRepaired = true
-      console.log(`🔧 GPT-5 Config: Set default base URL for ${profile.modelName}`)
+      console.log(
+        `🔧 GPT-5 Config: Set default base URL for ${profile.modelName}`,
+      )
     }
   }
-  
+
   // Update validation metadata
   repairedProfile.validationStatus = wasRepaired ? 'auto_repaired' : 'valid'
   repairedProfile.lastValidation = now
-  
+
   if (wasRepaired) {
-    console.log(`✅ GPT-5 Config: Auto-repaired configuration for ${profile.modelName}`)
+    console.log(
+      `✅ GPT-5 Config: Auto-repaired configuration for ${profile.modelName}`,
+    )
   }
-  
+
   return repairedProfile
 }
 
 /**
  * Validate and repair all GPT-5 profiles in the global configuration
  */
-export function validateAndRepairAllGPT5Profiles(): { repaired: number; total: number } {
+export function validateAndRepairAllGPT5Profiles(): {
+  repaired: number
+  total: number
+} {
   const config = getGlobalConfig()
   if (!config.modelProfiles) {
     return { repaired: 0, total: 0 }
   }
-  
+
   let repairCount = 0
   const repairedProfiles = config.modelProfiles.map(profile => {
     const repairedProfile = validateAndRepairGPT5Profile(profile)
@@ -1027,7 +1062,7 @@ export function validateAndRepairAllGPT5Profiles(): { repaired: number; total: n
     }
     return repairedProfile
   })
-  
+
   // Save the repaired configuration
   if (repairCount > 0) {
     const updatedConfig = {
@@ -1037,25 +1072,27 @@ export function validateAndRepairAllGPT5Profiles(): { repaired: number; total: n
     saveGlobalConfig(updatedConfig)
     console.log(`🔧 GPT-5 Config: Auto-repaired ${repairCount} model profiles`)
   }
-  
+
   return { repaired: repairCount, total: config.modelProfiles.length }
 }
 
 /**
  * Get GPT-5 configuration recommendations for a specific model
  */
-export function getGPT5ConfigRecommendations(modelName: string): Partial<ModelProfile> {
+export function getGPT5ConfigRecommendations(
+  modelName: string,
+): Partial<ModelProfile> {
   if (!isGPT5ModelName(modelName)) {
     return {}
   }
-  
+
   const recommendations: Partial<ModelProfile> = {
     contextLength: 128000, // GPT-5 standard context length
     maxTokens: 8192, // Good default for coding tasks
     reasoningEffort: 'medium', // Balanced for most coding tasks
     isGPT5: true,
   }
-  
+
   // Model-specific optimizations
   if (modelName.includes('gpt-5-mini')) {
     recommendations.maxTokens = 4096 // Smaller default for mini
@@ -1064,7 +1101,7 @@ export function getGPT5ConfigRecommendations(modelName: string): Partial<ModelPr
     recommendations.maxTokens = 2048 // Even smaller for nano
     recommendations.reasoningEffort = 'minimal' // Fastest option
   }
-  
+
   return recommendations
 }
 
@@ -1076,10 +1113,10 @@ export function createGPT5ModelProfile(
   modelName: string,
   apiKey: string,
   baseURL?: string,
-  provider: ProviderType = 'openai'
+  provider: ProviderType = 'openai',
 ): ModelProfile {
   const recommendations = getGPT5ConfigRecommendations(modelName)
-  
+
   const profile: ModelProfile = {
     name,
     provider,
@@ -1095,7 +1132,7 @@ export function createGPT5ModelProfile(
     validationStatus: 'valid',
     lastValidation: Date.now(),
   }
-  
+
   console.log(`✅ Created GPT-5 model profile: ${name} (${modelName})`)
   return profile
 }

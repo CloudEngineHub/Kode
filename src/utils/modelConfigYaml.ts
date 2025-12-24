@@ -105,7 +105,9 @@ function resolveApiKeyFromYaml(
 
   if (existingApiKey) return { apiKey: existingApiKey, warnings }
 
-  warnings.push('Missing apiKey (set apiKey.fromEnv, apiKeyEnv, or apiKey.value)')
+  warnings.push(
+    'Missing apiKey (set apiKey.fromEnv, apiKeyEnv, or apiKey.value)',
+  )
   return { apiKey: '', warnings }
 }
 
@@ -184,13 +186,23 @@ export function applyModelConfigYamlImport(
       apiKey: resolved.apiKey,
       maxTokens: profile.maxTokens,
       contextLength: profile.contextLength,
-      ...(profile.reasoningEffort ? { reasoningEffort: profile.reasoningEffort } : {}),
+      ...(profile.reasoningEffort
+        ? { reasoningEffort: profile.reasoningEffort }
+        : {}),
       isActive: profile.isActive ?? true,
       createdAt: profile.createdAt ?? existing?.createdAt ?? now,
-      ...(profile.lastUsed ? { lastUsed: profile.lastUsed } : existing?.lastUsed ? { lastUsed: existing.lastUsed } : {}),
+      ...(profile.lastUsed
+        ? { lastUsed: profile.lastUsed }
+        : existing?.lastUsed
+          ? { lastUsed: existing.lastUsed }
+          : {}),
       ...(existing?.isGPT5 ? { isGPT5: existing.isGPT5 } : {}),
-      ...(existing?.validationStatus ? { validationStatus: existing.validationStatus } : {}),
-      ...(existing?.lastValidation ? { lastValidation: existing.lastValidation } : {}),
+      ...(existing?.validationStatus
+        ? { validationStatus: existing.validationStatus }
+        : {}),
+      ...(existing?.lastValidation
+        ? { lastValidation: existing.lastValidation }
+        : {}),
     }
   })
 

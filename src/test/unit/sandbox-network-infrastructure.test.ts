@@ -5,10 +5,12 @@ import {
   __resetSandboxNetworkInfrastructureForTests,
   ensureSandboxNetworkInfrastructure,
   matchesSandboxDomainPattern,
-} from '@utils/sandboxNetworkInfrastructure'
-import type { SandboxRuntimeConfig } from '@utils/sandboxConfig'
+} from '@utils/sandbox/sandboxNetworkInfrastructure'
+import type { SandboxRuntimeConfig } from '@utils/sandbox/sandboxConfig'
 
-function createRuntimeConfig(overrides?: Partial<SandboxRuntimeConfig>): SandboxRuntimeConfig {
+function createRuntimeConfig(
+  overrides?: Partial<SandboxRuntimeConfig>,
+): SandboxRuntimeConfig {
   return {
     network: {
       allowedDomains: [],
@@ -46,19 +48,30 @@ afterEach(async () => {
 
 describe('sandbox network infrastructure (Reference CLI parity: yc0/vc0/p64/l64/i64)', () => {
   test('matchesSandboxDomainPattern supports "*.domain" and exact matches', () => {
-    expect(matchesSandboxDomainPattern('api.example.com', '*.example.com')).toBe(true)
-    expect(matchesSandboxDomainPattern('API.EXAMPLE.COM', '*.example.com')).toBe(true)
-    expect(matchesSandboxDomainPattern('example.com', '*.example.com')).toBe(false)
+    expect(
+      matchesSandboxDomainPattern('api.example.com', '*.example.com'),
+    ).toBe(true)
+    expect(
+      matchesSandboxDomainPattern('API.EXAMPLE.COM', '*.example.com'),
+    ).toBe(true)
+    expect(matchesSandboxDomainPattern('example.com', '*.example.com')).toBe(
+      false,
+    )
     expect(matchesSandboxDomainPattern('example.com', 'example.com')).toBe(true)
     expect(matchesSandboxDomainPattern('Example.Com', 'example.com')).toBe(true)
   })
 
   test('default deny: unknown host with no callback returns 403 (CONNECT)', async () => {
     const runtimeConfig = createRuntimeConfig()
-    const ports = await ensureSandboxNetworkInfrastructure({ runtimeConfig, permissionCallback: null })
+    const ports = await ensureSandboxNetworkInfrastructure({
+      runtimeConfig,
+      permissionCallback: null,
+    })
 
     const socket = net.connect(ports.httpProxyPort, '127.0.0.1')
-    socket.write('CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n\r\n')
+    socket.write(
+      'CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n\r\n',
+    )
 
     const line = await readFirstLine(socket)
     expect(line).toContain('403')
@@ -78,10 +91,15 @@ describe('sandbox network infrastructure (Reference CLI parity: yc0/vc0/p64/l64/
         deniedDomains: ['localhost'],
       },
     })
-    const ports = await ensureSandboxNetworkInfrastructure({ runtimeConfig, permissionCallback: null })
+    const ports = await ensureSandboxNetworkInfrastructure({
+      runtimeConfig,
+      permissionCallback: null,
+    })
 
     const socket = net.connect(ports.httpProxyPort, '127.0.0.1')
-    socket.write(`CONNECT localhost:${destPort} HTTP/1.1\r\nHost: localhost:${destPort}\r\n\r\n`)
+    socket.write(
+      `CONNECT localhost:${destPort} HTTP/1.1\r\nHost: localhost:${destPort}\r\n\r\n`,
+    )
     const line = await readFirstLine(socket)
     expect(line).toContain('403')
 
@@ -102,10 +120,15 @@ describe('sandbox network infrastructure (Reference CLI parity: yc0/vc0/p64/l64/
         allowedDomains: ['localhost'],
       },
     })
-    const ports = await ensureSandboxNetworkInfrastructure({ runtimeConfig, permissionCallback: null })
+    const ports = await ensureSandboxNetworkInfrastructure({
+      runtimeConfig,
+      permissionCallback: null,
+    })
 
     const socket = net.connect(ports.httpProxyPort, '127.0.0.1')
-    socket.write(`CONNECT localhost:${destPort} HTTP/1.1\r\nHost: localhost:${destPort}\r\n\r\n`)
+    socket.write(
+      `CONNECT localhost:${destPort} HTTP/1.1\r\nHost: localhost:${destPort}\r\n\r\n`,
+    )
     const line = await readFirstLine(socket)
     expect(line).toContain('200')
 

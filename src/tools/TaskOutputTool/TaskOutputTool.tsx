@@ -8,13 +8,18 @@ import {
   waitForBackgroundAgentTask,
 } from '@utils/backgroundTasks'
 import { createAssistantMessage } from '@utils/messages'
+import { maybeTruncateVerboseToolOutput } from '@utils/toolOutputDisplay'
 import { DESCRIPTION, PROMPT, TOOL_NAME_FOR_PROMPT } from './prompt'
 import { getTheme } from '@utils/theme'
 import { readTaskOutput } from '@utils/taskOutputStore'
 
 const inputSchema = z.strictObject({
   task_id: z.string().describe('The task ID to get output from'),
-  block: z.boolean().optional().default(true).describe('Whether to wait for completion'),
+  block: z
+    .boolean()
+    .optional()
+    .default(true)
+    .describe('Whether to wait for completion'),
   timeout: z
     .number()
     .min(0)
@@ -49,12 +54,13 @@ type Output = {
 function normalizeTaskOutputInput(input: Record<string, unknown>): Input {
   const task_id =
     (typeof input.task_id === 'string' && input.task_id) ||
-    (typeof (input as any).agentId === 'string' && String((input as any).agentId)) ||
-    (typeof (input as any).bash_id === 'string' && String((input as any).bash_id)) ||
+    (typeof (input as any).agentId === 'string' &&
+      String((input as any).agentId)) ||
+    (typeof (input as any).bash_id === 'string' &&
+      String((input as any).bash_id)) ||
     ''
 
-  const block =
-    typeof input.block === 'boolean' ? input.block : true
+  const block = typeof input.block === 'boolean' ? input.block : true
 
   const timeout =
     typeof input.timeout === 'number'
@@ -66,7 +72,9 @@ function normalizeTaskOutputInput(input: Record<string, unknown>): Input {
   return { task_id, block, timeout }
 }
 
-function taskStatusFromBash(bg: ReturnType<BunShell['getBackgroundOutput']>): TaskStatus {
+function taskStatusFromBash(
+  bg: ReturnType<BunShell['getBackgroundOutput']>,
+): TaskStatus {
   if (!bg) return 'failed'
   if (bg.killed) return 'killed'
   if (bg.code === null) return 'running'
@@ -116,7 +124,8 @@ async function waitForBashTaskCompletion(args: {
     if (signal.aborted) return null
     const summary = buildTaskSummary(taskId)
     if (!summary) return null
-    if (summary.status !== 'running' && summary.status !== 'pending') return summary
+    if (summary.status !== 'running' && summary.status !== 'pending')
+      return summary
     await new Promise(resolve => setTimeout(resolve, 100))
   }
 
@@ -158,7 +167,10 @@ export const TaskOutputTool = {
   renderToolResultMessage(output: Output, { verbose }: { verbose: boolean }) {
     const theme = getTheme()
 
-    if (output.retrieval_status === 'timeout' || output.retrieval_status === 'not_ready') {
+    if (
+      output.retrieval_status === 'timeout' ||
+      output.retrieval_status === 'not_ready'
+    ) {
       return (
         <Box>
           <Text color={theme.secondaryText}>Task is still running…</Text>
@@ -175,17 +187,23 @@ export const TaskOutputTool = {
     }
 
     if (output.task.task_type === 'local_agent') {
-      const lines = output.task.result ? output.task.result.split('\n').length : 0
+      const lines = output.task.result
+        ? output.task.result.split('\n').length
+        : 0
       if (!verbose) {
         return (
           <Box>
-            <Text color={theme.secondaryText}>Read output (ctrl+o to expand)</Text>
+            <Text color={theme.secondaryText}>
+              Read output (ctrl+o to expand)
+            </Text>
           </Box>
         )
       }
       return (
         <Box flexDirection="column">
-          <Text>{output.task.description} ({lines} lines)</Text>
+          <Text>
+            {output.task.description} ({lines} lines)
+          </Text>
           {output.task.prompt ? (
             <Box paddingLeft={2}>
               <Text color={theme.secondaryText}>{output.task.prompt}</Text>
@@ -193,7 +211,14 @@ export const TaskOutputTool = {
           ) : null}
           {output.task.result ? (
             <Box paddingLeft={2} marginTop={1}>
-              <Text>{output.task.result}</Text>
+              <Text>
+                {
+                  maybeTruncateVerboseToolOutput(output.task.result, {
+                    maxLines: 200,
+                    maxChars: 40_000,
+                  }).text
+                }
+              </Text>
             </Box>
           ) : null}
           {output.task.error ? (
@@ -214,7 +239,9 @@ export const TaskOutputTool = {
       return (
         <Box>
           <Text color={theme.secondaryText}>
-            {content.length > 0 ? 'Read output (ctrl+o to expand)' : '(No content)'}
+            {content.length > 0
+              ? 'Read output (ctrl+o to expand)'
+              : '(No content)'}
           </Text>
         </Box>
       )
@@ -224,7 +251,14 @@ export const TaskOutputTool = {
         <Text color={theme.secondaryText}>{output.task.description}</Text>
         {content ? (
           <Box paddingLeft={2} marginTop={1}>
-            <Text>{content}</Text>
+            <Text>
+              {
+                maybeTruncateVerboseToolOutput(content, {
+                  maxLines: 200,
+                  maxChars: 40_000,
+                }).text
+              }
+            </Text>
           </Box>
         ) : null}
       </Box>
@@ -232,7 +266,9 @@ export const TaskOutputTool = {
   },
   renderResultForAssistant(output: Output) {
     const parts: string[] = []
-    parts.push(`<retrieval_status>${output.retrieval_status}</retrieval_status>`)
+    parts.push(
+      `<retrieval_status>${output.retrieval_status}</retrieval_status>`,
+    )
 
     if (output.task) {
       parts.push(`<task_id>${output.task.task_id}</task_id>`)
@@ -279,12 +315,17 @@ export const TaskOutputTool = {
     }
 
     if (!block) {
-      const isDone = initial.status !== 'running' && initial.status !== 'pending'
+      const isDone =
+        initial.status !== 'running' && initial.status !== 'pending'
       const out: Output = {
         retrieval_status: isDone ? 'success' : 'not_ready',
         task: initial,
       }
-      yield { type: 'result', data: out, resultForAssistant: this.renderResultForAssistant(out) }
+      yield {
+        type: 'result',
+        data: out,
+        resultForAssistant: this.renderResultForAssistant(out),
+      }
       return
     }
 
@@ -318,17 +359,29 @@ export const TaskOutputTool = {
 
     if (!finalTask) {
       const out: Output = { retrieval_status: 'timeout', task: null }
-      yield { type: 'result', data: out, resultForAssistant: this.renderResultForAssistant(out) }
+      yield {
+        type: 'result',
+        data: out,
+        resultForAssistant: this.renderResultForAssistant(out),
+      }
       return
     }
 
     if (finalTask.status === 'running' || finalTask.status === 'pending') {
       const out: Output = { retrieval_status: 'timeout', task: finalTask }
-      yield { type: 'result', data: out, resultForAssistant: this.renderResultForAssistant(out) }
+      yield {
+        type: 'result',
+        data: out,
+        resultForAssistant: this.renderResultForAssistant(out),
+      }
       return
     }
 
     const out: Output = { retrieval_status: 'success', task: finalTask }
-    yield { type: 'result', data: out, resultForAssistant: this.renderResultForAssistant(out) }
+    yield {
+      type: 'result',
+      data: out,
+      resultForAssistant: this.renderResultForAssistant(out),
+    }
   },
 } satisfies Tool<typeof inputSchema, Output>

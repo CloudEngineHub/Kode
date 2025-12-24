@@ -49,7 +49,7 @@ import {
   matchPermissionRuleForPath,
   suggestFilePermissionUpdates,
 } from '@utils/permissions/fileToolPermissionEngine'
-import { getBunShellSandboxPlan } from '@utils/bunShellSandboxPlan'
+import { getBunShellSandboxPlan } from '@utils/sandbox/bunShellSandboxPlan'
 import {
   checkBashPermissions,
   checkBashPermissionsAutoAllowedBySandbox,
@@ -58,6 +58,7 @@ import {
   createDefaultToolPermissionContext,
   type ToolPermissionContextUpdate,
 } from '@kode-types/toolPermissionContext'
+import { parseMcpToolName } from '@utils/permissions/ruleString'
 
 // Commands that are known to be safe for execution
 const SAFE_COMMANDS = new Set([
@@ -167,7 +168,9 @@ export const bashToolHasPermission = async (
     }
   }
 
-  if (bashToolCommandHasExactMatchPermission(tool, trimmedCommand, allowedTools)) {
+  if (
+    bashToolCommandHasExactMatchPermission(tool, trimmedCommand, allowedTools)
+  ) {
     // This is an exact match for a command that is allowed, so we can skip the prefix check
     return { result: true }
   }
@@ -198,20 +201,26 @@ export const bashToolHasPermission = async (
 
   if (commandSubcommandPrefix.commandInjectionDetected) {
     // Only allow exact matches for potential command injections
-    if (bashToolCommandHasExplicitRule(tool, trimmedCommand, null, deniedTools)) {
+    if (
+      bashToolCommandHasExplicitRule(tool, trimmedCommand, null, deniedTools)
+    ) {
       return {
         result: false,
         message: `Permission to use ${tool.name} with command ${trimmedCommand} has been denied.`,
         shouldPromptUser: false,
       }
     }
-    if (bashToolCommandHasExplicitRule(tool, trimmedCommand, null, askedTools)) {
+    if (
+      bashToolCommandHasExplicitRule(tool, trimmedCommand, null, askedTools)
+    ) {
       return {
         result: false,
         message: `${PRODUCT_NAME} requested permissions to use ${tool.name}, but you haven't granted it yet.`,
       }
     }
-    if (bashToolCommandHasExactMatchPermission(tool, trimmedCommand, allowedTools)) {
+    if (
+      bashToolCommandHasExactMatchPermission(tool, trimmedCommand, allowedTools)
+    ) {
       return { result: true }
     } else {
       return {
@@ -307,7 +316,8 @@ export const bashToolHasPermission = async (
   }
 
   const deniedSubcommand = subCommands.find(subCommand => {
-    const prefixResult = commandSubcommandPrefix.subcommandPrefixes.get(subCommand)
+    const prefixResult =
+      commandSubcommandPrefix.subcommandPrefixes.get(subCommand)
     if (!prefixResult || prefixResult.commandInjectionDetected) return false
     return bashToolCommandHasExplicitRule(
       tool,
@@ -325,7 +335,8 @@ export const bashToolHasPermission = async (
   }
 
   const askedSubcommand = subCommands.find(subCommand => {
-    const prefixResult = commandSubcommandPrefix.subcommandPrefixes.get(subCommand)
+    const prefixResult =
+      commandSubcommandPrefix.subcommandPrefixes.get(subCommand)
     if (!prefixResult || prefixResult.commandInjectionDetected) return false
     return bashToolCommandHasExplicitRule(
       tool,
@@ -406,7 +417,8 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
   const shouldAvoidPermissionPrompts =
     context.options?.shouldAvoidPermissionPrompts === true
   const safeMode = Boolean(context.options?.safeMode ?? context.safeMode)
-  const requiresUserInteraction = tool.requiresUserInteraction?.(input as never) ?? false
+  const requiresUserInteraction =
+    tool.requiresUserInteraction?.(input as never) ?? false
   const dontAskDenied: PermissionResult = {
     result: false,
     message: `Permission to use ${tool.name} has been auto-denied in dontAsk mode.`,
@@ -420,7 +432,8 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
 
   // Bypass mode still prompts for tools that require an interactive UI.
   if (permissionMode === 'bypassPermissions' && !requiresUserInteraction) {
-    const bypassSafetyFloor = parseBoolLike(process.env.KODE_BYPASS_SAFETY_FLOOR) && !safeMode
+    const bypassSafetyFloor =
+      parseBoolLike(process.env.KODE_BYPASS_SAFETY_FLOOR) && !safeMode
 
     if (!bypassSafetyFloor) {
       const denyIfUnsafeWrite = (toolPath: string): PermissionResult | null => {
@@ -437,7 +450,10 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
       }
 
       if (tool === FileWriteTool || tool === FileEditTool) {
-        const filePath = typeof (input as any).file_path === 'string' ? String((input as any).file_path) : ''
+        const filePath =
+          typeof (input as any).file_path === 'string'
+            ? String((input as any).file_path)
+            : ''
         if (filePath) {
           const denied = denyIfUnsafeWrite(filePath)
           if (denied) return denied
@@ -446,7 +462,9 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
 
       if (tool === NotebookEditTool) {
         const notebookPath =
-          typeof (input as any).notebook_path === 'string' ? String((input as any).notebook_path) : ''
+          typeof (input as any).notebook_path === 'string'
+            ? String((input as any).notebook_path)
+            : ''
         if (notebookPath) {
           const denied = denyIfUnsafeWrite(notebookPath)
           if (denied) return denied
@@ -507,10 +525,14 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
   const askedTools = toolPermissionContext
     ? flattenPermissionRuleGroups(toolPermissionContext.alwaysAskRules)
     : (projectConfig.askedTools ?? [])
-  const commandAllowedTools = Array.isArray(context.options?.commandAllowedTools)
+  const commandAllowedTools = Array.isArray(
+    context.options?.commandAllowedTools,
+  )
     ? context.options!.commandAllowedTools!
     : []
-  const effectiveAllowedTools = [...new Set([...allowedTools, ...commandAllowedTools])]
+  const effectiveAllowedTools = [
+    ...new Set([...allowedTools, ...commandAllowedTools]),
+  ]
   const effectiveDeniedTools = [...new Set([...deniedTools])]
   const effectiveAskedTools = [...new Set([...askedTools])]
   // Special case for BashTool to allow blanket commands without exposing them in the UI
@@ -560,10 +582,10 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
       return { result: true }
     }
 
-	    const safety = getWriteSafetyCheckForPath(toolPath)
-	    if ('message' in safety) {
-	      return { result: false, message: safety.message }
-	    }
+    const safety = getWriteSafetyCheckForPath(toolPath)
+    if ('message' in safety) {
+      return { result: false, message: safety.message }
+    }
 
     for (const candidate of candidates) {
       const askedRule = matchPermissionRuleForPath({
@@ -584,7 +606,10 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
       toolPath,
       effectiveToolPermissionContext,
     )
-    if (effectiveToolPermissionContext.mode === 'acceptEdits' && inWorkingDirs) {
+    if (
+      effectiveToolPermissionContext.mode === 'acceptEdits' &&
+      inWorkingDirs
+    ) {
       return { result: true }
     }
 
@@ -612,366 +637,397 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
   // TODO: Move this into tool definitions (done for read tools!)
   const permissionResult: PermissionResult = await (async () => {
     switch (tool) {
-    // For bash tool, check each sub-command's permissions separately
-    case BashTool: {
-      // The types have already been validated by the tool,
-      // so we can safely parse the input (as opposed to safeParse).
-      const { command, dangerouslyDisableSandbox } = inputSchema.parse(input)
-      const trimmed = command.trim()
-      if (SAFE_COMMANDS.has(trimmed)) {
-        return { result: true }
-      }
-
-      const sandboxPlan = getBunShellSandboxPlan({
-        command: trimmed,
-        dangerouslyDisableSandbox: dangerouslyDisableSandbox === true,
-        toolUseContext: context,
-      })
-
-      if (sandboxPlan.shouldBlockUnsandboxedCommand) {
-        return {
-          result: false,
-          message: 'This command must run in the sandbox, but sandboxed execution is not available.',
-          shouldPromptUser: false,
+      // For bash tool, check each sub-command's permissions separately
+      case BashTool: {
+        // The types have already been validated by the tool,
+        // so we can safely parse the input (as opposed to safeParse).
+        const { command, dangerouslyDisableSandbox } = inputSchema.parse(input)
+        const trimmed = command.trim()
+        if (SAFE_COMMANDS.has(trimmed)) {
+          return { result: true }
         }
-      }
 
-      if (sandboxPlan.shouldAutoAllowBashPermissions) {
-        if (effectiveToolPermissionContext.mode !== 'acceptEdits') {
-          return await checkBashPermissions({
+        const sandboxPlan = getBunShellSandboxPlan({
+          command: trimmed,
+          dangerouslyDisableSandbox: dangerouslyDisableSandbox === true,
+          toolUseContext: context,
+        })
+
+        if (sandboxPlan.shouldBlockUnsandboxedCommand) {
+          return {
+            result: false,
+            message:
+              'This command must run in the sandbox, but sandboxed execution is not available.',
+            shouldPromptUser: false,
+          }
+        }
+
+        if (sandboxPlan.shouldAutoAllowBashPermissions) {
+          if (effectiveToolPermissionContext.mode !== 'acceptEdits') {
+            return await checkBashPermissions({
+              command: trimmed,
+              toolPermissionContext: effectiveToolPermissionContext,
+              toolUseContext: context,
+            })
+          }
+          return checkBashPermissionsAutoAllowedBySandbox({
             command: trimmed,
             toolPermissionContext: effectiveToolPermissionContext,
-            toolUseContext: context,
           })
         }
-        return checkBashPermissionsAutoAllowedBySandbox({
+
+        return await checkBashPermissions({
           command: trimmed,
           toolPermissionContext: effectiveToolPermissionContext,
+          toolUseContext: context,
         })
       }
-
-      return await checkBashPermissions({
-        command: trimmed,
-        toolPermissionContext: effectiveToolPermissionContext,
-        toolUseContext: context,
-      })
-    }
-    case SlashCommandTool: {
-      const command = typeof (input as any).command === 'string' ? (input as any).command : ''
-      const trimmed = command.trim()
-      const exactKey = getPermissionKey(tool, { command: trimmed }, null)
-      if (effectiveDeniedTools.includes(exactKey)) {
-        return {
-          result: false,
-          message: `Permission to use ${tool.name}(${trimmed}) has been denied.`,
-          shouldPromptUser: false,
-        }
-      }
-      if (effectiveAskedTools.includes(exactKey)) {
-        return {
-          result: false,
-          message: `${PRODUCT_NAME} requested permissions to use ${tool.name}, but you haven't granted it yet.`,
-        }
-      }
-      if (effectiveAllowedTools.includes(exactKey)) {
-        return { result: true }
-      }
-
-      // Support prefix rules like "/review-pr:*"
-      const firstWord = trimmed.split(/\s+/)[0]
-      if (firstWord && firstWord.startsWith('/')) {
-        const prefixKey = getPermissionKey(tool, { command: trimmed }, firstWord)
-        if (effectiveDeniedTools.includes(prefixKey)) {
+      case SlashCommandTool: {
+        const command =
+          typeof (input as any).command === 'string'
+            ? (input as any).command
+            : ''
+        const trimmed = command.trim()
+        const exactKey = getPermissionKey(tool, { command: trimmed }, null)
+        if (effectiveDeniedTools.includes(exactKey)) {
           return {
             result: false,
-            message: `Permission to use ${tool.name}(${firstWord}:*) has been denied.`,
+            message: `Permission to use ${tool.name}(${trimmed}) has been denied.`,
             shouldPromptUser: false,
           }
         }
-        if (effectiveAskedTools.includes(prefixKey)) {
+        if (effectiveAskedTools.includes(exactKey)) {
           return {
             result: false,
             message: `${PRODUCT_NAME} requested permissions to use ${tool.name}, but you haven't granted it yet.`,
           }
         }
-        if (effectiveAllowedTools.includes(prefixKey)) {
+        if (effectiveAllowedTools.includes(exactKey)) {
           return { result: true }
         }
-      }
 
-      return {
-        result: false,
-        message: `${PRODUCT_NAME} requested permissions to use ${tool.name}, but you haven't granted it yet.`,
-      }
-    }
-    case SkillTool: {
-      const rawSkill = typeof (input as any).skill === 'string' ? (input as any).skill : ''
-      const skillName = rawSkill.trim().replace(/^\//, '')
-      const exactKey = getPermissionKey(tool, { skill: skillName }, null)
-      if (effectiveDeniedTools.includes(exactKey)) {
-        return {
-          result: false,
-          message: `Permission to use ${tool.name}(${skillName}) has been denied.`,
-          shouldPromptUser: false,
+        // Support prefix rules like "/review-pr:*"
+        const firstWord = trimmed.split(/\s+/)[0]
+        if (firstWord && firstWord.startsWith('/')) {
+          const prefixKey = getPermissionKey(
+            tool,
+            { command: trimmed },
+            firstWord,
+          )
+          if (effectiveDeniedTools.includes(prefixKey)) {
+            return {
+              result: false,
+              message: `Permission to use ${tool.name}(${firstWord}:*) has been denied.`,
+              shouldPromptUser: false,
+            }
+          }
+          if (effectiveAskedTools.includes(prefixKey)) {
+            return {
+              result: false,
+              message: `${PRODUCT_NAME} requested permissions to use ${tool.name}, but you haven't granted it yet.`,
+            }
+          }
+          if (effectiveAllowedTools.includes(prefixKey)) {
+            return { result: true }
+          }
         }
-      }
-      if (effectiveAskedTools.includes(exactKey)) {
+
         return {
           result: false,
           message: `${PRODUCT_NAME} requested permissions to use ${tool.name}, but you haven't granted it yet.`,
         }
       }
-      if (effectiveAllowedTools.includes(exactKey)) {
-        return { result: true }
-      }
-
-      const prefixes = getSkillPrefixes(skillName)
-      for (const prefix of prefixes) {
-        const prefixKey = getPermissionKey(tool, { skill: skillName }, prefix)
-        if (effectiveDeniedTools.includes(prefixKey)) {
+      case SkillTool: {
+        const rawSkill =
+          typeof (input as any).skill === 'string' ? (input as any).skill : ''
+        const skillName = rawSkill.trim().replace(/^\//, '')
+        const exactKey = getPermissionKey(tool, { skill: skillName }, null)
+        if (effectiveDeniedTools.includes(exactKey)) {
           return {
             result: false,
-            message: `Permission to use ${tool.name}(${prefix}:*) has been denied.`,
+            message: `Permission to use ${tool.name}(${skillName}) has been denied.`,
             shouldPromptUser: false,
           }
         }
-      }
-
-      for (const prefix of prefixes) {
-        const prefixKey = getPermissionKey(tool, { skill: skillName }, prefix)
-        if (effectiveAskedTools.includes(prefixKey)) {
+        if (effectiveAskedTools.includes(exactKey)) {
           return {
             result: false,
             message: `${PRODUCT_NAME} requested permissions to use ${tool.name}, but you haven't granted it yet.`,
           }
         }
-      }
-
-      for (const prefix of prefixes) {
-        const prefixKey = getPermissionKey(tool, { skill: skillName }, prefix)
-        if (effectiveAllowedTools.includes(prefixKey)) {
+        if (effectiveAllowedTools.includes(exactKey)) {
           return { result: true }
         }
-      }
 
-      return {
-        result: false,
-        message: `${PRODUCT_NAME} requested permissions to use ${tool.name}, but you haven't granted it yet.`,
-      }
-    }
-    case FileReadTool:
-    case GlobTool:
-    case GrepTool: {
-      const rawPath =
-        tool === FileReadTool
-          ? typeof (input as any).file_path === 'string'
-            ? (input as any).file_path
-            : ''
-          : typeof (input as any).path === 'string'
-            ? (input as any).path
-            : ''
-      const toolPath = rawPath || getCwd()
-
-      const candidates = expandSymlinkPaths(toolPath)
-      for (const candidate of candidates) {
-        if (candidate.startsWith('\\\\') || candidate.startsWith('//')) {
-          return {
-            result: false,
-            message: `${PRODUCT_NAME} requested permissions to read from ${toolPath}, which appears to be a UNC path that could access network resources.`,
+        const prefixes = getSkillPrefixes(skillName)
+        for (const prefix of prefixes) {
+          const prefixKey = getPermissionKey(tool, { skill: skillName }, prefix)
+          if (effectiveDeniedTools.includes(prefixKey)) {
+            return {
+              result: false,
+              message: `Permission to use ${tool.name}(${prefix}:*) has been denied.`,
+              shouldPromptUser: false,
+            }
           }
         }
-      }
-      for (const candidate of candidates) {
-        if (hasSuspiciousWindowsPathPattern(candidate)) {
-          return {
-            result: false,
-            message: `${PRODUCT_NAME} requested permissions to read from ${toolPath}, which contains a suspicious Windows path pattern that requires manual approval.`,
+
+        for (const prefix of prefixes) {
+          const prefixKey = getPermissionKey(tool, { skill: skillName }, prefix)
+          if (effectiveAskedTools.includes(prefixKey)) {
+            return {
+              result: false,
+              message: `${PRODUCT_NAME} requested permissions to use ${tool.name}, but you haven't granted it yet.`,
+            }
           }
         }
-      }
 
-      for (const candidate of candidates) {
-        const deniedRule = matchPermissionRuleForPath({
-          inputPath: candidate,
-          toolPermissionContext: effectiveToolPermissionContext,
-          operation: 'read',
-          behavior: 'deny',
-        })
-        if (deniedRule) {
-          return {
-            result: false,
-            message: `Permission to read ${toolPath} has been denied.`,
-            shouldPromptUser: false,
+        for (const prefix of prefixes) {
+          const prefixKey = getPermissionKey(tool, { skill: skillName }, prefix)
+          if (effectiveAllowedTools.includes(prefixKey)) {
+            return { result: true }
           }
         }
-      }
 
-      for (const candidate of candidates) {
-        const askedRule = matchPermissionRuleForPath({
-          inputPath: candidate,
-          toolPermissionContext: effectiveToolPermissionContext,
-          operation: 'read',
-          behavior: 'ask',
-        })
-        if (askedRule) {
-          return {
-            result: false,
-            message: `${PRODUCT_NAME} requested permissions to read from ${toolPath}, but you haven't granted it yet.`,
-          }
+        return {
+          result: false,
+          message: `${PRODUCT_NAME} requested permissions to use ${tool.name}, but you haven't granted it yet.`,
         }
       }
+      case FileReadTool:
+      case GlobTool:
+      case GrepTool: {
+        const rawPath =
+          tool === FileReadTool
+            ? typeof (input as any).file_path === 'string'
+              ? (input as any).file_path
+              : ''
+            : typeof (input as any).path === 'string'
+              ? (input as any).path
+              : ''
+        const toolPath = rawPath || getCwd()
 
-      const editDecision = checkEditPermissionForPath(toolPath)
-      if (editDecision.result === true) {
-        return { result: true }
-      }
+        const candidates = expandSymlinkPaths(toolPath)
+        for (const candidate of candidates) {
+          if (candidate.startsWith('\\\\') || candidate.startsWith('//')) {
+            return {
+              result: false,
+              message: `${PRODUCT_NAME} requested permissions to read from ${toolPath}, which appears to be a UNC path that could access network resources.`,
+            }
+          }
+        }
+        for (const candidate of candidates) {
+          if (hasSuspiciousWindowsPathPattern(candidate)) {
+            return {
+              result: false,
+              message: `${PRODUCT_NAME} requested permissions to read from ${toolPath}, which contains a suspicious Windows path pattern that requires manual approval.`,
+            }
+          }
+        }
 
-      if (isPathInWorkingDirectories(toolPath, effectiveToolPermissionContext)) {
-        return { result: true }
-      }
+        for (const candidate of candidates) {
+          const deniedRule = matchPermissionRuleForPath({
+            inputPath: candidate,
+            toolPermissionContext: effectiveToolPermissionContext,
+            operation: 'read',
+            behavior: 'deny',
+          })
+          if (deniedRule) {
+            return {
+              result: false,
+              message: `Permission to read ${toolPath} has been denied.`,
+              shouldPromptUser: false,
+            }
+          }
+        }
 
-      const specialReason = getSpecialAllowedReadReason({ inputPath: toolPath, context })
-      if (specialReason) {
-        return { result: true }
-      }
+        for (const candidate of candidates) {
+          const askedRule = matchPermissionRuleForPath({
+            inputPath: candidate,
+            toolPermissionContext: effectiveToolPermissionContext,
+            operation: 'read',
+            behavior: 'ask',
+          })
+          if (askedRule) {
+            return {
+              result: false,
+              message: `${PRODUCT_NAME} requested permissions to read from ${toolPath}, but you haven't granted it yet.`,
+            }
+          }
+        }
 
-      const allowRule = matchPermissionRuleForPath({
-        inputPath: toolPath,
-        toolPermissionContext: effectiveToolPermissionContext,
-        operation: 'read',
-        behavior: 'allow',
-      })
-      if (allowRule) {
-        return { result: true }
-      }
+        const editDecision = checkEditPermissionForPath(toolPath)
+        if (editDecision.result === true) {
+          return { result: true }
+        }
 
-      return {
-        result: false,
-        message: `${PRODUCT_NAME} requested permissions to read from ${toolPath}, but you haven't granted it yet.`,
-        suggestions: suggestFilePermissionUpdates({
+        if (
+          isPathInWorkingDirectories(toolPath, effectiveToolPermissionContext)
+        ) {
+          return { result: true }
+        }
+
+        const specialReason = getSpecialAllowedReadReason({
           inputPath: toolPath,
-          operation: 'read',
+          context,
+        })
+        if (specialReason) {
+          return { result: true }
+        }
+
+        const allowRule = matchPermissionRuleForPath({
+          inputPath: toolPath,
           toolPermissionContext: effectiveToolPermissionContext,
-        }),
+          operation: 'read',
+          behavior: 'allow',
+        })
+        if (allowRule) {
+          return { result: true }
+        }
+
+        return {
+          result: false,
+          message: `${PRODUCT_NAME} requested permissions to read from ${toolPath}, but you haven't granted it yet.`,
+          suggestions: suggestFilePermissionUpdates({
+            inputPath: toolPath,
+            operation: 'read',
+            toolPermissionContext: effectiveToolPermissionContext,
+          }),
+        }
       }
-    }
-    case FileEditTool:
-    case FileWriteTool:
-    case NotebookEditTool: {
-      const targetPath =
-        tool === NotebookEditTool
-          ? typeof (input as any).notebook_path === 'string'
-            ? (input as any).notebook_path
+      case FileEditTool:
+      case FileWriteTool:
+      case NotebookEditTool: {
+        const targetPath =
+          tool === NotebookEditTool
+            ? typeof (input as any).notebook_path === 'string'
+              ? (input as any).notebook_path
+              : ''
+            : typeof (input as any).file_path === 'string'
+              ? (input as any).file_path
+              : ''
+        const toolPath = targetPath || getCwd()
+        return checkEditPermissionForPath(toolPath)
+      }
+      case WebFetchTool: {
+        const permissionKey = getPermissionKey(tool, input, null)
+        const openParenIndex = permissionKey.indexOf('(')
+        const actualRuleContent =
+          openParenIndex !== -1 && permissionKey.endsWith(')')
+            ? permissionKey.slice(openParenIndex + 1, -1)
             : ''
-          : typeof (input as any).file_path === 'string'
-            ? (input as any).file_path
-            : ''
-      const toolPath = targetPath || getCwd()
-      return checkEditPermissionForPath(toolPath)
-    }
-    case WebFetchTool: {
-      const permissionKey = getPermissionKey(tool, input, null)
-      const openParenIndex = permissionKey.indexOf('(')
-      const actualRuleContent =
-        openParenIndex !== -1 && permissionKey.endsWith(')')
-          ? permissionKey.slice(openParenIndex + 1, -1)
-          : ''
-      const actualHostname = actualRuleContent.startsWith('domain:')
-        ? actualRuleContent.slice('domain:'.length)
-        : null
+        const actualHostname = actualRuleContent.startsWith('domain:')
+          ? actualRuleContent.slice('domain:'.length)
+          : null
 
-      const matchesWebFetchRule = (rule: string): boolean => {
-        if (rule === WebFetchTool.name) return true
-        const open = rule.indexOf('(')
-        if (open === -1 || !rule.endsWith(')')) return false
-        const name = rule.slice(0, open)
-        if (name !== WebFetchTool.name) return false
-        const ruleContent = rule.slice(open + 1, -1).trim()
-        if (!ruleContent) return false
-        if (ruleContent.startsWith('domain:') && actualHostname !== null) {
-          const hostPattern = ruleContent.slice('domain:'.length).trim()
-          if (!hostPattern) return false
-          return minimatch(actualHostname, hostPattern, { nocase: true, dot: true })
+        const matchesWebFetchRule = (rule: string): boolean => {
+          if (rule === WebFetchTool.name) return true
+          const open = rule.indexOf('(')
+          if (open === -1 || !rule.endsWith(')')) return false
+          const name = rule.slice(0, open)
+          if (name !== WebFetchTool.name) return false
+          const ruleContent = rule.slice(open + 1, -1).trim()
+          if (!ruleContent) return false
+          if (ruleContent.startsWith('domain:') && actualHostname !== null) {
+            const hostPattern = ruleContent.slice('domain:'.length).trim()
+            if (!hostPattern) return false
+            return minimatch(actualHostname, hostPattern, {
+              nocase: true,
+              dot: true,
+            })
+          }
+          return ruleContent === actualRuleContent
         }
-        return ruleContent === actualRuleContent
-      }
 
-      if (effectiveDeniedTools.some(matchesWebFetchRule)) {
-        return {
-          result: false,
-          message: `Permission to use ${tool.name} has been denied.`,
-          shouldPromptUser: false,
+        if (effectiveDeniedTools.some(matchesWebFetchRule)) {
+          return {
+            result: false,
+            message: `Permission to use ${tool.name} has been denied.`,
+            shouldPromptUser: false,
+          }
         }
-      }
-      if (effectiveAskedTools.some(matchesWebFetchRule)) {
-        return {
-          result: false,
-          message: `${PRODUCT_NAME} requested permissions to use ${tool.name}, but you haven't granted it yet.`,
+        if (effectiveAskedTools.some(matchesWebFetchRule)) {
+          return {
+            result: false,
+            message: `${PRODUCT_NAME} requested permissions to use ${tool.name}, but you haven't granted it yet.`,
+          }
         }
-      }
-      if (effectiveAllowedTools.some(matchesWebFetchRule)) {
-        return { result: true }
-      }
+        if (effectiveAllowedTools.some(matchesWebFetchRule)) {
+          return { result: true }
+        }
 
-      return {
-        result: false,
-        message: `${PRODUCT_NAME} requested permissions to use ${tool.name}, but you haven't granted it yet.`,
-      }
-    }
-    case WebSearchTool: {
-      const permissionKey = getPermissionKey(tool, input, null)
-      const matchesWebSearchRule = (rule: string): boolean => {
-        if (rule === WebSearchTool.name) return true
-        return rule === permissionKey
-      }
-
-      if (effectiveDeniedTools.some(matchesWebSearchRule)) {
-        return {
-          result: false,
-          message: `Permission to use ${tool.name} has been denied.`,
-          shouldPromptUser: false,
-        }
-      }
-      if (effectiveAskedTools.some(matchesWebSearchRule)) {
         return {
           result: false,
           message: `${PRODUCT_NAME} requested permissions to use ${tool.name}, but you haven't granted it yet.`,
         }
       }
-      if (effectiveAllowedTools.some(matchesWebSearchRule)) {
-        return { result: true }
-      }
-
-      return {
-        result: false,
-        message: `${PRODUCT_NAME} requested permissions to use ${tool.name}, but you haven't granted it yet.`,
-      }
-    }
-    // For other tools, check persistent permissions
-    default: {
-      const permissionKey = getPermissionKey(tool, input, null)
-      if (effectiveDeniedTools.includes(permissionKey)) {
-        return {
-          result: false,
-          message: `Permission to use ${tool.name} has been denied.`,
-          shouldPromptUser: false,
+      case WebSearchTool: {
+        const permissionKey = getPermissionKey(tool, input, null)
+        const matchesWebSearchRule = (rule: string): boolean => {
+          if (rule === WebSearchTool.name) return true
+          return rule === permissionKey
         }
-      }
-      if (effectiveAskedTools.includes(permissionKey)) {
+
+        if (effectiveDeniedTools.some(matchesWebSearchRule)) {
+          return {
+            result: false,
+            message: `Permission to use ${tool.name} has been denied.`,
+            shouldPromptUser: false,
+          }
+        }
+        if (effectiveAskedTools.some(matchesWebSearchRule)) {
+          return {
+            result: false,
+            message: `${PRODUCT_NAME} requested permissions to use ${tool.name}, but you haven't granted it yet.`,
+          }
+        }
+        if (effectiveAllowedTools.some(matchesWebSearchRule)) {
+          return { result: true }
+        }
+
         return {
           result: false,
           message: `${PRODUCT_NAME} requested permissions to use ${tool.name}, but you haven't granted it yet.`,
         }
       }
-      if (effectiveAllowedTools.includes(permissionKey)) {
-        return { result: true }
-      }
+      // For other tools, check persistent permissions
+      default: {
+        const permissionKey = getPermissionKey(tool, input, null)
+        const matchesToolRule = (rule: string): boolean => {
+          if (rule === permissionKey) return true
 
-      return {
-        result: false,
-        message: `${PRODUCT_NAME} requested permissions to use ${tool.name}, but you haven't granted it yet.`,
+          const parsedTool = parseMcpToolName(permissionKey)
+          if (!parsedTool) return false
+
+          const parsedRule = parseMcpToolName(rule)
+          if (!parsedRule) return false
+          return (
+            parsedRule.serverName === parsedTool.serverName &&
+            parsedRule.toolName === '*'
+          )
+        }
+
+        if (effectiveDeniedTools.some(matchesToolRule)) {
+          return {
+            result: false,
+            message: `Permission to use ${tool.name} has been denied.`,
+            shouldPromptUser: false,
+          }
+        }
+        if (effectiveAskedTools.some(matchesToolRule)) {
+          return {
+            result: false,
+            message: `${PRODUCT_NAME} requested permissions to use ${tool.name}, but you haven't granted it yet.`,
+          }
+        }
+        if (effectiveAllowedTools.some(matchesToolRule)) {
+          return { result: true }
+        }
+
+        return {
+          result: false,
+          message: `${PRODUCT_NAME} requested permissions to use ${tool.name}, but you haven't granted it yet.`,
+        }
       }
-    }
     }
   })()
 
@@ -1042,7 +1098,10 @@ function toolRuleMatchesPath(
 }
 
 function getSkillPrefixes(skillName: string): string[] {
-  const parts = skillName.split(':').map(p => p.trim()).filter(Boolean)
+  const parts = skillName
+    .split(':')
+    .map(p => p.trim())
+    .filter(Boolean)
   if (parts.length <= 1) return []
   return parts.slice(0, -1).map((_, idx) => parts.slice(0, idx + 1).join(':'))
 }
@@ -1063,9 +1122,9 @@ export async function savePermission(
   ) {
     const filePath =
       tool === NotebookEditTool
-        ? (typeof (input as any).notebook_path === 'string'
-            ? (input as any).notebook_path
-            : '')
+        ? typeof (input as any).notebook_path === 'string'
+          ? (input as any).notebook_path
+          : ''
         : typeof (input as any).file_path === 'string'
           ? (input as any).file_path
           : ''
@@ -1075,7 +1134,7 @@ export async function savePermission(
     return
   }
 
-  // Reference CLI-compatible persistence: write allow rules to .claude/settings.local.json
+  // Persistence: write allow rules to .kode/settings.local.json (legacy .claude is read-compatible)
   try {
     const update = {
       type: 'addRules' as const,
@@ -1090,14 +1149,18 @@ export async function savePermission(
     const forkNumber = context?.options?.forkNumber ?? 0
     if (messageLogName) {
       const conversationKey = `${messageLogName}:${forkNumber}`
-      const nextToolPermissionContext = applyToolPermissionContextUpdateForConversationKey({
-        conversationKey,
-        isBypassPermissionsModeAvailable: !(context?.options?.safeMode ?? false),
-        update,
-      })
+      const nextToolPermissionContext =
+        applyToolPermissionContextUpdateForConversationKey({
+          conversationKey,
+          isBypassPermissionsModeAvailable: !(
+            context?.options?.safeMode ?? false
+          ),
+          update,
+        })
       // Ensure subsequent tool uses in the same turn see the updated rules.
       if (context?.options) {
-        ;(context.options as any).toolPermissionContext = nextToolPermissionContext
+        ;(context.options as any).toolPermissionContext =
+          nextToolPermissionContext
       }
     }
   } catch (error) {
@@ -1126,11 +1189,13 @@ function getPermissionKey(
       if (prefix) {
         return `${BashTool.name}(${prefix}:*)`
       }
-      return `${BashTool.name}(${BashTool.renderToolUseMessage(input as never)})`
+      return `${BashTool.name}(${typeof (input as any).command === 'string' ? String((input as any).command).trim() : ''})`
     case WebFetchTool: {
       try {
         const schema: any = (WebFetchTool as any).inputSchema
-        const parsed = schema?.safeParse ? schema.safeParse(input) : { success: false }
+        const parsed = schema?.safeParse
+          ? schema.safeParse(input)
+          : { success: false }
         if (!parsed.success) {
           return `${WebFetchTool.name}(input:${String(input)})`
         }
@@ -1141,12 +1206,16 @@ function getPermissionKey(
       }
     }
     case WebSearchTool: {
-      const query = typeof (input as any).query === 'string' ? String((input as any).query).trim() : ''
+      const query =
+        typeof (input as any).query === 'string'
+          ? String((input as any).query).trim()
+          : ''
       if (!query) return WebSearchTool.name
       return `${WebSearchTool.name}(${query})`
     }
     case SlashCommandTool: {
-      const command = typeof input.command === 'string' ? input.command.trim() : ''
+      const command =
+        typeof input.command === 'string' ? input.command.trim() : ''
       if (prefix) {
         return `${SlashCommandTool.name}(${prefix}:*)`
       }

@@ -109,17 +109,17 @@ function formatDiff(
           return (
             <React.Fragment key={key}>
               <Text>
-              <LineNumber
-                i={lineIndex === 0 ? i : undefined}
-                width={maxWidth}
-              />
-              <Text
-                color={overrideTheme ? theme.text : undefined}
-                dimColor={dim}
-              >
-                {line}
+                <LineNumber
+                  i={lineIndex === 0 ? i : undefined}
+                  width={maxWidth}
+                />
+                <Text
+                  color={overrideTheme ? theme.text : undefined}
+                  dimColor={dim}
+                >
+                  {line}
+                </Text>
               </Text>
-            </Text>
             </React.Fragment>
           )
       }

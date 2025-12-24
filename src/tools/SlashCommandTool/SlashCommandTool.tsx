@@ -5,7 +5,10 @@ import * as React from 'react'
 import type { Message } from '@query'
 import { createUserMessage } from '@utils/messages'
 import { getCommands } from '@commands'
-import { loadCustomCommands, type CustomCommandWithScope } from '@services/customCommands'
+import {
+  loadCustomCommands,
+  type CustomCommandWithScope,
+} from '@services/customCommands'
 import { TOOL_NAME_FOR_PROMPT } from './prompt'
 
 const inputSchema = z.strictObject({
@@ -135,15 +138,22 @@ ${availableLines}${truncatedNotice}
   async validateInput({ command }: Input, context) {
     const parsed = parseSlashCommand(command)
     if (!parsed) {
-      return { result: false, message: `Invalid slash command format: ${command}`, errorCode: 1 }
+      return {
+        result: false,
+        message: `Invalid slash command format: ${command}`,
+        errorCode: 1,
+      }
     }
 
-    const commands =
-      context?.options?.commands ?? (await getCommands())
+    const commands = context?.options?.commands ?? (await getCommands())
 
     const cmd = findCommand(parsed.commandName, commands)
     if (!cmd) {
-      return { result: false, message: `Unknown slash command: ${parsed.commandName}`, errorCode: 2 }
+      return {
+        result: false,
+        message: `Unknown slash command: ${parsed.commandName}`,
+        errorCode: 2,
+      }
     }
 
     if ((cmd as any).disableModelInvocation) {
@@ -151,6 +161,14 @@ ${availableLines}${truncatedNotice}
         result: false,
         message: `Slash command ${parsed.commandName} cannot be used with ${TOOL_NAME_FOR_PROMPT} tool due to disable-model-invocation`,
         errorCode: 4,
+      }
+    }
+
+    if ((cmd as any).disableNonInteractive) {
+      return {
+        result: false,
+        message: `Slash command ${parsed.commandName} cannot be used with ${TOOL_NAME_FOR_PROMPT} tool because it is non-interactive`,
+        errorCode: 6,
       }
     }
 
@@ -180,6 +198,11 @@ ${availableLines}${truncatedNotice}
         `Slash command ${parsed.commandName} cannot be used with ${TOOL_NAME_FOR_PROMPT} tool due to disable-model-invocation`,
       )
     }
+    if ((cmd as any).disableNonInteractive) {
+      throw new Error(
+        `Slash command ${parsed.commandName} cannot be used with ${TOOL_NAME_FOR_PROMPT} tool because it is non-interactive`,
+      )
+    }
     if (cmd.type !== 'prompt') {
       throw new Error(
         `Unexpected ${cmd.type} command. Expected 'prompt' command. Use /${parsed.commandName} directly in the main conversation.`,
@@ -206,7 +229,8 @@ ${availableLines}${truncatedNotice}
 
     const commandNameForMeta = cmd.userFacingName()
     const progressMessage = (cmd as any).progressMessage || 'running'
-    const metaMessage = createUserMessage(`<command-name>${commandNameForMeta}</command-name>
+    const metaMessage =
+      createUserMessage(`<command-name>${commandNameForMeta}</command-name>
 <command-message>${commandNameForMeta} is ${progressMessage}…</command-message>
 <command-args>${parsed.args}</command-args>`)
 
@@ -233,12 +257,16 @@ ${availableLines}${truncatedNotice}
                 const next = { ...ctx }
 
                 if (allowedTools.length > 0) {
-                  const prev = Array.isArray((next.options as any)?.commandAllowedTools)
+                  const prev = Array.isArray(
+                    (next.options as any)?.commandAllowedTools,
+                  )
                     ? ((next.options as any).commandAllowedTools as string[])
                     : []
                   next.options = {
                     ...(next.options || {}),
-                    commandAllowedTools: [...new Set([...prev, ...allowedTools])],
+                    commandAllowedTools: [
+                      ...new Set([...prev, ...allowedTools]),
+                    ],
                   }
                 }
 
@@ -261,13 +289,17 @@ ${availableLines}${truncatedNotice}
   },
 } satisfies Tool<typeof inputSchema, Output>
 
-function parseSlashCommand(command: string): { commandName: string; args: string } | null {
+function parseSlashCommand(
+  command: string,
+): { commandName: string; args: string } | null {
   const trimmed = command.trim()
   if (!trimmed.startsWith('/')) return null
   const withoutSlash = trimmed.slice(1)
   const spaceIdx = withoutSlash.indexOf(' ')
   const commandName =
-    spaceIdx === -1 ? withoutSlash.trim() : withoutSlash.slice(0, spaceIdx).trim()
+    spaceIdx === -1
+      ? withoutSlash.trim()
+      : withoutSlash.slice(0, spaceIdx).trim()
   if (!commandName) return null
   const args = spaceIdx === -1 ? '' : withoutSlash.slice(spaceIdx + 1).trim()
   return { commandName, args }

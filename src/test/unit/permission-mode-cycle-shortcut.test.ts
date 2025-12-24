@@ -10,12 +10,8 @@ describe('permission mode cycle shortcut', () => {
     })
 
     expect(shortcut.displayText).toBe('shift+tab')
-    expect(
-      shortcut.check('', { tab: true, shift: true } as any),
-    ).toBe(true)
-    expect(
-      shortcut.check('m', { meta: true } as any),
-    ).toBe(false)
+    expect(shortcut.check('', { tab: true, shift: true } as any)).toBe(true)
+    expect(shortcut.check('m', { meta: true } as any)).toBe(false)
   })
 
   test('Windows: Bun <1.2.23 falls back to alt+m', () => {
@@ -59,4 +55,3 @@ describe('permission mode cycle shortcut', () => {
     expect(shortcut.displayText).toBe('alt+m')
   })
 })
-

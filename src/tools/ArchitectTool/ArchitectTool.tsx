@@ -81,14 +81,14 @@ export const ArchitectTool = {
         {
           ...toolUseContext,
           setToolJSX: () => {}, // Dummy function since ArchitectTool doesn't use UI
-          options: { 
+          options: {
             commands: toolUseContext.options?.commands || [],
             forkNumber: toolUseContext.options?.forkNumber || 0,
             messageLogName: toolUseContext.options?.messageLogName || 'default',
             verbose: toolUseContext.options?.verbose || false,
             safeMode: toolUseContext.options?.safeMode || false,
             maxThinkingTokens: toolUseContext.options?.maxThinkingTokens || 0,
-            ...toolUseContext.options, 
+            ...toolUseContext.options,
             tools: allowedTools,
             persistSession: false,
           },

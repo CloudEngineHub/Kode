@@ -1,4 +1,8 @@
-import { ModelCapabilities, UnifiedRequestParams, UnifiedResponse } from '@kode-types/modelCapabilities'
+import {
+  ModelCapabilities,
+  UnifiedRequestParams,
+  UnifiedResponse,
+} from '@kode-types/modelCapabilities'
 import { ModelProfile } from '@utils/config'
 import { Tool } from '@tool'
 
@@ -12,12 +16,12 @@ interface TokenUsage {
 
 // Streaming event types for async generator streaming
 export type StreamingEvent =
-  | { type: 'message_start', message: any, responseId: string }
-  | { type: 'text_delta', delta: string, responseId: string }
-  | { type: 'tool_request', tool: any }
-  | { type: 'usage', usage: TokenUsage }
-  | { type: 'message_stop', message: any }
-  | { type: 'error', error: string }
+  | { type: 'message_start'; message: any; responseId: string }
+  | { type: 'text_delta'; delta: string; responseId: string }
+  | { type: 'tool_request'; tool: any }
+  | { type: 'usage'; usage: TokenUsage }
+  | { type: 'message_stop'; message: any }
+  | { type: 'error'; error: string }
 
 // Normalize API-specific token names to canonical representation - do this ONCE at the boundary
 function normalizeTokens(apiResponse: any): TokenUsage {
@@ -26,16 +30,29 @@ function normalizeTokens(apiResponse: any): TokenUsage {
     return { input: 0, output: 0 }
   }
 
-  const input = Number(apiResponse.prompt_tokens ?? apiResponse.input_tokens ?? apiResponse.promptTokens) || 0
-  const output = Number(apiResponse.completion_tokens ?? apiResponse.output_tokens ?? apiResponse.completionTokens) || 0
-  const total = Number(apiResponse.total_tokens ?? apiResponse.totalTokens) || undefined
-  const reasoning = Number(apiResponse.reasoning_tokens ?? apiResponse.reasoningTokens) || undefined
+  const input =
+    Number(
+      apiResponse.prompt_tokens ??
+        apiResponse.input_tokens ??
+        apiResponse.promptTokens,
+    ) || 0
+  const output =
+    Number(
+      apiResponse.completion_tokens ??
+        apiResponse.output_tokens ??
+        apiResponse.completionTokens,
+    ) || 0
+  const total =
+    Number(apiResponse.total_tokens ?? apiResponse.totalTokens) || undefined
+  const reasoning =
+    Number(apiResponse.reasoning_tokens ?? apiResponse.reasoningTokens) ||
+    undefined
 
   return {
     input,
     output,
     total: total && total > 0 ? total : undefined,
-    reasoning: reasoning && reasoning > 0 ? reasoning : undefined
+    reasoning: reasoning && reasoning > 0 ? reasoning : undefined,
   }
 }
 
@@ -46,7 +63,7 @@ export abstract class ModelAPIAdapter {
 
   constructor(
     protected capabilities: ModelCapabilities,
-    protected modelProfile: ModelProfile
+    protected modelProfile: ModelProfile,
   ) {}
 
   // Subclasses must implement these methods
@@ -56,7 +73,10 @@ export abstract class ModelAPIAdapter {
 
   // Optional: subclasses can implement streaming for real-time updates
   // Default implementation returns undefined (not supported)
-  async *parseStreamingResponse?(response: any, signal?: AbortSignal): AsyncGenerator<StreamingEvent> {
+  async *parseStreamingResponse?(
+    response: any,
+    signal?: AbortSignal,
+  ): AsyncGenerator<StreamingEvent> {
     // Not supported by default - subclasses can override
     return
     yield // unreachable, but satisfies TypeScript
@@ -72,18 +92,20 @@ export abstract class ModelAPIAdapter {
     this.cumulativeUsage.input += usage.input
     this.cumulativeUsage.output += usage.output
     if (usage.total) {
-      this.cumulativeUsage.total = (this.cumulativeUsage.total || 0) + usage.total
+      this.cumulativeUsage.total =
+        (this.cumulativeUsage.total || 0) + usage.total
     }
     if (usage.reasoning) {
-      this.cumulativeUsage.reasoning = (this.cumulativeUsage.reasoning || 0) + usage.reasoning
+      this.cumulativeUsage.reasoning =
+        (this.cumulativeUsage.reasoning || 0) + usage.reasoning
     }
   }
-  
+
   // Shared utility methods
   protected getMaxTokensParam(): string {
     return this.capabilities.parameters.maxTokensField
   }
-  
+
   protected getTemperature(): number {
     if (this.capabilities.parameters.temperatureMode === 'fixed_one') {
       return 1
@@ -93,11 +115,11 @@ export abstract class ModelAPIAdapter {
     }
     return 0.7
   }
-  
+
   protected shouldIncludeReasoningEffort(): boolean {
     return this.capabilities.parameters.supportsReasoningEffort
   }
-  
+
   protected shouldIncludeVerbosity(): boolean {
     return this.capabilities.parameters.supportsVerbosity
   }

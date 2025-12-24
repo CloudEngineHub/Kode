@@ -36,8 +36,8 @@ export function Logo({
   const currentModel = mainModelName || 'No model configured'
   const hasOverrides = Boolean(
     process.env.DISABLE_PROMPT_CACHING ||
-      process.env.API_TIMEOUT_MS ||
-      process.env.MAX_THINKING_TOKENS,
+    process.env.API_TIMEOUT_MS ||
+    process.env.MAX_THINKING_TOKENS,
   )
 
   return (
@@ -53,7 +53,10 @@ export function Logo({
       >
         {updateBannerVersion ? (
           <Box flexDirection="column">
-            <Text color="yellow">New version available: {updateBannerVersion} (current: {MACRO.VERSION})</Text>
+            <Text color="yellow">
+              New version available: {updateBannerVersion} (current:{' '}
+              {MACRO.VERSION})
+            </Text>
             <Text>Run the following command to update:</Text>
             <Text>
               {'  '}

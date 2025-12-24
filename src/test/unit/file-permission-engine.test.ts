@@ -9,7 +9,11 @@ import {
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import path from 'path'
-import { __resetPlanModeForTests, getPlanConversationKey, getPlanFilePath } from '@utils/planMode'
+import {
+  __resetPlanModeForTests,
+  getPlanConversationKey,
+  getPlanFilePath,
+} from '@utils/planMode'
 
 function makeContext(args?: {
   toolPermissionContext?: ReturnType<typeof createDefaultToolPermissionContext>
@@ -136,9 +140,11 @@ describe('Reference CLI parity: filesystem permission engine', () => {
       expect(denied.result).toBe(false)
       const updates = (denied as any).suggestions ?? []
       expect(updates.length).toBeGreaterThan(0)
-      expect(updates.some((u: any) => u.type === 'setMode' && u.mode === 'acceptEdits')).toBe(
-        true,
-      )
+      expect(
+        updates.some(
+          (u: any) => u.type === 'setMode' && u.mode === 'acceptEdits',
+        ),
+      ).toBe(true)
       expect(updates.some((u: any) => u.type === 'addDirectories')).toBe(true)
 
       const updatedContext = applyToolPermissionContextUpdates(base, updates)
@@ -157,8 +163,8 @@ describe('Reference CLI parity: filesystem permission engine', () => {
 
   test('allows writing to the plan file for the current conversation', async () => {
     const tmpConfig = mkdtempSync(path.join(tmpdir(), 'kode-plan-config-'))
-    const previousClaudeConfigDir = process.env.CLAUDE_CONFIG_DIR
-    process.env.CLAUDE_CONFIG_DIR = tmpConfig
+    const previousConfigDir = process.env.KODE_CONFIG_DIR
+    process.env.KODE_CONFIG_DIR = tmpConfig
 
     try {
       const toolPermissionContext = createDefaultToolPermissionContext({
@@ -182,7 +188,7 @@ describe('Reference CLI parity: filesystem permission engine', () => {
       )
       expect(result.result).toBe(true)
     } finally {
-      process.env.CLAUDE_CONFIG_DIR = previousClaudeConfigDir
+      process.env.KODE_CONFIG_DIR = previousConfigDir
       rmSync(tmpConfig, { recursive: true, force: true })
     }
   })
@@ -245,7 +251,11 @@ describe('Reference CLI parity: filesystem permission engine', () => {
       expect(denied.result).toBe(false)
 
       const updated = applyToolPermissionContextUpdates(base, [
-        { type: 'addDirectories', destination: 'session', directories: [outside] },
+        {
+          type: 'addDirectories',
+          destination: 'session',
+          directories: [outside],
+        },
       ])
       const ctx2 = makeContext({ toolPermissionContext: updated })
       const allowed = await hasPermissionsToUseTool(

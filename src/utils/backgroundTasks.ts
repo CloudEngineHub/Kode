@@ -1,6 +1,10 @@
 import type { Message as ConversationMessage } from '@query'
 
-export type BackgroundAgentStatus = 'running' | 'completed' | 'failed' | 'killed'
+export type BackgroundAgentStatus =
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'killed'
 
 export type BackgroundAgentTask = {
   type: 'async_agent'
@@ -38,7 +42,9 @@ export function getBackgroundAgentTaskSnapshot(
   return snapshot
 }
 
-export function upsertBackgroundAgentTask(task: BackgroundAgentTaskRuntime): void {
+export function upsertBackgroundAgentTask(
+  task: BackgroundAgentTaskRuntime,
+): void {
   backgroundTasks.set(task.agentId, task)
 }
 
@@ -76,4 +82,3 @@ export async function waitForBackgroundAgentTask(
   await Promise.race([task.done, timeoutPromise, abortPromise])
   return backgroundTasks.get(agentId)
 }
-

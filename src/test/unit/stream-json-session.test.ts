@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { createInterface } from 'node:readline'
 import { PassThrough } from 'node:stream'
-import { KodeAgentStructuredStdio } from '@utils/kodeAgentStructuredStdio'
-import { runKodeAgentStreamJsonSession } from '@utils/kodeAgentStreamJsonSession'
+import { KodeAgentStructuredStdio } from '@utils/protocol/kodeAgentStructuredStdio'
+import { runKodeAgentStreamJsonSession } from '@utils/protocol/kodeAgentStreamJsonSession'
 import { createAssistantMessage } from '@utils/messages'
 
 function makeLineReader(
@@ -40,10 +40,10 @@ describe('stream-json persistent session', () => {
     structured.start()
 
     let queryCalls = 0
-    const query = (async function* () {
+    const query = async function* () {
       queryCalls += 1
       yield createAssistantMessage(`turn:${queryCalls}`) as any
-    }) as any
+    } as any
 
     const sessionPromise = runKodeAgentStreamJsonSession({
       structured,
@@ -134,10 +134,10 @@ describe('stream-json persistent session', () => {
     structured.start()
 
     let queryCalls = 0
-    const query = (async function* () {
+    const query = async function* () {
       queryCalls += 1
       yield createAssistantMessage(`turn:${queryCalls}`) as any
-    }) as any
+    } as any
 
     const sessionPromise = runKodeAgentStreamJsonSession({
       structured,

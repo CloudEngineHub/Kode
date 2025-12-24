@@ -3,7 +3,10 @@ import { createDefaultToolPermissionContext } from '@kode-types/toolPermissionCo
 import { checkBashPermissions } from '@utils/permissions/bashToolPermissionEngine'
 import { hasPermissionsToUseTool } from '@permissions'
 import { BashTool } from '@tools/BashTool/BashTool'
-import { getCurrentProjectConfig, saveCurrentProjectConfig } from '@utils/config'
+import {
+  getCurrentProjectConfig,
+  saveCurrentProjectConfig,
+} from '@utils/config'
 
 function makeToolUseContext(permissionMode: string = 'default') {
   return {
@@ -60,7 +63,8 @@ describe('Bash permission engine parity', () => {
 
     expect(result).toEqual({
       result: false,
-      message: 'Permission to use Bash with command git status has been denied.',
+      message:
+        'Permission to use Bash with command git status has been denied.',
       shouldPromptUser: false,
     })
   })
@@ -110,4 +114,3 @@ describe('Bash permission engine parity', () => {
     })
   })
 })
-

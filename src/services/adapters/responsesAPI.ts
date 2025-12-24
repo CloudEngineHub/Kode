@@ -1,26 +1,42 @@
 import { OpenAIAdapter, StreamingEvent, normalizeTokens } from './openaiAdapter'
-import { UnifiedRequestParams, UnifiedResponse, ReasoningStreamingContext } from '@kode-types/modelCapabilities'
+import {
+  UnifiedRequestParams,
+  UnifiedResponse,
+  ReasoningStreamingContext,
+} from '@kode-types/modelCapabilities'
 import { Tool, getToolDescription } from '@tool'
 import { zodToJsonSchema } from 'zod-to-json-schema'
 import { processResponsesStream } from './responsesStreaming'
 
 export class ResponsesAPIAdapter extends OpenAIAdapter {
   createRequest(params: UnifiedRequestParams): any {
-    const { messages, systemPrompt, tools, maxTokens, reasoningEffort } = params
+    const {
+      messages,
+      systemPrompt,
+      tools,
+      maxTokens,
+      reasoningEffort,
+      stopSequences,
+    } = params
 
     // Build base request
     const request: any = {
       model: this.modelProfile.modelName,
       input: this.convertMessagesToInput(messages),
-      instructions: this.buildInstructions(systemPrompt)
+      instructions: this.buildInstructions(systemPrompt),
     }
 
     // Add token limit using model capabilities
     const maxTokensField = this.getMaxTokensParam()
     request[maxTokensField] = maxTokens
 
+    if (stopSequences && stopSequences.length > 0) {
+      request.stop = stopSequences
+    }
+
     // Add streaming support using model capabilities
-    request.stream = params.stream !== false && this.capabilities.streaming.supported
+    request.stream =
+      params.stream !== false && this.capabilities.streaming.supported
 
     // Add temperature using model capabilities
     const temperature = this.getTemperature()
@@ -30,15 +46,22 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
 
     // Add reasoning control using model capabilities
     const include: string[] = []
-    if (this.capabilities.parameters.supportsReasoningEffort && (this.shouldIncludeReasoningEffort() || reasoningEffort)) {
+    if (
+      this.capabilities.parameters.supportsReasoningEffort &&
+      (this.shouldIncludeReasoningEffort() || reasoningEffort)
+    ) {
       include.push('reasoning.encrypted_content')
       request.reasoning = {
-        effort: reasoningEffort || this.modelProfile.reasoningEffort || 'medium'
+        effort:
+          reasoningEffort || this.modelProfile.reasoningEffort || 'medium',
       }
     }
 
     // Add verbosity control using model capabilities
-    if (this.capabilities.parameters.supportsVerbosity && this.shouldIncludeVerbosity()) {
+    if (
+      this.capabilities.parameters.supportsVerbosity &&
+      this.shouldIncludeVerbosity()
+    ) {
       // Determine default verbosity based on model name if not provided
       let defaultVerbosity: 'low' | 'medium' | 'high' = 'medium'
       if (params.verbosity) {
@@ -54,7 +77,7 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
       }
 
       request.text = {
-        verbosity: defaultVerbosity
+        verbosity: defaultVerbosity,
       }
     }
 
@@ -75,7 +98,10 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
     request.store = false
 
     // Add state management
-    if (params.previousResponseId && this.capabilities.stateManagement.supportsPreviousResponseId) {
+    if (
+      params.previousResponseId &&
+      this.capabilities.stateManagement.supportsPreviousResponseId
+    ) {
       request.previous_response_id = params.previousResponseId
     }
 
@@ -86,12 +112,13 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
 
     return request
   }
-  
+
   buildTools(tools: Tool[]): any[] {
     // Follow codex-cli.js format: flat structure, no nested 'function' object
     return tools.map(tool => {
       // Prefer pre-built JSON schema if available
-      let parameters: Record<string, unknown> | undefined = tool.inputJSONSchema as any
+      let parameters: Record<string, unknown> | undefined =
+        tool.inputJSONSchema as any
 
       // Otherwise, check if inputSchema is already a JSON schema (not Zod)
       if (!parameters && tool.inputSchema) {
@@ -100,18 +127,25 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
           return obj !== null && typeof obj === 'object' && !Array.isArray(obj)
         }
 
-          if (isPlainObject(tool.inputSchema) && ('type' in (tool.inputSchema as any) || 'properties' in (tool.inputSchema as any))) {
-            // Already a JSON schema, use directly
-            parameters = tool.inputSchema as any
-          } else {
-            // Try to convert Zod schema
-            try {
-              parameters = zodToJsonSchema(tool.inputSchema as any) as any
-            } catch (error) {
-              console.warn(`Failed to convert Zod schema for tool ${tool.name}:`, error)
-              // Use minimal schema as fallback
-              parameters = { type: 'object', properties: {} }
-            }
+        if (
+          isPlainObject(tool.inputSchema) &&
+          ('type' in (tool.inputSchema as any) ||
+            'properties' in (tool.inputSchema as any))
+        ) {
+          // Already a JSON schema, use directly
+          parameters = tool.inputSchema as any
+        } else {
+          // Try to convert Zod schema
+          try {
+            parameters = zodToJsonSchema(tool.inputSchema as any) as any
+          } catch (error) {
+            console.warn(
+              `Failed to convert Zod schema for tool ${tool.name}:`,
+              error,
+            )
+            // Use minimal schema as fallback
+            parameters = { type: 'object', properties: {} }
+          }
         }
       }
 
@@ -119,11 +153,11 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
         type: 'function',
         name: tool.name,
         description: getToolDescription(tool),
-        parameters: (parameters as any) || { type: 'object', properties: {} }
+        parameters: (parameters as any) || { type: 'object', properties: {} },
       }
     })
   }
-  
+
   // Override parseResponse to handle Response API directly without double conversion
   async parseResponse(response: any): Promise<UnifiedResponse> {
     // Check if this is a streaming response (has ReadableStream body)
@@ -132,19 +166,21 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
       const { assistantMessage } = await processResponsesStream(
         this.parseStreamingResponse(response),
         Date.now(),
-        response.id ?? `resp_${Date.now()}`
+        response.id ?? `resp_${Date.now()}`,
       )
 
       // LINUX WAY: ONE representation only - tool_use blocks in content
       // NO toolCalls array when we have tool_use blocks
-      const hasToolUseBlocks = assistantMessage.message.content.some((block: any) => block.type === 'tool_use')
+      const hasToolUseBlocks = assistantMessage.message.content.some(
+        (block: any) => block.type === 'tool_use',
+      )
 
       return {
         id: assistantMessage.responseId,
         content: assistantMessage.message.content,
         toolCalls: hasToolUseBlocks ? [] : [],
         usage: this.normalizeUsageForAdapter(assistantMessage.message.usage),
-        responseId: assistantMessage.responseId
+        responseId: assistantMessage.responseId,
       }
     }
 
@@ -160,7 +196,9 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
     // Extract reasoning content from structured output
     let reasoningContent = ''
     if (response.output && Array.isArray(response.output)) {
-      const messageItems = response.output.filter(item => item.type === 'message')
+      const messageItems = response.output.filter(
+        item => item.type === 'message',
+      )
       if (messageItems.length > 0) {
         content = messageItems
           .map(item => {
@@ -177,7 +215,9 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
       }
 
       // Extract reasoning content
-      const reasoningItems = response.output.filter(item => item.type === 'reasoning')
+      const reasoningItems = response.output.filter(
+        item => item.type === 'reasoning',
+      )
       if (reasoningItems.length > 0) {
         reasoningContent = reasoningItems
           .map(item => item.content || '')
@@ -207,18 +247,20 @@ ${reasoningContent}
 
     const promptTokens = response.usage?.input_tokens || 0
     const completionTokens = response.usage?.output_tokens || 0
-    const totalTokens = response.usage?.total_tokens ?? (promptTokens + completionTokens)
+    const totalTokens =
+      response.usage?.total_tokens ?? promptTokens + completionTokens
 
     return {
       id: response.id || `resp_${Date.now()}`,
-      content: contentArray,  // Return as array (Anthropic format)
+      content: contentArray, // Return as array (Anthropic format)
       toolCalls,
       usage: {
         promptTokens,
         completionTokens,
-        reasoningTokens: response.usage?.output_tokens_details?.reasoning_tokens
+        reasoningTokens:
+          response.usage?.output_tokens_details?.reasoning_tokens,
       },
-      responseId: response.id  // Save for state management
+      responseId: response.id, // Save for state management
     }
   }
 
@@ -228,7 +270,7 @@ ${reasoningContent}
     responseId: string,
     hasStarted: boolean,
     accumulatedContent: string,
-    reasoningContext?: ReasoningStreamingContext
+    reasoningContext?: ReasoningStreamingContext,
   ): AsyncGenerator<StreamingEvent> {
     // Handle reasoning summary part events
     if (parsed.type === 'response.reasoning_summary_part.added') {
@@ -250,7 +292,7 @@ ${reasoningContent}
         yield {
           type: 'text_delta',
           delta: '\n\n',
-          responseId
+          responseId,
         }
       }
 
@@ -269,7 +311,7 @@ ${reasoningContent}
         yield {
           type: 'text_delta',
           delta,
-          responseId
+          responseId,
         }
       }
 
@@ -288,7 +330,7 @@ ${reasoningContent}
         yield {
           type: 'text_delta',
           delta,
-          responseId
+          responseId,
         }
       }
 
@@ -314,14 +356,18 @@ ${reasoningContent}
         const name = item.name
         const args = item.arguments
 
-        if (typeof callId === 'string' && typeof name === 'string' && typeof args === 'string') {
+        if (
+          typeof callId === 'string' &&
+          typeof name === 'string' &&
+          typeof args === 'string'
+        ) {
           yield {
             type: 'tool_request',
             tool: {
               id: callId,
               name: name,
-              input: args
-            }
+              input: args,
+            },
           }
         }
       }
@@ -333,19 +379,20 @@ ${reasoningContent}
 
       // Add reasoning tokens if available in Responses API format
       if (parsed.usage.output_tokens_details?.reasoning_tokens) {
-        normalizedUsage.reasoning = parsed.usage.output_tokens_details.reasoning_tokens
+        normalizedUsage.reasoning =
+          parsed.usage.output_tokens_details.reasoning_tokens
       }
 
       yield {
         type: 'usage',
-        usage: normalizedUsage
+        usage: normalizedUsage,
       }
     }
   }
 
   protected updateStreamingState(
     parsed: any,
-    accumulatedContent: string
+    accumulatedContent: string,
   ): { content?: string; hasStarted?: boolean } {
     const state: { content?: string; hasStarted?: boolean } = {}
 
@@ -361,14 +408,16 @@ ${reasoningContent}
   // parseStreamingResponse and parseSSEChunk are now handled by the base OpenAIAdapter class
 
   // Implement abstract method for parsing streaming OpenAI responses
-  protected async parseStreamingOpenAIResponse(response: any): Promise<{ assistantMessage: any; rawResponse: any }> {
+  protected async parseStreamingOpenAIResponse(
+    response: any,
+  ): Promise<{ assistantMessage: any; rawResponse: any }> {
     // Delegate to the processResponsesStream helper for consistency
     const { processResponsesStream } = await import('./responsesStreaming')
 
     return await processResponsesStream(
       this.parseStreamingResponse(response),
       Date.now(),
-      response.id ?? `resp_${Date.now()}`
+      response.id ?? `resp_${Date.now()}`,
     )
   }
 
@@ -380,10 +429,10 @@ ${reasoningContent}
     // Add any Responses API specific usage fields
     return {
       ...baseUsage,
-      reasoningTokens: usage?.output_tokens_details?.reasoning_tokens ?? 0
+      reasoningTokens: usage?.output_tokens_details?.reasoning_tokens ?? 0,
     }
   }
-  
+
   private convertMessagesToInput(messages: any[]): any[] {
     // Convert Chat Completions messages to Response API input format
     // Following reference implementation pattern
@@ -413,7 +462,7 @@ ${reasoningContent}
             inputItems.push({
               type: 'function_call_output',
               call_id: callId,
-              output: content
+              output: content,
             })
           }
         }
@@ -433,14 +482,19 @@ ${reasoningContent}
           const callId = tc.id || tc.call_id
           const fn = tc.function
           const name = typeof fn === 'object' && fn !== null ? fn.name : null
-          const args = typeof fn === 'object' && fn !== null ? fn.arguments : null
+          const args =
+            typeof fn === 'object' && fn !== null ? fn.arguments : null
 
-          if (typeof callId === 'string' && typeof name === 'string' && typeof args === 'string') {
+          if (
+            typeof callId === 'string' &&
+            typeof name === 'string' &&
+            typeof args === 'string'
+          ) {
             inputItems.push({
               type: 'function_call',
               name: name,
               arguments: args,
-              call_id: callId
+              call_id: callId,
             })
           }
         }
@@ -463,7 +517,8 @@ ${reasoningContent}
             }
           } else if (ptype === 'image_url') {
             const image = part.image_url
-            const url = typeof image === 'object' && image !== null ? image.url : image
+            const url =
+              typeof image === 'object' && image !== null ? image.url : image
             if (typeof url === 'string' && url) {
               contentItems.push({ type: 'input_image', image_url: url })
             }
@@ -476,13 +531,17 @@ ${reasoningContent}
 
       if (contentItems.length) {
         const roleOut = role === 'assistant' ? 'assistant' : 'user'
-        inputItems.push({ type: 'message', role: roleOut, content: contentItems })
+        inputItems.push({
+          type: 'message',
+          role: roleOut,
+          content: contentItems,
+        })
       }
     }
 
     return inputItems
   }
-  
+
   private buildInstructions(systemPrompt: string[]): string {
     // Join system prompts into instructions (following reference implementation)
     const systemContent = systemPrompt
@@ -491,7 +550,7 @@ ${reasoningContent}
 
     return systemContent
   }
-  
+
   private parseToolCalls(response: any): any[] {
     // Enhanced tool call parsing following codex-cli.js pattern
     if (!response.output || !Array.isArray(response.output)) {
@@ -508,24 +567,29 @@ ${reasoningContent}
         const args = item.arguments || '{}'
 
         // Validate required fields
-        if (typeof callId === 'string' && typeof name === 'string' && typeof args === 'string') {
+        if (
+          typeof callId === 'string' &&
+          typeof name === 'string' &&
+          typeof args === 'string'
+        ) {
           toolCalls.push({
             id: callId,
             type: 'function',
             function: {
               name: name,
-              arguments: args
-            }
+              arguments: args,
+            },
           })
         }
       } else if (item.type === 'tool_call') {
         // Handle alternative tool_call type
-        const callId = item.id || `tool_${Math.random().toString(36).substring(2, 15)}`
+        const callId =
+          item.id || `tool_${Math.random().toString(36).substring(2, 15)}`
         toolCalls.push({
           id: callId,
           type: 'tool_call',
           name: item.name,
-          arguments: item.arguments
+          arguments: item.arguments,
         })
       }
     }
@@ -533,21 +597,28 @@ ${reasoningContent}
     return toolCalls
   }
 
-  
   // Apply reasoning content to message for non-streaming
-  private applyReasoningToMessage(message: any, reasoningSummaryText: string, reasoningFullText: string): any {
+  private applyReasoningToMessage(
+    message: any,
+    reasoningSummaryText: string,
+    reasoningFullText: string,
+  ): any {
     const rtxtParts = []
-    if (typeof reasoningSummaryText === 'string' && reasoningSummaryText.trim()) {
+    if (
+      typeof reasoningSummaryText === 'string' &&
+      reasoningSummaryText.trim()
+    ) {
       rtxtParts.push(reasoningSummaryText)
     }
     if (typeof reasoningFullText === 'string' && reasoningFullText.trim()) {
       rtxtParts.push(reasoningFullText)
     }
-    const rtxt = rtxtParts.filter((p) => p).join('\n\n')
+    const rtxt = rtxtParts.filter(p => p).join('\n\n')
     if (rtxt) {
       const thinkBlock = `<think>\n${rtxt}\n</think>\n`
       const contentText = message.content || ''
-      message.content = thinkBlock + (typeof contentText === 'string' ? contentText : '')
+      message.content =
+        thinkBlock + (typeof contentText === 'string' ? contentText : '')
     }
     return message
   }

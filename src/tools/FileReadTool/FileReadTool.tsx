@@ -1,4 +1,7 @@
-import { DocumentBlockParam, ImageBlockParam } from '@anthropic-ai/sdk/resources/index.mjs'
+import {
+  DocumentBlockParam,
+  ImageBlockParam,
+} from '@anthropic-ai/sdk/resources/index.mjs'
 import { statSync } from 'fs'
 import { Box, Text } from 'ink'
 import * as path from 'node:path'
@@ -32,13 +35,7 @@ const MAX_LINE_LENGTH = 2000
 const MAX_OUTPUT_SIZE = 0.25 * 1024 * 1024 // 0.25MB in bytes (post-truncation safeguard)
 
 // Common image extensions (compatibility)
-const IMAGE_EXTENSIONS = new Set([
-  '.png',
-  '.jpg',
-  '.jpeg',
-  '.gif',
-  '.webp',
-])
+const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp'])
 
 // Maximum dimensions for images
 const MAX_WIDTH = 2000
@@ -377,7 +374,9 @@ export const FileReadTool = {
 
     // Post-truncation size validation
     if (Buffer.byteLength(truncatedLines, 'utf8') > MAX_OUTPUT_SIZE) {
-      throw new Error(formatFileSizeError(Buffer.byteLength(truncatedLines, 'utf8')))
+      throw new Error(
+        formatFileSizeError(Buffer.byteLength(truncatedLines, 'utf8')),
+      )
     }
 
     const data = {
@@ -505,17 +504,17 @@ async function readImage(
     const stats = statSync(filePath)
     const sharpModule = (await import('sharp')) as any
     const sharp = sharpModule.default || sharpModule
-    
+
     // Use secure file service to read the file
     const fileReadResult = secureFileService.safeReadFile(filePath, {
       encoding: 'buffer' as BufferEncoding,
-      maxFileSize: MAX_IMAGE_SIZE
+      maxFileSize: MAX_IMAGE_SIZE,
     })
-    
+
     if (!fileReadResult.success) {
       throw new Error(`Failed to read image file: ${fileReadResult.error}`)
     }
-    
+
     const image = sharp(fileReadResult.content as Buffer)
     const metadata = await image.metadata()
 
@@ -539,14 +538,18 @@ async function readImage(
       // Use secure file service to read the file
       const fileReadResult = secureFileService.safeReadFile(filePath, {
         encoding: 'buffer' as BufferEncoding,
-        maxFileSize: MAX_IMAGE_SIZE
+        maxFileSize: MAX_IMAGE_SIZE,
       })
-      
+
       if (!fileReadResult.success) {
         throw new Error(`Failed to read image file: ${fileReadResult.error}`)
       }
-      
-      return createImageResponse(fileReadResult.content as Buffer, ext, stats.size)
+
+      return createImageResponse(
+        fileReadResult.content as Buffer,
+        ext,
+        stats.size,
+      )
     }
 
     if (width > MAX_WIDTH) {
@@ -580,13 +583,17 @@ async function readImage(
     const stats = statSync(filePath)
     const fileReadResult = secureFileService.safeReadFile(filePath, {
       encoding: 'buffer' as BufferEncoding,
-      maxFileSize: MAX_IMAGE_SIZE
+      maxFileSize: MAX_IMAGE_SIZE,
     })
-    
+
     if (!fileReadResult.success) {
       throw new Error(`Failed to read image file: ${fileReadResult.error}`)
     }
-    
-    return createImageResponse(fileReadResult.content as Buffer, ext, stats.size)
+
+    return createImageResponse(
+      fileReadResult.content as Buffer,
+      ext,
+      stats.size,
+    )
   }
 }

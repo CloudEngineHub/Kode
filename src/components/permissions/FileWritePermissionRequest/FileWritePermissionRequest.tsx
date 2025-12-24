@@ -9,9 +9,7 @@ import {
 } from '@components/permissions/PermissionRequestTitle'
 import { logUnaryEvent } from '@utils/unaryLogging'
 import { env } from '@utils/env'
-import {
-  type ToolUseConfirm,
-} from '@components/permissions/PermissionRequest'
+import { type ToolUseConfirm } from '@components/permissions/PermissionRequest'
 import { existsSync } from 'fs'
 import chalk from 'chalk'
 import {
@@ -104,7 +102,9 @@ export function FileWritePermissionRequest({
             }
           }
           onDone()
-          toolUseConfirm.onAllow(hasSessionSuggestion ? 'permanent' : 'temporary')
+          toolUseConfirm.onAllow(
+            hasSessionSuggestion ? 'permanent' : 'temporary',
+          )
           return
         case 'no':
           extractLanguageName(file_path).then(language => {
@@ -123,7 +123,13 @@ export function FileWritePermissionRequest({
           return
       }
     },
-    [applyToolPermissionUpdate, file_path, hasSessionSuggestion, onDone, toolUseConfirm],
+    [
+      applyToolPermissionUpdate,
+      file_path,
+      hasSessionSuggestion,
+      onDone,
+      toolUseConfirm,
+    ],
   )
 
   useInput((inputChar, key) => {

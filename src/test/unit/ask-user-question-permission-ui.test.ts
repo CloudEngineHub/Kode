@@ -7,7 +7,9 @@ import {
 describe('AskUserQuestionPermissionRequest helpers', () => {
   test('formats multiSelect answers like reference CLI (comma-separated, Other appended)', () => {
     expect(__formatMultiSelectAnswerForTests(['A', 'B'], '')).toBe('A, B')
-    expect(__formatMultiSelectAnswerForTests(['__other__', 'A'], 'foo')).toBe('A, foo')
+    expect(__formatMultiSelectAnswerForTests(['__other__', 'A'], 'foo')).toBe(
+      'A, foo',
+    )
     expect(__formatMultiSelectAnswerForTests(['__other__'], '   ')).toBe('')
     expect(__formatMultiSelectAnswerForTests([], 'foo')).toBe('')
   })

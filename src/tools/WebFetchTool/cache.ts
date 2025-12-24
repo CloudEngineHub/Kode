@@ -11,10 +11,7 @@ class URLCache {
   private cache = new Map<string, CacheEntry>()
   private readonly CACHE_DURATION = 15 * 60 * 1000 // 15 minutes in milliseconds
 
-  set(
-    url: string,
-    entry: Omit<CacheEntry, 'timestamp'>,
-  ): void {
+  set(url: string, entry: Omit<CacheEntry, 'timestamp'>): void {
     this.cache.set(url, {
       ...entry,
       timestamp: Date.now(),
@@ -52,9 +49,12 @@ class URLCache {
 
   // Auto-clean expired entries every 5 minutes
   constructor() {
-    setInterval(() => {
-      this.cleanExpired()
-    }, 5 * 60 * 1000) // 5 minutes
+    setInterval(
+      () => {
+        this.cleanExpired()
+      },
+      5 * 60 * 1000,
+    ) // 5 minutes
   }
 }
 

@@ -44,4 +44,3 @@ describe('AskUserQuestion multi-select navigation parity', () => {
     expect(prev).toEqual({ focusedOptionIndex: 0, isSubmitFocused: false })
   })
 })
-

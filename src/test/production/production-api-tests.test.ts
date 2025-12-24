@@ -47,10 +47,11 @@ function getModelsToTest(): ModelProfile[] {
   }
 
   // Filter by model name or provider
-  const filtered = ACTIVE_MODELS.filter(model =>
-    model.name.toLowerCase().includes(TEST_MODEL.toLowerCase()) ||
-    model.modelName.toLowerCase().includes(TEST_MODEL.toLowerCase()) ||
-    model.provider.toLowerCase() === TEST_MODEL.toLowerCase()
+  const filtered = ACTIVE_MODELS.filter(
+    model =>
+      model.name.toLowerCase().includes(TEST_MODEL.toLowerCase()) ||
+      model.modelName.toLowerCase().includes(TEST_MODEL.toLowerCase()) ||
+      model.provider.toLowerCase() === TEST_MODEL.toLowerCase(),
   )
 
   return filtered.length > 0 ? filtered : ACTIVE_MODELS
@@ -62,9 +63,13 @@ describe('🌐 Production API Integration Tests', () => {
       console.log('\n🚨 PRODUCTION TEST MODE IS DISABLED 🚨')
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
       console.log('To enable production tests, run:')
-      console.log('  PRODUCTION_TEST_MODE=true bun test src/test/production-api-tests.ts')
+      console.log(
+        '  PRODUCTION_TEST_MODE=true bun test src/test/production-api-tests.ts',
+      )
       console.log('')
-      console.log('⚠️  WARNING: This will make REAL API calls and may incur costs!')
+      console.log(
+        '⚠️  WARNING: This will make REAL API calls and may incur costs!',
+      )
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
       expect(true).toBe(true) // This test always passes
     })
@@ -95,90 +100,107 @@ describe('🌐 Production API Integration Tests', () => {
   const testModelNames = modelsToTest.map(m => m.name).join(', ')
 
   describe(`📡 Production Tests (${testModelNames})`, () => {
-    modelsToTest.forEach((model) => {
-      test(`🚀 Making real API call to ${model.name}`, async () => {
-        const adapter = ModelAdapterFactory.createAdapter(model)
-        const shouldUseResponses = ModelAdapterFactory.shouldUseResponsesAPI(model)
+    modelsToTest.forEach(model => {
+      test(
+        `🚀 Making real API call to ${model.name}`,
+        async () => {
+          const adapter = ModelAdapterFactory.createAdapter(model)
+          const shouldUseResponses =
+            ModelAdapterFactory.shouldUseResponsesAPI(model)
 
-        console.log('\n🚀 PRODUCTION TEST:')
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-        console.log('🧪 Test Model:', model.name)
-        console.log('🔗 Adapter:', adapter.constructor.name)
-        console.log('📍 Endpoint:', shouldUseResponses
-          ? `${model.baseURL}/responses`
-          : `${model.baseURL}/chat/completions`)
-        console.log('🤖 Model:', model.modelName)
-        console.log('🔑 API Key:', model.apiKey.substring(0, 8) + '...')
+          console.log('\n🚀 PRODUCTION TEST:')
+          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+          console.log('🧪 Test Model:', model.name)
+          console.log('🔗 Adapter:', adapter.constructor.name)
+          console.log(
+            '📍 Endpoint:',
+            shouldUseResponses
+              ? `${model.baseURL}/responses`
+              : `${model.baseURL}/chat/completions`,
+          )
+          console.log('🤖 Model:', model.modelName)
+          console.log('🔑 API Key:', model.apiKey.substring(0, 8) + '...')
 
-        // Create test request
-        const testPrompt = `Write a simple function that adds two numbers (${model.name} test)`
-        const mockParams = {
-          messages: [
-            { role: 'user', content: testPrompt }
-          ],
-          systemPrompt: ['You are a helpful coding assistant. Provide clear, concise code examples.'],
-          maxTokens: 100, // Small limit to minimize costs
-        }
+          // Create test request
+          const testPrompt = `Write a simple function that adds two numbers (${model.name} test)`
+          const mockParams = {
+            messages: [{ role: 'user', content: testPrompt }],
+            systemPrompt: [
+              'You are a helpful coding assistant. Provide clear, concise code examples.',
+            ],
+            maxTokens: 100, // Small limit to minimize costs
+          }
 
-        try {
-          const request = adapter.createRequest(mockParams)
+          try {
+            const request = adapter.createRequest(mockParams)
 
-          // Make the actual API call
-          const endpoint = shouldUseResponses
-            ? `${model.baseURL}/responses`
-            : `${model.baseURL}/chat/completions`
+            // Make the actual API call
+            const endpoint = shouldUseResponses
+              ? `${model.baseURL}/responses`
+              : `${model.baseURL}/chat/completions`
 
-          console.log('📡 Making request to:', endpoint)
-          console.log('📝 Request body:', JSON.stringify(request, null, 2))
+            console.log('📡 Making request to:', endpoint)
+            console.log('📝 Request body:', JSON.stringify(request, null, 2))
 
-          const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${model.apiKey}`,
-            },
-            body: JSON.stringify(request),
+            const response = await fetch(endpoint, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${model.apiKey}`,
+              },
+              body: JSON.stringify(request),
             })
 
-          console.log('📊 Response status:', response.status)
-          console.log('📊 Response headers:', Object.fromEntries(response.headers.entries()))
+            console.log('📊 Response status:', response.status)
+            console.log(
+              '📊 Response headers:',
+              Object.fromEntries(response.headers.entries()),
+            )
 
-        if (response.ok) {
-          // Use the adapter's parseResponse method to handle both streaming and non-streaming
-          const unifiedResponse = await adapter.parseResponse(response)
-          console.log('✅ SUCCESS! Response received:')
-          console.log('📄 Unified Response:', JSON.stringify(unifiedResponse, null, 2))
+            if (response.ok) {
+              // Use the adapter's parseResponse method to handle both streaming and non-streaming
+              const unifiedResponse = await adapter.parseResponse(response)
+              console.log('✅ SUCCESS! Response received:')
+              console.log(
+                '📄 Unified Response:',
+                JSON.stringify(unifiedResponse, null, 2),
+              )
 
-          expect(response.status).toBe(200)
-          expect(unifiedResponse).toBeDefined()
-          expect(unifiedResponse.content).toBeDefined()
-        } else {
-          const errorText = await response.text()
-          console.log('❌ API ERROR:', response.status, errorText)
+              expect(response.status).toBe(200)
+              expect(unifiedResponse).toBeDefined()
+              expect(unifiedResponse.content).toBeDefined()
+            } else {
+              const errorText = await response.text()
+              console.log('❌ API ERROR:', response.status, errorText)
 
-          // Don't fail the test for API errors, just log them
-          // This allows testing multiple models even if some are misconfigured
-          console.log(`⚠️  Skipping API validation for ${model.name} due to API error`)
-          console.log(`💡 This might indicate the model endpoint doesn't support the expected API format`)
-          expect(true).toBe(true) // Pass the test but log the error
-        }
-
-        } catch (error: any) {
-          console.log('💥 Request failed:', error.message)
-          // For network or other errors, log but don't fail the test
-          console.log(`⚠️  Test completed with errors for ${model.name}`)
-          expect(true).toBe(true) // Pass the test but log the error
-        }
-      }, { timeout: 30000 })
+              // Don't fail the test for API errors, just log them
+              // This allows testing multiple models even if some are misconfigured
+              console.log(
+                `⚠️  Skipping API validation for ${model.name} due to API error`,
+              )
+              console.log(
+                `💡 This might indicate the model endpoint doesn't support the expected API format`,
+              )
+              expect(true).toBe(true) // Pass the test but log the error
+            }
+          } catch (error: any) {
+            console.log('💥 Request failed:', error.message)
+            // For network or other errors, log but don't fail the test
+            console.log(`⚠️  Test completed with errors for ${model.name}`)
+            expect(true).toBe(true) // Pass the test but log the error
+          }
+        },
+        { timeout: 30000 },
+      )
     }, 30000) // 30 second timeout
   })
 
-
   describe('⚡ Quick Health Check Tests', () => {
-    modelsToTest.forEach((model) => {
+    modelsToTest.forEach(model => {
       test(`🏥 ${model.name} endpoint health check`, async () => {
         const adapter = ModelAdapterFactory.createAdapter(model)
-        const shouldUseResponses = ModelAdapterFactory.shouldUseResponsesAPI(model)
+        const shouldUseResponses =
+          ModelAdapterFactory.shouldUseResponsesAPI(model)
 
         const endpoint = shouldUseResponses
           ? `${model.baseURL}/responses`
@@ -191,21 +213,20 @@ describe('🌐 Production API Integration Tests', () => {
           const minimalRequest = adapter.createRequest({
             messages: [{ role: 'user', content: 'Hi' }],
             systemPrompt: [],
-            maxTokens: 1
+            maxTokens: 1,
           })
 
           const response = await fetch(endpoint, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${model.apiKey}`,
+              Authorization: `Bearer ${model.apiKey}`,
             },
             body: JSON.stringify(minimalRequest),
           })
 
           console.log('📊 Health status:', response.status, response.statusText)
           expect(response.status).toBeLessThan(500) // Any response < 500 is OK for health check
-
         } catch (error: any) {
           console.log('💥 Health check failed:', error.message)
           // Don't fail the test for network issues
@@ -216,14 +237,15 @@ describe('🌐 Production API Integration Tests', () => {
   })
 
   describe('📊 Performance & Cost Metrics', () => {
-    modelsToTest.forEach((model) => {
+    modelsToTest.forEach(model => {
       test(`⏱️  API response time measurement for ${model.name}`, async () => {
         const startTime = performance.now()
 
         try {
           // Quick test call
           const adapter = ModelAdapterFactory.createAdapter(model)
-          const shouldUseResponses = ModelAdapterFactory.shouldUseResponsesAPI(model)
+          const shouldUseResponses =
+            ModelAdapterFactory.shouldUseResponsesAPI(model)
 
           const endpoint = shouldUseResponses
             ? `${model.baseURL}/responses`
@@ -232,14 +254,14 @@ describe('🌐 Production API Integration Tests', () => {
           const request = adapter.createRequest({
             messages: [{ role: 'user', content: 'Hello' }],
             systemPrompt: [],
-            maxTokens: 5
+            maxTokens: 5,
           })
 
           const response = await fetch(endpoint, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${model.apiKey}`,
+              Authorization: `Bearer ${model.apiKey}`,
             },
             body: JSON.stringify(request),
           })
@@ -253,7 +275,6 @@ describe('🌐 Production API Integration Tests', () => {
 
           expect(duration).toBeGreaterThan(0)
           expect(response.status).toBeDefined()
-
         } catch (error: any) {
           console.log('⚠️  Performance test failed:', error.message)
           // Don't fail for network issues

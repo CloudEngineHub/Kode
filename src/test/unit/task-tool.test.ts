@@ -162,6 +162,8 @@ describe('TaskTool', () => {
       cache_creation_input_tokens: 3,
       cache_read_input_tokens: 2,
     })
-    expect(result.data.content).toEqual([{ type: 'text', text: 'hello', citations: [] }])
+    expect(result.data.content).toEqual([
+      { type: 'text', text: 'hello', citations: [] },
+    ])
   })
 })

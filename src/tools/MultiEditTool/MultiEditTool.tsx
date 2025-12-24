@@ -24,10 +24,13 @@ function applyContentEdit(
   content: string,
   oldString: string,
   newString: string,
-  replaceAll: boolean = false
+  replaceAll: boolean = false,
 ): { newContent: string; occurrences: number } {
   if (replaceAll) {
-    const regex = new RegExp(oldString.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')
+    const regex = new RegExp(
+      oldString.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+      'g',
+    )
     const matches = content.match(regex)
     const occurrences = matches ? matches.length : 0
     const newContent = content.replace(regex, newString)
@@ -390,7 +393,6 @@ export const MultiEditTool = {
       }
 
       // Log the operation
-      
 
       yield {
         type: 'result',

@@ -31,12 +31,14 @@ import { getPermissionModeCycleShortcut } from '@utils/permissionModeCycleShortc
 import { getCwd } from '@utils/state'
 import { CompactModeIndicator } from '@components/ModeIndicator'
 import { getPromptInputSpecialKeyAction } from '@utils/promptInputSpecialKey'
+import { logStartupProfile } from '@utils/startupProfile'
+import { useStatusLine } from '@hooks/useStatusLine'
 
 // Async function to interpret the '#' command input using AI
 async function interpretHashCommand(input: string): Promise<string> {
   // Use the AI to interpret the input
   try {
-    const { queryQuick } = await import('@services/claude')
+    const { queryQuick } = await import('@services/llm')
 
     // Create a prompt for the model to interpret the hash command
     const systemPrompt = [
@@ -74,6 +76,7 @@ type Props = {
   commands: Command[]
   forkNumber: number
   messageLogName: string
+  disableSlashCommands?: boolean
   isDisabled: boolean
   isLoading: boolean
   onQuery: (
@@ -113,6 +116,7 @@ function PromptInput({
   commands,
   forkNumber,
   messageLogName,
+  disableSlashCommands,
   isDisabled,
   isLoading,
   onQuery,
@@ -135,6 +139,12 @@ function PromptInput({
   readFileTimestamps,
   onModelChange,
 }: Props): React.ReactNode {
+  useEffect(() => {
+    if (!isDisabled && !isLoading) {
+      logStartupProfile('prompt_ready')
+    }
+  }, [isDisabled, isLoading])
+
   const [exitMessage, setExitMessage] = useState<{
     show: boolean
     key?: string
@@ -159,13 +169,13 @@ function PromptInput({
   const pastedImageCounter = React.useRef(1)
 
   // Permission context for mode management
-  const { cycleMode, currentMode, toolPermissionContext } = usePermissionContext()
+  const { cycleMode, currentMode, toolPermissionContext } =
+    usePermissionContext()
   const modeCycleShortcut = useMemo(() => getPermissionModeCycleShortcut(), [])
   const showQuickModelSwitchShortcut = modeCycleShortcut.displayText !== 'alt+m'
 
-  const handleRewindConversation = useDoublePress(
-    setRewindMessagePending,
-    () => onShowMessageSelector(),
+  const handleRewindConversation = useDoublePress(setRewindMessagePending, () =>
+    onShowMessageSelector(),
   )
 
   // useEffect(() => {
@@ -192,11 +202,13 @@ function PromptInput({
     onInputChange,
     setCursorOffset,
     commands,
+    disableSlashCommands,
     onSubmit,
   })
 
   // Get theme early for memoized rendering
   const theme = getTheme()
+  const statusLine = useStatusLine()
 
   // Memoized completion suggestions rendering - after useUnifiedCompletion
   const renderedSuggestions = useMemo(() => {
@@ -205,20 +217,20 @@ function PromptInput({
     return suggestions.map((suggestion, index) => {
       const isSelected = index === selectedIndex
       const isAgent = suggestion.type === 'agent'
-      
+
       // Simple color logic without complex lookups
-      const displayColor = isSelected 
-        ? theme.suggestion 
-        : (isAgent && suggestion.metadata?.color)
+      const displayColor = isSelected
+        ? theme.suggestion
+        : isAgent && suggestion.metadata?.color
           ? suggestion.metadata.color
           : undefined
-      
+
       return (
-        <Box key={`${suggestion.type}-${suggestion.value}-${index}`} flexDirection="row">
-          <Text
-            color={displayColor}
-            dimColor={!isSelected && !displayColor}
-          >
+        <Box
+          key={`${suggestion.type}-${suggestion.value}-${index}`}
+          flexDirection="row"
+        >
+          <Text color={displayColor} dimColor={!isSelected && !displayColor}>
             {isSelected ? '◆ ' : '  '}
             {suggestion.displayValue}
           </Text>
@@ -249,7 +261,7 @@ function PromptInput({
 
     // Get debug info for better error reporting
     const debugInfo = modelManager.getModelSwitchingDebugInfo()
-    
+
     const switchResult = modelManager.switchToNextModel(currentTokens)
 
     if (switchResult.success && switchResult.modelName) {
@@ -258,7 +270,8 @@ function PromptInput({
       onSubmitCountChange(prev => prev + 1)
       setModelSwitchMessage({
         show: true,
-        text: switchResult.message || `✅ Switched to ${switchResult.modelName}`,
+        text:
+          switchResult.message || `✅ Switched to ${switchResult.modelName}`,
       })
       setTimeout(() => setModelSwitchMessage({ show: false }), 3000)
     } else if (switchResult.blocked && switchResult.message) {
@@ -269,9 +282,9 @@ function PromptInput({
       })
       setTimeout(() => setModelSwitchMessage({ show: false }), 5000)
     } else {
-      // Enhanced error reporting with debug info  
+      // Enhanced error reporting with debug info
       let errorMessage = switchResult.message
-      
+
       if (!errorMessage) {
         if (debugInfo.totalModels === 0) {
           errorMessage = '❌ No models configured. Use /model to add models.'
@@ -279,13 +292,15 @@ function PromptInput({
           errorMessage = `❌ No active models (${debugInfo.totalModels} total, all inactive). Use /model to activate models.`
         } else if (debugInfo.activeModels === 1) {
           // Show ALL models including inactive ones for debugging
-          const allModelNames = debugInfo.availableModels.map(m => `${m.name}${m.isActive ? '' : ' (inactive)'}`).join(', ')
+          const allModelNames = debugInfo.availableModels
+            .map(m => `${m.name}${m.isActive ? '' : ' (inactive)'}`)
+            .join(', ')
           errorMessage = `⚠️ Only 1 active model out of ${debugInfo.totalModels} total models: ${allModelNames}. ALL configured models will be activated for switching.`
         } else {
           errorMessage = `❌ Model switching failed (${debugInfo.activeModels} active, ${debugInfo.totalModels} total models available)`
         }
       }
-      
+
       setModelSwitchMessage({
         show: true,
         text: errorMessage,
@@ -317,7 +332,11 @@ function PromptInput({
 
   async function onSubmit(input: string, isSubmittingSlashCommand = false) {
     // When unified completion is open, Enter confirms the selection; avoid submitting the prompt.
-    if (!isSubmittingSlashCommand && completionActive && suggestions.length > 0) {
+    if (
+      !isSubmittingSlashCommand &&
+      completionActive &&
+      suggestions.length > 0
+    ) {
       return
     }
 
@@ -395,8 +414,8 @@ function PromptInput({
         if (messages.length) {
           await onQuery(messages)
 
-        // After query completes, the last message should be the assistant's response
-        // We'll set up a one-time listener to capture and save that response
+          // After query completes, the last message should be the assistant's response
+          // We'll set up a one-time listener to capture and save that response
           // This will be handled by the REPL component or message handler
         }
 
@@ -435,7 +454,7 @@ function PromptInput({
     if (isLoading) {
       return
     }
-    
+
     // Handle exit commands
     if (['exit', 'quit', ':q', ':q!', ':wq', ':wq!'].includes(input.trim())) {
       exit()
@@ -476,6 +495,7 @@ function PromptInput({
           maxThinkingTokens: 0,
           permissionMode: currentMode,
           toolPermissionContext,
+          disableSlashCommands,
         },
         messageId: undefined,
         abortController: newAbortController,
@@ -530,7 +550,8 @@ function PromptInput({
     // Reference CLI gating: only use a pasted-text placeholder when the paste is large or
     // has more than a small number of newlines (threshold depends on terminal rows).
     if (!shouldTreatAsSpecialPaste(text, { terminalRows: rows })) {
-      const newInput = input.slice(0, cursorOffset) + text + input.slice(cursorOffset)
+      const newInput =
+        input.slice(0, cursorOffset) + text + input.slice(cursorOffset)
       onInputChange(newInput)
       setCursorOffset(cursorOffset + text.length)
       return
@@ -560,42 +581,45 @@ function PromptInput({
     setPastedImages(prev => prev.filter(p => input.includes(p.placeholder)))
   }, [input])
 
-  useInput((inputChar, key) => {
-    // For bash mode, only exit when deleting the last character (which would be the '!' character)
-    if (mode === 'bash' && (key.backspace || key.delete)) {
-      // Check the current input state, not the inputChar parameter
-      // If current input is empty, we're about to delete the '!' character, so exit bash mode
-      if (input === '') {
-        onModeChange('prompt')
+  useInput(
+    (inputChar, key) => {
+      // For bash mode, only exit when deleting the last character (which would be the '!' character)
+      if (mode === 'bash' && (key.backspace || key.delete)) {
+        // Check the current input state, not the inputChar parameter
+        // If current input is empty, we're about to delete the '!' character, so exit bash mode
+        if (input === '') {
+          onModeChange('prompt')
+        }
+        return
       }
-      return
-    }
-    
-    // For koding mode, only exit when deleting the last character (which would be the '#' character)
-    if (mode === 'koding' && (key.backspace || key.delete)) {
-      // Check the current input state, not the inputChar parameter
-      // If current input is empty, we're about to delete the '#' character, so exit koding mode
-      if (input === '') {
-        onModeChange('prompt')
-      }
-      return
-    }
-    
-    // For other modes, keep the original behavior
-    if (inputChar === '' && (key.escape || key.backspace || key.delete)) {
-      onModeChange('prompt')
-    }
-    // esc is a little overloaded:
-    // - when we're loading a response, it's used to cancel the request
-    // - otherwise, it's used to show the message selector
-    // - when double pressed, it's used to clear the input
-    if (key.escape && messages.length > 0 && !input && !isLoading) {
-      handleRewindConversation()
-      return true
-    }
 
-    return false // Not handled, allow other hooks
-  }, { isActive: !isEditingExternally })
+      // For koding mode, only exit when deleting the last character (which would be the '#' character)
+      if (mode === 'koding' && (key.backspace || key.delete)) {
+        // Check the current input state, not the inputChar parameter
+        // If current input is empty, we're about to delete the '#' character, so exit koding mode
+        if (input === '') {
+          onModeChange('prompt')
+        }
+        return
+      }
+
+      // For other modes, keep the original behavior
+      if (inputChar === '' && (key.escape || key.backspace || key.delete)) {
+        onModeChange('prompt')
+      }
+      // esc is a little overloaded:
+      // - when we're loading a response, it's used to cancel the request
+      // - otherwise, it's used to show the message selector
+      // - when double pressed, it's used to clear the input
+      if (key.escape && messages.length > 0 && !input && !isLoading) {
+        handleRewindConversation()
+        return true
+      }
+
+      return false // Not handled, allow other hooks
+    },
+    { isActive: !isEditingExternally },
+  )
 
   const handleExternalEdit = useCallback(async () => {
     if (isEditingExternally || isLoading || isDisabled) return
@@ -633,46 +657,49 @@ function PromptInput({
   ])
 
   // Handle special key combinations before character input
-  const handleSpecialKey = useCallback((inputChar: string, key: any): boolean => {
-    if (isEditingExternally) return true
+  const handleSpecialKey = useCallback(
+    (inputChar: string, key: any): boolean => {
+      if (isEditingExternally) return true
 
-    const action = getPromptInputSpecialKeyAction({
-      inputChar,
-      key,
-      modeCycleShortcut,
-    })
+      const action = getPromptInputSpecialKeyAction({
+        inputChar,
+        key,
+        modeCycleShortcut,
+      })
 
-    if (action === 'modeCycle') {
-      cycleMode()
-      return true
-    }
-
-    if (action === 'modelSwitch') {
-      if (!isLoading) {
-        handleQuickModelSwitch()
+      if (action === 'modeCycle') {
+        cycleMode()
+        return true
       }
-      return true
-    }
 
-    // Note: Option + Enter is now handled in useTextInput
+      if (action === 'modelSwitch') {
+        if (!isLoading) {
+          handleQuickModelSwitch()
+        }
+        return true
+      }
 
-    if (action === 'externalEditor') {
-      void handleExternalEdit()
-      return true // Block character insertion
-    }
+      // Note: Option + Enter is now handled in useTextInput
 
-    return false // Not handled, allow normal processing
-  }, [
-    cycleMode,
-    handleQuickModelSwitch,
-    handleExternalEdit,
-    isEditingExternally,
-    isLoading,
-    modeCycleShortcut,
-  ])
+      if (action === 'externalEditor') {
+        void handleExternalEdit()
+        return true // Block character insertion
+      }
+
+      return false // Not handled, allow normal processing
+    },
+    [
+      cycleMode,
+      handleQuickModelSwitch,
+      handleExternalEdit,
+      isEditingExternally,
+      isLoading,
+      modeCycleShortcut,
+    ],
+  )
 
   const textInputColumns = columns - 6
-	  const tokenUsage = useMemo(() => countTokens(messages), [messages])
+  const tokenUsage = useMemo(() => countTokens(messages), [messages])
   // 🔧 Fix: Track model ID changes to detect external config updates
   const modelManager = getModelManager()
   const currentModelId = (modelManager.getModel('main') as any)?.id || null
@@ -698,12 +725,14 @@ function PromptInput({
     <Box flexDirection="column">
       {/* Top info bar: PWD on left (bash mode) and Model info on right */}
       {(mode === 'bash' || modelInfo) && (
-        <Box justifyContent="space-between" marginBottom={1} flexDirection="row">
+        <Box
+          justifyContent="space-between"
+          marginBottom={1}
+          flexDirection="row"
+        >
           {/* PWD in top-left when in bash mode */}
           {mode === 'bash' ? (
-            <Text color={theme.bashBorder}>
-              Shell PWD: {currentPwd}
-            </Text>
+            <Text color={theme.bashBorder}>Shell PWD: {currentPwd}</Text>
           ) : (
             <Text> </Text>
           )}
@@ -754,13 +783,13 @@ function PromptInput({
             </Text>
           )}
         </Box>
-	        <Box paddingRight={1}>
-	          <TextInput
-	            multiline
-	            focus={!isEditingExternally}
-	            onSubmit={onSubmit}
-	            onChange={onChange}
-	            value={input}
+        <Box paddingRight={1}>
+          <TextInput
+            multiline
+            focus={!isEditingExternally}
+            onSubmit={onSubmit}
+            onChange={onChange}
+            value={input}
             onHistoryUp={handleHistoryUp}
             onHistoryDown={handleHistoryDown}
             onHistoryReset={() => resetHistory()}
@@ -780,11 +809,7 @@ function PromptInput({
         </Box>
       </Box>
       {!completionActive && suggestions.length === 0 && (
-        <Box
-          flexDirection="column"
-          paddingX={2}
-          paddingY={0}
-        >
+        <Box flexDirection="column" paddingX={2} paddingY={0}>
           {/* First line: Command indicators */}
           <Box flexDirection="row" justifyContent="space-between">
             <Box justifyContent="flex-start" gap={1}>
@@ -796,52 +821,61 @@ function PromptInput({
                 <Text dimColor>Press Escape again to undo</Text>
               ) : modelSwitchMessage.show ? (
                 <Text color={theme.success}>{modelSwitchMessage.text}</Text>
+              ) : mode === 'prompt' && currentMode !== 'default' ? (
+                <CompactModeIndicator />
               ) : (
-                mode === 'prompt' && currentMode !== 'default' ? (
-                  <CompactModeIndicator />
-                ) : (
-                  <>
-                    <Text
-                      color={mode === 'bash' ? theme.bashBorder : undefined}
-                      dimColor={mode !== 'bash'}
-                    >
-                      ! run some shell command
-                    </Text>
-                    <Text dimColor> · / for commands</Text>
-                    <Text
-                      color={mode === 'koding' ? theme.noting : undefined}
-                      dimColor={mode !== 'koding'}
-                    >
-                      {' '}
-                      · # tell agent something to remember forever
-                    </Text>
-                  </>
-                )
+                <>
+                  <Text
+                    color={mode === 'bash' ? theme.bashBorder : undefined}
+                    dimColor={mode !== 'bash'}
+                  >
+                    ! run some shell command
+                  </Text>
+                  <Text dimColor> · / for commands</Text>
+                  <Text
+                    color={mode === 'koding' ? theme.noting : undefined}
+                    dimColor={mode !== 'koding'}
+                  >
+                    {' '}
+                    · # tell agent something to remember forever
+                  </Text>
+                </>
               )}
             </Box>
             <Box justifyContent="flex-end">
-              <Text dimColor>ESC to interrupt · 2×ESC for undo</Text>
+              <Text dimColor wrap="truncate-end">
+                {statusLine
+                  ? `${statusLine} · ESC to interrupt · 2×ESC for undo`
+                  : 'ESC to interrupt · 2×ESC for undo'}
+              </Text>
             </Box>
           </Box>
 
           {/* Second line: Shortcuts */}
           {!exitMessage.show &&
-	            !message.show &&
-	            !modelSwitchMessage.show &&
-	            !rewindMessagePending && (
-	            <Box flexDirection="row" justifyContent="space-between">
-	              <Box justifyContent="flex-start" gap={1}>
-	                <Text dimColor wrap="truncate-end">
-		                  option+enter: newline · {showQuickModelSwitchShortcut ? 'option+m: switch model · ' : ''}option+g: external editor · {modeCycleShortcut.displayText}: switch mode
-		                </Text>
-	              </Box>
-	              <SentryErrorBoundary children={
-	                <Box justifyContent="flex-end" gap={1}>
-                  <TokenWarning tokenUsage={tokenUsage} />
+            !message.show &&
+            !modelSwitchMessage.show &&
+            !rewindMessagePending && (
+              <Box flexDirection="row" justifyContent="space-between">
+                <Box justifyContent="flex-start" gap={1}>
+                  <Text dimColor wrap="truncate-end">
+                    option+enter: newline ·{' '}
+                    {showQuickModelSwitchShortcut
+                      ? 'option+m: switch model · '
+                      : ''}
+                    option+g: external editor · {modeCycleShortcut.displayText}:
+                    switch mode
+                  </Text>
                 </Box>
-              } />
-            </Box>
-          )}
+                <SentryErrorBoundary
+                  children={
+                    <Box justifyContent="flex-end" gap={1}>
+                      <TokenWarning tokenUsage={tokenUsage} />
+                    </Box>
+                  }
+                />
+              </Box>
+            )}
         </Box>
       )}
       {/* Unified completion suggestions - optimized rendering */}
@@ -854,31 +888,42 @@ function PromptInput({
         >
           <Box flexDirection="column">
             {renderedSuggestions}
-            
+
             {/* 简洁操作提示框 */}
-            <Box marginTop={1} paddingX={3} borderStyle="round" borderColor="gray">
-              <Text dimColor={!emptyDirMessage} color={emptyDirMessage ? "yellow" : undefined}>
-                {emptyDirMessage || (() => {
-                  const selected = suggestions[selectedIndex]
-                  if (!selected) {
-                    return '↑↓ navigate • → accept • Tab cycle • Esc close'
-                  }
-                  if (selected?.value.endsWith('/')) {
-                    return '→ enter directory • ↑↓ navigate • Tab cycle • Esc close'
-                  } else if (selected?.type === 'agent') {
-                    return '→ select agent • ↑↓ navigate • Tab cycle • Esc close'
-                  } else {
-                    return '→ insert reference • ↑↓ navigate • Tab cycle • Esc close'
-                  }
-                })()}
+            <Box
+              marginTop={1}
+              paddingX={3}
+              borderStyle="round"
+              borderColor="gray"
+            >
+              <Text
+                dimColor={!emptyDirMessage}
+                color={emptyDirMessage ? 'yellow' : undefined}
+              >
+                {emptyDirMessage ||
+                  (() => {
+                    const selected = suggestions[selectedIndex]
+                    if (!selected) {
+                      return '↑↓ navigate • → accept • Tab cycle • Esc close'
+                    }
+                    if (selected?.value.endsWith('/')) {
+                      return '→ enter directory • ↑↓ navigate • Tab cycle • Esc close'
+                    } else if (selected?.type === 'agent') {
+                      return '→ select agent • ↑↓ navigate • Tab cycle • Esc close'
+                    } else {
+                      return '→ insert reference • ↑↓ navigate • Tab cycle • Esc close'
+                    }
+                  })()}
               </Text>
             </Box>
           </Box>
-          <SentryErrorBoundary children={
-            <Box justifyContent="flex-end" gap={1}>
-              <TokenWarning tokenUsage={countTokens(messages)} />
-            </Box>
-          } />
+          <SentryErrorBoundary
+            children={
+              <Box justifyContent="flex-end" gap={1}>
+                <TokenWarning tokenUsage={countTokens(messages)} />
+              </Box>
+            }
+          />
         </Box>
       )}
     </Box>

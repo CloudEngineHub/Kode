@@ -10,7 +10,7 @@ interface Props {
 
 export function TaskProgressMessage({ agentType, status, toolCount }: Props) {
   const theme = getTheme()
-  
+
   return (
     <Box flexDirection="column" marginTop={1}>
       <Box flexDirection="row">
@@ -22,9 +22,7 @@ export function TaskProgressMessage({ agentType, status, toolCount }: Props) {
       </Box>
       {toolCount && toolCount > 0 && (
         <Box marginLeft={3}>
-          <Text color={theme.secondaryText}>
-            Tools used: {toolCount}
-          </Text>
+          <Text color={theme.secondaryText}>Tools used: {toolCount}</Text>
         </Box>
       )}
     </Box>

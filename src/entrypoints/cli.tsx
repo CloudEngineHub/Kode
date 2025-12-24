@@ -1,35 +1,18 @@
 #!/usr/bin/env bun
 import '@utils/sanitizeAnthropicEnv'
-import { fileURLToPath } from 'node:url'
-import { dirname, join } from 'node:path'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { initSentry } from '@services/sentry'
 import { PRODUCT_COMMAND, PRODUCT_NAME } from '@constants/product'
+import {
+  ensurePackagedRuntimeEnv,
+  ensureYogaWasmPath,
+} from './cli/bootstrapEnv'
+import { runPrintMode } from './cli/printMode'
+import { setup } from './cli/setup'
+import { showSetupScreens } from './cli/setupScreens'
 initSentry() // Initialize Sentry as early as possible
-
-// Default-on safety: enable the Bash LLM gate for agent calls unless explicitly disabled.
-if (process.env.KODE_BASH_LLM_GATE === undefined) {
-  process.env.KODE_BASH_LLM_GATE = '1'
-}
-
-// Ensure YOGA_WASM_PATH is set for Ink across run modes (wrapper/dev)
-// Resolve yoga.wasm relative to this file when missing using ESM-friendly APIs
-try {
-  if (!process.env.YOGA_WASM_PATH) {
-    const __filename = fileURLToPath(import.meta.url)
-    const __dirname = dirname(__filename)
-    const devCandidate = join(__dirname, '../../yoga.wasm')
-    const distCandidate = join(__dirname, './yoga.wasm')
-    const resolved = existsSync(distCandidate)
-      ? distCandidate
-      : existsSync(devCandidate)
-        ? devCandidate
-        : undefined
-    if (resolved) {
-      process.env.YOGA_WASM_PATH = resolved
-    }
-  }
-} catch {}
+ensurePackagedRuntimeEnv()
+ensureYogaWasmPath(import.meta.url)
 
 // XXX: Without this line (and the Object.keys, even though it seems like it does nothing!),
 // there is a bug in Bun only on Win32 that causes this import to be removed, even though
@@ -42,10 +25,8 @@ import { ReadStream } from 'tty'
 import { openSync } from 'fs'
 // ink and REPL are imported lazily to avoid top-level awaits during module init
 import type { RenderOptions } from 'ink'
-import { addToHistory } from '@history'
 import { getContext, setContext, removeContext } from '@context'
 import { Command } from '@commander-js/extra-typings'
-import { hasPermissionsToUseTool } from '@permissions'
 import {
   getGlobalConfig,
   getCurrentProjectConfig,
@@ -64,10 +45,8 @@ import {
 import { cwd } from 'process'
 import { dateToFilename, logError, parseLogFilename } from '@utils/log'
 import { initDebugLogger } from '@utils/debugLogger'
-import { Onboarding } from '@components/Onboarding'
 import { Doctor } from '@screens/Doctor'
-import { TrustDialog } from '@components/TrustDialog'
-import { checkHasTrustDialogAccepted, McpServerConfig } from '@utils/config'
+import { McpServerConfig } from '@utils/config'
 import { isDefaultSlowAndCapableModel } from '@utils/model'
 import {
   applyModelConfigYamlImport,
@@ -77,10 +56,9 @@ import { LogList } from '@screens/LogList'
 import { ResumeConversation } from '@screens/ResumeConversation'
 import { startMCPServer } from './mcp'
 import { env } from '@utils/env'
-import { getCwd, setCwd, setOriginalCwd } from '@utils/state'
+import { getCwd } from '@utils/state'
 import { getNextAvailableLogForkNumber, loadLogList } from '@utils/log'
 import { loadMessagesFromLog } from '@utils/conversationRecovery'
-import { cleanupOldMessageFilesInBackground } from '@utils/cleanup'
 import {
   handleListApprovedTools,
   handleRemoveApprovedTool,
@@ -92,6 +70,7 @@ import {
   parseEnvVars,
   removeMcpServer,
   getClients,
+  getClientsForCliMcpConfig,
   getMcprcServerStatus,
   ensureConfigScope,
 } from '@services/mcpClient'
@@ -101,84 +80,15 @@ import {
   normalizeMcpTransport,
   parseMcpHeaders,
 } from '@services/mcpCliUtils'
-import { handleMcprcServerApprovals } from '@services/mcpServerApproval'
- 
+
 import { cursorShow } from 'ansi-escapes'
 import { assertMinVersion } from '@utils/autoUpdater'
 import { CACHE_PATHS } from '@utils/log'
 // import { checkAndNotifyUpdate } from '@utils/autoUpdater'
 import { BunShell } from '@utils/BunShell'
-import { clearTerminal } from '@utils/terminal'
 import { showInvalidConfigDialog } from '@components/InvalidConfigDialog'
 import { ConfigParseError } from '@utils/errors'
-import { grantReadPermissionForOriginalDir } from '@utils/permissions/filesystem'
 import { MACRO } from '@constants/macros'
-export function completeOnboarding(): void {
-  const config = getGlobalConfig()
-  saveGlobalConfig({
-    ...config,
-    hasCompletedOnboarding: true,
-    lastOnboardingVersion: MACRO.VERSION,
-  })
-}
-
-async function showSetupScreens(
-  safeMode?: boolean,
-  print?: boolean,
-): Promise<void> {
-  if (process.env.NODE_ENV === 'test') {
-    return
-  }
-
-  const config = getGlobalConfig()
-  if (
-    !config.theme ||
-    !config.hasCompletedOnboarding // always show onboarding at least once
-  ) {
-    await clearTerminal()
-    const { render } = await import('ink')
-    await new Promise<void>(resolve => {
-      render(
-        <Onboarding
-          onDone={async () => {
-            completeOnboarding()
-            await clearTerminal()
-            resolve()
-          }}
-        />,
-        {
-          exitOnCtrlC: false,
-        },
-      )
-    })
-  }
-
-  
-
-  // In non-interactive mode, only show trust dialog in safe mode
-  if (!print) {
-    if (safeMode) {
-      if (!checkHasTrustDialogAccepted()) {
-        await new Promise<void>(resolve => {
-          const onDone = () => {
-            // Grant read permission to the current working directory
-            grantReadPermissionForOriginalDir()
-            resolve()
-          }
-          ;(async () => {
-            const { render } = await import('ink')
-            render(<TrustDialog onDone={onDone} />, {
-              exitOnCtrlC: false,
-            })
-          })()
-        })
-      }
-    }
-
-    // Prompt for project-file MCP servers (.mcp.json / .mcprc) that require approval.
-    await handleMcprcServerApprovals()
-  }
-}
 
 function logStartup(): void {
   const config = getGlobalConfig()
@@ -199,73 +109,6 @@ function omitKeys<T extends Record<string, any>>(
   return result
 }
 
-async function setup(cwd: string, safeMode?: boolean): Promise<void> {
-  // Set both current and original working directory if --cwd was provided
-  if (cwd !== process.cwd()) {
-    setOriginalCwd(cwd)
-  }
-  await setCwd(cwd)
-
-  // Always grant read permissions for original working dir
-  grantReadPermissionForOriginalDir()
-  
-  // Start watching agent configuration files for changes
-  // Try ESM-friendly path first (compiled dist), then fall back to extensionless (dev/tsx)
-  let agentLoader: any
-  try {
-    agentLoader = await import('@utils/agentLoader')
-  } catch {
-    agentLoader = await import('@utils/agentLoader')
-  }
-  const { startAgentWatcher, clearAgentCache } = agentLoader
-  await startAgentWatcher(() => {
-    // Cache is already cleared in the watcher, just log
-    console.log('✅ Agent configurations hot-reloaded')
-  })
-
-  // If --safe mode is enabled, prevent root/sudo usage for security
-  if (safeMode) {
-    // Check if running as root/sudo on Unix-like systems
-    if (
-      process.platform !== 'win32' &&
-      typeof process.getuid === 'function' &&
-      process.getuid() === 0
-    ) {
-      console.error(
-        `--safe mode cannot be used with root/sudo privileges for security reasons`,
-      )
-      process.exit(1)
-    }
-  }
-
-  if (process.env.NODE_ENV === 'test') {
-    return
-  }
-
-  cleanupOldMessageFilesInBackground()
-  getContext() // Pre-fetch all context data at once
-
-  // Check for last session's cost and duration
-  const projectConfig = getCurrentProjectConfig()
-  if (
-    projectConfig.lastCost !== undefined &&
-    projectConfig.lastDuration !== undefined
-  ) {
-        
-    // Clear the values after logging
-    // saveCurrentProjectConfig({
-    //   ...projectConfig,
-    //   lastCost: undefined,
-    //   lastAPIDuration: undefined,
-    //   lastDuration: undefined,
-    //   lastSessionId: undefined,
-    // })
-  }
-
-  // Skip interactive auto-updater permission prompts during startup
-  // Users can still run the doctor command manually if desired.
-}
-
 async function main() {
   // 初始化调试日志系统
   initDebugLogger()
@@ -273,7 +116,7 @@ async function main() {
   // Validate configs are valid and enable configuration system
   try {
     enableConfigs()
-    
+
     // 🔧 Validate and auto-repair GPT-5 model profiles (best-effort, non-blocking)
     // Avoid printing during interactive render; log to file on failure.
     queueMicrotask(() => {
@@ -296,13 +139,14 @@ async function main() {
   let inputPrompt = ''
   let renderContext: RenderOptions | undefined = {
     exitOnCtrlC: false,
-  
+
     onFlicker() {},
   } as any
 
   const wantsStreamJsonStdin =
     process.argv.some(
-      (arg, idx, all) => arg === '--input-format' && all[idx + 1] === 'stream-json',
+      (arg, idx, all) =>
+        arg === '--input-format' && all[idx + 1] === 'stream-json',
     ) || process.argv.some(arg => arg.startsWith('--input-format=stream-json'))
 
   if (
@@ -336,31 +180,17 @@ async function parseArgs(
     exitOnCtrlC: true,
   }
 
-  const wantsHelp = process.argv.includes('--help') || process.argv.includes('-h')
-  const commandList = wantsHelp
-    ? await (async () => {
-        const { getCommands } = await import('@commands')
-        const commands = await getCommands()
-        return commands
-          .filter(cmd => !cmd.isHidden)
-          .map(cmd => `/${cmd.name} - ${cmd.description}`)
-          .join('\n')
-      })()
-    : ''
-
   program
     .name(PRODUCT_COMMAND)
     .description(
-      wantsHelp
-        ? `${PRODUCT_NAME} - starts an interactive session by default, use -p/--print for non-interactive output
-
-Slash commands available during an interactive session:
-${commandList}`
-        : `${PRODUCT_NAME} - starts an interactive session by default, use -p/--print for non-interactive output`,
+      `${PRODUCT_NAME} - starts an interactive session by default, use -p/--print for non-interactive output`,
     )
     .argument('[prompt]', 'Your prompt', String)
-    .option('-c, --cwd <cwd>', 'The current working directory', String, cwd())
-    .option('-d, --debug', 'Enable debug mode', () => true)
+    .option('--cwd <cwd>', 'The current working directory', String, cwd())
+    .option(
+      '-d, --debug [filter]',
+      'Enable debug mode with optional category filtering (e.g., "api,hooks" or "!statsig,!file")',
+    )
     .option(
       '--debug-verbose',
       'Enable verbose debug terminal output',
@@ -384,10 +214,35 @@ ${commandList}`
       'text',
     )
     .option(
+      '--json-schema <schema>',
+      'JSON Schema for structured output validation. Example: {"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}',
+      String,
+    )
+    .option(
       '--input-format <format>',
       'Input format (only works with --print): "text" (default) or "stream-json"',
       String,
       'text',
+    )
+    .option(
+      '--mcp-debug',
+      '[DEPRECATED. Use --debug instead] Enable MCP debug mode (shows MCP server errors)',
+      () => true,
+    )
+    .option(
+      '--dangerously-skip-permissions',
+      'Bypass all permission checks. Recommended only for sandboxes with no internet access.',
+      () => true,
+    )
+    .option(
+      '--allow-dangerously-skip-permissions',
+      'Enable bypassing all permission checks as an option, without it being enabled by default. Recommended only for sandboxes with no internet access.',
+      () => true,
+    )
+    .option(
+      '--max-budget-usd <amount>',
+      'Maximum dollar amount to spend on API calls (only works with --print)',
+      String,
     )
     .option(
       '--include-partial-messages',
@@ -400,6 +255,32 @@ ${commandList}`
       () => true,
     )
     .option(
+      '--allowedTools, --allowed-tools <tools...>',
+      'Comma or space-separated list of tool names to allow (e.g. "Bash(git:*) Edit")',
+    )
+    .option(
+      '--tools <tools...>',
+      'Specify the list of available tools from the built-in set. Use "" to disable all tools, "default" to use all tools, or specify tool names (e.g. "Bash,Edit,Read"). Only works with --print mode.',
+    )
+    .option(
+      '--disallowedTools, --disallowed-tools <tools...>',
+      'Comma or space-separated list of tool names to deny (e.g. "Bash(git:*) Edit")',
+    )
+    .option(
+      '--mcp-config <configs...>',
+      'Load MCP servers from JSON files or strings (space-separated)',
+    )
+    .option('--system-prompt <prompt>', 'System prompt to use for the session')
+    .option(
+      '--append-system-prompt <prompt>',
+      'Append a system prompt to the default system prompt',
+    )
+    .option(
+      '--permission-mode <mode>',
+      'Permission mode to use for the session (choices: "acceptEdits", "bypassPermissions", "default", "delegate", "dontAsk", "plan")',
+      String,
+    )
+    .option(
       '--permission-prompt-tool <tool>',
       'Permission prompt tool (only works with --print, --output-format=stream-json, and --input-format=stream-json): "stdio"',
       String,
@@ -410,11 +291,74 @@ ${commandList}`
       () => true,
     )
     .option(
-      '-r, --resume [value]',
-      'Resume a conversation by session ID (optional value)',
+      '--disable-slash-commands',
+      'Disable slash commands (treat /... as plain text)',
+      () => true,
     )
     .option(
-      '--continue',
+      '--plugin-dir <paths...>',
+      'Load plugins from directories for this session only (repeatable)',
+      (value, previous: string[] | undefined) => {
+        const prev = Array.isArray(previous) ? previous : []
+        const next = Array.isArray(value) ? value : [value]
+        return [...prev, ...next].filter(Boolean)
+      },
+      [],
+    )
+    .option(
+      '--model <model>',
+      "Model for the current session. Provide an alias for the latest model (e.g. 'sonnet' or 'opus') or a model's full name.",
+      String,
+    )
+    .option(
+      '--agent <agent>',
+      "Agent for the current session. Overrides the 'agent' setting.",
+      String,
+    )
+    .option(
+      '--betas <betas...>',
+      'Beta headers to include in API requests (API key users only)',
+    )
+    .option(
+      '--fallback-model <model>',
+      'Enable automatic fallback to specified model when default model is overloaded (only works with --print)',
+      String,
+    )
+    .option(
+      '--settings <file-or-json>',
+      'Path to a settings JSON file or a JSON string to load additional settings from',
+      String,
+    )
+    .option(
+      '--add-dir <directories...>',
+      'Additional directories to allow tool access to',
+    )
+    .option(
+      '--ide',
+      'Automatically connect to IDE on startup if exactly one valid IDE is available',
+      () => true,
+    )
+    .option(
+      '--strict-mcp-config',
+      'Only use MCP servers from --mcp-config, ignoring all other MCP configurations',
+      () => true,
+    )
+    .option(
+      '--agents <json>',
+      `JSON object defining custom agents (e.g. '{"reviewer": {"description": "Reviews code", "prompt": "You are a code reviewer"}}')`,
+      String,
+    )
+    .option(
+      '--setting-sources <sources>',
+      'Comma-separated list of setting sources to load (user, project, local).',
+      String,
+    )
+    .option(
+      '-r, --resume [value]',
+      'Resume a conversation by session ID or session name (omit value to open selector)',
+    )
+    .option(
+      '-c, --continue',
       'Continue the most recent conversation',
       () => true,
     )
@@ -442,11 +386,28 @@ ${commandList}`
           enableArchitect,
           print,
           outputFormat,
+          jsonSchema,
           inputFormat,
+          mcpDebug,
+          dangerouslySkipPermissions,
+          allowDangerouslySkipPermissions,
+          maxBudgetUsd,
           includePartialMessages,
           replayUserMessages,
+          allowedTools,
+          tools: cliTools,
+          disallowedTools,
+          mcpConfig,
+          systemPrompt: systemPromptOverride,
+          appendSystemPrompt,
+          permissionMode,
           permissionPromptTool,
           safe,
+          disableSlashCommands,
+          pluginDir,
+          model,
+          addDir,
+          strictMcpConfig,
           resume,
           continue: continueConversation,
           forkSession,
@@ -459,6 +420,28 @@ ${commandList}`
 
         assertMinVersion()
 
+        {
+          const requested =
+            Array.isArray(pluginDir) && pluginDir.length > 0 ? pluginDir : []
+          const { listEnabledInstalledPluginPackRoots } =
+            await import('@services/skillMarketplace')
+          const installed = listEnabledInstalledPluginPackRoots()
+
+          const all = [...installed, ...requested].filter(Boolean)
+          const deduped = Array.from(new Set(all))
+
+          if (deduped.length > 0) {
+            const { configureSessionPlugins } =
+              await import('@services/pluginRuntime')
+            const { errors } = await configureSessionPlugins({
+              pluginDirs: deduped,
+            })
+            for (const err of errors) {
+              console.warn(err)
+            }
+          }
+        }
+
         const [{ ask }, { getTools }, { getCommands }] = await Promise.all([
           import('@utils/ask'),
           import('@tools'),
@@ -466,20 +449,37 @@ ${commandList}`
         ])
         const commands = await getCommands()
 
-        const [tools, mcpClients] = await Promise.all([
-          getTools(enableArchitect ?? getCurrentProjectConfig().enableArchitectTool),
-          getClients(),
+        const mcpClientsPromise =
+          (Array.isArray(mcpConfig) && mcpConfig.length > 0) ||
+          strictMcpConfig === true
+            ? getClientsForCliMcpConfig({
+                mcpConfig: Array.isArray(mcpConfig) ? mcpConfig : [],
+                strictMcpConfig: strictMcpConfig === true,
+                projectDir: cwd,
+              })
+            : getClients()
+
+        const [allTools, mcpClients] = await Promise.all([
+          getTools(
+            enableArchitect ?? getCurrentProjectConfig().enableArchitectTool,
+          ),
+          mcpClientsPromise,
         ])
+        const tools =
+          disableSlashCommands === true
+            ? allTools.filter(t => t.name !== 'SlashCommand')
+            : allTools
         const inputPrompt = [prompt, stdinContent].filter(Boolean).join('\n')
 
         const {
           loadKodeAgentSessionMessages,
           findMostRecentKodeAgentSessionId,
-        } = await import('@utils/kodeAgentSessionLoad')
+        } = await import('@utils/protocol/kodeAgentSessionLoad')
+        const { listKodeAgentSessions, resolveResumeSessionIdentifier } =
+          await import('@utils/protocol/kodeAgentSessionResume')
         const { isUuid } = await import('@utils/uuid')
-        const { setKodeAgentSessionId, getKodeAgentSessionId } = await import(
-          '@utils/kodeAgentSessionId'
-        )
+        const { setKodeAgentSessionId, getKodeAgentSessionId } =
+          await import('@utils/protocol/kodeAgentSessionId')
         const { randomUUID } = await import('crypto')
 
         const wantsContinue = Boolean(continueConversation)
@@ -500,6 +500,7 @@ ${commandList}`
 
         let initialMessages: any[] | undefined
         let resumedFromSessionId: string | null = null
+        let needsResumeSelector = false
 
         if (wantsContinue) {
           const latest = findMostRecentKodeAgentSessionId(cwd)
@@ -507,599 +508,123 @@ ${commandList}`
             console.error('No conversation found to continue')
             process.exit(1)
           }
-          initialMessages = loadKodeAgentSessionMessages({ cwd, sessionId: latest })
+          initialMessages = loadKodeAgentSessionMessages({
+            cwd,
+            sessionId: latest,
+          })
           resumedFromSessionId = latest
         } else if (wantsResume) {
           if (resume === true) {
-            console.error('Error: --resume without a session ID is not supported in Kode yet.')
-            process.exit(1)
+            needsResumeSelector = true
+          } else {
+            const identifier = String(resume)
+            const resolved = resolveResumeSessionIdentifier({ cwd, identifier })
+            if (resolved.kind === 'ok') {
+              initialMessages = loadKodeAgentSessionMessages({
+                cwd,
+                sessionId: resolved.sessionId,
+              })
+              resumedFromSessionId = resolved.sessionId
+            } else if (resolved.kind === 'different_directory') {
+              console.error(
+                resolved.otherCwd
+                  ? `Error: That session belongs to a different directory: ${resolved.otherCwd}`
+                  : `Error: That session belongs to a different directory.`,
+              )
+              process.exit(1)
+            } else if (resolved.kind === 'ambiguous') {
+              console.error(
+                `Error: Multiple sessions match "${identifier}": ${resolved.matchingSessionIds.join(
+                  ', ',
+                )}`,
+              )
+              process.exit(1)
+            } else {
+              console.error(
+                `No conversation found with session ID or name: ${identifier}`,
+              )
+              process.exit(1)
+            }
           }
-          const resumeId = String(resume)
-          if (!isUuid(resumeId)) {
-            console.error(`No conversation found with session ID: ${resumeId}`)
-            process.exit(1)
-          }
-          initialMessages = loadKodeAgentSessionMessages({ cwd, sessionId: resumeId })
-          resumedFromSessionId = resumeId
         }
 
-        const effectiveSessionId = (() => {
-          if (resumedFromSessionId) {
-            if (wantsFork) return sessionId ? String(sessionId) : randomUUID()
-            return resumedFromSessionId
-          }
-          if (sessionId) return String(sessionId)
-          return getKodeAgentSessionId()
-        })()
+        if (needsResumeSelector && print) {
+          console.error(
+            'Error: --resume without a value requires interactive mode (no --print).',
+          )
+          process.exit(1)
+        }
 
-        setKodeAgentSessionId(effectiveSessionId)
+        if (!needsResumeSelector) {
+          const effectiveSessionId = (() => {
+            if (resumedFromSessionId) {
+              if (wantsFork) return sessionId ? String(sessionId) : randomUUID()
+              return resumedFromSessionId
+            }
+            if (sessionId) return String(sessionId)
+            return getKodeAgentSessionId()
+          })()
+
+          setKodeAgentSessionId(effectiveSessionId)
+        }
 
         if (print) {
-          const normalizedOutputFormat = String(outputFormat || 'text').toLowerCase().trim()
-          const normalizedInputFormat = String(inputFormat || 'text').toLowerCase().trim()
-
-          if (!['text', 'stream-json'].includes(normalizedInputFormat)) {
-            console.error(
-              `Error: Invalid --input-format "${inputFormat}". Expected one of: text, stream-json`,
-            )
-            process.exit(1)
-          }
-
-          if (!['text', 'json', 'stream-json'].includes(normalizedOutputFormat)) {
-            console.error(
-              `Error: Invalid --output-format "${outputFormat}". Expected one of: text, json, stream-json`,
-            )
-            process.exit(1)
-          }
-
-          if (normalizedOutputFormat === 'stream-json' && !verbose) {
-            console.error(
-              'Error: When using --print, --output-format=stream-json requires --verbose',
-            )
-            process.exit(1)
-          }
-
-          const normalizedPermissionPromptTool = permissionPromptTool
-            ? String(permissionPromptTool).trim()
-            : null
-
-          if (normalizedPermissionPromptTool) {
-            if (normalizedPermissionPromptTool !== 'stdio') {
-              console.error(
-                `Error: Unsupported --permission-prompt-tool "${normalizedPermissionPromptTool}". Only "stdio" is supported in Kode right now.`,
-              )
-              process.exit(1)
-            }
-            if (normalizedInputFormat !== 'stream-json') {
-              console.error(
-                'Error: --permission-prompt-tool=stdio requires --input-format=stream-json',
-              )
-              process.exit(1)
-            }
-            if (normalizedOutputFormat !== 'stream-json') {
-              console.error(
-                'Error: --permission-prompt-tool=stdio requires --output-format=stream-json',
-              )
-              process.exit(1)
-            }
-          }
-
-          if (normalizedInputFormat === 'stream-json' && normalizedOutputFormat !== 'stream-json') {
-            console.error(
-              'Error: --input-format=stream-json requires --output-format=stream-json',
-            )
-            process.exit(1)
-          }
-
-          if (replayUserMessages) {
-            if (
-              normalizedInputFormat !== 'stream-json' ||
-              normalizedOutputFormat !== 'stream-json'
-            ) {
-              console.error(
-                'Error: --replay-user-messages requires --input-format=stream-json and --output-format=stream-json',
-              )
-              process.exit(1)
-            }
-          }
-
-          if (normalizedInputFormat === 'stream-json') {
-            if (prompt) {
-              console.error(
-                'Error: --input-format=stream-json cannot be used with a prompt argument',
-              )
-              process.exit(1)
-            }
-            if (stdinContent) {
-              console.error(
-                'Error: --input-format=stream-json cannot be used with stdin prompt text',
-              )
-              process.exit(1)
-            }
-          } else {
-            if (!inputPrompt) {
-              console.error(
-                'Error: Input must be provided either through stdin or as a prompt argument when using --print',
-              )
-              process.exit(1)
-            }
-          }
-
-          if (normalizedOutputFormat === 'text') {
-            addToHistory(inputPrompt)
-            const { resultText: response } = await ask({
-              commands,
-              hasPermissionsToUseTool,
-              messageLogName: dateToFilename(new Date()),
-              prompt: inputPrompt,
-              cwd,
-              tools,
-              safeMode: safe,
-              initialMessages,
-              persistSession: sessionPersistence !== false,
-            })
-            console.log(response)
-            process.exit(0)
-          }
-
-          const { createUserMessage } = await import('@utils/messages')
-          const { getSystemPrompt } = await import('@constants/prompts')
-          const { getContext } = await import('@context')
-          const { getTotalCost } = await import('@costTracker')
-          const { query } = await import('@query')
-          const { getKodeAgentSessionId } = await import('@utils/kodeAgentSessionId')
-          const {
-            kodeMessageToSdkMessage,
-            makeSdkInitMessage,
-            makeSdkResultMessage,
-          } = await import('@utils/kodeAgentStreamJson')
-          const { KodeAgentStructuredStdio } = await import(
-            '@utils/kodeAgentStructuredStdio',
-          )
-          const {
-            loadToolPermissionContextFromDisk,
-            persistToolPermissionUpdateToDisk,
-          } = await import('@utils/permissions/toolPermissionSettings')
-          const { applyToolPermissionContextUpdates } = await import(
-            '@kode-types/toolPermissionContext',
-          )
-
-          const sessionIdForSdk = getKodeAgentSessionId()
-          const startedAt = Date.now()
-          const sdkMessages: any[] = []
-
-          const systemPrompt = await getSystemPrompt()
-          const ctx = await getContext()
-
-          const toolPermissionContext = loadToolPermissionContextFromDisk({
-            projectDir: cwd,
-            includeKodeProjectConfig: true,
-            isBypassPermissionsModeAvailable: !safe,
-          })
-
-          const printOptions = {
-            commands,
-            tools,
-            verbose: true,
-            safeMode: safe,
-            forkNumber: 0,
-            messageLogName: 'unused',
-            maxThinkingTokens: 0,
-            persistSession: sessionPersistence !== false,
-            toolPermissionContext,
-            model: undefined as any,
-          }
-
-          const availableTools = tools.map(t => t.name)
-          const initMsg = makeSdkInitMessage({
-            sessionId: sessionIdForSdk,
+          await runPrintMode({
+            prompt,
+            stdinContent,
+            inputPrompt,
             cwd,
-            tools: availableTools,
+            safe,
+            verbose,
+            outputFormat,
+            inputFormat,
+            jsonSchema,
+            permissionPromptTool,
+            replayUserMessages,
+            cliTools,
+            tools,
+            commands,
+            ask,
+            initialMessages,
+            sessionPersistence,
+            systemPromptOverride,
+            appendSystemPrompt,
+            disableSlashCommands,
+            allowedTools,
+            disallowedTools,
+            addDir,
+            permissionMode,
+            dangerouslySkipPermissions,
+            allowDangerouslySkipPermissions,
+            model,
+            mcpClients,
           })
-
-          const writeSdkLine = (obj: any) => {
-            process.stdout.write(JSON.stringify(obj) + '\n')
-          }
-
-          if (normalizedOutputFormat === 'stream-json') {
-            writeSdkLine(initMsg)
-          } else {
-            sdkMessages.push(initMsg)
-          }
-
-          let activeTurnAbortController: AbortController | null = null
-          const structured =
-            normalizedInputFormat === 'stream-json'
-              ? new KodeAgentStructuredStdio(process.stdin, process.stdout, {
-                  onInterrupt: () => {
-                    activeTurnAbortController?.abort()
-                  },
-                  onControlRequest: async msg => {
-                    const subtype = msg.request?.subtype
-
-                    if (subtype === 'initialize') {
-                      return
-                    }
-
-                    if (subtype === 'set_permission_mode') {
-                      const mode = (msg.request as any)?.mode
-                      if (
-                        mode === 'default' ||
-                        mode === 'acceptEdits' ||
-                        mode === 'plan' ||
-                        mode === 'dontAsk' ||
-                        mode === 'bypassPermissions'
-                      ) {
-                        if (printOptions.toolPermissionContext) {
-                          printOptions.toolPermissionContext.mode = mode
-                        }
-                      }
-                      return
-                    }
-
-                    if (subtype === 'set_model') {
-                      const requested = (msg.request as any)?.model
-                      if (requested === 'default') {
-                        printOptions.model = undefined as any
-                      } else if (typeof requested === 'string' && requested.trim()) {
-                        printOptions.model = requested.trim()
-                      }
-                      return
-                    }
-
-                    if (subtype === 'set_max_thinking_tokens') {
-                      const value = (msg.request as any)?.max_thinking_tokens
-                      if (value === null) {
-                        printOptions.maxThinkingTokens = 0
-                      } else if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
-                        printOptions.maxThinkingTokens = value
-                      }
-                      return
-                    }
-
-                    if (subtype === 'mcp_status') {
-                      return {
-                        mcpServers: mcpClients.map(c => ({
-                          name: c.name,
-                          status: c.type,
-                          ...(c.type === 'connected' && c.capabilities
-                            ? { serverInfo: c.capabilities }
-                            : {}),
-                        })),
-                      }
-                    }
-
-                    if (subtype === 'mcp_message') {
-                      const serverName = (msg.request as any)?.server_name
-                      const message = (msg.request as any)?.message
-                      if (typeof serverName === 'string' && serverName) {
-                        const found = mcpClients.find(c => c.name === serverName)
-                        if (found && found.type === 'connected') {
-                          const transport = (found.client as any)?.transport
-                          if (transport && typeof transport.onmessage === 'function') {
-                            transport.onmessage(message)
-                          }
-                        }
-                      }
-                      return
-                    }
-
-                    if (subtype === 'mcp_set_servers') {
-                      return { ok: true, sdkServersChanged: false }
-                    }
-
-                    if (subtype === 'rewind_files') {
-                      throw new Error('rewind_files is not supported in Kode yet.')
-                    }
-
-                    throw new Error(`Unsupported control request subtype: ${String(subtype)}`)
-                  },
-                })
-              : null
-
-          if (structured) structured.start()
-
-          const permissionTimeoutMs = (() => {
-            const raw = process.env.KODE_STDIO_PERMISSION_TIMEOUT_MS
-            const n = raw ? Number(raw) : NaN
-            return Number.isFinite(n) && n > 0 ? n : 30_000
-          })()
-
-	          const canUseTool =
-	            normalizedPermissionPromptTool === 'stdio' && structured
-	              ? (async (tool: any, input: any, toolUseContext: any, assistantMessage: any) => {
-	                  const base = await hasPermissionsToUseTool(
-	                    tool,
-	                    input,
-	                    toolUseContext,
-	                    assistantMessage,
-	                  )
-
-                  if (base.result === true) return { result: true as const }
-
-                  const denied = base as Extract<typeof base, { result: false }>
-                  if (denied.shouldPromptUser === false) {
-                    return { result: false as const, message: denied.message }
-                  }
-
-	                  try {
-	                    const blockedPath =
-	                      typeof (denied as any).blockedPath === 'string'
-	                        ? String((denied as any).blockedPath)
-	                        : typeof (input as any)?.file_path === 'string'
-	                          ? String((input as any).file_path)
-	                          : typeof (input as any)?.notebook_path === 'string'
-	                            ? String((input as any).notebook_path)
-	                            : typeof (input as any)?.path === 'string'
-	                              ? String((input as any).path)
-	                              : undefined
-
-	                    const decisionReason =
-	                      typeof (denied as any).decisionReason === 'string'
-	                        ? String((denied as any).decisionReason)
-	                        : undefined
-
-	                    const response = await structured.sendRequest<
-	                      | {
-	                          behavior: 'allow'
-	                          updatedInput: Record<string, unknown>
-	                          updatedPermissions?: unknown
-	                          toolUseID?: string
-	                        }
-	                      | {
-	                          behavior: 'deny'
-	                          message: string
-	                          interrupt?: boolean
-	                          toolUseID?: string
-	                        }
-	                    >(
-	                      {
-	                        subtype: 'can_use_tool',
-	                        tool_name: tool.name,
-	                        input,
-	                        ...(typeof toolUseContext?.toolUseId === 'string' && toolUseContext.toolUseId
-	                          ? { tool_use_id: toolUseContext.toolUseId }
-	                          : {}),
-	                        ...(typeof toolUseContext?.agentId === 'string' && toolUseContext.agentId
-	                          ? { agent_id: toolUseContext.agentId }
-	                          : {}),
-	                        ...(Array.isArray((denied as any).suggestions)
-	                          ? { permission_suggestions: (denied as any).suggestions }
-	                          : {}),
-	                        ...(blockedPath ? { blocked_path: blockedPath } : {}),
-	                        ...(decisionReason ? { decision_reason: decisionReason } : {}),
-	                      },
-	                      {
-	                        signal: toolUseContext.abortController.signal,
-	                        timeoutMs: permissionTimeoutMs,
-	                      },
-	                    )
-
-	                    if (response && (response as any).behavior === 'allow') {
-	                      const updatedInput =
-	                        (response as any).updatedInput &&
-                        typeof (response as any).updatedInput === 'object'
-                          ? (response as any).updatedInput
-                          : null
-	                      if (updatedInput) {
-	                        Object.assign(input, updatedInput)
-	                      }
-
-	                      const updatedPermissionsRaw = (response as any).updatedPermissions
-	                      const updatedPermissions =
-	                        Array.isArray(updatedPermissionsRaw) &&
-	                        updatedPermissionsRaw.every(
-	                          u => u && typeof u === 'object' && typeof (u as any).type === 'string',
-	                        )
-	                          ? (updatedPermissionsRaw as any[])
-	                          : null
-
-	                      if (updatedPermissions && printOptions.toolPermissionContext) {
-	                        const next = applyToolPermissionContextUpdates(
-	                          printOptions.toolPermissionContext,
-	                          updatedPermissions as any,
-	                        )
-	                        printOptions.toolPermissionContext = next
-	                        if (toolUseContext?.options) {
-	                          toolUseContext.options.toolPermissionContext = next
-	                        }
-	                        for (const update of updatedPermissions as any) {
-	                          persistToolPermissionUpdateToDisk({ update, projectDir: cwd })
-	                        }
-	                      }
-
-	                      return { result: true as const }
-	                    }
-
-	                    if (response && (response as any).behavior === 'deny') {
-	                      if ((response as any).interrupt === true) {
-	                        toolUseContext.abortController.abort()
-	                      }
-	                    }
-
-	                    return {
-	                      result: false as const,
-	                      message:
-	                        typeof (response as any)?.message === 'string'
-	                          ? String((response as any).message)
-	                          : denied.message,
-                    }
-                  } catch (e) {
-                    const msg = e instanceof Error ? e.message : String(e)
-                    return {
-                      result: false as const,
-                      message: `Permission prompt failed: ${msg}`,
-                      shouldPromptUser: false,
-                    }
-                  }
-                }) as any
-              : hasPermissionsToUseTool
-
-          if (normalizedInputFormat === 'stream-json') {
-            if (!structured) {
-              console.error('Error: Structured stdin is not available')
-              process.exit(1)
-            }
-
-            const { runKodeAgentStreamJsonSession } = await import(
-              '@utils/kodeAgentStreamJsonSession',
-            )
-
-            await runKodeAgentStreamJsonSession({
-              structured,
-              query,
-              writeSdkLine,
-              sessionId: sessionIdForSdk,
-              systemPrompt,
-              context: ctx,
-              canUseTool,
-              toolUseContextBase: {
-                options: printOptions,
-                messageId: undefined,
-                readFileTimestamps: {},
-                setToolJSX: () => {},
-              },
-              replayUserMessages: Boolean(replayUserMessages),
-              getTotalCostUsd: () => getTotalCost(),
-              onActiveTurnAbortControllerChanged: controller => {
-                activeTurnAbortController = controller
-              },
-              initialMessages: initialMessages as any,
-            })
-
-            process.exit(0)
-          }
-
-          const abortController = new AbortController()
-          const userMsg = await (async () => {
-            if (normalizedInputFormat !== 'stream-json') {
-              addToHistory(inputPrompt)
-              return createUserMessage(inputPrompt)
-            }
-            if (!structured) {
-              console.error('Error: Structured stdin is not available')
-              process.exit(1)
-            }
-
-            const sdkUser = await structured.nextUserMessage({
-              signal: abortController.signal,
-              timeoutMs: 30_000,
-            })
-
-            if (!sdkUser || typeof sdkUser !== 'object') {
-              console.error('Error: Invalid stream-json input (missing user message)')
-              process.exit(1)
-            }
-
-            const sdkMessage = (sdkUser as any).message
-            const sdkContent = sdkMessage?.content
-            if (typeof sdkContent !== 'string' && !Array.isArray(sdkContent)) {
-              console.error('Error: Invalid stream-json user message content')
-              process.exit(1)
-            }
-
-            const m = createUserMessage(sdkContent as any)
-            if (typeof (sdkUser as any).uuid === 'string' && (sdkUser as any).uuid) {
-              ;(m as any).uuid = String((sdkUser as any).uuid)
-            }
-            return m
-          })()
-
-          const baseMessages = [...(initialMessages ?? []), userMsg]
-
-          const sdkUser = kodeMessageToSdkMessage(userMsg as any, sessionIdForSdk)
-          if (sdkUser) {
-            if (normalizedOutputFormat === 'stream-json') {
-              writeSdkLine(sdkUser)
-            } else {
-              sdkMessages.push(sdkUser)
-            }
-          }
-
-          let lastAssistant: any | null = null
-          let queryError: unknown = null
-	          try {
-	            for await (const m of query(
-	              baseMessages,
-	              systemPrompt,
-	              ctx,
-	              canUseTool,
-	              {
-	                options: printOptions,
-	                abortController,
-	                messageId: undefined,
-	                readFileTimestamps: {},
-	                setToolJSX: () => {},
-	              },
-            )) {
-              if (m.type === 'assistant') lastAssistant = m
-              const sdk = kodeMessageToSdkMessage(m, sessionIdForSdk)
-              if (!sdk) continue
-
-              if (normalizedOutputFormat === 'stream-json') {
-                writeSdkLine(sdk)
-              } else {
-                sdkMessages.push(sdk)
-              }
-            }
-          } catch (e) {
-            abortController.abort()
-            queryError = e
-          }
-
-          const textFromAssistant =
-            lastAssistant?.message?.content?.find((c: any) => c.type === 'text')?.text
-          const text =
-            typeof textFromAssistant === 'string'
-              ? textFromAssistant
-              : queryError instanceof Error
-                ? queryError.message
-                : queryError
-                  ? String(queryError)
-                  : ''
-
-          const usage = lastAssistant?.message?.usage
-          const totalCostUsd = getTotalCost()
-          const durationMs = Date.now() - startedAt
-          const resultMsg = makeSdkResultMessage({
-            sessionId: sessionIdForSdk,
-            result: String(text),
-            numTurns: 1,
-            usage,
-            totalCostUsd,
-            durationMs,
-            durationApiMs: 0,
-            isError: Boolean(queryError),
-          })
-
-          if (normalizedOutputFormat === 'stream-json') {
-            writeSdkLine(resultMsg)
-            process.exit(0)
-          }
-
-          // json
-          sdkMessages.push(resultMsg)
-          if (verbose) {
-            console.log(JSON.stringify(sdkMessages, null, 2))
-          } else {
-            console.log(JSON.stringify(resultMsg, null, 2))
-          }
-          process.exit(0)
+          return
         } else {
           if (sessionPersistence === false) {
-            console.error('Error: --no-session-persistence only works with --print')
+            console.error(
+              'Error: --no-session-persistence only works with --print',
+            )
             process.exit(1)
           }
-          const isDefaultModel = await isDefaultSlowAndCapableModel()
 
           // Prefetch update info before first render to place banner at top
           const updateInfo = await (async () => {
             try {
-              const [{ getLatestVersion, getUpdateCommandSuggestions }, semverMod] =
-                await Promise.all([import('@utils/autoUpdater'), import('semver')])
+              const [
+                { getLatestVersion, getUpdateCommandSuggestions },
+                semverMod,
+              ] = await Promise.all([
+                import('@utils/autoUpdater'),
+                import('semver'),
+              ])
               const semver: any = (semverMod as any)?.default ?? semverMod
               const gt = semver?.gt
-              if (typeof gt !== 'function') return { version: null as string | null, commands: null as string[] | null }
+              if (typeof gt !== 'function')
+                return {
+                  version: null as string | null,
+                  commands: null as string[] | null,
+                }
 
               const latest = await getLatestVersion()
               if (latest && gt(latest, MACRO.VERSION)) {
@@ -1107,29 +632,70 @@ ${commandList}`
                 return { version: latest as string, commands: cmds as string[] }
               }
             } catch {}
-            return { version: null as string | null, commands: null as string[] | null }
+            return {
+              version: null as string | null,
+              commands: null as string[] | null,
+            }
           })()
+
+          if (needsResumeSelector) {
+            const sessions = listKodeAgentSessions({ cwd })
+            if (sessions.length === 0) {
+              console.error('No conversation found to resume')
+              process.exit(1)
+            }
+
+            const context: { unmount?: () => void } = {}
+            ;(async () => {
+              const { render } = await import('ink')
+              const { unmount } = render(
+                <ResumeConversation
+                  cwd={cwd}
+                  context={context}
+                  commands={commands}
+                  sessions={sessions}
+                  tools={tools}
+                  verbose={verbose}
+                  safeMode={safe}
+                  debug={Boolean(debug)}
+                  disableSlashCommands={disableSlashCommands === true}
+                  mcpClients={mcpClients}
+                  initialPrompt={inputPrompt}
+                  forkSession={wantsFork}
+                  forkSessionId={sessionId ? String(sessionId) : null}
+                  initialUpdateVersion={updateInfo.version}
+                  initialUpdateCommands={updateInfo.commands}
+                />,
+                renderContextWithExitOnCtrlC,
+              )
+              context.unmount = unmount
+            })()
+            return
+          }
+
+          const isDefaultModel = await isDefaultSlowAndCapableModel()
 
           {
             const { render } = await import('ink')
             const { REPL } = await import('@screens/REPL')
             render(
               <REPL
-              commands={commands}
-              debug={debug}
-              initialPrompt={inputPrompt}
-              messageLogName={dateToFilename(new Date())}
-              shouldShowPromptInput={true}
-              verbose={verbose}
-              tools={tools}
-              safeMode={safe}
-              mcpClients={mcpClients}
-              isDefaultModel={isDefaultModel}
-              initialUpdateVersion={updateInfo.version}
-              initialUpdateCommands={updateInfo.commands}
-              initialMessages={initialMessages}
-            />,
-            renderContext,
+                commands={commands}
+                debug={Boolean(debug)}
+                disableSlashCommands={disableSlashCommands === true}
+                initialPrompt={inputPrompt}
+                messageLogName={dateToFilename(new Date())}
+                shouldShowPromptInput={true}
+                verbose={verbose}
+                tools={tools}
+                safeMode={safe}
+                mcpClients={mcpClients}
+                isDefaultModel={isDefaultModel}
+                initialUpdateVersion={updateInfo.version}
+                initialUpdateCommands={updateInfo.commands}
+                initialMessages={initialMessages}
+              />,
+              renderContext,
             )
           }
         }
@@ -1164,7 +730,7 @@ ${commandList}`
   config
     .command('get <key>')
     .description('Get a config value')
-    .option('-c, --cwd <cwd>', 'The current working directory', String, cwd())
+    .option('--cwd <cwd>', 'The current working directory', String, cwd())
     .option('-g, --global', 'Use global config')
     .action(async (key, { cwd, global }) => {
       await setup(cwd, false)
@@ -1175,7 +741,7 @@ ${commandList}`
   config
     .command('set <key> <value>')
     .description('Set a config value')
-    .option('-c, --cwd <cwd>', 'The current working directory', String, cwd())
+    .option('--cwd <cwd>', 'The current working directory', String, cwd())
     .option('-g, --global', 'Use global config')
     .action(async (key, value, { cwd, global }) => {
       await setup(cwd, false)
@@ -1187,7 +753,7 @@ ${commandList}`
   config
     .command('remove <key>')
     .description('Remove a config value')
-    .option('-c, --cwd <cwd>', 'The current working directory', String, cwd())
+    .option('--cwd <cwd>', 'The current working directory', String, cwd())
     .option('-g, --global', 'Use global config')
     .action(async (key, { cwd, global }) => {
       await setup(cwd, false)
@@ -1199,12 +765,16 @@ ${commandList}`
   config
     .command('list')
     .description('List all config values')
-    .option('-c, --cwd <cwd>', 'The current working directory', String, cwd())
+    .option('--cwd <cwd>', 'The current working directory', String, cwd())
     .option('-g, --global', 'Use global config', false)
     .action(async ({ cwd, global }) => {
       await setup(cwd, false)
       console.log(
-        JSON.stringify(global ? listConfigForCLI(true) : listConfigForCLI(false), null, 2),
+        JSON.stringify(
+          global ? listConfigForCLI(true) : listConfigForCLI(false),
+          null,
+          2,
+        ),
       )
       process.exit(0)
     })
@@ -1220,7 +790,7 @@ ${commandList}`
     .description(
       'Export shareable model config as YAML (does not include plaintext API keys)',
     )
-    .option('-c, --cwd <cwd>', 'The current working directory', String, cwd())
+    .option('--cwd <cwd>', 'The current working directory', String, cwd())
     .option('-o, --output <path>', 'Write YAML to file instead of stdout')
     .action(async ({ cwd, output }) => {
       try {
@@ -1242,7 +812,7 @@ ${commandList}`
   modelsCmd
     .command('import <file>')
     .description('Import model config YAML (merges by default)')
-    .option('-c, --cwd <cwd>', 'The current working directory', String, cwd())
+    .option('--cwd <cwd>', 'The current working directory', String, cwd())
     .option('--replace', 'Replace existing model profiles instead of merging')
     .action(async (file: string, { cwd, replace }) => {
       try {
@@ -1265,6 +835,471 @@ ${commandList}`
           console.error(warnings.join('\n'))
         }
         console.log(`Imported model config YAML from ${file}`)
+        process.exit(0)
+      } catch (error) {
+        console.error((error as Error).message)
+        process.exit(1)
+      }
+    })
+
+  // Plugins & marketplaces (legacy-compatible)
+
+  const registerMarketplaceCommands = (marketplaceCmd: Command) => {
+    marketplaceCmd
+      .command('add <source>')
+      .description('Add a marketplace from a URL, path, or GitHub repo')
+      .action(async (source: string) => {
+        try {
+          const { addMarketplace } = await import('@services/skillMarketplace')
+          console.log('Adding marketplace...')
+          const { name } = await addMarketplace(source)
+          console.log(`Successfully added marketplace: ${name}`)
+          process.exit(0)
+        } catch (error) {
+          console.error((error as Error).message)
+          process.exit(1)
+        }
+      })
+
+    marketplaceCmd
+      .command('list')
+      .description('List all configured marketplaces')
+      .option('--json', 'Output as JSON')
+      .action(async (options: { json?: boolean }) => {
+        try {
+          const { listMarketplaces } =
+            await import('@services/skillMarketplace')
+          const marketplaces = listMarketplaces()
+
+          if (options.json) {
+            console.log(JSON.stringify(marketplaces, null, 2))
+            process.exit(0)
+          }
+
+          const names = Object.keys(marketplaces).sort()
+          if (names.length === 0) {
+            console.log('No marketplaces configured')
+            process.exit(0)
+          }
+
+          console.log('Configured marketplaces:\n')
+          for (const name of names) {
+            const entry = marketplaces[name] as any
+            console.log(`  - ${name}`)
+            const src = entry?.source
+            if (src?.source === 'github') {
+              console.log(`    Source: GitHub (${src.repo})`)
+            } else if (src?.source === 'git') {
+              console.log(`    Source: Git (${src.url})`)
+            } else if (src?.source === 'url') {
+              console.log(`    Source: URL (${src.url})`)
+            } else if (src?.source === 'directory') {
+              console.log(`    Source: Directory (${src.path})`)
+            } else if (src?.source === 'file') {
+              console.log(`    Source: File (${src.path})`)
+            } else if (src?.source === 'npm') {
+              console.log(`    Source: NPM (${src.package})`)
+            }
+            console.log('')
+          }
+
+          process.exit(0)
+        } catch (error) {
+          console.error((error as Error).message)
+          process.exit(1)
+        }
+      })
+
+    marketplaceCmd
+      .command('remove <name>')
+      .alias('rm')
+      .description('Remove a configured marketplace')
+      .action(async (name: string) => {
+        try {
+          const { removeMarketplace } =
+            await import('@services/skillMarketplace')
+          removeMarketplace(name)
+          console.log(`Successfully removed marketplace: ${name}`)
+          process.exit(0)
+        } catch (error) {
+          console.error((error as Error).message)
+          process.exit(1)
+        }
+      })
+
+    marketplaceCmd
+      .command('update [name]')
+      .description(
+        'Update marketplace(s) from their source - updates all if no name specified',
+      )
+      .action(async (name: string | undefined, _options: any) => {
+        try {
+          const {
+            listMarketplaces,
+            refreshAllMarketplacesAsync,
+            refreshMarketplaceAsync,
+          } = await import('@services/skillMarketplace')
+
+          const trimmed = typeof name === 'string' ? name.trim() : ''
+          if (trimmed) {
+            console.log(`Updating marketplace: ${trimmed}...`)
+            await refreshMarketplaceAsync(trimmed)
+            console.log(`Successfully updated marketplace: ${trimmed}`)
+            process.exit(0)
+          }
+
+          const marketplaces = listMarketplaces()
+          const names = Object.keys(marketplaces)
+          if (names.length === 0) {
+            console.log('No marketplaces configured')
+            process.exit(0)
+          }
+
+          console.log(`Updating ${names.length} marketplace(s)...`)
+          await refreshAllMarketplacesAsync(message => {
+            console.log(message)
+          })
+          console.log(`Successfully updated ${names.length} marketplace(s)`)
+          process.exit(0)
+        } catch (error) {
+          console.error((error as Error).message)
+          process.exit(1)
+        }
+      })
+  }
+
+  const pluginCmd = program
+    .command('plugin')
+    .description('Manage plugins and marketplaces')
+
+  const pluginMarketplaceCmd = pluginCmd
+    .command('marketplace')
+    .description(
+      'Manage marketplaces (.kode-plugin/marketplace.json; legacy .claude-plugin supported)',
+    )
+
+  registerMarketplaceCommands(pluginMarketplaceCmd)
+
+  const PLUGIN_SCOPES = ['user', 'project', 'local'] as const
+  type PluginScope = (typeof PLUGIN_SCOPES)[number]
+
+  const parsePluginScope = (value: unknown): PluginScope | null => {
+    const normalized = String(value || 'user') as PluginScope
+    return PLUGIN_SCOPES.includes(normalized) ? normalized : null
+  }
+
+  pluginCmd
+    .command('install <plugin>')
+    .alias('i')
+    .description(
+      'Install a plugin from available marketplaces (use plugin@marketplace for specific marketplace)',
+    )
+    .option('--cwd <cwd>', 'The current working directory', String, cwd())
+    .option(
+      '-s, --scope <scope>',
+      'Installation scope: user, project, or local',
+      'user',
+    )
+    .option('--force', 'Overwrite existing installed files', () => true)
+    .action(async (plugin: string, options: any) => {
+      try {
+        const scope = parsePluginScope(options.scope)
+        if (!scope) {
+          console.error(
+            `Invalid scope: ${String(options.scope)}. Must be one of: ${PLUGIN_SCOPES.join(', ')}`,
+          )
+          process.exit(1)
+        }
+
+        const { setCwd } = await import('@utils/state')
+        await setCwd(options.cwd ?? cwd())
+
+        const { installSkillPlugin } =
+          await import('@services/skillMarketplace')
+        const result = installSkillPlugin(plugin, {
+          scope,
+          force: options.force === true,
+        })
+
+        const skillList =
+          result.installedSkills.length > 0
+            ? `Skills: ${result.installedSkills.join(', ')}`
+            : 'Skills: (none)'
+        console.log(`Installed ${result.pluginSpec}\n${skillList}`)
+        process.exit(0)
+      } catch (error) {
+        console.error((error as Error).message)
+        process.exit(1)
+      }
+    })
+
+  pluginCmd
+    .command('uninstall <plugin>')
+    .alias('remove')
+    .alias('rm')
+    .description('Uninstall an installed plugin')
+    .option('--cwd <cwd>', 'The current working directory', String, cwd())
+    .option(
+      '-s, --scope <scope>',
+      `Uninstall from scope: ${PLUGIN_SCOPES.join(', ')} (default: user)`,
+      'user',
+    )
+    .action(async (plugin: string, options: any) => {
+      try {
+        const scope = parsePluginScope(options.scope)
+        if (!scope) {
+          console.error(
+            `Invalid scope: ${String(options.scope)}. Must be one of: ${PLUGIN_SCOPES.join(', ')}`,
+          )
+          process.exit(1)
+        }
+
+        const { setCwd } = await import('@utils/state')
+        await setCwd(options.cwd ?? cwd())
+
+        const { uninstallSkillPlugin } =
+          await import('@services/skillMarketplace')
+        const result = uninstallSkillPlugin(plugin, { scope })
+        const skillList =
+          result.removedSkills.length > 0
+            ? `Skills: ${result.removedSkills.join(', ')}`
+            : 'Skills: (none)'
+        console.log(`Uninstalled ${result.pluginSpec}\n${skillList}`)
+        process.exit(0)
+      } catch (error) {
+        console.error((error as Error).message)
+        process.exit(1)
+      }
+    })
+
+  pluginCmd
+    .command('list')
+    .description('List installed plugins')
+    .option('--cwd <cwd>', 'The current working directory', String, cwd())
+    .option(
+      '-s, --scope <scope>',
+      `Filter by scope: ${PLUGIN_SCOPES.join(', ')} (default: user)`,
+      'user',
+    )
+    .option('--json', 'Output as JSON')
+    .action(async (options: any) => {
+      try {
+        const scope = parsePluginScope(options.scope)
+        if (!scope) {
+          console.error(
+            `Invalid scope: ${String(options.scope)}. Must be one of: ${PLUGIN_SCOPES.join(', ')}`,
+          )
+          process.exit(1)
+        }
+
+        const { setCwd, getCwd } = await import('@utils/state')
+        await setCwd(options.cwd ?? cwd())
+
+        const { listInstalledSkillPlugins } =
+          await import('@services/skillMarketplace')
+        const all = listInstalledSkillPlugins()
+        const filtered = Object.fromEntries(
+          Object.entries(all).filter(([, record]) => {
+            if ((record as any)?.scope !== scope) return false
+            if (scope === 'user') return true
+            return (record as any)?.projectPath === getCwd()
+          }),
+        )
+
+        if (options.json) {
+          console.log(JSON.stringify(filtered, null, 2))
+          process.exit(0)
+        }
+
+        const names = Object.keys(filtered).sort()
+        if (names.length === 0) {
+          console.log('No plugins installed')
+          process.exit(0)
+        }
+        console.log(`Installed plugins (scope=${scope}):\n`)
+        for (const spec of names) {
+          const record = filtered[spec] as any
+          const enabled = record?.isEnabled === false ? 'disabled' : 'enabled'
+          console.log(`  - ${spec} (${enabled})`)
+        }
+        process.exit(0)
+      } catch (error) {
+        console.error((error as Error).message)
+        process.exit(1)
+      }
+    })
+
+  pluginCmd
+    .command('enable <plugin>')
+    .description('Enable a disabled plugin')
+    .option('--cwd <cwd>', 'The current working directory', String, cwd())
+    .option(
+      '-s, --scope <scope>',
+      `Installation scope: ${PLUGIN_SCOPES.join(', ')} (default: user)`,
+      'user',
+    )
+    .action(async (plugin: string, options: any) => {
+      try {
+        const scope = parsePluginScope(options.scope)
+        if (!scope) {
+          console.error(
+            `Invalid scope: ${String(options.scope)}. Must be one of: ${PLUGIN_SCOPES.join(', ')}`,
+          )
+          process.exit(1)
+        }
+
+        const { setCwd } = await import('@utils/state')
+        await setCwd(options.cwd ?? cwd())
+
+        const { enableSkillPlugin } = await import('@services/skillMarketplace')
+        const result = enableSkillPlugin(plugin, { scope })
+        console.log(`Enabled ${result.pluginSpec}`)
+        process.exit(0)
+      } catch (error) {
+        console.error((error as Error).message)
+        process.exit(1)
+      }
+    })
+
+  pluginCmd
+    .command('disable <plugin>')
+    .description('Disable an enabled plugin')
+    .option('--cwd <cwd>', 'The current working directory', String, cwd())
+    .option(
+      '-s, --scope <scope>',
+      `Installation scope: ${PLUGIN_SCOPES.join(', ')} (default: user)`,
+      'user',
+    )
+    .action(async (plugin: string, options: any) => {
+      try {
+        const scope = parsePluginScope(options.scope)
+        if (!scope) {
+          console.error(
+            `Invalid scope: ${String(options.scope)}. Must be one of: ${PLUGIN_SCOPES.join(', ')}`,
+          )
+          process.exit(1)
+        }
+
+        const { setCwd } = await import('@utils/state')
+        await setCwd(options.cwd ?? cwd())
+
+        const { disableSkillPlugin } =
+          await import('@services/skillMarketplace')
+        const result = disableSkillPlugin(plugin, { scope })
+        console.log(`Disabled ${result.pluginSpec}`)
+        process.exit(0)
+      } catch (error) {
+        console.error((error as Error).message)
+        process.exit(1)
+      }
+    })
+
+  pluginCmd
+    .command('validate <path>')
+    .description('Validate a plugin or marketplace manifest')
+    .option('--cwd <cwd>', 'The current working directory', String, cwd())
+    .action(async (path: string, options: any) => {
+      try {
+        const { setCwd } = await import('@utils/state')
+        await setCwd(options.cwd ?? cwd())
+
+        const { formatValidationResult, validatePluginOrMarketplacePath } =
+          await import('@services/pluginValidation')
+
+        const result = validatePluginOrMarketplacePath(path)
+        console.log(
+          `Validating ${result.fileType} manifest: ${result.filePath}\n`,
+        )
+        console.log(formatValidationResult(result))
+        process.exit(result.success ? 0 : 1)
+      } catch (error) {
+        console.error(
+          `Unexpected error during validation: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        )
+        process.exit(2)
+      }
+    })
+
+  // Skills (Agent Skills compatible)
+
+  const skillsCmd = program
+    .command('skills')
+    .description('Manage skills and skill marketplaces')
+
+  const marketplaceCmd = skillsCmd
+    .command('marketplace')
+    .description(
+      'Manage skill marketplaces (.kode-plugin/marketplace.json; legacy .claude-plugin supported)',
+    )
+
+  registerMarketplaceCommands(marketplaceCmd)
+
+  skillsCmd
+    .command('install <plugin>')
+    .description('Install a skill plugin pack (<plugin>@<marketplace>)')
+    .option('--cwd <cwd>', 'The current working directory', String, cwd())
+    .option('--project', 'Install into this project (.kode/...)', () => true)
+    .option('--force', 'Overwrite existing installed files', () => true)
+    .action(async (plugin: string, options: any) => {
+      try {
+        const { setCwd } = await import('@utils/state')
+        await setCwd(options.cwd ?? cwd())
+
+        const { installSkillPlugin } =
+          await import('@services/skillMarketplace')
+        const result = installSkillPlugin(plugin, {
+          project: options.project === true,
+          force: options.force === true,
+        })
+        const skillList =
+          result.installedSkills.length > 0
+            ? `Skills: ${result.installedSkills.join(', ')}`
+            : 'Skills: (none)'
+        console.log(`Installed ${plugin}\n${skillList}`)
+        process.exit(0)
+      } catch (error) {
+        console.error((error as Error).message)
+        process.exit(1)
+      }
+    })
+
+  skillsCmd
+    .command('uninstall <plugin>')
+    .description('Uninstall a skill plugin pack (<plugin>@<marketplace>)')
+    .option('--cwd <cwd>', 'The current working directory', String, cwd())
+    .option('--project', 'Uninstall from this project (.kode/...)', () => true)
+    .action(async (plugin: string, options: any) => {
+      try {
+        const { setCwd } = await import('@utils/state')
+        await setCwd(options.cwd ?? cwd())
+
+        const { uninstallSkillPlugin } =
+          await import('@services/skillMarketplace')
+        const result = uninstallSkillPlugin(plugin, {
+          project: options.project === true,
+        })
+        const skillList =
+          result.removedSkills.length > 0
+            ? `Skills: ${result.removedSkills.join(', ')}`
+            : 'Skills: (none)'
+        console.log(`Uninstalled ${plugin}\n${skillList}`)
+        process.exit(0)
+      } catch (error) {
+        console.error((error as Error).message)
+        process.exit(1)
+      }
+    })
+
+  skillsCmd
+    .command('list-installed')
+    .description('List installed skill plugins')
+    .action(async () => {
+      try {
+        const { listInstalledSkillPlugins } =
+          await import('@services/skillMarketplace')
+        console.log(JSON.stringify(listInstalledSkillPlugins(), null, 2))
         process.exit(0)
       } catch (error) {
         console.error((error as Error).message)
@@ -1340,7 +1375,11 @@ ${commandList}`
         const scopeInfo = normalizeMcpScopeForCli(options.scope)
         const headers = parseMcpHeaders(options.header)
 
-        addMcpServer(name, { type: 'sse', url, ...(headers ? { headers } : {}) }, scopeInfo.scope)
+        addMcpServer(
+          name,
+          { type: 'sse', url, ...(headers ? { headers } : {}) },
+          scopeInfo.scope,
+        )
         console.log(
           `Added SSE MCP server ${name} with URL: ${url} to ${scopeInfo.display} config`,
         )
@@ -1370,7 +1409,11 @@ ${commandList}`
       try {
         const scopeInfo = normalizeMcpScopeForCli(options.scope)
         const headers = parseMcpHeaders(options.header)
-        addMcpServer(name, { type: 'http', url, ...(headers ? { headers } : {}) }, scopeInfo.scope)
+        addMcpServer(
+          name,
+          { type: 'http', url, ...(headers ? { headers } : {}) },
+          scopeInfo.scope,
+        )
         console.log(
           `Added HTTP MCP server ${name} with URL: ${url} to ${scopeInfo.display} config`,
         )
@@ -1414,7 +1457,10 @@ ${commandList}`
       'Configuration scope (local, user, or project)',
       'local',
     )
-    .option('-t, --transport <transport>', 'MCP transport (stdio, sse, or http)')
+    .option(
+      '-t, --transport <transport>',
+      'MCP transport (stdio, sse, or http)',
+    )
     .option(
       '-H, --header <header...>',
       'Set headers (e.g. -H "X-Api-Key: abc123" -H "X-Custom: value")',
@@ -1631,11 +1677,17 @@ ${commandList}`
           process.exit(0)
         }
 
-        const matches: Array<{ scope: ReturnType<typeof ensureConfigScope>; display: string }> = []
+        const matches: Array<{
+          scope: ReturnType<typeof ensureConfigScope>
+          display: string
+        }> = []
 
         const projectConfig = getCurrentProjectConfig()
         if (projectConfig.mcpServers?.[name]) {
-          matches.push({ scope: ensureConfigScope('project'), display: 'local' })
+          matches.push({
+            scope: ensureConfigScope('project'),
+            display: 'local',
+          })
         }
 
         const globalConfig = getGlobalConfig()
@@ -1647,9 +1699,15 @@ ${commandList}`
         if (projectFileDefinitions.servers[name]) {
           const source = projectFileDefinitions.sources[name]
           if (source === '.mcp.json') {
-            matches.push({ scope: ensureConfigScope('mcpjson'), display: 'project' })
+            matches.push({
+              scope: ensureConfigScope('mcpjson'),
+              display: 'project',
+            })
           } else {
-            matches.push({ scope: ensureConfigScope('mcprc'), display: 'mcprc' })
+            matches.push({
+              scope: ensureConfigScope('mcprc'),
+              display: 'mcprc',
+            })
           }
         }
 
@@ -1807,7 +1865,7 @@ ${commandList}`
         }
 
         // Add server with the provided config
-        
+
         addMcpServer(name, serverConfig, scope)
 
         switch (serverConfig.type) {
@@ -1955,11 +2013,11 @@ ${commandList}`
       }
     })
 
-  // Import servers from Claude Desktop
+  // Import servers from a desktop MCP host config
   mcp
     .command('add-from-claude-desktop')
     .description(
-      'Import MCP servers from Claude Desktop (Mac, Windows and WSL)',
+      'Import MCP servers from a desktop MCP host config (macOS, Windows and WSL)',
     )
     .option(
       '-s, --scope <scope>',
@@ -1991,7 +2049,7 @@ ${commandList}`
           process.exit(1)
         }
 
-        // Get Claude Desktop config path
+        // Get desktop MCP host config path
         let configPath
         if (platform === 'darwin') {
           configPath = join(
@@ -2020,9 +2078,7 @@ ${commandList}`
 
         // Check if config file exists
         if (!existsSync(configPath)) {
-          console.error(
-            `Error: Claude Desktop config file not found at ${configPath}`,
-          )
+          console.error(`Error: Config file not found at ${configPath}`)
           process.exit(1)
         }
 
@@ -2042,7 +2098,7 @@ ${commandList}`
         const numServers = serverNames.length
 
         if (numServers === 0) {
-          console.log('No MCP servers found in Claude Desktop config')
+          console.log('No MCP servers found in the desktop config')
           process.exit(0)
         }
 
@@ -2095,7 +2151,9 @@ ${commandList}`
           function ClaudeDesktopImport() {
             const { useState } = reactModule
             const [isFinished, setIsFinished] = useState(false)
-            const [importResults, setImportResults] = useState([] as { name: string; success: boolean }[])
+            const [importResults, setImportResults] = useState(
+              [] as { name: string; success: boolean }[],
+            )
             const [isImporting, setIsImporting] = useState(false)
             const theme = getTheme()
 
@@ -2188,17 +2246,17 @@ ${commandList}`
                 <Box
                   flexDirection="column"
                   borderStyle="round"
-                borderColor={theme.kode}
+                  borderColor={theme.kode}
                   padding={1}
                   width={'100%'}
                 >
                   <Text bold color={theme.kode}>
-                    Import MCP Servers from Claude Desktop
+                    Import MCP Servers from Desktop Config
                   </Text>
 
                   <Box marginY={1}>
                     <Text>
-                      Found {numServers} MCP servers in Claude Desktop.
+                      Found {numServers} MCP servers in the desktop config.
                     </Text>
                   </Box>
 
@@ -2276,16 +2334,16 @@ ${commandList}`
       'Reset approvals for project-file MCP servers (.mcp.json/.mcprc) in this project',
     )
     .action(() => {
-      
       resetMcpChoices()
     })
 
   // Keep old command for backward compatibility.
   mcp
     .command('reset-mcprc-choices')
-    .description('Reset approvals for project-file MCP servers (.mcp.json/.mcprc) in this project')
+    .description(
+      'Reset approvals for project-file MCP servers (.mcp.json/.mcprc) in this project',
+    )
     .action(() => {
-      
       resetMcpChoices()
     })
 
@@ -2294,8 +2352,6 @@ ${commandList}`
     .command('doctor')
     .description(`Check the health of your ${PRODUCT_NAME} installation`)
     .action(async () => {
-      
-
       await new Promise<void>(resolve => {
         ;(async () => {
           const { render } = await import('ink')
@@ -2312,13 +2368,11 @@ ${commandList}`
     .command('update')
     .description('Show manual upgrade commands (no auto-install)')
     .action(async () => {
-      
       console.log(`Current version: ${MACRO.VERSION}`)
       console.log('Checking for updates...')
 
-      const { getLatestVersion, getUpdateCommandSuggestions } = await import(
-        '@utils/autoUpdater'
-      )
+      const { getLatestVersion, getUpdateCommandSuggestions } =
+        await import('@utils/autoUpdater')
       const latestVersion = await getLatestVersion()
 
       if (!latestVersion) {
@@ -2336,7 +2390,9 @@ ${commandList}`
       console.log('\nRun one of the following commands to update:')
       for (const c of cmds) console.log(`  ${c}`)
       if (process.platform !== 'win32') {
-        console.log('\nNote: you may need to prefix with "sudo" on macOS/Linux.')
+        console.log(
+          '\nNote: you may need to prefix with "sudo" on macOS/Linux.',
+        )
       }
       process.exit(0)
     })
@@ -2350,10 +2406,10 @@ ${commandList}`
       'A number (0, 1, 2, etc.) to display a specific log',
       parseInt,
     )
-    .option('-c, --cwd <cwd>', 'The current working directory', String, cwd())
+    .option('--cwd <cwd>', 'The current working directory', String, cwd())
     .action(async (number, { cwd }) => {
       await setup(cwd, false)
-      
+
       const context: { unmount?: () => void } = {}
       ;(async () => {
         const { render } = await import('ink')
@@ -2369,13 +2425,13 @@ ${commandList}`
   program
     .command('resume')
     .description(
-      'Resume a previous conversation. Optionally provide a number (0, 1, 2, etc.) or file path to resume a specific conversation.',
+      'Resume a previous conversation. Optionally provide a session ID or session name (legacy: log index or file path).',
     )
     .argument(
       '[identifier]',
-      'A number (0, 1, 2, etc.) or file path to resume a specific conversation',
+      'A session ID or session name (legacy: log index or file path)',
     )
-    .option('-c, --cwd <cwd>', 'The current working directory', String, cwd())
+    .option('--cwd <cwd>', 'The current working directory', String, cwd())
     .option('-e, --enable-architect', 'Enable the Architect tool', () => true)
     .option('-v, --verbose', 'Do not truncate message output', () => true)
     .option(
@@ -2383,96 +2439,173 @@ ${commandList}`
       'Enable strict permission checking mode (default is permissive)',
       () => true,
     )
-    .action(async (identifier, { cwd, enableArchitect, safe, verbose }) => {
-      await setup(cwd, safe)
-      assertMinVersion()
+    .option(
+      '--disable-slash-commands',
+      'Disable slash commands (treat /... as plain text)',
+      () => true,
+    )
+    .action(
+      async (
+        identifier,
+        { cwd, enableArchitect, safe, verbose, disableSlashCommands },
+      ) => {
+        await setup(cwd, safe)
+        assertMinVersion()
 
-      const [{ getTools }, { getCommands }] = await Promise.all([
-        import('@tools'),
-        import('@commands'),
-      ])
-      const [tools, commands, logs, mcpClients] = await Promise.all([
-        getTools(
-          enableArchitect ?? getCurrentProjectConfig().enableArchitectTool,
-        ),
-        getCommands(),
-        loadLogList(CACHE_PATHS.messages()),
-        getClients(),
-      ])
+        const [{ getTools }, { getCommands }] = await Promise.all([
+          import('@tools'),
+          import('@commands'),
+        ])
+        const [allTools, commands, mcpClients] = await Promise.all([
+          getTools(
+            enableArchitect ?? getCurrentProjectConfig().enableArchitectTool,
+          ),
+          getCommands(),
+          getClients(),
+        ])
+        const tools =
+          disableSlashCommands === true
+            ? allTools.filter(t => t.name !== 'SlashCommand')
+            : allTools
 
-      // If a specific conversation is requested, load and resume it directly
-      if (identifier !== undefined) {
-        // Check if identifier is a number or a file path
-        const number = Math.abs(parseInt(identifier))
-        const isNumber = !isNaN(number)
-        let messages, date, forkNumber
-        try {
-          if (isNumber) {
-            
-            const log = logs[number]
-            if (!log) {
-              console.error('No conversation found at index', number)
-              process.exit(1)
+        // If a specific conversation is requested, load and resume it directly
+        if (identifier !== undefined) {
+          const { loadKodeAgentSessionMessages } =
+            await import('@utils/protocol/kodeAgentSessionLoad')
+          const { resolveResumeSessionIdentifier } =
+            await import('@utils/protocol/kodeAgentSessionResume')
+          const { setKodeAgentSessionId } =
+            await import('@utils/protocol/kodeAgentSessionId')
+
+          const rawIdentifier = String(identifier).trim()
+          const isLegacyNumber = /^-?\\d+$/.test(rawIdentifier)
+          const isLegacyPath = !isLegacyNumber && existsSync(rawIdentifier)
+
+          let messages: any[] | undefined
+          let messageLogName: string = dateToFilename(new Date())
+          let initialForkNumber: number | undefined = undefined
+
+          try {
+            if (isLegacyNumber || isLegacyPath) {
+              const logs = await loadLogList(CACHE_PATHS.messages())
+              if (isLegacyNumber) {
+                const number = Math.abs(parseInt(rawIdentifier, 10))
+                const log = logs[number]
+                if (!log) {
+                  console.error('No conversation found at index', number)
+                  process.exit(1)
+                }
+                messages = await loadMessagesFromLog(log.fullPath, tools)
+                messageLogName = log.date
+                initialForkNumber = getNextAvailableLogForkNumber(
+                  log.date,
+                  log.forkNumber ?? 1,
+                  0,
+                )
+              } else {
+                messages = await loadMessagesFromLog(rawIdentifier, tools)
+                const pathSegments = rawIdentifier.split('/')
+                const filename =
+                  pathSegments[pathSegments.length - 1] ?? 'unknown'
+                const { date, forkNumber } = parseLogFilename(filename)
+                messageLogName = date
+                initialForkNumber = getNextAvailableLogForkNumber(
+                  date,
+                  forkNumber ?? 1,
+                  0,
+                )
+              }
+            } else {
+              const resolved = resolveResumeSessionIdentifier({
+                cwd,
+                identifier: rawIdentifier,
+              })
+              if (resolved.kind === 'ok') {
+                setKodeAgentSessionId(resolved.sessionId)
+                messages = loadKodeAgentSessionMessages({
+                  cwd,
+                  sessionId: resolved.sessionId,
+                })
+              } else if (resolved.kind === 'different_directory') {
+                console.error(
+                  resolved.otherCwd
+                    ? `Error: That session belongs to a different directory: ${resolved.otherCwd}`
+                    : `Error: That session belongs to a different directory.`,
+                )
+                process.exit(1)
+              } else if (resolved.kind === 'ambiguous') {
+                console.error(
+                  `Error: Multiple sessions match "${rawIdentifier}": ${resolved.matchingSessionIds.join(
+                    ', ',
+                  )}`,
+                )
+                process.exit(1)
+              } else {
+                console.error(
+                  `No conversation found with session ID or name: ${rawIdentifier}`,
+                )
+                process.exit(1)
+              }
             }
-            messages = await loadMessagesFromLog(log.fullPath, tools)
-            ;({ date, forkNumber } = log)
-          } else {
-            // Handle file path case
-            
-            if (!existsSync(identifier)) {
-              console.error('File does not exist:', identifier)
-              process.exit(1)
+
+            const isDefaultModel = await isDefaultSlowAndCapableModel()
+            {
+              const { render } = await import('ink')
+              const { REPL } = await import('@screens/REPL')
+              render(
+                <REPL
+                  initialPrompt=""
+                  messageLogName={messageLogName}
+                  initialForkNumber={initialForkNumber}
+                  shouldShowPromptInput={true}
+                  verbose={verbose}
+                  commands={commands}
+                  disableSlashCommands={disableSlashCommands === true}
+                  tools={tools}
+                  safeMode={safe}
+                  initialMessages={messages}
+                  mcpClients={mcpClients}
+                  isDefaultModel={isDefaultModel}
+                />,
+                { exitOnCtrlC: false },
+              )
             }
-            messages = await loadMessagesFromLog(identifier, tools)
-            const pathSegments = identifier.split('/')
-            const filename = pathSegments[pathSegments.length - 1] ?? 'unknown'
-            ;({ date, forkNumber } = parseLogFilename(filename))
+          } catch (error) {
+            logError(`Failed to load conversation: ${error}`)
+            process.exit(1)
           }
-          const fork = getNextAvailableLogForkNumber(date, forkNumber ?? 1, 0)
-          const isDefaultModel = await isDefaultSlowAndCapableModel()
-          {
+        } else {
+          const { listKodeAgentSessions } =
+            await import('@utils/protocol/kodeAgentSessionResume')
+          const sessions = listKodeAgentSessions({ cwd })
+          if (sessions.length === 0) {
+            console.error('No conversation found to resume')
+            process.exit(1)
+          }
+
+          const context: { unmount?: () => void } = {}
+          ;(async () => {
             const { render } = await import('ink')
-            const { REPL } = await import('@screens/REPL')
-            render(
-              <REPL
-              initialPrompt=""
-              messageLogName={date}
-              initialForkNumber={fork}
-              shouldShowPromptInput={true}
-              verbose={verbose}
-              commands={commands}
-              tools={tools}
-              safeMode={safe}
-              initialMessages={messages}
-              mcpClients={mcpClients}
-              isDefaultModel={isDefaultModel}
-            />,
-            { exitOnCtrlC: false },
+            const { unmount } = render(
+              <ResumeConversation
+                cwd={cwd}
+                context={context}
+                commands={commands}
+                sessions={sessions}
+                tools={tools}
+                verbose={verbose}
+                safeMode={safe}
+                disableSlashCommands={disableSlashCommands === true}
+                mcpClients={mcpClients}
+                initialPrompt=""
+              />,
+              renderContextWithExitOnCtrlC,
             )
-          }
-        } catch (error) {
-          logError(`Failed to load conversation: ${error}`)
-          process.exit(1)
+            context.unmount = unmount
+          })()
         }
-      } else {
-        // Show the conversation selector UI
-        const context: { unmount?: () => void } = {}
-        ;(async () => {
-          const { render } = await import('ink')
-          const { unmount } = render(
-            <ResumeConversation
-              context={context}
-              commands={commands}
-              logs={logs}
-              tools={tools}
-              verbose={verbose}
-            />,
-            renderContextWithExitOnCtrlC,
-          )
-          context.unmount = unmount
-        })()
-      }
-    })
+      },
+    )
 
   // Error logs
   program
@@ -2485,10 +2618,10 @@ ${commandList}`
       'A number (0, 1, 2, etc.) to display a specific log',
       parseInt,
     )
-    .option('-c, --cwd <cwd>', 'The current working directory', String, cwd())
+    .option('--cwd <cwd>', 'The current working directory', String, cwd())
     .action(async (number, { cwd }) => {
       await setup(cwd, false)
-      
+
       const context: { unmount?: () => void } = {}
       ;(async () => {
         const { render } = await import('ink')
@@ -2509,11 +2642,11 @@ ${commandList}`
 
   context
     .command('get <key>')
-    .option('-c, --cwd <cwd>', 'The current working directory', String, cwd())
+    .option('--cwd <cwd>', 'The current working directory', String, cwd())
     .description('Get a value from context')
     .action(async (key, { cwd }) => {
       await setup(cwd, false)
-      
+
       const context = omitKeys(
         await getContext(),
         'codeStyle',
@@ -2526,10 +2659,10 @@ ${commandList}`
   context
     .command('set <key> <value>')
     .description('Set a value in context')
-    .option('-c, --cwd <cwd>', 'The current working directory', String, cwd())
+    .option('--cwd <cwd>', 'The current working directory', String, cwd())
     .action(async (key, value, { cwd }) => {
       await setup(cwd, false)
-      
+
       setContext(key, value)
       console.log(`Set context.${key} to "${value}"`)
       process.exit(0)
@@ -2538,10 +2671,10 @@ ${commandList}`
   context
     .command('list')
     .description('List all context values')
-    .option('-c, --cwd <cwd>', 'The current working directory', String, cwd())
+    .option('--cwd <cwd>', 'The current working directory', String, cwd())
     .action(async ({ cwd }) => {
       await setup(cwd, false)
-      
+
       const context = omitKeys(
         await getContext(),
         'codeStyle',
@@ -2555,10 +2688,10 @@ ${commandList}`
   context
     .command('remove <key>')
     .description('Remove a value from context')
-    .option('-c, --cwd <cwd>', 'The current working directory', String, cwd())
+    .option('--cwd <cwd>', 'The current working directory', String, cwd())
     .action(async (key, { cwd }) => {
       await setup(cwd, false)
-      
+
       removeContext(key)
       console.log(`Removed context.${key}`)
       process.exit(0)
@@ -2584,23 +2717,77 @@ process.on('exit', () => {
   BunShell.getInstance().close()
 })
 
-function gracefulExit(code = 0) {
-  try { resetCursor() } catch {}
-  try { BunShell.getInstance().close() } catch {}
+let isGracefulExitInProgress = false
+async function gracefulExit(code = 0) {
+  if (isGracefulExitInProgress) {
+    process.exit(code)
+    return
+  }
+  isGracefulExitInProgress = true
+
+  try {
+    const { runSessionEndHooks } = await import('@utils/kodeHooks')
+    const { getKodeAgentSessionId } =
+      await import('@utils/protocol/kodeAgentSessionId')
+    const { tmpdir } = await import('os')
+    const { join } = await import('path')
+
+    const sessionId = getKodeAgentSessionId()
+    const transcriptPath = join(
+      tmpdir(),
+      'kode-hooks-transcripts',
+      `${sessionId}.transcript.txt`,
+    )
+
+    const { signal, cleanup } = (() => {
+      if (
+        typeof AbortSignal !== 'undefined' &&
+        typeof (AbortSignal as any).timeout === 'function'
+      ) {
+        return {
+          signal: (AbortSignal as any).timeout(5000) as AbortSignal,
+          cleanup: () => {},
+        }
+      }
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 5000)
+      return { signal: controller.signal, cleanup: () => clearTimeout(timer) }
+    })()
+
+    try {
+      await runSessionEndHooks({
+        reason: 'exit',
+        cwd: cwd(),
+        transcriptPath,
+        signal,
+      })
+    } finally {
+      cleanup()
+    }
+  } catch {
+    // best-effort only
+  }
+
+  try {
+    resetCursor()
+  } catch {}
+  try {
+    BunShell.getInstance().close()
+  } catch {}
   process.exit(code)
 }
 
-process.on('SIGINT', () => gracefulExit(0))
-process.on('SIGTERM', () => gracefulExit(0))
+process.on('SIGINT', () => void gracefulExit(0))
+process.on('SIGTERM', () => void gracefulExit(0))
 // Windows CTRL+BREAK
-process.on('SIGBREAK', () => gracefulExit(0))
+process.on('SIGBREAK', () => void gracefulExit(0))
 process.on('unhandledRejection', err => {
   console.error('Unhandled rejection:', err)
-  gracefulExit(1)
+  void gracefulExit(1)
 })
 process.on('uncaughtException', err => {
   console.error('Uncaught exception:', err)
-  gracefulExit(1)
+  void gracefulExit(1)
 })
 
 function resetCursor() {

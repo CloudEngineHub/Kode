@@ -2,6 +2,23 @@
 
 Kode 项目提供了两套发包流程，专注于npm发布，不涉及git操作：
 
+## ✅ 推荐：GitHub Actions 自动发布
+
+日常发版建议使用仓库内置的 GitHub Actions：
+
+- **开发版（main）**：`.github/workflows/dev-release.yml`
+  - 每次 `main` 更新会发布 npm `dev` dist-tag（例如 `2.0.0-dev.123`）
+  - 同步创建 GitHub Prerelease，并附带二进制文件与 `checksums-sha256.txt`
+- **正式版（tag）**：`.github/workflows/npm-publish.yml`
+  - 推送 `v*` tag（例如 `v2.0.0`）后自动发布 npm `latest`
+  - 构建多平台二进制并创建 GitHub Release（含校验和）
+
+需要配置的 Secrets：
+
+- `NPM_TOKEN`：具备 `@shareai-lab/kode` 发布权限的 npm token
+
+详见：`docs/develop/releasing.md`
+
 ## 🚀 快速使用
 
 ### 开发版本发布 (测试用)
@@ -18,7 +35,7 @@ npm run publish:release
 
 ### 1. 开发版本 (`dev` tag)
 - **目的**: 内部测试和预发布验证
-- **版本格式**: `1.1.16-dev.1`, `1.1.16-dev.2`
+- **版本格式**: `2.0.0-dev.1`, `2.0.0-dev.2`
 - **安装方式**: `npm install -g @shareai-lab/kode@dev`
 - **特点**:
   - 自动递增 dev 版本号
@@ -28,7 +45,7 @@ npm run publish:release
 
 ### 2. 正式版本 (`latest` tag)
 - **目的**: 面向最终用户的稳定版本
-- **版本格式**: `1.1.16`, `1.1.17`, `1.2.0`
+- **版本格式**: `2.0.0`, `2.0.1`, `2.1.0`
 - **安装方式**: `npm install -g @shareai-lab/kode` (默认)
 - **特点**:
   - 语义化版本控制
@@ -64,9 +81,9 @@ npm run publish:release
 **交互式流程**:
 1. 📦 显示当前版本
 2. 🔢 选择版本升级类型:
-   - **patch** (1.1.16 → 1.1.17): 修复 bug
-   - **minor** (1.1.16 → 1.2.0): 新功能
-   - **major** (1.1.16 → 2.0.0): 破坏性变更
+   - **patch** (2.0.0 → 2.0.1): 修复 bug
+   - **minor** (2.0.0 → 2.1.0): 新功能
+   - **major** (2.0.0 → 3.0.0): 破坏性变更
    - **custom**: 自定义版本号
 3. ✅ 检查版本是否已在npm上存在
 4. 🤔 确认发布信息
@@ -106,7 +123,7 @@ git push origin vx.x.x
 ```
 
 ### 版本号管理
-- **开发版**: 基于当前正式版本自动递增 (1.1.16-dev.1 → 1.1.16-dev.2)
+- **开发版**: 基于当前正式版本自动递增 (2.0.0-dev.1 → 2.0.0-dev.2)
 - **正式版**: 遵循 [语义化版本](https://semver.org/lang/zh-CN/) 规范
 - **版本检查**: 自动检查npm上是否已存在相同版本
 

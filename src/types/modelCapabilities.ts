@@ -3,9 +3,9 @@ export interface ModelCapabilities {
   // API architecture type
   apiArchitecture: {
     primary: 'chat_completions' | 'responses_api'
-    fallback?: 'chat_completions'  // Responses API models can fallback
+    fallback?: 'chat_completions' // Responses API models can fallback
   }
-  
+
   // Parameter mapping
   parameters: {
     maxTokensField: 'max_tokens' | 'max_completion_tokens' | 'max_output_tokens'
@@ -13,7 +13,7 @@ export interface ModelCapabilities {
     supportsVerbosity: boolean
     temperatureMode: 'flexible' | 'fixed_one' | 'restricted'
   }
-  
+
   // Tool calling capabilities
   toolCalling: {
     mode: 'none' | 'function_calling' | 'custom_tools'
@@ -21,14 +21,14 @@ export interface ModelCapabilities {
     supportsAllowedTools: boolean
     supportsParallelCalls: boolean
   }
-  
+
   // State management
   stateManagement: {
     supportsResponseId: boolean
     supportsConversationChaining: boolean
     supportsPreviousResponseId: boolean
   }
-  
+
   // Streaming support
   streaming: {
     supported: boolean
@@ -61,10 +61,11 @@ export interface UnifiedRequestParams {
   stream?: boolean
   previousResponseId?: string
   reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high'
-  reasoning?: ReasoningConfig  // Full reasoning config
+  reasoning?: ReasoningConfig // Full reasoning config
   verbosity?: 'low' | 'medium' | 'high'
   temperature?: number
   allowedTools?: string[]
+  stopSequences?: string[]
 }
 
 // Unified response format
@@ -77,5 +78,5 @@ export interface UnifiedResponse {
     completionTokens: number
     reasoningTokens?: number
   }
-  responseId?: string  // For Responses API state management
+  responseId?: string // For Responses API state management
 }

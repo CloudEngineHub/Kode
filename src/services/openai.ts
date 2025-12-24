@@ -2,7 +2,11 @@ import { OpenAI } from 'openai'
 import { getGlobalConfig, GlobalConfig } from '@utils/config'
 import { ProxyAgent, fetch, Response } from 'undici'
 import { setSessionState, getSessionState } from '@utils/sessionState'
-import { debug as debugLogger, getCurrentRequest, logAPIError } from '@utils/debugLogger'
+import {
+  debug as debugLogger,
+  getCurrentRequest,
+  logAPIError,
+} from '@utils/debugLogger'
 
 /**
  * Retry configuration constants for API calls
@@ -114,18 +118,26 @@ const GPT5_ERROR_HANDLERS: ErrorHandler[] = [
       const lowerMsg = errMsg.toLowerCase()
       return (
         // Exact OpenAI GPT-5 error message
-        (lowerMsg.includes("unsupported parameter: 'max_tokens'") && lowerMsg.includes("'max_completion_tokens'")) ||
+        (lowerMsg.includes("unsupported parameter: 'max_tokens'") &&
+          lowerMsg.includes("'max_completion_tokens'")) ||
         // Generic max_tokens error patterns
-        (lowerMsg.includes("max_tokens") && lowerMsg.includes("max_completion_tokens")) ||
-        (lowerMsg.includes("max_tokens") && lowerMsg.includes("not supported")) ||
-        (lowerMsg.includes("max_tokens") && lowerMsg.includes("use max_completion_tokens")) ||
+        (lowerMsg.includes('max_tokens') &&
+          lowerMsg.includes('max_completion_tokens')) ||
+        (lowerMsg.includes('max_tokens') &&
+          lowerMsg.includes('not supported')) ||
+        (lowerMsg.includes('max_tokens') &&
+          lowerMsg.includes('use max_completion_tokens')) ||
         // Additional patterns for various providers
-        (lowerMsg.includes("invalid parameter") && lowerMsg.includes("max_tokens")) ||
-        (lowerMsg.includes("parameter error") && lowerMsg.includes("max_tokens"))
+        (lowerMsg.includes('invalid parameter') &&
+          lowerMsg.includes('max_tokens')) ||
+        (lowerMsg.includes('parameter error') &&
+          lowerMsg.includes('max_tokens'))
       )
     },
     fix: async opts => {
-      console.log(`🔧 GPT-5 Fix: Converting max_tokens (${opts.max_tokens}) to max_completion_tokens`)
+      console.log(
+        `🔧 GPT-5 Fix: Converting max_tokens (${opts.max_tokens}) to max_completion_tokens`,
+      )
       if ('max_tokens' in opts) {
         opts.max_completion_tokens = opts.max_tokens
         delete opts.max_tokens
@@ -137,12 +149,16 @@ const GPT5_ERROR_HANDLERS: ErrorHandler[] = [
     detect: errMsg => {
       const lowerMsg = errMsg.toLowerCase()
       return (
-        lowerMsg.includes("temperature") && 
-        (lowerMsg.includes("only supports") || lowerMsg.includes("must be 1") || lowerMsg.includes("invalid temperature"))
+        lowerMsg.includes('temperature') &&
+        (lowerMsg.includes('only supports') ||
+          lowerMsg.includes('must be 1') ||
+          lowerMsg.includes('invalid temperature'))
       )
     },
     fix: async opts => {
-      console.log(`🔧 GPT-5 Fix: Adjusting temperature from ${opts.temperature} to 1`)
+      console.log(
+        `🔧 GPT-5 Fix: Adjusting temperature from ${opts.temperature} to 1`,
+      )
       opts.temperature = 1
     },
   },
@@ -168,7 +184,7 @@ const ERROR_HANDLERS: ErrorHandler[] = [
             remainder += line + '\n'
           }
         }
-        
+
         tool.function.description = str
         toolDescriptions[tool.function.name] = remainder
       }
@@ -272,32 +288,32 @@ const MODEL_FEATURES: Record<string, ModelFeatures> = {
   'o1-pro': { usesMaxCompletionTokens: true },
   'o3-mini': { usesMaxCompletionTokens: true },
   // GPT-5 models
-  'gpt-5': { 
-    usesMaxCompletionTokens: true, 
+  'gpt-5': {
+    usesMaxCompletionTokens: true,
     supportsResponsesAPI: true,
     requiresTemperatureOne: true,
     supportsVerbosityControl: true,
     supportsCustomTools: true,
     supportsAllowedTools: true,
   },
-  'gpt-5-mini': { 
-    usesMaxCompletionTokens: true, 
+  'gpt-5-mini': {
+    usesMaxCompletionTokens: true,
     supportsResponsesAPI: true,
     requiresTemperatureOne: true,
     supportsVerbosityControl: true,
     supportsCustomTools: true,
     supportsAllowedTools: true,
   },
-  'gpt-5-nano': { 
-    usesMaxCompletionTokens: true, 
+  'gpt-5-nano': {
+    usesMaxCompletionTokens: true,
     supportsResponsesAPI: true,
     requiresTemperatureOne: true,
     supportsVerbosityControl: true,
     supportsCustomTools: true,
     supportsAllowedTools: true,
   },
-  'gpt-5-chat-latest': { 
-    usesMaxCompletionTokens: true, 
+  'gpt-5-chat-latest': {
+    usesMaxCompletionTokens: true,
     supportsResponsesAPI: false, // Uses Chat Completions only
     requiresTemperatureOne: true,
     supportsVerbosityControl: true,
@@ -353,21 +369,23 @@ function applyModelSpecificTransformations(
   if (isGPT5 || features.usesMaxCompletionTokens) {
     // Force max_completion_tokens for all GPT-5 models
     if ('max_tokens' in opts && !('max_completion_tokens' in opts)) {
-      console.log(`🔧 Transforming max_tokens (${opts.max_tokens}) to max_completion_tokens for ${opts.model}`)
+      console.log(
+        `🔧 Transforming max_tokens (${opts.max_tokens}) to max_completion_tokens for ${opts.model}`,
+      )
       opts.max_completion_tokens = opts.max_tokens
       delete opts.max_tokens
     }
-    
+
     // Force temperature = 1 for GPT-5 models
     if (features.requiresTemperatureOne && 'temperature' in opts) {
       if (opts.temperature !== 1 && opts.temperature !== undefined) {
         console.log(
-          `🔧 GPT-5 temperature constraint: Adjusting temperature from ${opts.temperature} to 1 for ${opts.model}`
+          `🔧 GPT-5 temperature constraint: Adjusting temperature from ${opts.temperature} to 1 for ${opts.model}`,
         )
         opts.temperature = 1
       }
     }
-    
+
     // Remove unsupported parameters for GPT-5
     if (isGPT5) {
       // Remove parameters that may not be supported by GPT-5
@@ -375,7 +393,7 @@ function applyModelSpecificTransformations(
       delete opts.presence_penalty
       delete opts.logit_bias
       delete opts.user
-      
+
       // Add reasoning_effort if not present and model supports it
       if (!opts.reasoning_effort && features.supportsVerbosityControl) {
         opts.reasoning_effort = 'medium' // Default reasoning effort for coding tasks
@@ -404,8 +422,10 @@ async function applyModelErrorFixes(
   baseURL: string,
 ) {
   const isGPT5 = opts.model.startsWith('gpt-5')
-  const handlers = isGPT5 ? [...GPT5_ERROR_HANDLERS, ...ERROR_HANDLERS] : ERROR_HANDLERS
-  
+  const handlers = isGPT5
+    ? [...GPT5_ERROR_HANDLERS, ...ERROR_HANDLERS]
+    : ERROR_HANDLERS
+
   for (const handler of handlers) {
     if (hasModelError(baseURL, opts.model, handler.type)) {
       await handler.fix(opts)
@@ -473,7 +493,11 @@ async function tryWithEndpointFallback(
 }
 
 // Export shared utilities for GPT-5 compatibility
-export { getGPT5CompletionWithProfile, getModelFeatures, applyModelSpecificTransformations }
+export {
+  getGPT5CompletionWithProfile,
+  getModelFeatures,
+  applyModelSpecificTransformations,
+}
 
 export async function getCompletionWithProfile(
   modelProfile: any,
@@ -607,33 +631,46 @@ export async function getCompletionWithProfile(
         if (signal?.aborted) {
           throw new Error('Request cancelled by user')
         }
-        
+
         // 🔥 NEW: Parse error message to detect and handle specific API errors
         try {
           const errorData = await response.json()
           // Type guard for error data structure
-          const hasError = (data: unknown): data is { error?: { message?: string }; message?: string } => {
+          const hasError = (
+            data: unknown,
+          ): data is { error?: { message?: string }; message?: string } => {
             return typeof data === 'object' && data !== null
           }
-          const errorMessage = hasError(errorData) 
-            ? (errorData.error?.message || errorData.message || `HTTP ${response.status}`)
+          const errorMessage = hasError(errorData)
+            ? errorData.error?.message ||
+              errorData.message ||
+              `HTTP ${response.status}`
             : `HTTP ${response.status}`
-          
+
           // Check if this is a parameter error that we can fix
           const isGPT5 = opts.model.startsWith('gpt-5')
-          const handlers = isGPT5 ? [...GPT5_ERROR_HANDLERS, ...ERROR_HANDLERS] : ERROR_HANDLERS
-          
+          const handlers = isGPT5
+            ? [...GPT5_ERROR_HANDLERS, ...ERROR_HANDLERS]
+            : ERROR_HANDLERS
+
           for (const handler of handlers) {
             if (handler.detect(errorMessage)) {
-              console.log(`🔧 Detected ${handler.type} error for ${opts.model}: ${errorMessage}`)
-              
+              console.log(
+                `🔧 Detected ${handler.type} error for ${opts.model}: ${errorMessage}`,
+              )
+
               // Store this error for future requests
-              setModelError(baseURL || '', opts.model, handler.type, errorMessage)
-              
+              setModelError(
+                baseURL || '',
+                opts.model,
+                handler.type,
+                errorMessage,
+              )
+
               // Apply the fix and retry immediately
               await handler.fix(opts)
               console.log(`🔧 Applied fix for ${handler.type}, retrying...`)
-              
+
               return getCompletionWithProfile(
                 modelProfile,
                 opts,
@@ -643,10 +680,12 @@ export async function getCompletionWithProfile(
               )
             }
           }
-          
+
           // If no specific handler found, log the error for debugging
-          console.log(`⚠️  Unhandled API error (${response.status}): ${errorMessage}`)
-          
+          console.log(
+            `⚠️  Unhandled API error (${response.status}): ${errorMessage}`,
+          )
+
           // Log API error using unified logger
           logAPIError({
             model: opts.model,
@@ -655,12 +694,12 @@ export async function getCompletionWithProfile(
             error: errorMessage,
             request: opts,
             response: errorData,
-            provider: provider
+            provider: provider,
           })
         } catch (parseError) {
           // If we can't parse the error, fall back to generic retry
           console.log(`⚠️  Could not parse error response (${response.status})`)
-          
+
           // Log parse error
           logAPIError({
             model: opts.model,
@@ -669,10 +708,10 @@ export async function getCompletionWithProfile(
             error: `Could not parse error response: ${parseError.message}`,
             request: opts,
             response: { parseError: parseError.message },
-            provider: provider
+            provider: provider,
           })
         }
-        
+
         const delayMs = getRetryDelay(attempt)
         console.log(
           `  ⎿  API error (${response.status}), retrying in ${Math.round(delayMs / 1000)}s... (attempt ${attempt + 1}/${maxAttempts})`,
@@ -745,33 +784,41 @@ export async function getCompletionWithProfile(
       if (signal?.aborted) {
         throw new Error('Request cancelled by user')
       }
-      
+
       // 🔥 NEW: Parse error message to detect and handle specific API errors
       try {
         const errorData = await response.json()
         // Type guard for error data structure
-        const hasError = (data: unknown): data is { error?: { message?: string }; message?: string } => {
+        const hasError = (
+          data: unknown,
+        ): data is { error?: { message?: string }; message?: string } => {
           return typeof data === 'object' && data !== null
         }
-        const errorMessage = hasError(errorData) 
-          ? (errorData.error?.message || errorData.message || `HTTP ${response.status}`)
+        const errorMessage = hasError(errorData)
+          ? errorData.error?.message ||
+            errorData.message ||
+            `HTTP ${response.status}`
           : `HTTP ${response.status}`
-        
+
         // Check if this is a parameter error that we can fix
         const isGPT5 = opts.model.startsWith('gpt-5')
-        const handlers = isGPT5 ? [...GPT5_ERROR_HANDLERS, ...ERROR_HANDLERS] : ERROR_HANDLERS
-        
+        const handlers = isGPT5
+          ? [...GPT5_ERROR_HANDLERS, ...ERROR_HANDLERS]
+          : ERROR_HANDLERS
+
         for (const handler of handlers) {
           if (handler.detect(errorMessage)) {
-            console.log(`🔧 Detected ${handler.type} error for ${opts.model}: ${errorMessage}`)
-            
+            console.log(
+              `🔧 Detected ${handler.type} error for ${opts.model}: ${errorMessage}`,
+            )
+
             // Store this error for future requests
             setModelError(baseURL || '', opts.model, handler.type, errorMessage)
-            
+
             // Apply the fix and retry immediately
             await handler.fix(opts)
             console.log(`🔧 Applied fix for ${handler.type}, retrying...`)
-            
+
             return getCompletionWithProfile(
               modelProfile,
               opts,
@@ -781,14 +828,16 @@ export async function getCompletionWithProfile(
             )
           }
         }
-        
+
         // If no specific handler found, log the error for debugging
-        console.log(`⚠️  Unhandled API error (${response.status}): ${errorMessage}`)
+        console.log(
+          `⚠️  Unhandled API error (${response.status}): ${errorMessage}`,
+        )
       } catch (parseError) {
         // If we can't parse the error, fall back to generic retry
         console.log(`⚠️  Could not parse error response (${response.status})`)
       }
-      
+
       const delayMs = getRetryDelay(attempt)
       console.log(
         `  ⎿  API error (${response.status}), retrying in ${Math.round(delayMs / 1000)}s... (attempt ${attempt + 1}/${maxAttempts})`,
@@ -818,13 +867,13 @@ export async function getCompletionWithProfile(
     if (signal?.aborted) {
       throw new Error('Request cancelled by user')
     }
-    
+
     if (attempt < maxAttempts) {
       // 🔧 Double-check abort status to avoid showing misleading retry message
       if (signal?.aborted) {
         throw new Error('Request cancelled by user')
       }
-      
+
       const delayMs = getRetryDelay(attempt)
       console.log(
         `  ⎿  Network error, retrying in ${Math.round(delayMs / 1000)}s... (attempt ${attempt + 1}/${maxAttempts})`,
@@ -984,7 +1033,9 @@ export async function callGPT5ResponsesAPI(
 
     if (!response.ok) {
       const errorText = await response.text()
-      throw new Error(`GPT-5 Responses API error: ${response.status} ${response.statusText} - ${errorText}`)
+      throw new Error(
+        `GPT-5 Responses API error: ${response.status} ${response.statusText} - ${errorText}`,
+      )
     }
 
     // Return the raw response - the adapter will handle parsing
@@ -1005,24 +1056,28 @@ function convertResponsesAPIToChatCompletion(responsesData: any): any {
   // Extract content from Responses API format
   let outputText = responsesData.output_text || ''
   const usage = responsesData.usage || {}
-  
+
   // 🚀 GPT-5 Reasoning Summary Integration
   // If reasoning summary is available, prepend it to the output for transparency
   if (responsesData.output && Array.isArray(responsesData.output)) {
-    const reasoningItems = responsesData.output.filter(item => item.type === 'reasoning' && item.summary)
-    const messageItems = responsesData.output.filter(item => item.type === 'message')
-    
+    const reasoningItems = responsesData.output.filter(
+      item => item.type === 'reasoning' && item.summary,
+    )
+    const messageItems = responsesData.output.filter(
+      item => item.type === 'message',
+    )
+
     if (reasoningItems.length > 0 && messageItems.length > 0) {
       const reasoningSummary = reasoningItems
         .map(item => item.summary?.map(s => s.text).join('\n'))
         .filter(Boolean)
         .join('\n\n')
-      
+
       const mainContent = messageItems
         .map(item => item.content?.map(c => c.text).join('\n'))
         .filter(Boolean)
         .join('\n\n')
-      
+
       if (reasoningSummary) {
         outputText = `**🧠 Reasoning Process:**\n${reasoningSummary}\n\n**📝 Response:**\n${mainContent}`
       } else {
@@ -1080,8 +1135,8 @@ async function getGPT5CompletionWithProfile(
   signal?: AbortSignal,
 ): Promise<OpenAI.ChatCompletion | AsyncIterable<OpenAI.ChatCompletionChunk>> {
   const features = getModelFeatures(opts.model)
-  const isOfficialOpenAI = !modelProfile.baseURL || 
-    modelProfile.baseURL.includes('api.openai.com')
+  const isOfficialOpenAI =
+    !modelProfile.baseURL || modelProfile.baseURL.includes('api.openai.com')
 
   // 🌐 Handle third-party GPT-5 providers with enhanced compatibility
   if (!isOfficialOpenAI) {
@@ -1092,20 +1147,24 @@ async function getGPT5CompletionWithProfile(
       supportsResponsesAPI: features.supportsResponsesAPI,
       requestId: getCurrentRequest()?.id,
     })
-    
+
     // 🔧 Apply enhanced parameter optimization for third-party providers
-    console.log(`🌐 Using GPT-5 via third-party provider: ${modelProfile.provider} (${modelProfile.baseURL})`)
-    
+    console.log(
+      `🌐 Using GPT-5 via third-party provider: ${modelProfile.provider} (${modelProfile.baseURL})`,
+    )
+
     // Some third-party providers may need additional parameter adjustments
     if (modelProfile.provider === 'azure') {
       // Azure OpenAI specific adjustments
       delete opts.reasoning_effort // Azure may not support this yet
     } else if (modelProfile.provider === 'custom-openai') {
       // Generic OpenAI-compatible provider optimizations
-      console.log(`🔧 Applying OpenAI-compatible optimizations for custom provider`)
+      console.log(
+        `🔧 Applying OpenAI-compatible optimizations for custom provider`,
+      )
     }
   }
-  
+
   // 📡 Handle streaming requests (Responses API doesn't support streaming yet)
   else if (opts.stream) {
     debugLogger.api('GPT5_STREAMING_MODE', {
@@ -1114,8 +1173,10 @@ async function getGPT5CompletionWithProfile(
       reason: 'responses_api_no_streaming',
       requestId: getCurrentRequest()?.id,
     })
-    
-    console.log(`🔄 Using Chat Completions for streaming (Responses API streaming not available)`)
+
+    console.log(
+      `🔄 Using Chat Completions for streaming (Responses API streaming not available)`,
+    )
   }
 
   // 🔧 Enhanced Chat Completions fallback with GPT-5 optimizations
@@ -1192,11 +1253,21 @@ export async function fetchCustomModels(
 
     // Type guards for different API response formats
     const hasDataArray = (obj: unknown): obj is { data: unknown[] } => {
-      return typeof obj === 'object' && obj !== null && 'data' in obj && Array.isArray((obj as any).data)
+      return (
+        typeof obj === 'object' &&
+        obj !== null &&
+        'data' in obj &&
+        Array.isArray((obj as any).data)
+      )
     }
-    
+
     const hasModelsArray = (obj: unknown): obj is { models: unknown[] } => {
-      return typeof obj === 'object' && obj !== null && 'models' in obj && Array.isArray((obj as any).models)
+      return (
+        typeof obj === 'object' &&
+        obj !== null &&
+        'models' in obj &&
+        Array.isArray((obj as any).models)
+      )
     }
 
     // Validate response format and extract models array

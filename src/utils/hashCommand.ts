@@ -5,21 +5,22 @@ import { getTheme } from '@utils/theme'
 import { logError } from '@utils/log'
 
 export function handleHashCommand(interpreted: string): void {
-  // Appends the AI-interpreted content to both AGENTS.md and CLAUDE.md (if exists)
+  // Appends the AI-interpreted content to AGENTS.md.
+  // If a legacy CLAUDE.md exists, it is also updated for compatibility.
   try {
     const cwd = process.cwd()
     const agentsPath = join(cwd, 'AGENTS.md')
-    const claudePath = join(cwd, 'CLAUDE.md')
+    const legacyPath = join(cwd, 'CLAUDE.md')
 
     const filesToUpdate: Array<{ path: string; name: string }> = []
 
     // Always try to update AGENTS.md (create if not exists)
     filesToUpdate.push({ path: agentsPath, name: 'AGENTS.md' })
 
-    // Update CLAUDE.md only if it exists
+    // Update legacy CLAUDE.md only if it exists
     try {
-      readFileSync(claudePath, 'utf-8')
-      filesToUpdate.push({ path: claudePath, name: 'CLAUDE.md' })
+      readFileSync(legacyPath, 'utf-8')
+      filesToUpdate.push({ path: legacyPath, name: 'CLAUDE.md' })
     } catch {
       // CLAUDE.md doesn't exist, skip it
     }
@@ -71,7 +72,10 @@ export function handleHashCommand(interpreted: string): void {
     }
   } catch (e) {
     logError(e)
-    console.error(chalk.hex(getTheme().error)(`Failed to add note: ${(e as Error).message}`))
+    console.error(
+      chalk.hex(getTheme().error)(
+        `Failed to add note: ${(e as Error).message}`,
+      ),
+    )
   }
 }
-

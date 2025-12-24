@@ -11,7 +11,7 @@ import { quote } from 'shell-quote'
 import type { BunShellSandboxOptions } from './BunShell'
 import { BunShell } from './BunShell'
 
-const d = debug('claude:ripgrep')
+const d = debug('kode:ripgrep')
 
 function shouldUseBuiltinRipgrep(): boolean {
   return !!process.env.USE_BUILTIN_RIPGREP
@@ -214,7 +214,9 @@ async function codesignRipgrepIfNecessary() {
 
     if (signResult.code !== 0) {
       d('failed to sign ripgrep: %o', signResult)
-      logError(`Failed to sign ripgrep: ${signResult.stdout} ${signResult.stderr}`)
+      logError(
+        `Failed to sign ripgrep: ${signResult.stdout} ${signResult.stderr}`,
+      )
     }
 
     d('removing quarantine')
@@ -241,4 +243,3 @@ export function resetRipgrepPathCacheForTests(): void {
   ;(getRipgrepPath as any).cache?.clear?.()
   alreadyDoneSignCheck = false
 }
-

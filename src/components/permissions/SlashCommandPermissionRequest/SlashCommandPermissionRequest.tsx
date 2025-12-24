@@ -62,9 +62,12 @@ export function SlashCommandPermissionRequest({
       <Box flexDirection="column" paddingX={2} paddingY={1}>
         <Text>
           {toolUseConfirm.tool.userFacingName?.() || 'SlashCommand'}(
-          {toolUseConfirm.tool.renderToolUseMessage(toolUseConfirm.input as any, {
-            verbose,
-          })}
+          {toolUseConfirm.tool.renderToolUseMessage(
+            toolUseConfirm.input as any,
+            {
+              verbose,
+            },
+          )}
           )
         </Text>
         <Text color={theme.secondaryText}>{toolUseConfirm.description}</Text>
@@ -122,12 +125,10 @@ export function SlashCommandPermissionRequest({
                   toolUseConfirm.input,
                   null,
                   toolUseConfirm.toolUseContext,
-                ).then(
-                  () => {
-                    toolUseConfirm.onAllow('permanent')
-                    onDone()
-                  },
-                )
+                ).then(() => {
+                  toolUseConfirm.onAllow('permanent')
+                  onDone()
+                })
                 break
               case 'yes-prefix':
                 if (!prefix) {
@@ -149,12 +150,10 @@ export function SlashCommandPermissionRequest({
                   toolUseConfirm.input,
                   prefix,
                   toolUseConfirm.toolUseContext,
-                ).then(
-                  () => {
-                    toolUseConfirm.onAllow('permanent')
-                    onDone()
-                  },
-                )
+                ).then(() => {
+                  toolUseConfirm.onAllow('permanent')
+                  onDone()
+                })
                 break
               case 'no':
                 logUnaryEvent({

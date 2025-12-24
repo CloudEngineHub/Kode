@@ -36,11 +36,10 @@ describe('macOS sandbox-exec profile hardening', () => {
       __platformOverride: 'darwin',
     }
 
-    const built = (shell as any).buildSandboxCmd('echo hi', sandbox) as
-      | { cmd: string[] }
-      | null
+    const built = (shell as any).buildSandboxCmd('echo hi', sandbox) as {
+      cmd: string[]
+    } | null
     expect(built).toBeTruthy()
     expect(built!.cmd[0]).toBe('/usr/bin/sandbox-exec')
   })
 })
-

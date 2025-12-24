@@ -45,7 +45,15 @@ describe('TodoWriteTool UI parity (Reference CLI)', () => {
             type: 'tool_use',
             id: 't1',
             name: TodoWriteTool.name,
-            input: { todos: [{ content: 'Do thing', status: 'pending', activeForm: 'Doing thing' }] },
+            input: {
+              todos: [
+                {
+                  content: 'Do thing',
+                  status: 'pending',
+                  activeForm: 'Doing thing',
+                },
+              ],
+            },
           } as any
         }
         costUSD={0}

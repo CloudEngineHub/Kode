@@ -4,7 +4,7 @@ import {
   kodeMessageToSdkMessage,
   makeSdkInitMessage,
   makeSdkResultMessage,
-} from '@utils/kodeAgentStreamJson'
+} from '@utils/protocol/kodeAgentStreamJson'
 
 describe('stream-json helpers', () => {
   test('init message includes session_id/cwd/tools', () => {
@@ -18,6 +18,17 @@ describe('stream-json helpers', () => {
     expect((msg as any).session_id).toBe('00000000-0000-0000-0000-000000000000')
     expect((msg as any).cwd).toBe('/tmp/project')
     expect((msg as any).tools).toEqual(['Bash', 'Read'])
+    expect('slash_commands' in (msg as any)).toBe(false)
+  })
+
+  test('init message includes slash_commands only when provided', () => {
+    const withSlash = makeSdkInitMessage({
+      sessionId: '00000000-0000-0000-0000-000000000000',
+      cwd: '/tmp/project',
+      tools: ['Bash'],
+      slashCommands: ['/help', '/compact'],
+    })
+    expect((withSlash as any).slash_commands).toEqual(['/help', '/compact'])
   })
 
   test('maps user/assistant messages and normalizes tool_use block types', () => {

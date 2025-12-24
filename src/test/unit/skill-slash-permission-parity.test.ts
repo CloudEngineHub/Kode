@@ -6,7 +6,10 @@ import { FileEditTool } from '@tools/FileEditTool/FileEditTool'
 import { FileReadTool } from '@tools/FileReadTool/FileReadTool'
 import { SlashCommandTool } from '@tools/SlashCommandTool/SlashCommandTool'
 import { SkillTool } from '@tools/SkillTool/SkillTool'
-import { getCurrentProjectConfig, saveCurrentProjectConfig } from '@utils/config'
+import {
+  getCurrentProjectConfig,
+  saveCurrentProjectConfig,
+} from '@utils/config'
 
 const makeContext = (overrides?: any) => ({
   abortController: new AbortController(),
@@ -70,7 +73,7 @@ describe('Skill/SlashCommand parity: contextModifier effects', () => {
       type: 'prompt',
       name: 'review-pr',
       disableModelInvocation: false,
-      allowedTools: ['Edit(~/.claude/settings.json)'],
+      allowedTools: ['Edit(~/.kode/settings.json)'],
       model: 'sonnet',
       maxThinkingTokens: 456,
       userFacingName() {
@@ -82,14 +85,19 @@ describe('Skill/SlashCommand parity: contextModifier effects', () => {
     }
 
     const ctx = makeContext({ options: { commands: [cmd] } })
-    const gen = SlashCommandTool.call({ command: '/review-pr 123' } as any, ctx as any)
+    const gen = SlashCommandTool.call(
+      { command: '/review-pr 123' } as any,
+      ctx as any,
+    )
     const first = await gen.next()
     const firstValue = first.value as any
     expect(firstValue?.type).toBe('result')
     const nextCtx = firstValue.contextModifier.modifyContext(ctx)
     expect(nextCtx.options.model).toBe('task')
     expect(nextCtx.options.maxThinkingTokens).toBe(456)
-    expect(nextCtx.options.commandAllowedTools).toContain('Edit(~/.claude/settings.json)')
+    expect(nextCtx.options.commandAllowedTools).toContain(
+      'Edit(~/.kode/settings.json)',
+    )
   })
 })
 

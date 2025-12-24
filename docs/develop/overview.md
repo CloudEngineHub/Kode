@@ -26,7 +26,7 @@ Unlike web-based AI assistants, Kode is built specifically for terminal workflow
 The AI automatically understands your project through:
 - Git status and recent commits
 - Directory structure analysis
-- AGENTS.md and CLAUDE.md project documentation
+- AGENTS.md project documentation (legacy CLAUDE.md supported)
 - Custom command definitions in .claude/commands/ and .kode/commands/
 - Previous conversation history and forked conversations
 
@@ -46,7 +46,7 @@ Support for multiple AI providers through unified interface:
 Model Context Protocol (MCP) integration enables:
 - Third-party tool integration
 - Custom server connections (stdio/SSE)
-- Import from Claude Desktop configuration
+- Import from desktop MCP host configuration
 - Project-scoped server management
 
 ## Technology Stack
@@ -68,8 +68,8 @@ Model Context Protocol (MCP) integration enables:
 - **Build System**: Custom Bun-based build scripts
 - **Testing**: Bun test runner with mocking support
 - **Formatting**: Prettier with consistent code style
-- **Error Tracking**: Sentry integration for production monitoring
-- **Analytics**: Statsig for feature flags and usage metrics
+- **Error Tracking**: No external reporting by default (Sentry adapter is no-op)
+- **Analytics**: No product telemetry/analytics by default
 
 ## System Architecture Layers
 
@@ -109,7 +109,7 @@ Foundational services including:
 - Permission system and security
 - Logging and error handling
 - Session and history management
-- Cost tracking and analytics
+- Cost tracking (local)
 
 ## Key Design Patterns
 

@@ -23,8 +23,6 @@ export const ThinkTool = {
   prompt: async () => PROMPT,
 
   async *call(input, { messageId }) {
-    
-
     yield {
       type: 'result',
       resultForAssistant: 'Your thought has been logged.',
@@ -39,7 +37,9 @@ export const ThinkTool = {
 
   renderToolUseRejectedMessage() {
     return (
-      <MessageResponse children={<Text color={getTheme().error}>Thought cancelled</Text>} />
+      <MessageResponse
+        children={<Text color={getTheme().error}>Thought cancelled</Text>}
+      />
     )
   },
 

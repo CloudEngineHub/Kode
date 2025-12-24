@@ -1,5 +1,4 @@
 import { memoize } from 'lodash-es'
-import { API_ERROR_MESSAGE_PREFIX, queryQuick } from '@services/claude'
 import { type ControlOperator, parse, ParseEntry } from 'shell-quote'
 
 const SINGLE_QUOTE = '__SINGLE_QUOTE__'
@@ -122,7 +121,12 @@ export function splitCommand(command: string): string[] {
       continue
     }
 
-    if (part && typeof part === 'object' && 'op' in part && part.op === 'glob') {
+    if (
+      part &&
+      typeof part === 'object' &&
+      'op' in part &&
+      part.op === 'glob'
+    ) {
       const pattern = String((part as any).pattern)
       if (tokens.length > 0 && typeof tokens[tokens.length - 1] === 'string') {
         tokens[tokens.length - 1] += ' ' + pattern
@@ -136,20 +140,19 @@ export function splitCommand(command: string): string[] {
   }
 
   // 2) Convert tokens to split parts.
-  const parts: Array<string | null> = tokens
-    .map(part => {
-      if (typeof part === 'string') {
-        const restored = part
-          .replaceAll(`${SINGLE_QUOTE}`, "'")
-          .replaceAll(`${DOUBLE_QUOTE}`, '"')
-        if (restored === NEW_LINE) return null
-        return restored
-      }
-      if (!part || typeof part !== 'object') return null
-      if ('comment' in part) return null // comments are unsafe; treat as split boundary
-      if ('op' in part) return String((part as any).op)
-      return null
-    })
+  const parts: Array<string | null> = tokens.map(part => {
+    if (typeof part === 'string') {
+      const restored = part
+        .replaceAll(`${SINGLE_QUOTE}`, "'")
+        .replaceAll(`${DOUBLE_QUOTE}`, '"')
+      if (restored === NEW_LINE) return null
+      return restored
+    }
+    if (!part || typeof part !== 'object') return null
+    if ('comment' in part) return null // comments are unsafe; treat as split boundary
+    if ('op' in part) return String((part as any).op)
+    return null
+  })
 
   // 3) Split on safe separators and newlines, keep other operators inside segment.
   const out: string[] = []
@@ -214,6 +217,8 @@ const getCommandPrefix = memoize(
     const { systemPrompt, userPrompt } =
       buildBashCommandPrefixDetectionPrompt(command)
 
+    const { API_ERROR_MESSAGE_PREFIX, queryQuick } =
+      await import('@services/llm')
     const response = await queryQuick({
       systemPrompt,
       userPrompt,
@@ -221,7 +226,7 @@ const getCommandPrefix = memoize(
       enablePromptCaching: false,
     })
 
-    const prefix =
+    const rawPrefix =
       typeof response.message.content === 'string'
         ? response.message.content
         : Array.isArray(response.message.content)
@@ -229,11 +234,23 @@ const getCommandPrefix = memoize(
             'none')
           : 'none'
 
+    const firstNonEmptyLine =
+      rawPrefix
+        .split(/\r?\n/)
+        .map(l => l.trim())
+        .find(Boolean) ?? ''
+    const prefix = firstNonEmptyLine.replace(/<[^>]+>/g, '').trim()
+
     if (prefix.startsWith(API_ERROR_MESSAGE_PREFIX)) {
       return null
     }
 
     if (prefix === 'command_injection_detected') {
+      return { commandInjectionDetected: true }
+    }
+
+    // Safety: the prefix must be a literal string prefix of the original command.
+    if (prefix !== 'none' && prefix !== 'git' && !command.startsWith(prefix)) {
       return { commandInjectionDetected: true }
     }
 
@@ -289,7 +306,8 @@ function isCommandList(command: string): boolean {
     if (op === 'glob') continue
     if (COMMAND_LIST_SEPARATORS.has(op)) continue
     if (op === '>&') {
-      if (typeof next === 'string' && ['0', '1', '2'].includes(next.trim())) continue
+      if (typeof next === 'string' && ['0', '1', '2'].includes(next.trim()))
+        continue
     }
     if (op === '>' || op === '>>') continue
 

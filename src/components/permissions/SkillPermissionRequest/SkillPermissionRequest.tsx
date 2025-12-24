@@ -3,9 +3,7 @@ import React, { useMemo } from 'react'
 import chalk from 'chalk'
 import { Select } from '@components/CustomSelect/select'
 import { savePermission } from '@permissions'
-import {
-  type PermissionRequestProps,
-} from '@components/permissions/PermissionRequest'
+import { type PermissionRequestProps } from '@components/permissions/PermissionRequest'
 import { getCwd } from '@utils/state'
 import { getTheme } from '@utils/theme'
 import {
@@ -30,7 +28,9 @@ export function SkillPermissionRequest({
   usePermissionRequestLogging(toolUseConfirm, unaryEvent)
 
   const raw =
-    typeof toolUseConfirm.input.skill === 'string' ? toolUseConfirm.input.skill : ''
+    typeof toolUseConfirm.input.skill === 'string'
+      ? toolUseConfirm.input.skill
+      : ''
   const skill = raw.trim().replace(/^\//, '')
 
   return (
@@ -47,9 +47,12 @@ export function SkillPermissionRequest({
       <Box flexDirection="column" paddingX={2} paddingY={1}>
         <Text>
           {toolUseConfirm.tool.userFacingName?.() || 'Skill'}(
-          {toolUseConfirm.tool.renderToolUseMessage(toolUseConfirm.input as any, {
-            verbose,
-          })}
+          {toolUseConfirm.tool.renderToolUseMessage(
+            toolUseConfirm.input as any,
+            {
+              verbose,
+            },
+          )}
           )
         </Text>
         <Text color={theme.secondaryText}>{toolUseConfirm.description}</Text>
@@ -99,12 +102,10 @@ export function SkillPermissionRequest({
                   toolUseConfirm.input,
                   null,
                   toolUseConfirm.toolUseContext,
-                ).then(
-                  () => {
-                    toolUseConfirm.onAllow('permanent')
-                    onDone()
-                  },
-                )
+                ).then(() => {
+                  toolUseConfirm.onAllow('permanent')
+                  onDone()
+                })
                 break
               case 'no':
                 logUnaryEvent({

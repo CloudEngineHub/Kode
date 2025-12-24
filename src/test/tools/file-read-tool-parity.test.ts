@@ -10,7 +10,11 @@ afterAll(() => {
   rmSync(tmpRoot, { recursive: true, force: true })
 })
 
-async function runRead(input: { file_path: string; offset?: number; limit?: number }) {
+async function runRead(input: {
+  file_path: string
+  offset?: number
+  limit?: number
+}) {
   const ctx = { readFileTimestamps: {} as Record<string, number> }
   const gen = FileReadTool.call(input as any, ctx as any)
   for await (const item of gen as any) {
@@ -56,7 +60,9 @@ describe('FileReadTool parity: validateInput gating', () => {
     const filePath = join(tmpRoot, 'large.txt')
     writeFileSync(filePath, 'a'.repeat(300_000), 'utf8')
 
-    const result = await FileReadTool.validateInput({ file_path: filePath } as any)
+    const result = await FileReadTool.validateInput({
+      file_path: filePath,
+    } as any)
     expect(result.result).toBe(false)
     expect(result.message).toContain('offset and limit')
   })
@@ -65,7 +71,9 @@ describe('FileReadTool parity: validateInput gating', () => {
     const filePath = join(tmpRoot, 'sound.mp3')
     writeFileSync(filePath, 'not really an mp3', 'utf8')
 
-    const result = await FileReadTool.validateInput({ file_path: filePath } as any)
+    const result = await FileReadTool.validateInput({
+      file_path: filePath,
+    } as any)
     expect(result.result).toBe(false)
     expect(result.message).toContain('cannot read binary files')
   })
@@ -74,9 +82,10 @@ describe('FileReadTool parity: validateInput gating', () => {
     const filePath = join(tmpRoot, 'empty.png')
     writeFileSync(filePath, '', 'utf8')
 
-    const result = await FileReadTool.validateInput({ file_path: filePath } as any)
+    const result = await FileReadTool.validateInput({
+      file_path: filePath,
+    } as any)
     expect(result.result).toBe(false)
     expect(result.message).toContain('Empty image files')
   })
 })
-

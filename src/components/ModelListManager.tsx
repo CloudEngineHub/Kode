@@ -150,19 +150,21 @@ export function ModelListManager({ onClose }: Props): React.ReactNode {
             : ''}
         </Text>
         <Text dimColor>
-          {isDeleteMode
-            ? availableModels.length <= 1
-              ? 'Cannot delete the last model, Esc to cancel'
-              : 'Press Enter/Space to DELETE selected model (cannot delete main), Esc to cancel'
-            : (
-                <>
-                  Navigate: ↑↓ | Select: Enter |{' '}
-                  <Text bold color="red">
-                    Delete: d
-                  </Text>{' '}
-                  | Exit: Esc
-                </>
-              )}
+          {isDeleteMode ? (
+            availableModels.length <= 1 ? (
+              'Cannot delete the last model, Esc to cancel'
+            ) : (
+              'Press Enter/Space to DELETE selected model (cannot delete main), Esc to cancel'
+            )
+          ) : (
+            <>
+              Navigate: ↑↓ | Select: Enter |{' '}
+              <Text bold color="red">
+                Delete: d
+              </Text>{' '}
+              | Exit: Esc
+            </>
+          )}
         </Text>
       </Box>
 
@@ -194,9 +196,7 @@ export function ModelListManager({ onClose }: Props): React.ReactNode {
                     )}
                     {item.usedBy.length === 0 && (
                       <Box marginLeft={1}>
-                        <Text color={theme.secondaryText}>
-                          [Available]
-                        </Text>
+                        <Text color={theme.secondaryText}>[Available]</Text>
                       </Box>
                     )}
                   </>
@@ -215,13 +215,16 @@ export function ModelListManager({ onClose }: Props): React.ReactNode {
                 </Text>
               </Box>
             )}
-            {isSelected && isDeleteMode && item.type === 'model' && config.modelPointers?.main === item.id && (
-              <Box paddingLeft={2} marginTop={1}>
-                <Text color="yellow">
-                  Cannot delete: This model is currently set as main
-                </Text>
-              </Box>
-            )}
+            {isSelected &&
+              isDeleteMode &&
+              item.type === 'model' &&
+              config.modelPointers?.main === item.id && (
+                <Box paddingLeft={2} marginTop={1}>
+                  <Text color="yellow">
+                    Cannot delete: This model is currently set as main
+                  </Text>
+                </Box>
+              )}
           </Box>
         )
       })}
@@ -233,21 +236,23 @@ export function ModelListManager({ onClose }: Props): React.ReactNode {
         borderTopStyle="single"
       >
         <Text dimColor>
-          {isDeleteMode
-            ? availableModels.length <= 1
-              ? 'Cannot delete the last model - press Esc to cancel'
-              : 'DELETE MODE: Press Enter/Space to delete (cannot delete main model), Esc to cancel'
-            : availableModels.length <= 1
-              ? 'Use ↑/↓ to navigate, Enter to add new, Esc to exit (cannot delete last model)'
-              : (
-                  <>
-                    Use ↑/↓ to navigate,{' '}
-                    <Text bold color="red">
-                      d to delete model
-                    </Text>
-                    , Enter to add new, Esc to exit
-                  </>
-                )}
+          {isDeleteMode ? (
+            availableModels.length <= 1 ? (
+              'Cannot delete the last model - press Esc to cancel'
+            ) : (
+              'DELETE MODE: Press Enter/Space to delete (cannot delete main model), Esc to cancel'
+            )
+          ) : availableModels.length <= 1 ? (
+            'Use ↑/↓ to navigate, Enter to add new, Esc to exit (cannot delete last model)'
+          ) : (
+            <>
+              Use ↑/↓ to navigate,{' '}
+              <Text bold color="red">
+                d to delete model
+              </Text>
+              , Enter to add new, Esc to exit
+            </>
+          )}
         </Text>
       </Box>
     </Box>

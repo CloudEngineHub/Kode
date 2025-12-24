@@ -2,6 +2,9 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import React, { useMemo, useState } from 'react'
 import { PassThrough } from 'stream'
 import stripAnsi from 'strip-ansi'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import { Box, Text, render } from 'ink'
 import PromptInput from '@components/PromptInput'
 import { PermissionProvider } from '@context/PermissionContext'
@@ -17,6 +20,7 @@ import {
 import type { Message as KodeMessage } from '@query'
 import { Message } from '@components/Message'
 import { MessageResponse } from '@components/MessageResponse'
+import { setCwd } from '@utils/state'
 
 type InkTestHarness = {
   stdin: PassThrough & {
@@ -40,7 +44,8 @@ class TestErrorBoundary extends React.Component<
 
   static getDerivedStateFromError(error: unknown): { error: string } {
     return {
-      error: error instanceof Error ? error.stack || error.message : String(error),
+      error:
+        error instanceof Error ? error.stack || error.message : String(error),
     }
   }
 
@@ -152,7 +157,83 @@ function PromptInputHarness({
   )
 }
 
+function PromptInputHarnessWithRaw({
+  conversationKey,
+}: {
+  conversationKey: string
+}): React.ReactNode {
+  const [input, setInput] = useState('')
+  const [mode, setMode] = useState<'bash' | 'prompt' | 'koding'>('prompt')
+  const [submitCount, setSubmitCount] = useState(0)
+  const [abortController, setAbortController] =
+    useState<AbortController | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+
+  return (
+    <PermissionProvider
+      conversationKey={conversationKey}
+      isBypassPermissionsModeAvailable={true}
+    >
+      <Box flexDirection="column">
+        <Text>RAW:{JSON.stringify(input)}</Text>
+        <PromptInput
+          commands={[]}
+          forkNumber={0}
+          messageLogName="tui"
+          isDisabled={false}
+          isLoading={isLoading}
+          onQuery={async () => {}}
+          debug={false}
+          verbose={false}
+          messages={[]}
+          setToolJSX={() => {}}
+          tools={[]}
+          input={input}
+          onInputChange={setInput}
+          mode={mode}
+          onModeChange={setMode}
+          submitCount={submitCount}
+          onSubmitCountChange={updater => setSubmitCount(prev => updater(prev))}
+          setIsLoading={setIsLoading}
+          setAbortController={setAbortController}
+          onShowMessageSelector={() => {}}
+          setForkConvoWithMessagesOnTheNextRender={() => {}}
+          readFileTimestamps={{}}
+          abortController={abortController}
+        />
+      </Box>
+    </PermissionProvider>
+  )
+}
+
 describe('TUI E2E regression (Ink render)', () => {
+  test('Completion: Space inserts a space (does not accept suggestion)', async () => {
+    // Ensure the completion cwd matches the test runner cwd.
+    await setCwd(process.cwd())
+
+    const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
+    const h = createInkTestHarness(
+      <PromptInputHarnessWithRaw conversationKey={conversationKey} />,
+    )
+    mounted.push(h)
+
+    await h.wait(25)
+    h.clearOutput()
+
+    h.stdin.write('./d')
+    await h.wait(75)
+    expect(h.getOutput()).toContain('RAW:"./d"')
+
+    h.clearOutput()
+    h.stdin.write(' ')
+    await h.wait(75)
+
+    const out = h.getOutput()
+    expect(out).toContain('RAW:"./d "')
+    expect(out).not.toContain('RAW:"./dist/')
+    expect(out).not.toContain('RAW:"loading...')
+  })
+
   test('shift+tab cycles permission mode and renders CompactModeIndicator', async () => {
     const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
     const h = createInkTestHarness(
@@ -291,7 +372,11 @@ describe('TUI E2E regression (Ink render)', () => {
       [],
     )
 
-    function MessagesHarness({ messages }: { messages: KodeMessage[] }): React.ReactNode {
+    function MessagesHarness({
+      messages,
+    }: {
+      messages: KodeMessage[]
+    }): React.ReactNode {
       const normalized = useMemo(() => normalizeMessages(messages), [messages])
       const ordered = useMemo(() => reorderMessages(normalized), [normalized])
 
@@ -367,5 +452,50 @@ describe('TUI E2E regression (Ink render)', () => {
 
     expect(h.getOutput()).toContain('Running…')
     expect(h.getOutput()).not.toContain('Waiting…')
+  })
+
+  test('statusline renders when configured', async () => {
+    const originalHome = process.env.HOME
+    const originalUserProfile = process.env.USERPROFILE
+    const originalEnabled = process.env.KODE_STATUSLINE_ENABLED
+    const originalConfigDir = process.env.KODE_CONFIG_DIR
+
+    const homeDir = mkdtempSync(join(tmpdir(), 'kode-statusline-home-'))
+    process.env.HOME = homeDir
+    process.env.USERPROFILE = homeDir
+    process.env.KODE_STATUSLINE_ENABLED = '1'
+    process.env.KODE_CONFIG_DIR = join(homeDir, '.kode')
+
+    mkdirSync(join(homeDir, '.kode'), { recursive: true })
+    const cmd = `${process.execPath} -e "process.stdout.write('hello-statusline')"`
+    writeFileSync(
+      join(homeDir, '.kode', 'settings.json'),
+      JSON.stringify({ statusLine: cmd }, null, 2) + '\n',
+      'utf8',
+    )
+
+    try {
+      const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
+      const h = createInkTestHarness(
+        <PromptInputHarness conversationKey={conversationKey} />,
+      )
+      mounted.push(h)
+
+      await h.wait(25)
+      await h.wait(1000)
+
+      expect(h.getOutput()).toContain('hello-statusline')
+    } finally {
+      if (originalHome === undefined) delete process.env.HOME
+      else process.env.HOME = originalHome
+      if (originalUserProfile === undefined) delete process.env.USERPROFILE
+      else process.env.USERPROFILE = originalUserProfile
+      if (originalEnabled === undefined)
+        delete process.env.KODE_STATUSLINE_ENABLED
+      else process.env.KODE_STATUSLINE_ENABLED = originalEnabled
+      if (originalConfigDir === undefined) delete process.env.KODE_CONFIG_DIR
+      else process.env.KODE_CONFIG_DIR = originalConfigDir
+      rmSync(homeDir, { recursive: true, force: true })
+    }
   })
 })

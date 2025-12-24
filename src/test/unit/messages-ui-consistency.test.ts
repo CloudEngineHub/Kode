@@ -28,7 +28,11 @@ function makeToolResult(toolUseID: string, content = 'ok') {
   ] as any)
 }
 
-function makeProgress(toolUseID: string, siblingToolUseIDs: Set<string>, text: string) {
+function makeProgress(
+  toolUseID: string,
+  siblingToolUseIDs: Set<string>,
+  text: string,
+) {
   return createProgressMessage(
     toolUseID,
     siblingToolUseIDs,
@@ -126,4 +130,3 @@ describe('UI messages consistency (no duplicate tool rendering)', () => {
     }
   })
 })
-

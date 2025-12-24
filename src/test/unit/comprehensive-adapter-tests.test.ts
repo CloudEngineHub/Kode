@@ -4,13 +4,15 @@ import { getModelCapabilities } from '../../constants/modelCapabilities'
 import { testModels } from '../testAdapters'
 
 describe('Model Adapter Tests', () => {
-
   describe('Adapter Selection', () => {
-    test.each(testModels)('$name uses correct adapter', (model) => {
+    test.each(testModels)('$name uses correct adapter', model => {
       const adapter = ModelAdapterFactory.createAdapter(model)
-      const shouldUseResponses = ModelAdapterFactory.shouldUseResponsesAPI(model)
+      const shouldUseResponses =
+        ModelAdapterFactory.shouldUseResponsesAPI(model)
 
-      const expectedAdapter = shouldUseResponses ? 'ResponsesAPIAdapter' : 'ChatCompletionsAdapter'
+      const expectedAdapter = shouldUseResponses
+        ? 'ResponsesAPIAdapter'
+        : 'ChatCompletionsAdapter'
       expect(adapter.constructor.name).toBe(expectedAdapter)
     })
   })
@@ -18,7 +20,8 @@ describe('Model Adapter Tests', () => {
   describe('Architecture Validation', () => {
     test('Chat Completions models use ChatCompletionsAdapter', () => {
       const chatModels = testModels.filter(model => {
-        const shouldUseResponses = ModelAdapterFactory.shouldUseResponsesAPI(model)
+        const shouldUseResponses =
+          ModelAdapterFactory.shouldUseResponsesAPI(model)
         return !shouldUseResponses
       })
 
@@ -30,7 +33,8 @@ describe('Model Adapter Tests', () => {
 
     test('Responses API models use ResponsesAPIAdapter', () => {
       const responsesModels = testModels.filter(model => {
-        const shouldUseResponses = ModelAdapterFactory.shouldUseResponsesAPI(model)
+        const shouldUseResponses =
+          ModelAdapterFactory.shouldUseResponsesAPI(model)
         return shouldUseResponses
       })
 
@@ -59,13 +63,14 @@ describe('Model Adapter Tests', () => {
       tools: [],
       maxTokens: 100,
       stream: true,
-      temperature: 0.7
+      temperature: 0.7,
     }
 
     testModels.forEach(model => {
       const adapter = ModelAdapterFactory.createAdapter(model)
       const request = adapter.createRequest(unifiedParams)
-      const shouldUseResponses = ModelAdapterFactory.shouldUseResponsesAPI(model)
+      const shouldUseResponses =
+        ModelAdapterFactory.shouldUseResponsesAPI(model)
 
       expect(request.model).toBe(model.modelName)
 
@@ -75,7 +80,9 @@ describe('Model Adapter Tests', () => {
         expect(request.stream).toBe(true)
       } else {
         expect(request).toHaveProperty('messages')
-        const hasMaxTokens = request.hasOwnProperty('max_tokens') || request.hasOwnProperty('max_completion_tokens')
+        const hasMaxTokens =
+          request.hasOwnProperty('max_tokens') ||
+          request.hasOwnProperty('max_completion_tokens')
         expect(hasMaxTokens).toBe(true)
         expect(request).not.toHaveProperty('include')
         expect(request).not.toHaveProperty('max_output_tokens')

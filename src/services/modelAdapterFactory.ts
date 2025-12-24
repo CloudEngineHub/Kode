@@ -11,10 +11,10 @@ export class ModelAdapterFactory {
    */
   static createAdapter(modelProfile: ModelProfile): ModelAPIAdapter {
     const capabilities = getModelCapabilities(modelProfile.modelName)
-    
+
     // Determine which API to use
     const apiType = this.determineAPIType(modelProfile, capabilities)
-    
+
     // Create corresponding adapter
     switch (apiType) {
       case 'responses_api':
@@ -24,40 +24,40 @@ export class ModelAdapterFactory {
         return new ChatCompletionsAdapter(capabilities, modelProfile)
     }
   }
-  
+
   /**
    * Determine which API should be used
    */
   private static determineAPIType(
     modelProfile: ModelProfile,
-    capabilities: ModelCapabilities
+    capabilities: ModelCapabilities,
   ): 'responses_api' | 'chat_completions' {
     // If model doesn't support Responses API, use Chat Completions directly
     if (capabilities.apiArchitecture.primary !== 'responses_api') {
       return 'chat_completions'
     }
-    
+
     // Check if this is official OpenAI endpoint
-    const isOfficialOpenAI = !modelProfile.baseURL || 
-      modelProfile.baseURL.includes('api.openai.com')
-    
+    const isOfficialOpenAI =
+      !modelProfile.baseURL || modelProfile.baseURL.includes('api.openai.com')
+
     // Non-official endpoints can use Responses API if model supports it
     if (!isOfficialOpenAI) {
       // If there's a fallback option, use fallback
       if (capabilities.apiArchitecture.fallback === 'chat_completions') {
-        return capabilities.apiArchitecture.primary  // ← FIXED: Use primary instead of fallback
+        return capabilities.apiArchitecture.primary // ← FIXED: Use primary instead of fallback
       }
       // Otherwise use primary (might fail, but let it try)
       return capabilities.apiArchitecture.primary
     }
-    
+
     // For now, always use Responses API for supported models when on official endpoint
     // Streaming fallback will be handled at runtime if needed
-    
+
     // Use primary API type
     return capabilities.apiArchitecture.primary
   }
-  
+
   /**
    * Check if model should use Responses API
    */

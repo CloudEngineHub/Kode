@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
- 
+
 import { logUnaryEvent, CompletionType } from '@utils/unaryLogging'
 import { ToolUseConfirm } from '@components/permissions/PermissionRequest'
 import { env } from '@utils/env'
@@ -18,8 +18,6 @@ export function usePermissionRequestLogging(
   unaryEvent: UnaryEvent,
 ): void {
   useEffect(() => {
-    
-
     // Handle string or Promise language name
     const languagePromise = Promise.resolve(unaryEvent.language_name)
 

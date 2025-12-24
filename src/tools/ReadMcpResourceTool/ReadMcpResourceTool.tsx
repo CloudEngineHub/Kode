@@ -59,7 +59,11 @@ export const ReadMcpResourceTool = {
       }
     }
     if (match.type !== 'connected') {
-      return { result: false, message: `Server "${server}" is not connected`, errorCode: 2 }
+      return {
+        result: false,
+        message: `Server "${server}" is not connected`,
+        errorCode: 2,
+      }
     }
     let capabilities: Record<string, unknown> | null =
       (match as any).capabilities ?? null
@@ -71,7 +75,11 @@ export const ReadMcpResourceTool = {
       }
     }
     if (!(capabilities as any)?.resources) {
-      return { result: false, message: `Server "${server}" does not support resources`, errorCode: 3 }
+      return {
+        result: false,
+        message: `Server "${server}" does not support resources`,
+        errorCode: 3,
+      }
     }
     return { result: true }
   },
@@ -89,7 +97,9 @@ export const ReadMcpResourceTool = {
         <Box flexDirection="row">
           <Text>&nbsp;&nbsp;⎿ &nbsp;</Text>
           <Text bold>Read MCP resource</Text>
-          <Text>{count ? ` (${count} part${count === 1 ? '' : 's'})` : ''}</Text>
+          <Text>
+            {count ? ` (${count} part${count === 1 ? '' : 's'})` : ''}
+          </Text>
         </Box>
         <Cost costUSD={0} durationMs={0} debug={false} />
       </Box>

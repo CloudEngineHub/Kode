@@ -11,12 +11,12 @@ import { isInDirectory } from '@utils/file'
 import { logError } from '@utils/log'
 import { createAssistantMessage } from '@utils/messages'
 import { BunShell } from '@utils/BunShell'
-import { getBunShellSandboxPlan } from '@utils/bunShellSandboxPlan'
-import { ensureSandboxNetworkInfrastructure } from '@utils/sandboxNetworkInfrastructure'
+import { getBunShellSandboxPlan } from '@utils/sandbox/bunShellSandboxPlan'
+import { ensureSandboxNetworkInfrastructure } from '@utils/sandbox/sandboxNetworkInfrastructure'
 import { getCwd, getOriginalCwd } from '@utils/state'
-import { decideSystemSandboxForBashTool } from '@utils/systemSandbox'
+import { decideSystemSandboxForBashTool } from '@utils/sandbox/systemSandbox'
 import { isBashCommandReadOnly } from '@utils/permissions/bashReadOnly'
-import { getBashDestructiveCommandBlock } from '@utils/destructiveCommandGuard'
+import { getBashDestructiveCommandBlock } from '@utils/sandbox/destructiveCommandGuard'
 import { getTaskOutputFilePath } from '@utils/taskOutputStore'
 import {
   formatBashLlmGateBlockMessage,
@@ -73,18 +73,6 @@ export const inputSchema = z.strictObject({
     .number()
     .optional()
     .describe('Optional timeout in milliseconds (max 600000)'),
-  reason: z
-    .string()
-    .optional()
-    .describe(
-      'Human-readable intent for running this command (1-2 sentences). This is used for safety/intention checks and for clearer logs/UI. Examples: "Check current git status before making changes", "Install dependencies to run tests".',
-    ),
-  intent: z
-    .string()
-    .optional()
-    .describe(
-      'Alias for `reason` (kept for compatibility). Prefer using `reason`.',
-    ),
   description: z
     .string()
     .optional()
@@ -148,7 +136,9 @@ export const BashTool = {
   userFacingName(input?: z.infer<typeof inputSchema>) {
     if (!input) return 'Bash'
 
-    const raw = process.env.CLAUDE_CODE_BASH_SANDBOX_SHOW_INDICATOR
+    const raw =
+      process.env.KODE_BASH_SANDBOX_SHOW_INDICATOR ??
+      process.env.CLAUDE_CODE_BASH_SANDBOX_SHOW_INDICATOR
     // Reference CLI parity: only explicit truthy values enable the indicator (F0 in cli.js).
     const showIndicator = raw
       ? ['1', 'true', 'yes', 'on'].includes(raw.trim().toLowerCase())
@@ -198,8 +188,7 @@ export const BashTool = {
     ) {
       return {
         result: false,
-        message:
-          'Sandbox cannot be disabled while safe mode is enabled.',
+        message: 'Sandbox cannot be disabled while safe mode is enabled.',
       }
     }
     const commands = splitCommand(command)
@@ -237,19 +226,22 @@ export const BashTool = {
     return { result: true }
   },
   renderToolUseMessage(
-    { command, run_in_background, reason, intent },
+    { command, run_in_background, description, timeout },
     options?: { verbose: boolean },
   ) {
-    // Optional: show intent in verbose mode (keeps permission keys stable).
+    // Optional: show the command description in verbose mode.
     const verbose = Boolean(options?.verbose)
-    const trimmedReason = (reason?.trim() || intent?.trim() || '').trim()
-    const withReason = (base: string): string => {
-      if (!verbose || !trimmedReason) return base
+    const trimmedDescription = (description?.trim() || '').trim()
+    const effectiveTimeout = timeout ?? DEFAULT_TIMEOUT_MS
+    const timeoutSuffix = ` (timeout=${formatDuration(effectiveTimeout)})`
+    const bgSuffix = run_in_background ? ' [background]' : ''
+    const withDescription = (base: string): string => {
+      if (!verbose || !trimmedDescription) return base
       const maxLen = 160
       const shown =
-        trimmedReason.length > maxLen
-          ? `${trimmedReason.slice(0, maxLen - 1)}…`
-          : trimmedReason
+        trimmedDescription.length > maxLen
+          ? `${trimmedDescription.slice(0, maxLen - 1)}…`
+          : trimmedDescription
       return `${base} — ${shown}`
     }
 
@@ -263,13 +255,13 @@ export const BashTool = {
         const content = match[2]
         const suffix = match[3] || ''
         const cleaned = `${prefix.trim()} "${content.trim()}"${suffix.trim()}`
-        const base = run_in_background ? `${cleaned} [background]` : cleaned
-        return withReason(base)
+        const base = `${cleaned}${bgSuffix}${timeoutSuffix}`
+        return withDescription(base.trim())
       }
     }
 
-    const base = run_in_background ? `${command} [background]` : command
-    return withReason(base)
+    const base = `${command}${bgSuffix}${timeoutSuffix}`
+    return withDescription(base.trim())
   },
   renderToolUseRejectedMessage() {
     return <FallbackToolUseRejectedMessage />
@@ -278,7 +270,13 @@ export const BashTool = {
   renderToolResultMessage(content) {
     return <BashToolResultMessage content={content} verbose={false} />
   },
-  renderResultForAssistant({ interrupted, stdout, stderr, bashId, backgroundTaskId }) {
+  renderResultForAssistant({
+    interrupted,
+    stdout,
+    stderr,
+    bashId,
+    backgroundTaskId,
+  }) {
     let trimmedStdout = stdout
     if (trimmedStdout) {
       trimmedStdout = trimmedStdout.replace(/^(\s*\n)+/, '')
@@ -296,7 +294,9 @@ export const BashTool = {
       ? `Command running in background with ID: ${id}. Output is being written to: ${getTaskOutputFilePath(id)}`
       : ''
 
-    return [trimmedStdout, trimmedStderr, backgroundLine].filter(Boolean).join('\n')
+    return [trimmedStdout, trimmedStderr, backgroundLine]
+      .filter(Boolean)
+      .join('\n')
   },
   async *call(
     {
@@ -304,26 +304,30 @@ export const BashTool = {
       timeout = DEFAULT_TIMEOUT_MS,
       run_in_background,
       dangerouslyDisableSandbox,
-      reason,
-      intent,
       description,
     },
     context,
   ) {
     const { abortController, readFileTimestamps } = context
     const setToolJSX = (context as any).setToolJSX as
-      | ((jsx: { jsx: React.ReactNode | null; shouldHidePromptInput: boolean } | null) => void)
+      | ((
+          jsx: {
+            jsx: React.ReactNode | null
+            shouldHidePromptInput: boolean
+          } | null,
+        ) => void)
       | undefined
     let stdout = ''
     let stderr = ''
 
     const commandSource = getCommandSource(context as any)
     const safeMode = Boolean(context?.safeMode ?? context?.options?.safeMode)
-    const effectiveReason =
-      (typeof reason === 'string' && reason.trim()) ||
-      (typeof intent === 'string' && intent.trim()) ||
-      (typeof description === 'string' && description.trim()) ||
-      ''
+    const userPrompt =
+      typeof context?.options?.lastUserPrompt === 'string'
+        ? context.options.lastUserPrompt.trim()
+        : ''
+    const commandDescription =
+      typeof description === 'string' ? description.trim() : ''
 
     const destructiveBlock = getBashDestructiveCommandBlock({
       command,
@@ -374,7 +378,8 @@ export const BashTool = {
       const data: Out = {
         stdout: '',
         stdoutLines: 0,
-        stderr: 'This command must run in the sandbox, but sandboxed execution is not available.',
+        stderr:
+          'This command must run in the sandbox, but sandboxed execution is not available.',
         stderrLines: 1,
         interrupted: false,
       }
@@ -387,19 +392,31 @@ export const BashTool = {
     }
 
     let sandboxOptions =
-      sandboxPlan.settings.enabled === true ? sandboxPlan.bunShellSandboxOptions : systemSandboxOptions
+      sandboxPlan.settings.enabled === true
+        ? sandboxPlan.bunShellSandboxOptions
+        : systemSandboxOptions
+
+    const bashLlmGateQuery =
+      typeof (context as any)?.options?.bashLlmGateQuery === 'function'
+        ? ((context as any).options.bashLlmGateQuery as any)
+        : undefined
 
     const llmGateResult = await runBashLlmSafetyGate({
       command,
-      reason: effectiveReason,
+      userPrompt,
+      description: commandDescription,
       platform: process.platform,
       commandSource,
       safeMode,
+      runInBackground: run_in_background === true,
       willSandbox: Boolean(sandboxOptions?.enabled),
-      sandboxRequired: Boolean(sandboxOptions?.enabled && sandboxOptions.require),
+      sandboxRequired: Boolean(
+        sandboxOptions?.enabled && sandboxOptions.require,
+      ),
       cwd: getCwd(),
       originalCwd: getOriginalCwd(),
       parentAbortSignal: abortController.signal,
+      query: bashLlmGateQuery,
     })
 
     if (llmGateResult.decision === 'block') {
@@ -420,29 +437,48 @@ export const BashTool = {
     }
 
     if (llmGateResult.decision === 'error' && !llmGateResult.canFailOpen) {
-      const message = [
+      const userHint =
+        llmGateResult.errorType === 'api'
+          ? 'Fix your model connection (API key / network) and retry.'
+          : llmGateResult.errorType === 'timeout'
+            ? 'LLM intent gate timed out. Retry.'
+            : 'LLM intent gate returned invalid output. Retry.'
+      const userMessage = [
         llmGateResult.willSandbox
-          ? 'Blocked: LLM safety gate failed (fail-closed policy).'
-          : 'Blocked: LLM safety gate failed and command would run unsandboxed.',
+          ? 'Blocked: LLM intent gate failed (cannot verify command intent).'
+          : 'Blocked: LLM intent gate failed and command would run unsandboxed.',
         `Error: ${llmGateResult.error}`,
         '',
+        userHint,
+      ]
+        .filter(Boolean)
+        .join('\n')
+
+      // Keep user-only bypass instructions out of the model-facing tool result to avoid
+      // encouraging the assistant to "solve" the problem by bypassing safety.
+      const assistantMessage = [
         llmGateResult.willSandbox
-          ? 'To allow fail-open when sandboxed, set KODE_BASH_LLM_GATE_FAIL_OPEN_SANDBOXED=1.'
-          : null,
-        'If you explicitly want to bypass this gate, set KODE_BASH_LLM_GATE_BYPASS=1 (not available in safe mode).',
+          ? 'Blocked: LLM intent gate unavailable.'
+          : 'Blocked: LLM intent gate unavailable (command would run unsandboxed).',
+        `Error: ${llmGateResult.error}`,
+        llmGateResult.errorType === 'invalid_output'
+          ? 'Hint: Retry and include a short `description` for the Bash command.'
+          : llmGateResult.errorType === 'timeout'
+            ? 'Hint: Retry (or switch to a faster main model).'
+            : '',
       ]
         .filter(Boolean)
         .join('\n')
       const data: Out = {
         stdout: '',
         stdoutLines: 0,
-        stderr: message,
-        stderrLines: message.split(/\r?\n/).length,
+        stderr: userMessage,
+        stderrLines: userMessage.split(/\r?\n/).length,
         interrupted: false,
       }
       yield {
         type: 'result',
-        resultForAssistant: this.renderResultForAssistant(data),
+        resultForAssistant: assistantMessage,
         data,
       }
       return
@@ -458,17 +494,21 @@ export const BashTool = {
       sandboxOptions.needsNetworkRestriction === true
     ) {
       const mode = context?.options?.toolPermissionContext?.mode ?? 'default'
-      const shouldAvoidPermissionPrompts = Boolean(context?.options?.shouldAvoidPermissionPrompts)
+      const shouldAvoidPermissionPrompts = Boolean(
+        context?.options?.shouldAvoidPermissionPrompts,
+      )
 
       const ports = await ensureSandboxNetworkInfrastructure({
         runtimeConfig: sandboxPlan.runtimeConfig,
         permissionCallback: async ({ host, port }) => {
-          if (mode === 'acceptEdits' || mode === 'bypassPermissions') return true
+          if (mode === 'acceptEdits' || mode === 'bypassPermissions')
+            return true
           if (mode === 'dontAsk' || shouldAvoidPermissionPrompts) return false
           if (!setToolJSX) return false
           if (abortController.signal.aborted) return false
 
-          const hostForUrl = host.includes(':') && !host.startsWith('[') ? `[${host}]` : host
+          const hostForUrl =
+            host.includes(':') && !host.startsWith('[') ? `[${host}]` : host
           const url = `http://${hostForUrl}:${port}/`
 
           return await new Promise<boolean>(resolve => {
@@ -538,9 +578,13 @@ export const BashTool = {
 
     try {
       if (run_in_background) {
-        const { bashId } = BunShell.getInstance().execInBackground(command, timeout, {
-          sandbox: sandboxOptions,
-        })
+        const { bashId } = BunShell.getInstance().execInBackground(
+          command,
+          timeout,
+          {
+            sandbox: sandboxOptions,
+          },
+        )
         const data: Out = {
           stdout: '',
           stdoutLines: 0,
@@ -641,7 +685,10 @@ export const BashTool = {
         const waitMs = Math.max(0, nextTickAt - now)
         const race = await Promise.race([
           resultPromise.then(r => ({ kind: 'done' as const, r })),
-          backgroundPromise.then(bashId => ({ kind: 'background' as const, bashId })),
+          backgroundPromise.then(bashId => ({
+            kind: 'background' as const,
+            bashId,
+          })),
           new Promise<{ kind: 'tick' }>(resolve =>
             setTimeout(() => resolve({ kind: 'tick' }), waitMs),
           ),
@@ -679,7 +726,6 @@ export const BashTool = {
             // Shell directory is outside original working directory, reset it
             await BunShell.getInstance().setCwd(getOriginalCwd())
             stderr = `${stderr.trim()}${EOL}Shell cwd was reset to ${getOriginalCwd()}`
-
           }
 
           // Update read timestamps for any files referenced by the command
@@ -695,7 +741,8 @@ export const BashTool = {
 
                 // Try/catch in case the file doesn't exist (because Haiku didn't properly extract it)
                 try {
-                  readFileTimestamps[fullFilePath] = statSync(fullFilePath).mtimeMs
+                  readFileTimestamps[fullFilePath] =
+                    statSync(fullFilePath).mtimeMs
                 } catch (e) {
                   logError(e)
                 }
@@ -732,7 +779,9 @@ export const BashTool = {
           overlayShown = true
           setToolJSX({
             jsx: (
-              <BashToolRunInBackgroundOverlay onBackground={requestBackground} />
+              <BashToolRunInBackgroundOverlay
+                onBackground={requestBackground}
+              />
             ),
             shouldHidePromptInput: false,
           })
@@ -741,7 +790,9 @@ export const BashTool = {
         const text = buildProgressText()
         yield {
           type: 'progress',
-          content: createAssistantMessage(`<tool-progress>${text}</tool-progress>`),
+          content: createAssistantMessage(
+            `<tool-progress>${text}</tool-progress>`,
+          ),
         }
 
         nextTickAt = Date.now() + PROGRESS_INTERVAL_MS
@@ -749,10 +800,10 @@ export const BashTool = {
     } catch (error) {
       // 🔧 Handle cancellation or other errors properly
       const isAborted = abortController.signal.aborted
-      const errorMessage = isAborted 
-        ? 'Command was cancelled by user' 
+      const errorMessage = isAborted
+        ? 'Command was cancelled by user'
         : `Command failed: ${error instanceof Error ? error.message : String(error)}`
-      
+
       const data: Out = {
         stdout: stdout.trim(),
         stdoutLines: stdout.split('\n').length,

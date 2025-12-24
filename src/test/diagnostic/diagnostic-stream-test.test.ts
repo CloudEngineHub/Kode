@@ -55,7 +55,7 @@ describe('🔍 Diagnostic: Stream State Tracking', () => {
       stream: true, // Force streaming mode (even though adapter forces it anyway)
       reasoningEffort: 'high' as const,
       temperature: 1,
-      verbosity: 'high' as const
+      verbosity: 'high' as const,
     }
     console.log('  ✅ Unified params built with stream: true')
 
@@ -75,7 +75,9 @@ describe('🔍 Diagnostic: Stream State Tracking', () => {
     console.log(`  📊 Response ok: ${response.ok}`)
     console.log(`  📊 Response type: ${response.type}`)
     console.log(`  📊 Response body exists: ${!!response.body}`)
-    console.log(`  📊 Response body locked: ${response.body?.locked || 'N/A (not a ReadableStream)'}`)
+    console.log(
+      `  📊 Response body locked: ${response.body?.locked || 'N/A (not a ReadableStream)'}`,
+    )
 
     // Step 6: Check if body is a ReadableStream
     if (response.body && typeof response.body.getReader === 'function') {
@@ -86,12 +88,18 @@ describe('🔍 Diagnostic: Stream State Tracking', () => {
 
       if (response.body.locked) {
         console.log('\n❌ CRITICAL ISSUE FOUND: Stream is already locked!')
-        console.log('   This means something consumed the stream BEFORE adapter.parseResponse()')
+        console.log(
+          '   This means something consumed the stream BEFORE adapter.parseResponse()',
+        )
         console.log('   Possible culprits:')
         console.log('   - Middleware/interceptor reading the response')
-        console.log('   - Debug logging calling response.json() or response.text()')
+        console.log(
+          '   - Debug logging calling response.json() or response.text()',
+        )
         console.log('   - Error handler accessing the body')
-        throw new Error('Stream locked before adapter.parseResponse() - investigate what consumed it!')
+        throw new Error(
+          'Stream locked before adapter.parseResponse() - investigate what consumed it!',
+        )
       }
     } else {
       console.log('  ⚠️  WARNING: Response.body is NOT a ReadableStream')
@@ -111,10 +119,17 @@ describe('🔍 Diagnostic: Stream State Tracking', () => {
       console.log(`   Message: ${error.message}`)
       console.log(`   Stack: ${error.stack}`)
 
-      if (error.message.includes('locked') || error.message.includes('reader')) {
+      if (
+        error.message.includes('locked') ||
+        error.message.includes('reader')
+      ) {
         console.log('\n💡 ROOT CAUSE IDENTIFIED:')
-        console.log('   The stream was locked between API call and parseResponse()')
-        console.log('   This is the exact bug causing empty content in the CLI!')
+        console.log(
+          '   The stream was locked between API call and parseResponse()',
+        )
+        console.log(
+          '   This is the exact bug causing empty content in the CLI!',
+        )
       }
 
       throw error
@@ -123,8 +138,12 @@ describe('🔍 Diagnostic: Stream State Tracking', () => {
     // Step 8: Validate result
     console.log('\nStep 7: Validating result...')
     console.log(`  📄 Response ID: ${unifiedResponse.id}`)
-    console.log(`  📄 Content type: ${Array.isArray(unifiedResponse.content) ? 'array' : typeof unifiedResponse.content}`)
-    console.log(`  📄 Content length: ${Array.isArray(unifiedResponse.content) ? unifiedResponse.content.length : unifiedResponse.content?.length || 0}`)
+    console.log(
+      `  📄 Content type: ${Array.isArray(unifiedResponse.content) ? 'array' : typeof unifiedResponse.content}`,
+    )
+    console.log(
+      `  📄 Content length: ${Array.isArray(unifiedResponse.content) ? unifiedResponse.content.length : unifiedResponse.content?.length || 0}`,
+    )
 
     // Extract actual text content
     let actualText = ''
@@ -143,7 +162,7 @@ describe('🔍 Diagnostic: Stream State Tracking', () => {
     // Assertions
     expect(unifiedResponse).toBeDefined()
     expect(unifiedResponse.content).toBeDefined()
-    expect(Array.isArray(unifiedResponse.content)).toBe(true)  // Now expects array!
+    expect(Array.isArray(unifiedResponse.content)).toBe(true) // Now expects array!
 
     if (actualText.length === 0) {
       console.log('\n❌ CONFIRMED BUG: Content is empty!')
@@ -153,7 +172,9 @@ describe('🔍 Diagnostic: Stream State Tracking', () => {
       console.log('   2. Never had data to begin with (API returned empty)')
       console.log('   3. SSE parsing failed (wrong event structure)')
     } else {
-      console.log('\n✅ Content received! This test would pass if the bug is fixed.')
+      console.log(
+        '\n✅ Content received! This test would pass if the bug is fixed.',
+      )
     }
 
     // Final summary
@@ -182,16 +203,22 @@ describe('🔍 Diagnostic: Stream State Tracking', () => {
       stream: true,
       reasoningEffort: 'high' as const,
       temperature: 1,
-      verbosity: 'high' as const
+      verbosity: 'high' as const,
     }
 
     const streamingRequest = adapter.createRequest(streamingParams)
-    const streamingResponse = await callGPT5ResponsesAPI(GPT5_CODEX_PROFILE, streamingRequest)
+    const streamingResponse = await callGPT5ResponsesAPI(
+      GPT5_CODEX_PROFILE,
+      streamingRequest,
+    )
     const streamingResult = await adapter.parseResponse(streamingResponse)
 
     // Extract text from content array
     const streamingText = Array.isArray(streamingResult.content)
-      ? streamingResult.content.filter(b => b.type === 'text').map(b => b.text).join('')
+      ? streamingResult.content
+          .filter(b => b.type === 'text')
+          .map(b => b.text)
+          .join('')
       : streamingResult.content
 
     console.log(`  Stream forced: ${streamingRequest.stream}`)
@@ -202,16 +229,22 @@ describe('🔍 Diagnostic: Stream State Tracking', () => {
     console.log('\n📡 Testing with stream: false...')
     const nonStreamingParams = {
       ...streamingParams,
-      stream: false
+      stream: false,
     }
 
     const nonStreamingRequest = adapter.createRequest(nonStreamingParams)
-    const nonStreamingResponse = await callGPT5ResponsesAPI(GPT5_CODEX_PROFILE, nonStreamingRequest)
+    const nonStreamingResponse = await callGPT5ResponsesAPI(
+      GPT5_CODEX_PROFILE,
+      nonStreamingRequest,
+    )
     const nonStreamingResult = await adapter.parseResponse(nonStreamingResponse)
 
     // Extract text from content array
     const nonStreamingText = Array.isArray(nonStreamingResult.content)
-      ? nonStreamingResult.content.filter(b => b.type === 'text').map(b => b.text).join('')
+      ? nonStreamingResult.content
+          .filter(b => b.type === 'text')
+          .map(b => b.text)
+          .join('')
       : nonStreamingResult.content
 
     console.log(`  Stream requested: ${nonStreamingParams.stream}`)
@@ -224,11 +257,15 @@ describe('🔍 Diagnostic: Stream State Tracking', () => {
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
     console.log(`  Streaming content length: ${streamingText.length}`)
     console.log(`  Non-streaming content length: ${nonStreamingText.length}`)
-    console.log(`  Difference: ${nonStreamingText.length - streamingText.length}`)
+    console.log(
+      `  Difference: ${nonStreamingText.length - streamingText.length}`,
+    )
 
     if (streamingText.length === 0 && nonStreamingText.length > 0) {
       console.log('\n💡 KEY FINDING:')
-      console.log('   The adapter forces stream: true, but returns empty content!')
+      console.log(
+        '   The adapter forces stream: true, but returns empty content!',
+      )
       console.log('   This suggests the SSE parsing is failing silently.')
     }
   })

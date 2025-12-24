@@ -55,4 +55,3 @@ describe('PromptInput mode-cycle intercept', () => {
     ).toBe('modeCycle')
   })
 })
-

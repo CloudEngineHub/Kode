@@ -1,9 +1,15 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { getNextPermissionMode } from '@kode-types/PermissionMode'
 import { __applyPermissionModeSideEffectsForTests } from '@context/PermissionContext'
-import { __resetPermissionModeStateForTests, getPermissionModeForConversationKey } from '@utils/permissionModeState'
+import {
+  __resetPermissionModeStateForTests,
+  getPermissionModeForConversationKey,
+} from '@utils/permissionModeState'
 import { getGlobalConfig, saveGlobalConfig } from '@utils/config'
-import { getPlanModeSystemPromptAdditions, isPlanModeEnabled } from '@utils/planMode'
+import {
+  getPlanModeSystemPromptAdditions,
+  isPlanModeEnabled,
+} from '@utils/planMode'
 
 describe('permission mode cycle parity (Reference CLI aB9 + side effects)', () => {
   beforeEach(() => {
@@ -40,7 +46,9 @@ describe('permission mode cycle parity (Reference CLI aB9 + side effects)', () =
         isBypassPermissionsModeAvailable: true,
       }),
     ).toBe('plan')
-    expect(isPlanModeEnabled({ options: { messageLogName, forkNumber } } as any)).toBe(true)
+    expect(
+      isPlanModeEnabled({ options: { messageLogName, forkNumber } } as any),
+    ).toBe(true)
     expect((getGlobalConfig() as any).lastPlanModeUse).toBe(12345)
   })
 
@@ -59,7 +67,9 @@ describe('permission mode cycle parity (Reference CLI aB9 + side effects)', () =
       now: () => 999,
     })
 
-    expect(isPlanModeEnabled({ options: { messageLogName, forkNumber } } as any)).toBe(true)
+    expect(
+      isPlanModeEnabled({ options: { messageLogName, forkNumber } } as any),
+    ).toBe(true)
     expect((getGlobalConfig() as any).lastPlanModeUse).toBe(0)
   })
 

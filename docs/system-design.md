@@ -33,7 +33,7 @@ Kode 采用了创新的 **双轨架构模式 (Dual-Drive Architecture)**, 将 CL
 ```
 src/entrypoints/
 ├── cli.tsx          # CLI 应用主入口 (终端交互)
-├── mcp.ts           # MCP 服务器入口 (Claude Desktop 集成)
+├── mcp.ts           # MCP 服务器入口 (Desktop MCP host 集成)
 ```
 
 **CLI 模式核心职责**:
@@ -45,7 +45,7 @@ src/entrypoints/
 **MCP 模式核心职责**:
 - JSON-RPC 协议实现
 - 工具功能暴露与认证
-- 与 Claude Desktop 的服务发现
+- 与 Desktop MCP host 的服务发现
 - 结构化输入输出处理
 
 ### 2. 核心业务层 (Business Logic Layer)
@@ -88,20 +88,20 @@ const startCLI = async () => {
 
 ### MCP 启动流程
 ```typescript
-// Claude Desktop 通过 MCP 协议调用
+// Desktop MCP host 通过 MCP 协议调用
 const startMCPServer = () => {
   const server = new Server(
-    { name: 'kode', version: '1.0.0' },
+    { name: 'kode', version: '2.0.0' },
     { capabilities: { tools: {} } }
   );
-  server.connect(transport);             // 连接到 Claude Desktop
+  server.connect(transport);             // 连接到 Desktop MCP host
 };
 ```
 
 ### 运行时模式切换表
 | 特征 | CLI 模式 | MCP 模式 |
 |---|---|---|
-| 启动方式 | `kode` 命令 | Claude Desktop 集成 |
+| 启动方式 | `kode` 命令 | Desktop MCP host 集成 |
 | UI 机制 | React/Ink 终端 UI | 无直接 UI |
 | 输入输出 | 实时终端交互 | JSON-RPC 消息 |
 | 用户认证 | 浏览器 OAuth | 无 (代理认证) |
@@ -322,7 +322,7 @@ const generateSystemReminders = (context: AppContext) => {
 - **审计追踪** - 所有操作可追踪记录
 
 #### 3. 网络级安全
-- **请求代理** - 通过 Claude Desktop 代理网络访问
+- **请求代理** - 通过 Desktop MCP host 代理网络访问
 - **密钥隔离** - API 密钥与用户系统隔离
 
 #### 权限策略表
@@ -425,7 +425,7 @@ const metrics = {
 - **Debug 模式** - `NODE_ENV=development pnpm run dev --verbose`
 - **健康检查** - `/doctor` 命令自动诊断系统状态
 - **性能分析** - 集成式性能监控与瓶颈分析
-- **错误追踪** - Sentry 集成，自动错误上报
+- **错误追踪** - 默认不启用任何错误上报（仅本地日志；Sentry 适配为 no-op）
 
 ### 日志分级系统
 - **FATAL** - 系统崩溃，无法恢复

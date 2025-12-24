@@ -13,7 +13,11 @@ import { randomUUID } from 'crypto'
  * Get the kode config directory
  */
 function getConfigDirectory(): string {
-  return process.env.KODE_CONFIG_DIR ?? process.env.ANYKODE_CONFIG_DIR ?? join(homedir(), '.kode')
+  return (
+    process.env.KODE_CONFIG_DIR ??
+    process.env.ANYKODE_CONFIG_DIR ??
+    join(homedir(), '.kode')
+  )
 }
 
 /**

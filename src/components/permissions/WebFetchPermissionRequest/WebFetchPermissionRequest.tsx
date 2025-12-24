@@ -4,9 +4,7 @@ import chalk from 'chalk'
 import { Select } from '@components/CustomSelect/select'
 import { savePermission } from '@permissions'
 import { getTheme } from '@utils/theme'
-import {
-  type PermissionRequestProps,
-} from '@components/permissions/PermissionRequest'
+import { type PermissionRequestProps } from '@components/permissions/PermissionRequest'
 import {
   UnaryEvent,
   usePermissionRequestLogging,
@@ -40,7 +38,9 @@ export function WebFetchPermissionRequest({
   const hostname = hostnameForUrl(toolUseConfirm.input.url)
   const hostLabel =
     hostname ??
-    (typeof toolUseConfirm.input.url === 'string' ? toolUseConfirm.input.url : 'unknown')
+    (typeof toolUseConfirm.input.url === 'string'
+      ? toolUseConfirm.input.url
+      : 'unknown')
 
   const reject = () => {
     logUnaryEvent({
@@ -72,7 +72,10 @@ export function WebFetchPermissionRequest({
       paddingRight={1}
       paddingBottom={1}
     >
-      <PermissionRequestTitle title="Network request outside of sandbox" riskScore={null} />
+      <PermissionRequestTitle
+        title="Network request outside of sandbox"
+        riskScore={null}
+      />
       <Box flexDirection="column" paddingX={2} paddingY={1}>
         <Box>
           <Text dimColor>Host:</Text>

@@ -24,7 +24,9 @@ export default {
 
     saveGlobalConfig(config)
 
-    const message = <Text>Successfully logged out from your ShareAI Lab account.</Text>
+    const message = (
+      <Text>Successfully logged out from your ShareAI Lab account.</Text>
+    )
 
     setTimeout(() => {
       process.exit(0)

@@ -14,7 +14,10 @@ import { DESCRIPTION, PROMPT, TOOL_NAME_FOR_PROMPT } from './prompt'
 
 const inputSchema = z.strictObject({
   agentId: z.string().describe('The agent ID to retrieve results for'),
-  block: z.boolean().optional().describe('Whether to block until results are ready'),
+  block: z
+    .boolean()
+    .optional()
+    .describe('Whether to block until results are ready'),
   wait_up_to: z
     .number()
     .min(0)
@@ -38,7 +41,9 @@ type Output = {
   agents: Record<string, AgentInfo>
 }
 
-function taskToAgentInfo(task: ReturnType<typeof getBackgroundAgentTaskSnapshot>): AgentInfo | null {
+function taskToAgentInfo(
+  task: ReturnType<typeof getBackgroundAgentTaskSnapshot>,
+): AgentInfo | null {
   if (!task) return null
   return {
     status: task.status,
@@ -79,10 +84,18 @@ export const AgentOutputTool = {
     }
     const task = getBackgroundAgentTaskSnapshot(agentId)
     if (!task) {
-      return { result: false, message: `No agent found with ID: ${agentId}`, errorCode: 3 }
+      return {
+        result: false,
+        message: `No agent found with ID: ${agentId}`,
+        errorCode: 3,
+      }
     }
     if (task.type !== 'async_agent') {
-      return { result: false, message: `Task ${agentId} is not an async agent`, errorCode: 4 }
+      return {
+        result: false,
+        message: `Task ${agentId} is not an async agent`,
+        errorCode: 4,
+      }
     }
     return { result: true }
   },
@@ -117,10 +130,7 @@ export const AgentOutputTool = {
   renderResultForAssistant(output: Output) {
     return JSON.stringify(output)
   },
-  async *call(
-    { agentId, block, wait_up_to }: Input,
-    { abortController }: any,
-  ) {
+  async *call({ agentId, block, wait_up_to }: Input, { abortController }: any) {
     const shouldBlock = block ?? true
     const waitSeconds = wait_up_to ?? 150
 
@@ -133,11 +143,19 @@ export const AgentOutputTool = {
           retrieval_status: 'success',
           agents: { [agentId]: agent },
         }
-        yield { type: 'result', data: output, resultForAssistant: this.renderResultForAssistant(output) }
+        yield {
+          type: 'result',
+          data: output,
+          resultForAssistant: this.renderResultForAssistant(output),
+        }
         return
       }
       const output: Output = { retrieval_status: 'not_ready', agents: {} }
-      yield { type: 'result', data: output, resultForAssistant: this.renderResultForAssistant(output) }
+      yield {
+        type: 'result',
+        data: output,
+        resultForAssistant: this.renderResultForAssistant(output),
+      }
       return
     }
 
@@ -152,14 +170,20 @@ export const AgentOutputTool = {
         waitSeconds * 1000,
         abortController.signal,
       )
-      const snapshot = task ? getBackgroundAgentTaskSnapshot(task.agentId) : null
+      const snapshot = task
+        ? getBackgroundAgentTaskSnapshot(task.agentId)
+        : null
       const agent = taskToAgentInfo(snapshot)
       markBackgroundAgentTaskRetrieved(agentId)
       const output: Output = {
         retrieval_status: 'success',
         agents: agent ? { [agentId]: agent } : {},
       }
-      yield { type: 'result', data: output, resultForAssistant: this.renderResultForAssistant(output) }
+      yield {
+        type: 'result',
+        data: output,
+        resultForAssistant: this.renderResultForAssistant(output),
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       if (message.includes('Request timed out')) {
@@ -169,12 +193,19 @@ export const AgentOutputTool = {
           retrieval_status: 'timeout',
           agents: agent ? { [agentId]: agent } : {},
         }
-        yield { type: 'result', data: output, resultForAssistant: this.renderResultForAssistant(output) }
+        yield {
+          type: 'result',
+          data: output,
+          resultForAssistant: this.renderResultForAssistant(output),
+        }
         return
       }
       const output: Output = { retrieval_status: 'not_ready', agents: {} }
-      yield { type: 'result', data: output, resultForAssistant: this.renderResultForAssistant(output) }
+      yield {
+        type: 'result',
+        data: output,
+        resultForAssistant: this.renderResultForAssistant(output),
+      }
     }
   },
 } satisfies Tool<typeof inputSchema, Output>
-

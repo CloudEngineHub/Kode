@@ -58,7 +58,10 @@ test('falls back to bundled vendor rg when forced', () => {
         ? join(vendorRoot, `${process.arch}-win32`)
         : join(vendorRoot, `${process.arch}-${process.platform}`)
     mkdirSync(targetDir, { recursive: true })
-    const fakeRg = join(targetDir, process.platform === 'win32' ? 'rg.exe' : 'rg')
+    const fakeRg = join(
+      targetDir,
+      process.platform === 'win32' ? 'rg.exe' : 'rg',
+    )
     writeFileSync(fakeRg, 'stub')
 
     setEnv({
@@ -85,7 +88,9 @@ test('throws a helpful error when bundled rg is missing', () => {
       KODE_RIPGREP_PATH: undefined,
     })
 
-    expect(() => getRipgrepPath()).toThrow(/Bundled ripgrep missing|no bundled ripgrep/i)
+    expect(() => getRipgrepPath()).toThrow(
+      /Bundled ripgrep missing|no bundled ripgrep/i,
+    )
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

@@ -3,7 +3,7 @@ import { resolve } from 'path'
 import { logError } from './log'
 
 const d = (msg: string) => {
-  if (process.env.DEBUG?.includes('claude:search')) {
+  if (process.env.DEBUG?.includes('kode:search')) {
     console.log(`[search] ${msg}`)
   }
 }
@@ -42,7 +42,9 @@ export class BunSearcher {
       d(`Bun.glob found ${results.length} files`)
       return results
     } catch (error) {
-      d(`Bun.glob failed: ${error instanceof Error ? error.message : String(error)}`)
+      d(
+        `Bun.glob failed: ${error instanceof Error ? error.message : String(error)}`,
+      )
       logError(`BunSearcher.glob error: ${error}`)
       return []
     }
@@ -52,16 +54,15 @@ export class BunSearcher {
    * List all files in a directory (non-empty files)
    * Uses Bun.Glob to scan directory structure
    */
-  static async listFiles(
-    dir: string,
-    limit: number = 1000,
-  ): Promise<string[]> {
+  static async listFiles(dir: string, limit: number = 1000): Promise<string[]> {
     try {
       d(`listFiles: dir="${dir}" limit=${limit}`)
       // Scan all files recursively
       return await this.glob('**/*', dir, limit)
     } catch (error) {
-      d(`listFiles failed: ${error instanceof Error ? error.message : String(error)}`)
+      d(
+        `listFiles failed: ${error instanceof Error ? error.message : String(error)}`,
+      )
       logError(`BunSearcher.listFiles error: ${error}`)
       return []
     }
@@ -89,7 +90,9 @@ export class BunSearcher {
 
         results.push(file)
       } catch (error) {
-        d(`filterFiles stat error for ${file}: ${error instanceof Error ? error.message : String(error)}`)
+        d(
+          `filterFiles stat error for ${file}: ${error instanceof Error ? error.message : String(error)}`,
+        )
       }
     }
 
@@ -108,5 +111,9 @@ export async function searchWithRipgrep(
 ): Promise<string[]> {
   // Lazy import to avoid loading ripgrep unless needed
   const { ripGrep } = await import('./ripgrep')
-  return ripGrep(['-l', pattern], dir, abortSignal || new AbortController().signal)
+  return ripGrep(
+    ['-l', pattern],
+    dir,
+    abortSignal || new AbortController().signal,
+  )
 }

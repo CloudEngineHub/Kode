@@ -14,4 +14,3 @@ export function getAgentTranscript(
 ): ConversationMessage[] | undefined {
   return transcripts.get(agentId)
 }
-

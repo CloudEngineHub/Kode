@@ -8,18 +8,19 @@ import {
   getKodeAgentSessionId,
   resetKodeAgentSessionIdForTests,
   setKodeAgentSessionId,
-} from '@utils/kodeAgentSessionId'
+} from '@utils/protocol/kodeAgentSessionId'
 import {
   getCurrentSessionCustomTitle,
   getCurrentSessionTag,
   getSessionLogFilePath,
   resetSessionJsonlStateForTests,
-} from '@utils/kodeAgentSessionLog'
-import { loadKodeAgentSessionLogData } from '@utils/kodeAgentSessionLoad'
+} from '@utils/protocol/kodeAgentSessionLog'
+import { loadKodeAgentSessionLogData } from '@utils/protocol/kodeAgentSessionLoad'
 import { setCwd } from '@utils/state'
 
 describe('/rename + /tag (session metadata records)', () => {
   const originalConfigDir = process.env.KODE_CONFIG_DIR
+  const runnerCwd = process.cwd()
 
   let configDir: string
   let projectDir: string
@@ -33,7 +34,8 @@ describe('/rename + /tag (session metadata records)', () => {
     await setCwd(projectDir)
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await setCwd(runnerCwd)
     resetSessionJsonlStateForTests()
     resetKodeAgentSessionIdForTests()
     if (originalConfigDir === undefined) {
@@ -56,18 +58,27 @@ describe('/rename + /tag (session metadata records)', () => {
     expect(tagOut).toContain('Session tagged as:')
     expect(getCurrentSessionTag()).toBe('pr')
 
-    const logPath = getSessionLogFilePath({ cwd: projectDir, sessionId: getKodeAgentSessionId() })
+    const logPath = getSessionLogFilePath({
+      cwd: projectDir,
+      sessionId: getKodeAgentSessionId(),
+    })
     const lines = readFileSync(logPath, 'utf8')
       .split('\n')
       .filter(Boolean)
       .map(l => JSON.parse(l))
 
-    expect(lines.some(l => l.type === 'custom-title' && l.customTitle === 'My Session')).toBe(true)
+    expect(
+      lines.some(
+        l => l.type === 'custom-title' && l.customTitle === 'My Session',
+      ),
+    ).toBe(true)
     expect(lines.some(l => l.type === 'tag' && l.tag === 'pr')).toBe(true)
 
-    const data = loadKodeAgentSessionLogData({ cwd: projectDir, sessionId: getKodeAgentSessionId() })
+    const data = loadKodeAgentSessionLogData({
+      cwd: projectDir,
+      sessionId: getKodeAgentSessionId(),
+    })
     expect(data.customTitles.get(getKodeAgentSessionId())).toBe('My Session')
     expect(data.tags.get(getKodeAgentSessionId())).toBe('pr')
   })
 })
-

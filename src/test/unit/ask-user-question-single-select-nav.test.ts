@@ -39,4 +39,3 @@ describe('AskUserQuestion single-select navigation parity', () => {
     ).toBe(2)
   })
 })
-

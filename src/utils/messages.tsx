@@ -1,11 +1,6 @@
 import { createHash, randomUUID, UUID } from 'crypto'
 import { Box } from 'ink'
-import {
-  AssistantMessage,
-  Message,
-  ProgressMessage,
-  UserMessage,
-} from '@query'
+import { AssistantMessage, Message, ProgressMessage, UserMessage } from '@query'
 import { getCommand, hasCommand } from '@commands'
 import { MalformedCommandError } from './errors'
 import { logError } from './log'
@@ -13,7 +8,7 @@ import { resolve } from 'path'
 import { last, memoize } from 'lodash-es'
 import type { SetToolJSXFn, Tool, ToolUseContext } from '@tool'
 import { lastX } from '@utils/generators'
-import { NO_CONTENT_MESSAGE } from '@services/claude'
+import { NO_CONTENT_MESSAGE } from '@services/llmConstants'
 import {
   ImageBlockParam,
   TextBlockParam,
@@ -44,10 +39,8 @@ export const CANCEL_MESSAGE =
   "The user doesn't want to take this action right now. STOP what you are doing and wait for the user to tell you how to proceed."
 export const REJECT_MESSAGE =
   "The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to tell you how to proceed."
-export const REJECT_MESSAGE_WITH_FEEDBACK_PREFIX =
-  `The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). To tell you how to proceed, the user said:\n`
-export const REJECTED_PLAN_PREFIX =
-  `The agent proposed a plan that was rejected by the user. The user chose to stay in plan mode rather than proceed with implementation.\n\nRejected plan:\n`
+export const REJECT_MESSAGE_WITH_FEEDBACK_PREFIX = `The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). To tell you how to proceed, the user said:\n`
+export const REJECTED_PLAN_PREFIX = `The agent proposed a plan that was rejected by the user. The user chose to stay in plan mode rather than proceed with implementation.\n\nRejected plan:\n`
 export const NO_RESPONSE_REQUESTED = 'No response requested.'
 
 export const SYNTHETIC_ASSISTANT_MESSAGES = new Set([
@@ -182,14 +175,14 @@ export async function processUserInput(
       kodingContext?: string
     }
   },
-  pastedImages:
-    | Array<{ placeholder: string; data: string; mediaType: string }>
-    | null,
+  pastedImages: Array<{
+    placeholder: string
+    data: string
+    mediaType: string
+  }> | null,
 ): Promise<Message[]> {
   // Bash commands
   if (mode === 'bash') {
-    
-
     const userMessage = createUserMessage(`<bash-input>${input}</bash-input>`)
 
     // Special case: cd
@@ -237,10 +230,10 @@ export async function processUserInput(
         return [userMessage, createAssistantMessage(validationResult.message)]
       }
       const { data } = await lastX(
-        BashTool.call(
-          { command: input },
-          { ...(context as any), commandSource: 'user_bash_mode' } as any,
-        ),
+        BashTool.call({ command: input }, {
+          ...(context as any),
+          commandSource: 'user_bash_mode',
+        } as any),
       )
       return [
         userMessage,
@@ -261,8 +254,6 @@ export async function processUserInput(
   }
   // Koding mode - special wrapper for display
   else if (mode === 'koding') {
-    
-
     const userMessage = createUserMessage(
       `<koding-input>${input}</koding-input>`,
     )
@@ -277,14 +268,13 @@ export async function processUserInput(
   }
 
   // Slash commands
-  if (input.startsWith('/')) {
+  if (context.options?.disableSlashCommands !== true && input.startsWith('/')) {
     const words = input.slice(1).split(' ')
     let commandName = words[0]
     if (words.length > 1 && words[1] === '(MCP)') {
       commandName = commandName + ' (MCP)'
     }
     if (!commandName) {
-      
       return [
         createAssistantMessage('Commands are in the form `/command [args]`'),
       ]
@@ -293,7 +283,7 @@ export async function processUserInput(
     // Check if it's a real command before processing
     if (!hasCommand(commandName, context.options.commands)) {
       // If not a real command, treat it as a regular user input
-      
+
       return [createUserMessage(input)]
     }
 
@@ -307,7 +297,6 @@ export async function processUserInput(
 
     // Local JSX commands
     if (newMessages.length === 0) {
-      
       return []
     }
 
@@ -319,23 +308,20 @@ export async function processUserInput(
       typeof newMessages[1]!.message.content === 'string' &&
       newMessages[1]!.message.content.startsWith('Unknown command:')
     ) {
-      
       return newMessages
     }
 
     // User-Assistant pair (eg. local commands)
     if (newMessages.length === 2) {
-      
       return newMessages
     }
 
     // A valid command
-    
+
     return newMessages
   }
 
   // Regular user prompt
-  
 
   // Check if this is a Koding request that needs special handling
   const isKodingRequest = context.options?.isKodingRequest === true
@@ -345,7 +331,9 @@ export async function processUserInput(
   let userMessage: UserMessage
 
   let processedInput =
-    isKodingRequest && kodingContextInfo ? `${kodingContextInfo}\n\n${input}` : input
+    isKodingRequest && kodingContextInfo
+      ? `${kodingContextInfo}\n\n${input}`
+      : input
 
   // Process dynamic content for custom commands with ! and @ prefixes
   // This uses the same processing functions as custom commands to maintain consistency
@@ -438,22 +426,24 @@ async function getMessagesForSlashCommand(
       case 'local-jsx': {
         return new Promise(resolve => {
           command
-            .call(r => {
-              setToolJSX(null)
-              resolve([
-                createUserMessage(`<command-name>${command.userFacingName()}</command-name>
+            .call(
+              r => {
+                setToolJSX(null)
+                resolve([
+                  createUserMessage(`<command-name>${command.userFacingName()}</command-name>
           <command-message>${command.userFacingName()}</command-message>
           <command-args>${args}</command-args>`),
-                r
-                  ? createAssistantMessage(r)
-                  : createAssistantMessage(NO_RESPONSE_REQUESTED),
-              ])
-            }, context)
+                  r
+                    ? createAssistantMessage(r)
+                    : createAssistantMessage(NO_RESPONSE_REQUESTED),
+                ])
+              },
+              context,
+              args,
+            )
             .then(jsx => {
-              setToolJSX({
-                jsx,
-                shouldHidePromptInput: true,
-              })
+              if (!jsx) return
+              setToolJSX({ jsx, shouldHidePromptInput: true })
             })
         })
       }
@@ -470,8 +460,9 @@ async function getMessagesForSlashCommand(
             options: {
               commands: context.options.commands || [],
               tools: context.options.tools || [],
-              slowAndCapableModel: context.options.slowAndCapableModel || 'main'
-            }
+              slowAndCapableModel:
+                context.options.slowAndCapableModel || 'main',
+            },
           })
 
           return [
@@ -493,9 +484,9 @@ async function getMessagesForSlashCommand(
       case 'prompt': {
         // Compatibility: emit a metadata message, then the expanded prompt.
         const commandName = command.userFacingName()
-        const progressMessage =
-          (command as any).progressMessage || 'running'
-        const metaMessage = createUserMessage(`<command-name>${commandName}</command-name>
+        const progressMessage = (command as any).progressMessage || 'running'
+        const metaMessage =
+          createUserMessage(`<command-name>${commandName}</command-name>
         <command-message>${commandName} is ${progressMessage}…</command-message>
         <command-args>${args}</command-args>`)
 
@@ -677,7 +668,9 @@ export function normalizeMessages(messages: Message[]): NormalizedMessage[] {
           // When resuming from logs or other sources, uuid may be absent; fall back to the
           // assistant message id which is stable across refreshes/reloads.
           const baseSeed = String(
-            (message as any).uuid ?? (message as any).message?.id ?? randomUUID(),
+            (message as any).uuid ??
+              (message as any).message?.id ??
+              randomUUID(),
           )
           return {
             type: 'assistant',
@@ -687,8 +680,7 @@ export function normalizeMessages(messages: Message[]): NormalizedMessage[] {
               content: [block],
             },
             costUSD:
-              (message as AssistantMessage).costUSD /
-              contentBlocks.length,
+              (message as AssistantMessage).costUSD / contentBlocks.length,
             durationMs: (message as AssistantMessage).durationMs,
           } as NormalizedMessage
         case 'user':
@@ -926,7 +918,9 @@ export function normalizeMessagesForAPI(
     )
   }
 
-  function normalizeUserContent(content: UserMessage['message']['content']): ContentBlockParam[] {
+  function normalizeUserContent(
+    content: UserMessage['message']['content'],
+  ): ContentBlockParam[] {
     if (typeof content === 'string') {
       return [{ type: 'text', text: content }]
     }
@@ -946,7 +940,10 @@ export function normalizeMessagesForAPI(
     return [...toolResults, ...rest]
   }
 
-  function mergeUserMessages(base: UserMessage, next: UserMessage): UserMessage {
+  function mergeUserMessages(
+    base: UserMessage,
+    next: UserMessage,
+  ): UserMessage {
     const baseBlocks = normalizeUserContent(base.message.content)
     const nextBlocks = normalizeUserContent(next.message.content)
     return {

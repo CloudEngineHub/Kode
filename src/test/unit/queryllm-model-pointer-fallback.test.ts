@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { queryLLM } from '@services/claude'
+import { queryLLM } from '@services/llm'
 
 describe('queryLLM model pointer fallback (Reference CLI parity)', () => {
   test('falls back when resolveModelWithInfo fails (no throw)', async () => {

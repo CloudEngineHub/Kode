@@ -1,6 +1,6 @@
 import { execFileNoThrow } from './execFileNoThrow'
 import { logError } from './log'
- 
+
 import { MACRO } from '@constants/macros'
 import { PRODUCT_NAME } from '@constants/product'
 
@@ -93,8 +93,10 @@ export async function getUpdateCommandSuggestions(): Promise<string[]> {
 export async function checkAndNotifyUpdate(): Promise<void> {
   try {
     if (process.env.NODE_ENV === 'test') return
-    const [{ isAutoUpdaterDisabled, getGlobalConfig, saveGlobalConfig }, { env }] =
-      await Promise.all([import('./config'), import('./env')])
+    const [
+      { isAutoUpdaterDisabled, getGlobalConfig, saveGlobalConfig },
+      { env },
+    ] = await Promise.all([import('./config'), import('./env')])
     if (await isAutoUpdaterDisabled()) return
     if (await env.getIsDocker()) return
     if (!(await env.hasInternetAccess())) return
@@ -120,7 +122,9 @@ export async function checkAndNotifyUpdate(): Promise<void> {
       })
       const suggestions = await getUpdateCommandSuggestions()
       // eslint-disable-next-line no-console
-      console.log(`New version available: ${latest} (current: ${MACRO.VERSION})`)
+      console.log(
+        `New version available: ${latest} (current: ${MACRO.VERSION})`,
+      )
       console.log('Run the following command to update:')
       for (const command of suggestions) console.log(`  ${command}`)
     } else {

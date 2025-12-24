@@ -1,6 +1,3 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
-import { homedir } from 'os'
-import { dirname, join } from 'path'
 import type {
   ToolPermissionContext,
   ToolPermissionContextUpdate,
@@ -14,16 +11,22 @@ import {
 import { getCurrentProjectConfig } from '@utils/config'
 import { getCwd } from '@utils/state'
 import { logError } from '@utils/log'
+import {
+  getSettingsFileCandidates,
+  loadSettingsWithLegacyFallback,
+  saveSettingsToPrimaryAndSyncLegacy,
+  type SettingsFile,
+} from '@utils/settingsFiles'
 
-type ClaudeSettingsPermissions = {
+type SettingsPermissions = {
   allow?: unknown
   deny?: unknown
   ask?: unknown
   additionalDirectories?: unknown
 }
 
-type ClaudeSettingsFile = {
-  permissions?: ClaudeSettingsPermissions
+type SettingsFileWithPermissions = {
+  permissions?: SettingsPermissions
   [key: string]: unknown
 }
 
@@ -40,42 +43,17 @@ function uniqueStrings(value: unknown): string[] {
   return out
 }
 
-export function getClaudeSettingsFilePath(options: {
+function getPrimarySettingsFilePathForDestination(options: {
   destination: ToolPermissionUpdateDestination
   projectDir?: string
   homeDir?: string
 }): string | null {
-  const projectDir = options.projectDir ?? getCwd()
-  const homeDir = options.homeDir ?? homedir()
-
-  switch (options.destination) {
-    case 'localSettings':
-      return join(projectDir, '.claude', 'settings.local.json')
-    case 'projectSettings':
-      return join(projectDir, '.claude', 'settings.json')
-    case 'userSettings':
-      return join(homeDir, '.claude', 'settings.json')
-    default:
-      return null
-  }
-}
-
-export function readClaudeSettingsFile(filePath: string): ClaudeSettingsFile | null {
-  if (!existsSync(filePath)) return null
-  try {
-    const raw = readFileSync(filePath, 'utf-8')
-    const parsed = JSON.parse(raw)
-    if (!parsed || typeof parsed !== 'object') return null
-    return parsed as ClaudeSettingsFile
-  } catch (error) {
-    logError(error)
-    return null
-  }
-}
-
-export function writeClaudeSettingsFile(filePath: string, settings: ClaudeSettingsFile): void {
-  mkdirSync(dirname(filePath), { recursive: true })
-  writeFileSync(filePath, JSON.stringify(settings, null, 2) + '\n', 'utf-8')
+  const candidates = getSettingsFileCandidates({
+    destination: options.destination as any,
+    projectDir: options.projectDir,
+    homeDir: options.homeDir,
+  })
+  return candidates?.primary ?? null
 }
 
 export function loadToolPermissionContextFromDisk(options?: {
@@ -85,7 +63,7 @@ export function loadToolPermissionContextFromDisk(options?: {
   isBypassPermissionsModeAvailable?: boolean
 }): ToolPermissionContext {
   const projectDir = options?.projectDir ?? getCwd()
-  const homeDir = options?.homeDir ?? homedir()
+  const homeDir = options?.homeDir
   const includeKodeProjectConfig = options?.includeKodeProjectConfig ?? true
 
   const base = createDefaultToolPermissionContext({
@@ -93,40 +71,33 @@ export function loadToolPermissionContextFromDisk(options?: {
       options?.isBypassPermissionsModeAvailable ?? false,
   })
 
-  const sources: Array<{
-    destination: ToolPermissionUpdateDestination
-    filePath: string
-  }> = [
-    {
-      destination: 'userSettings',
-      filePath: join(homeDir, '.claude', 'settings.json'),
-    },
-    {
-      destination: 'projectSettings',
-      filePath: join(projectDir, '.claude', 'settings.json'),
-    },
-    {
-      destination: 'localSettings',
-      filePath: join(projectDir, '.claude', 'settings.local.json'),
-    },
+  const destinations: ToolPermissionUpdateDestination[] = [
+    'userSettings',
+    'projectSettings',
+    'localSettings',
   ]
 
-  for (const source of sources) {
-    const settings = readClaudeSettingsFile(source.filePath)
+  for (const destination of destinations) {
+    const settings = loadSettingsWithLegacyFallback({
+      destination: destination as any,
+      projectDir,
+      homeDir,
+      migrateToPrimary: true,
+    }).settings as SettingsFileWithPermissions | null
     const perms = settings?.permissions
     const allow = uniqueStrings(perms?.allow)
     const deny = uniqueStrings(perms?.deny)
     const ask = uniqueStrings(perms?.ask)
     const additionalDirectories = uniqueStrings(perms?.additionalDirectories)
 
-    if (allow.length > 0) base.alwaysAllowRules[source.destination] = allow
-    if (deny.length > 0) base.alwaysDenyRules[source.destination] = deny
-    if (ask.length > 0) base.alwaysAskRules[source.destination] = ask
+    if (allow.length > 0) base.alwaysAllowRules[destination] = allow
+    if (deny.length > 0) base.alwaysDenyRules[destination] = deny
+    if (ask.length > 0) base.alwaysAskRules[destination] = ask
 
     for (const dir of additionalDirectories) {
       base.additionalWorkingDirectories.set(dir, {
         path: dir,
-        source: source.destination,
+        source: destination,
       })
     }
   }
@@ -135,8 +106,12 @@ export function loadToolPermissionContextFromDisk(options?: {
     try {
       const cfg = getCurrentProjectConfig()
       const allow = Array.isArray(cfg.allowedTools) ? cfg.allowedTools : []
-      const deny = Array.isArray((cfg as any).deniedTools) ? (cfg as any).deniedTools : []
-      const ask = Array.isArray((cfg as any).askedTools) ? (cfg as any).askedTools : []
+      const deny = Array.isArray((cfg as any).deniedTools)
+        ? (cfg as any).deniedTools
+        : []
+      const ask = Array.isArray((cfg as any).askedTools)
+        ? (cfg as any).askedTools
+        : []
 
       if (allow.length > 0) {
         const prev = base.alwaysAllowRules.localSettings ?? []
@@ -158,16 +133,20 @@ export function loadToolPermissionContextFromDisk(options?: {
   return base
 }
 
-function getOrCreatePermissions(settings: ClaudeSettingsFile): Required<ClaudeSettingsFile>['permissions'] {
+function getOrCreatePermissions(
+  settings: SettingsFileWithPermissions,
+): Required<SettingsFileWithPermissions>['permissions'] {
   const existing = settings.permissions
   if (existing && typeof existing === 'object') {
-    return existing as ClaudeSettingsPermissions
+    return existing as SettingsPermissions
   }
   settings.permissions = {}
-  return settings.permissions as ClaudeSettingsPermissions
+  return settings.permissions as SettingsPermissions
 }
 
-function behaviorKey(behavior: ToolPermissionRuleBehavior): keyof ClaudeSettingsPermissions {
+function behaviorKey(
+  behavior: ToolPermissionRuleBehavior,
+): keyof SettingsPermissions {
   switch (behavior) {
     case 'allow':
       return 'allow'
@@ -191,14 +170,20 @@ export function persistToolPermissionUpdateToDisk(options: {
     return { persisted: false }
   }
 
-  const filePath = getClaudeSettingsFilePath({
+  const filePath = getPrimarySettingsFilePathForDestination({
     destination: update.destination,
     projectDir: options.projectDir,
     homeDir: options.homeDir,
   })
   if (!filePath) return { persisted: false }
 
-  const existing = readClaudeSettingsFile(filePath) ?? {}
+  const existing =
+    (loadSettingsWithLegacyFallback({
+      destination: update.destination as any,
+      projectDir: options.projectDir,
+      homeDir: options.homeDir,
+      migrateToPrimary: true,
+    }).settings as SettingsFileWithPermissions | null) ?? {}
   const permissions = getOrCreatePermissions(existing)
 
   try {
@@ -239,11 +224,16 @@ export function persistToolPermissionUpdateToDisk(options: {
         return { persisted: false }
     }
 
-    writeClaudeSettingsFile(filePath, existing)
+    saveSettingsToPrimaryAndSyncLegacy({
+      destination: update.destination as any,
+      projectDir: options.projectDir,
+      homeDir: options.homeDir,
+      settings: existing as SettingsFile,
+      syncLegacyIfExists: true,
+    })
     return { persisted: true }
   } catch (error) {
     logError(error)
     return { persisted: false }
   }
 }
-

@@ -112,9 +112,13 @@ profiles:
       fromEnv: MISSING_ENV
 `
 
-    const { nextConfig } = applyModelConfigYamlImport(existingConfig, yamlText, {
-      replace: true,
-    })
+    const { nextConfig } = applyModelConfigYamlImport(
+      existingConfig,
+      yamlText,
+      {
+        replace: true,
+      },
+    )
 
     expect(nextConfig.modelProfiles?.[0]?.apiKey).toBe('existing-key')
   })

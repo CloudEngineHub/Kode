@@ -59,7 +59,13 @@ describe('REPL Static prefix append-only (regression)', () => {
       [user, assistant],
       [user, assistant, toolUseMessage],
       [user, assistant, toolUseMessage, progress1],
-      [user, assistant, toolUseMessage, progress1, makeToolResult('t1', 'done')],
+      [
+        user,
+        assistant,
+        toolUseMessage,
+        progress1,
+        makeToolResult('t1', 'done'),
+      ],
       [
         user,
         assistant,
@@ -97,15 +103,18 @@ describe('REPL Static prefix append-only (regression)', () => {
 
     const before = normalizeMessages([base] as any)
     const beforeUuids = before
-      .filter(m => typeof m.uuid === 'string' && m.uuid.startsWith(`${base.uuid}:`))
+      .filter(
+        m => typeof m.uuid === 'string' && m.uuid.startsWith(`${base.uuid}:`),
+      )
       .map(m => m.uuid as string)
 
     const after = normalizeMessages([base, makeToolResult('t1', 'done')] as any)
     const afterUuids = after
-      .filter(m => typeof m.uuid === 'string' && m.uuid.startsWith(`${base.uuid}:`))
+      .filter(
+        m => typeof m.uuid === 'string' && m.uuid.startsWith(`${base.uuid}:`),
+      )
       .map(m => m.uuid as string)
 
     expect(afterUuids).toEqual(beforeUuids)
   })
 })
-

@@ -3,17 +3,35 @@ import { memoize } from 'lodash-es'
 import { join } from 'path'
 import { homedir } from 'os'
 import { CONFIG_BASE_DIR, CONFIG_FILE } from '@constants/product'
-// Base directory for all Any kode data files (except config.json for backwards compatibility)
-// Support both KODE_CONFIG_DIR and CLAUDE_CONFIG_DIR for compatibility
-export const CLAUDE_BASE_DIR =
-  process.env.KODE_CONFIG_DIR ?? process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), CONFIG_BASE_DIR)
+// Base directory for local Kode data files.
+// Also respects `CLAUDE_CONFIG_DIR` (Claude Code-compatible) for compatibility.
+//
+// Note: this must be a function (not a fixed const) because tests (and some host
+// integrations) may set env vars after modules are loaded.
+export function getKodeBaseDir(): string {
+  return (
+    process.env.KODE_CONFIG_DIR ??
+    process.env.CLAUDE_CONFIG_DIR ??
+    join(homedir(), CONFIG_BASE_DIR)
+  )
+}
 
 // Config and data paths
-// Support both KODE_CONFIG_DIR and CLAUDE_CONFIG_DIR environment variables
-export const GLOBAL_CLAUDE_FILE = (process.env.KODE_CONFIG_DIR || process.env.CLAUDE_CONFIG_DIR)
-  ? join(CLAUDE_BASE_DIR, 'config.json')
-  : join(homedir(), CONFIG_FILE)
-export const MEMORY_DIR = join(CLAUDE_BASE_DIR, 'memory')
+// Also respects `CLAUDE_CONFIG_DIR` (Claude Code-compatible) for compatibility.
+export function getGlobalConfigFilePath(): string {
+  return process.env.KODE_CONFIG_DIR || process.env.CLAUDE_CONFIG_DIR
+    ? join(getKodeBaseDir(), 'config.json')
+    : join(homedir(), CONFIG_FILE)
+}
+
+export function getMemoryDir(): string {
+  return join(getKodeBaseDir(), 'memory')
+}
+
+// Back-compat exports (prefer calling the functions above in new code).
+export const KODE_BASE_DIR = getKodeBaseDir()
+export const GLOBAL_CONFIG_FILE = getGlobalConfigFilePath()
+export const MEMORY_DIR = getMemoryDir()
 
 const getIsDocker = memoize(async (): Promise<boolean> => {
   // Check for .dockerenv file
@@ -25,20 +43,14 @@ const getIsDocker = memoize(async (): Promise<boolean> => {
 })
 
 const hasInternetAccess = memoize(async (): Promise<boolean> => {
-  try {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 1000)
-
-    await fetch('http://1.1.1.1', {
-      method: 'HEAD',
-      signal: controller.signal,
-    })
-
-    clearTimeout(timeout)
-    return true
-  } catch {
-    return false
-  }
+  const offline =
+    process.env.KODE_OFFLINE ??
+    process.env.OFFLINE ??
+    process.env.NO_NETWORK ??
+    ''
+  const normalized = String(offline).trim().toLowerCase()
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return false
+  return true
 })
 
 // all of these should be immutable

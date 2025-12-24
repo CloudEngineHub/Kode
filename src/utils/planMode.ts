@@ -1,9 +1,13 @@
 import { existsSync, mkdirSync, readFileSync, realpathSync } from 'fs'
 import { randomBytes } from 'crypto'
-import { homedir } from 'os'
 import { isAbsolute, join, relative, resolve, parse } from 'path'
 import type { ToolUseContext } from '@tool'
-import { PLAN_SLUG_ADJECTIVES, PLAN_SLUG_NOUNS, PLAN_SLUG_VERBS } from './planSlugWords'
+import { getKodeBaseDir } from '@utils/env'
+import {
+  PLAN_SLUG_ADJECTIVES,
+  PLAN_SLUG_NOUNS,
+  PLAN_SLUG_VERBS,
+} from './planSlugWords'
 
 const DEFAULT_CONVERSATION_KEY = 'default'
 const MAX_SLUG_ATTEMPTS = 10
@@ -22,11 +26,15 @@ type PlanModeAttachmentState = {
 const planModeEnabledByConversationKey = new Map<string, boolean>()
 const planSlugCache = new Map<string, string>()
 const planModeFlagsByConversationKey = new Map<string, PlanModeFlags>()
-const planModeAttachmentStateByAgentKey = new Map<string, PlanModeAttachmentState>()
+const planModeAttachmentStateByAgentKey = new Map<
+  string,
+  PlanModeAttachmentState
+>()
 let activePlanConversationKey: string | null = null
 
 function getConversationKey(context?: Pick<ToolUseContext, 'options'>): string {
-  const messageLogName = context?.options?.messageLogName ?? DEFAULT_CONVERSATION_KEY
+  const messageLogName =
+    context?.options?.messageLogName ?? DEFAULT_CONVERSATION_KEY
   const forkNumber = context?.options?.forkNumber ?? 0
   return `${messageLogName}:${forkNumber}`
 }
@@ -45,7 +53,9 @@ export function getActivePlanConversationKey(): string | null {
   return activePlanConversationKey
 }
 
-function getAgentKey(context?: Pick<ToolUseContext, 'options' | 'agentId'>): string {
+function getAgentKey(
+  context?: Pick<ToolUseContext, 'options' | 'agentId'>,
+): string {
   const conversationKey = getConversationKey(context)
   const agentId = context?.agentId ?? 'main'
   return `${conversationKey}:${agentId}`
@@ -109,7 +119,9 @@ function getOrCreatePlanModeFlags(conversationKey: string): PlanModeFlags {
 }
 
 function getMaxParallelExploreAgents(): number {
-  const raw = process.env.CLAUDE_CODE_PLAN_V2_EXPLORE_AGENT_COUNT
+  const raw =
+    process.env.KODE_PLAN_V2_EXPLORE_AGENT_COUNT ??
+    process.env.CLAUDE_CODE_PLAN_V2_EXPLORE_AGENT_COUNT
   if (raw) {
     const parsed = Number.parseInt(raw, 10)
     if (Number.isFinite(parsed) && parsed > 0 && parsed <= 10) return parsed
@@ -118,7 +130,9 @@ function getMaxParallelExploreAgents(): number {
 }
 
 function getMaxParallelPlanAgents(): number {
-  const raw = process.env.CLAUDE_CODE_PLAN_V2_AGENT_COUNT
+  const raw =
+    process.env.KODE_PLAN_V2_AGENT_COUNT ??
+    process.env.CLAUDE_CODE_PLAN_V2_AGENT_COUNT
   if (raw) {
     const parsed = Number.parseInt(raw, 10)
     if (Number.isFinite(parsed) && parsed > 0 && parsed <= 10) return parsed
@@ -132,7 +146,12 @@ function buildPlanModeMainReminder(args: {
   maxParallelExploreAgents: number
   maxParallelPlanAgents: number
 }): string {
-  const { planExists, planFilePath, maxParallelExploreAgents, maxParallelPlanAgents } = args
+  const {
+    planExists,
+    planFilePath,
+    maxParallelExploreAgents,
+    maxParallelPlanAgents,
+  } = args
 
   const writeToolName = 'Write'
   const editToolName = 'Edit'
@@ -172,7 +191,9 @@ You can launch up to ${maxParallelPlanAgents} agent(s) in parallel.
 **Guidelines:**
 - **Default**: Launch at least 1 Plan agent for most tasks - it helps validate your understanding and consider alternatives
 - **Skip agents**: Only for truly trivial tasks (typo fixes, single-line changes, simple renames)
-${maxParallelPlanAgents > 1 ? `- **Multiple agents**: Use up to ${maxParallelPlanAgents} agents for complex tasks that benefit from different perspectives
+${
+  maxParallelPlanAgents > 1
+    ? `- **Multiple agents**: Use up to ${maxParallelPlanAgents} agents for complex tasks that benefit from different perspectives
 
 Examples of when to use multiple agents:
 - The task touches multiple parts of the codebase
@@ -184,7 +205,9 @@ Example perspectives by task type:
 - New feature: simplicity vs performance vs maintainability
 - Bug fix: root cause vs workaround vs prevention
 - Refactoring: minimal change vs clean architecture
-` : ''}
+`
+    : ''
+}
 In the agent prompt:
 - Provide comprehensive background context from Phase 1 exploration including filenames and code path traces
 - Describe requirements and constraints
@@ -269,11 +292,15 @@ export function getPlanModeSystemPromptAdditions(
   if (isPlanModeEnabled(context)) {
     const previous =
       planModeAttachmentStateByAgentKey.get(agentKey) ??
-      ({ hasInjected: false, lastInjectedAssistantTurn: -Infinity } satisfies PlanModeAttachmentState)
+      ({
+        hasInjected: false,
+        lastInjectedAssistantTurn: -Infinity,
+      } satisfies PlanModeAttachmentState)
 
     if (
       previous.hasInjected &&
-      assistantTurns - previous.lastInjectedAssistantTurn < TURNS_BETWEEN_ATTACHMENTS
+      assistantTurns - previous.lastInjectedAssistantTurn <
+        TURNS_BETWEEN_ATTACHMENTS
     ) {
       return []
     }
@@ -282,7 +309,9 @@ export function getPlanModeSystemPromptAdditions(
     const planExists = existsSync(planFilePath)
 
     if (flags.hasExitedPlanMode && planExists) {
-      additions.push(wrapSystemReminder(buildPlanModeReentryReminder(planFilePath)))
+      additions.push(
+        wrapSystemReminder(buildPlanModeReentryReminder(planFilePath)),
+      )
       flags.hasExitedPlanMode = false
     }
 
@@ -324,7 +353,9 @@ export function isPlanModeEnabled(context?: ToolUseContext): boolean {
   return planModeEnabledByConversationKey.get(key) ?? false
 }
 
-export function enterPlanMode(context?: ToolUseContext): { planFilePath: string } {
+export function enterPlanMode(context?: ToolUseContext): {
+  planFilePath: string
+} {
   const key = getConversationKey(context)
   planModeEnabledByConversationKey.set(key, true)
   return { planFilePath: getPlanFilePath(context?.agentId, key) }
@@ -334,7 +365,9 @@ export function enterPlanModeForConversationKey(conversationKey: string): void {
   planModeEnabledByConversationKey.set(conversationKey, true)
 }
 
-export function exitPlanMode(context?: ToolUseContext): { planFilePath: string } {
+export function exitPlanMode(context?: ToolUseContext): {
+  planFilePath: string
+} {
   const key = getConversationKey(context)
   planModeEnabledByConversationKey.set(key, false)
 
@@ -358,7 +391,9 @@ export function setPlanSlug(conversationKey: string, slug: string): void {
   planSlugCache.set(conversationKey, slug)
 }
 
-export function getPlanSlugForConversationKey(conversationKey: string): string | null {
+export function getPlanSlugForConversationKey(
+  conversationKey: string,
+): string | null {
   return planSlugCache.get(conversationKey) ?? null
 }
 
@@ -399,21 +434,18 @@ export function hydratePlanSlugFromMessages(
   return false
 }
 
-export function getClaudeConfigDir(): string {
-  const override = process.env.CLAUDE_CONFIG_DIR?.trim()
-  if (override) return resolve(override)
-  return join(homedir(), '.claude')
-}
-
 export function getPlanDirectory(): string {
-  const dir = join(getClaudeConfigDir(), 'plans')
+  const dir = join(getKodeBaseDir(), 'plans')
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true })
   }
   return dir
 }
 
-export function getPlanFilePath(agentId?: string, conversationKey?: string): string {
+export function getPlanFilePath(
+  agentId?: string,
+  conversationKey?: string,
+): string {
   const dir = getPlanDirectory()
   const key = conversationKey ?? DEFAULT_CONVERSATION_KEY
   const slug = getOrCreatePlanSlug(key)
@@ -434,7 +466,9 @@ function resolveExistingPath(path: string): string {
 export function isPlanFilePathForActiveConversation(path: string): boolean {
   const key = activePlanConversationKey ?? DEFAULT_CONVERSATION_KEY
   const planDir = resolveExistingPath(getPlanDirectory())
-  const expectedMainPlanPath = resolveExistingPath(getPlanFilePath(undefined, key))
+  const expectedMainPlanPath = resolveExistingPath(
+    getPlanFilePath(undefined, key),
+  )
   const target = resolveExistingPath(path)
 
   const rel = relative(planDir, target)
@@ -445,7 +479,8 @@ export function isPlanFilePathForActiveConversation(path: string): boolean {
   const expectedSlug = parse(expectedMainPlanPath).name
   const targetName = parse(target).name
   return (
-    targetName === expectedSlug || targetName.startsWith(`${expectedSlug}-agent-`)
+    targetName === expectedSlug ||
+    targetName.startsWith(`${expectedSlug}-agent-`)
   )
 }
 

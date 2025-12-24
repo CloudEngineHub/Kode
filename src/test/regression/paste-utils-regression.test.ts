@@ -42,6 +42,8 @@ describe('Regression: paste/newline heuristics', () => {
     expect(shouldTreatAsSpecialPaste('a\nb')).toBe(false)
     expect(shouldTreatAsSpecialPaste('a\nb\nc\nd')).toBe(true)
     expect(shouldTreatAsSpecialPaste('a'.repeat(801))).toBe(true)
-    expect(shouldTreatAsSpecialPaste('a\nb\nc', { terminalRows: 11 })).toBe(true)
+    expect(shouldTreatAsSpecialPaste('a\nb\nc', { terminalRows: 11 })).toBe(
+      true,
+    )
   })
 })

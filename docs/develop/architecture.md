@@ -31,7 +31,7 @@
 │                   Service Integration Layer                  │
 │  ┌─────────────┐  ┌──────────────┐  ┌──────────────────┐  │
 │  │ AI Providers│  │  MCP Servers │  │  External APIs   │  │
-│  │(Claude/GPT) │  │ (stdio/SSE)  │  │  (Git/Sentry)    │  │
+│  │(Claude/GPT) │  │ (stdio/SSE)  │  │ (Git/Local Logs) │  │
 │  └─────────────┘  └──────────────┘  └──────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
                               │
@@ -218,7 +218,7 @@ Multi-level permission system:
 
 ### 5. Context Management
 Automatic context injection:
-- Project files (AGENTS.md, CLAUDE.md)
+- Project files (AGENTS.md; legacy CLAUDE.md supported)
 - Git status and recent commits
 - Directory structure
 - Previous conversation history

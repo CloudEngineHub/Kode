@@ -53,7 +53,9 @@ export function EnterPlanModePermissionRequest({
       </Box>
 
       <Box flexDirection="column" paddingX={2} marginTop={1}>
-        <Text dimColor>No code changes will be made until you approve the plan.</Text>
+        <Text dimColor>
+          No code changes will be made until you approve the plan.
+        </Text>
       </Box>
 
       <Box flexDirection="column">

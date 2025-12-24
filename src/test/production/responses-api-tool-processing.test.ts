@@ -24,7 +24,9 @@ describe('🧪 Response API Tool Processing - Real Mock Server Test', () => {
   test('should process tool calls correctly without duplication', async () => {
     const mockModel = getResponsesAPIModels(productionTestModels)[0]
     if (!mockModel) {
-      console.log('⚠️  No Responses API test model configured; skipping mock server test.')
+      console.log(
+        '⚠️  No Responses API test model configured; skipping mock server test.',
+      )
       return
     }
 
@@ -36,25 +38,32 @@ describe('🧪 Response API Tool Processing - Real Mock Server Test', () => {
 
     // Create the exact request when user says "Use the Read tool to read the package.json file"
     const userRequest = {
-      messages: [{
-        role: 'user',
-        content: 'Use the Read tool to read the package.json file'
-      }],
+      messages: [
+        {
+          role: 'user',
+          content: 'Use the Read tool to read the package.json file',
+        },
+      ],
       systemPrompt: ['You are a helpful assistant. Use tools when requested.'],
-      tools: [{
-        name: 'Read',
-        description: 'Read file contents',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            file_path: { type: 'string', description: 'Absolute file path to read' }
+      tools: [
+        {
+          name: 'Read',
+          description: 'Read file contents',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              file_path: {
+                type: 'string',
+                description: 'Absolute file path to read',
+              },
+            },
+            required: ['file_path'],
           },
-          required: ['file_path']
-        }
-      }],
+        },
+      ],
       maxTokens: 1000,
       stream: true,
-      temperature: 0.7
+      temperature: 0.7,
     }
 
     console.log('\n📝 Step 1: Creating request for "use the Read tool"')
@@ -71,13 +80,17 @@ describe('🧪 Response API Tool Processing - Real Mock Server Test', () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${mockModel.apiKey}`
+        Authorization: `Bearer ${mockModel.apiKey}`,
       },
-      body: JSON.stringify(request)
+      body: JSON.stringify(request),
     })
 
     if (!response.ok) {
-      console.log('   ❌ Mock server request failed:', response.status, response.statusText)
+      console.log(
+        '   ❌ Mock server request failed:',
+        response.status,
+        response.statusText,
+      )
       throw new Error(`Mock server error: ${response.status}`)
     }
 
@@ -88,18 +101,26 @@ describe('🧪 Response API Tool Processing - Real Mock Server Test', () => {
 
     console.log('   Response ID:', unifiedResponse.id)
     console.log('   Content blocks:', unifiedResponse.content?.length || 0)
-    console.log('   Tool calls in response:', unifiedResponse.toolCalls?.length || 0)
+    console.log(
+      '   Tool calls in response:',
+      unifiedResponse.toolCalls?.length || 0,
+    )
 
     // Analyze the response for the triple tool call bug
-    const contentBlocks = Array.isArray(unifiedResponse.content) ? unifiedResponse.content : []
-    const toolUseInContent = contentBlocks.filter((block: any) => block.type === 'tool_use')
+    const contentBlocks = Array.isArray(unifiedResponse.content)
+      ? unifiedResponse.content
+      : []
+    const toolUseInContent = contentBlocks.filter(
+      (block: any) => block.type === 'tool_use',
+    )
     const toolCallsInResponse = unifiedResponse.toolCalls || []
 
     console.log('\n📊 Step 4: Analyzing for triple tool call bug')
     console.log('   Content blocks with tool_use:', toolUseInContent.length)
     console.log('   Tool calls array length:', toolCallsInResponse.length)
 
-    const totalToolRepresentations = toolUseInContent.length + toolCallsInResponse.length
+    const totalToolRepresentations =
+      toolUseInContent.length + toolCallsInResponse.length
     console.log('   Total tool representations:', totalToolRepresentations)
 
     // Check for the bug pattern
@@ -112,9 +133,16 @@ describe('🧪 Response API Tool Processing - Real Mock Server Test', () => {
       if (firstToolUse.name === firstToolCall.function.name) {
         bugDetected = true
         console.log('\n🚨 TRIPLE TOOL CALL BUG CONFIRMED!')
-        console.log('   Same Read tool appears in both content and toolCalls array')
-        console.log('   This will cause duplication when claude.ts processes it')
-        console.log('   Content tool_use:', JSON.stringify(firstToolUse, null, 2))
+        console.log(
+          '   Same Read tool appears in both content and toolCalls array',
+        )
+        console.log(
+          '   This will cause duplication when claude.ts processes it',
+        )
+        console.log(
+          '   Content tool_use:',
+          JSON.stringify(firstToolUse, null, 2),
+        )
         console.log('   Tool call:', JSON.stringify(firstToolCall, null, 2))
       }
     }
@@ -127,8 +155,12 @@ describe('🧪 Response API Tool Processing - Real Mock Server Test', () => {
       console.log('   - SSE format mismatch between mock server and adapter')
     } else if (bugDetected) {
       console.log('\n❌ BUG REPRODUCTION SUCCESSFUL!')
-      console.log('   The "use the Read tool" scenario triggers the triple tool call bug')
-      console.log('   Fix needed in claude.ts buildAssistantMessageFromUnifiedResponse()')
+      console.log(
+        '   The "use the Read tool" scenario triggers the triple tool call bug',
+      )
+      console.log(
+        '   Fix needed in claude.ts buildAssistantMessageFromUnifiedResponse()',
+      )
     } else if (totalToolRepresentations === 1) {
       console.log('\n✅ NO BUG DETECTED!')
       console.log('   Single tool representation - bug may be fixed')
@@ -136,9 +168,13 @@ describe('🧪 Response API Tool Processing - Real Mock Server Test', () => {
 
     // Document the results
     console.log('\n📋 Response API Tool Processing Test Results:')
-    console.log(`   User message: "Use the Read tool to read the package.json file"`)
+    console.log(
+      `   User message: "Use the Read tool to read the package.json file"`,
+    )
     console.log(`   Tool representations found: ${totalToolRepresentations}`)
-    console.log(`   Status: ${bugDetected ? 'FAILED - Triple processing detected' : 'PASSED - Single processing'}`)
+    console.log(
+      `   Status: ${bugDetected ? 'FAILED - Triple processing detected' : 'PASSED - Single processing'}`,
+    )
 
     // Test expectations - FAIL if bug is detected
     expect(totalToolRepresentations).toBeGreaterThanOrEqual(0)
@@ -146,16 +182,19 @@ describe('🧪 Response API Tool Processing - Real Mock Server Test', () => {
     // CRITICAL: Fail the test if triple tool call bug is detected
     if (bugDetected) {
       console.log('\n❌ TEST FAILED: Triple tool call bug detected!')
-      console.log('   This indicates the Response API is processing tool calls multiple times')
+      console.log(
+        '   This indicates the Response API is processing tool calls multiple times',
+      )
       console.log('   Expected: 1 tool representation')
       console.log(`   Actual: ${totalToolRepresentations} tool representations`)
       console.log('\n💡 Fix Implementation Required:')
       console.log('   File: src/services/adapters/responsesAPI.ts')
-      console.log('   Ensure parseResponse returns only ONE representation of tool calls')
+      console.log(
+        '   Ensure parseResponse returns only ONE representation of tool calls',
+      )
 
       // Fail the test explicitly
       expect(bugDetected).toBe(false)
     }
   })
-
 })

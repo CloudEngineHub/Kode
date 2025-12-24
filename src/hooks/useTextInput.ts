@@ -156,7 +156,9 @@ export function useTextInput({
     }
 
     const placeholder = onImagePaste?.(base64Image)
-    return cursor.insert(typeof placeholder === 'string' ? placeholder : IMAGE_PLACEHOLDER)
+    return cursor.insert(
+      typeof placeholder === 'string' ? placeholder : IMAGE_PLACEHOLDER,
+    )
   }
 
   const handleCtrl = mapInput([

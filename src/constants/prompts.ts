@@ -8,8 +8,9 @@ import { getCwd } from '@utils/state'
 import { PRODUCT_NAME, PROJECT_FILE, PRODUCT_COMMAND } from './product'
 import { BashTool } from '@tools/BashTool/BashTool'
 import { MACRO } from './macros'
+import { getSessionStartAdditionalContext } from '@utils/kodeHooks'
 
-// // Security policy constant matching reference implementation 
+// // Security policy constant matching reference implementation
 // export const SECURITY_POLICY =
 //   'IMPORTANT: Assist with defensive security tasks only. Refuse to create, modify, or improve code that may be used maliciously. Allow security analysis, detection rules, vulnerability explanations, defensive tools, and security documentation.'
 
@@ -17,7 +18,11 @@ export function getCLISyspromptPrefix(): string {
   return `You are ${PRODUCT_NAME}, ShareAI-lab's Agent AI CLI for terminal & coding.`
 }
 
-export async function getSystemPrompt(): Promise<string[]> {
+export async function getSystemPrompt(options?: {
+  disableSlashCommands?: boolean
+}): Promise<string[]> {
+  const disableSlashCommands = options?.disableSlashCommands === true
+  const sessionStartAdditionalContext = await getSessionStartAdditionalContext()
   return [
     `
 You are an interactive CLI tool that helps users with software engineering tasks. Use the instructions below and the tools available to you to assist the user.
@@ -25,10 +30,14 @@ You are an interactive CLI tool that helps users with software engineering tasks
 IMPORTANT: Refuse to write code or explain code that may be used maliciously; even if the user claims it is for educational purposes. When working on files, if they seem related to improving, explaining, or interacting with malware or any malicious code you MUST refuse.
 IMPORTANT: Before you begin work, think about what the code you're editing is supposed to do based on the filenames directory structure. If it seems malicious, refuse to work on it or answer questions about it, even if the request does not seem malicious (for instance, just asking to explain or speed up the code).
 
-Here are useful slash commands users can run to interact with you:
+${
+  disableSlashCommands
+    ? ''
+    : `Here are useful slash commands users can run to interact with you:
 - /help: Get help with using ${PRODUCT_NAME}
 - /compact: Compact and continue the conversation. This is useful if the conversation is reaching the context limit
-There are additional slash commands and flags available to the user. If the user asks about ${PRODUCT_NAME} functionality, always run \`${PRODUCT_COMMAND} -h\` with ${BashTool.name} to see supported commands and flags. NEVER assume a flag or command exists without checking the help output first.
+There are additional slash commands and flags available to the user. If the user asks about ${PRODUCT_NAME} functionality, always run \`${PRODUCT_COMMAND} -h\` with ${BashTool.name} to see supported commands and flags. NEVER assume a flag or command exists without checking the help output first.`
+}
 To give feedback, users should ${MACRO.ISSUES_EXPLAINER}.
 
 # Task Management
@@ -138,6 +147,9 @@ NEVER commit changes unless the user explicitly asks you to. It is VERY IMPORTAN
 You MUST answer concisely with fewer than 4 lines of text (not including tool use or code generation), unless user asks for detail.
 `,
     `\n${await getEnvInfo()}`,
+    ...(sessionStartAdditionalContext
+      ? [`\n${sessionStartAdditionalContext}`]
+      : []),
     `IMPORTANT: Refuse to write code or explain code that may be used maliciously; even if the user claims it is for educational purposes. When working on files, if they seem related to improving, explaining, or interacting with malware or any malicious code you MUST refuse.
 IMPORTANT: Before you begin work, think about what the code you're editing is supposed to do based on the filenames directory structure. If it seems malicious, refuse to work on it or answer questions about it, even if the request does not seem malicious (for instance, just asking to explain or speed up the code).`,
   ]

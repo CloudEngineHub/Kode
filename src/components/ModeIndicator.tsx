@@ -28,11 +28,7 @@ export function ModeIndicator({
   })
 
   return (
-    <Box
-      flexDirection="row"
-      justifyContent="space-between"
-      width="100%"
-    >
+    <Box flexDirection="row" justifyContent="space-between" width="100%">
       <Text color={indicator.color}>
         {indicator.mainText}
         {indicator.shortcutHintText ? (

@@ -75,7 +75,8 @@ export default function ProjectOnboarding({
   // NOTE: This whole component is statically rendered Once
   const workspaceHasProjectGuide = existsSync(join(workspaceDir, PROJECT_FILE))
   const isWorkspaceDirEmpty = isDirEmpty(workspaceDir)
-  const shouldRecommendProjectGuide = !workspaceHasProjectGuide && !isWorkspaceDirEmpty
+  const shouldRecommendProjectGuide =
+    !workspaceHasProjectGuide && !isWorkspaceDirEmpty
 
   const theme = getTheme()
 
@@ -110,18 +111,19 @@ export default function ProjectOnboarding({
                     <OrderedList.Item>
                       <Text color={theme.secondaryText}>
                         Run <Text color={theme.text}>/init</Text> to create
-                      a&nbsp;
-                      {PROJECT_FILE} file with instructions for {PRODUCT_NAME}.
-                    </Text>
+                        a&nbsp;
+                        {PROJECT_FILE} file with instructions for {PRODUCT_NAME}
+                        .
+                      </Text>
                     </OrderedList.Item>
                   </React.Fragment>,
                 )
               }
 
-	              items.push(
-	                <React.Fragment key="questions">
-	                  {/* @ts-expect-error - OrderedList.Item children prop issue */}
-	                  <OrderedList.Item>
+              items.push(
+                <React.Fragment key="questions">
+                  {/* @ts-expect-error - OrderedList.Item children prop issue */}
+                  <OrderedList.Item>
                     <Text color={theme.secondaryText}>
                       Ask {PRODUCT_NAME} questions about your codebase.
                     </Text>
@@ -159,9 +161,7 @@ export default function ProjectOnboarding({
             <Box flexDirection="column" marginLeft={1}>
               {releaseNotesToShow.map((note, noteIndex) => (
                 <React.Fragment key={noteIndex}>
-                  <Text color={getTheme().secondaryText}>
-                    • {note}
-                  </Text>
+                  <Text color={getTheme().secondaryText}>• {note}</Text>
                 </React.Fragment>
               ))}
             </Box>

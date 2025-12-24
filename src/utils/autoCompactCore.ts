@@ -6,7 +6,7 @@ import { getCodeStyle } from '@utils/style'
 import { clearTerminal } from '@utils/terminal'
 import { resetFileFreshnessSession } from '@services/fileFreshness'
 import { createUserMessage, normalizeMessagesForAPI } from '@utils/messages'
-import { queryLLM } from '@services/claude'
+import { queryLLM } from '@services/llmLazy'
 import { selectAndReadFiles } from './fileRecoveryCore'
 import { addLineNumbers } from './file'
 import { getModelManager } from './model'
@@ -157,15 +157,19 @@ async function executeAutoCompact(
       compactResolution.error ||
       "Compression model pointer 'compact' is not configured."
   } else {
-    const compactBudget = Math.floor(compactResolution.profile.contextLength * 0.9)
+    const compactBudget = Math.floor(
+      compactResolution.profile.contextLength * 0.9,
+    )
     if (compactBudget > 0 && tokenCount > compactBudget) {
       compressionModelPointer = 'main'
-      compressionNotice =
-        `Compression model '${compactResolution.profile.name}' does not fit current context (~${Math.round(tokenCount / 1000)}k tokens).`
+      compressionNotice = `Compression model '${compactResolution.profile.name}' does not fit current context (~${Math.round(tokenCount / 1000)}k tokens).`
     }
   }
 
-  if (compressionModelPointer === 'main' && (!mainResolution.success || !mainResolution.profile)) {
+  if (
+    compressionModelPointer === 'main' &&
+    (!mainResolution.success || !mainResolution.profile)
+  ) {
     throw new Error(
       mainResolution.error ||
         "Compression fallback failed: model pointer 'main' is not configured.",

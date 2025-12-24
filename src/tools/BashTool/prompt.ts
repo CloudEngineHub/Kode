@@ -1,7 +1,7 @@
 import {
-  loadMergedClaudeSettings,
+  loadMergedSettings,
   normalizeSandboxRuntimeConfigFromSettings,
-} from '@utils/sandboxConfig'
+} from '@utils/sandbox/sandboxConfig'
 
 export const DEFAULT_TIMEOUT_MS = 120000
 export const MAX_TIMEOUT_MS = 600000
@@ -25,18 +25,18 @@ function isExperimentalMcpCliEnabled(): boolean {
   return ['1', 'true', 'yes', 'on'].includes(String(value).trim().toLowerCase())
 }
 
-function indentJsonForClaude(value: unknown): string {
+function indentJsonForPrompt(value: unknown): string {
   return JSON.stringify(value, null, 2).split('\n').join('\n      ')
 }
 
-function getClaudeCodeAttribution(): { commit: string; pr: string } {
+function getAttribution(): { commit: string; pr: string } {
   const pr = `🤖 Generated with [Kode Agent](${PROJECT_URL})`
   const commit = `${pr}\n\n   Co-Authored-By: ${DEFAULT_CO_AUTHOR} <ai-lab@foxmail.com>`
   return { commit, pr }
 }
 
-function getClaudeBashSandboxPrompt(): string {
-  const settings = loadMergedClaudeSettings()
+function getBashSandboxPrompt(): string {
+  const settings = loadMergedSettings()
   if (settings.sandbox?.enabled !== true) return ''
 
   const runtimeConfig = normalizeSandboxRuntimeConfigFromSettings(settings)
@@ -67,15 +67,18 @@ function getClaudeBashSandboxPrompt(): string {
   }
 
   const ignoredViolations = runtimeConfig.ignoreViolations
-  const allowUnsandboxedCommands = settings.sandbox?.allowUnsandboxedCommands !== false
+  const allowUnsandboxedCommands =
+    settings.sandbox?.allowUnsandboxedCommands !== false
 
   const sections: string[] = []
-  sections.push(`    - Filesystem: ${indentJsonForClaude(filesystem)}`)
+  sections.push(`    - Filesystem: ${indentJsonForPrompt(filesystem)}`)
   if (Object.keys(network).length > 0) {
-    sections.push(`    - Network: ${indentJsonForClaude(network)}`)
+    sections.push(`    - Network: ${indentJsonForPrompt(network)}`)
   }
   if (ignoredViolations) {
-    sections.push(`    - Ignored violations: ${indentJsonForClaude(ignoredViolations)}`)
+    sections.push(
+      `    - Ignored violations: ${indentJsonForPrompt(ignoredViolations)}`,
+    )
   }
 
   const mcpCliException = isExperimentalMcpCliEnabled()
@@ -118,8 +121,8 @@ ${overridePolicy}
     - Most programs that respect \`TMPDIR\` will automatically use it`
 }
 
-function getClaudeBashGitPrompt(): string {
-  const { commit, pr } = getClaudeCodeAttribution()
+function getBashGitPrompt(): string {
+  const { commit, pr } = getAttribution()
   return `# Committing changes with git
 
 Only create commits when requested by the user. If unclear, ask first. When the user asks you to create a new git commit, follow these steps carefully:
@@ -201,7 +204,7 @@ Important:
 }
 
 export function getBashToolPrompt(): string {
-  const sandboxPrompt = getClaudeBashSandboxPrompt()
+  const sandboxPrompt = getBashSandboxPrompt()
   return `Executes a given bash command in a persistent shell session with optional timeout, ensuring proper handling and security measures.
 
 IMPORTANT: This tool is for terminal operations like git, npm, docker, etc. DO NOT use it for file operations (reading, writing, editing, searching, finding files) - use the specialized tools for this instead.
@@ -225,7 +228,6 @@ Before executing the command, please follow these steps:
 Usage notes:
   - The command argument is required.
   - You can specify an optional timeout in milliseconds (up to ${MAX_TIMEOUT_MS}ms / ${MAX_TIMEOUT_MS / 60000} minutes). If not specified, commands will timeout after ${DEFAULT_TIMEOUT_MS}ms (${DEFAULT_TIMEOUT_MS / 60000} minutes).
-  - Always provide a clear reason (or intent) explaining why you are running the command (1-2 sentences). This is used by an automated safety/intention check.
   - It is very helpful if you write a clear, concise description of what this command does in 5-10 words.
   - If the output exceeds ${MAX_OUTPUT_LENGTH} characters, output will be truncated before being returned to you.
   - You can use the \`run_in_background\` parameter to run the command in the background, which allows you to continue working while the command runs. You can monitor the output using the ${TOOL_NAME_BASH} tool as it becomes available. You do not need to use '&' at the end of the command when using this parameter.
@@ -250,5 +252,5 @@ Usage notes:
     cd /foo/bar && pytest tests
     </bad-example>
 
-${getClaudeBashGitPrompt()}`
+${getBashGitPrompt()}`
 }

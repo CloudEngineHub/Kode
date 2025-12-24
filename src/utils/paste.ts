@@ -42,7 +42,8 @@ export function shouldAggregatePasteChunk(
   if (input === '\x1b\r' || input === '\x1b\n') return false
 
   // Multi-line chunks (or CRLF bursts) are usually paste, but may be delivered in smaller batches.
-  if (input.length > 1 && (input.includes('\n') || input.includes('\r'))) return true
+  if (input.length > 1 && (input.includes('\n') || input.includes('\r')))
+    return true
 
   return false
 }
