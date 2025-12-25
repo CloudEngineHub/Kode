@@ -8,6 +8,9 @@ import { setCwd } from '@utils/state'
 import { clearOutputStyleCache } from '@services/outputStyles'
 
 describe('/output-style (menu + direct set + help)', () => {
+  const stripAnsi = (value: string | undefined): string =>
+    (value ?? '').replace(/\x1b\[[0-9;]*m/g, '')
+
   const runnerCwd = process.cwd()
   const originalConfigDir = process.env.KODE_CONFIG_DIR
 
@@ -44,7 +47,7 @@ describe('/output-style (menu + direct set + help)', () => {
     )
 
     expect(jsx).toBeNull()
-    expect(message).toBe('Set output style to default')
+    expect(stripAnsi(message)).toBe('Set output style to default')
 
     const settingsPath = join(projectDir, '.kode', 'settings.local.json')
     expect(existsSync(settingsPath)).toBe(true)
@@ -59,7 +62,7 @@ describe('/output-style (menu + direct set + help)', () => {
       {} as any,
       'default',
     )
-    expect(msg1).toBe('Set output style to default')
+    expect(stripAnsi(msg1)).toBe('Set output style to default')
 
     let msg2: string | undefined
     await (outputStyle as any).call(
@@ -120,7 +123,7 @@ describe('/output-style (menu + direct set + help)', () => {
               .map((b: any) => String(b.text ?? ''))
               .join('')
           : ''
-    expect(rendered).toBe('Set output style to default')
+    expect(stripAnsi(rendered)).toBe('Set output style to default')
 
     const settingsPath = join(projectDir, '.kode', 'settings.local.json')
     const json = JSON.parse(readFileSync(settingsPath, 'utf8'))

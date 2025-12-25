@@ -7,12 +7,12 @@ export function printModelConfig() {
   const activeProfiles = modelProfiles.filter(p => p.isActive)
 
   if (activeProfiles.length === 0) {
-    console.log(chalk.gray('  ⎿  No active model profiles configured'))
+    process.stdout.write(`${chalk.gray('  ⎿  No active model profiles configured')}\n`)
     return
   }
 
   const profileSummary = activeProfiles
     .map(p => `${p.name} (${p.provider}: ${p.modelName})`)
     .join(' | ')
-  console.log(chalk.gray(`  ⎿  ${profileSummary}`))
+  process.stdout.write(`${chalk.gray(`  ⎿  ${profileSummary}`)}\n`)
 }

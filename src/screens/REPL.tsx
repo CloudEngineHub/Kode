@@ -44,7 +44,7 @@ import type { Tool } from '@tool'
 // Auto-updater removed; only show a new version banner passed from CLI
 import { getGlobalConfig, saveGlobalConfig } from '@utils/config'
 import { MACRO } from '@constants/macros'
-import { getNextAvailableLogForkNumber } from '@utils/log'
+import { getNextAvailableLogForkNumber, logError } from '@utils/log'
 import {
   getErroredToolUseMessages,
   getInProgressToolUseIDs,
@@ -446,7 +446,8 @@ export function REPL({
           handleHashCommand(content)
         }
       } catch (error) {
-        console.error('Error saving response to project docs:', error)
+        logError(error)
+        debugLogger.error('REPL_KODING_SAVE_PROJECT_DOCS_ERROR', { error })
       }
     }
 

@@ -3,6 +3,8 @@ import { last, memoize } from 'lodash-es'
 import React from 'react'
 import { Box, Text } from 'ink'
 import { z } from 'zod'
+import { randomUUID } from 'crypto'
+import { existsSync, readFileSync } from 'fs'
 import { Tool } from '@tool'
 import { FallbackToolUseRejectedMessage } from '@components/FallbackToolUseRejectedMessage'
 import { getAgentPrompt } from '@constants/prompts'
@@ -33,6 +35,8 @@ import {
 } from '@utils/agentTranscripts'
 import { getTaskTools, getPrompt } from './prompt'
 import { TOOL_NAME } from './constants'
+import type { PermissionMode } from '@kode-types/PermissionMode'
+import type { ToolPermissionContext } from '@kode-types/toolPermissionContext'
 
 const inputSchema = z.object({
   description: z
@@ -106,6 +110,17 @@ function normalizeAgentModelName(
   return model
 }
 
+function getToolNameFromSpec(spec: string): string {
+  const trimmed = spec.trim()
+  if (!trimmed) return trimmed
+  const match = trimmed.match(/^([^(]+)\(([^)]+)\)$/)
+  if (!match) return trimmed
+  const toolName = match[1]?.trim()
+  const ruleContent = match[2]?.trim()
+  if (!toolName || !ruleContent) return trimmed
+  return toolName
+}
+
 function asyncLaunchMessage(agentId: string): string {
   const toolName = 'TaskOutput'
   return `Async agent launched successfully.
@@ -113,6 +128,158 @@ agentId: ${agentId} (This is an internal ID for your use, do not mention it to t
 The agent is currently working in the background. If you have other tasks you you should continue working on them now. Wait to call ${toolName} until either:
 - If you want to check on the agent's progress - call ${toolName} with block=false to get an immediate update on the agent's status
 - If you run out of things to do and the agent is still running - call ${toolName} with block=true to idle and wait for the agent's result (do not use block=true unless you completely run out of things to do as it will waste time).`
+}
+
+const FORK_CONTEXT_TOOL_RESULT_TEXT = `### FORKING CONVERSATION CONTEXT ###
+### ENTERING SUB-AGENT ROUTINE ###
+Entered sub-agent context
+
+PLEASE NOTE: 
+- The messages above this point are from the main thread prior to sub-agent execution. They are provided as context only.
+- Context messages may include tool_use blocks for tools that are not available in the sub-agent context. You should only use the tools specifically provided to you in the system prompt.
+- Only complete the specific sub-agent task you have been assigned below.`
+
+function normalizeAgentPermissionMode(
+  mode: unknown,
+): PermissionMode | undefined {
+  if (typeof mode !== 'string') return undefined
+  const trimmed = mode.trim()
+  if (!trimmed) return undefined
+  if (trimmed === 'delegate') return 'default'
+  if (
+    trimmed === 'default' ||
+    trimmed === 'acceptEdits' ||
+    trimmed === 'plan' ||
+    trimmed === 'bypassPermissions' ||
+    trimmed === 'dontAsk'
+  ) {
+    return trimmed
+  }
+  return undefined
+}
+
+function applyAgentPermissionMode(
+  base: ToolPermissionContext | undefined,
+  options: {
+    agentPermissionMode: PermissionMode | undefined
+    safeMode: boolean
+  },
+): ToolPermissionContext | undefined {
+  if (!base) return base
+  if (!options.agentPermissionMode) return base
+
+  if (
+    options.agentPermissionMode === 'bypassPermissions' &&
+    (options.safeMode || base.isBypassPermissionsModeAvailable !== true)
+  ) {
+    return { ...base, mode: 'default' }
+  }
+
+  return { ...base, mode: options.agentPermissionMode }
+}
+
+function readJsonArrayFile(path: string): any[] | null {
+  if (!existsSync(path)) return null
+  try {
+    const raw = readFileSync(path, 'utf8')
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function buildForkContextForAgent(options: {
+  enabled: boolean
+  prompt: string
+  toolUseId: string | undefined
+  messageLogName: string
+  forkNumber: number
+}): {
+  forkContextMessages: MessageType[]
+  promptMessages: MessageType[]
+} {
+  const userPromptMessage = createUserMessage(options.prompt)
+
+  if (!options.enabled || !options.toolUseId) {
+    return {
+      forkContextMessages: [],
+      promptMessages: [userPromptMessage],
+    }
+  }
+
+  const mainPath = getMessagesPath(options.messageLogName, options.forkNumber, 0)
+  const mainMessages = readJsonArrayFile(mainPath) as MessageType[] | null
+  if (!mainMessages || mainMessages.length === 0) {
+    return {
+      forkContextMessages: [],
+      promptMessages: [userPromptMessage],
+    }
+  }
+
+  let toolUseMessageIndex = -1
+  let toolUseMessage: any = null
+  let taskToolUseBlock: any = null
+
+  for (let i = 0; i < mainMessages.length; i++) {
+    const msg: any = mainMessages[i]
+    if (msg?.type !== 'assistant') continue
+    const blocks: any[] = Array.isArray(msg?.message?.content)
+      ? msg.message.content
+      : []
+    const match = blocks.find(
+      b => b && b.type === 'tool_use' && b.id === options.toolUseId,
+    )
+    if (!match) continue
+    toolUseMessageIndex = i
+    toolUseMessage = msg
+    taskToolUseBlock = match
+    break
+  }
+
+  if (toolUseMessageIndex === -1 || !toolUseMessage || !taskToolUseBlock) {
+    return {
+      forkContextMessages: [],
+      promptMessages: [userPromptMessage],
+    }
+  }
+
+  const forkContextMessages = (mainMessages.slice(
+    0,
+    toolUseMessageIndex,
+  ) ?? []) as MessageType[]
+
+  const toolUseOnlyAssistant: MessageType = {
+    ...toolUseMessage,
+    uuid: randomUUID(),
+    message: {
+      ...toolUseMessage.message,
+      content: [taskToolUseBlock],
+    },
+  }
+
+  const forkContextToolResult = createUserMessage(
+    [
+      {
+        type: 'tool_result',
+        tool_use_id: taskToolUseBlock.id,
+        content: FORK_CONTEXT_TOOL_RESULT_TEXT,
+      } as any,
+    ],
+    {
+      data: {
+        status: 'sub_agent_entered',
+        description: 'Entered sub-agent context',
+        message: FORK_CONTEXT_TOOL_RESULT_TEXT,
+      },
+      resultForAssistant: FORK_CONTEXT_TOOL_RESULT_TEXT,
+    } as any,
+  )
+
+  return {
+    forkContextMessages,
+    promptMessages: [toolUseOnlyAssistant, forkContextToolResult, userPromptMessage],
+  }
 }
 
 export const TaskTool = {
@@ -276,6 +443,7 @@ export const TaskTool = {
     const startTime = Date.now()
     const {
       abortController,
+      toolUseId,
       options: {
         safeMode = false,
         forkNumber,
@@ -302,18 +470,26 @@ export const TaskTool = {
 
     const effectivePrompt = input.prompt
 
-    // Model selection: input.model overrides, else agent config overrides, else inherit from parent.
-    const normalizedAgentModel = normalizeAgentModelName(agentConfig.model_name)
-    let modelToUse: string =
-      modelEnumToPointer(input.model) ||
-      (normalizedAgentModel && normalizedAgentModel !== 'inherit'
-        ? normalizedAgentModel
+    // Model selection (compatibility rules):
+    // - If Task input specifies model => use it
+    // - Else if agent specifies model:
+    //   - "inherit" => inherit from parent
+    //   - otherwise => use that model
+    // - Else => default to task model (Sonnet-equivalent)
+    const normalizedAgentModel = normalizeAgentModelName(agentConfig.model)
+    const defaultSubagentModel = 'task'
+    const envSubagentModel =
+      process.env.KODE_SUBAGENT_MODEL ??
+      process.env.CLAUDE_CODE_SUBAGENT_MODEL
+    const modelToUse: string =
+      (typeof envSubagentModel === 'string' && envSubagentModel.trim()
+        ? envSubagentModel.trim()
         : undefined) ||
-      parentModel ||
-      'main'
-    if (!input.model && normalizedAgentModel === 'inherit') {
-      modelToUse = parentModel || 'main'
-    }
+      modelEnumToPointer(input.model) ||
+      (normalizedAgentModel === 'inherit'
+        ? parentModel || defaultSubagentModel
+        : normalizedAgentModel) ||
+      defaultSubagentModel
 
     const toolFilter = agentConfig.tools
     let tools = await getTaskTools(safeMode)
@@ -325,7 +501,10 @@ export const TaskTool = {
       if (toolFilter === '*' || isAllArray) {
         // Keep all tools
       } else if (Array.isArray(toolFilter)) {
-        tools = tools.filter(t => toolFilter.includes(t.name))
+        const allowedToolNames = new Set(
+          toolFilter.map(getToolNameFromSpec).filter(Boolean),
+        )
+        tools = tools.filter(t => allowedToolNames.has(t.name))
       }
     }
 
@@ -333,7 +512,10 @@ export const TaskTool = {
       ? agentConfig.disallowedTools
       : []
     if (disallowedTools.length > 0) {
-      tools = tools.filter(t => !disallowedTools.includes(t.name))
+      const disallowedToolNames = new Set(
+        disallowedTools.map(getToolNameFromSpec).filter(Boolean),
+      )
+      tools = tools.filter(t => !disallowedToolNames.has(t.name))
     }
 
     const agentId = input.resume || generateAgentId()
@@ -345,20 +527,41 @@ export const TaskTool = {
       throw Error(`No transcript found for agent ID: ${input.resume}`)
     }
 
-    const messages: MessageType[] = [
+    const { forkContextMessages, promptMessages } = buildForkContextForAgent({
+      enabled: agentConfig.forkContext === true,
+      prompt: effectivePrompt,
+      toolUseId,
+      messageLogName,
+      forkNumber,
+    })
+
+    const transcriptMessages: MessageType[] = [
       ...(baseTranscript || []),
-      createUserMessage(effectivePrompt),
+      ...promptMessages,
+    ]
+
+    const messagesForQuery: MessageType[] = [
+      ...forkContextMessages,
+      ...transcriptMessages,
     ]
 
     const [baseSystemPrompt, context, maxThinkingTokens] = await Promise.all([
       getAgentPrompt(),
       getContext(),
-      getMaxThinkingTokens(messages),
+      getMaxThinkingTokens(messagesForQuery),
     ])
     const systemPrompt =
       agentConfig.systemPrompt && agentConfig.systemPrompt.length > 0
         ? [...baseSystemPrompt, agentConfig.systemPrompt]
         : baseSystemPrompt
+
+    const agentPermissionMode = normalizeAgentPermissionMode(
+      (agentConfig as any).permissionMode,
+    )
+    const toolPermissionContext = applyAgentPermissionMode(
+      toolUseContext.options?.toolPermissionContext,
+      { agentPermissionMode, safeMode },
+    )
 
     const queryOptions = {
       safeMode,
@@ -368,7 +571,7 @@ export const TaskTool = {
       commands: [],
       verbose,
       permissionMode: 'dontAsk' as const,
-      toolPermissionContext: toolUseContext.options?.toolPermissionContext,
+      toolPermissionContext,
       maxThinkingTokens,
       model: modelToUse,
       mcpClients,
@@ -384,14 +587,15 @@ export const TaskTool = {
         prompt: effectivePrompt,
         status: 'running',
         startedAt: Date.now(),
-        messages: [...messages],
+        messages: [...transcriptMessages],
         abortController: bgAbortController,
         done: Promise.resolve(),
       }
 
       taskRecord.done = (async () => {
         try {
-          const bgMessages: MessageType[] = [...messages]
+          const bgMessages: MessageType[] = [...messagesForQuery]
+          const bgTranscriptMessages: MessageType[] = [...transcriptMessages]
 
           for await (const msg of queryFn(
             bgMessages,
@@ -408,12 +612,13 @@ export const TaskTool = {
             },
           )) {
             bgMessages.push(msg)
-            taskRecord.messages = [...bgMessages]
+            bgTranscriptMessages.push(msg)
+            taskRecord.messages = [...bgTranscriptMessages]
             upsertBackgroundAgentTask(taskRecord)
           }
 
           const lastAssistant = last(
-            bgMessages.filter(m => m.type === 'assistant'),
+            bgTranscriptMessages.filter(m => m.type === 'assistant'),
           ) as any
           const content = lastAssistant?.message?.content?.filter(
             (b: any) => b.type === 'text',
@@ -422,9 +627,9 @@ export const TaskTool = {
           taskRecord.status = 'completed'
           taskRecord.completedAt = Date.now()
           taskRecord.resultText = (content || []).map(b => b.text).join('\n')
-          taskRecord.messages = [...bgMessages]
+          taskRecord.messages = [...bgTranscriptMessages]
           upsertBackgroundAgentTask(taskRecord)
-          saveAgentTranscript(agentId, bgMessages)
+          saveAgentTranscript(agentId, bgTranscriptMessages)
         } catch (e) {
           taskRecord.status = 'failed'
           taskRecord.completedAt = Date.now()
@@ -547,24 +752,25 @@ export const TaskTool = {
 
     let toolUseCount = 0
     for await (const message of queryFn(
-      messages,
+      messagesForQuery,
       systemPrompt,
       context,
       hasPermissionsToUseTool,
       {
         abortController,
         options: queryOptions,
-        messageId: getLastAssistantMessageId(messages),
+        messageId: getLastAssistantMessageId(messagesForQuery),
         agentId,
         readFileTimestamps,
         setToolJSX: () => {},
       },
     )) {
-      messages.push(message)
+      messagesForQuery.push(message)
+      transcriptMessages.push(message)
 
       overwriteLog(
         getMessagesPath(messageLogName, forkNumber, getSidechainNumber()),
-        messages.filter(_ => _.type !== 'progress'),
+        transcriptMessages.filter(_ => _.type !== 'progress'),
         { conversationKey: `${messageLogName}:${forkNumber}` },
       )
 
@@ -600,7 +806,7 @@ export const TaskTool = {
     }
 
     const lastAssistant = last(
-      messages.filter(m => m.type === 'assistant'),
+      transcriptMessages.filter(m => m.type === 'assistant'),
     ) as any
     if (!lastAssistant || lastAssistant.type !== 'assistant') {
       throw Error('No assistant messages found')
@@ -610,10 +816,10 @@ export const TaskTool = {
       (b: any) => b.type === 'text',
     ) as TextBlock[]
 
-    saveAgentTranscript(agentId, messages)
+    saveAgentTranscript(agentId, transcriptMessages)
 
     const totalDurationMs = Date.now() - startTime
-    const totalTokens = countTokens(messages)
+    const totalTokens = countTokens(transcriptMessages)
     const usage = lastAssistant.message.usage
 
     const output: Output = {

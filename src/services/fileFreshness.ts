@@ -4,6 +4,8 @@ import {
   systemReminderService,
 } from '@services/systemReminder'
 import { getAgentFilePath } from '@utils/agentStorage'
+import { debug as debugLogger } from '@utils/debugLogger'
+import { logError } from '@utils/log'
 
 interface FileTimestamp {
   path: string
@@ -74,7 +76,11 @@ class FileFreshnessService {
         modified: timestamp.lastModified,
       })
     } catch (error) {
-      console.error(`Error recording file read for ${filePath}:`, error)
+      logError(error)
+      debugLogger.warn('FILE_FRESHNESS_RECORD_READ_FAILED', {
+        filePath,
+        error: error instanceof Error ? error.message : String(error),
+      })
     }
   }
 
@@ -122,7 +128,11 @@ class FileFreshnessService {
         conflict,
       }
     } catch (error) {
-      console.error(`Error checking freshness for ${filePath}:`, error)
+      logError(error)
+      debugLogger.warn('FILE_FRESHNESS_CHECK_FAILED', {
+        filePath,
+        error: error instanceof Error ? error.message : String(error),
+      })
       return { isFresh: false, conflict: true }
     }
   }
@@ -168,7 +178,11 @@ class FileFreshnessService {
         source: 'agent',
       })
     } catch (error) {
-      console.error(`Error recording file edit for ${filePath}:`, error)
+      logError(error)
+      debugLogger.warn('FILE_FRESHNESS_RECORD_EDIT_FAILED', {
+        filePath,
+        error: error instanceof Error ? error.message : String(error),
+      })
     }
   }
 
@@ -206,7 +220,11 @@ class FileFreshnessService {
       // External modification detected - generate reminder
       return `Note: ${filePath} was modified externally since last read. The file may have changed outside of this session.`
     } catch (error) {
-      console.error(`Error checking modification for ${filePath}:`, error)
+      logError(error)
+      debugLogger.warn('FILE_FRESHNESS_CHECK_MODIFICATION_FAILED', {
+        filePath,
+        error: error instanceof Error ? error.message : String(error),
+      })
       return null
     }
   }
@@ -225,7 +243,11 @@ class FileFreshnessService {
       try {
         unwatchFile(filePath)
       } catch (error) {
-        console.error(`Error unwatching file ${filePath}:`, error)
+        logError(error)
+        debugLogger.warn('FILE_FRESHNESS_UNWATCH_FAILED', {
+          filePath,
+          error: error instanceof Error ? error.message : String(error),
+        })
       }
     })
 
@@ -273,10 +295,11 @@ class FileFreshnessService {
         }
       })
     } catch (error) {
-      console.error(
-        `Error starting todo file watch for agent ${agentId}:`,
-        error,
-      )
+      logError(error)
+      debugLogger.warn('FILE_FRESHNESS_TODO_WATCH_START_FAILED', {
+        agentId,
+        error: error instanceof Error ? error.message : String(error),
+      })
     }
   }
 
@@ -291,10 +314,11 @@ class FileFreshnessService {
         this.state.watchedTodoFiles.delete(agentId)
       }
     } catch (error) {
-      console.error(
-        `Error stopping todo file watch for agent ${agentId}:`,
-        error,
-      )
+      logError(error)
+      debugLogger.warn('FILE_FRESHNESS_TODO_WATCH_STOP_FAILED', {
+        agentId,
+        error: error instanceof Error ? error.message : String(error),
+      })
     }
   }
 

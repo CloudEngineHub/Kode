@@ -3,6 +3,7 @@ import { getCurrentProjectConfig } from '@utils/config'
 import { cleanupOldMessageFilesInBackground } from '@utils/cleanup'
 import { grantReadPermissionForOriginalDir } from '@utils/permissions/filesystem'
 import { setCwd, setOriginalCwd } from '@utils/state'
+import { debug as debugLogger } from '@utils/debugLogger'
 
 export async function setup(cwd: string, safeMode?: boolean): Promise<void> {
   // Set both current and original working directory if --cwd was provided
@@ -25,7 +26,7 @@ export async function setup(cwd: string, safeMode?: boolean): Promise<void> {
   const { startAgentWatcher } = agentLoader
   await startAgentWatcher(() => {
     // Cache is already cleared in the watcher, just log
-    console.log('✅ Agent configurations hot-reloaded')
+    debugLogger.info('AGENTS_HOT_RELOADED', { ok: true })
   })
 
   // If --safe mode is enabled, prevent root/sudo usage for security

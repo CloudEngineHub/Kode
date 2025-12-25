@@ -1,6 +1,8 @@
 import { Command } from '@commands'
 import { reloadCustomCommands } from '@services/customCommands'
 import { getCommands } from '@commands'
+import { debug as debugLogger } from '@utils/debugLogger'
+import { logError } from '@utils/log'
 
 /**
  * Refresh Commands - Reload custom commands from filesystem
@@ -43,8 +45,11 @@ Custom commands reloaded: ${customCommands.length}
 
 Use /help to see updated command list.`
     } catch (error) {
-      console.error('Failed to refresh commands:', error)
-      return '❌ Failed to refresh commands. Check console for details.'
+      logError(error)
+      debugLogger.warn('REFRESH_COMMANDS_FAILED', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      return '❌ Failed to refresh commands. Check debug logs for details.'
     }
   },
   userFacingName() {

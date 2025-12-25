@@ -4,7 +4,8 @@
   "bin": {
     "kode": "cli.js",
     "kwa": "cli.js",
-    "kd": "cli.js"
+    "kd": "cli.js",
+    "kode-acp": "cli-acp.js"
   },
   "engines": {
     "node": ">=20.18.1"
@@ -23,11 +24,13 @@
   },
   "files": [
     "cli.js",
+    "cli-acp.js",
     "yoga.wasm",
     "dist/**/*",
     "vendor/**/*",
     "scripts/binary-utils.cjs",
     "scripts/cli-wrapper.cjs",
+    "scripts/cli-acp-wrapper.cjs",
     "scripts/postinstall.js",
     ".npmrc"
   ],

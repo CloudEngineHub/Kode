@@ -1,4 +1,6 @@
 import { getProjectDocs } from '@context'
+import { debug as debugLogger } from '@utils/debugLogger'
+import { logError } from '@utils/log'
 
 class KodeContextManager {
   private static instance: KodeContextManager
@@ -22,7 +24,10 @@ class KodeContextManager {
         this.projectDocsCache = projectDocs || ''
         this.cacheInitialized = true
       } catch (error) {
-        console.warn('[KodeContext] Failed to load project docs:', error)
+        logError(error)
+        debugLogger.warn('KODE_CONTEXT_LOAD_FAILED', {
+          error: error instanceof Error ? error.message : String(error),
+        })
         this.projectDocsCache = ''
         this.cacheInitialized = true
       }
@@ -33,7 +38,12 @@ class KodeContextManager {
 
   public getKodeContext(): string {
     if (!this.cacheInitialized) {
-      this.initialize().catch(console.warn)
+      this.initialize().catch(error => {
+        logError(error)
+        debugLogger.warn('KODE_CONTEXT_LOAD_FAILED', {
+          error: error instanceof Error ? error.message : String(error),
+        })
+      })
       return ''
     }
     return this.projectDocsCache

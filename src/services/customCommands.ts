@@ -7,6 +7,8 @@ import type { Command } from '@commands'
 import { getCwd } from '@utils/state'
 import { getSessionPlugins } from '@utils/sessionPlugins'
 import { getKodeBaseDir } from '@utils/env'
+import { debug as debugLogger } from '@utils/debugLogger'
+import { logError } from '@utils/log'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import matter from 'gray-matter'
@@ -57,7 +59,11 @@ export async function executeBashCommands(content: string): Promise<string> {
       const output = stdout.trim() || stderr.trim() || '(no output)'
       result = result.replace(fullMatch, output)
     } catch (error) {
-      console.warn(`Failed to execute bash command "${command}":`, error)
+      logError(error)
+      debugLogger.warn('CUSTOM_COMMAND_BASH_EXEC_FAILED', {
+        command,
+        error: error instanceof Error ? error.message : String(error),
+      })
       result = result.replace(fullMatch, `(error executing: ${command})`)
     }
   }
@@ -106,7 +112,11 @@ export async function resolveFileReferences(content: string): Promise<string> {
         result = result.replace(fullMatch, `(file not found: ${filePath})`)
       }
     } catch (error) {
-      console.warn(`Failed to read file "${filePath}":`, error)
+      logError(error)
+      debugLogger.warn('CUSTOM_COMMAND_FILE_READ_FAILED', {
+        filePath,
+        error: error instanceof Error ? error.message : String(error),
+      })
       result = result.replace(fullMatch, `(error reading: ${filePath})`)
     }
   }
@@ -485,14 +495,16 @@ function loadPluginSkillDirectoryCommandsFromBaseDir(args: {
         declaredName && declaredName === dirName ? declaredName : ''
       if (declaredName && declaredName !== dirName) {
         if (strictMode) continue
-        console.warn(
-          `Skill name mismatch: dir=${dirName} frontmatter.name=${declaredName} (${skillFile})`,
-        )
+        debugLogger.warn('CUSTOM_COMMAND_SKILL_NAME_MISMATCH', {
+          dirName,
+          declaredName,
+          skillFile,
+        })
       }
       const name = buildPluginQualifiedName(args.pluginName, dirName)
       if (!validateName(dirName)) {
         if (strictMode) continue
-        console.warn(`Invalid skill directory name: ${dirName} (${skillFile})`)
+        debugLogger.warn('CUSTOM_COMMAND_SKILL_DIR_INVALID', { dirName, skillFile })
       }
       const descriptionText =
         frontmatter.description ??
@@ -753,14 +765,16 @@ function loadSkillDirectoryCommandsFromBaseDir(
         declaredName && declaredName === dirName ? declaredName : ''
       if (declaredName && declaredName !== dirName) {
         if (strictMode) continue
-        console.warn(
-          `Skill name mismatch: dir=${dirName} frontmatter.name=${declaredName} (${skillFile})`,
-        )
+        debugLogger.warn('CUSTOM_COMMAND_SKILL_NAME_MISMATCH', {
+          dirName,
+          declaredName,
+          skillFile,
+        })
       }
       const name = dirName
       if (!validateName(name)) {
         if (strictMode) continue
-        console.warn(`Invalid skill directory name: ${name} (${skillFile})`)
+        debugLogger.warn('CUSTOM_COMMAND_SKILL_DIR_INVALID', { name, skillFile })
       }
       const descriptionText =
         frontmatter.description ??
@@ -962,7 +976,10 @@ export const loadCustomCommands = memoize(
 
       return unique
     } catch (error) {
-      console.warn('Failed to load custom commands:', error)
+      logError(error)
+      debugLogger.warn('CUSTOM_COMMANDS_LOAD_FAILED', {
+        error: error instanceof Error ? error.message : String(error),
+      })
       return []
     } finally {
       clearTimeout(timeout)

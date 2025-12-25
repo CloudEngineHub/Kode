@@ -4,7 +4,7 @@ import { logError } from './log'
 
 const d = (msg: string) => {
   if (process.env.DEBUG?.includes('kode:search')) {
-    console.log(`[search] ${msg}`)
+    process.stderr.write(`[search] ${msg}\n`)
   }
 }
 

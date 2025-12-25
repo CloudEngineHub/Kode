@@ -1,7 +1,5 @@
 import { join } from 'path'
 import { readFileSync, writeFileSync } from 'fs'
-import chalk from 'chalk'
-import { getTheme } from '@utils/theme'
 import { logError } from '@utils/log'
 
 export function handleHashCommand(interpreted: string): void {
@@ -55,27 +53,9 @@ export function handleHashCommand(interpreted: string): void {
         updatedFiles.push(file.name)
       } catch (error) {
         logError(error)
-        console.error(
-          chalk.hex(getTheme().error)(
-            `Failed to update ${file.name}: ${(error as Error).message}`,
-          ),
-        )
       }
-    }
-
-    if (updatedFiles.length > 0) {
-      console.log(
-        chalk.hex(getTheme().success)(
-          `Added note to ${updatedFiles.join(' and ')}`,
-        ),
-      )
     }
   } catch (e) {
     logError(e)
-    console.error(
-      chalk.hex(getTheme().error)(
-        `Failed to add note: ${(e as Error).message}`,
-      ),
-    )
   }
 }

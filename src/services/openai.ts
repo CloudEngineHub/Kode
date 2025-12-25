@@ -135,9 +135,10 @@ const GPT5_ERROR_HANDLERS: ErrorHandler[] = [
       )
     },
     fix: async opts => {
-      console.log(
-        `🔧 GPT-5 Fix: Converting max_tokens (${opts.max_tokens}) to max_completion_tokens`,
-      )
+      debugLogger.api('GPT5_FIX_MAX_TOKENS', {
+        from: opts.max_tokens,
+        to: opts.max_tokens,
+      })
       if ('max_tokens' in opts) {
         opts.max_completion_tokens = opts.max_tokens
         delete opts.max_tokens
@@ -156,9 +157,10 @@ const GPT5_ERROR_HANDLERS: ErrorHandler[] = [
       )
     },
     fix: async opts => {
-      console.log(
-        `🔧 GPT-5 Fix: Adjusting temperature from ${opts.temperature} to 1`,
-      )
+      debugLogger.api('GPT5_FIX_TEMPERATURE', {
+        from: opts.temperature,
+        to: 1,
+      })
       opts.temperature = 1
     },
   },
@@ -369,9 +371,10 @@ function applyModelSpecificTransformations(
   if (isGPT5 || features.usesMaxCompletionTokens) {
     // Force max_completion_tokens for all GPT-5 models
     if ('max_tokens' in opts && !('max_completion_tokens' in opts)) {
-      console.log(
-        `🔧 Transforming max_tokens (${opts.max_tokens}) to max_completion_tokens for ${opts.model}`,
-      )
+      debugLogger.api('OPENAI_TRANSFORM_MAX_TOKENS', {
+        model: opts.model,
+        from: opts.max_tokens,
+      })
       opts.max_completion_tokens = opts.max_tokens
       delete opts.max_tokens
     }
@@ -379,9 +382,11 @@ function applyModelSpecificTransformations(
     // Force temperature = 1 for GPT-5 models
     if (features.requiresTemperatureOne && 'temperature' in opts) {
       if (opts.temperature !== 1 && opts.temperature !== undefined) {
-        console.log(
-          `🔧 GPT-5 temperature constraint: Adjusting temperature from ${opts.temperature} to 1 for ${opts.model}`,
-        )
+        debugLogger.api('OPENAI_TRANSFORM_TEMPERATURE', {
+          model: opts.model,
+          from: opts.temperature,
+          to: 1,
+        })
         opts.temperature = 1
       }
     }
@@ -470,9 +475,11 @@ async function tryWithEndpointFallback(
 
       // If it's a 404, try the next endpoint
       if (response.status === 404 && endpointsToTry.length > 1) {
-        console.log(
-          `Endpoint ${endpoint} returned 404, trying next endpoint...`,
-        )
+        debugLogger.api('OPENAI_ENDPOINT_FALLBACK', {
+          endpoint,
+          status: 404,
+          reason: 'not_found',
+        })
         continue
       }
 
@@ -482,7 +489,11 @@ async function tryWithEndpointFallback(
       lastError = error
       // Network errors might be temporary, try next endpoint
       if (endpointsToTry.indexOf(endpoint) < endpointsToTry.length - 1) {
-        console.log(`Network error on ${endpoint}, trying next endpoint...`)
+        debugLogger.api('OPENAI_ENDPOINT_FALLBACK', {
+          endpoint,
+          reason: 'network_error',
+          error: error instanceof Error ? error.message : String(error),
+        })
         continue
       }
     }
@@ -655,9 +666,12 @@ export async function getCompletionWithProfile(
 
           for (const handler of handlers) {
             if (handler.detect(errorMessage)) {
-              console.log(
-                `🔧 Detected ${handler.type} error for ${opts.model}: ${errorMessage}`,
-              )
+              debugLogger.api('OPENAI_MODEL_ERROR_DETECTED', {
+                model: opts.model,
+                type: handler.type,
+                errorMessage,
+                status: response.status,
+              })
 
               // Store this error for future requests
               setModelError(
@@ -669,7 +683,10 @@ export async function getCompletionWithProfile(
 
               // Apply the fix and retry immediately
               await handler.fix(opts)
-              console.log(`🔧 Applied fix for ${handler.type}, retrying...`)
+              debugLogger.api('OPENAI_MODEL_ERROR_FIXED', {
+                model: opts.model,
+                type: handler.type,
+              })
 
               return getCompletionWithProfile(
                 modelProfile,
@@ -682,9 +699,11 @@ export async function getCompletionWithProfile(
           }
 
           // If no specific handler found, log the error for debugging
-          console.log(
-            `⚠️  Unhandled API error (${response.status}): ${errorMessage}`,
-          )
+          debugLogger.warn('OPENAI_API_ERROR_UNHANDLED', {
+            model: opts.model,
+            status: response.status,
+            errorMessage,
+          })
 
           // Log API error using unified logger
           logAPIError({
@@ -698,7 +717,11 @@ export async function getCompletionWithProfile(
           })
         } catch (parseError) {
           // If we can't parse the error, fall back to generic retry
-          console.log(`⚠️  Could not parse error response (${response.status})`)
+          debugLogger.warn('OPENAI_API_ERROR_PARSE_FAILED', {
+            model: opts.model,
+            status: response.status,
+            error: parseError instanceof Error ? parseError.message : String(parseError),
+          })
 
           // Log parse error
           logAPIError({
@@ -713,9 +736,13 @@ export async function getCompletionWithProfile(
         }
 
         const delayMs = getRetryDelay(attempt)
-        console.log(
-          `  ⎿  API error (${response.status}), retrying in ${Math.round(delayMs / 1000)}s... (attempt ${attempt + 1}/${maxAttempts})`,
-        )
+        debugLogger.warn('OPENAI_API_RETRY', {
+          model: opts.model,
+          status: response.status,
+          attempt: attempt + 1,
+          maxAttempts,
+          delayMs,
+        })
         try {
           await abortableDelay(delayMs, signal)
         } catch (error) {
@@ -808,16 +835,22 @@ export async function getCompletionWithProfile(
 
         for (const handler of handlers) {
           if (handler.detect(errorMessage)) {
-            console.log(
-              `🔧 Detected ${handler.type} error for ${opts.model}: ${errorMessage}`,
-            )
+            debugLogger.api('OPENAI_MODEL_ERROR_DETECTED', {
+              model: opts.model,
+              type: handler.type,
+              errorMessage,
+              status: response.status,
+            })
 
             // Store this error for future requests
             setModelError(baseURL || '', opts.model, handler.type, errorMessage)
 
             // Apply the fix and retry immediately
             await handler.fix(opts)
-            console.log(`🔧 Applied fix for ${handler.type}, retrying...`)
+            debugLogger.api('OPENAI_MODEL_ERROR_FIXED', {
+              model: opts.model,
+              type: handler.type,
+            })
 
             return getCompletionWithProfile(
               modelProfile,
@@ -830,18 +863,28 @@ export async function getCompletionWithProfile(
         }
 
         // If no specific handler found, log the error for debugging
-        console.log(
-          `⚠️  Unhandled API error (${response.status}): ${errorMessage}`,
-        )
+        debugLogger.warn('OPENAI_API_ERROR_UNHANDLED', {
+          model: opts.model,
+          status: response.status,
+          errorMessage,
+        })
       } catch (parseError) {
         // If we can't parse the error, fall back to generic retry
-        console.log(`⚠️  Could not parse error response (${response.status})`)
+        debugLogger.warn('OPENAI_API_ERROR_PARSE_FAILED', {
+          model: opts.model,
+          status: response.status,
+          error: parseError instanceof Error ? parseError.message : String(parseError),
+        })
       }
 
       const delayMs = getRetryDelay(attempt)
-      console.log(
-        `  ⎿  API error (${response.status}), retrying in ${Math.round(delayMs / 1000)}s... (attempt ${attempt + 1}/${maxAttempts})`,
-      )
+      debugLogger.warn('OPENAI_API_RETRY', {
+        model: opts.model,
+        status: response.status,
+        attempt: attempt + 1,
+        maxAttempts,
+        delayMs,
+      })
       try {
         await abortableDelay(delayMs, signal)
       } catch (error) {
@@ -875,9 +918,13 @@ export async function getCompletionWithProfile(
       }
 
       const delayMs = getRetryDelay(attempt)
-      console.log(
-        `  ⎿  Network error, retrying in ${Math.round(delayMs / 1000)}s... (attempt ${attempt + 1}/${maxAttempts})`,
-      )
+      debugLogger.warn('OPENAI_NETWORK_RETRY', {
+        model: opts.model,
+        attempt: attempt + 1,
+        maxAttempts,
+        delayMs,
+        error: error instanceof Error ? error.message : String(error),
+      })
       try {
         await abortableDelay(delayMs, signal)
       } catch (error) {
@@ -927,7 +974,9 @@ export function createStreamProcessor(
           if (signal?.aborted) {
             break
           }
-          console.error('Error reading from stream:', e)
+          debugLogger.warn('OPENAI_STREAM_READ_ERROR', {
+            error: e instanceof Error ? e.message : String(e),
+          })
           break
         }
 
@@ -956,7 +1005,10 @@ export function createStreamProcessor(
               const parsed = JSON.parse(data) as OpenAI.ChatCompletionChunk
               yield parsed
             } catch (e) {
-              console.error('Error parsing JSON:', data, e)
+              debugLogger.warn('OPENAI_STREAM_JSON_PARSE_ERROR', {
+                data,
+                error: e instanceof Error ? e.message : String(e),
+              })
             }
           }
 
@@ -976,18 +1028,25 @@ export function createStreamProcessor(
               const parsed = JSON.parse(data) as OpenAI.ChatCompletionChunk
               yield parsed
             } catch (e) {
-              console.error('Error parsing final JSON:', data, e)
+              debugLogger.warn('OPENAI_STREAM_FINAL_JSON_PARSE_ERROR', {
+                data,
+                error: e instanceof Error ? e.message : String(e),
+              })
             }
           }
         }
       }
     } catch (e) {
-      console.error('Unexpected error in stream processing:', e)
+      debugLogger.warn('OPENAI_STREAM_UNEXPECTED_ERROR', {
+        error: e instanceof Error ? e.message : String(e),
+      })
     } finally {
       try {
         reader.releaseLock()
       } catch (e) {
-        console.error('Error releasing reader lock:', e)
+        debugLogger.warn('OPENAI_STREAM_RELEASE_LOCK_ERROR', {
+          error: e instanceof Error ? e.message : String(e),
+        })
       }
     }
   })()
@@ -1148,10 +1207,11 @@ async function getGPT5CompletionWithProfile(
       requestId: getCurrentRequest()?.id,
     })
 
-    // 🔧 Apply enhanced parameter optimization for third-party providers
-    console.log(
-      `🌐 Using GPT-5 via third-party provider: ${modelProfile.provider} (${modelProfile.baseURL})`,
-    )
+    debugLogger.api('GPT5_PROVIDER_THIRD_PARTY_NOTICE', {
+      model: opts.model,
+      provider: modelProfile.provider,
+      baseURL: modelProfile.baseURL,
+    })
 
     // Some third-party providers may need additional parameter adjustments
     if (modelProfile.provider === 'azure') {
@@ -1159,9 +1219,10 @@ async function getGPT5CompletionWithProfile(
       delete opts.reasoning_effort // Azure may not support this yet
     } else if (modelProfile.provider === 'custom-openai') {
       // Generic OpenAI-compatible provider optimizations
-      console.log(
-        `🔧 Applying OpenAI-compatible optimizations for custom provider`,
-      )
+      debugLogger.api('GPT5_CUSTOM_PROVIDER_OPTIMIZATIONS', {
+        model: opts.model,
+        provider: modelProfile.provider,
+      })
     }
   }
 
@@ -1174,9 +1235,10 @@ async function getGPT5CompletionWithProfile(
       requestId: getCurrentRequest()?.id,
     })
 
-    console.log(
-      `🔄 Using Chat Completions for streaming (Responses API streaming not available)`,
-    )
+    debugLogger.api('GPT5_STREAMING_FALLBACK_TO_CHAT_COMPLETIONS', {
+      model: opts.model,
+      reason: 'responses_api_no_streaming',
+    })
   }
 
   // 🔧 Enhanced Chat Completions fallback with GPT-5 optimizations
@@ -1307,7 +1369,10 @@ export async function fetchCustomModels(
     }
 
     // For network errors or other issues
-    console.error('Failed to fetch custom API models:', error)
+    debugLogger.warn('CUSTOM_API_MODELS_FETCH_FAILED', {
+      baseURL,
+      error: error instanceof Error ? error.message : String(error),
+    })
 
     // Check if it's a network error
     if (error instanceof Error && error.message.includes('fetch')) {

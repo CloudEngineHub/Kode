@@ -59,7 +59,11 @@ async function main() {
   // Build CLI + MCP entrypoints (dist/entrypoints/*.js)
   await buildWithBun({
     label: 'entrypoints',
-    entrypoints: ['src/entrypoints/cli.tsx', 'src/entrypoints/mcp.ts'],
+    entrypoints: [
+      'src/entrypoints/cli.tsx',
+      'src/entrypoints/mcp.ts',
+      'src/entrypoints/acp.ts',
+    ],
     outdir: join(OUT_DIR, 'entrypoints'),
   })
 
@@ -104,6 +108,17 @@ async function main() {
     )
   }
 
+  // Generate Node-based ACP shim (npm bin points here)
+  cpSync(join('scripts', 'cli-acp-wrapper.cjs'), 'cli-acp.js')
+  try {
+    chmodSync('cli-acp.js', 0o755)
+  } catch (err) {
+    console.warn(
+      '⚠️  Could not make cli-acp.js executable:',
+      err instanceof Error ? err.message : String(err),
+    )
+  }
+
   // Create .npmrc file (kept intentionally tiny)
   writeFileSync(
     '.npmrc',
@@ -118,7 +133,9 @@ save-exact=true
   console.log('  - dist/index.js')
   console.log('  - dist/entrypoints/cli.js')
   console.log('  - dist/entrypoints/mcp.js')
+  console.log('  - dist/entrypoints/acp.js')
   console.log('  - cli.js')
+  console.log('  - cli-acp.js')
 }
 
 main().catch(err => {

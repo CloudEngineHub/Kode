@@ -1,5 +1,7 @@
 import { randomUUID } from 'crypto'
 import type { AgentConfig } from '@utils/agentLoader'
+import { debug as debugLogger } from '@utils/debugLogger'
+import { logError } from '@utils/log'
 
 export type GeneratedAgent = {
   identifier: string
@@ -110,7 +112,10 @@ Make the agent highly specialized and effective for the described use case.`
       systemPrompt: sanitize(agentSystemPrompt),
     }
   } catch (error) {
-    console.error('AI generation failed:', error)
+    logError(error)
+    debugLogger.warn('AGENT_GENERATION_FAILED', {
+      error: error instanceof Error ? error.message : String(error),
+    })
 
     const fallbackId = prompt
       .toLowerCase()
@@ -240,34 +245,24 @@ export function generateAgentFileContent(
   model?: string,
   color?: string,
 ): string {
-  const descriptionLines = description.split('\n')
-  const formattedDescription =
-    descriptionLines.length > 1
-      ? `|\n  ${descriptionLines.join('\n  ')}`
-      : JSON.stringify(description)
+  // Match legacy `.claude` agent file generator format:
+  // - description uses literal "\n" escapes
+  // - tools is an optional comma-separated scalar (omitted when "*" / inherit-all)
+  const desc = description.replace(/\n/g, '\\n')
 
-  const lines = [
-    '---',
-    `name: ${agentType}`,
-    `description: ${formattedDescription}`,
-  ]
+  const toolsList =
+    tools === '*'
+      ? undefined
+      : Array.isArray(tools) && tools.length === 1 && tools[0] === '*'
+        ? undefined
+        : Array.isArray(tools)
+          ? tools
+          : undefined
 
-  if (tools) {
-    if (tools === '*') {
-      lines.push(`tools: "*"`)
-    } else if (Array.isArray(tools) && tools.length > 0) {
-      lines.push(`tools: [${tools.map(t => `"${t}"`).join(', ')}]`)
-    }
-  }
+  const toolsLine =
+    toolsList === undefined ? '' : `\ntools: ${toolsList.join(', ')}`
+  const modelLine = model ? `\nmodel: ${model}` : ''
+  const colorLine = color ? `\ncolor: ${color}` : ''
 
-  if (model) {
-    lines.push(`model: ${model}`)
-  }
-
-  if (color) {
-    lines.push(`color: ${color}`)
-  }
-
-  lines.push('---', '', systemPrompt)
-  return lines.join('\n')
+  return `---\nname: ${agentType}\ndescription: ${desc}${toolsLine}${modelLine}${colorLine}\n---\n\n${systemPrompt}\n`
 }

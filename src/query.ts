@@ -1172,7 +1172,7 @@ async function* checkPermissionsAndCallTool(
     : await canUseTool(
         tool,
         normalizedInput,
-        permissionContextForCall,
+        { ...permissionContextForCall, toolUseId: toolUseID },
         assistantMessage,
       )
   if (permissionResult.result === false) {

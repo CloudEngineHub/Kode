@@ -26,11 +26,11 @@ export async function assertMinVersion(): Promise<void> {
 
       const suggestions = await getUpdateCommandSuggestions()
       // Intentionally minimal: caller may print its own message; we just exit
-      // eslint-disable-next-line no-console
-      console.error(
+      process.stderr.write(
         `Your ${PRODUCT_NAME} version ${MACRO.VERSION} is below the minimum supported ${versionConfig.minVersion}.\n` +
           'Update using one of:\n' +
-          suggestions.map(c => `  ${c}`).join('\n'),
+          suggestions.map(c => `  ${c}`).join('\n') +
+          '\n',
       )
       process.exit(1)
     }
@@ -121,12 +121,14 @@ export async function checkAndNotifyUpdate(): Promise<void> {
         lastSuggestedVersion: latest,
       })
       const suggestions = await getUpdateCommandSuggestions()
-      // eslint-disable-next-line no-console
-      console.log(
-        `New version available: ${latest} (current: ${MACRO.VERSION})`,
+      process.stderr.write(
+        [
+          `New version available: ${latest} (current: ${MACRO.VERSION})`,
+          'Run the following command to update:',
+          ...suggestions.map(command => `  ${command}`),
+          '',
+        ].join('\n'),
       )
-      console.log('Run the following command to update:')
-      for (const command of suggestions) console.log(`  ${command}`)
     } else {
       saveGlobalConfig({ ...config, lastUpdateCheckAt: now })
     }

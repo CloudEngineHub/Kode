@@ -2,6 +2,8 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { join } from 'path'
 import { homedir } from 'os'
 import { randomUUID } from 'crypto'
+import { debug as debugLogger } from '@utils/debugLogger'
+import { logError } from '@utils/log'
 
 /**
  * Expert Chat Session Storage - 极简版
@@ -80,7 +82,11 @@ export function loadExpertChatSession(
     const content = readFileSync(filePath, 'utf-8')
     return JSON.parse(content) as ExpertChatSession
   } catch (error) {
-    console.error(`Failed to load expert chat session ${sessionId}:`, error)
+    logError(error)
+    debugLogger.warn('EXPERT_CHAT_SESSION_LOAD_FAILED', {
+      sessionId,
+      error: error instanceof Error ? error.message : String(error),
+    })
     return null
   }
 }
@@ -95,10 +101,11 @@ export function saveExpertChatSession(session: ExpertChatSession): void {
     session.lastUpdated = Date.now()
     writeFileSync(filePath, JSON.stringify(session, null, 2), 'utf-8')
   } catch (error) {
-    console.error(
-      `Failed to save expert chat session ${session.sessionId}:`,
-      error,
-    )
+    logError(error)
+    debugLogger.warn('EXPERT_CHAT_SESSION_SAVE_FAILED', {
+      sessionId: session.sessionId,
+      error: error instanceof Error ? error.message : String(error),
+    })
     throw error
   }
 }

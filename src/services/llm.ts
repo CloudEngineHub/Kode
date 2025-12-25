@@ -261,9 +261,14 @@ async function withRetry<T>(
       const retryAfter = error.headers?.['retry-after'] ?? null
       const delayMs = getRetryDelay(attempt, retryAfter)
 
-      console.log(
-        `  ⎿  ${chalk.red(`API ${error.name} (${error.message}) · Retrying in ${Math.round(delayMs / 1000)} seconds… (attempt ${attempt}/${maxRetries})`)}`,
-      )
+      debugLogger.warn('LLM_API_RETRY', {
+        name: error.name,
+        message: error.message,
+        status: error.status,
+        attempt,
+        maxRetries,
+        delayMs,
+      })
 
       try {
         await abortableDelay(delayMs, options.signal)
@@ -339,7 +344,10 @@ export async function fetchAnthropicModels(
     }
 
     // For network errors or other issues
-    console.error('Failed to fetch Anthropic models:', error)
+    logError(error)
+    debugLogger.warn('ANTHROPIC_MODELS_FETCH_FAILED', {
+      error: error instanceof Error ? error.message : String(error),
+    })
     throw new Error(
       'Unable to connect to Anthropic API. Please check your internet connection and try again.',
     )
@@ -364,9 +372,7 @@ export async function verifyApiKey(
       }
 
       if (!baseURL) {
-        console.warn(
-          'No baseURL provided for non-Anthropic provider verification',
-        )
+        debugLogger.warn('API_VERIFICATION_MISSING_BASE_URL', { provider })
         return false
       }
 
@@ -379,7 +385,11 @@ export async function verifyApiKey(
 
       return response.ok
     } catch (error) {
-      console.warn('API verification failed for non-Anthropic provider:', error)
+      logError(error)
+      debugLogger.warn('API_VERIFICATION_FAILED', {
+        provider,
+        error: error instanceof Error ? error.message : String(error),
+      })
       return false
     }
   }

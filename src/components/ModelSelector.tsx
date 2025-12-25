@@ -21,6 +21,7 @@ import {
 } from '@utils/config'
 import { getModelManager } from '@utils/model'
 import { getTheme } from '@utils/theme'
+import { debug as debugLogger } from '@utils/debugLogger'
 
 import { CardNavigator, useCardNavigation } from './CardNavigator'
 import { Select } from './CustomSelect/select'
@@ -721,7 +722,12 @@ export function ModelSelector({
         return models
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error))
-        console.log(`Model fetch attempt ${attempt} failed:`, lastError.message)
+        debugLogger.warn('MODEL_FETCH_RETRY_FAILED', {
+          attempt,
+          maxRetries: MAX_RETRIES,
+          error: lastError.message,
+          provider: selectedProvider,
+        })
 
         if (attempt === MAX_RETRIES) {
           // Final attempt failed, break to handle fallback
@@ -1136,9 +1142,10 @@ export function ModelSelector({
         const isGPT5 = selectedModel?.toLowerCase().includes('gpt-5')
 
         if (isGPT5) {
-          console.log(
-            `🚀 Using specialized GPT-5 connection test for model: ${selectedModel}`,
-          )
+          debugLogger.api('GPT5_CONNECTION_TEST_USING_SPECIALIZED', {
+            model: selectedModel,
+            provider: selectedProvider,
+          })
 
           // Validate configuration first
           const configValidation = validateGPT5Config({
@@ -1261,15 +1268,16 @@ export function ModelSelector({
 
     // GPT-5 parameter compatibility fix
     if (selectedModel && selectedModel.toLowerCase().includes('gpt-5')) {
-      console.log(`Applying GPT-5 parameter fix for model: ${selectedModel}`)
+      debugLogger.api('GPT5_PARAMETER_FIX_APPLY', { model: selectedModel })
 
       // GPT-5 requires max_completion_tokens instead of max_tokens
       if (testPayload.max_tokens) {
         testPayload.max_completion_tokens = testPayload.max_tokens
         delete testPayload.max_tokens
-        console.log(
-          `Transformed max_tokens → max_completion_tokens: ${testPayload.max_completion_tokens}`,
-        )
+        debugLogger.api('GPT5_PARAMETER_FIX_MAX_TOKENS', {
+          model: selectedModel,
+          max_completion_tokens: testPayload.max_completion_tokens,
+        })
       }
 
       // GPT-5 temperature handling - ensure it's 1 or undefined
@@ -1277,9 +1285,11 @@ export function ModelSelector({
         testPayload.temperature !== undefined &&
         testPayload.temperature !== 1
       ) {
-        console.log(
-          `Adjusting temperature from ${testPayload.temperature} to 1 for GPT-5`,
-        )
+        debugLogger.api('GPT5_PARAMETER_FIX_TEMPERATURE', {
+          model: selectedModel,
+          from: testPayload.temperature,
+          to: 1,
+        })
         testPayload.temperature = 1
       }
     }
@@ -1304,10 +1314,11 @@ export function ModelSelector({
 
       if (response.ok) {
         const data = await response.json()
-        console.log(
-          '[DEBUG] Connection test response:',
-          JSON.stringify(data, null, 2),
-        )
+        debugLogger.api('CONNECTION_TEST_RESPONSE', {
+          provider: selectedProvider,
+          endpoint: endpointPath,
+          ok: true,
+        })
 
         // Check if we got a valid response with content
         let responseContent = ''
@@ -1322,7 +1333,11 @@ export function ModelSelector({
           responseContent = data.output?.text || data.output || ''
         }
 
-        console.log('[DEBUG] Extracted response content:', responseContent)
+        debugLogger.api('CONNECTION_TEST_RESPONSE_PARSED', {
+          provider: selectedProvider,
+          endpoint: endpointPath,
+          contentLength: responseContent.length,
+        })
 
         // Check if response contains "YES" (case insensitive)
         const containsYes = responseContent.toLowerCase().includes('yes')
@@ -1394,9 +1409,10 @@ export function ModelSelector({
       },
     }
 
-    console.log(`🔧 Testing GPT-5 Responses API for model: ${selectedModel}`)
-    console.log(`🔧 Test URL: ${testURL}`)
-    console.log(`🔧 Test payload:`, JSON.stringify(testPayload, null, 2))
+    debugLogger.api('GPT5_RESPONSES_API_TEST_START', {
+      model: selectedModel,
+      url: testURL,
+    })
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -1412,10 +1428,10 @@ export function ModelSelector({
 
       if (response.ok) {
         const data = await response.json()
-        console.log(
-          '[DEBUG] Responses API connection test response:',
-          JSON.stringify(data, null, 2),
-        )
+        debugLogger.api('GPT5_RESPONSES_API_TEST_RESPONSE', {
+          model: selectedModel,
+          ok: true,
+        })
 
         // Extract content from Responses API format
         let responseContent = ''
@@ -1429,7 +1445,10 @@ export function ModelSelector({
               : data.output.text || ''
         }
 
-        console.log('[DEBUG] Extracted response content:', responseContent)
+        debugLogger.api('GPT5_RESPONSES_API_TEST_RESPONSE_PARSED', {
+          model: selectedModel,
+          contentLength: responseContent.length,
+        })
 
         // Check if response contains "YES" (case insensitive)
         const containsYes = responseContent.toLowerCase().includes('yes')
@@ -1455,10 +1474,12 @@ export function ModelSelector({
         const errorMessage =
           errorData?.error?.message || errorData?.message || response.statusText
 
-        console.log(
-          `🚨 GPT-5 Responses API Error (${response.status}):`,
-          errorData,
-        )
+        debugLogger.warn('GPT5_RESPONSES_API_TEST_ERROR', {
+          model: selectedModel,
+          status: response.status,
+          error:
+            errorData?.error?.message || errorData?.message || response.statusText,
+        })
 
         // 🔧 Provide specific guidance for common GPT-5 errors
         let details = `Responses API Error: ${errorMessage}`
@@ -1498,9 +1519,9 @@ export function ModelSelector({
     // For Anthropic and Anthropic-compatible providers, use the official SDK for testing
     if (selectedProvider === 'anthropic' || selectedProvider === 'bigdream') {
       try {
-        console.log(
-          `[DEBUG] Testing ${selectedProvider} connection using native SDK...`,
-        )
+        debugLogger.api('PROVIDER_CONNECTION_TEST_NATIVE_SDK', {
+          provider: selectedProvider,
+        })
 
         // Determine the baseURL for testing
         let testBaseURL: string | undefined = undefined
@@ -1538,7 +1559,10 @@ export function ModelSelector({
           }
         }
       } catch (error) {
-        console.log(`[DEBUG] ${selectedProvider} connection test error:`, error)
+        debugLogger.warn('PROVIDER_CONNECTION_TEST_NATIVE_SDK_ERROR', {
+          provider: selectedProvider,
+          error: error instanceof Error ? error.message : String(error),
+        })
         return {
           success: false,
           message: `❌ ${selectedProvider} connection failed`,

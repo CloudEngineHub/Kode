@@ -34,7 +34,7 @@ export async function getInstructionFilesNote(): Promise<string | null> {
 
     const fileTypes = new Set<string>()
     for (const f of instructionFiles) fileTypes.add(f.filename)
-    if (hasLegacy) fileTypes.add('CLAUDE.md (Claude Code-compatible)')
+    if (hasLegacy) fileTypes.add('CLAUDE.md (legacy)')
 
     const allFiles = [
       ...instructionFiles.map(f => f.absolutePath),
@@ -105,12 +105,12 @@ export async function getProjectDocsForCwd(
       if (content.trim().length > 0) docs.push(content)
     }
 
-    // Try to read legacy CLAUDE.md (Claude Code-compatible).
+    // Try to read legacy CLAUDE.md (compatibility).
     if (existsSync(legacyPath)) {
       try {
         const content = await readFile(legacyPath, 'utf-8')
         docs.push(
-          `# Legacy instructions (CLAUDE.md, Claude Code-compatible)\n\n${content}`,
+          `# Legacy instructions (CLAUDE.md)\n\n${content}`,
         )
       } catch (e) {
         logError(e)

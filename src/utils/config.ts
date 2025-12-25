@@ -985,27 +985,33 @@ export function validateAndRepairGPT5Profile(
     ) {
       repairedProfile.reasoningEffort = 'medium' // Default for coding tasks
       wasRepaired = true
-      console.log(
-        `🔧 GPT-5 Config: Set reasoning effort to 'medium' for ${profile.modelName}`,
-      )
+      debugLogger.state('GPT5_CONFIG_AUTO_REPAIR', {
+        model: profile.modelName,
+        field: 'reasoningEffort',
+        value: 'medium',
+      })
     }
 
     // 2. Context length validation (GPT-5 models typically have 128k context)
     if (profile.contextLength < 128000) {
       repairedProfile.contextLength = 128000
       wasRepaired = true
-      console.log(
-        `🔧 GPT-5 Config: Updated context length to 128k for ${profile.modelName}`,
-      )
+      debugLogger.state('GPT5_CONFIG_AUTO_REPAIR', {
+        model: profile.modelName,
+        field: 'contextLength',
+        value: 128000,
+      })
     }
 
     // 3. Output tokens validation (reasonable defaults for GPT-5)
     if (profile.maxTokens < 4000) {
       repairedProfile.maxTokens = 8192 // Good default for coding tasks
       wasRepaired = true
-      console.log(
-        `🔧 GPT-5 Config: Updated max tokens to 8192 for ${profile.modelName}`,
-      )
+      debugLogger.state('GPT5_CONFIG_AUTO_REPAIR', {
+        model: profile.modelName,
+        field: 'maxTokens',
+        value: 8192,
+      })
     }
 
     // 4. Provider validation
@@ -1014,18 +1020,22 @@ export function validateAndRepairGPT5Profile(
       profile.provider !== 'custom-openai' &&
       profile.provider !== 'azure'
     ) {
-      console.warn(
-        `⚠️  GPT-5 Config: Unexpected provider '${profile.provider}' for GPT-5 model ${profile.modelName}. Consider using 'openai' or 'custom-openai'.`,
-      )
+      debugLogger.warn('GPT5_CONFIG_UNEXPECTED_PROVIDER', {
+        model: profile.modelName,
+        provider: profile.provider,
+        expectedProviders: ['openai', 'custom-openai', 'azure'],
+      })
     }
 
     // 5. Base URL validation for official models
     if (profile.modelName.includes('gpt-5') && !profile.baseURL) {
       repairedProfile.baseURL = 'https://api.openai.com/v1'
       wasRepaired = true
-      console.log(
-        `🔧 GPT-5 Config: Set default base URL for ${profile.modelName}`,
-      )
+      debugLogger.state('GPT5_CONFIG_AUTO_REPAIR', {
+        model: profile.modelName,
+        field: 'baseURL',
+        value: 'https://api.openai.com/v1',
+      })
     }
   }
 
@@ -1034,9 +1044,7 @@ export function validateAndRepairGPT5Profile(
   repairedProfile.lastValidation = now
 
   if (wasRepaired) {
-    console.log(
-      `✅ GPT-5 Config: Auto-repaired configuration for ${profile.modelName}`,
-    )
+    debugLogger.info('GPT5_CONFIG_AUTO_REPAIRED', { model: profile.modelName })
   }
 
   return repairedProfile
@@ -1070,7 +1078,10 @@ export function validateAndRepairAllGPT5Profiles(): {
       modelProfiles: repairedProfiles,
     }
     saveGlobalConfig(updatedConfig)
-    console.log(`🔧 GPT-5 Config: Auto-repaired ${repairCount} model profiles`)
+    debugLogger.info('GPT5_CONFIG_AUTO_REPAIR_SUMMARY', {
+      repaired: repairCount,
+      total: config.modelProfiles.length,
+    })
   }
 
   return { repaired: repairCount, total: config.modelProfiles.length }
@@ -1133,6 +1144,5 @@ export function createGPT5ModelProfile(
     lastValidation: Date.now(),
   }
 
-  console.log(`✅ Created GPT-5 model profile: ${name} (${modelName})`)
   return profile
 }

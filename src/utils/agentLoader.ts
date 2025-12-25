@@ -1,8 +1,10 @@
 /**
  * Agent configuration loader
- * Loads agent configurations from markdown files with YAML frontmatter.
- * Maintains compatibility with legacy agent directories while prioritizing
- * Kode-specific overrides.
+ *
+ * Agent/subagent definitions:
+ * - Markdown files with YAML frontmatter
+ * - Sources: built-in, plugin, userSettings, projectSettings, flagSettings, policySettings
+ * - Merge order matches official CLI: built-in < plugin < userSettings < projectSettings < flagSettings < policySettings
  */
 
 import {
@@ -11,28 +13,493 @@ import {
   readdirSync,
   statSync,
   watch,
-  FSWatcher,
+  type FSWatcher,
 } from 'fs'
-import { join, resolve } from 'path'
+import { basename, dirname, join, resolve } from 'path'
 import { homedir } from 'os'
 import matter from 'gray-matter'
 import yaml from 'js-yaml'
-import { getCwd } from './state'
 import { memoize } from 'lodash-es'
+import { z } from 'zod'
+import { getCwd } from './state'
 import { getSessionPlugins } from '@utils/sessionPlugins'
+import { isSettingSourceEnabled } from '@utils/settingSources'
+import { debug as debugLogger } from './debugLogger'
+import { logError } from './log'
 
-// Track warned agents to avoid spam
-const warnedAgents = new Set<string>()
+export type AgentSource =
+  | 'built-in'
+  | 'plugin'
+  | 'userSettings'
+  | 'projectSettings'
+  | 'flagSettings'
+  | 'policySettings'
+
+export type AgentLocation = 'built-in' | 'plugin' | 'user' | 'project'
+
+// Compatibility aliases, plus Kode selectors (custom profile names/IDs).
+export type AgentModel = 'inherit' | 'haiku' | 'sonnet' | 'opus' | (string & {})
+
+export type AgentPermissionMode =
+  | 'default'
+  | 'acceptEdits'
+  | 'plan'
+  | 'bypassPermissions'
+  | 'dontAsk'
+  | 'delegate'
 
 export interface AgentConfig {
-  agentType: string // Agent identifier (matches subagent_type)
-  whenToUse: string // Description of when to use this agent
-  tools: string[] | '*' // Tool permissions
-  disallowedTools?: string[] // Tools explicitly forbidden (compatibility)
-  systemPrompt: string // System prompt content
-  location: 'built-in' | 'plugin' | 'user' | 'project'
-  color?: string // Optional UI color
-  model_name?: string // Optional model override
+  agentType: string // matches subagent_type
+  whenToUse: string
+  /**
+   * Tools the agent is allowed to use.
+   * - "*" means all tools
+   * - [] means no tools
+   */
+  tools: string[] | '*'
+  disallowedTools?: string[]
+  skills?: string[]
+  systemPrompt: string
+  source: AgentSource
+  location: AgentLocation
+  baseDir?: string
+  filename?: string
+  color?: string
+  model?: AgentModel
+  permissionMode?: AgentPermissionMode
+  forkContext?: boolean
+}
+
+function getClaudePolicyBaseDir(): string {
+  switch (process.platform) {
+    case 'darwin':
+      return '/Library/Application Support/ClaudeCode'
+    case 'win32':
+      return existsSync('C:\\Program Files\\ClaudeCode')
+        ? 'C:\\Program Files\\ClaudeCode'
+        : 'C:\\ProgramData\\ClaudeCode'
+    default:
+      return '/etc/claude-code'
+  }
+}
+
+function normalizeOverride(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed ? resolve(trimmed) : null
+}
+
+function dedupeStrings(values: string[]): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const value of values) {
+    if (!value) continue
+    if (seen.has(value)) continue
+    seen.add(value)
+    out.push(value)
+  }
+  return out
+}
+
+function getUserConfigRoots(): string[] {
+  const claudeOverride = normalizeOverride(process.env.CLAUDE_CONFIG_DIR)
+  const kodeOverride = normalizeOverride(process.env.KODE_CONFIG_DIR)
+
+  const hasAnyOverride = Boolean(claudeOverride || kodeOverride)
+  if (hasAnyOverride) {
+    return dedupeStrings([claudeOverride ?? '', kodeOverride ?? ''])
+  }
+
+  return dedupeStrings([join(homedir(), '.claude'), join(homedir(), '.kode')])
+}
+
+function findProjectAgentDirs(cwd: string): string[] {
+  const result: string[] = []
+  const home = resolve(homedir())
+  let current = resolve(cwd)
+
+  while (current !== home) {
+    const claudeDir = join(current, '.claude', 'agents')
+    if (existsSync(claudeDir)) result.push(claudeDir)
+
+    const kodeDir = join(current, '.kode', 'agents')
+    if (existsSync(kodeDir)) result.push(kodeDir)
+
+    const parent = dirname(current)
+    if (parent === current) break
+    current = parent
+  }
+
+  return result
+}
+
+function listMarkdownFilesRecursively(rootDir: string): string[] {
+  const files: string[] = []
+  const visitedDirs = new Set<string>()
+
+  const walk = (dirPath: string) => {
+    let dirStat: ReturnType<typeof statSync>
+    try {
+      dirStat = statSync(dirPath)
+    } catch {
+      return
+    }
+    if (!dirStat.isDirectory()) return
+
+    const dirKey = `${dirStat.dev}:${dirStat.ino}`
+    if (visitedDirs.has(dirKey)) return
+    visitedDirs.add(dirKey)
+
+    let entries: Array<{
+      name: string
+      isDirectory(): boolean
+      isFile(): boolean
+      isSymbolicLink(): boolean
+    }>
+    try {
+      entries = readdirSync(dirPath, {
+        withFileTypes: true,
+        encoding: 'utf8',
+      }) as any
+    } catch {
+      return
+    }
+
+    for (const entry of entries) {
+      const name = String(entry.name ?? '')
+      const fullPath = join(dirPath, name)
+
+      if (entry.isDirectory()) {
+        walk(fullPath)
+        continue
+      }
+
+      if (entry.isFile()) {
+        if (name.endsWith('.md')) files.push(fullPath)
+        continue
+      }
+
+      if (entry.isSymbolicLink()) {
+        try {
+          const st = statSync(fullPath)
+          if (st.isDirectory()) {
+            walk(fullPath)
+          } else if (st.isFile() && name.endsWith('.md')) {
+            files.push(fullPath)
+          }
+        } catch {
+          continue
+        }
+      }
+    }
+  }
+
+  if (!existsSync(rootDir)) return []
+  walk(rootDir)
+  return files
+}
+
+function readMarkdownFile(filePath: string): { frontmatter: any; content: string } | null {
+  try {
+    const raw = readFileSync(filePath, 'utf8')
+    const yamlSchema = (yaml as any).JSON_SCHEMA
+    const matterOptions = {
+      engines: {
+        yaml: {
+          parse: (input: string) =>
+            yaml.load(input, yamlSchema ? { schema: yamlSchema } : undefined) ??
+            {},
+        },
+      },
+    }
+    const parsed = matter(raw, matterOptions)
+    return {
+      frontmatter: (parsed.data as any) ?? {},
+      content: String(parsed.content ?? ''),
+    }
+  } catch {
+    return null
+  }
+}
+
+function splitCliList(values: string[]): string[] {
+  if (values.length === 0) return []
+  const out: string[] = []
+
+  for (const value of values) {
+    if (!value) continue
+    let current = ''
+    let inParens = false
+
+    for (const ch of value) {
+      switch (ch) {
+        case '(':
+          inParens = true
+          current += ch
+          break
+        case ')':
+          inParens = false
+          current += ch
+          break
+        case ',':
+          if (inParens) {
+            current += ch
+          } else {
+            const trimmed = current.trim()
+            if (trimmed) out.push(trimmed)
+            current = ''
+          }
+          break
+        case ' ':
+          if (inParens) {
+            current += ch
+          } else {
+            const trimmed = current.trim()
+            if (trimmed) out.push(trimmed)
+            current = ''
+          }
+          break
+        default:
+          current += ch
+      }
+    }
+
+    const trimmed = current.trim()
+    if (trimmed) out.push(trimmed)
+  }
+
+  return out
+}
+
+function normalizeToolList(value: unknown): string[] | null {
+  if (value === undefined || value === null) return null
+  if (!value) return []
+
+  let raw: string[] = []
+  if (typeof value === 'string') raw = [value]
+  else if (Array.isArray(value))
+    raw = value.filter((v): v is string => typeof v === 'string')
+
+  if (raw.length === 0) return []
+  const parsed = splitCliList(raw)
+  if (parsed.includes('*')) return ['*']
+  return parsed
+}
+
+function z2A(value: unknown): string[] | undefined {
+  const normalized = normalizeToolList(value)
+  if (normalized === null) return value === undefined ? undefined : []
+  if (normalized.includes('*')) return undefined
+  return normalized
+}
+
+function qP(value: unknown): string[] {
+  const normalized = normalizeToolList(value)
+  if (normalized === null) return []
+  return normalized
+}
+
+const VALID_PERMISSION_MODES = [
+  'default',
+  'acceptEdits',
+  'plan',
+  'bypassPermissions',
+  'dontAsk',
+  'delegate',
+] as const
+
+function sourceToLocation(source: AgentSource): AgentLocation {
+  switch (source) {
+    case 'plugin':
+      return 'plugin'
+    case 'userSettings':
+      return 'user'
+    case 'projectSettings':
+      return 'project'
+    case 'built-in':
+    case 'flagSettings':
+    case 'policySettings':
+    default:
+      return 'built-in'
+  }
+}
+
+function parseAgentFromFile(options: {
+  filePath: string
+  baseDir: string
+  source: Exclude<AgentSource, 'flagSettings' | 'built-in'>
+}): AgentConfig | null {
+  const parsed = readMarkdownFile(options.filePath)
+  if (!parsed) return null
+
+  try {
+    const fm = parsed.frontmatter ?? {}
+    let name: unknown = fm.name
+    let description: unknown = fm.description
+
+    if (!name || typeof name !== 'string' || !description || typeof description !== 'string') {
+      return null
+    }
+
+    const whenToUse = description.replace(/\\n/g, '\n')
+    const filename = basename(options.filePath, '.md')
+
+    const color = typeof fm.color === 'string' ? fm.color : undefined
+
+    let modelRaw: unknown = fm.model
+    if (typeof modelRaw !== 'string' && typeof fm.model_name === 'string') {
+      modelRaw = fm.model_name
+    }
+    let model =
+      typeof modelRaw === 'string' ? modelRaw.trim() : undefined
+    if (model === '') model = undefined
+
+    const forkContextValue: unknown = fm.forkContext
+    if (
+      forkContextValue !== undefined &&
+      forkContextValue !== 'true' &&
+      forkContextValue !== 'false'
+    ) {
+      // Match official behavior: warn (but do not crash) on invalid forkContext.
+      debugLogger.warn('AGENT_LOADER_INVALID_FORK_CONTEXT', {
+        filePath: options.filePath,
+        forkContext: String(forkContextValue),
+      })
+    }
+    const forkContext = forkContextValue === 'true'
+
+    if (forkContext && model && model !== 'inherit') {
+      debugLogger.warn('AGENT_LOADER_FORK_CONTEXT_MODEL_OVERRIDE', {
+        filePath: options.filePath,
+        model,
+      })
+      model = 'inherit'
+    }
+
+    const permissionModeValue: unknown = fm.permissionMode
+    const permissionModeIsValid =
+      typeof permissionModeValue === 'string' &&
+      VALID_PERMISSION_MODES.includes(permissionModeValue as AgentPermissionMode)
+    if (
+      typeof permissionModeValue === 'string' &&
+      permissionModeValue &&
+      !permissionModeIsValid
+    ) {
+      debugLogger.warn('AGENT_LOADER_INVALID_PERMISSION_MODE', {
+        filePath: options.filePath,
+        permissionMode: permissionModeValue,
+        valid: VALID_PERMISSION_MODES,
+      })
+    }
+
+    const toolsList = z2A(fm.tools)
+    const tools: string[] | '*' =
+      toolsList === undefined || toolsList.includes('*') ? '*' : toolsList
+
+    const disallowedRaw =
+      fm.disallowedTools ??
+      fm['disallowed-tools'] ??
+      fm['disallowed_tools']
+    const disallowedTools = disallowedRaw !== undefined ? z2A(disallowedRaw) : undefined
+
+    const skills = qP(fm.skills)
+    const systemPrompt = parsed.content.trim()
+
+    const agent: AgentConfig = {
+      agentType: name,
+      whenToUse,
+      tools,
+      ...(disallowedTools !== undefined ? { disallowedTools } : {}),
+      ...(skills.length > 0 ? { skills } : { skills: [] }),
+      systemPrompt,
+      source: options.source,
+      location: sourceToLocation(options.source),
+      baseDir: options.baseDir,
+      filename,
+      ...(color ? { color } : {}),
+      ...(model ? { model: model as AgentModel } : {}),
+      ...(permissionModeIsValid ? { permissionMode: permissionModeValue as AgentPermissionMode } : {}),
+      ...(forkContext ? { forkContext: true } : {}),
+    }
+
+    return agent
+  } catch {
+    return null
+  }
+}
+
+const agentJsonSchema = z.object({
+  description: z.string().min(1, 'Description cannot be empty'),
+  tools: z.array(z.string()).optional(),
+  disallowedTools: z.array(z.string()).optional(),
+  prompt: z.string().min(1, 'Prompt cannot be empty'),
+  model: z.string().optional(),
+  permissionMode: z.enum(VALID_PERMISSION_MODES).optional(),
+})
+
+const agentsJsonSchema = z.record(z.string(), agentJsonSchema)
+
+function parseAgentFromJson(agentType: string, value: unknown): AgentConfig | null {
+  const parsed = agentJsonSchema.safeParse(value)
+  if (!parsed.success) return null
+
+  const toolsList = z2A(parsed.data.tools)
+  const disallowedList =
+    parsed.data.disallowedTools !== undefined ? z2A(parsed.data.disallowedTools) : undefined
+  const model =
+    typeof parsed.data.model === 'string' ? parsed.data.model.trim() : undefined
+
+  return {
+    agentType,
+    whenToUse: parsed.data.description,
+    tools: toolsList === undefined || toolsList.includes('*') ? '*' : toolsList,
+    ...(disallowedList !== undefined ? { disallowedTools: disallowedList } : {}),
+    systemPrompt: parsed.data.prompt,
+    source: 'flagSettings',
+    location: 'built-in',
+    ...(model ? { model: model as AgentModel } : {}),
+    ...(parsed.data.permissionMode ? { permissionMode: parsed.data.permissionMode } : {}),
+  }
+}
+
+let FLAG_AGENTS: AgentConfig[] = []
+
+export function setFlagAgentsFromCliJson(json: string | undefined): void {
+  if (!json) {
+    FLAG_AGENTS = []
+    clearAgentCache()
+    return
+  }
+
+  let raw: unknown
+  try {
+    raw = JSON.parse(json)
+  } catch (err) {
+    logError(err)
+    debugLogger.warn('AGENT_LOADER_FLAG_AGENTS_JSON_PARSE_FAILED', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+    FLAG_AGENTS = []
+    clearAgentCache()
+    return
+  }
+
+  const parsed = agentsJsonSchema.safeParse(raw)
+  if (!parsed.success) {
+    logError(parsed.error)
+    debugLogger.warn('AGENT_LOADER_FLAG_AGENTS_SCHEMA_INVALID', {
+      error: parsed.error.message,
+    })
+    FLAG_AGENTS = []
+    clearAgentCache()
+    return
+  }
+
+  FLAG_AGENTS = Object.entries(parsed.data)
+    .map(([agentType, value]) => parseAgentFromJson(agentType, value))
+    .filter((agent): agent is AgentConfig => agent !== null)
+
+  clearAgentCache()
 }
 
 // Built-in general-purpose agent as fallback
@@ -54,7 +521,9 @@ Guidelines:
 - For analysis: Start broad and narrow down. Use multiple search strategies if the first doesn't yield results.
 - Be thorough: Check multiple locations, consider different naming conventions, look for related files.
 - Complete tasks directly using your capabilities.`,
+  source: 'built-in',
   location: 'built-in',
+  baseDir: 'built-in',
 }
 
 const BUILTIN_EXPLORE: AgentConfig = {
@@ -63,7 +532,7 @@ const BUILTIN_EXPLORE: AgentConfig = {
     'Fast agent specialized for exploring codebases. Use this when you need to quickly find files by patterns (eg. "src/components/**/*.tsx"), search code for keywords (eg. "API endpoints"), or answer questions about the codebase (eg. "how do API endpoints work?"). When calling this agent, specify the desired thoroughness level: "quick" for basic searches, "medium" for moderate exploration, or "very thorough" for comprehensive analysis across multiple locations and naming conventions.',
   tools: '*',
   disallowedTools: ['Task', 'ExitPlanMode', 'Edit', 'Write', 'NotebookEdit'],
-  model_name: 'haiku',
+  model: 'haiku',
   systemPrompt: `You are a file search specialist. You excel at thoroughly navigating and exploring codebases.
 
 === CRITICAL: READ-ONLY MODE - NO FILE MODIFICATIONS ===
@@ -99,7 +568,9 @@ NOTE: You are meant to be a fast agent that returns output as quickly as possibl
 - Wherever possible you should try to spawn multiple parallel tool calls for grepping and reading files
 
 Complete the user's search request efficiently and report your findings clearly.`,
+  source: 'built-in',
   location: 'built-in',
+  baseDir: 'built-in',
 }
 
 const BUILTIN_PLAN: AgentConfig = {
@@ -108,7 +579,7 @@ const BUILTIN_PLAN: AgentConfig = {
     'Software architect agent for designing implementation plans. Use this when you need to plan the implementation strategy for a task. Returns step-by-step plans, identifies critical files, and considers architectural trade-offs.',
   tools: '*',
   disallowedTools: ['Task', 'ExitPlanMode', 'Edit', 'Write', 'NotebookEdit'],
-  model_name: 'inherit',
+  model: 'inherit',
   systemPrompt: `You are a software architect and planning specialist. Your role is to explore the codebase and design implementation plans.
 
 === CRITICAL: READ-ONLY MODE - NO FILE MODIFICATIONS ===
@@ -159,7 +630,9 @@ List 3-5 files most critical for implementing this plan:
 - path/to/file3.ts - [Brief reason: e.g., "Pattern to follow"]
 
 REMEMBER: You can ONLY explore and plan. You CANNOT and MUST NOT write, edit, or modify any files. You do NOT have access to file editing tools.`,
+  source: 'built-in',
   location: 'built-in',
+  baseDir: 'built-in',
 }
 
 const BUILTIN_STATUSLINE_SETUP: AgentConfig = {
@@ -189,257 +662,178 @@ Suggested approach:
    - If the file does not exist, create it as a minimal JSON object.
    - Preserve unrelated fields if present.
 4) Reply with the exact command you set and how the user can change/remove it later.`,
+  source: 'built-in',
   location: 'built-in',
+  baseDir: 'built-in',
 }
 
-/**
- * Parse tools field from frontmatter
- */
-function parseTools(tools: any): string[] | '*' {
-  if (!tools) return '*'
-  if (tools === '*') return '*'
-  if (Array.isArray(tools)) {
-    // Ensure all items are strings and filter out non-strings
-    const filteredTools = tools.filter(
-      (t): t is string => typeof t === 'string',
-    )
-    return filteredTools.length > 0 ? filteredTools : '*'
+function mergeAgents(allAgents: AgentConfig[]): AgentConfig[] {
+  const builtIn = allAgents.filter(a => a.source === 'built-in')
+  const plugin = allAgents.filter(a => a.source === 'plugin')
+  const user = allAgents.filter(a => a.source === 'userSettings')
+  const project = allAgents.filter(a => a.source === 'projectSettings')
+  const flag = allAgents.filter(a => a.source === 'flagSettings')
+  const policy = allAgents.filter(a => a.source === 'policySettings')
+
+  const ordered = [builtIn, plugin, user, project, flag, policy]
+  const map = new Map<string, AgentConfig>()
+  for (const group of ordered) {
+    for (const agent of group) {
+      map.set(agent.agentType, agent)
+    }
   }
-  if (typeof tools === 'string') {
-    return [tools]
-  }
-  return '*'
+  return Array.from(map.values())
 }
 
-function parseDisallowedTools(disallowedTools: any): string[] | undefined {
-  if (!disallowedTools) return undefined
-  if (Array.isArray(disallowedTools)) {
-    const filtered = disallowedTools.filter(
-      (t): t is string => typeof t === 'string' && t.trim().length > 0,
-    )
-    return filtered.length > 0 ? filtered : undefined
+function inodeKeyForPath(filePath: string): string | null {
+  try {
+    const st = statSync(filePath)
+    if (typeof (st as any).dev === 'number' && typeof (st as any).ino === 'number') {
+      return `${(st as any).dev}:${(st as any).ino}`
+    }
+    return null
+  } catch {
+    return null
   }
-  if (
-    typeof disallowedTools === 'string' &&
-    disallowedTools.trim().length > 0
-  ) {
-    return [disallowedTools.trim()]
-  }
-  return undefined
 }
 
-/**
- * Scan a directory for agent configuration files
- */
-async function scanAgentDirectory(
-  dirPath: string,
-  location: 'plugin' | 'user' | 'project',
-): Promise<AgentConfig[]> {
-  if (!existsSync(dirPath)) {
+function scanAgentPaths(options: {
+  dirPathOrFile: string
+  baseDir: string
+  source: Exclude<AgentSource, 'built-in' | 'flagSettings'>
+  seenInodes: Map<string, AgentSource>
+}): AgentConfig[] {
+  const out: AgentConfig[] = []
+
+  const addFile = (filePath: string) => {
+    if (!filePath.endsWith('.md')) return
+
+    const inodeKey = inodeKeyForPath(filePath)
+    if (inodeKey) {
+      const existing = options.seenInodes.get(inodeKey)
+      if (existing) return
+      options.seenInodes.set(inodeKey, options.source)
+    }
+
+    const agent = parseAgentFromFile({
+      filePath,
+      baseDir: options.baseDir,
+      source: options.source,
+    })
+    if (agent) out.push(agent)
+  }
+
+  let st: ReturnType<typeof statSync>
+  try {
+    st = statSync(options.dirPathOrFile)
+  } catch {
     return []
   }
 
-  const agents: AgentConfig[] = []
-  const yamlSchema = (yaml as any).JSON_SCHEMA
-  const matterOptions = {
-    engines: {
-      yaml: {
-        parse: (input: string) =>
-          yaml.load(input, yamlSchema ? { schema: yamlSchema } : undefined) ??
-          {},
-      },
-    },
+  if (st.isFile()) {
+    addFile(options.dirPathOrFile)
+    return out
   }
 
-  const parseAgentFile = (filePath: string): void => {
-    if (!filePath.endsWith('.md')) return
-    try {
-      const stat = statSync(filePath)
-      if (!stat.isFile()) return
+  if (!st.isDirectory()) return []
 
-      const content = readFileSync(filePath, 'utf-8')
-      const { data: frontmatter, content: body } = matter(
-        content,
-        matterOptions,
-      )
-
-      // Validate required fields
-      if (!frontmatter.name || !frontmatter.description) {
-        console.warn(
-          `Skipping ${filePath}: missing required fields (name, description)`,
-        )
-        return
-      }
-
-      // Silently ignore deprecated 'model' field - no warnings by default
-      // Only warn if KODE_DEBUG_AGENTS environment variable is set
-      if (
-        frontmatter.model &&
-        !frontmatter.model_name &&
-        !warnedAgents.has(frontmatter.name) &&
-        process.env.KODE_DEBUG_AGENTS
-      ) {
-        console.warn(
-          `⚠️ Agent ${frontmatter.name}: 'model' field is deprecated and ignored. Use 'model_name' instead, or omit to use default 'task' model.`,
-        )
-        warnedAgents.add(frontmatter.name)
-      }
-
-      // Build agent config
-      const disallowed = parseDisallowedTools(
-        (frontmatter as any).disallowedTools ??
-          (frontmatter as any)['disallowed-tools'],
-      )
-
-      const agent: AgentConfig = {
-        agentType: frontmatter.name,
-        whenToUse: frontmatter.description.replace(/\\n/g, '\n'),
-        tools: parseTools(frontmatter.tools),
-        ...(disallowed ? { disallowedTools: disallowed } : {}),
-        systemPrompt: body.trim(),
-        location,
-        ...(frontmatter.color && { color: frontmatter.color }),
-        // Only use model_name field, ignore deprecated 'model' field
-        ...(frontmatter.model_name && { model_name: frontmatter.model_name }),
-      }
-
-      agents.push(agent)
-    } catch (error) {
-      console.warn(`Failed to parse agent file ${filePath}:`, error)
-    }
+  for (const filePath of listMarkdownFilesRecursively(options.dirPathOrFile)) {
+    addFile(filePath)
   }
 
-  try {
-    try {
-      const stat = statSync(dirPath)
-      if (stat.isFile()) {
-        parseAgentFile(dirPath)
-        return agents
-      }
-    } catch {
-      return []
-    }
-
-    const files = readdirSync(dirPath)
-
-    for (const file of files) {
-      const filePath = join(dirPath, file)
-      parseAgentFile(filePath)
-    }
-  } catch (error) {
-    console.warn(`Failed to scan directory ${dirPath}:`, error)
-  }
-
-  return agents
+  return out
 }
 
-/**
- * Load all agent configurations
- */
 async function loadAllAgents(): Promise<{
   activeAgents: AgentConfig[]
   allAgents: AgentConfig[]
 }> {
-  try {
-    // Scan both legacy and native directories in parallel.
-    const userLegacyDir = join(homedir(), '.claude', 'agents')
-    const userKodeDir = join(homedir(), '.kode', 'agents')
-    const projectLegacyDir = join(getCwd(), '.claude', 'agents')
-    const projectKodeDir = join(getCwd(), '.kode', 'agents')
+  // Built-in agents (compatibility subset)
+  const builtinAgents: AgentConfig[] = [
+    BUILTIN_GENERAL_PURPOSE,
+    BUILTIN_STATUSLINE_SETUP,
+    BUILTIN_EXPLORE,
+    BUILTIN_PLAN,
+  ]
 
-    const [
-      userLegacyAgents,
-      userKodeAgents,
-      projectLegacyAgents,
-      projectKodeAgents,
-    ] = await Promise.all([
-      scanAgentDirectory(userLegacyDir, 'user'),
-      scanAgentDirectory(userKodeDir, 'user'),
-      scanAgentDirectory(projectLegacyDir, 'project'),
-      scanAgentDirectory(projectKodeDir, 'project'),
-    ])
+  const seenInodes = new Map<string, AgentSource>()
 
-    const sessionPlugins = getSessionPlugins()
-    const pluginAgentDirs = sessionPlugins.flatMap(p => p.agentsDirs ?? [])
-    const pluginAgents = (
-      await Promise.all(
-        pluginAgentDirs.map(dir => scanAgentDirectory(dir, 'plugin')),
+  // Plugins
+  const sessionPlugins = getSessionPlugins()
+  const pluginAgentDirs = sessionPlugins.flatMap(p => p.agentsDirs ?? [])
+  const pluginAgents = pluginAgentDirs.flatMap(dir =>
+    scanAgentPaths({
+      dirPathOrFile: dir,
+      baseDir: dir,
+      source: 'plugin',
+      seenInodes,
+    }),
+  )
+
+  // Policy
+  const policyAgentsDir = join(getClaudePolicyBaseDir(), '.claude', 'agents')
+  const policyAgents = scanAgentPaths({
+    dirPathOrFile: policyAgentsDir,
+    baseDir: policyAgentsDir,
+    source: 'policySettings',
+    seenInodes,
+  })
+
+  // User (optional by setting source)
+  const userAgents: AgentConfig[] = []
+  if (isSettingSourceEnabled('userSettings')) {
+    for (const root of getUserConfigRoots()) {
+      const dir = join(root, 'agents')
+      userAgents.push(
+        ...scanAgentPaths({
+          dirPathOrFile: dir,
+          baseDir: dir,
+          source: 'userSettings',
+          seenInodes,
+        }),
       )
-    ).flat()
-
-    // Built-in agents (compatibility subset)
-    const builtinAgents = [
-      BUILTIN_GENERAL_PURPOSE,
-      BUILTIN_EXPLORE,
-      BUILTIN_PLAN,
-      BUILTIN_STATUSLINE_SETUP,
-    ]
-
-    // Apply priority override:
-    // built-in < plugins < legacy (user) < native (user) < legacy (project) < native (project)
-    const agentMap = new Map<string, AgentConfig>()
-
-    // Add in priority order (later entries override earlier ones)
-    for (const agent of builtinAgents) {
-      agentMap.set(agent.agentType, agent)
-    }
-    for (const agent of pluginAgents) {
-      agentMap.set(agent.agentType, agent)
-    }
-    for (const agent of userLegacyAgents) {
-      agentMap.set(agent.agentType, agent)
-    }
-    for (const agent of userKodeAgents) {
-      agentMap.set(agent.agentType, agent)
-    }
-    for (const agent of projectLegacyAgents) {
-      agentMap.set(agent.agentType, agent)
-    }
-    for (const agent of projectKodeAgents) {
-      agentMap.set(agent.agentType, agent)
-    }
-
-    const activeAgents = Array.from(agentMap.values())
-    const allAgents = [
-      ...builtinAgents,
-      ...pluginAgents,
-      ...userLegacyAgents,
-      ...userKodeAgents,
-      ...projectLegacyAgents,
-      ...projectKodeAgents,
-    ]
-
-    return { activeAgents, allAgents }
-  } catch (error) {
-    console.error('Failed to load agents, falling back to built-in:', error)
-    return {
-      activeAgents: [BUILTIN_GENERAL_PURPOSE],
-      allAgents: [BUILTIN_GENERAL_PURPOSE],
     }
   }
+
+  // Project (optional by setting source)
+  const projectAgents: AgentConfig[] = []
+  if (isSettingSourceEnabled('projectSettings')) {
+    const dirs = findProjectAgentDirs(getCwd())
+    for (const dir of dirs) {
+      projectAgents.push(
+        ...scanAgentPaths({
+          dirPathOrFile: dir,
+          baseDir: dir,
+          source: 'projectSettings',
+          seenInodes,
+        }),
+      )
+    }
+  }
+
+  const allAgents: AgentConfig[] = [
+    ...builtinAgents,
+    ...pluginAgents,
+    ...userAgents,
+    ...projectAgents,
+    ...FLAG_AGENTS,
+    ...policyAgents,
+  ]
+
+  const activeAgents = mergeAgents(allAgents)
+  return { activeAgents, allAgents }
 }
 
-// Memoized version for performance
 export const getActiveAgents = memoize(async (): Promise<AgentConfig[]> => {
   const { activeAgents } = await loadAllAgents()
   return activeAgents
 })
 
-// Get all agents (both active and overridden)
 export const getAllAgents = memoize(async (): Promise<AgentConfig[]> => {
   const { allAgents } = await loadAllAgents()
   return allAgents
 })
 
-// Clear cache when needed
-export function clearAgentCache() {
-  getActiveAgents.cache?.clear?.()
-  getAllAgents.cache?.clear?.()
-  getAgentByType.cache?.clear?.()
-  getAvailableAgentTypes.cache?.clear?.()
-}
-
-// Get a specific agent by type
 export const getAgentByType = memoize(
   async (agentType: string): Promise<AgentConfig | undefined> => {
     const agents = await getActiveAgents()
@@ -447,66 +841,74 @@ export const getAgentByType = memoize(
   },
 )
 
-// Get all available agent types for validation
 export const getAvailableAgentTypes = memoize(async (): Promise<string[]> => {
   const agents = await getActiveAgents()
   return agents.map(agent => agent.agentType)
 })
 
-// File watcher for hot reload
+export function clearAgentCache(): void {
+  getActiveAgents.cache?.clear?.()
+  getAllAgents.cache?.clear?.()
+  getAgentByType.cache?.clear?.()
+  getAvailableAgentTypes.cache?.clear?.()
+}
+
 let watchers: FSWatcher[] = []
 
-/**
- * Start watching agent configuration directories for changes
- */
 export async function startAgentWatcher(onChange?: () => void): Promise<void> {
-  await stopAgentWatcher() // Clean up any existing watchers
+  await stopAgentWatcher()
 
-  // Watch both legacy and native directories
-  const userLegacyDir = join(homedir(), '.claude', 'agents')
-  const userKodeDir = join(homedir(), '.kode', 'agents')
-  const projectLegacyDir = join(getCwd(), '.claude', 'agents')
-  const projectKodeDir = join(getCwd(), '.kode', 'agents')
+  const watchDirs: string[] = []
 
-  const watchDirectory = (dirPath: string, label: string) => {
-    if (existsSync(dirPath)) {
+  // Policy
+  watchDirs.push(join(getClaudePolicyBaseDir(), '.claude', 'agents'))
+
+  // User
+  if (isSettingSourceEnabled('userSettings')) {
+    for (const root of getUserConfigRoots()) {
+      watchDirs.push(join(root, 'agents'))
+    }
+  }
+
+  // Project (include parents that currently exist)
+  if (isSettingSourceEnabled('projectSettings')) {
+    watchDirs.push(...findProjectAgentDirs(getCwd()))
+  }
+
+  // Plugins (session-scoped)
+  for (const plugin of getSessionPlugins()) {
+    for (const dir of plugin.agentsDirs ?? []) {
+      watchDirs.push(dir)
+    }
+  }
+
+  for (const dirPath of dedupeStrings(watchDirs)) {
+    if (!existsSync(dirPath)) continue
+    try {
       const watcher = watch(
         dirPath,
         { recursive: false },
-        async (eventType, filename) => {
+        async (_eventType, filename) => {
           if (filename && filename.endsWith('.md')) {
-            console.log(
-              `🔄 Agent configuration changed in ${label}: ${filename}`,
-            )
             clearAgentCache()
-            // Also clear any other related caches
-            getAllAgents.cache?.clear?.()
             onChange?.()
           }
         },
       )
       watchers.push(watcher)
+    } catch {
+      continue
     }
   }
-
-  // Watch all directories
-  watchDirectory(userLegacyDir, 'user/legacy')
-  watchDirectory(userKodeDir, 'user/.kode')
-  watchDirectory(projectLegacyDir, 'project/legacy')
-  watchDirectory(projectKodeDir, 'project/.kode')
 }
 
-/**
- * Stop watching agent configuration directories
- */
 export async function stopAgentWatcher(): Promise<void> {
-  // FSWatcher.close() is synchronous and does not accept a callback on Node 18/20
   try {
     for (const watcher of watchers) {
       try {
         watcher.close()
-      } catch (err) {
-        console.error('Failed to close file watcher:', err)
+      } catch {
+        // ignore
       }
     }
   } finally {

@@ -6,8 +6,10 @@ This directory contains user and developer documentation for Kode.
 
 - Install & distribution: `docs/binary-distribution.md`
 - Configuration: `docs/develop/configuration.md`
+- ACP integration: `docs/acp.md`
 - MCP servers (extensions): `docs/mcp.md`
 - Skills & plugins: `docs/skills.md`
+- Output styles: `docs/output-styles.md`
 - Compatibility notes (legacy formats): `docs/compatibility.md`
 - System sandbox: `docs/system-sandbox.md`
 
@@ -39,4 +41,3 @@ This directory contains user and developer documentation for Kode.
 - `docs/develop-zh/tools-system.md`
 - `docs/develop-zh/security-model.md`
 - `docs/develop-zh/configuration.md`
-

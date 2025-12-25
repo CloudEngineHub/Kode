@@ -10,6 +10,7 @@ import { existsSync } from 'fs'
 import { resolve } from 'path'
 import { getCwd } from '@utils/state'
 import { debug as debugLogger } from '@utils/debugLogger'
+import { logError } from '@utils/log'
 
 export interface MentionContext {
   type: 'agent' | 'file'
@@ -123,7 +124,8 @@ class MentionProcessorService {
 
       return result
     } catch (error) {
-      console.warn('[MentionProcessor] Failed to process mentions:', {
+      logError(error)
+      debugLogger.warn('MENTION_PROCESSOR_PROCESS_FAILED', {
         input: input.substring(0, 100) + (input.length > 100 ? '...' : ''),
         error: error instanceof Error ? error.message : error,
       })
@@ -184,14 +186,12 @@ class MentionProcessorService {
         })
       }
     } catch (error) {
-      console.warn(
-        '[MentionProcessor] Failed to refresh agent cache, keeping existing cache:',
-        {
-          error: error instanceof Error ? error.message : error,
-          cacheSize: this.agentCache.size,
-          lastRefresh: new Date(this.lastAgentCheck).toISOString(),
-        },
-      )
+      logError(error)
+      debugLogger.warn('MENTION_PROCESSOR_CACHE_REFRESH_FAILED', {
+        error: error instanceof Error ? error.message : error,
+        cacheSize: this.agentCache.size,
+        lastRefresh: new Date(this.lastAgentCheck).toISOString(),
+      })
       // Keep existing cache on error to maintain functionality
     }
   }

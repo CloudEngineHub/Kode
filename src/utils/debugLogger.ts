@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, appendFileSync } from 'fs'
 import { join } from 'path'
 import { homedir } from 'os'
 import { randomUUID } from 'crypto'
+import { format } from 'node:util'
 import chalk from 'chalk'
 import envPaths from 'env-paths'
 import { PRODUCT_COMMAND } from '@constants/product'
@@ -124,6 +125,10 @@ class RequestContext {
 // 全局请求上下文管理
 const activeRequests = new Map<string, RequestContext>()
 let currentRequest: RequestContext | null = null
+
+function terminalLog(...args: unknown[]): void {
+  process.stderr.write(`${format(...args)}\n`)
+}
 
 // 核心日志记录函数
 function writeToFile(filePath: string, entry: LogEntry) {
@@ -319,7 +324,7 @@ function logToTerminal(entry: LogEntry) {
     dataStr = typeof data === 'string' ? data : JSON.stringify(data)
   }
 
-  console.log(
+  terminalLog(
     `${color(`[${timestamp}]`)} ${prefix} ${color(phase)} ${reqId} ${dataStr} ${elapsedStr}`,
   )
 }
@@ -476,7 +481,7 @@ export function logAPIError(context: {
     try {
       mkdirSync(errorDir, { recursive: true })
     } catch (err) {
-      console.error('Failed to create error log directory:', err)
+      terminalLog('Failed to create error log directory:', err)
       return // Exit early if we can't create the directory
     }
   }
@@ -511,7 +516,7 @@ export function logAPIError(context: {
     appendFileSync(filepath, JSON.stringify(fullLogContent, null, 2) + '\n')
     appendFileSync(filepath, '='.repeat(80) + '\n\n')
   } catch (err) {
-    console.error('Failed to write API error log:', err)
+    terminalLog('Failed to write API error log:', err)
   }
 
   // 在调试模式下记录到系统日志
@@ -530,14 +535,14 @@ export function logAPIError(context: {
 
   // 优雅的终端显示（仅在verbose模式下）
   if (isVerboseMode() || isDebugVerboseMode()) {
-    console.log()
-    console.log(chalk.red('━'.repeat(60)))
-    console.log(chalk.red.bold('⚠️  API Error'))
-    console.log(chalk.red('━'.repeat(60)))
+    terminalLog()
+    terminalLog(chalk.red('━'.repeat(60)))
+    terminalLog(chalk.red.bold('⚠️  API Error'))
+    terminalLog(chalk.red('━'.repeat(60)))
 
     // 显示关键信息
-    console.log(chalk.white('  Model:  ') + chalk.yellow(context.model))
-    console.log(chalk.white('  Status: ') + chalk.red(context.status))
+    terminalLog(chalk.white('  Model:  ') + chalk.yellow(context.model))
+    terminalLog(chalk.white('  Status: ') + chalk.red(context.status))
 
     // 格式化错误消息
     let errorMessage = 'Unknown error'
@@ -550,12 +555,12 @@ export function logAPIError(context: {
     }
 
     // 错误消息换行显示
-    console.log(chalk.white('  Error:  ') + chalk.red(errorMessage))
+    terminalLog(chalk.white('  Error:  ') + chalk.red(errorMessage))
 
     // 如果有响应体，显示格式化的响应
     if (context.response) {
-      console.log()
-      console.log(chalk.gray('  Response:'))
+      terminalLog()
+      terminalLog(chalk.gray('  Response:'))
       const responseStr =
         typeof context.response === 'string'
           ? context.response
@@ -563,14 +568,14 @@ export function logAPIError(context: {
 
       // 缩进显示响应内容
       responseStr.split('\n').forEach(line => {
-        console.log(chalk.gray('    ' + line))
+        terminalLog(chalk.gray('    ' + line))
       })
     }
 
-    console.log()
-    console.log(chalk.dim(`  📁 Full log: ${filepath}`))
-    console.log(chalk.red('━'.repeat(60)))
-    console.log()
+    terminalLog()
+    terminalLog(chalk.dim(`  📁 Full log: ${filepath}`))
+    terminalLog(chalk.red('━'.repeat(60)))
+    terminalLog()
   }
 }
 
@@ -587,17 +592,17 @@ export function logLLMInteraction(context: {
 
   const duration = context.timing.end - context.timing.start
 
-  console.log('\n' + chalk.blue('🧠 LLM CALL DEBUG'))
-  console.log(chalk.gray('━'.repeat(60)))
+  terminalLog('\n' + chalk.blue('🧠 LLM CALL DEBUG'))
+  terminalLog(chalk.gray('━'.repeat(60)))
 
   // 显示上下文基本信息
-  console.log(chalk.yellow('📊 Context Overview:'))
-  console.log(`   Messages Count: ${context.messages.length}`)
-  console.log(`   System Prompt Length: ${context.systemPrompt.length} chars`)
-  console.log(`   Duration: ${duration.toFixed(0)}ms`)
+  terminalLog(chalk.yellow('📊 Context Overview:'))
+  terminalLog(`   Messages Count: ${context.messages.length}`)
+  terminalLog(`   System Prompt Length: ${context.systemPrompt.length} chars`)
+  terminalLog(`   Duration: ${duration.toFixed(0)}ms`)
 
   if (context.usage) {
-    console.log(
+    terminalLog(
       `   Token Usage: ${context.usage.inputTokens} → ${context.usage.outputTokens}`,
     )
   }
@@ -606,11 +611,11 @@ export function logLLMInteraction(context: {
   const apiLabel = context.apiFormat
     ? ` (${context.apiFormat.toUpperCase()})`
     : ''
-  console.log(chalk.cyan(`\n💬 Real API Messages${apiLabel} (last 10):`))
+  terminalLog(chalk.cyan(`\n💬 Real API Messages${apiLabel} (last 10):`))
 
   // 这里展示的是真正发送给LLM API的messages，不是内部处理的版本
   const recentMessages = context.messages.slice(-10)
-  recentMessages.forEach((msg, index) => {
+    recentMessages.forEach((msg, index) => {
     const globalIndex = context.messages.length - recentMessages.length + index
     const roleColor =
       msg.role === 'user'
@@ -669,7 +674,7 @@ export function logLLMInteraction(context: {
 
     // 根据消息类型使用不同的显示样式 - 更友好的视觉格式
     if (isReminder) {
-      console.log(
+      terminalLog(
         `   [${globalIndex}] ${chalk.magenta('🔔 REMINDER')}: ${chalk.dim(content)}`,
       )
     } else {
@@ -682,7 +687,7 @@ export function logLLMInteraction(context: {
             : msg.role === 'system'
               ? '⚙️'
               : '📄'
-      console.log(
+      terminalLog(
         `   [${globalIndex}] ${(chalk as any)[roleColor](roleIcon + ' ' + msg.role.toUpperCase())}: ${content}`,
       )
     }
@@ -693,7 +698,7 @@ export function logLLMInteraction(context: {
         (block: any) => block.type === 'tool_use',
       )
       if (toolCalls.length > 0) {
-        console.log(
+        terminalLog(
           chalk.cyan(
             `       🔧 → Tool calls (${toolCalls.length}): ${toolCalls.map((t: any) => t.name).join(', ')}`,
           ),
@@ -706,7 +711,7 @@ export function logLLMInteraction(context: {
             inputStr.length > maxLength
               ? inputStr.substring(0, maxLength) + '...'
               : inputStr
-          console.log(
+          terminalLog(
             chalk.dim(`         [${idx}] ${tool.name}: ${displayInput}`),
           )
         })
@@ -714,7 +719,7 @@ export function logLLMInteraction(context: {
     }
     // OpenAI格式的工具调用
     if (msg.tool_calls && msg.tool_calls.length > 0) {
-      console.log(
+      terminalLog(
         chalk.cyan(
           `       🔧 → Tool calls (${msg.tool_calls.length}): ${msg.tool_calls.map((t: any) => t.function.name).join(', ')}`,
         ),
@@ -726,7 +731,7 @@ export function logLLMInteraction(context: {
           inputStr.length > maxLength
             ? inputStr.substring(0, maxLength) + '...'
             : inputStr
-        console.log(
+        terminalLog(
           chalk.dim(`         [${idx}] ${tool.function.name}: ${displayInput}`),
         )
       })
@@ -734,7 +739,7 @@ export function logLLMInteraction(context: {
   })
 
   // 显示 LLM 响应核心信息 - 更详细友好的格式
-  console.log(chalk.magenta('\n🤖 LLM Response:'))
+  terminalLog(chalk.magenta('\n🤖 LLM Response:'))
 
   // Handle different response formats (Anthropic vs OpenAI vs UnifiedResponse)
   let responseContent = ''
@@ -780,13 +785,13 @@ export function logLLMInteraction(context: {
     responseContent.length > maxResponseLength
       ? responseContent.substring(0, maxResponseLength) + '...'
       : responseContent
-  console.log(`   Content: ${displayContent}`)
+  terminalLog(`   Content: ${displayContent}`)
 
   if (toolCalls.length > 0) {
     const toolNames = toolCalls.map(
       (t: any) => t.name || t.function?.name || 'unknown',
     )
-    console.log(
+    terminalLog(
       chalk.cyan(
         `   🔧 Tool Calls (${toolCalls.length}): ${toolNames.join(', ')}`,
       ),
@@ -802,14 +807,14 @@ export function logLLMInteraction(context: {
         inputStr.length > maxToolInputLength
           ? inputStr.substring(0, maxToolInputLength) + '...'
           : inputStr
-      console.log(chalk.dim(`     [${index}] ${toolName}: ${displayInput}`))
+      terminalLog(chalk.dim(`     [${index}] ${toolName}: ${displayInput}`))
     })
   }
 
-  console.log(
+  terminalLog(
     `   Stop Reason: ${context.response.stop_reason || context.response.finish_reason || 'unknown'}`,
   )
-  console.log(chalk.gray('━'.repeat(60)))
+  terminalLog(chalk.gray('━'.repeat(60)))
 }
 
 // 新增：系统提示构建过程调试
@@ -821,23 +826,23 @@ export function logSystemPromptConstruction(construction: {
 }) {
   if (!isDebugMode()) return
 
-  console.log('\n' + chalk.yellow('📝 SYSTEM PROMPT CONSTRUCTION'))
-  console.log(`   Base Prompt: ${construction.basePrompt.length} chars`)
+  terminalLog('\n' + chalk.yellow('📝 SYSTEM PROMPT CONSTRUCTION'))
+  terminalLog(`   Base Prompt: ${construction.basePrompt.length} chars`)
 
   if (construction.kodeContext) {
-    console.log(`   + Kode Context: ${construction.kodeContext.length} chars`)
+    terminalLog(`   + Kode Context: ${construction.kodeContext.length} chars`)
   }
 
   if (construction.reminders.length > 0) {
-    console.log(
+    terminalLog(
       `   + Dynamic Reminders: ${construction.reminders.length} items`,
     )
     construction.reminders.forEach((reminder, index) => {
-      console.log(chalk.dim(`     [${index}] ${reminder.substring(0, 80)}...`))
+      terminalLog(chalk.dim(`     [${index}] ${reminder.substring(0, 80)}...`))
     })
   }
 
-  console.log(`   = Final Length: ${construction.finalPrompt.length} chars`)
+  terminalLog(`   = Final Length: ${construction.finalPrompt.length} chars`)
 }
 
 // 新增：上下文压缩过程调试
@@ -850,17 +855,17 @@ export function logContextCompression(compression: {
 }) {
   if (!isDebugMode()) return
 
-  console.log('\n' + chalk.red('🗜️  CONTEXT COMPRESSION'))
-  console.log(`   Trigger: ${compression.trigger}`)
-  console.log(
+  terminalLog('\n' + chalk.red('🗜️  CONTEXT COMPRESSION'))
+  terminalLog(`   Trigger: ${compression.trigger}`)
+  terminalLog(
     `   Messages: ${compression.beforeMessages} → ${compression.afterMessages}`,
   )
-  console.log(
+  terminalLog(
     `   Compression Ratio: ${(compression.compressionRatio * 100).toFixed(1)}%`,
   )
 
   if (compression.preservedFiles.length > 0) {
-    console.log(`   Preserved Files: ${compression.preservedFiles.join(', ')}`)
+    terminalLog(`   Preserved Files: ${compression.preservedFiles.join(', ')}`)
   }
 }
 
@@ -914,7 +919,7 @@ export function logUserFriendly(type: string, data: any, requestId?: string) {
   }
 
   const reqId = requestId ? chalk.dim(`[${requestId.slice(0, 8)}]`) : ''
-  console.log(`${color(`[${timestamp}]`)} ${icon} ${color(message)} ${reqId}`)
+  terminalLog(`${color(`[${timestamp}]`)} ${icon} ${color(message)} ${reqId}`)
 }
 
 // 初始化日志系统
@@ -937,14 +942,14 @@ export function initDebugLogger() {
     ? Array.from(DEBUG_VERBOSE_TERMINAL_LOG_LEVELS).join(', ')
     : Array.from(TERMINAL_LOG_LEVELS).join(', ')
 
-  console.log(
+  terminalLog(
     chalk.dim(`[DEBUG] Terminal output filtered to: ${terminalLevels}`),
   )
-  console.log(
+  terminalLog(
     chalk.dim(`[DEBUG] Complete logs saved to: ${DEBUG_PATHS.base()}`),
   )
   if (!isDebugVerboseMode()) {
-    console.log(
+    terminalLog(
       chalk.dim(
         `[DEBUG] Use --debug-verbose for detailed system logs (FLOW, API, STATE)`,
       ),
@@ -1200,39 +1205,39 @@ export function logErrorWithDiagnosis(
   )
 
   // 在终端显示诊断信息
-  console.log('\n' + chalk.red('🚨 ERROR DIAGNOSIS'))
-  console.log(chalk.gray('━'.repeat(60)))
+  terminalLog('\n' + chalk.red('🚨 ERROR DIAGNOSIS'))
+  terminalLog(chalk.gray('━'.repeat(60)))
 
-  console.log(chalk.red(`❌ ${diagnosis.errorType}`))
-  console.log(
+  terminalLog(chalk.red(`❌ ${diagnosis.errorType}`))
+  terminalLog(
     chalk.dim(
       `Category: ${diagnosis.category} | Severity: ${diagnosis.severity}`,
     ),
   )
-  console.log(`\n${diagnosis.description}`)
+  terminalLog(`\n${diagnosis.description}`)
 
-  console.log(chalk.yellow('\n💡 Recovery Suggestions:'))
+  terminalLog(chalk.yellow('\n💡 Recovery Suggestions:'))
   diagnosis.suggestions.forEach((suggestion, index) => {
-    console.log(`   ${index + 1}. ${suggestion}`)
+    terminalLog(`   ${index + 1}. ${suggestion}`)
   })
 
-  console.log(chalk.cyan('\n🔍 Debug Steps:'))
+  terminalLog(chalk.cyan('\n🔍 Debug Steps:'))
   diagnosis.debugSteps.forEach((step, index) => {
-    console.log(`   ${index + 1}. ${step}`)
+    terminalLog(`   ${index + 1}. ${step}`)
   })
 
   if (diagnosis.relatedLogs && diagnosis.relatedLogs.length > 0) {
-    console.log(chalk.magenta('\n📋 Related Information:'))
+    terminalLog(chalk.magenta('\n📋 Related Information:'))
     diagnosis.relatedLogs.forEach((log, index) => {
       const truncatedLog =
         log.length > 200 ? log.substring(0, 200) + '...' : log
-      console.log(chalk.dim(`   ${truncatedLog}`))
+      terminalLog(chalk.dim(`   ${truncatedLog}`))
     })
   }
 
   const debugPath = DEBUG_PATHS.base()
-  console.log(chalk.gray(`\n📁 Complete logs: ${debugPath}`))
-  console.log(chalk.gray('━'.repeat(60)))
+  terminalLog(chalk.gray(`\n📁 Complete logs: ${debugPath}`))
+  terminalLog(chalk.gray('━'.repeat(60)))
 }
 export function getDebugInfo() {
   return {

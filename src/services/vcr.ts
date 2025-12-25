@@ -30,8 +30,8 @@ export async function withVCR(
   }
 
   if (env.isCI) {
-    console.warn(
-      `Anthropic API fixture missing. Re-run npm test locally, then commit the result. ${JSON.stringify({ input: dehydratedInput }, null, 2)}`,
+    process.stderr.write(
+      `Anthropic API fixture missing. Re-run bun test locally, then commit the result. ${JSON.stringify({ input: dehydratedInput }, null, 2)}\n`,
     )
   }
 

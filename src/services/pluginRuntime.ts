@@ -153,9 +153,14 @@ function loadPluginFromDir(rootDir: string): SessionPlugin {
     ...manifestAgents.dirs,
     ...manifestAgents.files,
   ]
+  const manifestOutputStyles = resolveManifestPaths(
+    rootDir,
+    (parsed.data as any).outputStyles,
+  )
   const outputStylesDirs = [
     ...listIfDir(join(rootDir, 'output-styles')),
-    ...resolveManifestPaths(rootDir, (parsed.data as any).outputStyles).dirs,
+    ...manifestOutputStyles.dirs,
+    ...manifestOutputStyles.files,
   ]
 
   const standardHook = fileIfExists(join(rootDir, 'hooks', 'hooks.json'))

@@ -28,11 +28,11 @@ Kode supports the [AGENTS.md standard](https://agents.md): a simple, open format
 ### Full Compatibility with Multiple Standards
 
 - ✅ **AGENTS.md** - Native support for the OpenAI-initiated standard format
-- ✅ **Claude Code compatibility (legacy)** - Reads `.claude` directories and `CLAUDE.md` when present (see `docs/compatibility.md`)
+- ✅ **Legacy `.claude` compatibility** - Reads `.claude` directories and `CLAUDE.md` when present (see `docs/compatibility.md`)
 - ✅ **Subagent System** - Advanced agent delegation and task orchestration
 - ✅ **Cross-platform** - Works with 20+ AI models and providers
 
-Use `# Your documentation request` to generate and maintain your AGENTS.md file automatically, while preserving compatibility with existing `.claude` (Claude Code-compatible) workflows.
+Use `# Your documentation request` to generate and maintain your AGENTS.md file automatically, while preserving compatibility with existing `.claude` workflows.
 
 ### Instruction Discovery (Codex-compatible)
 
@@ -135,8 +135,9 @@ See `docs/binary-distribution.md`.
 
 ### Configuration / API keys
 
-- Configure models and API keys via `~/.kode.json` / `./.kode.json` and environment variables.
-- See `docs/develop/configuration.md`.
+- Global config (models, pointers, theme, etc): `~/.kode.json` (or `<KODE_CONFIG_DIR>/config.json` when `KODE_CONFIG_DIR`/`CLAUDE_CONFIG_DIR` is set).
+- Project/local settings (output style, etc): `./.kode/settings.json` and `./.kode/settings.local.json` (legacy `.claude` is supported for some features).
+- Configure models via `/model` (UI) or `kode models import/export` (YAML). Details: `docs/develop/configuration.md`.
 
 ## Usage
 
@@ -157,6 +158,24 @@ kode -p "explain this function" path/to/file.js
 # or
 kwa -p "explain this function" path/to/file.js
 ```
+
+### ACP (Agent Client Protocol)
+
+Run Kode as an ACP agent server (stdio JSON-RPC), for clients like Toad/Zed:
+
+```bash
+kode-acp
+# or
+kode --acp
+```
+
+Toad example:
+
+```bash
+toad acp "kode-acp"
+```
+
+More: `docs/acp.md`.
 
 ### Using the @ Mention System
 
@@ -303,12 +322,48 @@ As long as you have an openai-like endpoint, it should work.
 - `/help` - Show available commands
 - `/model` - Change AI model settings
 - `/config` - Open configuration panel
-- `/output-style` - Set the output style (deprecated compatibility feature)
+- `/agents` - Manage subagents
+- `/output-style` - Set the output style
 - `/statusline` - Configure a custom status line command
 - `/cost` - Show token usage and costs
 - `/clear` - Clear conversation history
 - `/init` - Initialize project context
 - `/plugin` - Manage plugins/marketplaces (skills, commands)
+
+## Agents / Subagents
+
+Kode supports subagents (agent templates) for delegation and task orchestration.
+
+- Agents are loaded from `.kode/agents` and `.claude/agents` (user + project), plus plugins/policy and `--agents`.
+- Manage in the UI: `/agents` (creates new agents under `./.claude/agents` / `~/.claude/agents` by default).
+- Run via mentions: `@run-agent-<agentType> ...`
+- Run via tooling: `Task(subagent_type: "<agentType>", ...)`
+- CLI flags: `--agents <json>` (inject agents for this run), `--setting-sources user,project,local` (control which sources are loaded)
+
+Minimal agent file example (`./.kode/agents/reviewer.md`):
+
+```md
+---
+name: reviewer
+description: "Review diffs for correctness, security, and simplicity"
+tools: ["Read", "Grep"]
+model: inherit
+---
+
+Be strict. Point out bugs and risky changes. Prefer small, targeted fixes.
+```
+
+Model field notes:
+- Compatibility aliases: `inherit`, `opus`, `sonnet`, `haiku` (mapped to model pointers)
+- Kode selectors (via `/model`): pointers (`main|task|compact|quick`), profile name, modelName, or `provider:modelName` (e.g. `openai:o3`)
+
+Validate agent templates:
+
+```bash
+kode agents validate
+```
+
+See `docs/agents-system.md`.
 
 ## Skills & Plugins
 
@@ -375,15 +430,17 @@ Compatibility:
 
 See `docs/skills.md` for a compact reference and examples.
 
-### Output styles (deprecated)
+### Output styles
 
-Kode supports legacy output styles for backward compatibility.
+Use output styles to switch system-prompt behavior.
 
 - Select: `/output-style` (menu) or `/output-style <style>`
-- Stored per-project in `./.kode/settings.local.json` as `outputStyle` (legacy `.claude/settings.local.json` is read-compatible)
-- Plugins can provide styles under `output-styles/` (Markdown with optional YAML `name`/`description`; body is appended to the system prompt). Plugin styles are namespaced as `<plugin>:<style>`.
+- Built-ins: `default`, `Explanatory`, `Learning`
+- Stored per-project in `./.kode/settings.local.json` as `outputStyle` (legacy `.claude/settings.local.json` is supported)
+- Custom styles: Markdown files under `output-styles/` in `.claude`/`.kode` user + project locations
+- Plugins can provide styles under `output-styles/` (or manifest `outputStyles`); plugin styles are namespaced as `<plugin>:<style>`
 
-For new workflows, prefer plugins (custom commands + hooks) instead of output styles.
+See `docs/output-styles.md`.
 
 ## Multi-Model Intelligent Collaboration
 
@@ -414,6 +471,9 @@ kode models import kode-models.yaml
 
 # Replace existing profiles instead of merging
 kode models import --replace kode-models.yaml
+
+# List configured profiles + pointers
+kode models list
 ```
 
 Example `kode-models.yaml`:

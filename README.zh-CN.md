@@ -30,7 +30,7 @@ Kode 支持 [AGENTS.md 标准](https://agents.md)：一个简单、开放的“�
 - Kode 会从 Git 仓库根目录一路走到当前工作目录（`cwd`）读取项目指令。
 - 每一层目录最多读取一个文件：优先 `AGENTS.override.md`，否则读取 `AGENTS.md`。
 - 指令会按 root → leaf 拼接（默认合并上限 32KiB；可通过 `KODE_PROJECT_DOC_MAX_BYTES` 覆盖）。
-- 如果当前目录存在 `CLAUDE.md`，Kode 也会将其作为 legacy 指令文件读取（用于 Claude Code 兼容项目）。
+- 如果当前目录存在 `CLAUDE.md`，Kode 也会将其作为 legacy 指令文件读取（兼容 legacy `.claude` 格式）。
 
 Kode 是一个强大的 AI 助手，运行在你的终端中。它能理解你的代码库、编辑文件、运行命令，并为你处理整个开发工作流。
 
@@ -95,8 +95,9 @@ npm install -g @shareai-lab/kode@dev
 
 ### 配置 / API Key
 
-- 模型与 API key 可通过 `~/.kode.json` / `./.kode.json` 与环境变量配置。
-- 详见 `docs/develop/configuration.md`。
+- 全局配置（模型 profiles / 指针、主题等）：默认在 `~/.kode.json`（如设置 `KODE_CONFIG_DIR`/`CLAUDE_CONFIG_DIR` 则为 `<KODE_CONFIG_DIR>/config.json`）。
+- 项目/本地 settings（如输出风格）：`./.kode/settings.json` 与 `./.kode/settings.local.json`（部分功能兼容 legacy `.claude`）。
+- 模型推荐用 `/model`（交互 UI）或 `kode models import/export`（YAML）。详见 `docs/develop/configuration.md`。
 
 ## 使用方法
 
@@ -117,6 +118,24 @@ kode -p "解释这个函数" 路径/到/文件.js
 # 或
 kwa -p "解释这个函数" 路径/到/文件.js
 ```
+
+### ACP（Agent Client Protocol）
+
+以 ACP Agent Server（stdio JSON-RPC）模式运行 Kode，供 Toad / Zed 等 ACP Client 使用：
+
+```bash
+kode-acp
+# 或
+kode --acp
+```
+
+Toad 示例：
+
+```bash
+toad acp "kode-acp"
+```
+
+更多说明：`docs/acp.md`。
 
 ### Docker 使用说明
  
@@ -169,18 +188,54 @@ Kode 同时使用 `~/.kode` 目录（存放额外数据，如内存文件）和 
 - `/help` - 显示可用命令
 - `/model` - 更改 AI 模型设置
 - `/config` - 打开配置面板
-- `/output-style` - 设置输出风格（兼容特性，已弃用）
+- `/agents` - 管理 subagents
+- `/output-style` - 设置输出风格
 - `/statusline` - 配置自定义状态栏命令
 - `/cost` - 显示 token 使用量和成本
 - `/clear` - 清除对话历史
 - `/init` - 初始化项目上下文
 - `/plugin` - 管理插件/市场（技能、命令）
 
+## Agents / Subagents
+
+Kode 支持 subagents（agent 模版），用于任务委派与编排。
+
+- Agents 会从 `.kode/agents` 与 `.claude/agents`（用户 + 项目）加载，并叠加 plugins/policy/`--agents`。
+- 用 `/agents` 打开管理 UI（默认新建写入 `./.claude/agents` / `~/.claude/agents`）
+- 用提及运行：`@run-agent-<agentType> ...`
+- 用工具运行：`Task(subagent_type: "<agentType>", ...)`
+- CLI flags：`--agents <json>`（本次运行注入 agents）、`--setting-sources user,project,local`（控制加载来源）
+
+最小 agent 文件示例（`./.kode/agents/reviewer.md`）：
+
+```md
+---
+name: reviewer
+description: "Review diffs for correctness, security, and simplicity"
+tools: ["Read", "Grep"]
+model: inherit
+---
+
+更严格一些：指出 bug / 风险点，优先推荐小而聚焦的修改。
+```
+
+`model` 字段说明：
+- 兼容别名：`inherit`、`opus`、`sonnet`、`haiku`（会映射到 model pointers）
+- Kode 选择器（通过 `/model` 配置）：指针（`main|task|compact|quick`）、profile 名称、modelName，或 `provider:modelName`（例如 `openai:o3`）
+
+校验 agent 模版：
+
+```bash
+kode agents validate
+```
+
+详见 `docs/agents-system.md`。
+
 ## 技能与插件
 
 Kode 支持：
 - **Agent Skills** 格式（`SKILL.md`）用于分发可复用技能包
-- **Marketplace 兼容**（`.kode-plugin/marketplace.json`，legacy `.claude-plugin/marketplace.json`（Claude Code 兼容））用于分享/安装技能包
+- **Marketplace 兼容**（`.kode-plugin/marketplace.json`，legacy `.claude-plugin/marketplace.json`）用于分享/安装技能包
 
 ### 从 marketplace 安装技能
 
@@ -241,15 +296,17 @@ allowed-tools: Read Bash(git:*) Bash(jq:*)
 
 详见 `docs/skills.md`。
 
-### 输出风格（已弃用）
+### 输出风格
 
-Kode 提供 legacy 输出风格能力（主要用于兼容历史用法）。
+用输出风格切换 system prompt 行为。
 
 - 选择：`/output-style`（菜单）或 `/output-style <style>`
-- 按项目存储在 `./.kode/settings.local.json` 的 `outputStyle`（legacy `.claude/settings.local.json` 兼容读取）
-- 插件可在 `output-styles/` 提供风格（Markdown 文件，可选 YAML `name`/`description`；正文会追加到 system prompt）。插件风格命名为 `<plugin>:<style>`。
+- 内置：`default`、`Explanatory`、`Learning`
+- 按项目存储在 `./.kode/settings.local.json` 的 `outputStyle`（legacy `.claude/settings.local.json` 兼容）
+- 自定义风格：放在 `.claude/.kode` 的 `output-styles/` 下的 Markdown 文件
+- 插件也可提供风格（`output-styles/` 或 manifest `outputStyles`）；插件风格命名为 `<plugin>:<style>`
 
-新的工作流建议优先使用插件（自定义命令 + hooks）来替代输出风格。
+详见 `docs/output-styles.md`。
 
 ## MCP 服务器（扩展）
 
@@ -328,6 +385,9 @@ kode models import kode-models.yaml
 
 # 用导入内容替换本地已有 profiles（不 merge）
 kode models import --replace kode-models.yaml
+
+# 列出当前 profiles + pointers
+kode models list
 ```
 
 示例 `kode-models.yaml`：

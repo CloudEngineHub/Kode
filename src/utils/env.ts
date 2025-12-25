@@ -4,7 +4,7 @@ import { join } from 'path'
 import { homedir } from 'os'
 import { CONFIG_BASE_DIR, CONFIG_FILE } from '@constants/product'
 // Base directory for local Kode data files.
-// Also respects `CLAUDE_CONFIG_DIR` (Claude Code-compatible) for compatibility.
+// Also respects `CLAUDE_CONFIG_DIR` for compatibility.
 //
 // Note: this must be a function (not a fixed const) because tests (and some host
 // integrations) may set env vars after modules are loaded.
@@ -17,7 +17,7 @@ export function getKodeBaseDir(): string {
 }
 
 // Config and data paths
-// Also respects `CLAUDE_CONFIG_DIR` (Claude Code-compatible) for compatibility.
+// Also respects `CLAUDE_CONFIG_DIR` for compatibility.
 export function getGlobalConfigFilePath(): string {
   return process.env.KODE_CONFIG_DIR || process.env.CLAUDE_CONFIG_DIR
     ? join(getKodeBaseDir(), 'config.json')

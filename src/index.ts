@@ -10,21 +10,25 @@ function hasFlag(...flags: string[]): boolean {
 
 // Minimal pre-parse: handle version/help early without loading heavy UI modules
 if (hasFlag('--version', '-v')) {
-  console.log(MACRO.VERSION || '')
+  process.stdout.write(`${MACRO.VERSION || ''}\n`)
   process.exit(0)
 }
 
 if (hasFlag('--help-lite')) {
-  console.log(
+  process.stdout.write(
     `Usage: kode [options] [command] [prompt]\n\n` +
       `Common options:\n` +
       `  -h, --help           Show full help\n` +
       `  -v, --version        Show version\n` +
       `  -p, --print          Print response and exit (non-interactive)\n` +
-      `  -c, --cwd <cwd>      Set working directory`,
+      `  -c, --cwd <cwd>      Set working directory\n`,
   )
   process.exit(0)
 }
 
 // For compatibility, --help loads full CLI help
-await import('./entrypoints/cli.js')
+if (hasFlag('--acp')) {
+  await import('./entrypoints/acp.js')
+} else {
+  await import('./entrypoints/cli.js')
+}

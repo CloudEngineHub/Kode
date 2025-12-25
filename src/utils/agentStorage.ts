@@ -2,6 +2,8 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { join } from 'path'
 import { homedir } from 'os'
 import { randomUUID } from 'crypto'
+import { debug as debugLogger } from '@utils/debugLogger'
+import { logError } from '@utils/log'
 
 /**
  * Agent Storage Utilities
@@ -60,7 +62,11 @@ export function readAgentData<T = any>(agentId: string): T | null {
     const content = readFileSync(filePath, 'utf-8')
     return JSON.parse(content) as T
   } catch (error) {
-    console.error(`Failed to read agent data for ${agentId}:`, error)
+    logError(error)
+    debugLogger.warn('AGENT_STORAGE_READ_FAILED', {
+      agentId,
+      error: error instanceof Error ? error.message : String(error),
+    })
     return null
   }
 }
@@ -74,7 +80,11 @@ export function writeAgentData<T = any>(agentId: string, data: T): void {
   try {
     writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8')
   } catch (error) {
-    console.error(`Failed to write agent data for ${agentId}:`, error)
+    logError(error)
+    debugLogger.warn('AGENT_STORAGE_WRITE_FAILED', {
+      agentId,
+      error: error instanceof Error ? error.message : String(error),
+    })
     throw error
   }
 }

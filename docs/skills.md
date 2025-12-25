@@ -2,7 +2,7 @@
 
 Kode supports:
 - **Agent Skills** (directories containing `SKILL.md`)
-- **Marketplace compatibility** (`.kode-plugin/marketplace.json`, legacy `.claude-plugin/marketplace.json` (Claude Code-compatible))
+- **Marketplace compatibility** (`.kode-plugin/marketplace.json`, legacy `.claude-plugin/marketplace.json`)
 - **Plugin packs** installed via `kode plugin install ...`
 
 This doc is a compact reference for installing/using/creating/distributing skills.

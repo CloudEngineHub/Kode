@@ -1,4 +1,6 @@
 import { getMCPTools } from '@services/mcpClient'
+import { debug as debugLogger } from '@utils/debugLogger'
+import { logError } from '@utils/log'
 
 export type Tool = {
   name: string
@@ -44,7 +46,10 @@ export async function getAvailableTools(): Promise<Tool[]> {
       availableTools.push(...mcpTools)
     }
   } catch (error) {
-    console.warn('Failed to load MCP tools:', error)
+    logError(error)
+    debugLogger.warn('AGENT_TOOLING_MCP_LOAD_FAILED', {
+      error: error instanceof Error ? error.message : String(error),
+    })
   }
 
   return availableTools

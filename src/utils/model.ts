@@ -1,6 +1,7 @@
 import { memoize } from 'lodash-es'
 
 import { logError } from './log'
+import { debug as debugLogger } from './debugLogger'
 import {
   getGlobalConfig,
   ModelProfile,
@@ -821,6 +822,14 @@ export class ModelManager {
       return profile
     }
 
+    // 4. Kode extension: provider-qualified selectors ("provider:modelName" or "provider:profileName")
+    if (typeof modelParam === 'string') {
+      const qualified = this.resolveProviderQualifiedModel(modelParam)
+      if (qualified && qualified.isActive) {
+        return qualified
+      }
+    }
+
     // 所有查找方式都失败，尝试 fallback 到默认模型
     return this.getDefaultModel()
   }
@@ -882,11 +891,15 @@ export class ModelManager {
         profile = this.findModelProfileByName(modelParam)
       }
 
+      if (!profile && typeof modelParam === 'string') {
+        profile = this.resolveProviderQualifiedModel(modelParam)
+      }
+
       if (!profile) {
         return {
           success: false,
           profile: null,
-          error: `Model '${modelParam}' not found. Use /model to add models.`,
+          error: `Model '${modelParam}' not found. Use /model to add models, or run 'kode models list' to see configured profiles.`,
         }
       }
 
@@ -906,6 +919,30 @@ export class ModelManager {
   }
 
   // Private helper methods
+  private resolveProviderQualifiedModel(input: string): ModelProfile | null {
+    const trimmed = input.trim()
+    const colonIndex = trimmed.indexOf(':')
+    if (colonIndex <= 0 || colonIndex >= trimmed.length - 1) return null
+
+    const provider = trimmed.slice(0, colonIndex).trim().toLowerCase()
+    const modelOrName = trimmed.slice(colonIndex + 1).trim()
+    if (!provider || !modelOrName) return null
+
+    const providerProfiles = this.modelProfiles.filter(
+      p => String(p.provider).trim().toLowerCase() === provider,
+    )
+    if (providerProfiles.length === 0) return null
+
+    // Prefer an exact modelName match, else fall back to profile name match.
+    const byModelName = providerProfiles.find(p => p.modelName === modelOrName)
+    if (byModelName) return byModelName
+
+    const byName = providerProfiles.find(p => p.name === modelOrName)
+    if (byName) return byName
+
+    return null
+  }
+
   private findModelProfile(modelName: string): ModelProfile | null {
     return this.modelProfiles.find(p => p.modelName === modelName) || null
   }
@@ -937,9 +974,7 @@ export const getModelManager = (): ModelManager => {
     if (!globalModelManager) {
       const config = getGlobalConfig()
       if (!config) {
-        console.warn(
-          'No global config available, creating ModelManager with empty config',
-        )
+        debugLogger.warn('MODEL_MANAGER_GLOBAL_CONFIG_MISSING', {})
         globalModelManager = new ModelManager({
           modelProfiles: [],
           modelPointers: { main: '', task: '', compact: '', quick: '' },
@@ -950,7 +985,10 @@ export const getModelManager = (): ModelManager => {
     }
     return globalModelManager
   } catch (error) {
-    console.error('Error creating ModelManager:', error)
+    logError(error)
+    debugLogger.error('MODEL_MANAGER_CREATE_FAILED', {
+      error: error instanceof Error ? error.message : String(error),
+    })
     // Return a fallback ModelManager with empty configuration
     return new ModelManager({
       modelProfiles: [],

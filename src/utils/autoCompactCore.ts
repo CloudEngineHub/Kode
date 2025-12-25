@@ -10,6 +10,8 @@ import { queryLLM } from '@services/llmLazy'
 import { selectAndReadFiles } from './fileRecoveryCore'
 import { addLineNumbers } from './file'
 import { getModelManager } from './model'
+import { debug as debugLogger } from '@utils/debugLogger'
+import { logError } from '@utils/log'
 import {
   AUTO_COMPACT_THRESHOLD_RATIO,
   calculateAutoCompactThresholds,
@@ -122,10 +124,10 @@ export async function checkAutoCompact(
   } catch (error) {
     // Graceful degradation: if auto-compact fails, continue with original messages
     // This ensures system remains functional even if compression encounters issues
-    console.error(
-      'Auto-compact failed, continuing with original messages:',
-      error,
-    )
+    logError(error)
+    debugLogger.warn('AUTO_COMPACT_FAILED', {
+      error: error instanceof Error ? error.message : String(error),
+    })
     return { messages, wasCompacted: false }
   }
 }

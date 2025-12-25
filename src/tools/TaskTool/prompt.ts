@@ -10,10 +10,19 @@ import { FileReadTool } from '@tools/FileReadTool/FileReadTool'
 import { getModelManager } from '@utils/model'
 import { getActiveAgents } from '@utils/agentLoader'
 
+const SUBAGENT_DISALLOWED_TOOL_NAMES = new Set<string>([
+  'Task',
+  'TaskOutput',
+  'KillShell',
+  'EnterPlanMode',
+  'ExitPlanMode',
+  'AskUserQuestion',
+])
+
 export async function getTaskTools(safeMode: boolean): Promise<Tool[]> {
   // No recursive tasks, yet..
   return (await (!safeMode ? getTools() : getReadOnlyTools())).filter(
-    _ => _.name !== TaskTool.name,
+    tool => !SUBAGENT_DISALLOWED_TOOL_NAMES.has(tool.name),
   )
 }
 

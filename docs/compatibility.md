@@ -1,21 +1,26 @@
-# Compatibility (Claude Code)
+# Compatibility (Legacy Formats)
 
-Kode is designed to be **Kode-first** while remaining compatible with parts of the **Claude Code** project ecosystem.
+Kode is designed to be **Kode-first** while supporting legacy on-disk layouts (notably the `.claude` layout used by Claude Code).
 
-Kode is **not affiliated with Anthropic**. “Claude Code” is referenced here only to describe on-disk formats and interoperability.
+Kode is **not affiliated with Anthropic**. “Claude Code” is referenced here only to name legacy formats and interoperability.
 
 ## Directory Compatibility
 
 - Primary (Kode-native): `./.kode/**`, `~/.kode/**`
-- Legacy (Claude Code-compatible, read-first fallback): `./.claude/**`, `~/.claude/**`
+- Compatibility (`.claude` layout): `./.claude/**`, `~/.claude/**`
 
 Kode generally **writes to `.kode`** and may read from `.claude` for compatibility.
+
+Note: the interactive `/agents` UI creates new agent files under `.claude/agents` by default, while still loading `.kode/agents`.
 
 ## What’s Supported
 
 - Agents
-  - Primary: `./.kode/agents`, `~/.kode/agents`
-  - Legacy: `./.claude/agents`, `~/.claude/agents`
+  - Read: `./.kode/agents`, `~/.kode/agents`, `./.claude/agents`, `~/.claude/agents`
+  - Write (via `/agents`): `./.claude/agents`, `~/.claude/agents` (edits legacy `.kode/agents` if that’s where the agent currently lives)
+- Output styles (`/output-style`)
+  - Selection stored in: `./.kode/settings.local.json` (legacy `./.claude/settings.local.json`)
+  - Custom styles discovered from: `./.kode/output-styles`, `~/.kode/output-styles`, `./.claude/output-styles`, `~/.claude/output-styles`
 - Custom commands & skills
   - Primary: `./.kode/commands`, `~/.kode/commands`, `./.kode/skills`, `~/.kode/skills`
   - Legacy: `./.claude/commands`, `~/.claude/commands`, `./.claude/skills`, `~/.claude/skills`
@@ -30,9 +35,13 @@ Kode generally **writes to `.kode`** and may read from `.claude` for compatibili
 Kode’s preferred variables:
 - `KODE_CONFIG_DIR`
 
-Claude Code-compatible variables (supported as fallbacks):
+Legacy variables (supported as fallbacks):
 - `CLAUDE_CONFIG_DIR`
 - Hook/plugin variables such as `CLAUDE_PLUGIN_ROOT`, `CLAUDE_PROJECT_DIR`, `CLAUDE_ENV_FILE` (used for compatibility with existing plugin/hook scripts).
 
 Some historical `CLAUDE_CODE_*` toggles may still be recognized as fallbacks where needed.
 
+## Helpful CLI Commands
+
+- List configured model profiles/pointers: `kode models list`
+- Validate agent templates: `kode agents validate`

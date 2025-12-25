@@ -26,6 +26,7 @@ import {
   shouldTreatAsSpecialPaste,
 } from '@utils/paste'
 import { handleHashCommand } from '@utils/hashCommand'
+import { logError } from '@utils/log'
 import { usePermissionContext } from '@context/PermissionContext'
 import { getPermissionModeCycleShortcut } from '@utils/permissionModeCycleShortcut'
 import { getCwd } from '@utils/state'
@@ -422,7 +423,7 @@ function PromptInput({
         return
       } catch (e) {
         // If something fails, log the error
-        console.error('Error processing Koding request:', e)
+        logError(e)
       }
     }
 
@@ -439,6 +440,7 @@ function PromptInput({
         handleHashCommand(interpreted)
       } catch (e) {
         // If interpretation fails, log the error
+        logError(e)
       }
       onInputChange('')
       addToHistory(mode === 'koding' ? `#${input}` : input)

@@ -79,6 +79,11 @@ export type Command = {
   isEnabled: boolean
   isHidden: boolean
   name: string
+  /**
+   * Optional hint text for command arguments shown in help/menus.
+   * Example: "[style]" or "<tag-name>".
+   */
+  argumentHint?: string
   aliases?: string[]
   /**
    * If true, this command must not be invoked via non-interactive tool calls

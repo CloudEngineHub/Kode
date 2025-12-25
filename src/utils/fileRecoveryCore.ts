@@ -1,5 +1,7 @@
 import { readTextContent } from './file'
 import { fileFreshnessService } from '@services/fileFreshness'
+import { debug as debugLogger } from '@utils/debugLogger'
+import { logError } from '@utils/log'
 
 /**
  * File recovery configuration for auto-compact feature
@@ -63,7 +65,11 @@ export async function selectAndReadFiles(): Promise<
       })
     } catch (error) {
       // Skip files that cannot be read, don't let one failure stop the process
-      console.error(`Failed to read file for recovery: ${fileInfo.path}`, error)
+      logError(error)
+      debugLogger.warn('FILE_RECOVERY_READ_FAILED', {
+        path: fileInfo.path,
+        error: error instanceof Error ? error.message : String(error),
+      })
     }
   }
 

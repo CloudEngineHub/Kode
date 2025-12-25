@@ -6,6 +6,7 @@
  */
 
 import { getModelFeatures } from './openai'
+import { debug as debugLogger } from '@utils/debugLogger'
 
 export interface ConnectionTestResult {
   success: boolean
@@ -47,30 +48,31 @@ export async function testGPT5Connection(
   const isOfficialOpenAI =
     !config.baseURL || config.baseURL.includes('api.openai.com')
 
-  console.log(`🔧 Testing GPT-5 connection for model: ${config.model}`)
-  console.log(`🔧 Base URL: ${baseURL}`)
-  console.log(`🔧 Official OpenAI: ${isOfficialOpenAI}`)
-  console.log(
-    `🔧 Supports Responses API: ${modelFeatures.supportsResponsesAPI}`,
-  )
+  debugLogger.api('GPT5_CONNECTION_TEST_START', {
+    model: config.model,
+    baseURL,
+    isOfficialOpenAI,
+    supportsResponsesAPI: modelFeatures.supportsResponsesAPI,
+  })
 
   // Try Responses API first for official GPT-5 models
   if (isGPT5 && modelFeatures.supportsResponsesAPI && isOfficialOpenAI) {
-    console.log(`🚀 Attempting Responses API for ${config.model}`)
+    debugLogger.api('GPT5_CONNECTION_TEST_TRY_RESPONSES', { model: config.model })
     const responsesResult = await testResponsesAPI(config, baseURL, startTime)
 
     if (responsesResult.success) {
-      console.log(`✅ Responses API test successful for ${config.model}`)
+      debugLogger.api('GPT5_CONNECTION_TEST_RESPONSES_OK', { model: config.model })
       return responsesResult
     } else {
-      console.log(
-        `⚠️ Responses API failed, falling back to Chat Completions: ${responsesResult.details}`,
-      )
+      debugLogger.warn('GPT5_CONNECTION_TEST_RESPONSES_FAILED', {
+        model: config.model,
+        details: responsesResult.details,
+      })
     }
   }
 
   // Fallback to Chat Completions API
-  console.log(`🔄 Using Chat Completions API for ${config.model}`)
+  debugLogger.api('GPT5_CONNECTION_TEST_FALLBACK_CHAT_COMPLETIONS', { model: config.model })
   return await testChatCompletionsAPI(config, baseURL, startTime)
 }
 
@@ -105,8 +107,10 @@ async function testResponsesAPI(
     Authorization: `Bearer ${config.apiKey}`,
   }
 
-  console.log(`🔧 Responses API URL: ${testURL}`)
-  console.log(`🔧 Responses API payload:`, JSON.stringify(testPayload, null, 2))
+  debugLogger.api('GPT5_CONNECTION_TEST_RESPONSES_REQUEST', {
+    model: config.model,
+    url: testURL,
+  })
 
   try {
     const response = await fetch(testURL, {
@@ -119,7 +123,10 @@ async function testResponsesAPI(
 
     if (response.ok) {
       const data = await response.json()
-      console.log(`✅ Responses API successful response:`, data)
+      debugLogger.api('GPT5_CONNECTION_TEST_RESPONSES_RESPONSE', {
+        model: config.model,
+        status: response.status,
+      })
 
       // Extract content from Responses API format
       let responseContent = ''
@@ -162,7 +169,11 @@ async function testResponsesAPI(
       const errorMessage =
         errorData?.error?.message || errorData?.message || response.statusText
 
-      console.log(`❌ Responses API error (${response.status}):`, errorData)
+      debugLogger.warn('GPT5_CONNECTION_TEST_RESPONSES_ERROR', {
+        model: config.model,
+        status: response.status,
+        error: errorMessage,
+      })
 
       return {
         success: false,
@@ -174,7 +185,10 @@ async function testResponsesAPI(
       }
     }
   } catch (error) {
-    console.log(`❌ Responses API connection error:`, error)
+    debugLogger.warn('GPT5_CONNECTION_TEST_RESPONSES_NETWORK_ERROR', {
+      model: config.model,
+      error: error instanceof Error ? error.message : String(error),
+    })
 
     return {
       success: false,
@@ -217,9 +231,10 @@ async function testChatCompletionsAPI(
   if (isGPT5) {
     testPayload.max_completion_tokens = Math.max(config.maxTokens || 8192, 8192)
     delete testPayload.max_tokens // 🔥 CRITICAL: Remove max_tokens for GPT-5
-    console.log(
-      `🔧 GPT-5 mode: Using max_completion_tokens = ${testPayload.max_completion_tokens}`,
-    )
+    debugLogger.api('GPT5_CONNECTION_TEST_MAX_COMPLETION_TOKENS', {
+      model: config.model,
+      max_completion_tokens: testPayload.max_completion_tokens,
+    })
   } else {
     testPayload.max_tokens = Math.max(config.maxTokens || 8192, 8192)
   }
@@ -235,11 +250,10 @@ async function testChatCompletionsAPI(
     headers['Authorization'] = `Bearer ${config.apiKey}`
   }
 
-  console.log(`🔧 Chat Completions URL: ${testURL}`)
-  console.log(
-    `🔧 Chat Completions payload:`,
-    JSON.stringify(testPayload, null, 2),
-  )
+  debugLogger.api('GPT5_CONNECTION_TEST_CHAT_COMPLETIONS_REQUEST', {
+    model: config.model,
+    url: testURL,
+  })
 
   try {
     const response = await fetch(testURL, {
@@ -252,7 +266,10 @@ async function testChatCompletionsAPI(
 
     if (response.ok) {
       const data = await response.json()
-      console.log(`✅ Chat Completions successful response:`, data)
+      debugLogger.api('GPT5_CONNECTION_TEST_CHAT_COMPLETIONS_RESPONSE', {
+        model: config.model,
+        status: response.status,
+      })
 
       const responseContent = data.choices?.[0]?.message?.content || ''
       const containsYes = responseContent.toLowerCase().includes('yes')
@@ -281,7 +298,11 @@ async function testChatCompletionsAPI(
       const errorMessage =
         errorData?.error?.message || errorData?.message || response.statusText
 
-      console.log(`❌ Chat Completions error (${response.status}):`, errorData)
+      debugLogger.warn('GPT5_CONNECTION_TEST_CHAT_COMPLETIONS_ERROR', {
+        model: config.model,
+        status: response.status,
+        error: errorMessage,
+      })
 
       // 🔧 Provide specific guidance for GPT-5 errors
       let details = `Error: ${errorMessage}`
@@ -304,7 +325,10 @@ async function testChatCompletionsAPI(
       }
     }
   } catch (error) {
-    console.log(`❌ Chat Completions connection error:`, error)
+    debugLogger.warn('GPT5_CONNECTION_TEST_CHAT_COMPLETIONS_NETWORK_ERROR', {
+      model: config.model,
+      error: error instanceof Error ? error.message : String(error),
+    })
 
     return {
       success: false,
@@ -324,7 +348,7 @@ export function validateGPT5Config(config: GPT5TestConfig): {
   valid: boolean
   errors: string[]
 } {
-  console.log(`🔧 validateGPT5Config called with:`, {
+  debugLogger.state('GPT5_VALIDATE_CONFIG_CALLED', {
     model: config.model,
     hasApiKey: !!config.apiKey,
     baseURL: config.baseURL,
@@ -343,19 +367,25 @@ export function validateGPT5Config(config: GPT5TestConfig): {
 
   const isGPT5 = config.model?.toLowerCase().includes('gpt-5')
   if (isGPT5) {
-    console.log(
-      `🔧 GPT-5 validation: model=${config.model}, maxTokens=${config.maxTokens}`,
-    )
+    debugLogger.state('GPT5_VALIDATE_CONFIG', {
+      model: config.model,
+      maxTokens: config.maxTokens,
+    })
 
     if (config.maxTokens && config.maxTokens < 1000) {
       errors.push('GPT-5 models typically require at least 1000 max tokens')
     }
 
     // 完全移除第三方provider限制，允许所有代理中转站使用GPT-5
-    console.log(`🔧 No third-party restrictions applied for GPT-5`)
+    debugLogger.state('GPT5_VALIDATE_CONFIG_NO_PROVIDER_RESTRICTIONS', {
+      model: config.model,
+    })
   }
 
-  console.log(`🔧 Validation result:`, { valid: errors.length === 0, errors })
+  debugLogger.state('GPT5_VALIDATE_CONFIG_RESULT', {
+    valid: errors.length === 0,
+    errors,
+  })
 
   return {
     valid: errors.length === 0,

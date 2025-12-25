@@ -203,7 +203,7 @@ export async function runPrintMode({
       initialMessages,
       persistSession: sessionPersistence !== false,
     })
-    console.log(response)
+    process.stdout.write(`${response}\n`)
     process.exit(0)
   }
 
@@ -824,9 +824,9 @@ export async function runPrintMode({
   // json
   sdkMessages.push(resultMsg)
   if (verbose) {
-    console.log(JSON.stringify(sdkMessages, null, 2))
+    process.stdout.write(`${JSON.stringify(sdkMessages, null, 2)}\n`)
   } else {
-    console.log(JSON.stringify(resultMsg, null, 2))
+    process.stdout.write(`${JSON.stringify(resultMsg, null, 2)}\n`)
   }
   process.exit(0)
 }

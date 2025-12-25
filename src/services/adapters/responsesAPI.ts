@@ -7,6 +7,8 @@ import {
 import { Tool, getToolDescription } from '@tool'
 import { zodToJsonSchema } from 'zod-to-json-schema'
 import { processResponsesStream } from './responsesStreaming'
+import { debug as debugLogger } from '@utils/debugLogger'
+import { logError } from '@utils/log'
 
 export class ResponsesAPIAdapter extends OpenAIAdapter {
   createRequest(params: UnifiedRequestParams): any {
@@ -139,10 +141,11 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
           try {
             parameters = zodToJsonSchema(tool.inputSchema as any) as any
           } catch (error) {
-            console.warn(
-              `Failed to convert Zod schema for tool ${tool.name}:`,
-              error,
-            )
+            logError(error)
+            debugLogger.warn('RESPONSES_API_TOOL_SCHEMA_CONVERSION_FAILED', {
+              toolName: tool.name,
+              error: error instanceof Error ? error.message : String(error),
+            })
             // Use minimal schema as fallback
             parameters = { type: 'object', properties: {} }
           }

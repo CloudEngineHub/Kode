@@ -3,6 +3,8 @@ import { useInput, type Key } from 'ink'
 import { getCwd } from '@utils/state'
 import { getActiveAgents } from '@utils/agentLoader'
 import { getModelManager } from '@utils/model'
+import { debug as debugLogger } from '@utils/debugLogger'
+import { logError } from '@utils/log'
 import { getCompletionContext } from '@utils/completion/context'
 import { generateSuggestionsForContext } from '@utils/completion/generateSuggestions'
 import {
@@ -164,13 +166,16 @@ export function useUnifiedCompletion({
 
       const commands = Array.from(commandSet).sort()
       setSystemCommands(commands)
-    } catch (error) {
-      console.warn('Failed to load system commands, using fallback:', error)
-      // Use minimal fallback commands from utils if system scan fails
-      setSystemCommands(getMinimalFallbackCommands())
-    } finally {
-      setIsLoadingCommands(false)
-    }
+	    } catch (error) {
+	      logError(error)
+	      debugLogger.warn('UNIFIED_COMPLETION_SYSTEM_COMMANDS_LOAD_FAILED', {
+	        error: error instanceof Error ? error.message : String(error),
+	      })
+	      // Use minimal fallback commands from utils if system scan fails
+	      setSystemCommands(getMinimalFallbackCommands())
+	    } finally {
+	      setIsLoadingCommands(false)
+	    }
   }, [systemCommands.length, isLoadingCommands])
 
   // Load commands on first use
@@ -206,12 +211,15 @@ export function useUnifiedCompletion({
       })
 
       setModelSuggestions(suggestions)
-    } catch (error) {
-      console.warn('[useUnifiedCompletion] Failed to load models:', error)
-      // No fallback - rely on dynamic loading only
-      setModelSuggestions([])
-    }
-  }, [])
+	    } catch (error) {
+	      logError(error)
+	      debugLogger.warn('UNIFIED_COMPLETION_MODELS_LOAD_FAILED', {
+	        error: error instanceof Error ? error.message : String(error),
+	      })
+	      // No fallback - rely on dynamic loading only
+	      setModelSuggestions([])
+	    }
+	  }, [])
 
   // Load agent suggestions on mount
   useEffect(() => {
@@ -295,12 +303,15 @@ export function useUnifiedCompletion({
         // Agents loaded successfully
         setAgentSuggestions(suggestions)
       })
-      .catch(error => {
-        console.warn('[useUnifiedCompletion] Failed to load agents:', error)
-        // No fallback - rely on dynamic loading only
-        setAgentSuggestions([])
-      })
-  }, [])
+	      .catch(error => {
+	        logError(error)
+	        debugLogger.warn('UNIFIED_COMPLETION_AGENTS_LOAD_FAILED', {
+	          error: error instanceof Error ? error.message : String(error),
+	        })
+	        // No fallback - rely on dynamic loading only
+	        setAgentSuggestions([])
+	      })
+	  }, [])
 
   const generateSuggestions = useCallback(
     (context: CompletionContext): UnifiedSuggestion[] =>

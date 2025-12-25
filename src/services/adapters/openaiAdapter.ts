@@ -8,6 +8,8 @@ import {
 import { ModelProfile } from '@utils/config'
 import { Tool, getToolDescription } from '@tool'
 import { zodToJsonSchema } from 'zod-to-json-schema'
+import { debug as debugLogger } from '@utils/debugLogger'
+import { logError } from '@utils/log'
 
 // Re-export normalizeTokens and StreamingEvent for subclasses
 export { normalizeTokens, type StreamingEvent }
@@ -112,7 +114,10 @@ export abstract class OpenAIAdapter extends ModelAPIAdapter {
         }
       }
     } catch (error) {
-      console.error('Error reading streaming response:', error)
+      logError(error)
+      debugLogger.warn('OPENAI_ADAPTER_STREAM_READ_ERROR', {
+        error: error instanceof Error ? error.message : String(error),
+      })
       yield {
         type: 'error',
         error: error instanceof Error ? error.message : String(error),
@@ -151,7 +156,10 @@ export abstract class OpenAIAdapter extends ModelAPIAdapter {
         try {
           return JSON.parse(data)
         } catch (error) {
-          console.error('Error parsing SSE chunk:', error)
+          logError(error)
+          debugLogger.warn('OPENAI_ADAPTER_SSE_PARSE_ERROR', {
+            error: error instanceof Error ? error.message : String(error),
+          })
           return null
         }
       }

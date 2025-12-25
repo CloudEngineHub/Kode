@@ -176,7 +176,6 @@ Question: What are the most effective React optimization techniques for handling
         }
       }
     } catch (error) {
-      console.error('Model validation error in AskExpertModelTool:', error)
       logError(error)
       return {
         result: false,
@@ -323,7 +322,6 @@ ${output.expertAnswer}`
           const session = createExpertChatSession(expertModel)
           sessionId = session.sessionId
         } catch (error) {
-          console.error('Failed to create new expert chat session:', error)
           logError(error)
           throw new Error('Failed to create new chat session')
         }
@@ -337,17 +335,12 @@ ${output.expertAnswer}`
             sessionId = newSession.sessionId
           }
         } catch (error) {
-          console.error('Failed to load expert chat session:', error)
           logError(error)
           // Fallback: create new session
           try {
             const newSession = createExpertChatSession(expertModel)
             sessionId = newSession.sessionId
           } catch (createError) {
-            console.error(
-              'Failed to create fallback expert chat session:',
-              createError,
-            )
             logError(createError)
             throw new Error('Unable to create or load chat session')
           }
@@ -364,7 +357,6 @@ ${output.expertAnswer}`
       try {
         historyMessages = getSessionMessages(sessionId)
       } catch (error) {
-        console.error('Failed to load session messages:', error)
         logError(error)
         historyMessages = [] // Fallback to empty history
       }
@@ -379,7 +371,6 @@ ${output.expertAnswer}`
             : createAssistantMessage(msg.content),
         )
       } catch (error) {
-        console.error('Failed to create system messages:', error)
         logError(error)
         throw new Error('Failed to prepare conversation messages')
       }
@@ -443,7 +434,6 @@ ${output.expertAnswer}`
           timeoutPromise,
         ])
       } catch (error: any) {
-        console.error('Expert model query failed:', error)
         logError(error)
 
         // Check for specific error types
@@ -526,7 +516,6 @@ ${output.expertAnswer}`
           throw new Error('Expert response was empty')
         }
       } catch (error) {
-        console.error('Failed to extract expert answer:', error)
         logError(error)
         throw new Error('Failed to process expert response')
       }
@@ -536,7 +525,6 @@ ${output.expertAnswer}`
         addMessageToSession(sessionId, 'user', question)
         addMessageToSession(sessionId, 'assistant', expertAnswer)
       } catch (error) {
-        console.error('Failed to save conversation to session:', error)
         logError(error)
         // Don't throw here - we got a valid response, saving is non-critical
       }
@@ -562,7 +550,6 @@ ${output.expertAnswer}`
         return yield* this.handleInterrupt()
       }
 
-      console.error('AskExpertModelTool execution failed:', error)
       logError(error)
 
       // Ensure we have a valid sessionId for error response

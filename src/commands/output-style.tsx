@@ -1,5 +1,6 @@
 import React, { useMemo, useRef } from 'react'
 import { Box, Text, useInput } from 'ink'
+import chalk from 'chalk'
 import type { Command } from '@commands'
 import { Select } from '@components/CustomSelect/select'
 import { getTheme } from '@utils/theme'
@@ -37,7 +38,7 @@ function OutputStyleMenu({
   }, [styles])
 
   const rawCurrentStyle = getCurrentOutputStyle()
-  const currentStyle =
+  const resolvedCurrentStyle =
     resolveOutputStyleName(rawCurrentStyle) ?? DEFAULT_OUTPUT_STYLE
 
   const finish = (msg?: string) => {
@@ -48,7 +49,7 @@ function OutputStyleMenu({
 
   useInput((_input, key) => {
     if (key.escape) {
-      finish(`Kept output style as ${currentStyle}`)
+      finish(`Kept output style as ${chalk.bold(rawCurrentStyle)}`)
     }
   })
 
@@ -62,16 +63,16 @@ function OutputStyleMenu({
         borderColor={theme.secondary}
       >
         <Text bold>Output style</Text>
-        <Text dimColor>Current: {currentStyle}</Text>
+        <Text dimColor>Current: {resolvedCurrentStyle}</Text>
         <Text>Choose a style:</Text>
         <Select
           options={styleNames.map(name => ({ label: name, value: name }))}
-          defaultValue={currentStyle}
+          defaultValue={resolvedCurrentStyle}
           visibleOptionCount={Math.min(10, Math.max(5, styleNames.length))}
           onChange={value => {
             const next = normalizeStyleName(value)
             setCurrentOutputStyle(next)
-            finish(`Set output style to ${next}`)
+            finish(`Set output style to ${chalk.bold(next)}`)
           }}
         />
       </Box>
@@ -88,6 +89,7 @@ const outputStyle = {
   description: 'Set the output style directly or from a selection menu',
   isEnabled: true,
   isHidden: false,
+  argumentHint: '[style]',
   userFacingName() {
     return 'output-style'
   },
@@ -95,8 +97,8 @@ const outputStyle = {
     const raw = (args ?? '').trim()
 
     if (CURRENT_ARGS.has(raw)) {
-      const current = resolveOutputStyleName(getCurrentOutputStyle())
-      onDone(`Current output style: ${current ?? DEFAULT_OUTPUT_STYLE}`)
+      const current = getCurrentOutputStyle()
+      onDone(`Current output style: ${current}`)
       return null
     }
 
@@ -114,7 +116,7 @@ const outputStyle = {
         return null
       }
       setCurrentOutputStyle(resolved)
-      onDone(`Set output style to ${resolved}`)
+      onDone(`Set output style to ${chalk.bold(resolved)}`)
       return null
     }
 

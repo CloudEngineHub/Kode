@@ -1,4 +1,6 @@
 import { getTodos, TodoItem } from '@utils/todoStorage'
+import { debug as debugLogger } from '@utils/debugLogger'
+import { logError } from '@utils/log'
 
 export interface ReminderMessage {
   role: 'system'
@@ -417,7 +419,11 @@ class SystemReminderService {
       try {
         callback(context)
       } catch (error) {
-        console.error(`Error in event listener for ${event}:`, error)
+        logError(error)
+        debugLogger.warn('SYSTEM_REMINDER_LISTENER_ERROR', {
+          event,
+          error: error instanceof Error ? error.message : String(error),
+        })
       }
     })
   }

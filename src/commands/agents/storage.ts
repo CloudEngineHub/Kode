@@ -10,13 +10,15 @@ import { homedir } from 'os'
 
 import { getCwd } from '@utils/state'
 import type { AgentConfig } from '@utils/agentLoader'
+import { debug as debugLogger } from '@utils/debugLogger'
+import { logError } from '@utils/log'
 
 import { generateAgentFileContent } from './generation'
 
 export type AgentLocation = 'user' | 'project'
 
-const PRIMARY_FOLDER = '.kode'
-const LEGACY_FOLDER = '.claude'
+const PRIMARY_FOLDER = '.claude'
+const LEGACY_FOLDER = '.kode'
 const AGENTS_DIR = 'agents'
 
 export function getAgentDirectory(location: AgentLocation): string {
@@ -121,7 +123,10 @@ export async function saveAgent(
         unlinkSync(tempFile)
       }
     } catch (cleanupError) {
-      console.warn('Failed to cleanup temp file:', cleanupError)
+      logError(cleanupError)
+      debugLogger.warn('AGENT_STORAGE_TEMP_CLEANUP_FAILED', {
+        error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+      })
     }
     throw error
   }

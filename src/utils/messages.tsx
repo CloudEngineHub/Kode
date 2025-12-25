@@ -355,7 +355,7 @@ export async function processUserInput(
         await processMentions(processedInput)
       }
     } catch (error) {
-      console.warn('Dynamic content processing failed:', error)
+      logError(error)
       // Continue with original input if processing fails
     }
   }

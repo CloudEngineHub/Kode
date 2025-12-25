@@ -1,4 +1,5 @@
 import { fetchCustomModels } from '@services/openai'
+import { debug as debugLogger } from '@utils/debugLogger'
 
 import type { ModelInfo } from './types'
 
@@ -107,10 +108,10 @@ async function fetchAnthropicCompatibleModelsWithFallback({
     }))
   } catch (error) {
     lastError = error as Error
-    console.log(
-      `Native API failed for ${provider}, trying OpenAI format:`,
-      error,
-    )
+    debugLogger.warn('MODEL_FETCH_NATIVE_API_FAILED', {
+      provider,
+      error: error instanceof Error ? error.message : String(error),
+    })
   }
 
   // 第二层：尝试使用 OpenAI 风格的 API
@@ -127,7 +128,10 @@ async function fetchAnthropicCompatibleModelsWithFallback({
     }))
   } catch (error) {
     lastError = error as Error
-    console.log(`OpenAI API failed for ${provider}, trying fallback:`, error)
+    debugLogger.warn('MODEL_FETCH_OPENAI_API_FAILED', {
+      provider,
+      error: error instanceof Error ? error.message : String(error),
+    })
   }
 
   // 第三层：降级到手动输入模式
