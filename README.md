@@ -20,6 +20,8 @@
 
 **2025-08-29**: We've added Windows support! All Windows users can now run Kode using Git Bash, Unix subsystems, or WSL (Windows Subsystem for Linux) on their computers.
 
+**2025-12-30**: Windows now works out of the box with native cmd.exe support. Git Bash and WSL are optional but recommended for the best experience.
+
 
 ## 🤝 AGENTS.md Standard Support
 
@@ -100,14 +102,14 @@ After installation, you can use any of these commands:
 
 ### Windows Notes
 
-- Install Git for Windows to provide a Bash (Unix‑like) environment: https://git-scm.com/download/win
-  - Kode automatically prefers Git Bash/MSYS or WSL Bash when available.
-  - If neither is available, it will fall back to your default shell, but many features work best with Bash.
-- Use VS Code’s integrated terminal rather than legacy Command Prompt (cmd):
+- **Git Bash is optional**: Kode now works natively with Windows cmd.exe and PowerShell.
+  - Kode automatically prefers Git Bash/MSYS or WSL Bash when available for better Unix compatibility.
+  - If neither is available, it uses cmd.exe which works out of the box.
+- For best experience, consider using VS Code's integrated terminal:
   - Better font rendering and icon support.
-  - Fewer path and encoding quirks compared to cmd.
-  - Select “Git Bash” as the VS Code terminal shell when possible.
-- Optional: If you install globally via npm, avoid spaces in the global prefix path to prevent shim issues.
+  - Fewer path and encoding quirks compared to legacy Command Prompt.
+- Optional: Install Git for Windows for enhanced Unix-like functionality: https://git-scm.com/download/win
+- If you install globally via npm, avoid spaces in the global prefix path to prevent shim issues.
   - Example: `npm config set prefix "C:\\npm"` and reinstall global packages.
 
 ## Usage
