@@ -1,6 +1,6 @@
 import { getGlobalConfig } from '@utils/config'
 
-export const AUTO_COMPACT_THRESHOLD_RATIO = 0.92
+export const AUTO_COMPACT_THRESHOLD_RATIO = 0.9
 
 export function isValidAutoCompactThresholdRatio(
   value: unknown,
