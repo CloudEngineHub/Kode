@@ -141,6 +141,7 @@ Kode 同时使用 `~/.kode` 目录（存放额外数据，如内存文件）和 
 - `/config` - 打开配置面板
 - `/cost` - 显示 token 使用量和成本
 - `/clear` - 清除对话历史
+- `/compact-threshold` - 查看或设置自动压缩阈值比例（如 `/compact-threshold 0.85` 或 `/compact-threshold 85%`）
 - `/init` - 初始化项目上下文
 
 ## 多模型智能协同
