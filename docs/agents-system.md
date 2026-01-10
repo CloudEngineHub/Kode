@@ -5,6 +5,7 @@ Kode supports subagents (agent templates): Markdown files with YAML frontmatter 
 Agents can be stored under `.kode/agents` (Kode-native) or `.claude/agents` (compatibility layout). Kode loads both.
 
 This powers:
+
 - `@run-agent-<agentType> ...` (mention system)
 - The `Task` tool (`subagent_type: "<agentType>"`)
 - The `/agents` interactive manager
@@ -19,6 +20,7 @@ kode
 ```
 
 Default write location (interactive `/agents`):
+
 - Project: `./.claude/agents/<agentType>.md`
 - User: `~/.claude/agents/<agentType>.md`
 
@@ -31,14 +33,15 @@ Create `./.kode/agents/api-designer.md` (or `./.claude/agents/...` if you prefer
 ```md
 ---
 name: api-designer
-description: "Design APIs with clear contracts and robust error handling"
-tools: ["Read", "Edit", "Grep", "Glob"]
+description: 'Design APIs with clear contracts and robust error handling'
+tools: ['Read', 'Edit', 'Grep', 'Glob']
 model: inherit
 permissionMode: plan
-forkContext: "false"
+forkContext: 'false'
 ---
 
 You are an API design specialist. Focus on:
+
 - clear interfaces and types
 - compatibility, migrations, and versioning
 - concrete, actionable output
@@ -55,10 +58,12 @@ Then use it:
 Agents are Markdown files with YAML frontmatter + a prompt body.
 
 Required:
+
 - `name`: agent type (used as `subagent_type`)
 - `description`: “when to use this agent” (supports `\\n` for line breaks)
 
 Common optional fields:
+
 - `tools`: `*` for all tools, or an allowlist (array or string). Supports tool specs like `Bash(git:*)`.
 - `disallowedTools`: denylist applied after `tools` (also accepts `disallowed-tools` / `disallowed_tools`).
 - `model` / `model_name`:
@@ -72,12 +77,14 @@ Common optional fields:
 - `forkContext`: must be the **string** `"true"` or `"false"` (quoted). When `"true"`, the agent runs with a forked snapshot of the main-thread context and `model` is forced to `inherit`.
 
 Model mapping notes (aliases → pointers):
+
 - `inherit` keeps the parent model at runtime
 - `opus` maps to the `main` pointer
 - `sonnet` maps to the `task` pointer
 - `haiku` maps to the `quick` pointer (set `quick` = `task` if you want haiku+sonnet to behave the same)
 
 Notes:
+
 - In subagent context, orchestration tools are removed regardless of configuration (e.g. `Task`, `TaskOutput`, `KillShell`, `EnterPlanMode`, `ExitPlanMode`, `AskUserQuestion`).
 
 ## Loading & Priority Order
@@ -104,6 +111,7 @@ kode --agents '{"reviewer":{"description":"Review code","prompt":"Be strict.","t
 ### `--setting-sources <sources>`
 
 Control which settings sources are loaded (comma-separated):
+
 - `user` → user agents/styles
 - `project` → project agents/styles
 - `local` → local settings (e.g. output style selection)
@@ -146,6 +154,7 @@ kode models list --json
 ## Future Enhancements
 
 Planned improvements:
+
 - Agent templates and inheritance
 - Performance metrics per agent
 - Agent composition (agents using other agents)

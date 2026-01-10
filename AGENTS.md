@@ -31,8 +31,8 @@ bun run format:check
 
 ### Build System Details
 - **Primary Build Tool**: Bun (required for development)
-- **Distribution**: Smart CLI wrapper (`cli.js`) that prefers Bun but falls back to Node.js with tsx loader
-- **Entry Point**: `src/entrypoints/cli.tsx`
+- **Distribution**: Smart CLI wrapper (`cli.js`) that prefers cached native binary, then falls back to Node.js (`dist/index.js`)
+- **Entry Points**: `apps/kode/src/index.ts` (dispatch) + `apps/kode/src/entrypoints/cli.tsx` (TUI)
 - **Build Output**: `cli.js` (executable wrapper) and `.npmrc` (npm configuration)
 
 ### Publishing
@@ -48,17 +48,17 @@ SKIP_BUNDLED_CHECK=true npm publish
 ### Core System Design
 Kode implements a **three-layer parallel architecture** refined for fast iteration across terminal workflows while remaining compatible with the `.claude` agent ecosystem:
 
-1. **User Interaction Layer** (`src/screens/REPL.tsx`)
+1. **User Interaction Layer** (`ui/ink/src/screens/REPL.tsx`)
    - Interactive terminal interface using Ink (React for CLI)
    - Command parsing and user input handling
    - Real-time UI updates and syntax highlighting
 
-2. **Orchestration Layer** (`src/tools/TaskTool/`)
+2. **Orchestration Layer** (`packages/tools-builtin/src/tools/ai/TaskTool/`)
    - Dynamic agent system for task delegation
    - Multi-model collaboration and switching
    - Context management and conversation continuity
 
-3. **Tool Execution Layer** (`src/tools/`)
+3. **Tool Execution Layer** (`packages/tools-builtin/src/tools/`)
    - Specialized tools for different capabilities (File I/O, Bash, Grep, etc.)
    - Permission system for secure tool access
    - MCP (Model Context Protocol) integration
@@ -66,12 +66,12 @@ Kode implements a **three-layer parallel architecture** refined for fast iterati
 ### Multi-Model Architecture
 **Key Innovation**: Unlike single-model systems, Kode supports unlimited AI models with intelligent collaboration:
 
-- **ModelManager** (`src/utils/model.ts`): Unified model configuration and switching
+- **ModelManager** (`packages/core/src/utils/model.ts`): Unified model configuration and switching
 - **Model Profiles**: Each model has independent API endpoints, authentication, and capabilities
 - **Model Pointers**: Default models for different purposes (main, task, reasoning, quick)
 - **Dynamic Switching**: Runtime model changes without session restart
 
-### Agent System (`src/utils/agentLoader.ts`)
+### Agent System (`packages/core/src/utils/agentLoader.ts`)
 **Dynamic Agent Configuration Loading** with 5-tier priority system:
 1. Built-in (code-embedded)
 2. `~/.claude/agents/` (`.claude` user directory compatibility)
@@ -92,19 +92,19 @@ System prompt content here...
 ```
 
 ### Tool Architecture
-Each tool follows a consistent pattern in `src/tools/[ToolName]/`:
-- `[ToolName].tsx`: Main tool implementation with React UI
+Each tool follows a consistent pattern in `packages/tools-builtin/src/tools/<domain>/<ToolName>/`:
+- `[ToolName].tsx`: Main tool implementation (UI presenters live under `ui/ink`)
 - `prompt.ts`: Tool-specific system prompts
 - Tool schema using Zod for validation
 - Permission-aware execution
 
 ### Service Layer
-- **LLM Service** (`src/services/llm.ts`): Main LLM integration (Anthropic/OpenAI-compatible)
-- **OpenAI Service** (`src/services/openai.ts`): OpenAI-compatible models
-- **Model Adapter Factory** (`src/services/modelAdapterFactory.ts`): Unified model interface
-- **MCP Client** (`src/services/mcpClient.ts`): Model Context Protocol for tool extensions
+- **LLM Service** (`packages/core/src/services/llm.ts`): Main LLM integration (Anthropic/OpenAI-compatible)
+- **OpenAI Service** (`packages/core/src/services/openai.ts`): OpenAI-compatible models
+- **Model Adapter Factory** (`packages/core/src/services/modelAdapterFactory.ts`): Unified model interface
+- **MCP Client** (`packages/core/src/services/mcpClient.ts`): Model Context Protocol for tool extensions
 
-### Configuration System (`src/utils/config.ts`)
+### Configuration System (`packages/config/src/index.ts`)
 **Hierarchical Configuration** supporting:
 - Global config (`~/.kode.json`)
 - Project config (`./.kode.json`)
@@ -113,11 +113,11 @@ Each tool follows a consistent pattern in `src/tools/[ToolName]/`:
 - Multi-model profile management
 
 ### Context Management
-- **Message Context Manager** (`src/utils/messageContextManager.ts`): Intelligent context window handling
-- **Memory Tools** (`src/tools/MemoryReadTool/`, `src/tools/MemoryWriteTool/`): Persistent memory across sessions
-- **Project Context** (`src/context.ts`): Codebase understanding and file relationships
+- **Project Context** (`packages/core/src/context/`): Codebase understanding and file relationships
+- **Session protocol** (`packages/core/src/utils/protocol/`): stream-json session persistence helpers
+- **Tool presenters** (`ui/ink/src/toolPresenters/`): TUI rendering for tool results
 
-### Permission System (`src/permissions.ts`)
+### Permission System (`packages/core/src/permissions/`)
 **Security-First Tool Access**:
 - Granular permission requests for each tool use
 - User approval required for file modifications and command execution
@@ -151,7 +151,7 @@ const description = typeof tool.description === 'function'
 ### Error Handling Strategy
 - **Graceful Degradation**: System continues with built-in agents if loading fails
 - **User-Friendly Errors**: Clear error messages with suggested fixes
-- **Debug Logging**: Comprehensive logging system (`src/utils/debugLogger.ts`)
+- **Debug Logging**: Comprehensive logging system (`packages/core/src/utils/debugLogger.ts`)
 
 ### TypeScript Integration
 - **Strict Types**: Full TypeScript coverage with strict mode
@@ -161,23 +161,23 @@ const description = typeof tool.description === 'function'
 ## Key Files for Understanding the System
 
 ### Core Entry Points
-- `src/entrypoints/cli.tsx`: Main CLI application entry
-- `src/screens/REPL.tsx`: Interactive terminal interface
+- `apps/kode/src/index.ts`: Unified dispatch entry (help-lite/version early return)
+- `apps/kode/src/entrypoints/cli.tsx`: Main CLI application entry (Ink TUI)
+- `ui/ink/src/screens/REPL.tsx`: Interactive terminal interface
 
 ### Tool System
-- `src/tools.ts`: Tool registry and exports
-- `src/Tool.ts`: Base tool interface definition
-- `src/tools/TaskTool/TaskTool.tsx`: Agent orchestration tool
+- `packages/tools-builtin/src/registry.ts`: Tool registry and exports
+- `packages/core/src/tooling/Tool.ts`: Base tool interface definition
+- `packages/tools-builtin/src/tools/ai/TaskTool/TaskTool.tsx`: Agent orchestration tool
 
 ### Configuration & Model Management
-- `src/utils/config.ts`: Configuration management
-- `src/utils/model.ts`: Model manager and switching logic
-- `src/utils/agentLoader.ts`: Dynamic agent configuration loading
+- `packages/config/src/index.ts`: Configuration management
+- `packages/core/src/utils/model.ts`: Model manager and switching logic
+- `packages/core/src/utils/agentLoader.ts`: Dynamic agent configuration loading
 
 ### Services & Integrations
-- `src/services/llm.ts`: Main AI service integration
-- `src/services/mcpClient.ts`: MCP tool integration
-- `src/utils/messageContextManager.ts`: Context window management
+- `packages/core/src/services/llm.ts`: Main AI service integration
+- `packages/core/src/services/mcpClient.ts`: MCP tool integration
 
 ## Debugging & Forensics (Bash Tool / LLM Gate / Session Storage)
 
@@ -223,22 +223,22 @@ This is the canonical artifact to diagnose “model responded with analysis/mark
 ## Development Patterns
 
 ### Adding New Tools
-1. Create directory in `src/tools/[ToolName]/`
+1. Create directory in `packages/tools-builtin/src/tools/<domain>/<ToolName>/`
 2. Implement `[ToolName].tsx` following existing patterns
 3. Add `prompt.ts` for tool-specific prompts
-4. Register in `src/tools.ts`
+4. Register in `packages/tools-builtin/src/registry.ts`
 5. Update tool permissions in agent configurations
 
 ### Adding New Commands
-1. Create command file in `src/commands/[command].tsx`
+1. Create command file in `packages/core/src/commands/[command].tsx`
 2. Implement command logic with Ink UI components
-3. Register in `src/commands.ts`
+3. Register in `packages/core/src/commands.ts`
 4. Add command to help system
 
 ### Model Integration
-1. Add model profile to `src/constants/models.ts`
-2. Implement adapter if needed in `src/services/adapters/`
-3. Update model capabilities in `src/constants/modelCapabilities.ts`
+1. Add model profile to `packages/core/src/constants/models.ts`
+2. Implement adapter if needed in `packages/core/src/services/ai/adapters/`
+3. Update model capabilities in `packages/core/src/constants/modelCapabilities.ts`
 4. Test with existing tool suite
 
 ### Agent Development

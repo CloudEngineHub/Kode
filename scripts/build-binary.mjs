@@ -45,7 +45,7 @@ async function main() {
     '--format=esm',
     '--outfile',
     outFile,
-    'src/index.ts',
+    'apps/cli/src/dispatch.ts',
   ])
 
   console.log('✅ Binary build completed')

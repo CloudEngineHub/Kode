@@ -9,8 +9,12 @@ function run(cmd, options = {}) {
     ...options,
   })
   if (proc.exitCode !== 0) {
-    const stderr = (proc.stderr ? Buffer.from(proc.stderr).toString('utf8') : '').trim()
-    throw new Error(stderr || `Command failed (${proc.exitCode}): ${cmd.join(' ')}`)
+    const stderr = (
+      proc.stderr ? Buffer.from(proc.stderr).toString('utf8') : ''
+    ).trim()
+    throw new Error(
+      stderr || `Command failed (${proc.exitCode}): ${cmd.join(' ')}`,
+    )
   }
   return (proc.stdout ? Buffer.from(proc.stdout).toString('utf8') : '').trim()
 }
@@ -32,4 +36,3 @@ function main() {
 }
 
 main()
-

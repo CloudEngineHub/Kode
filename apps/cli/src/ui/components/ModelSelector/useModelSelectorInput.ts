@@ -1,0 +1,264 @@
+import { useKeypress } from '#ui-ink/hooks/useKeypress'
+import {
+  CONTEXT_LENGTH_OPTIONS,
+  DEFAULT_CONTEXT_LENGTH,
+} from '#ui-ink/ui/components/model-selector/options'
+import type { ModelSelectorScreen } from '#ui-ink/ui/components/model-selector/state'
+import type { ConnectionTestResult } from '#ui-ink/ui/components/model-selector/actions/connectionTest'
+import type { ProviderType } from '#core/utils/config'
+import { logError } from '#core/utils/log'
+
+type Option = { value: string; label: string }
+
+export function useModelSelectorInput(args: {
+  currentScreen: ModelSelectorScreen
+  mainMenuOptions: Option[]
+  providerFocusIndex: number
+  setProviderFocusIndex: (value: number | ((prev: number) => number)) => void
+  partnerProviderOptions: Option[]
+  partnerProviderFocusIndex: number
+  setPartnerProviderFocusIndex: (
+    value: number | ((prev: number) => number),
+  ) => void
+  codingPlanOptions: Option[]
+  codingPlanFocusIndex: number
+  setCodingPlanFocusIndex: (value: number | ((prev: number) => number)) => void
+
+  selectedProvider: ProviderType
+  apiKey: string
+  resourceName: string
+  providerBaseUrl: string
+  customBaseUrl: string
+  customModelName: string
+
+  contextLength: number
+  setContextLength: (value: number) => void
+
+  isTestingConnection: boolean
+  connectionTestResult: ConnectionTestResult | null
+
+  activeFieldIndex: number
+  setActiveFieldIndex: (value: number | ((prev: number) => number)) => void
+
+  handleProviderSelection: (provider: string) => void
+  handleApiKeySubmit: (key: string) => void | Promise<void>
+  fetchModelsWithRetry: () => Promise<unknown>
+  navigateTo: (screen: ModelSelectorScreen) => void
+  handleResourceNameSubmit: (name: string) => void
+  handleCustomBaseUrlSubmit: (url: string) => void
+  handleProviderBaseUrlSubmit: (url: string) => void
+  handleCustomModelSubmit: (model: string) => void
+  handleConfirmation: () => Promise<void>
+  setValidationError: (value: string | null) => void
+  handleConnectionTest: () => void
+  handleContextLengthSubmit: () => void
+  setModelLoadError: (value: string | null) => void
+  getFormFieldsForModelParams: () => Array<{ name: string; component: string }>
+  handleModelParamsSubmit: () => void
+}) {
+  useKeypress((input, key) => {
+    if (args.currentScreen === 'provider') {
+      if (key.upArrow) {
+        args.setProviderFocusIndex(prev =>
+          args.mainMenuOptions.length === 0
+            ? 0
+            : (prev - 1 + args.mainMenuOptions.length) %
+              args.mainMenuOptions.length,
+        )
+        return true
+      }
+      if (key.downArrow) {
+        args.setProviderFocusIndex(prev =>
+          args.mainMenuOptions.length === 0
+            ? 0
+            : (prev + 1) % args.mainMenuOptions.length,
+        )
+        return true
+      }
+      if (key.return) {
+        const opt = args.mainMenuOptions[args.providerFocusIndex]
+        if (opt) {
+          args.handleProviderSelection(opt.value)
+        }
+        return true
+      }
+    }
+
+    if (args.currentScreen === 'partnerProviders') {
+      if (key.upArrow) {
+        args.setPartnerProviderFocusIndex(prev =>
+          args.partnerProviderOptions.length === 0
+            ? 0
+            : (prev - 1 + args.partnerProviderOptions.length) %
+              args.partnerProviderOptions.length,
+        )
+        return true
+      }
+      if (key.downArrow) {
+        args.setPartnerProviderFocusIndex(prev =>
+          args.partnerProviderOptions.length === 0
+            ? 0
+            : (prev + 1) % args.partnerProviderOptions.length,
+        )
+        return true
+      }
+      if (key.return) {
+        const opt = args.partnerProviderOptions[args.partnerProviderFocusIndex]
+        if (opt) {
+          args.handleProviderSelection(opt.value)
+        }
+        return true
+      }
+    }
+
+    if (args.currentScreen === 'partnerCodingPlans') {
+      if (key.upArrow) {
+        args.setCodingPlanFocusIndex(prev =>
+          args.codingPlanOptions.length === 0
+            ? 0
+            : (prev - 1 + args.codingPlanOptions.length) %
+              args.codingPlanOptions.length,
+        )
+        return true
+      }
+      if (key.downArrow) {
+        args.setCodingPlanFocusIndex(prev =>
+          args.codingPlanOptions.length === 0
+            ? 0
+            : (prev + 1) % args.codingPlanOptions.length,
+        )
+        return true
+      }
+      if (key.return) {
+        const opt = args.codingPlanOptions[args.codingPlanFocusIndex]
+        if (opt) {
+          args.handleProviderSelection(opt.value)
+        }
+        return true
+      }
+    }
+
+    if (args.currentScreen === 'apiKey' && key.tab) {
+      if (
+        args.selectedProvider === 'anthropic' ||
+        args.selectedProvider === 'kimi' ||
+        args.selectedProvider === 'deepseek' ||
+        args.selectedProvider === 'qwen' ||
+        args.selectedProvider === 'glm' ||
+        args.selectedProvider === 'glm-coding' ||
+        args.selectedProvider === 'minimax' ||
+        args.selectedProvider === 'minimax-coding' ||
+        args.selectedProvider === 'baidu-qianfan' ||
+        args.selectedProvider === 'siliconflow' ||
+        args.selectedProvider === 'custom-openai'
+      ) {
+        args.navigateTo('modelInput')
+        return true
+      }
+
+      void args.fetchModelsWithRetry().catch(error => {
+        logError(error)
+      })
+      return true
+    }
+
+    if (args.currentScreen === 'confirmation' && key.return) {
+      void args.handleConfirmation().catch(error => {
+        logError(error)
+        args.setValidationError(
+          error instanceof Error ? error.message : 'Unexpected error occurred',
+        )
+      })
+      return true
+    }
+
+    if (args.currentScreen === 'connectionTest') {
+      if (key.return) {
+        if (!args.isTestingConnection && !args.connectionTestResult) {
+          args.handleConnectionTest()
+        } else if (
+          args.connectionTestResult &&
+          args.connectionTestResult.success
+        ) {
+          args.navigateTo('confirmation')
+        } else if (
+          args.connectionTestResult &&
+          !args.connectionTestResult.success
+        ) {
+          args.handleConnectionTest()
+        }
+        return true
+      }
+    }
+
+    if (args.currentScreen === 'contextLength') {
+      if (key.return) {
+        args.handleContextLengthSubmit()
+        return true
+      }
+
+      if (key.upArrow) {
+        const currentIndex = CONTEXT_LENGTH_OPTIONS.findIndex(
+          opt => opt.value === args.contextLength,
+        )
+        const newIndex =
+          currentIndex > 0
+            ? currentIndex - 1
+            : currentIndex === -1
+              ? CONTEXT_LENGTH_OPTIONS.findIndex(
+                  opt => opt.value === DEFAULT_CONTEXT_LENGTH,
+                ) || 0
+              : CONTEXT_LENGTH_OPTIONS.length - 1
+        args.setContextLength(CONTEXT_LENGTH_OPTIONS[newIndex].value)
+        return true
+      }
+
+      if (key.downArrow) {
+        const currentIndex = CONTEXT_LENGTH_OPTIONS.findIndex(
+          opt => opt.value === args.contextLength,
+        )
+        const newIndex =
+          currentIndex === -1
+            ? CONTEXT_LENGTH_OPTIONS.findIndex(
+                opt => opt.value === DEFAULT_CONTEXT_LENGTH,
+              ) || 0
+            : (currentIndex + 1) % CONTEXT_LENGTH_OPTIONS.length
+        args.setContextLength(CONTEXT_LENGTH_OPTIONS[newIndex].value)
+        return true
+      }
+    }
+
+    if (
+      args.currentScreen === 'apiKey' &&
+      ((key.ctrl && input === 'v') || (key.meta && input === 'v'))
+    ) {
+      args.setModelLoadError(
+        "Please use your terminal's paste functionality or type the API key manually",
+      )
+      return true
+    }
+
+    if (args.currentScreen === 'modelParams' && key.tab) {
+      const formFields = args.getFormFieldsForModelParams()
+      args.setActiveFieldIndex(current => (current + 1) % formFields.length)
+      return true
+    }
+
+    if (args.currentScreen === 'modelParams' && key.return) {
+      const formFields = args.getFormFieldsForModelParams()
+      const currentField = formFields[args.activeFieldIndex]
+
+      if (
+        currentField?.name === 'submit' ||
+        args.activeFieldIndex === formFields.length - 1
+      ) {
+        args.handleModelParamsSubmit()
+      } else if (currentField?.component === 'select') {
+        args.setActiveFieldIndex(current =>
+          Math.min(current + 1, formFields.length - 1),
+        )
+      }
+      return true
+    }
+  })
+}

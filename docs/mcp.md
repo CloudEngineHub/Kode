@@ -54,7 +54,11 @@ Kode 支持通过 MCP（Model Context Protocol）接入外部工具服务器，�
 也兼容 `.mcprc` 包一层 `mcpServers`：
 
 ```json
-{ "mcpServers": { "my-http": { "type": "http", "url": "http://127.0.0.1:3333/mcp" } } }
+{
+  "mcpServers": {
+    "my-http": { "type": "http", "url": "http://127.0.0.1:3333/mcp" }
+  }
+}
 ```
 
 ## 3) 审批与排障

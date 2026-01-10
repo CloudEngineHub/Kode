@@ -18,7 +18,7 @@
 
 ## 📢 Update Log
 
-**2025-12-22**: Native-first distribution (Windows OOTB). Kode will prefer a cached native binary and fall back to Bun when needed. See `docs/binary-distribution.md`.
+**2025-12-22**: Native-first distribution (Windows OOTB). Kode prefers a cached native binary and falls back to the Node.js runtime when needed. See `docs/binary-distribution.md`.
 
 
 ## 🤝 AGENTS.md Standard Support
@@ -109,6 +109,11 @@ Our state-of-the-art completion system provides unparalleled coding assistance:
 npm install -g @shareai-lab/kode
 ```
 
+> **🇨🇳 For users in China**: If you encounter network issues, use a mirror registry:
+> ```bash
+> npm install -g @shareai-lab/kode --registry=https://registry.npmmirror.com
+> ```
+
 Dev channel (latest features):
 
 ```bash
@@ -124,7 +129,7 @@ After installation, you can use any of these commands:
 
 - No WSL/Git Bash required.
 - On `postinstall`, Kode will best-effort download a native binary from GitHub Releases into `${KODE_BIN_DIR:-~/.kode/bin}/<version>/<platform>-<arch>/kode(.exe)`.
-- The wrapper (`cli.js`) prefers the native binary and falls back to Bun (`bun dist/index.js`) when needed.
+- The wrapper (`cli.js`) prefers the native binary and falls back to the Node.js runtime (`node dist/index.js`) when needed.
 
 Overrides:
 - Mirror downloads: `KODE_BINARY_BASE_URL`
@@ -200,8 +205,8 @@ Kode supports a powerful @ mention system for intelligent completions:
 #### 📁 Smart File References
 ```bash
 # Reference files and directories with auto-completion
-@src/components/Button.tsx
-@docs/api-reference.md
+@packages/core/src/query/index.ts
+@docs/README.md
 @.env.example
 ```
 
@@ -251,7 +256,7 @@ Example `.mcprc`:
 ### Troubleshooting
 
 - Models: use `/model`, or `kode models import kode-models.yaml`, and ensure required API key env vars exist.
-- Windows: if the native binary download is blocked/offline, set `KODE_BINARY_BASE_URL` (mirror) or install Bun for fallback.
+- Windows: if the native binary download is blocked/offline, set `KODE_BINARY_BASE_URL` (mirror) or `KODE_SKIP_BINARY_DOWNLOAD=1` (skip download); the wrapper will fall back to the Node.js runtime (`dist/index.js`).
 - MCP: use `kode mcp list` to check server status; tune `MCP_CONNECTION_TIMEOUT_MS`, `MCP_SERVER_CONNECTION_BATCH_SIZE`, and `MCP_TOOL_TIMEOUT` if servers are slow.
 - Sandbox: install `bwrap` (bubblewrap) on Linux, or set `KODE_SYSTEM_SANDBOX=0` to disable.
 

@@ -23,18 +23,14 @@
 
 ```
 .
-├── src/                    # Source code
-│   ├── entrypoints/       # CLI and MCP entry points
-│   ├── commands/          # Command implementations
-│   ├── components/        # React/Ink UI components
-│   ├── tools/            # AI tool implementations
-│   ├── services/         # Core services
-│   ├── hooks/            # React hooks
-│   └── utils/            # Utilities
-├── scripts/              # Build and utility scripts
-├── docs/                 # Documentation
-├── test/                 # Test files
-└── cli.js               # Generated CLI wrapper
+├── apps/                  # Entrypoints (build to dist/)
+├── packages/              # Internal workspace modules (core/protocol/tools/hosts/daemon/config/runtime)
+├── ui/                    # Presentation layer (Ink TUI + WebUI)
+├── scripts/               # Build and utility scripts
+├── docs/                  # Documentation
+├── new_plan/              # vNext architecture plan
+├── examples/              # Integration examples / PoCs
+└── cli.js                 # Generated CLI wrapper (built)
 ```
 
 ## Building
@@ -43,7 +39,7 @@
 bun run build
 ```
 
-This runs `scripts/build.ts` which creates:
+This runs `scripts/build.mjs` which creates:
 - `cli.js` - Smart runtime wrapper
 - `.npmrc` - NPM configuration
 
@@ -62,8 +58,8 @@ bun test
 
 - Run `bun run format` before committing
 - TypeScript/TSX for all source files
-- No Chinese in code or comments
-- Follow existing patterns
+- Prefer English for code identifiers and comments (bilingual docs are OK)
+- Follow existing patterns and keep changes focused
 
 ## Git Hooks & CI Gating
 

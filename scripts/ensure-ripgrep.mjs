@@ -17,12 +17,42 @@ const vendorRoot = join(process.cwd(), 'vendor', 'ripgrep')
 const cacheRoot = join(process.cwd(), '.tmp', 'ripgrep-downloads')
 
 const targets = [
-  { id: 'arm64-darwin', assetSuffix: 'aarch64-apple-darwin', archiveExt: 'tar.gz', exe: 'rg' },
-  { id: 'x64-darwin', assetSuffix: 'x86_64-apple-darwin', archiveExt: 'tar.gz', exe: 'rg' },
-  { id: 'arm64-linux', assetSuffix: 'aarch64-unknown-linux-gnu', archiveExt: 'tar.gz', exe: 'rg' },
-  { id: 'x64-linux', assetSuffix: 'x86_64-unknown-linux-musl', archiveExt: 'tar.gz', exe: 'rg' },
-  { id: 'arm64-win32', assetSuffix: 'aarch64-pc-windows-msvc', archiveExt: 'zip', exe: 'rg.exe' },
-  { id: 'x64-win32', assetSuffix: 'x86_64-pc-windows-msvc', archiveExt: 'zip', exe: 'rg.exe' },
+  {
+    id: 'arm64-darwin',
+    assetSuffix: 'aarch64-apple-darwin',
+    archiveExt: 'tar.gz',
+    exe: 'rg',
+  },
+  {
+    id: 'x64-darwin',
+    assetSuffix: 'x86_64-apple-darwin',
+    archiveExt: 'tar.gz',
+    exe: 'rg',
+  },
+  {
+    id: 'arm64-linux',
+    assetSuffix: 'aarch64-unknown-linux-gnu',
+    archiveExt: 'tar.gz',
+    exe: 'rg',
+  },
+  {
+    id: 'x64-linux',
+    assetSuffix: 'x86_64-unknown-linux-musl',
+    archiveExt: 'tar.gz',
+    exe: 'rg',
+  },
+  {
+    id: 'arm64-win32',
+    assetSuffix: 'aarch64-pc-windows-msvc',
+    archiveExt: 'zip',
+    exe: 'rg.exe',
+  },
+  {
+    id: 'x64-win32',
+    assetSuffix: 'x86_64-pc-windows-msvc',
+    archiveExt: 'zip',
+    exe: 'rg.exe',
+  },
 ]
 
 function sha256(data) {
@@ -51,7 +81,9 @@ async function downloadAndVerify(url, destPath) {
   const buf = await download(url, destPath)
   const shaUrl = url + '.sha256'
   try {
-    const shaText = await (await fetch(shaUrl, { headers: { 'User-Agent': 'kode-cli' } })).text()
+    const shaText = await (
+      await fetch(shaUrl, { headers: { 'User-Agent': 'kode-cli' } })
+    ).text()
     const expected = shaText.match(/\b[a-f0-9]{64}\b/i)?.[0]
     const actual = sha256(buf)
     if (expected && expected !== actual) {
@@ -116,14 +148,32 @@ async function ensureTarget(target) {
   mkdirSync(extractRoot, { recursive: true })
 
   if (target.archiveExt === 'tar.gz') {
-    run('tar', ['-xzf', archivePath, '-C', extractRoot, `${folder}/${target.exe}`])
+    run('tar', [
+      '-xzf',
+      archivePath,
+      '-C',
+      extractRoot,
+      `${folder}/${target.exe}`,
+    ])
   } else {
     // zip (prefer unzip, fall back to bsdtar-compatible tar)
     const unzip = Bun.which('unzip')
     if (unzip) {
-      run(unzip, ['-o', archivePath, `${folder}/${target.exe}`, '-d', extractRoot])
+      run(unzip, [
+        '-o',
+        archivePath,
+        `${folder}/${target.exe}`,
+        '-d',
+        extractRoot,
+      ])
     } else {
-      run('tar', ['-xf', archivePath, '-C', extractRoot, `${folder}/${target.exe}`])
+      run('tar', [
+        '-xf',
+        archivePath,
+        '-C',
+        extractRoot,
+        `${folder}/${target.exe}`,
+      ])
     }
   }
 
@@ -143,11 +193,17 @@ async function main() {
     process.env.KODE_RIPGREP_CURRENT_ONLY === '1'
 
   const wanted = currentOnly
-    ? targets.filter(t => t.id === `${process.arch}-${process.platform}` || (process.platform === 'win32' && t.id === `${process.arch}-win32`))
+    ? targets.filter(
+        t =>
+          t.id === `${process.arch}-${process.platform}` ||
+          (process.platform === 'win32' && t.id === `${process.arch}-win32`),
+      )
     : targets
 
   if (wanted.length === 0) {
-    throw new Error(`No ripgrep target mapping for ${process.arch}-${process.platform}`)
+    throw new Error(
+      `No ripgrep target mapping for ${process.arch}-${process.platform}`,
+    )
   }
 
   const results = []
@@ -162,6 +218,9 @@ async function main() {
 }
 
 main().catch(err => {
-  console.error('❌ ensure-ripgrep failed:', err instanceof Error ? err.message : String(err))
+  console.error(
+    '❌ ensure-ripgrep failed:',
+    err instanceof Error ? err.message : String(err),
+  )
   process.exit(1)
 })

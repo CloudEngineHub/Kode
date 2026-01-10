@@ -23,12 +23,7 @@ function parseStartupLine(line) {
 }
 
 async function runOnce({ timeoutMs }) {
-  const cmd = [
-    process.execPath,
-    'run',
-    './src/entrypoints/cli.tsx',
-    '--verbose',
-  ]
+  const cmd = [process.execPath, 'run', './apps/cli/src/index.ts', '--verbose']
 
   const child = Bun.spawn(cmd, {
     env: {
@@ -101,6 +96,9 @@ for (let i = 0; i < runs; i++) {
 }
 
 process.stdout.write('\n')
-process.stdout.write(`avg first_render: ${mean(results.map(r => r.firstRenderMs)) ?? 'NA'}ms\n`)
-process.stdout.write(`avg prompt_ready: ${mean(results.map(r => r.promptReadyMs)) ?? 'NA'}ms\n`)
-
+process.stdout.write(
+  `avg first_render: ${mean(results.map(r => r.firstRenderMs)) ?? 'NA'}ms\n`,
+)
+process.stdout.write(
+  `avg prompt_ready: ${mean(results.map(r => r.promptReadyMs)) ?? 'NA'}ms\n`,
+)

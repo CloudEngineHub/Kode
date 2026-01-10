@@ -7,31 +7,40 @@ Kode 实现了全面的安全模型，在可用性和安全性之间取得平衡
 ## 安全原则
 
 ### 1. 最小权限原则
+
 操作被授予最小必要权限。工具只请求它们需要的特定权限。
 
 ### 2. 明确的用户同意
+
 潜在危险的操作需要明确的用户批准，并清楚地解释风险。
 
 ### 3. 纵深防御
+
 多个安全层确保单一故障不会危及系统。
 
 ### 4. 透明度
+
 所有操作都被记录并可审计。用户可以看到 AI 正在做什么。
 
 ### 5. 安全默认值
+
 系统默认为更安全的选项，更宽松的模式需要明确选择加入。
 
 ## 安全模式
 
 ### 宽松模式（默认）
+
 平衡安全性和可用性：
+
 - 自动批准安全的读取操作
 - 提示文件写入和系统命令
 - 为会话缓存批准
 - 适用于受信任的环境
 
 ### 安全模式（--safe 标志）
+
 对敏感环境的最大安全性：
+
 - 所有操作都需要批准
 - 无自动批准
 - 无缓存权限
@@ -81,6 +90,7 @@ kode --safe -p "更新生产配置"
 ### 1. 文件系统权限
 
 #### 读取权限
+
 - 自动授予项目目录
 - 限制系统目录
 - 隐藏文件需要明确权限
@@ -95,6 +105,7 @@ interface FileReadPermission {
 ```
 
 #### 写入权限
+
 - 始终需要明确批准
 - 路径验证以防止遍历
 - 为现有文件创建备份
@@ -110,20 +121,22 @@ interface FileWritePermission {
 ### 2. 命令执行权限
 
 #### 命令批准模式
+
 命令与批准模式匹配：
 
 ```json
 {
   "allowedCommands": [
-    "git *",           // 所有 git 命令
-    "npm test",        // 特定命令
-    "bun run *",       // 模式匹配
-    "echo *"           // 安全命令
+    "git *", // 所有 git 命令
+    "npm test", // 特定命令
+    "bun run *", // 模式匹配
+    "echo *" // 安全命令
   ]
 }
 ```
 
 #### 受限命令
+
 永不允许，即使有权限：
 
 ```typescript
@@ -133,18 +146,20 @@ const RESTRICTED_COMMANDS = [
   'fdisk',
   'dd',
   'mkfs',
-  ':(){:|:&};:',  // Fork 炸弹
+  ':(){:|:&};:', // Fork 炸弹
 ]
 ```
 
 ### 3. 网络权限
 
 #### API 访问
+
 - API 密钥安全存储
 - 强制执行速率限制
 - 用于审计的请求日志
 
 #### 网页获取
+
 - URL 验证
 - 带限制的重定向跟随
 - 内容大小限制
@@ -152,6 +167,7 @@ const RESTRICTED_COMMANDS = [
 ### 4. MCP 服务器权限
 
 #### 服务器批准
+
 - 项目范围的服务器批准
 - 基于功能的权限
 - 运行时沙箱
@@ -173,18 +189,18 @@ interface MCPServerPermission {
 function validatePath(requestedPath: string, allowedBase: string): boolean {
   const resolved = path.resolve(requestedPath)
   const base = path.resolve(allowedBase)
-  
+
   // 防止在允许的目录外遍历
   if (!resolved.startsWith(base)) {
     throw new SecurityError('检测到路径遍历')
   }
-  
+
   // 检查符号链接
   const realPath = fs.realpathSync(resolved)
   if (!realPath.startsWith(base)) {
     throw new SecurityError('检测到符号链接逃逸')
   }
-  
+
   return true
 }
 ```
@@ -198,7 +214,7 @@ function sanitizeCommand(command: string): string {
   if (dangerous.test(command)) {
     throw new SecurityError('检测到危险的命令字符')
   }
-  
+
   // 使用数组执行以防止注入
   const [cmd, ...args] = shellQuote.parse(command)
   return { cmd, args }
@@ -209,11 +225,11 @@ function sanitizeCommand(command: string): string {
 
 ```typescript
 interface ResourceLimits {
-  maxFileSize: number      // 默认 10MB
-  maxOutputSize: number    // 默认 1MB
+  maxFileSize: number // 默认 10MB
+  maxOutputSize: number // 默认 1MB
   maxExecutionTime: number // 默认 2 分钟
   maxConcurrentOps: number // 默认 10
-  maxMemoryUsage: number   // 默认 500MB
+  maxMemoryUsage: number // 默认 500MB
 }
 ```
 
@@ -233,7 +249,7 @@ interface AuditLog {
 function logSecurityEvent(event: AuditLog) {
   // 写入安全审计日志
   appendToAuditLog(event)
-  
+
   // 检测可疑模式时发出警报
   if (detectSuspiciousPattern(event)) {
     alertSecurity(event)
@@ -325,12 +341,7 @@ interface PermissionRequest {
     "maxFileSize": 10485760,
     "maxExecutionTime": 120000,
     "auditLogging": true,
-    "restrictedPaths": [
-      "/etc",
-      "/sys",
-      "/proc",
-      "~/.ssh"
-    ]
+    "restrictedPaths": ["/etc", "/sys", "/proc", "~/.ssh"]
   }
 }
 ```
@@ -340,23 +351,10 @@ interface PermissionRequest {
 ```json
 {
   "security": {
-    "allowedCommands": [
-      "git *",
-      "npm test",
-      "npm run build"
-    ],
-    "allowedPaths": [
-      "./src",
-      "./tests",
-      "./docs"
-    ],
-    "deniedTools": [
-      "bash"
-    ],
-    "requireApproval": [
-      "file_write",
-      "file_delete"
-    ]
+    "allowedCommands": ["git *", "npm test", "npm run build"],
+    "allowedPaths": ["./src", "./tests", "./docs"],
+    "deniedTools": ["bash"],
+    "requireApproval": ["file_write", "file_delete"]
   }
 }
 ```
@@ -366,35 +364,38 @@ interface PermissionRequest {
 ### 安全事件响应
 
 1. **立即行动**
+
    ```bash
    # 终止所有 Kode 进程
    pkill -f kode
-   
+
    # 撤销 API 密钥
    kode config remove -g apiKey
-   
+
    # 全局启用安全模式
    kode config set -g security.mode safe
    ```
 
 2. **调查**
+
    ```bash
    # 检查修改的文件
    git status
    git diff
-   
+
    # 审查权限授予
    kode security permissions list
    ```
 
 3. **恢复**
+
    ```bash
    # 重置权限
    kode security reset
-   
+
    # 从备份恢复
    git restore .
-   
+
    # 更新安全设置
    kode config set security.mode safe
    ```
@@ -417,7 +418,7 @@ function monitorSecurity() {
   if (metrics.deniedOperations > threshold) {
     alert('拒绝操作数量过多')
   }
-  
+
   // 模式检测
   if (detectAttackPattern(auditLog)) {
     alert('检测到潜在的安全威胁')

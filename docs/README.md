@@ -21,6 +21,7 @@ This directory contains user and developer documentation for Kode.
 - Security model: `docs/develop/security-model.md`
 - Testing: `docs/develop/testing.md`
 - Releasing: `docs/develop/releasing.md`
+- SDK & integrations: `docs/sdk/README.md`
 - Deep dives: `docs/develop/modules/`
 
 ## Reference / Notes
@@ -32,6 +33,10 @@ This directory contains user and developer documentation for Kode.
 - Custom commands: `docs/custom-commands.md`
 - Publish notes: `docs/PUBLISH.md`
 - Project structure: `docs/PROJECT_STRUCTURE.md`
+
+## Archive
+
+- Historical/internal notes (may contain legacy paths): `docs/_archive/`
 
 ## 中文文档（Develop）
 

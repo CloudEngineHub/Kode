@@ -1,0 +1,12 @@
+{
+  "name": "@kode/core",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "dependencies": {
+    "@kode/config": "workspace:*",
+    "@kode/protocol": "workspace:*",
+    "@kode/runtime": "workspace:*",
+    "@kode/tools": "workspace:*"
+  }
+}

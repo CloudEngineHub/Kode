@@ -1,8 +1,9 @@
 # Output Styles
 
-Output styles let you switch the assistant’s *system prompt behavior* (tone/structure/extra instructions) without changing your project.
+Output styles let you switch the assistant’s _system prompt behavior_ (tone/structure/extra instructions) without changing your project.
 
 Kode implements `/output-style`, including:
+
 - built-in styles (`default`, `Explanatory`, `Learning`)
 - custom Markdown style files discovered from user/project/plugin/policy locations
 - plugin namespacing (`<plugin>:<style>`)
@@ -36,6 +37,7 @@ Help:
 ```
 
 Notes:
+
 - Style names are matched case-insensitively.
 - Output styles are injected **only for the main thread** (subagents do not receive output styles).
 
@@ -48,9 +50,11 @@ Notes:
 ## Where the selection is stored
 
 The selected output style is stored per-project in:
+
 - `./.kode/settings.local.json` → `{ "outputStyle": "..." }`
 
 Legacy compatibility:
+
 - If `./.claude/settings.local.json` exists, Kode can read/migrate from it.
 
 If you run with `--setting-sources` that excludes `local`, Kode ignores the saved selection for that session and behaves as `default`.
@@ -63,9 +67,9 @@ Custom styles are Markdown files. The body is appended to the system prompt when
 
 ```md
 ---
-name: MyStyle            # optional; defaults to filename
-description: "When to use this style"  # optional; defaults to first heading/line
-keep-coding-instructions: "true"       # optional; MUST be the string "true"/"false"
+name: MyStyle # optional; defaults to filename
+description: 'When to use this style' # optional; defaults to first heading/line
+keep-coding-instructions: 'true' # optional; MUST be the string "true"/"false"
 ---
 
 Write any system-prompt instructions here...

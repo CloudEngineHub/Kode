@@ -50,24 +50,13 @@ function run(cmd, args) {
   process.exit(typeof result.status === 'number' ? result.status : 1)
 }
 
-function canRunBun() {
-  try {
-    const ret = spawnSync('bun', ['--version'], { stdio: 'ignore' })
-    return !ret.error && ret.status === 0
-  } catch {
-    return false
-  }
-}
-
 function main() {
   const packageRoot = findPackageRoot(__dirname)
   const pkg = readPackageJson(packageRoot)
   const version = pkg?.version || ''
-  const { getCachedBinaryPath } = require(path.join(
-    packageRoot,
-    'scripts',
-    'binary-utils.cjs',
-  ))
+  const { getCachedBinaryPath } = require(
+    path.join(packageRoot, 'scripts', 'binary-utils.cjs'),
+  )
 
   if (hasFlag('--help-lite')) {
     printHelpLite()
@@ -87,10 +76,10 @@ function main() {
     }
   }
 
-  // 2) Fallback: Bun JS runtime (preserve current behavior)
+  // 2) Fallback: Node.js runtime (no Bun required)
   const distEntry = path.join(packageRoot, 'dist', 'index.js')
-  if (fs.existsSync(distEntry) && canRunBun()) {
-    run('bun', [distEntry, ...process.argv.slice(2)])
+  if (fs.existsSync(distEntry)) {
+    run(process.execPath, [distEntry, ...process.argv.slice(2)])
   }
 
   // 3) Final fallback: explain what to do
@@ -100,11 +89,11 @@ function main() {
       '',
       'Tried:',
       '- Native binary (postinstall download)',
-      '- Bun runtime fallback',
+      '- Node.js runtime fallback',
       '',
       'Fix:',
       '- Reinstall (ensure network access), or set KODE_BINARY_BASE_URL to a mirror',
-      '- Or install Bun: https://bun.sh',
+      '- Or run from source: bun run apps/cli/src/dispatch.ts',
       '',
     ].join('\n'),
   )

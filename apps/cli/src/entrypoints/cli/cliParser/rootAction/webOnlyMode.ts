@@ -1,0 +1,78 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+import { randomUUID } from 'node:crypto'
+
+function getKodeConfigDir(): string {
+  const envDir = process.env.KODE_CONFIG_DIR ?? process.env.CLAUDE_CONFIG_DIR
+  if (envDir && envDir.trim()) return envDir.trim()
+  return join(homedir(), '.kode')
+}
+
+function getOrCreateWebToken(): string {
+  const configDir = getKodeConfigDir()
+  const tokenFile = join(configDir, 'web-token')
+
+  if (existsSync(tokenFile)) {
+    try {
+      const token = readFileSync(tokenFile, 'utf-8').trim()
+      if (token && token.length >= 8) return token
+    } catch {}
+  }
+
+  const newToken = randomUUID().replace(/-/g, '').slice(0, 9)
+  try {
+    mkdirSync(configDir, { recursive: true })
+    writeFileSync(tokenFile, newToken, 'utf-8')
+  } catch {}
+
+  return newToken
+}
+
+export async function runWebOnlyMode(args: {
+  cwd: string
+  webHost?: string
+  webPort?: string
+}): Promise<void> {
+  const { startKodeDaemon } = await import('#daemon/server')
+
+  const host =
+    typeof args.webHost === 'string' && args.webHost.trim()
+      ? args.webHost.trim()
+      : undefined
+
+  const port = (() => {
+    const raw = typeof args.webPort === 'string' ? args.webPort.trim() : ''
+    if (!raw) return 0
+    const n = Number(raw)
+    return Number.isFinite(n) && n >= 0 ? n : 0
+  })()
+
+  const token = getOrCreateWebToken()
+
+  const daemon = await startKodeDaemon({
+    host,
+    port,
+    token,
+    cwd: args.cwd,
+  })
+
+  const link = `\x1b]8;;${daemon.url}\x07${daemon.url}\x1b]8;;\x07`
+
+  console.log('')
+  console.log('Kode Web Server')
+  console.log('')
+  console.log(`  ${link}`)
+  console.log('')
+  console.log('Press Ctrl+C to stop')
+  console.log('')
+
+  await new Promise<void>(resolve => {
+    const cleanup = () => {
+      daemon.stop()
+      resolve()
+    }
+    process.on('SIGINT', cleanup)
+    process.on('SIGTERM', cleanup)
+  })
+}

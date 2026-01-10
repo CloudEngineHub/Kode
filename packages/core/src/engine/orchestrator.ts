@@ -1,0 +1,51 @@
+import type { CanUseToolFn } from '#core/permissions/canUseTool'
+import { getCwd } from '#core/utils/state'
+import { appendSessionJsonlFromMessage } from '#protocol/utils/kodeAgentSessionLog'
+
+import type {
+  AssistantMessage,
+  BinaryFeedbackResult,
+  Message,
+  ExtendedToolUseContext,
+} from './message-pipeline'
+import { messagePipeline } from './message-pipeline'
+
+/**
+ * Core query orchestrator.
+ *
+ * Streams `Message` objects (user/assistant/progress) for a single user turn, including tool use.
+ */
+export async function* query(
+  messages: Message[],
+  systemPrompt: string[],
+  context: { [k: string]: string },
+  canUseTool: CanUseToolFn,
+  toolUseContext: ExtendedToolUseContext,
+  getBinaryFeedbackResponse?: (
+    m1: AssistantMessage,
+    m2: AssistantMessage,
+  ) => Promise<BinaryFeedbackResult>,
+): AsyncGenerator<Message, void> {
+  const shouldPersistSession =
+    toolUseContext.options?.persistSession !== false &&
+    process.env.NODE_ENV !== 'test'
+  const cwd = shouldPersistSession ? getCwd() : null
+
+  for await (const message of messagePipeline(
+    messages,
+    systemPrompt,
+    context,
+    canUseTool,
+    toolUseContext,
+    getBinaryFeedbackResponse,
+  )) {
+    if (shouldPersistSession) {
+      appendSessionJsonlFromMessage({
+        cwd: cwd ?? getCwd(),
+        message,
+        toolUseContext,
+      })
+    }
+    yield message
+  }
+}

@@ -1,0 +1,19 @@
+export type { ConnectedClient, FailedClient, WrappedClient } from './types'
+
+export type { ScopedMcpServerConfig } from './config'
+export {
+  addMcpServer,
+  ensureConfigScope,
+  getMcprcServerStatus,
+  getMcpServer,
+  listMCPServers,
+  listPluginMCPServers,
+  parseEnvVars,
+  parseMcpServersFromCliConfigEntries,
+  removeMcpServer,
+} from './config'
+
+export { getClients, getClientsForCliMcpConfig } from './clients'
+
+export { getMCPTools } from './tools'
+export { getMCPCommands, runCommand } from './commands'

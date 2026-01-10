@@ -22,11 +22,13 @@ Kode 项目提供了两套发包流程，专注于npm发布，不涉及git操作
 ## 🚀 快速使用
 
 ### 开发版本发布 (测试用)
+
 ```bash
 npm run publish:dev
 ```
 
 ### 正式版本发布
+
 ```bash
 npm run publish:release
 ```
@@ -34,6 +36,7 @@ npm run publish:release
 ## 📦 发包策略
 
 ### 1. 开发版本 (`dev` tag)
+
 - **目的**: 内部测试和预发布验证
 - **版本格式**: `2.0.0-dev.1`, `2.0.0-dev.2`
 - **安装方式**: `npm install -g @shareai-lab/kode@dev`
@@ -44,6 +47,7 @@ npm run publish:release
   - 临时修改package.json，发布后自动恢复
 
 ### 2. 正式版本 (`latest` tag)
+
 - **目的**: 面向最终用户的稳定版本
 - **版本格式**: `2.0.0`, `2.0.1`, `2.1.0`
 - **安装方式**: `npm install -g @shareai-lab/kode` (默认)
@@ -58,6 +62,7 @@ npm run publish:release
 ### 开发版本发布 (`scripts/publish-dev.js`)
 
 **自动化流程**:
+
 1. 🔢 读取当前基础版本
 2. 📊 查询npm上现有的dev版本，自动递增
 3. 📝 临时更新package.json版本号
@@ -67,11 +72,13 @@ npm run publish:release
 7. 🔄 恢复package.json到原始版本
 
 **使用场景**:
+
 - 功能开发完成，需要内部测试
 - PR验证前的最终测试
 - 快速修复验证
 
 **安全特性**:
+
 - 临时修改package.json，发布后自动恢复
 - 失败时自动回滚
 - 不会改变本地版本状态
@@ -79,6 +86,7 @@ npm run publish:release
 ### 正式版本发布 (`scripts/publish-release.js`)
 
 **交互式流程**:
+
 1. 📦 显示当前版本
 2. 🔢 选择版本升级类型:
    - **patch** (2.0.0 → 2.0.1): 修复 bug
@@ -95,6 +103,7 @@ npm run publish:release
 10. 💡 提示后续git操作建议
 
 **安全特性**:
+
 - 交互式确认，避免误发布
 - 检查版本冲突
 - 测试失败时自动回滚版本号
@@ -103,6 +112,7 @@ npm run publish:release
 ## 🎯 最佳实践
 
 ### 开发流程建议
+
 ```bash
 # 1. 开发功能
 # ... 开发代码 ...
@@ -123,11 +133,13 @@ git push origin vx.x.x
 ```
 
 ### 版本号管理
+
 - **开发版**: 基于当前正式版本自动递增 (2.0.0-dev.1 → 2.0.0-dev.2)
 - **正式版**: 遵循 [语义化版本](https://semver.org/lang/zh-CN/) 规范
 - **版本检查**: 自动检查npm上是否已存在相同版本
 
 ### 标签管理
+
 ```bash
 # 查看所有版本
 npm view @shareai-lab/kode versions --json
@@ -135,7 +147,7 @@ npm view @shareai-lab/kode versions --json
 # 查看 dev 版本
 npm view @shareai-lab/kode@dev version
 
-# 查看最新正式版本  
+# 查看最新正式版本
 npm view @shareai-lab/kode@latest version
 ```
 
@@ -144,22 +156,27 @@ npm view @shareai-lab/kode@latest version
 ### 常见问题
 
 **发布失败怎么办？**
+
 - 开发版本：脚本会自动回滚package.json
 - 正式版本：检查错误信息，修复后重新运行
 
 **版本号冲突？**
+
 - 开发版本会自动递增，不会冲突
 - 正式版本发布前会检查是否已存在
 
 **权限问题？**
+
 - 确保已登录npm: `npm whoami`
 - 确保有包的发布权限: `npm owner ls @shareai-lab/kode`
 
 **测试失败？**
+
 - 正式版本发布会自动回滚版本号
 - 修复测试问题后重新运行
 
 ### 手动操作
+
 ```bash
 # 查看当前登录用户
 npm whoami
@@ -194,12 +211,14 @@ kode --version
 虽然发包脚本不包含git操作，但建议的git工作流程：
 
 **开发版本发布后**:
+
 ```bash
 # 开发版本不需要git操作，package.json已自动恢复
 # 继续开发即可
 ```
 
 **正式版本发布后**:
+
 ```bash
 # package.json已更新版本号，建议提交
 git add package.json
@@ -212,8 +231,9 @@ git push origin --tags
 ---
 
 通过这套纯npm发包系统，你可以：
+
 - 🚀 快速发布开发版本进行内部测试
-- 🛡️ 安全发布正式版本给最终用户  
+- 🛡️ 安全发布正式版本给最终用户
 - 📈 保持清晰的版本管理
 - ⚡ 专注于包发布，git操作完全可控
 - 🔄 灵活的版本回滚和恢复机制

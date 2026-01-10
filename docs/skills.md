@@ -1,6 +1,7 @@
 # Skills & Plugins
 
 Kode supports:
+
 - **Agent Skills** (directories containing `SKILL.md`)
 - **Marketplace compatibility** (`.kode-plugin/marketplace.json`, legacy `.claude-plugin/marketplace.json`)
 - **Plugin packs** installed via `kode plugin install ...`
@@ -75,10 +76,12 @@ Step-by-step instructions here…
 ```
 
 Rules:
+
 - `name` must match the parent directory name
 - Lowercase letters, numbers, and hyphens only (`a-z0-9-`), 1–64 chars
 
 Compatibility:
+
 - Kode also discovers `.claude/skills` and `.claude/commands` for legacy compatibility.
 
 ## Distribute skills
@@ -116,6 +119,7 @@ For full plugins (beyond simple skill packs), place:
 ```
 
 Key rules (per upstream spec):
+
 - `name` must be kebab-case and unique
 - All component paths must be relative and start with `./`
 - No `../` segments; forward slashes only

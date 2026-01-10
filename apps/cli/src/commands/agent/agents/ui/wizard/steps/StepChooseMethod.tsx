@@ -1,0 +1,35 @@
+import React from 'react'
+import { Box } from 'ink'
+import { Select } from '#ui-ink/components/CustomSelect/select'
+import { useKeypress } from '#ui-ink/hooks/useKeypress'
+import { WizardPanel, type WizardContextValue } from '../Wizard'
+import type { WizardMethod } from '../types'
+
+export function StepChooseMethod({ ctx }: { ctx: WizardContextValue }) {
+  useKeypress((_input, key) => {
+    if (key.escape) ctx.goBack()
+  })
+
+  return (
+    <WizardPanel subtitle="Creation method">
+      <Box marginTop={1}>
+        <Select
+          options={[
+            { label: 'Generate with Claude (recommended)', value: 'generate' },
+            { label: 'Manual configuration', value: 'manual' },
+          ]}
+          onChange={value => {
+            const method: WizardMethod =
+              value === 'manual' ? 'manual' : 'generate'
+            ctx.updateWizardData({
+              method,
+              wasGenerated: method === 'generate',
+            })
+            if (method === 'generate') ctx.goNext()
+            else ctx.goToStep(3)
+          }}
+        />
+      </Box>
+    </WizardPanel>
+  )
+}

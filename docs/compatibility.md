@@ -33,9 +33,11 @@ Note: the interactive `/agents` UI creates new agent files under `.claude/agents
 ## Environment Variables (Compatibility)
 
 Kode’s preferred variables:
+
 - `KODE_CONFIG_DIR`
 
 Legacy variables (supported as fallbacks):
+
 - `CLAUDE_CONFIG_DIR`
 - Hook/plugin variables such as `CLAUDE_PLUGIN_ROOT`, `CLAUDE_PROJECT_DIR`, `CLAUDE_ENV_FILE` (used for compatibility with existing plugin/hook scripts).
 
@@ -45,3 +47,14 @@ Some historical `CLAUDE_CODE_*` toggles may still be recognized as fallbacks whe
 
 - List configured model profiles/pointers: `kode models list`
 - Validate agent templates: `kode agents validate`
+
+## Claude Model Provider Compatibility (Request Profiles)
+
+Some Claude model gateways/proxies enforce a specific **client fingerprint** (headers/UA/system prompt/tools) and may reject third‑party clients even when the API key is valid.
+
+Kode stays **Kode-first** by default and only uses these compatibility profiles:
+
+- when the provider returns a clear “restricted client” signal for a Claude model, or
+- when you explicitly choose a request strategy during model setup.
+
+See `docs/claude-model-compatibility.md` for details.

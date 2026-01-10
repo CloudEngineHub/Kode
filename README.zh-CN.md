@@ -19,7 +19,7 @@
 
 ## 📢 更新日志
 
-**2025-12-22**：原生优先分发（Windows 开箱即用）。Kode 会优先使用缓存的原生二进制文件，并在需要时回退到 Bun。详见 `docs/binary-distribution.md`。
+**2025-12-22**：原生优先分发（Windows 开箱即用）。Kode 会优先使用缓存的原生二进制文件，并在需要时回退到 Node.js 运行时。详见 `docs/binary-distribution.md`。
 
 ## 🤝 AGENTS.md 标准支持
 
@@ -69,6 +69,11 @@ Kode 是一个强大的 AI 助手，运行在你的终端中。它能理解你�
 npm install -g @shareai-lab/kode
 ```
 
+> **🇨🇳 中国用户提示**：如遇到网络问题，建议使用国内镜像源安装：
+> ```bash
+> npm install -g @shareai-lab/kode --registry=https://registry.npmmirror.com
+> ```
+
 开发版（最新特性）：
 
 ```bash
@@ -84,7 +89,7 @@ npm install -g @shareai-lab/kode@dev
 
 - 无需 WSL / Git Bash。
 - `postinstall` 会尽力从 GitHub Releases 下载原生二进制文件到 `${KODE_BIN_DIR:-~/.kode/bin}/<version>/<platform>-<arch>/kode(.exe)`。
-- 入口包装器（`cli.js`）会优先使用原生二进制，并在需要时回退到 Bun（`bun dist/index.js`）。
+- 入口包装器（`cli.js`）会优先使用原生二进制，并在需要时回退到 Node.js 运行时（`node dist/index.js`）。
 
 可选覆盖：
 - 镜像下载源：`KODE_BINARY_BASE_URL`
@@ -352,7 +357,7 @@ kode mcp remove <name>
 ## 常见排障
 
 - 模型：用 `/model`，或 `kode models import kode-models.yaml` 导入团队共享模型配置；确认所需 API Key 环境变量已设置。
-- Windows：若原生二进制下载失败/被阻断，可设置 `KODE_BINARY_BASE_URL`（镜像）或安装 Bun 以启用回退方案。
+- Windows：若原生二进制下载失败/被阻断，可设置 `KODE_BINARY_BASE_URL`（镜像）或 `KODE_SKIP_BINARY_DOWNLOAD=1`（禁用下载）；包装器会回退到 Node.js 运行时（`dist/index.js`）。
 - MCP：用 `kode mcp list` 查看状态；若服务较慢可调 `MCP_CONNECTION_TIMEOUT_MS`、`MCP_SERVER_CONNECTION_BATCH_SIZE`、`MCP_TOOL_TIMEOUT`。
 - Sandbox：Linux 安装 `bwrap`（bubblewrap），或设置 `KODE_SYSTEM_SANDBOX=0` 关闭。
 

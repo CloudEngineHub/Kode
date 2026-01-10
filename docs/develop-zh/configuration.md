@@ -2,8 +2,8 @@
 
 Kode 使用两层互补的配置体系：
 
-1) **全局配置**（全局生效）：模型 profiles / 模型指针、主题、统计等  
-2) **settings 文件**（用户/项目/本地）：`.kode/settings.json`、`.kode/settings.local.json` 等（并兼容读取 legacy 的 `.claude`）
+1. **全局配置**（全局生效）：模型 profiles / 模型指针、主题、统计等
+2. **settings 文件**（用户/项目/本地）：`.kode/settings.json`、`.kode/settings.local.json` 等（并兼容读取 legacy 的 `.claude`）
 
 本文重点说明文件位置与**模型配置**的正确方式。
 
@@ -15,6 +15,7 @@ Kode 使用两层互补的配置体系：
 - 如果设置了 `KODE_CONFIG_DIR`（或 `CLAUDE_CONFIG_DIR`）：`<KODE_CONFIG_DIR>/config.json`
 
 Kode 还会使用一个数据目录存放日志/任务/记忆等：
+
 - 默认：`~/.kode/`
 - 如果设置了 `KODE_CONFIG_DIR`（或 `CLAUDE_CONFIG_DIR`）：`<KODE_CONFIG_DIR>/`
 
@@ -30,6 +31,7 @@ Kode 还会使用一个数据目录存放日志/任务/记忆等：
 ### Model Profiles + Model Pointers（存储在全局配置里）
 
 模型配置在全局配置中：
+
 - `modelProfiles`：模型配置数组（provider / endpoint / key / 上下文等）
 - `modelPointers`：默认指针 `main / task / compact / quick`
 
@@ -50,11 +52,17 @@ Kode 还会使用一个数据目录存放日志/任务/记忆等：
       "createdAt": 1710000000000
     }
   ],
-  "modelPointers": { "main": "o3", "task": "o3", "compact": "o3", "quick": "o3" }
+  "modelPointers": {
+    "main": "o3",
+    "task": "o3",
+    "compact": "o3",
+    "quick": "o3"
+  }
 }
 ```
 
 推荐的配置方式：
+
 - 交互 UI：`/model`
 - 团队可共享 YAML：`kode models export` / `kode models import`
 - 查看当前配置（profiles/pointers）：`kode models list`
@@ -72,6 +80,7 @@ kode models import --replace kode-models.yaml
 ### Model selector（`model:` 字段应该怎么写）
 
 在 Kode 的各类 `model:` 字段里（agents、Task tool 覆盖等），通常可以用：
+
 - 指针：`main | task | compact | quick`
 - Profile 名称：`OpenAI Main`
 - ModelName：`o3`、`gpt-4o`、`qwen2.5-coder-32b-instruct`
@@ -128,6 +137,7 @@ LOG_LEVEL=debug
 ### 优先级规则
 
 环境变量覆盖配置文件（Anthropic 密钥除外）：
+
 1. 检查环境变量
 2. 检查项目配置
 3. 检查全局配置
@@ -146,18 +156,18 @@ function migrateConfig(config: any): Config {
     config.shiftEnterKeyBindingInstalled = config.iterm2KeyBindingInstalled
     delete config.iterm2KeyBindingInstalled
   }
-  
+
   // v2 到 v3：更新模型格式
   if (typeof config.model === 'string') {
     config.modelProfiles = {
       default: {
         type: 'anthropic',
-        model: config.model
-      }
+        model: config.model,
+      },
     }
     delete config.model
   }
-  
+
   return config
 }
 ```
@@ -171,7 +181,7 @@ function saveConfigWithBackup(config: Config) {
   // 创建备份
   const backupPath = `${configPath}.backup`
   fs.copyFileSync(configPath, backupPath)
-  
+
   try {
     // 保存新配置
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2))
@@ -215,14 +225,18 @@ function loadConfig(path: string): Config {
 ## 配置范围
 
 ### 全局范围
+
 影响所有项目：
+
 - 用户偏好（主题、键绑定）
 - 模型配置文件和 API 密钥
 - 全局 MCP 服务器
 - 自动更新程序设置
 
 ### 项目范围
+
 特定于当前项目：
+
 - 工具权限
 - 允许的命令
 - 项目上下文
@@ -230,7 +244,9 @@ function loadConfig(path: string): Config {
 - 成本跟踪
 
 ### 会话范围
+
 当前会话的临时：
+
 - 运行时标志
 - 临时权限
 - 活动 MCP 连接
@@ -305,24 +321,28 @@ function loadConfig(path: string): Config {
 ## 配置最佳实践
 
 ### 1. 安全性
+
 - 永远不要将 API 密钥提交到版本控制
 - 使用环境变量存储机密
 - 验证所有配置输入
 - 适当限制命令权限
 
 ### 2. 组织
+
 - 为用户偏好保留全局配置
 - 为项目特定设置使用项目配置
 - 在 README 中记录自定义配置
 - 版本控制项目配置
 
 ### 3. 性能
+
 - 在内存中缓存配置
 - 仅在文件更改时重新加载
 - 使用高效的 JSON 解析
 - 最小化配置文件大小
 
 ### 4. 调试
+
 - 为配置问题使用详细模式
 - 使用 `config list` 检查配置
 - 加载时验证配置

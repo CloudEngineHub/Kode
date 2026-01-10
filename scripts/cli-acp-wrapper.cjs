@@ -35,15 +35,6 @@ function run(cmd, args) {
   process.exit(typeof result.status === 'number' ? result.status : 1)
 }
 
-function canRunBun() {
-  try {
-    const ret = spawnSync('bun', ['--version'], { stdio: 'ignore' })
-    return !ret.error && ret.status === 0
-  } catch {
-    return false
-  }
-}
-
 function main() {
   const packageRoot = findPackageRoot(__dirname)
   const pkg = readPackageJson(packageRoot)
@@ -52,8 +43,8 @@ function main() {
   // Prefer native binary if present, but route through the JS entry with --acp
   // so both dev and packaged layouts behave the same.
   const distEntry = path.join(packageRoot, 'dist', 'index.js')
-  if (fs.existsSync(distEntry) && canRunBun()) {
-    run('bun', [distEntry, '--acp', ...process.argv.slice(2)])
+  if (fs.existsSync(distEntry)) {
+    run(process.execPath, [distEntry, '--acp', ...process.argv.slice(2)])
   }
 
   process.stderr.write(
@@ -61,10 +52,10 @@ function main() {
       '❌ kode-acp is not runnable on this system.',
       '',
       'Tried:',
-      '- Bun runtime fallback',
+      '- Node.js runtime fallback',
       '',
       'Fix:',
-      '- Install Bun: https://bun.sh',
+      '- Run from source: bun run apps/cli/src/dispatch.ts --acp',
       '',
       version ? `Package version: ${version}` : '',
     ]
@@ -75,4 +66,3 @@ function main() {
 }
 
 main()
-

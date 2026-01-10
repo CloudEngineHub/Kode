@@ -15,6 +15,7 @@ This doc focuses on where the files live and how to configure **models** reliabl
 - If `KODE_CONFIG_DIR` (or `CLAUDE_CONFIG_DIR`) is set: `<KODE_CONFIG_DIR>/config.json`
 
 Kode also uses a data directory for logs/tasks/memory:
+
 - Default: `~/.kode/`
 - If `KODE_CONFIG_DIR` (or `CLAUDE_CONFIG_DIR`) is set: `<KODE_CONFIG_DIR>/`
 
@@ -30,6 +31,7 @@ Example: output style selection is stored in `settings.local.json` under `output
 ### Model profiles + pointers (stored in global config)
 
 Model configuration lives in the global config under:
+
 - `modelProfiles`: array of provider/model entries
 - `modelPointers`: default assignments for `main`, `task`, `compact`, `quick`
 
@@ -50,11 +52,17 @@ Minimal example (illustrative):
       "createdAt": 1710000000000
     }
   ],
-  "modelPointers": { "main": "o3", "task": "o3", "compact": "o3", "quick": "o3" }
+  "modelPointers": {
+    "main": "o3",
+    "task": "o3",
+    "compact": "o3",
+    "quick": "o3"
+  }
 }
 ```
 
 Recommended ways to manage models:
+
 - Interactive UI: `/model`
 - Shareable YAML: `kode models export` / `kode models import`
 - List configured profiles/pointers: `kode models list`
@@ -72,6 +80,7 @@ The exported YAML defaults to `apiKey: { fromEnv: ... }` so you can keep secrets
 ### Model selectors (what to put in `model:` fields)
 
 Across Kode features (agents, Task tool overrides, etc.), you can generally reference a model using:
+
 - Pointer: `main | task | compact | quick`
 - Profile name: `OpenAI Main`
 - Model name (modelName): `o3`, `gpt-4o`, `qwen2.5-coder-32b-instruct`
@@ -128,6 +137,7 @@ LOG_LEVEL=debug
 ### Precedence Rules
 
 Environment variables override configuration files (Anthropic keys excluded):
+
 1. Check environment variable
 2. Check project configuration
 3. Check global configuration
@@ -146,18 +156,18 @@ function migrateConfig(config: any): Config {
     config.shiftEnterKeyBindingInstalled = config.iterm2KeyBindingInstalled
     delete config.iterm2KeyBindingInstalled
   }
-  
+
   // v2 to v3: Update model format
   if (typeof config.model === 'string') {
     config.modelProfiles = {
       default: {
         type: 'anthropic',
-        model: config.model
-      }
+        model: config.model,
+      },
     }
     delete config.model
   }
-  
+
   return config
 }
 ```
@@ -171,7 +181,7 @@ function saveConfigWithBackup(config: Config) {
   // Create backup
   const backupPath = `${configPath}.backup`
   fs.copyFileSync(configPath, backupPath)
-  
+
   try {
     // Save new configuration
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2))
@@ -215,14 +225,18 @@ function loadConfig(path: string): Config {
 ## Configuration Scopes
 
 ### Global Scope
+
 Affects all projects:
+
 - User preferences (theme, keybindings)
 - Model profiles and API keys
 - Global MCP servers
 - Auto-updater settings
 
 ### Project Scope
+
 Specific to current project:
+
 - Tool permissions
 - Allowed commands
 - Project context
@@ -230,7 +244,9 @@ Specific to current project:
 - Cost tracking
 
 ### Session Scope
+
 Temporary for current session:
+
 - Runtime flags
 - Temporary permissions
 - Active MCP connections
@@ -305,24 +321,28 @@ Temporary for current session:
 ## Configuration Best Practices
 
 ### 1. Security
+
 - Never commit API keys to version control
 - Use environment variables for secrets
 - Validate all configuration inputs
 - Limit command permissions appropriately
 
 ### 2. Organization
+
 - Keep global config for user preferences
 - Use project config for project-specific settings
 - Document custom configuration in README
 - Version control project configuration
 
 ### 3. Performance
+
 - Cache configuration in memory
 - Reload only when files change
 - Use efficient JSON parsing
 - Minimize configuration file size
 
 ### 4. Debugging
+
 - Use verbose mode for configuration issues
 - Check configuration with `config list`
 - Validate configuration on load
