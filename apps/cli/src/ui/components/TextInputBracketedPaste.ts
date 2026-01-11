@@ -4,6 +4,7 @@ import {
   shouldTreatAsSpecialPaste,
 } from '#core/utils/paste'
 import { terminalCapabilityManager } from '#ui-ink/utils/terminalCapabilityManager'
+import { writeToStdout } from '#cli-utils/stdio'
 
 const BRACKETED_PASTE_ENABLE = '\x1b[?2004h'
 const BRACKETED_PASTE_DISABLE = '\x1b[?2004l'
@@ -19,9 +20,7 @@ let bracketedPasteRefCount = 0
 function setBracketedPasteEnabled(enabled: boolean) {
   if (!process.stdout?.isTTY) return
   if (!terminalCapabilityManager.isBracketedPasteSupported()) return
-  process.stdout.write(
-    enabled ? BRACKETED_PASTE_ENABLE : BRACKETED_PASTE_DISABLE,
-  )
+  writeToStdout(enabled ? BRACKETED_PASTE_ENABLE : BRACKETED_PASTE_DISABLE)
 }
 
 function acquireBracketedPasteMode() {

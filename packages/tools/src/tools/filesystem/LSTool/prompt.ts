@@ -7,4 +7,3 @@ Usage:
 - Prefer LS over running \`ls\` via Bash when you only need a directory listing.
 - Set \`all: true\` to include dotfiles (like \`ls -a\`).
 `
-

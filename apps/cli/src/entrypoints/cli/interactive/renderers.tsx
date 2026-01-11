@@ -1,11 +1,21 @@
 import React from 'react'
 import type { RenderOptions } from 'ink'
 import { KeypressProvider } from '#ui-ink/contexts/KeypressContext'
+import { setInkInstanceForStdout } from '#ui-ink/utils/inkInstanceStore'
+import { ensureTuiStdioPatched } from '#cli-utils/stdio'
+
+type RenderInstance = {
+  unmount: () => void
+  pause?: () => void
+  resume?: () => void
+  suspendStdin?: () => void
+  resumeStdin?: () => void
+}
 
 type RenderFn = (
   element: React.ReactElement,
   options?: RenderOptions,
-) => { unmount: () => void }
+) => RenderInstance
 
 export async function renderRepl(
   props: any,
@@ -14,12 +24,22 @@ export async function renderRepl(
 ): Promise<void> {
   const render = deps?.render ?? (await import('ink')).render
   const REPL = deps?.REPL ?? (await import('#ui-ink/screens/REPL')).REPL
-  render(
+  const stdio = ensureTuiStdioPatched()
+  const effectiveContext = renderContext
+    ? { ...renderContext, ...stdio }
+    : { ...stdio }
+  const instance = render(
     <KeypressProvider>
       <REPL {...props} />
     </KeypressProvider>,
-    renderContext,
+    effectiveContext,
   )
+  const stdout = (effectiveContext?.stdout ??
+    process.stdout) as NodeJS.WriteStream
+  setInkInstanceForStdout(stdout, instance)
+  if (stdout !== process.stdout) {
+    setInkInstanceForStdout(process.stdout as NodeJS.WriteStream, instance)
+  }
 }
 
 export function renderResumeConversationSelector(
@@ -31,13 +51,26 @@ export function renderResumeConversationSelector(
     const { render } = await import('ink')
     const { ResumeConversation } =
       await import('#ui-ink/screens/ResumeConversation')
-    const { unmount } = render(
+    const stdio = ensureTuiStdioPatched()
+    const effectiveContext = renderContext
+      ? { ...renderContext, ...stdio }
+      : { ...stdio }
+    const instance = render(
       <KeypressProvider>
         <ResumeConversation {...props} context={context} />
       </KeypressProvider>,
-      renderContext,
+      effectiveContext,
     )
-    context.unmount = unmount
+    const stdout = (effectiveContext?.stdout ??
+      process.stdout) as NodeJS.WriteStream
+    setInkInstanceForStdout(stdout, instance as RenderInstance)
+    if (stdout !== process.stdout) {
+      setInkInstanceForStdout(
+        process.stdout as NodeJS.WriteStream,
+        instance as RenderInstance,
+      )
+    }
+    context.unmount = instance.unmount
   })()
 }
 
@@ -46,10 +79,22 @@ export async function renderDoctorScreen(): Promise<void> {
     ;(async () => {
       const { render } = await import('ink')
       const { Doctor } = await import('#ui-ink/screens/Doctor')
-      render(
+      const stdio = ensureTuiStdioPatched()
+      const instance = render(
         <KeypressProvider>
-          <Doctor onDone={() => resolve()} doctorMode={true} />
+          <Doctor
+            onDone={() => {
+              instance.unmount?.()
+              resolve()
+            }}
+            doctorMode={true}
+          />
         </KeypressProvider>,
+        { ...stdio, exitOnCtrlC: false },
+      )
+      setInkInstanceForStdout(
+        process.stdout as NodeJS.WriteStream,
+        instance as RenderInstance,
       )
     })()
   })
@@ -63,7 +108,11 @@ export function renderLogListScreen(
   ;(async () => {
     const { render } = await import('ink')
     const { LogList } = await import('#ui-ink/screens/LogList')
-    const { unmount } = render(
+    const stdio = ensureTuiStdioPatched()
+    const effectiveContext = renderContext
+      ? { ...renderContext, ...stdio }
+      : { ...stdio }
+    const instance = render(
       <KeypressProvider>
         <LogList
           context={context}
@@ -71,8 +120,17 @@ export function renderLogListScreen(
           logNumber={props.logNumber}
         />
       </KeypressProvider>,
-      renderContext,
+      effectiveContext,
     )
-    context.unmount = unmount
+    const stdout = (effectiveContext?.stdout ??
+      process.stdout) as NodeJS.WriteStream
+    setInkInstanceForStdout(stdout, instance as RenderInstance)
+    if (stdout !== process.stdout) {
+      setInkInstanceForStdout(
+        process.stdout as NodeJS.WriteStream,
+        instance as RenderInstance,
+      )
+    }
+    context.unmount = instance.unmount
   })()
 }

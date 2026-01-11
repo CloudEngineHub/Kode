@@ -1,5 +1,4 @@
 import React from 'react'
-import { render } from 'ink'
 import { ModelConfig } from '#ui-ink/components/ModelConfig'
 import { enableConfigs } from '#core/utils/config'
 import { triggerModelConfigChange } from '#core/messages'

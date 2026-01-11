@@ -77,4 +77,3 @@ describe('Claude compatibility headers', () => {
     )
   })
 })
-

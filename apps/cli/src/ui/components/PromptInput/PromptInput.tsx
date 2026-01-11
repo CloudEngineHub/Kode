@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { memo, useCallback, useEffect, useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { countTokens } from '#core/utils/tokens'
 import { getTheme } from '#core/utils/theme'
 import { getModelManager } from '#core/utils/model'
@@ -22,6 +22,10 @@ import type { PromptInputProps, PromptMode } from './types'
 import { PromptInputView } from './PromptInputView'
 import { useExternalEdit } from './useExternalEdit'
 import { useQuickModelSwitch } from './useQuickModelSwitch'
+import {
+  getNotifications,
+  subscribeNotifications,
+} from '#core/services/notificationCenter'
 
 function exit(): never {
   setTerminalTitle('')
@@ -89,6 +93,13 @@ export function PromptInput({
     show: boolean
     text?: string
   }>({ show: false })
+  const [toastMessage, setToastMessage] = useState<{
+    show: boolean
+    text?: string
+    kind?: 'info' | 'success' | 'warning' | 'error'
+  }>({ show: false })
+  const lastToastIdRef = useRef<string | null>(null)
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const placeholder = ''
   const [cursorOffset, setCursorOffset] = useState<number>(input.length)
   const [currentPwd, setCurrentPwd] = useState<string>(() => getCwd())
@@ -108,6 +119,40 @@ export function PromptInput({
     setMessage(prev =>
       prev.show === show && prev.text === text ? prev : { show, text },
     )
+  }, [])
+
+  useEffect(() => {
+    const showLatest = () => {
+      const all = getNotifications()
+      const latest = all[all.length - 1]
+      if (!latest) return
+      if (latest.id === lastToastIdRef.current) return
+
+      const raw = latest.title
+        ? `${latest.title}: ${latest.message}`
+        : latest.message
+      const text = raw.replace(/\r?\n/g, ' ').trim()
+      if (!text) return
+
+      lastToastIdRef.current = latest.id
+      setToastMessage({ show: true, text, kind: latest.kind })
+
+      if (toastTimerRef.current) {
+        clearTimeout(toastTimerRef.current)
+      }
+      toastTimerRef.current = setTimeout(() => {
+        setToastMessage(prev => (prev.show ? { show: false } : prev))
+      }, 6000)
+    }
+
+    showLatest()
+    const unsubscribe = subscribeNotifications(showLatest)
+    return () => {
+      unsubscribe()
+      if (toastTimerRef.current) {
+        clearTimeout(toastTimerRef.current)
+      }
+    }
   }, [])
   const handleRewindConversation = useDoublePress(
     setRewindMessagePending,
@@ -359,6 +404,7 @@ export function PromptInput({
       message={message}
       rewindMessagePending={rewindMessagePending}
       modelSwitchMessage={modelSwitchMessage}
+      toastMessage={toastMessage}
       statusLine={statusLine}
       currentMode={currentMode}
       modeCycleShortcutText={modeCycleShortcut.displayText}

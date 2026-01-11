@@ -17,6 +17,11 @@ import {
   exitAlternateScreen,
   shouldEnterAlternateScreen,
 } from '#cli-utils/terminal'
+import {
+  restoreTuiStdioPatch,
+  writeToStderr,
+  writeToStdout,
+} from '#cli-utils/stdio'
 
 import { cursorShow } from 'ansi-escapes'
 import { openSync } from 'fs'
@@ -130,6 +135,9 @@ async function stdin() {
 }
 
 process.on('exit', () => {
+  try {
+    restoreTuiStdioPatch()
+  } catch {}
   resetCursor()
   if (didEnterAlternateScreen) {
     exitAlternateScreen()
@@ -207,10 +215,12 @@ process.on('uncaughtException', err => {
 })
 
 function resetCursor() {
-  const terminal = process.stderr.isTTY
-    ? process.stderr
-    : process.stdout.isTTY
-      ? process.stdout
-      : undefined
-  terminal?.write(`\u001B[?25h${cursorShow}`)
+  if (process.stderr.isTTY) {
+    writeToStderr(cursorShow)
+    return
+  }
+
+  if (process.stdout.isTTY) {
+    writeToStdout(cursorShow)
+  }
 }

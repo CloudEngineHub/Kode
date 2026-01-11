@@ -3,6 +3,7 @@ import { Box, Newline, Text } from 'ink'
 import { getTheme } from '#core/utils/theme'
 import { Select } from './CustomSelect/select'
 import { render } from 'ink'
+import { renderWithTuiStdio } from '#ui-ink/utils/inkRender'
 import { writeFileSync } from 'fs'
 import { ConfigParseError } from '#core/utils/errors'
 import { useExitOnCtrlCD } from '#ui-ink/hooks/useExitOnCtrlCD'
@@ -91,7 +92,8 @@ export function showInvalidConfigDialog({
   error,
 }: InvalidConfigHandlerProps): Promise<void> {
   return new Promise(resolve => {
-    render(
+    renderWithTuiStdio(
+      render,
       <InvalidConfigDialog
         filePath={error.filePath}
         errorDescription={error.message}

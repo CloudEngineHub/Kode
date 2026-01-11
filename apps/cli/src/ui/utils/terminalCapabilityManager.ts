@@ -224,12 +224,20 @@ export class TerminalCapabilityManager {
     return this.kittyEnabled
   }
 
+  isKittyProtocolSupported(): boolean {
+    return this.kittySupported
+  }
+
   isBracketedPasteSupported(): boolean {
     return this.bracketedPasteSupported
   }
 
   isBracketedPasteEnabled(): boolean {
     return this.bracketedPasteEnabled
+  }
+
+  isModifyOtherKeysSupported(): boolean {
+    return this.modifyOtherKeysSupported
   }
 
   isModifyOtherKeysEnabled(): boolean {

@@ -2,6 +2,7 @@ import type { CanUseToolFn } from '#core/permissions/canUseTool'
 import { queryLLM } from '#core/ai/llmLazy'
 import { formatSystemPromptWithContext } from '#core/services/systemPrompt'
 import { emitReminderEvent } from '#core/services/systemReminder'
+import { addNotification } from '#core/services/notificationCenter'
 import { markPhase } from '#core/utils/debugLogger'
 import {
   createAssistantMessage,
@@ -108,6 +109,22 @@ async function* messagePipelineCore(
 
       const notifications = shell.flushBashNotifications()
       for (const notification of notifications) {
+        const status = notification.status
+        const exitCode = notification.exitCode
+        const summarySuffix =
+          status === 'completed'
+            ? `completed${exitCode !== undefined ? ` (exit ${exitCode})` : ''}`
+            : status === 'failed'
+              ? `failed${exitCode !== undefined ? ` (exit ${exitCode})` : ''}`
+              : 'was killed'
+
+        addNotification({
+          title: 'Background bash',
+          message: `${notification.description} — ${summarySuffix}. Output: ${notification.outputFile}`,
+          source: 'system',
+          kind: status === 'failed' ? 'error' : 'info',
+        })
+
         const text = renderBashNotification(notification)
         if (text.trim().length === 0) continue
         const msg = createAssistantMessage(text)

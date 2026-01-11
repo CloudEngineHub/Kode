@@ -12,8 +12,11 @@ export function useModelSelectorMenus(args: {
   ) => void
   setCodingPlanFocusIndex: (value: number | ((prev: number) => number)) => void
 }) {
-  const { setProviderFocusIndex, setPartnerProviderFocusIndex, setCodingPlanFocusIndex } =
-    args
+  const {
+    setProviderFocusIndex,
+    setPartnerProviderFocusIndex,
+    setCodingPlanFocusIndex,
+  } = args
 
   function getProviderLabel(provider: string, modelCount: number): string {
     if (providers[provider]) {

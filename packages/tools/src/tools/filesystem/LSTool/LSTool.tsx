@@ -149,4 +149,3 @@ export const LSTool = {
     return `${output.entries.join('\n')}${suffix}`
   },
 } satisfies Tool<typeof inputSchema, Output>
-

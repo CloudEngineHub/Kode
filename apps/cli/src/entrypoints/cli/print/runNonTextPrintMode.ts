@@ -171,7 +171,10 @@ export async function runNonTextPrintMode(
     typeof args.permissionMode === 'string' ? args.permissionMode.trim() : ''
   const hasRuleEntries = (
     groups: typeof toolPermissionContext.alwaysAllowRules,
-  ) => Object.values(groups).some(rules => Array.isArray(rules) && rules.length > 0)
+  ) =>
+    Object.values(groups).some(
+      rules => Array.isArray(rules) && rules.length > 0,
+    )
   const hasCustomPermissions =
     toolPermissionContext.additionalWorkingDirectories.size > 0 ||
     hasRuleEntries(toolPermissionContext.alwaysAllowRules) ||

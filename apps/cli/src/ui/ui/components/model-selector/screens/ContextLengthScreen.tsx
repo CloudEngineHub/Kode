@@ -55,7 +55,9 @@ export function ContextLengthScreen({
                 <Text color={isSelected ? 'blue' : undefined}>
                   {isSelected ? '→ ' : '  '}
                   {option.label}
-                  {option.value === DEFAULT_CONTEXT_LENGTH ? ' (recommended)' : ''}
+                  {option.value === DEFAULT_CONTEXT_LENGTH
+                    ? ' (recommended)'
+                    : ''}
                 </Text>
               </Box>
             )
@@ -64,12 +66,15 @@ export function ContextLengthScreen({
 
         {!tightLayout && (
           <Text dimColor>
-            Selected: <Text color={theme.suggestion}>{selectedOption.label}</Text>
+            Selected:{' '}
+            <Text color={theme.suggestion}>{selectedOption.label}</Text>
           </Text>
         )}
 
         <Box marginTop={tightLayout ? 0 : 1}>
-          <Text dimColor>↑/↓ to select · Enter to continue · Esc to go back</Text>
+          <Text dimColor>
+            ↑/↓ to select · Enter to continue · Esc to go back
+          </Text>
         </Box>
       </Box>
     </ScreenContainer>

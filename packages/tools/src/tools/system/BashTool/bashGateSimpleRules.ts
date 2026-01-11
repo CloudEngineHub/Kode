@@ -97,10 +97,7 @@ export const SIMPLE_RULES: SimpleRule[] = [
     severity: 'medium',
     category: 'remote_exec',
     title: 'sources a file into the current shell',
-    patterns: [
-      /\bsource\b\s+(?!<\()\S+/i,
-      /(^|[;&|()\s])\.\s+(?!<\()\S+/i,
-    ],
+    patterns: [/\bsource\b\s+(?!<\()\S+/i, /(^|[;&|()\s])\.\s+(?!<\()\S+/i],
   },
   {
     code: 'RCE_BASE64',

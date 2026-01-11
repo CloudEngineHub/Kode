@@ -2,7 +2,8 @@ import type { Command } from '../types'
 import { getMessagesSetter } from '#core/messages'
 import { getContext } from '#core/context'
 import { getCodeStyle } from '#core/utils/style'
-import { clearTerminal } from '#cli-utils/terminal'
+import { clearScrollback, clearTerminal } from '#cli-utils/terminal'
+import { getGlobalConfig } from '#core/utils/config'
 import { getOriginalCwd, setCwd } from '#core/utils/state'
 import { Message } from '#core/query'
 import { resetReminderSession } from '#core/services/systemReminder'
@@ -13,7 +14,8 @@ export async function clearConversation(context: {
     forkConvoWithMessages: Message[],
   ) => void
 }) {
-  await clearTerminal()
+  const config = getGlobalConfig()
+  await (config.wipeScrollbackOnClear ? clearScrollback() : clearTerminal())
   getMessagesSetter()([])
   context.setForkConvoWithMessagesOnTheNextRender([])
   getContext.cache.clear?.()

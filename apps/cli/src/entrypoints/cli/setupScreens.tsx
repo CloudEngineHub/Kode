@@ -9,8 +9,12 @@ import {
   getGlobalConfig,
   saveGlobalConfig,
 } from '#core/utils/config'
-import { clearTerminal } from '#cli-utils/terminal'
+import { withEphemeralAlternateScreen } from '#cli-utils/terminal'
 import { grantReadPermissionForOriginalDir } from '#core/utils/permissions/filesystem'
+import {
+  renderWithTuiStdio,
+  type InkRenderInstance,
+} from '#ui-ink/utils/inkRender'
 import { handleMcprcServerApprovals } from './mcpServerApproval'
 
 export function completeOnboarding(): void {
@@ -30,51 +34,52 @@ export async function showSetupScreens(
     return
   }
 
+  // Never show interactive setup screens in print mode.
+  if (print) return
+
   const config = getGlobalConfig()
   if (!config.theme || !config.hasCompletedOnboarding) {
-    await clearTerminal()
     const { render } = await import('ink')
-    await new Promise<void>(resolve => {
-      render(
-        <KeypressProvider>
-          <Onboarding
-            onDone={async () => {
-              completeOnboarding()
-              await clearTerminal()
-              resolve()
-            }}
-          />
-        </KeypressProvider>,
-        {
-          exitOnCtrlC: false,
-        },
-      )
+    await withEphemeralAlternateScreen(async () => {
+      await new Promise<void>(resolve => {
+        let instance: InkRenderInstance | undefined
+        instance = renderWithTuiStdio(
+          render,
+          <KeypressProvider>
+            <Onboarding
+              onDone={() => {
+                completeOnboarding()
+                instance?.unmount?.()
+                resolve()
+              }}
+            />
+          </KeypressProvider>,
+          { exitOnCtrlC: false },
+        )
+      })
     })
   }
 
-  if (!print) {
-    if (safeMode) {
-      if (!checkHasTrustDialogAccepted()) {
-        await new Promise<void>(resolve => {
-          const onDone = () => {
-            grantReadPermissionForOriginalDir()
-            resolve()
-          }
-          ;(async () => {
-            const { render } = await import('ink')
-            render(
-              <KeypressProvider>
-                <TrustDialog onDone={onDone} />
-              </KeypressProvider>,
-              {
-                exitOnCtrlC: false,
-              },
-            )
-          })()
-        })
-      }
-    }
-
-    await handleMcprcServerApprovals()
+  if (safeMode && !checkHasTrustDialogAccepted()) {
+    const { render } = await import('ink')
+    await withEphemeralAlternateScreen(async () => {
+      await new Promise<void>(resolve => {
+        let instance: InkRenderInstance | undefined
+        const onDone = () => {
+          grantReadPermissionForOriginalDir()
+          instance?.unmount?.()
+          resolve()
+        }
+        instance = renderWithTuiStdio(
+          render,
+          <KeypressProvider>
+            <TrustDialog onDone={onDone} />
+          </KeypressProvider>,
+          { exitOnCtrlC: false },
+        )
+      })
+    })
   }
+
+  await handleMcprcServerApprovals()
 }

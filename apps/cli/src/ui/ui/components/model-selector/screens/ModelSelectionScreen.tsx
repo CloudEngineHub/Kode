@@ -30,6 +30,8 @@ type Props = {
   getProviderLabel: (provider: string, modelCount: number) => string
 }
 
+const VIEWPORT_SAFE_MARGIN_ROWS = 1
+
 export function ModelSelectionScreen({
   theme,
   exitState,
@@ -57,7 +59,10 @@ export function ModelSelectionScreen({
     (tightLayout ? 10 : compactLayout ? 12 : 14) +
     containerPaddingY * 2 +
     containerGap * 4
-  const availableForList = Math.max(3, terminalRows - reservedLines - 1)
+  const availableForList = Math.max(
+    3,
+    terminalRows - reservedLines - 1 - VIEWPORT_SAFE_MARGIN_ROWS,
+  )
   const visibleOptionCount = Math.max(
     3,
     Math.min(12, modelOptions.length || 12, availableForList),
@@ -73,7 +78,11 @@ export function ModelSelectionScreen({
       <Box flexDirection="column" gap={containerGap}>
         <Text bold>
           Select a model from{' '}
-          {getProviderLabel(selectedProvider, availableModels.length).split(' (')[0]}{' '}
+          {
+            getProviderLabel(selectedProvider, availableModels.length).split(
+              ' (',
+            )[0]
+          }{' '}
           for {modelTypeText}:
         </Text>
         {!tightLayout && (
@@ -127,8 +136,8 @@ export function ModelSelectionScreen({
 
         <Box marginTop={tightLayout ? 0 : 1}>
           <Text dimColor>
-            Press <Text color={theme.suggestion}>Esc</Text> to go back to API key
-            input
+            Press <Text color={theme.suggestion}>Esc</Text> to go back to API
+            key input
           </Text>
         </Box>
       </Box>

@@ -17,6 +17,9 @@ import outputStyle from './builtin/output-style'
 import * as model from './builtin/model'
 import modelstatus from './builtin/modelstatus'
 import onboarding from './builtin/onboarding'
+import open from './builtin/open'
+import consoleCommand from './builtin/console'
+import notifications from './builtin/notifications'
 import pr_comments from './builtin/pr_comments'
 import refreshCommands from './builtin/refreshCommands'
 import releaseNotes from './builtin/release-notes'
@@ -55,6 +58,9 @@ const COMMANDS = memoize((): Command[] => [
   model,
   modelstatus,
   onboarding,
+  open,
+  consoleCommand,
+  notifications,
   pr_comments,
   rename,
   tag,

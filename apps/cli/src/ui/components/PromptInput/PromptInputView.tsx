@@ -20,6 +20,11 @@ type ModelInfo = {
 
 type ExitMessageState = { show: boolean; key?: string }
 type InlineMessageState = { show: boolean; text?: string }
+type ToastMessageState = {
+  show: boolean
+  text?: string
+  kind?: 'info' | 'success' | 'warning' | 'error'
+}
 
 type Suggestion = {
   type: string
@@ -60,6 +65,7 @@ export function PromptInputView({
   message,
   rewindMessagePending,
   modelSwitchMessage,
+  toastMessage,
   statusLine,
   currentMode,
   modeCycleShortcutText,
@@ -100,6 +106,7 @@ export function PromptInputView({
   message: InlineMessageState
   rewindMessagePending: boolean
   modelSwitchMessage: InlineMessageState
+  toastMessage: ToastMessageState
   statusLine: string | null
   currentMode: PermissionMode
   modeCycleShortcutText: string
@@ -218,6 +225,21 @@ export function PromptInputView({
               ) : modelSwitchMessage.show ? (
                 <Text color={theme.success} wrap="truncate-end">
                   {modelSwitchMessage.text}
+                </Text>
+              ) : toastMessage.show ? (
+                <Text
+                  color={
+                    toastMessage.kind === 'error'
+                      ? theme.error
+                      : toastMessage.kind === 'warning'
+                        ? theme.warning
+                        : toastMessage.kind === 'success'
+                          ? theme.success
+                          : theme.secondaryText
+                  }
+                  wrap="truncate-end"
+                >
+                  {toastMessage.text}
                 </Text>
               ) : statusLine ? (
                 <Text dimColor wrap="truncate-end">

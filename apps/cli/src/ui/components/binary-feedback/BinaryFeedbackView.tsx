@@ -14,6 +14,7 @@ import { useExitOnCtrlCD } from '#ui-ink/hooks/useExitOnCtrlCD'
 import { BinaryFeedbackChoice } from './utils'
 import { PRODUCT_NAME } from '#core/constants/product'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
+import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 
 const HELP_URL = 'https://go/cli-feedback'
 
@@ -71,9 +72,14 @@ export function BinaryFeedbackView({
   verbose,
 }: Props) {
   const theme = getTheme()
+  const { rows } = useTerminalSize()
   const [focused, setFocus] = useState('no-preference')
   const [focusValue, setFocusValue] = useState<string | undefined>(undefined)
   const exitState = useExitOnCtrlCD(() => process.exit(1))
+
+  // Keep a bottom margin to avoid terminal scroll/flicker when Ink re-renders near the last row.
+  // Reserve 1 row for the exit/hint line rendered outside the bordered panel.
+  const panelHeight = Math.max(1, rows - 2)
 
   useKeypress((_input, key) => {
     if (key.leftArrow) {
@@ -89,7 +95,7 @@ export function BinaryFeedbackView({
     <>
       <Box
         flexDirection="column"
-        height="100%"
+        height={panelHeight}
         width="100%"
         borderStyle="round"
         borderColor={theme.permission}

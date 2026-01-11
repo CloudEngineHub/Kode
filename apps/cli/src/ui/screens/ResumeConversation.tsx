@@ -12,6 +12,7 @@ import { loadKodeAgentSessionMessages } from '#protocol/utils/kodeAgentSessionLo
 import { setKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
 import { randomUUID } from 'crypto'
 import { dateToFilename } from '#core/utils/log'
+import { renderWithTuiStdio } from '#ui-ink/utils/inkRender'
 
 type Props = {
   cwd: string
@@ -66,7 +67,8 @@ export function ResumeConversation({
       })
       const isDefaultModel = await isDefaultSlowAndCapableModel()
 
-      render(
+      renderWithTuiStdio(
+        render,
         <REPL
           commands={commands}
           debug={debug}

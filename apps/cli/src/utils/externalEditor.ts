@@ -2,6 +2,10 @@ import { spawn, spawnSync } from 'child_process'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
+import { withEphemeralAlternateScreen } from '#cli-utils/terminal'
+import { writeToStdout } from '#cli-utils/stdio'
+import { getInkInstanceForStdout } from '#ui-ink/utils/inkInstanceStore'
+import { terminalCapabilityManager } from '#ui-ink/utils/terminalCapabilityManager'
 
 type EditorCommand = {
   command: string
@@ -11,6 +15,38 @@ type EditorCommand = {
 }
 
 const isWindows = process.platform === 'win32'
+
+function showTerminalCursor(): void {
+  if (!process.stdout?.isTTY) return
+  // Reset styles + show cursor for full-screen editors.
+  writeToStdout('\x1b[0m\x1b[?25h')
+}
+
+function hideTerminalCursor(): void {
+  if (!process.stdout?.isTTY) return
+  writeToStdout('\x1b[?25l')
+}
+
+async function withSuspendedInk<T>(fn: () => Promise<T> | T): Promise<T> {
+  const stdout = process.stdout as NodeJS.WriteStream
+  const instance = getInkInstanceForStdout(stdout)
+  const hasInk = Boolean(instance)
+
+  try {
+    instance?.pause?.()
+    instance?.suspendStdin?.()
+    terminalCapabilityManager.disableAllModes()
+    showTerminalCursor()
+    return await withEphemeralAlternateScreen(fn)
+  } finally {
+    if (hasInk) {
+      hideTerminalCursor()
+    }
+    terminalCapabilityManager.enableSupportedModes()
+    instance?.resumeStdin?.()
+    instance?.resume?.()
+  }
+}
 
 function isCommandAvailable(command: string): boolean {
   const checker = isWindows ? 'where' : 'which'
@@ -116,27 +152,29 @@ export async function launchExternalEditor(
   }
 
   try {
-    await new Promise<void>((resolve, reject) => {
-      const child = spawn(
-        editorCommand.command,
-        [...editorCommand.args, filePath],
-        {
-          stdio: 'inherit',
-          shell: editorCommand.shell ?? false,
-        },
-      )
+    await withSuspendedInk(async () => {
+      await new Promise<void>((resolve, reject) => {
+        const child = spawn(
+          editorCommand.command,
+          [...editorCommand.args, filePath],
+          {
+            stdio: 'inherit',
+            shell: editorCommand.shell ?? false,
+          },
+        )
 
-      child.on('error', reject)
-      child.on('exit', (code, signal) => {
-        if (code === 0 || code === null) {
-          resolve()
-        } else {
-          reject(
-            new Error(
-              `Editor exited with code ${code}${signal ? ` (signal ${signal})` : ''}`,
-            ),
-          )
-        }
+        child.on('error', reject)
+        child.on('exit', (code, signal) => {
+          if (code === 0 || code === null) {
+            resolve()
+          } else {
+            reject(
+              new Error(
+                `Editor exited with code ${code}${signal ? ` (signal ${signal})` : ''}`,
+              ),
+            )
+          }
+        })
       })
     })
   } catch (error) {
@@ -191,27 +229,29 @@ export async function launchExternalEditorForFilePath(
   }
 
   try {
-    await new Promise<void>((resolve, reject) => {
-      const child = spawn(
-        editorCommand.command,
-        [...editorCommand.args, filePath],
-        {
-          stdio: 'inherit',
-          shell: editorCommand.shell ?? false,
-        },
-      )
+    await withSuspendedInk(async () => {
+      await new Promise<void>((resolve, reject) => {
+        const child = spawn(
+          editorCommand.command,
+          [...editorCommand.args, filePath],
+          {
+            stdio: 'inherit',
+            shell: editorCommand.shell ?? false,
+          },
+        )
 
-      child.on('error', reject)
-      child.on('exit', (code, signal) => {
-        if (code === 0 || code === null) {
-          resolve()
-        } else {
-          reject(
-            new Error(
-              `Editor exited with code ${code}${signal ? ` (signal ${signal})` : ''}`,
-            ),
-          )
-        }
+        child.on('error', reject)
+        child.on('exit', (code, signal) => {
+          if (code === 0 || code === null) {
+            resolve()
+          } else {
+            reject(
+              new Error(
+                `Editor exited with code ${code}${signal ? ` (signal ${signal})` : ''}`,
+              ),
+            )
+          }
+        })
       })
     })
   } catch (error) {

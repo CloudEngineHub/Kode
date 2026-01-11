@@ -21,8 +21,13 @@ import {
 import type { Message as MessageType } from '#core/query'
 import { getGlobalConfig, saveGlobalConfig } from '#core/utils/config'
 import { getNextAvailableLogForkNumber } from '#core/utils/log'
-import { clearTerminal } from '#cli-utils/terminal'
 import { getOriginalCwd } from '#core/utils/state'
+import { Help } from '#ui-ink/components/Help'
+import { Config } from '#ui-ink/components/Config'
+import { OpenFileDialog } from '#ui-ink/components/OpenFileDialog'
+import { TuiConsoleDialog } from '#ui-ink/components/TuiConsoleDialog'
+import { TuiNotificationsDialog } from '#ui-ink/components/TuiNotificationsDialog'
+import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { useTranscriptItems } from './useTranscriptItems'
 import { useRequestToolUsePermission } from './useRequestToolUsePermission'
 import { useReplQuery } from './useReplQuery'
@@ -40,10 +45,9 @@ export function useReplController(props: REPLProps) {
   const updateAvailableVersion = props.initialUpdateVersion ?? null
   const updateCommands = props.initialUpdateCommands ?? null
 
-  const [verboseConfig] = useState(
-    () => props.verbose ?? getGlobalConfig().verbose,
-  )
-  const verbose = verboseConfig
+  const [verbose, setVerbose] = useState(() => {
+    return props.verbose ?? getGlobalConfig().verbose
+  })
 
   const [forkNumber, setForkNumber] = useState(
     getNextAvailableLogForkNumber(
@@ -86,6 +90,82 @@ export function useReplController(props: REPLProps) {
   )
   const [binaryFeedbackContext, setBinaryFeedbackContext] =
     useState<BinaryFeedbackContext | null>(null)
+
+  const dismissToolView = useCallback(() => {
+    setToolJSX(null)
+  }, [])
+
+  const openToolView = useCallback(
+    (view: NonNullable<typeof toolJSX>) => {
+      setToolJSX(view)
+    },
+    [setToolJSX],
+  )
+
+  useKeypress(
+    (inputChar, key) => {
+      const hasModal =
+        Boolean(toolJSX) ||
+        Boolean(toolUseConfirm) ||
+        Boolean(binaryFeedbackContext) ||
+        showingCostDialog ||
+        isMessageSelectorVisible
+
+      if (hasModal) return
+
+      // Ctrl+O: toggle verbose transcript (expand/collapse long outputs)
+      if (key.ctrl && inputChar === 'o') {
+        setVerbose(prev => !prev)
+        return true
+      }
+
+      if (key.name === 'f1') {
+        openToolView({
+          jsx: <Help commands={props.commands} onClose={dismissToolView} />,
+          shouldHidePromptInput: true,
+          displayMode: 'fullscreen',
+        })
+        return true
+      }
+
+      if (key.name === 'f2') {
+        openToolView({
+          jsx: <Config onClose={dismissToolView} />,
+          shouldHidePromptInput: true,
+          displayMode: 'fullscreen',
+        })
+        return true
+      }
+
+      if (key.name === 'f3') {
+        openToolView({
+          jsx: <OpenFileDialog onDone={dismissToolView} />,
+          shouldHidePromptInput: true,
+          displayMode: 'fullscreen',
+        })
+        return true
+      }
+
+      if (key.name === 'f4') {
+        openToolView({
+          jsx: <TuiConsoleDialog onDone={dismissToolView} />,
+          shouldHidePromptInput: true,
+          displayMode: 'fullscreen',
+        })
+        return true
+      }
+
+      if (key.name === 'f5') {
+        openToolView({
+          jsx: <TuiNotificationsDialog onDone={dismissToolView} />,
+          shouldHidePromptInput: true,
+          displayMode: 'fullscreen',
+        })
+        return true
+      }
+    },
+    { priority: 50 },
+  )
 
   const getBinaryFeedbackResponse = useCallback(
     (m1: BinaryFeedbackContext['m1'], m2: BinaryFeedbackContext['m2']) => {

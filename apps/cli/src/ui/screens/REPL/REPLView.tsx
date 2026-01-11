@@ -1,8 +1,7 @@
 import { Box, Static, type DOMElement, measureElement, useStdout } from 'ink'
 import * as React from 'react'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import ansiEscapes from 'ansi-escapes'
 import type { ToolUseConfirm } from '#ui-ink/components/permissions/PermissionRequest'
 import { PermissionRequest } from '#ui-ink/components/permissions/PermissionRequest'
 import PromptInput from '#ui-ink/components/PromptInput'
@@ -22,6 +21,9 @@ import type { Tool } from '#core/tooling/Tool'
 import type { TranscriptItem } from './useTranscriptItems'
 import type { BinaryFeedbackContext } from './types'
 import { TransientViewportProvider } from '#ui-ink/contexts/TransientViewportContext'
+
+const CLEAR_VIEWPORT = '\x1b[2J\x1b[H'
+const VIEWPORT_SAFE_MARGIN_ROWS = 1
 
 export function REPLView({
   conversationKey,
@@ -94,17 +96,14 @@ export function REPLView({
 
   const lastTerminalWidthRef = useRef(columns)
   const isInitialMountRef = useRef(true)
+  const lastVerboseRef = useRef(verbose)
   const [staticRemountKey, setStaticRemountKey] = useState(0)
   const [staticNeedsRefresh, setStaticNeedsRefresh] = useState(false)
   const lastStaticRefreshAtRef = useRef(0)
 
-  const [footerMeasureTick, setFooterMeasureTick] = useState(0)
-  const requestFooterRemeasure = useCallback(() => {
-    setFooterMeasureTick(prev => prev + 1)
-  }, [])
-
   const [mainControlsHeight, setMainControlsHeight] = useState(0)
   const [messageSelectorHeight, setMessageSelectorHeight] = useState(0)
+  const lastOverflowMeasureAtRef = useRef(0)
 
   // Mirror Gemini CLI: measure the "footer" (controls + prompt) height and use it to
   // constrain transient (actively changing) transcript content to the remaining viewport.
@@ -117,9 +116,13 @@ export function REPLView({
   // (e.g. auto-triggered suggestions). Measure every render and only commit when the height
   // actually changes so we never miss a footer growth event.
   useLayoutEffect(() => {
+    if (rows <= 0 || columns <= 0) return
+
     if (mainControlsRef.current) {
       const measured = measureElement(mainControlsRef.current).height
       setMainControlsHeight(prev => (prev === measured ? prev : measured))
+    } else {
+      setMainControlsHeight(prev => (prev === 0 ? prev : 0))
     }
 
     if (messageSelectorRef.current) {
@@ -128,33 +131,28 @@ export function REPLView({
     } else {
       setMessageSelectorHeight(prev => (prev === 0 ? prev : 0))
     }
-  }, [
-    footerMeasureTick,
-    columns,
-    rows,
-    isLoading,
-    showingCostDialog,
-    isMessageSelectorVisible,
-    shouldShowPromptInput,
-    toolJSX,
-    toolUseConfirm,
-    binaryFeedbackContext,
-  ])
+  })
 
   useEffect(() => {
     if (!transientItemsRef.current) return
     if (rows <= 0 || columns <= 0) return
 
+    const now = Date.now()
+    if (now - lastOverflowMeasureAtRef.current < 200) return
+    lastOverflowMeasureAtRef.current = now
+
     const transientHeight = measureElement(transientItemsRef.current).height
     const availableHeight = Math.max(
       1,
-      rows - mainControlsHeight - messageSelectorHeight,
+      rows -
+        mainControlsHeight -
+        messageSelectorHeight -
+        VIEWPORT_SAFE_MARGIN_ROWS,
     )
 
     if (transientHeight <= availableHeight) return
     if (staticNeedsRefresh) return
 
-    const now = Date.now()
     const elapsed = now - lastStaticRefreshAtRef.current
     if (elapsed < 500) return
 
@@ -165,7 +163,7 @@ export function REPLView({
     mainControlsHeight,
     messageSelectorHeight,
     staticNeedsRefresh,
-    transientItems.length,
+    transientItems,
   ])
 
   useEffect(() => {
@@ -178,7 +176,8 @@ export function REPLView({
     try {
       const out = stdout ?? process.stdout
       if (out?.isTTY) {
-        out.write(ansiEscapes.clearTerminal)
+        // Clear the viewport without wiping scrollback so users can still scroll up.
+        out.write(CLEAR_VIEWPORT)
       }
     } catch {
       // best-effort only
@@ -188,6 +187,12 @@ export function REPLView({
     setStaticNeedsRefresh(false)
   }, [columns, isLoading, rows, staticNeedsRefresh, stdout])
 
+  useEffect(() => {
+    if (lastVerboseRef.current === verbose) return
+    lastVerboseRef.current = verbose
+    setStaticNeedsRefresh(true)
+  }, [verbose])
+
   const lastFullScreenToolViewRef = useRef(isFullScreenToolView)
   useEffect(() => {
     if (lastFullScreenToolViewRef.current === isFullScreenToolView) return
@@ -196,7 +201,7 @@ export function REPLView({
     try {
       const out = stdout ?? process.stdout
       if (out?.isTTY) {
-        out.write(ansiEscapes.clearTerminal)
+        out.write(CLEAR_VIEWPORT)
       }
     } catch {
       // best-effort only
@@ -223,7 +228,7 @@ export function REPLView({
         try {
           const out = stdout ?? process.stdout
           if (out?.isTTY) {
-            out.write(ansiEscapes.clearTerminal)
+            out.write(CLEAR_VIEWPORT)
           }
         } catch {
           // best-effort only
@@ -240,7 +245,10 @@ export function REPLView({
 
   const transientMaxHeight = Math.max(
     1,
-    rows - mainControlsHeight - messageSelectorHeight,
+    rows -
+      mainControlsHeight -
+      messageSelectorHeight -
+      VIEWPORT_SAFE_MARGIN_ROWS,
   )
   const transientViewportValue = useMemo(
     () => ({ maxHeight: transientMaxHeight }),

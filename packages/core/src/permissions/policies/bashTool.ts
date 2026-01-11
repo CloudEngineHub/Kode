@@ -21,7 +21,9 @@ export async function checkBashToolPermission(args: {
     args.input,
     'dangerouslyDisableSandbox',
   )
-  const safeMode = Boolean(args.context.options?.safeMode ?? args.context.safeMode)
+  const safeMode = Boolean(
+    args.context.options?.safeMode ?? args.context.safeMode,
+  )
 
   if (SAFE_COMMANDS.has(command)) return { result: true }
 

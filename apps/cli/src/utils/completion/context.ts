@@ -60,8 +60,7 @@ export function getCompletionContext(args: {
   if (!word) return null
 
   if (word.startsWith('/')) {
-    const isCommand =
-      !word.includes('/', 1) && !disableSlashCommands
+    const isCommand = !word.includes('/', 1) && !disableSlashCommands
     return {
       type: isCommand ? 'command' : 'file',
       prefix: isCommand ? word.slice(1) : word,

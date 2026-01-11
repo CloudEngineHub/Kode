@@ -109,7 +109,10 @@ export function ModelListManager({ onClose }: Props): React.ReactNode {
       return { start: 0, end: menuItems.length, items: menuItems }
     }
 
-    const visibleCount = Math.max(1, Math.min(maxVisibleItems, menuItems.length))
+    const visibleCount = Math.max(
+      1,
+      Math.min(maxVisibleItems, menuItems.length),
+    )
     const half = Math.floor(visibleCount / 2)
     const start = Math.max(
       0,
@@ -193,7 +196,11 @@ export function ModelListManager({ onClose }: Props): React.ReactNode {
       paddingX={2}
       paddingY={containerPaddingY}
     >
-      <Box flexDirection="column" minHeight={2} marginBottom={tightLayout ? 0 : 1}>
+      <Box
+        flexDirection="column"
+        minHeight={2}
+        marginBottom={tightLayout ? 0 : 1}
+      >
         <Text bold color={isDeleteMode ? 'red' : undefined}>
           Manage Model List{isDeleteMode ? ' - DELETE MODE' : ''}
           {menuItems.length > windowedMenuItems.items.length

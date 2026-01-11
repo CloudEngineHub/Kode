@@ -45,7 +45,8 @@ export function useModelSelectorController(
   const theme = getTheme()
   const { rows: terminalRows, columns: terminalColumns } = useTerminalSize()
   const tightLayout = terminalRows <= 18 || terminalColumns <= 66
-  const compactLayout = tightLayout || terminalRows <= 22 || terminalColumns <= 76
+  const compactLayout =
+    tightLayout || terminalRows <= 22 || terminalColumns <= 76
   const containerPaddingY = tightLayout ? 0 : compactLayout ? 0 : 1
   const containerGap = tightLayout ? 0 : 1
 

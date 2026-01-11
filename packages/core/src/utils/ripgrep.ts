@@ -134,6 +134,11 @@ export const getRipgrepPath = memoize((): string => {
   return vscodeRgPath
 })
 
+export async function ensureRipgrepReady(): Promise<string> {
+  await codesignRipgrepIfNecessary()
+  return getRipgrepPath()
+}
+
 export async function ripGrep(
   args: string[],
   target: string,

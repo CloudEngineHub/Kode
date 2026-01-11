@@ -60,9 +60,11 @@ export function PartnerCodingPlansScreen({
               'Specialized coding models from partners.'
             ) : (
               <>
-                These are specialized models optimized for coding and development tasks.
+                These are specialized models optimized for coding and
+                development tasks.
                 <Newline />
-                They require specific coding plan subscriptions from the respective providers.
+                They require specific coding plan subscriptions from the
+                respective providers.
               </>
             )}
           </Text>
@@ -80,7 +82,8 @@ export function PartnerCodingPlansScreen({
 
         <Box marginTop={footerMarginTop}>
           <Text dimColor>
-            Press <Text color={theme.suggestion}>Esc</Text> to go back to main menu
+            Press <Text color={theme.suggestion}>Esc</Text> to go back to main
+            menu
           </Text>
         </Box>
       </Box>

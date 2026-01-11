@@ -79,8 +79,9 @@ function findMatchingBashRules(args: {
   const withoutRedirectionsRaw =
     stripOutputRedirections(trimmed).commandWithoutRedirections
   const normalizedTrimmed = normalizeBashCommandForRuleMatch(trimmed)
-  const normalizedWithoutRedirections =
-    normalizeBashCommandForRuleMatch(withoutRedirectionsRaw)
+  const normalizedWithoutRedirections = normalizeBashCommandForRuleMatch(
+    withoutRedirectionsRaw,
+  )
   const candidates =
     args.matchType === 'exact'
       ? [normalizedTrimmed, normalizedWithoutRedirections]
@@ -104,11 +105,17 @@ function findMatchingBashRules(args: {
     const matched = candidates.some(candidate => {
       switch (ruleContent.type) {
         case 'exact':
-          return normalizeBashCommandForRuleMatch(ruleContent.command) === candidate
+          return (
+            normalizeBashCommandForRuleMatch(ruleContent.command) === candidate
+          )
         case 'prefix':
           if (args.matchType === 'exact')
-            return normalizeBashCommandForRuleMatch(ruleContent.prefix) === candidate
-          if (candidate === normalizeBashCommandForRuleMatch(ruleContent.prefix))
+            return (
+              normalizeBashCommandForRuleMatch(ruleContent.prefix) === candidate
+            )
+          if (
+            candidate === normalizeBashCommandForRuleMatch(ruleContent.prefix)
+          )
             return true
           return candidate.startsWith(
             `${normalizeBashCommandForRuleMatch(ruleContent.prefix)} `,

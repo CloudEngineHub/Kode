@@ -120,7 +120,11 @@ export function ConfirmationScreen({
             <Text>
               <Text bold>API Key: </Text>
               <Text color={theme.suggestion}>
-                {apiKey ? (tightLayout ? '(set)' : formatApiKeyDisplay(apiKey)) : '(none)'}
+                {apiKey
+                  ? tightLayout
+                    ? '(set)'
+                    : formatApiKeyDisplay(apiKey)
+                  : '(none)'}
               </Text>
             </Text>
           )}
@@ -135,8 +139,8 @@ export function ConfirmationScreen({
           <Text>
             <Text bold>Context Length: </Text>
             <Text color={theme.suggestion}>
-              {CONTEXT_LENGTH_OPTIONS.find(opt => opt.value === contextLength)?.label ||
-                `${contextLength.toLocaleString()} tokens`}
+              {CONTEXT_LENGTH_OPTIONS.find(opt => opt.value === contextLength)
+                ?.label || `${contextLength.toLocaleString()} tokens`}
             </Text>
           </Text>
 

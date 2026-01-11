@@ -96,7 +96,9 @@ export function BaseUrlScreen({
             <Box marginTop={1}>
               <Text>
                 <Text
-                  color={isLoadingModels ? theme.secondaryText : theme.suggestion}
+                  color={
+                    isLoadingModels ? theme.secondaryText : theme.suggestion
+                  }
                 >
                   [Submit Base URL]
                 </Text>
@@ -136,7 +138,8 @@ export function BaseUrlScreen({
                 <>
                   This is the URL of your Ollama server.
                   <Newline />
-                  Default is http://localhost:11434/v1 for local Ollama installations.
+                  Default is http://localhost:11434/v1 for local Ollama
+                  installations.
                 </>
               ) : (
                 <>
@@ -164,7 +167,9 @@ export function BaseUrlScreen({
         {!tightLayout && (
           <Box marginTop={1}>
             <Text>
-              <Text color={isLoadingModels ? theme.secondaryText : theme.suggestion}>
+              <Text
+                color={isLoadingModels ? theme.secondaryText : theme.suggestion}
+              >
                 [Submit Base URL]
               </Text>
               <Text> - Press Enter to continue</Text>

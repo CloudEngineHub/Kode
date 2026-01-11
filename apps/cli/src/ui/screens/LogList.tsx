@@ -4,6 +4,7 @@ import { LogSelector } from '#ui-ink/components/LogSelector'
 import type { LogOption, LogListProps } from '#core/types/logs'
 import { loadLogList } from '#core/utils/log'
 import { logError } from '#core/utils/log'
+import { writeToStderr, writeToStdout } from '#cli-utils/stdio'
 
 type Props = LogListProps & {
   type: 'messages' | 'errors'
@@ -23,10 +24,10 @@ export function LogList({ context, type, logNumber }: Props): React.ReactNode {
         if (logNumber !== undefined) {
           const log = logs[logNumber >= 0 ? logNumber : 0] // Handle out of bounds
           if (log) {
-            console.log(JSON.stringify(log.messages, null, 2))
+            writeToStdout(`${JSON.stringify(log.messages, null, 2)}\n`)
             process.exit(0)
           } else {
-            console.error('No log found at index', logNumber)
+            writeToStderr(`No log found at index ${String(logNumber)}\n`)
             process.exit(1)
           }
         }
@@ -50,7 +51,7 @@ export function LogList({ context, type, logNumber }: Props): React.ReactNode {
     }
     setDidSelectLog(true)
     setTimeout(() => {
-      console.log(JSON.stringify(log.messages, null, 2))
+      writeToStdout(`${JSON.stringify(log.messages, null, 2)}\n`)
       process.exit(0)
     }, 100)
   }

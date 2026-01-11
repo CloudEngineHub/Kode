@@ -2,6 +2,7 @@ import type { Command } from '@commander-js/extra-typings'
 
 import type { McpServerConfig } from '#config'
 import { addMcpServer, ensureConfigScope, getMcpServer } from '#core/mcp/client'
+import { renderWithTuiStdio } from '#ui-ink/utils/inkRender'
 
 export function registerMcpImportClaudeDesktopCommand(args: {
   mcp: Command
@@ -224,10 +225,10 @@ export function registerMcpImportClaudeDesktopCommand(args: {
             )
           }
 
-          const { unmount } = render(<ClaudeDesktopImport />)
+          const instance = renderWithTuiStdio(render, <ClaudeDesktopImport />)
 
           setTimeout(() => {
-            unmount()
+            instance.unmount?.()
             resolve()
           }, 30_000)
         })

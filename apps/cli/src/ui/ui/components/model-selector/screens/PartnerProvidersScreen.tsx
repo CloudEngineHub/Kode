@@ -72,7 +72,8 @@ export function PartnerProvidersScreen({
 
         <Box marginTop={footerMarginTop}>
           <Text dimColor>
-            Press <Text color={theme.suggestion}>Esc</Text> to go back to main menu
+            Press <Text color={theme.suggestion}>Esc</Text> to go back to main
+            menu
           </Text>
         </Box>
       </Box>

@@ -118,6 +118,17 @@ export function Config({ onClose }: Props): React.ReactNode {
       },
       type: 'boolean',
     },
+    {
+      id: 'wipeScrollbackOnClear',
+      label: 'Wipe scrollback on /clear',
+      value: globalConfig.wipeScrollbackOnClear ?? false,
+      onChange(wipeScrollbackOnClear: boolean) {
+        const config = { ...getGlobalConfig(), wipeScrollbackOnClear }
+        saveGlobalConfig(config)
+        setGlobalConfig(config)
+      },
+      type: 'boolean',
+    },
   ]
 
   const theme = getTheme()

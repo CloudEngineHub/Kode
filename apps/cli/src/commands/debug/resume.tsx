@@ -2,6 +2,7 @@ import * as React from 'react'
 import type { Command } from '../types'
 import { ResumeConversation } from '#ui-ink/screens/ResumeConversation'
 import { render } from 'ink'
+import { renderWithTuiStdio } from '#ui-ink/utils/inkRender'
 import { listKodeAgentSessions } from '#protocol/utils/kodeAgentSessionResume'
 
 export default {
@@ -21,16 +22,20 @@ export default {
       onDone('No conversation found to resume')
       return null
     }
-    render(
+    const inkContext: { unmount?: () => void } = {}
+    const instance = renderWithTuiStdio(
+      render,
       <ResumeConversation
         cwd={cwd}
         commands={commands}
-        context={{ unmount: onDone }}
+        context={inkContext}
         sessions={sessions}
         tools={tools}
         verbose={verbose}
       />,
+      { exitOnCtrlC: false },
     )
+    inkContext.unmount = instance.unmount
     // This return is here for type only
     return null
   },

@@ -1,20 +1,15 @@
 import { Box, Text } from 'ink'
 import * as React from 'react'
-import { useMemo, useState, useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import figures from 'figures'
 import { getTheme } from '#core/utils/theme'
-import { Message as MessageComponent } from './Message'
 import { randomUUID } from 'crypto'
 import { type Tool } from '#core/tooling/Tool'
-import {
-  createUserMessage,
-  isEmptyMessageText,
-  isNotEmptyMessage,
-  normalizeMessages,
-} from '#core/utils/messages'
+import { createUserMessage, stripSystemMessages } from '#core/utils/messages'
 import type { AssistantMessage, UserMessage } from '#core/query'
 import { useExitOnCtrlCD } from '#ui-ink/hooks/useExitOnCtrlCD'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
+import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 
 type Props = {
   erroredToolUseIDs: Set<string>
@@ -26,21 +21,34 @@ type Props = {
 }
 
 const MAX_VISIBLE_MESSAGES = 7
+const SELECTOR_OVERHEAD_ROWS = 7
+const SELECTOR_RESERVED_ROWS = 4
+const INDEX_WIDTH = 7
+
+function extractUserMessageText(content: unknown): string {
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return ''
+
+  const parts: string[] = []
+  for (const block of content) {
+    if (!block || typeof block !== 'object') continue
+    const record = block as Record<string, unknown>
+    if (record.type !== 'text') continue
+    parts.push(String(record.text ?? ''))
+  }
+
+  return parts.join('\n')
+}
 
 export function MessageSelector({
-  erroredToolUseIDs,
   messages,
   onSelect,
   onEscape,
-  tools,
-  unresolvedToolUseIDs,
 }: Props): React.ReactNode {
-  const currentUUID = useMemo(randomUUID, [])
-
-  useEffect(() => {}, [])
+  const currentUUID = useMemo(() => randomUUID(), [])
+  const { rows } = useTerminalSize()
 
   function handleSelect(message: UserMessage) {
-    const indexFromEnd = messages.length - 1 - messages.indexOf(message)
     onSelect(message)
   }
 
@@ -68,6 +76,13 @@ export function MessageSelector({
     [messages, currentUUID],
   )
   const [selectedIndex, setSelectedIndex] = useState(allItems.length - 1)
+
+  useEffect(() => {
+    setSelectedIndex(previous => {
+      if (allItems.length === 0) return 0
+      return Math.min(previous, allItems.length - 1)
+    })
+  }, [allItems.length])
 
   const exitState = useExitOnCtrlCD(() => process.exit(0))
 
@@ -107,17 +122,22 @@ export function MessageSelector({
     }
   })
 
+  const maxVisibleCount = Math.max(
+    1,
+    rows - SELECTOR_OVERHEAD_ROWS - SELECTOR_RESERVED_ROWS,
+  )
+  const visibleCount = Math.min(
+    allItems.length,
+    MAX_VISIBLE_MESSAGES,
+    maxVisibleCount,
+  )
+
   const firstVisibleIndex = Math.max(
     0,
     Math.min(
-      selectedIndex - Math.floor(MAX_VISIBLE_MESSAGES / 2),
-      allItems.length - MAX_VISIBLE_MESSAGES,
+      selectedIndex - Math.floor(visibleCount / 2),
+      allItems.length - visibleCount,
     ),
-  )
-
-  const normalizedMessages = useMemo(
-    () => normalizeMessages(messages).filter(isNotEmptyMessage),
-    [messages],
   )
 
   return (
@@ -126,7 +146,6 @@ export function MessageSelector({
         flexDirection="column"
         borderStyle="round"
         borderColor={getTheme().secondaryBorder}
-        height={4 + Math.min(MAX_VISIBLE_MESSAGES, allItems.length) * 2}
         paddingX={1}
         marginTop={1}
       >
@@ -135,53 +154,51 @@ export function MessageSelector({
           <Text dimColor>This will fork the conversation</Text>
         </Box>
         {allItems
-          .slice(firstVisibleIndex, firstVisibleIndex + MAX_VISIBLE_MESSAGES)
+          .slice(firstVisibleIndex, firstVisibleIndex + visibleCount)
           .map((msg, index) => {
             const actualIndex = firstVisibleIndex + index
             const isSelected = actualIndex === selectedIndex
             const isCurrent = msg.uuid === currentUUID
 
+            const cleanedText = stripSystemMessages(
+              extractUserMessageText(msg.message.content),
+            )
+            const firstLine =
+              cleanedText
+                .split('\n')
+                .map(line => line.trim())
+                .find(Boolean) ?? ''
+            const isEmpty = !firstLine
+
             return (
-              <Box key={msg.uuid} flexDirection="row" height={2} minHeight={2}>
-                <Box width={7}>
+              <Box key={msg.uuid} flexDirection="row" height={1} minHeight={1}>
+                <Box width={INDEX_WIDTH}>
                   {isSelected ? (
                     <Text color="blue" bold>
-                      {figures.pointer} {firstVisibleIndex + index + 1}{' '}
+                      {figures.pointer} {actualIndex + 1}{' '}
                     </Text>
                   ) : (
                     <Text>
                       {'  '}
-                      {firstVisibleIndex + index + 1}{' '}
+                      {actualIndex + 1}{' '}
                     </Text>
                   )}
                 </Box>
-                <Box height={1} overflow="hidden" width={100}>
+                <Box height={1} overflow="hidden" width="100%">
                   {isCurrent ? (
                     <Box width="100%">
                       <Text dimColor italic>
                         {'(current)'}
                       </Text>
                     </Box>
-                  ) : Array.isArray(msg.message.content) &&
-                    msg.message.content[0]?.type === 'text' &&
-                    isEmptyMessageText(msg.message.content[0].text) ? (
-                    <Text dimColor italic>
-                      (empty message)
-                    </Text>
                   ) : (
-                    <MessageComponent
-                      message={msg}
-                      messages={normalizedMessages}
-                      addMargin={false}
-                      tools={tools}
-                      verbose={false}
-                      debug={false}
-                      erroredToolUseIDs={erroredToolUseIDs}
-                      inProgressToolUseIDs={new Set()}
-                      unresolvedToolUseIDs={unresolvedToolUseIDs}
-                      shouldAnimate={false}
-                      shouldShowDot={false}
-                    />
+                    <Text
+                      dimColor={isEmpty}
+                      italic={isEmpty}
+                      wrap="truncate-end"
+                    >
+                      {isEmpty ? '(empty message)' : firstLine}
+                    </Text>
                   )}
                 </Box>
               </Box>

@@ -209,7 +209,11 @@ export function ModelConfig({ onClose }: Props): React.ReactNode {
       paddingX={2}
       paddingY={containerPaddingY}
     >
-      <Box flexDirection="column" minHeight={2} marginBottom={tightLayout ? 0 : 1}>
+      <Box
+        flexDirection="column"
+        minHeight={2}
+        marginBottom={tightLayout ? 0 : 1}
+      >
         <Text bold>
           Model Configuration{isDeleteMode ? ' - CLEAR MODE' : ''}
         </Text>

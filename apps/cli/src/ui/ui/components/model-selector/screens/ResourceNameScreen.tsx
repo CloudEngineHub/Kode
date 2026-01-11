@@ -49,10 +49,11 @@ export function ResourceNameScreen({
         {!tightLayout && (
           <Box flexDirection="column" width={descriptionWidth}>
             <Text color={theme.secondaryText}>
-              This is the name of your Azure OpenAI resource (without the full domain).
+              This is the name of your Azure OpenAI resource (without the full
+              domain).
               <Newline />
-              For example, if your endpoint is "https://myresource.openai.azure.com",
-              enter "myresource".
+              For example, if your endpoint is
+              "https://myresource.openai.azure.com", enter "myresource".
             </Text>
           </Box>
         )}

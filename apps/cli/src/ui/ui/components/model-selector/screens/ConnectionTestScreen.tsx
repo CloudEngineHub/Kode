@@ -94,11 +94,13 @@ export function ConnectionTestScreen({
         {!tightLayout && (
           <Box flexDirection="column" width={descriptionWidth}>
             <Text color={theme.secondaryText}>
-              This will verify your configuration by sending a test request to the API.
+              This will verify your configuration by sending a test request to
+              the API.
               {selectedProvider === 'minimax' && (
                 <>
                   <Newline />
-                  For MiniMax, we'll test both v2 and v1 endpoints to find the best one.
+                  For MiniMax, we'll test both v2 and v1 endpoints to find the
+                  best one.
                 </>
               )}
             </Text>
@@ -108,23 +110,33 @@ export function ConnectionTestScreen({
         {!connectionTestResult && !isTestingConnection && (
           <Box marginTop={tightLayout ? 0 : 1}>
             <Text>
-              <Text color={theme.suggestion}>Press Enter</Text> to start the connection test
+              <Text color={theme.suggestion}>Press Enter</Text> to start the
+              connection test
             </Text>
           </Box>
         )}
 
         {isTestingConnection && (
-          <Box flexDirection="column" marginTop={tightLayout ? 0 : 1} gap={containerGap}>
+          <Box
+            flexDirection="column"
+            marginTop={tightLayout ? 0 : 1}
+            gap={containerGap}
+          >
             <Text color={theme.suggestion}>
               {tightLayout ? 'Testing connection…' : '🔄 Testing connection...'}
             </Text>
             {connectionTestResult?.message && (
-              <Text color={theme.secondaryText}>{connectionTestResult.message}</Text>
+              <Text color={theme.secondaryText}>
+                {connectionTestResult.message}
+              </Text>
             )}
             {!tightLayout &&
-              (connectionTestResult?.attempt || connectionTestResult?.phase) && (
+              (connectionTestResult?.attempt ||
+                connectionTestResult?.phase) && (
                 <Text color={theme.secondaryText}>
-                  {connectionTestResult.phase ? `Phase: ${connectionTestResult.phase}` : null}
+                  {connectionTestResult.phase
+                    ? `Phase: ${connectionTestResult.phase}`
+                    : null}
                   {connectionTestResult.attempt
                     ? ` · Attempt: ${connectionTestResult.attempt}/${connectionTestResult.maxAttempts ?? '?'}`
                     : ''}
@@ -133,16 +145,22 @@ export function ConnectionTestScreen({
                     : ''}
                 </Text>
               )}
-            {!tightLayout && typeof connectionTestResult?.retryInMs === 'number' && (
-              <Text color={theme.secondaryText}>
-                Retrying in {Math.round(connectionTestResult.retryInMs / 1000)}s...
-              </Text>
-            )}
+            {!tightLayout &&
+              typeof connectionTestResult?.retryInMs === 'number' && (
+                <Text color={theme.secondaryText}>
+                  Retrying in{' '}
+                  {Math.round(connectionTestResult.retryInMs / 1000)}s...
+                </Text>
+              )}
           </Box>
         )}
 
         {connectionTestResult && !isTestingConnection && (
-          <Box flexDirection="column" marginTop={tightLayout ? 0 : 1} gap={containerGap}>
+          <Box
+            flexDirection="column"
+            marginTop={tightLayout ? 0 : 1}
+            gap={containerGap}
+          >
             <Text color={connectionTestResult.success ? theme.success : 'red'}>
               {connectionTestResult.message}
             </Text>
@@ -155,13 +173,15 @@ export function ConnectionTestScreen({
 
             {!tightLayout && connectionTestResult.fallbackStep && (
               <Text color={theme.secondaryText}>
-                Strategy: {formatStrategyLabel(connectionTestResult.fallbackStep)}
+                Strategy:{' '}
+                {formatStrategyLabel(connectionTestResult.fallbackStep)}
               </Text>
             )}
 
             {!tightLayout && connectionTestResult.errorCategory && (
               <Text color={theme.secondaryText}>
-                Error type: {formatErrorCategory(connectionTestResult.errorCategory)}
+                Error type:{' '}
+                {formatErrorCategory(connectionTestResult.errorCategory)}
               </Text>
             )}
 
@@ -173,7 +193,9 @@ export function ConnectionTestScreen({
 
             {connectionTestResult.success ? (
               !tightLayout && (
-                <Text color={theme.success}>✅ Automatically proceeding...</Text>
+                <Text color={theme.success}>
+                  ✅ Automatically proceeding...
+                </Text>
               )
             ) : (
               <Text>
@@ -186,7 +208,8 @@ export function ConnectionTestScreen({
 
         <Box marginTop={tightLayout ? 0 : 1}>
           <Text dimColor>
-            Press <Text color={theme.suggestion}>Esc</Text> to go back to context length
+            Press <Text color={theme.suggestion}>Esc</Text> to go back to
+            context length
           </Text>
         </Box>
       </Box>

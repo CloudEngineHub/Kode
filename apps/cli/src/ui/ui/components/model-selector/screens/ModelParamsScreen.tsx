@@ -13,6 +13,8 @@ import {
   MAX_TOKENS_OPTIONS,
 } from '../options'
 
+const VIEWPORT_SAFE_MARGIN_ROWS = 1
+
 function isReasoningEffortOption(
   value: string,
 ): value is ReasoningEffortOption {
@@ -80,7 +82,10 @@ export function ModelParamsScreen({
 }: Props) {
   const maxSelectHeight = Math.max(
     3,
-    Math.min(tightLayout ? 6 : 10, terminalRows - (tightLayout ? 12 : 18)),
+    Math.min(
+      tightLayout ? 6 : 10,
+      terminalRows - (tightLayout ? 12 : 18) - VIEWPORT_SAFE_MARGIN_ROWS,
+    ),
   )
 
   return (
@@ -113,7 +118,9 @@ export function ModelParamsScreen({
               >
                 {field.label}
               </Text>
-              {!tightLayout && field.component !== 'button' && field.description ? (
+              {!tightLayout &&
+              field.component !== 'button' &&
+              field.description ? (
                 <Text color={theme.secondaryText}>{field.description}</Text>
               ) : null}
 
@@ -180,14 +187,16 @@ export function ModelParamsScreen({
                   </Text>
                 ) : field.name === 'reasoningEffort' ? (
                   <Text color={theme.secondaryText}>
-                    Current: <Text color={theme.suggestion}>{reasoningEffort}</Text>
+                    Current:{' '}
+                    <Text color={theme.suggestion}>{reasoningEffort}</Text>
                   </Text>
                 ) : field.name === 'requestStrategy' ? (
                   <Text color={theme.secondaryText}>
                     Current:{' '}
                     <Text color={theme.suggestion}>
-                      {requestStrategyOptions.find(option => option.value === requestStrategy)
-                        ?.label ?? requestStrategy}
+                      {requestStrategyOptions.find(
+                        option => option.value === requestStrategy,
+                      )?.label ?? requestStrategy}
                     </Text>
                   </Text>
                 ) : null}
@@ -196,9 +205,7 @@ export function ModelParamsScreen({
           ))}
 
           <Box marginTop={tightLayout ? 0 : 1}>
-            <Text dimColor>
-              Tab: next · Enter: continue · Esc: back
-            </Text>
+            <Text dimColor>Tab: next · Enter: continue · Esc: back</Text>
           </Box>
         </Box>
       </Box>

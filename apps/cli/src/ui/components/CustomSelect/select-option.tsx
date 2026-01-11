@@ -74,7 +74,9 @@ export function SelectOption({
         </Text>
       )}
 
-      <Text {...styles.label({ isFocused, isSelected })}>{children}</Text>
+      <Text {...styles.label({ isFocused, isSelected })} wrap="truncate-end">
+        {children}
+      </Text>
 
       {isSelected && (
         <Text {...styles.selectedIndicator()}>{figures.tick}</Text>

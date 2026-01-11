@@ -53,7 +53,9 @@ export function ApiKeyScreen({
   const modelTypeText = 'this model profile'
   const apiKeyInputColumns = Math.max(1, Math.min(80, terminalColumns - 10))
   const descriptionWidth = Math.max(1, Math.min(70, terminalColumns - 10))
-  const providerDisplayName = getProviderLabel(selectedProvider, 0).split(' (')[0]
+  const providerDisplayName = getProviderLabel(selectedProvider, 0).split(
+    ' (',
+  )[0]
   const skipsValidation =
     selectedProvider === 'minimax' || selectedProvider === 'minimax-coding'
 
@@ -84,7 +86,9 @@ export function ApiKeyScreen({
       return (
         <Text color={theme.secondaryText}>
           Tip: Get your API key from:{' '}
-          <Text color={theme.suggestion}>https://cloud.siliconflow.cn/i/oJWsm6io</Text>
+          <Text color={theme.suggestion}>
+            https://cloud.siliconflow.cn/i/oJWsm6io
+          </Text>
         </Text>
       )
     }
@@ -112,9 +116,13 @@ export function ApiKeyScreen({
       return (
         <Text color={theme.secondaryText}>
           Tip: This is for GLM Coding Plan API.{' '}
-          <Text color={theme.suggestion}>Use the same API key as regular GLM</Text>
+          <Text color={theme.suggestion}>
+            Use the same API key as regular GLM
+          </Text>
           <Newline />
-          <Text dimColor>Note: This uses a special endpoint for coding tasks.</Text>
+          <Text dimColor>
+            Note: This uses a special endpoint for coding tasks.
+          </Text>
         </Text>
       )
     }
@@ -136,7 +144,9 @@ export function ApiKeyScreen({
             https://platform.minimaxi.com/user-center/payment/coding-plan
           </Text>
           <Newline />
-          <Text dimColor>Note: This requires a MiniMax Coding Plan subscription.</Text>
+          <Text dimColor>
+            Note: This requires a MiniMax Coding Plan subscription.
+          </Text>
         </Text>
       )
     }
@@ -154,7 +164,9 @@ export function ApiKeyScreen({
       return (
         <Text color={theme.secondaryText}>
           Tip: Get your API key from:{' '}
-          <Text color={theme.suggestion}>https://platform.openai.com/api-keys</Text>
+          <Text color={theme.suggestion}>
+            https://platform.openai.com/api-keys
+          </Text>
         </Text>
       )
     }
@@ -181,7 +193,10 @@ export function ApiKeyScreen({
           Enter your {providerDisplayName} API key for {modelTypeText}:
         </Text>
 
-        <Box flexDirection="column" width={tightLayout ? undefined : descriptionWidth}>
+        <Box
+          flexDirection="column"
+          width={tightLayout ? undefined : descriptionWidth}
+        >
           {tightLayout ? (
             <Text color={theme.secondaryText}>
               Stored locally. Never sent to our servers.
@@ -225,7 +240,9 @@ export function ApiKeyScreen({
 
         {apiKeyCleanedNotification && !tightLayout && (
           <Box marginTop={1}>
-            <Text color={theme.success}>✓ API key cleaned: trimmed whitespace</Text>
+            <Text color={theme.success}>
+              ✓ API key cleaned: trimmed whitespace
+            </Text>
           </Box>
         )}
 
@@ -237,7 +254,8 @@ export function ApiKeyScreen({
               </Text>
               <Text>
                 {' '}
-                - Press Enter to {skipsValidation ? 'continue' : 'validate and continue'}
+                - Press Enter to{' '}
+                {skipsValidation ? 'continue' : 'validate and continue'}
               </Text>
             </Text>
           </Box>

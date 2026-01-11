@@ -60,6 +60,6 @@ export function useNotifyAfterTimeout(
       }
     }, timeout)
 
-    return () => clearTimeout(timer)
+    return () => clearInterval(timer)
   }, [message, timeout])
 }
