@@ -163,6 +163,222 @@ describe('session loader (projects/*.jsonl)', () => {
     )
   })
 
+  test('loads toolUseResult data from user messages with tool results', () => {
+    const sessionId = '66666666-6666-6666-6666-666666666666'
+    const path = getSessionLogFilePath({ cwd: projectDir, sessionId })
+    mkdirSync(
+      join(
+        configDir,
+        'projects',
+        sanitizeProjectNameForSessionStore(projectDir),
+      ),
+      {
+        recursive: true,
+      },
+    )
+
+    // Simulate a session with a Bash tool result that has toolUseResult data
+    const lines =
+      [
+        JSON.stringify({
+          type: 'file-history-snapshot',
+          messageId: 'm1',
+          snapshot: {
+            messageId: 'm1',
+            trackedFileBackups: {},
+            timestamp: new Date().toISOString(),
+          },
+          isSnapshotUpdate: false,
+        }),
+        JSON.stringify({
+          type: 'user',
+          sessionId,
+          uuid: 'u1',
+          message: { role: 'user', content: 'run ls command' },
+        }),
+        JSON.stringify({
+          type: 'assistant',
+          sessionId,
+          uuid: 'a1',
+          message: {
+            id: 'msg1',
+            model: 'x',
+            type: 'message',
+            role: 'assistant',
+            content: [
+              { type: 'text', text: 'Running ls...' },
+              { type: 'tool_use', id: 'toolu_bash1', name: 'Bash', input: { command: 'ls' } },
+            ],
+            stop_reason: 'tool_use',
+            stop_sequence: null,
+            usage: { input_tokens: 0, output_tokens: 0 },
+          },
+        }),
+        // User message with tool_result AND toolUseResult data (as saved by kodeAgentSessionLog)
+        JSON.stringify({
+          type: 'user',
+          sessionId,
+          uuid: 'u2',
+          message: {
+            role: 'user',
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: 'toolu_bash1',
+                is_error: false,
+                content: 'file1.ts\nfile2.ts',
+              },
+            ],
+          },
+          toolUseResult: {
+            stdout: 'file1.ts\nfile2.ts',
+            stderr: '',
+            exitCode: 0,
+            interrupted: false,
+          },
+        }),
+      ].join('\n') + '\n'
+    writeFileSync(path, lines, 'utf8')
+
+    const messages = loadKodeAgentSessionMessages({
+      cwd: projectDir,
+      sessionId,
+    })
+
+    expect(messages.length).toBe(3)
+
+    // Verify the tool result message has toolUseResult restored
+    const toolResultMsg = messages[2] as any
+    expect(toolResultMsg.type).toBe('user')
+    expect(toolResultMsg.toolUseResult).toBeDefined()
+    expect(toolResultMsg.toolUseResult.data).toEqual({
+      stdout: 'file1.ts\nfile2.ts',
+      stderr: '',
+      exitCode: 0,
+      interrupted: false,
+    })
+  })
+
+  test('loads FileEdit toolUseResult with filePath for UI rendering', () => {
+    const sessionId = '77777777-7777-7777-7777-777777777777'
+    const path = getSessionLogFilePath({ cwd: projectDir, sessionId })
+    mkdirSync(
+      join(
+        configDir,
+        'projects',
+        sanitizeProjectNameForSessionStore(projectDir),
+      ),
+      {
+        recursive: true,
+      },
+    )
+
+    // Simulate a session with a FileEdit tool result
+    const lines =
+      [
+        JSON.stringify({
+          type: 'file-history-snapshot',
+          messageId: 'm1',
+          snapshot: {
+            messageId: 'm1',
+            trackedFileBackups: {},
+            timestamp: new Date().toISOString(),
+          },
+          isSnapshotUpdate: false,
+        }),
+        JSON.stringify({
+          type: 'user',
+          sessionId,
+          uuid: 'u1',
+          message: {
+            role: 'user',
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: 'toolu_edit1',
+                is_error: false,
+                content: 'File edited successfully',
+              },
+            ],
+          },
+          // This is the data shape that FileEditToolUpdatedMessage expects
+          toolUseResult: {
+            filePath: '/path/to/file.ts',
+            structuredPatch: [
+              {
+                oldStart: 1,
+                oldLines: 1,
+                newStart: 1,
+                newLines: 2,
+                lines: ['-old line', '+new line', '+another line'],
+              },
+            ],
+          },
+        }),
+      ].join('\n') + '\n'
+    writeFileSync(path, lines, 'utf8')
+
+    const messages = loadKodeAgentSessionMessages({
+      cwd: projectDir,
+      sessionId,
+    })
+
+    expect(messages.length).toBe(1)
+
+    const toolResultMsg = messages[0] as any
+    expect(toolResultMsg.toolUseResult).toBeDefined()
+    expect(toolResultMsg.toolUseResult.data.filePath).toBe('/path/to/file.ts')
+    expect(toolResultMsg.toolUseResult.data.structuredPatch).toHaveLength(1)
+  })
+
+  test('handles user messages without toolUseResult gracefully', () => {
+    const sessionId = '88888888-8888-8888-8888-888888888888'
+    const path = getSessionLogFilePath({ cwd: projectDir, sessionId })
+    mkdirSync(
+      join(
+        configDir,
+        'projects',
+        sanitizeProjectNameForSessionStore(projectDir),
+      ),
+      {
+        recursive: true,
+      },
+    )
+
+    // User message without toolUseResult (plain text message)
+    const lines =
+      [
+        JSON.stringify({
+          type: 'file-history-snapshot',
+          messageId: 'm1',
+          snapshot: {
+            messageId: 'm1',
+            trackedFileBackups: {},
+            timestamp: new Date().toISOString(),
+          },
+          isSnapshotUpdate: false,
+        }),
+        JSON.stringify({
+          type: 'user',
+          sessionId,
+          uuid: 'u1',
+          message: { role: 'user', content: 'hello' },
+          // No toolUseResult field
+        }),
+      ].join('\n') + '\n'
+    writeFileSync(path, lines, 'utf8')
+
+    const messages = loadKodeAgentSessionMessages({
+      cwd: projectDir,
+      sessionId,
+    })
+
+    expect(messages.length).toBe(1)
+    const msg = messages[0] as any
+    expect(msg.type).toBe('user')
+    expect(msg.toolUseResult).toBeUndefined()
+  })
+
   test('findMostRecentKodeAgentSessionId picks newest jsonl by mtime', () => {
     const projectRoot = join(
       configDir,

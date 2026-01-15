@@ -116,6 +116,9 @@ function normalizeLoadedUser(entry: JsonlUserEntry): Message | null {
     type: 'user',
     uuid: entry.uuid as any,
     message: entry.message as any,
+    ...(entry.toolUseResult !== undefined
+      ? { toolUseResult: { data: entry.toolUseResult, resultForAssistant: '' } }
+      : {}),
   }
 }
 

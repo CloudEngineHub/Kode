@@ -608,6 +608,22 @@ export function isEmptyMessageText(text: string): boolean {
     text.trim() === NO_CONTENT_MESSAGE
   )
 }
+
+/**
+ * Filter messages to get user text messages for the undo menu (2xESC).
+ * Excludes:
+ * - Assistant messages
+ * - User messages that only contain tool_result blocks
+ */
+export function filterUserTextMessagesForUndo(
+  messages: (UserMessage | AssistantMessage)[],
+): UserMessage[] {
+  return messages.filter((msg): msg is UserMessage => {
+    if (msg.type !== 'user') return false
+    if (!Array.isArray(msg.message.content)) return true
+    return !msg.message.content.every(block => block.type === 'tool_result')
+  })
+}
 const STRIPPED_TAGS = [
   'commit_analysis',
   'context',
