@@ -8,6 +8,7 @@ import { randomUUID } from 'crypto'
 import { type Tool } from '@tool'
 import {
   createUserMessage,
+  filterUserTextMessagesForUndo,
   isEmptyMessageText,
   isNotEmptyMessage,
   normalizeMessages,
@@ -49,16 +50,7 @@ export function MessageSelector({
 
   const allItems = useMemo(
     () => [
-      ...messages
-        .filter(
-          _ =>
-            !(
-              _.type === 'user' &&
-              Array.isArray(_.message.content) &&
-              _.message.content[0]?.type === 'tool_result'
-            ),
-        )
-        .filter(_ => _.type !== 'assistant'),
+      ...filterUserTextMessagesForUndo(messages),
       { ...createUserMessage(''), uuid: currentUUID } as UserMessage,
     ],
     [messages, currentUUID],

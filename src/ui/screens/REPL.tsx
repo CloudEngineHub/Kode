@@ -38,6 +38,7 @@ import {
   type BinaryFeedbackResult,
   type Message as MessageType,
   type ProgressMessage,
+  type UserMessage,
   query,
 } from '@query'
 import type { WrappedClient } from '@services/mcpClient'
@@ -741,7 +742,10 @@ export function REPL({
           <MessageSelector
             erroredToolUseIDs={erroredToolUseIDs}
             unresolvedToolUseIDs={unresolvedToolUseIDs}
-            messages={normalizeMessagesForAPI(messages)}
+            messages={messages.filter(
+              (m): m is UserMessage | AssistantMessage =>
+                m.type === 'user' || m.type === 'assistant',
+            )}
             onSelect={async message => {
               setIsMessageSelectorVisible(false)
 

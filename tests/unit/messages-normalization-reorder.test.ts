@@ -4,6 +4,7 @@ import {
   createAssistantMessage,
   createProgressMessage,
   createUserMessage,
+  filterUserTextMessagesForUndo,
   getInProgressToolUseIDs,
   getUnresolvedToolUseIDs,
   normalizeMessages,
@@ -113,5 +114,30 @@ describe('messages normalization + reordering parity', () => {
     const normalized = normalizeMessages([t1, t2, progressT2])
     expect(getUnresolvedToolUseIDs(normalized)).toEqual(new Set(['t1', 't2']))
     expect(getInProgressToolUseIDs(normalized)).toEqual(new Set(['t1', 't2']))
+  })
+
+  test('filterUserTextMessagesForUndo excludes tool_result-only messages', () => {
+    const messages = [
+      createUserMessage('hello'),
+      makeToolResult('t1'),
+      createAssistantMessage('response'),
+    ]
+    const result = filterUserTextMessagesForUndo(messages as any)
+    expect(result).toHaveLength(1)
+    expect(result[0]!.message.content).toBe('hello')
+  })
+
+  test('filterUserTextMessagesForUndo keeps user text after tool_results', () => {
+    const messages = [
+      createUserMessage('first'),
+      createAssistantMessage('response'),
+      makeToolResult('t1'),
+      makeToolResult('t2'),
+      createUserMessage('second'),
+    ]
+    const result = filterUserTextMessagesForUndo(messages as any)
+    expect(result).toHaveLength(2)
+    expect(result[0]!.message.content).toBe('first')
+    expect(result[1]!.message.content).toBe('second')
   })
 })

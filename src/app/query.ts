@@ -489,6 +489,21 @@ export async function* query(
     toolUseContext.options?.persistSession !== false &&
     process.env.NODE_ENV !== 'test'
 
+  // Persist the last user message that triggered this query (if it's a text message, not a tool result)
+  // This ensures user prompts are saved to the session file for resume/undo functionality
+  if (shouldPersistSession && messages.length > 0) {
+    const lastMessage = messages[messages.length - 1]
+    if (
+      lastMessage?.type === 'user' &&
+      (typeof lastMessage.message.content === 'string' ||
+        (Array.isArray(lastMessage.message.content) &&
+          lastMessage.message.content.length > 0 &&
+          lastMessage.message.content[0]?.type !== 'tool_result'))
+    ) {
+      appendSessionJsonlFromMessage({ message: lastMessage, toolUseContext })
+    }
+  }
+
   for await (const message of queryCore(
     messages,
     systemPrompt,
