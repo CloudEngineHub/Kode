@@ -53,7 +53,7 @@ describe('Regression Tests: Responses API Bug Fixes', () => {
 
     console.log(`  📦 Unified response ID: ${unifiedResponse.responseId}`)
 
-    // Step 2: Convert to AssistantMessage (like refactored claude.ts does)
+    // Step 2: Convert to AssistantMessage (like the refactored CLI pipeline does)
     const apiMessage = {
       role: 'assistant' as const,
       content: unifiedResponse.content,

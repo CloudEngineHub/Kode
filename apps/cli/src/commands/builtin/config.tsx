@@ -1,5 +1,5 @@
 import type { Command } from '../types'
-import { Config } from '#ui-ink/components/Config'
+import { ConfigScreen } from '#ui-ink/screens/overlays/ConfigScreen'
 import * as React from 'react'
 
 const config = {
@@ -10,7 +10,7 @@ const config = {
   isHidden: false,
   ui: { displayMode: 'fullscreen' },
   async call(onDone) {
-    return <Config onClose={onDone} />
+    return <ConfigScreen onClose={onDone} />
   },
   userFacingName() {
     return 'config'

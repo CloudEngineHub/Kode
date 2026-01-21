@@ -2,6 +2,7 @@ export interface UnifiedSuggestion {
   value: string
   displayValue: string
   type: 'command' | 'agent' | 'file' | 'ask'
+  description?: string
   icon?: string
   score: number
   metadata?: any
@@ -14,4 +15,5 @@ export interface CompletionContext {
   prefix: string
   startPos: number
   endPos: number
+  trigger?: '@' | '/' | null
 }

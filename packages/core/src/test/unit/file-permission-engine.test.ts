@@ -17,6 +17,10 @@ import {
   getPlanFilePath,
 } from '#core/utils/planMode'
 import { createAssistantMessage } from '#core/utils/messages'
+import {
+  getKodeAgentSessionId,
+  setKodeAgentSessionId,
+} from '#protocol/utils/kodeAgentSessionId'
 
 function makeContext(args?: {
   toolPermissionContext?: ReturnType<typeof createDefaultToolPermissionContext>
@@ -84,6 +88,10 @@ describe('Compatibility: filesystem permission engine', () => {
       if (result.result !== false) {
         throw new Error('Expected permission denied result')
       }
+      expect(result.blockedPath).toBe(filePath)
+      expect(result.decisionReason).toBe(
+        'No allow rule matched (outside working directories)',
+      )
       expect(result.suggestions?.length ?? 0).toBeGreaterThan(0)
     } finally {
       rmSync(tmp, { recursive: true, force: true })
@@ -203,6 +211,160 @@ describe('Compatibility: filesystem permission engine', () => {
     }
   })
 
+  test('allows reading session-memory files for the current session (kode root + claude compat root)', async () => {
+    const tmpRoots = mkdtempSync(path.join(tmpdir(), 'kode-perm-roots-'))
+    const tmpKodeRoot = path.join(tmpRoots, '.kode')
+    const tmpClaudeRoot = path.join(tmpRoots, '.claude')
+    mkdirSync(tmpKodeRoot, { recursive: true })
+    mkdirSync(tmpClaudeRoot, { recursive: true })
+
+    const previousKodeConfigDir = process.env.KODE_CONFIG_DIR
+    const previousClaudeConfigDir = process.env.CLAUDE_CONFIG_DIR
+    const previousSessionId = getKodeAgentSessionId()
+
+    process.env.KODE_CONFIG_DIR = tmpKodeRoot
+    process.env.CLAUDE_CONFIG_DIR = tmpClaudeRoot
+    setKodeAgentSessionId('session-perm-test')
+
+    try {
+      const toolPermissionContext = createDefaultToolPermissionContext({
+        isBypassPermissionsModeAvailable: true,
+      })
+      const ctx = makeContext({ toolPermissionContext })
+
+      const projectKey = process.cwd().replace(/[^a-zA-Z0-9]/g, '-')
+      const sessionId = getKodeAgentSessionId()
+
+      const kodeSessionMemoryFile = path.join(
+        tmpKodeRoot,
+        'projects',
+        projectKey,
+        sessionId,
+        'session-memory',
+        'summary.md',
+      )
+      mkdirSync(path.dirname(kodeSessionMemoryFile), { recursive: true })
+      writeFileSync(kodeSessionMemoryFile, 'test', 'utf8')
+
+      const claudeSessionMemoryFile = path.join(
+        tmpClaudeRoot,
+        'projects',
+        projectKey,
+        sessionId,
+        'session-memory',
+        'summary.md',
+      )
+      mkdirSync(path.dirname(claudeSessionMemoryFile), { recursive: true })
+      writeFileSync(claudeSessionMemoryFile, 'test', 'utf8')
+
+      const kodeRead = await hasPermissionsToUseTool(
+        FileReadTool,
+        { file_path: kodeSessionMemoryFile },
+        ctx,
+        createAssistantMessage(''),
+      )
+      expect(kodeRead.result).toBe(true)
+
+      const claudeRead = await hasPermissionsToUseTool(
+        FileReadTool,
+        { file_path: claudeSessionMemoryFile },
+        ctx,
+        createAssistantMessage(''),
+      )
+      expect(claudeRead.result).toBe(true)
+
+      const kodeWriteDenied = await hasPermissionsToUseTool(
+        FileWriteTool,
+        { file_path: kodeSessionMemoryFile, content: 'overwrite' },
+        ctx,
+        createAssistantMessage(''),
+      )
+      expect(kodeWriteDenied.result).toBe(false)
+    } finally {
+      setKodeAgentSessionId(previousSessionId)
+      process.env.KODE_CONFIG_DIR = previousKodeConfigDir
+      process.env.CLAUDE_CONFIG_DIR = previousClaudeConfigDir
+      rmSync(tmpRoots, { recursive: true, force: true })
+    }
+  })
+
+  test('allows writing to scratchpad files for the current session (claude tmpdir layout)', async () => {
+    if (process.platform === 'win32') return
+
+    const tmpScratchBase = mkdtempSync(path.join(tmpdir(), 'kode-scratchpad-'))
+    const previousTmp = process.env.CLAUDE_CODE_TMPDIR
+    const previousSessionId = getKodeAgentSessionId()
+    process.env.CLAUDE_CODE_TMPDIR = tmpScratchBase
+    setKodeAgentSessionId('session-scratchpad-test')
+
+    try {
+      const toolPermissionContext = createDefaultToolPermissionContext({
+        isBypassPermissionsModeAvailable: true,
+      })
+      const ctx = makeContext({ toolPermissionContext })
+
+      const projectKey = process.cwd().replace(/[^a-zA-Z0-9]/g, '-')
+      const sessionId = getKodeAgentSessionId()
+      const scratchpadFile = path.join(
+        tmpScratchBase,
+        'claude',
+        projectKey,
+        sessionId,
+        'scratchpad',
+        'note.txt',
+      )
+
+      const allowed = await hasPermissionsToUseTool(
+        FileWriteTool,
+        { file_path: scratchpadFile, content: 'hi' },
+        ctx,
+        createAssistantMessage(''),
+      )
+      expect(allowed.result).toBe(true)
+    } finally {
+      setKodeAgentSessionId(previousSessionId)
+      process.env.CLAUDE_CODE_TMPDIR = previousTmp
+      rmSync(tmpScratchBase, { recursive: true, force: true })
+    }
+  })
+
+  test('allows reading Claude tasks/*.output files (claude tmpdir layout)', async () => {
+    if (process.platform === 'win32') return
+
+    const tmpScratchBase = mkdtempSync(path.join(tmpdir(), 'kode-tasks-out-'))
+    const previousTmp = process.env.CLAUDE_CODE_TMPDIR
+    process.env.CLAUDE_CODE_TMPDIR = tmpScratchBase
+
+    try {
+      const toolPermissionContext = createDefaultToolPermissionContext({
+        isBypassPermissionsModeAvailable: true,
+      })
+      const ctx = makeContext({ toolPermissionContext })
+
+      const projectKey = process.cwd().replace(/[^a-zA-Z0-9]/g, '-')
+      const outputFile = path.join(
+        tmpScratchBase,
+        'claude',
+        projectKey,
+        'tasks',
+        'bash_123.output',
+      )
+      mkdirSync(path.dirname(outputFile), { recursive: true })
+      writeFileSync(outputFile, 'hello', 'utf8')
+
+      const allowed = await hasPermissionsToUseTool(
+        FileReadTool,
+        { file_path: outputFile },
+        ctx,
+        createAssistantMessage(''),
+      )
+      expect(allowed.result).toBe(true)
+    } finally {
+      process.env.CLAUDE_CODE_TMPDIR = previousTmp
+      rmSync(tmpScratchBase, { recursive: true, force: true })
+    }
+  })
+
   test('asks for UNC paths and does not provide suggestions', async () => {
     const toolPermissionContext = createDefaultToolPermissionContext({
       isBypassPermissionsModeAvailable: true,
@@ -220,6 +382,10 @@ describe('Compatibility: filesystem permission engine', () => {
     if (result.result !== false) {
       throw new Error('Expected permission denied result')
     }
+    expect(result.blockedPath).toBe('//server/share/file.txt')
+    expect(result.decisionReason).toBe(
+      'UNC/network path requires manual approval',
+    )
     expect(result.suggestions).toBeUndefined()
   })
 
@@ -240,6 +406,10 @@ describe('Compatibility: filesystem permission engine', () => {
     if (result.result !== false) {
       throw new Error('Expected permission denied result')
     }
+    expect(result.blockedPath).toBe('C:\\\\foo:bar')
+    expect(result.decisionReason).toBe(
+      'Suspicious Windows path pattern requires manual approval',
+    )
     expect(result.suggestions).toBeUndefined()
   })
 
@@ -256,7 +426,14 @@ describe('Compatibility: filesystem permission engine', () => {
       const base = createDefaultToolPermissionContext({
         isBypassPermissionsModeAvailable: true,
       })
-      const ctx = makeContext({ toolPermissionContext: base })
+      const withInside = applyToolPermissionContextUpdates(base, [
+        {
+          type: 'addDirectories',
+          destination: 'session',
+          directories: [inside],
+        },
+      ])
+      const ctx = makeContext({ toolPermissionContext: withInside })
 
       const denied = await hasPermissionsToUseTool(
         FileReadTool,
@@ -266,7 +443,7 @@ describe('Compatibility: filesystem permission engine', () => {
       )
       expect(denied.result).toBe(false)
 
-      const updated = applyToolPermissionContextUpdates(base, [
+      const updated = applyToolPermissionContextUpdates(withInside, [
         {
           type: 'addDirectories',
           destination: 'session',

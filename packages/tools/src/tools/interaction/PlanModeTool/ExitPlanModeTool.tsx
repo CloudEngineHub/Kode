@@ -3,6 +3,7 @@ import React from 'react'
 import { z } from 'zod'
 import { Tool } from '#core/tooling/Tool'
 import {
+  exitPlanMode,
   getPlanConversationKey,
   getPlanFilePath,
   readPlanFile,
@@ -10,6 +11,11 @@ import {
 import { EXIT_DESCRIPTION, EXIT_PROMPT, EXIT_TOOL_NAME } from './prompt'
 import { getTheme } from '#core/utils/theme'
 import { BLACK_CIRCLE } from '#core/constants/figures'
+import {
+  getPermissionMode,
+  setPermissionMode,
+} from '#core/utils/permissionModeState'
+import { applyToolPermissionContextUpdateForConversationKey } from '#core/utils/toolPermissionContextState'
 
 function getExitPlanModePlanText(conversationKey?: string): string {
   const { content } = readPlanFile(undefined, conversationKey)
@@ -24,7 +30,21 @@ export function __getExitPlanModePlanTextForTests(
   return getExitPlanModePlanText(conversationKey)
 }
 
-const inputSchema = z.object({}).passthrough()
+const inputSchema = z
+  .object({
+    allowedPrompts: z
+      .array(
+        z.object({
+          tool: z.literal('Bash'),
+          prompt: z.string(),
+        }),
+      )
+      .optional()
+      .describe(
+        'Prompt-based permissions needed to implement the plan. These describe categories of actions rather than specific commands.',
+      ),
+  })
+  .passthrough()
 
 type Output = {
   plan: string
@@ -81,7 +101,7 @@ export const ExitPlanModeTool = {
         <Box flexDirection="row">
           <Text>&nbsp;&nbsp;⎿ &nbsp;</Text>
           <Box flexDirection="column" width="100%">
-            <Text color={theme.error}>User rejected Claude&apos;s plan:</Text>
+            <Text color={theme.error}>User rejected the plan:</Text>
             <Box
               borderStyle="round"
               borderColor={theme.planMode}
@@ -106,13 +126,13 @@ export const ExitPlanModeTool = {
       <Box flexDirection="column" marginTop={1} width="100%">
         <Box flexDirection="row">
           <Text color={theme.planMode}>{BLACK_CIRCLE}</Text>
-          <Text> User approved Claude&apos;s plan</Text>
+          <Text> User approved the plan</Text>
         </Box>
         <Box flexDirection="row">
           <Text>&nbsp;&nbsp;⎿ &nbsp;</Text>
           <Box flexDirection="column">
             {planPath ? (
-              <Text dimColor>Plan saved to: {planPath} · /plan to edit</Text>
+              <Text dimColor>Plan file: {planPath} · /plan to edit</Text>
             ) : null}
             <Text dimColor>{plan}</Text>
           </Box>
@@ -127,25 +147,49 @@ export const ExitPlanModeTool = {
 
     return `User has approved your plan. You can now start coding. Start with updating your todo list if applicable
 
-Your plan has been saved to: ${output.filePath}
+Your plan file is: ${output.filePath}
 You can refer back to it if needed during implementation.
 
 ## Approved Plan:
 ${output.plan}`
   },
   async *call(input: z.infer<typeof inputSchema>, context: any) {
+    exitPlanMode(context)
+
+    const safeMode = Boolean(context?.options?.safeMode ?? context?.safeMode)
+    const permissionMode = getPermissionMode(context)
+    const nextPermissionMode =
+      permissionMode === 'plan' ? 'default' : permissionMode
     const conversationKey = getPlanConversationKey(context)
-    const planFilePath = getPlanFilePath(context?.agentId, conversationKey)
-    const { content, exists } = readPlanFile(context?.agentId, conversationKey)
-    if (!exists) {
-      throw new Error(
-        `No plan file found at ${planFilePath}. Please write your plan to this file before calling ExitPlanMode.`,
-      )
+    const updatedToolPermissionContext =
+      applyToolPermissionContextUpdateForConversationKey({
+        conversationKey,
+        isBypassPermissionsModeAvailable: !safeMode,
+        update: {
+          type: 'setMode',
+          mode: nextPermissionMode,
+          destination: 'session',
+        },
+      })
+
+    if (context) {
+      context.options ??= {}
+      context.options.toolPermissionContext = updatedToolPermissionContext
     }
+
+    if (context) {
+      setPermissionMode(context, nextPermissionMode)
+    }
+
+    const planFilePath = getPlanFilePath(context?.agentId, conversationKey)
+    const { content } = readPlanFile(context?.agentId, conversationKey)
+    const plan = content.trim()
+      ? content
+      : getExitPlanModePlanText(conversationKey)
 
     const isAgent = !!context?.agentId
     const output: Output = {
-      plan: content,
+      plan,
       isAgent,
       filePath: planFilePath,
     }

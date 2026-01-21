@@ -2,24 +2,22 @@ import { execFileNoThrow } from './execFileNoThrow'
 import { memoize } from 'lodash-es'
 import { join } from 'path'
 import { homedir } from 'os'
-import { CONFIG_BASE_DIR, CONFIG_FILE } from '#core/constants/product'
+import { CONFIG_FILE } from '#core/constants/product'
+import { getKodeRoot } from '#config/dataRoots'
 // Base directory for local Kode data files.
-// Also respects `CLAUDE_CONFIG_DIR` for compatibility.
 //
 // Note: this must be a function (not a fixed const) because tests (and some host
 // integrations) may set env vars after modules are loaded.
 export function getKodeBaseDir(): string {
-  return (
-    process.env.KODE_CONFIG_DIR ??
-    process.env.CLAUDE_CONFIG_DIR ??
-    join(homedir(), CONFIG_BASE_DIR)
-  )
+  return getKodeRoot()
 }
 
 // Config and data paths
-// Also respects `CLAUDE_CONFIG_DIR` for compatibility.
 export function getGlobalConfigFilePath(): string {
-  return process.env.KODE_CONFIG_DIR || process.env.CLAUDE_CONFIG_DIR
+  const hasOverride = Boolean(
+    process.env.KODE_CONFIG_DIR || process.env.ANYKODE_CONFIG_DIR,
+  )
+  return hasOverride
     ? join(getKodeBaseDir(), 'config.json')
     : join(homedir(), CONFIG_FILE)
 }

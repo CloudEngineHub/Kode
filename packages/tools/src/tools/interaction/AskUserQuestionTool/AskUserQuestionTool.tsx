@@ -2,6 +2,7 @@ import { Box, Text } from 'ink'
 import React from 'react'
 import { z } from 'zod'
 import { BLACK_CIRCLE } from '#core/constants/figures'
+import { PRODUCT_NAME } from '#core/constants/product'
 import { Tool, ToolUseContext } from '#core/tooling/Tool'
 import { getTheme } from '#core/utils/theme'
 import { DESCRIPTION, PROMPT, TOOL_NAME_FOR_PROMPT } from './prompt'
@@ -19,8 +20,20 @@ const questionSchema = z.object({
 })
 
 const inputSchema = z
-  .strictObject({
+  .object({
     questions: z.array(questionSchema).min(1).max(4),
+    answers: z
+      .record(z.string())
+      .optional()
+      .describe('User answers collected by the permission component'),
+    metadata: z
+      .object({
+        source: z.string().optional(),
+      })
+      .optional()
+      .describe(
+        'Optional metadata for tracking and analytics purposes. Not displayed to user.',
+      ),
   })
   .refine(
     input => {
@@ -91,7 +104,7 @@ export const AskUserQuestionTool = {
       <Box flexDirection="column" marginTop={1}>
         <Box flexDirection="row">
           <Text color={theme.text}>{BLACK_CIRCLE}&nbsp;</Text>
-          <Text>User answered Claude&apos;s questions:</Text>
+          <Text>User answered {PRODUCT_NAME} Agent&apos;s questions:</Text>
         </Box>
         <Box flexDirection="column" paddingLeft={2}>
           {Object.entries(output.answers).map(([question, answer]) => (

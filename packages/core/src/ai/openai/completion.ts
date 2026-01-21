@@ -5,9 +5,9 @@ import type { Response } from 'undici'
 
 import { getGlobalConfig } from '#core/utils/config'
 import {
-  buildClaudeCodeHeaders,
+  buildCompatHeaders,
   type RequestHeadersProfile,
-} from '#core/ai/llm/claudeCodeFallback'
+} from '#core/ai/llm/restrictedClientCompat'
 import { debug as debugLogger, logAPIError } from '#core/utils/debugLogger'
 import { providers } from '#core/constants/models/providers'
 
@@ -138,9 +138,7 @@ function createHeaders(
 ): Record<string, string> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(requestHeadersProfile === 'claude_code'
-      ? buildClaudeCodeHeaders()
-      : {}),
+    ...(requestHeadersProfile === 'compat' ? buildCompatHeaders() : {}),
   }
 
   if (apiKey) {

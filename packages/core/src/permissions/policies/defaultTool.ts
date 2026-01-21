@@ -32,17 +32,21 @@ export function checkDefaultToolPermission(args: {
     )
   }
 
-  if (args.effectiveDeniedTools.some(matchesToolRule)) {
+  const deniedRule = args.effectiveDeniedTools.find(matchesToolRule)
+  if (deniedRule) {
     return {
       result: false,
       message: `Permission to use ${args.tool.name} has been denied.`,
       shouldPromptUser: false,
+      decisionReason: deniedRule,
     }
   }
-  if (args.effectiveAskedTools.some(matchesToolRule)) {
+  const askedRule = args.effectiveAskedTools.find(matchesToolRule)
+  if (askedRule) {
     return {
       result: false,
       message: `${PRODUCT_NAME} requested permissions to use ${args.tool.name}, but you haven't granted it yet.`,
+      decisionReason: askedRule,
     }
   }
   if (args.effectiveAllowedTools.some(matchesToolRule)) {
@@ -52,5 +56,6 @@ export function checkDefaultToolPermission(args: {
   return {
     result: false,
     message: `${PRODUCT_NAME} requested permissions to use ${args.tool.name}, but you haven't granted it yet.`,
+    decisionReason: 'No allow rule matched',
   }
 }

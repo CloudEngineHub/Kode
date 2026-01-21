@@ -9,7 +9,10 @@ import { WizardPanel, type WizardContextValue } from '../Wizard'
 
 export function StepChooseColor({ ctx }: { ctx: WizardContextValue }) {
   useKeypress((_input, key) => {
-    if (key.escape) ctx.goBack()
+    if (key.escape) {
+      ctx.goBack()
+      return true
+    }
   })
 
   const agentType = ctx.wizardData.agentType ?? 'agent'

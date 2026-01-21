@@ -49,6 +49,8 @@ export function checkFilesystemPermission(args: {
       return {
         result: false,
         message: `${PRODUCT_NAME} requested permissions to read from ${toolPath}, which appears to be a UNC path that could access network resources.`,
+        blockedPath: toolPath,
+        decisionReason: 'UNC/network path requires manual approval',
       }
     }
   }
@@ -57,6 +59,9 @@ export function checkFilesystemPermission(args: {
       return {
         result: false,
         message: `${PRODUCT_NAME} requested permissions to read from ${toolPath}, which contains a suspicious Windows path pattern that requires manual approval.`,
+        blockedPath: toolPath,
+        decisionReason:
+          'Suspicious Windows path pattern requires manual approval',
       }
     }
   }
@@ -73,6 +78,8 @@ export function checkFilesystemPermission(args: {
         result: false,
         message: `Permission to read ${toolPath} has been denied.`,
         shouldPromptUser: false,
+        blockedPath: toolPath,
+        decisionReason: deniedRule,
       }
     }
   }
@@ -88,6 +95,8 @@ export function checkFilesystemPermission(args: {
       return {
         result: false,
         message: `${PRODUCT_NAME} requested permissions to read from ${toolPath}, but you haven't granted it yet.`,
+        blockedPath: toolPath,
+        decisionReason: askedRule,
       }
     }
   }
@@ -118,6 +127,8 @@ export function checkFilesystemPermission(args: {
   return {
     result: false,
     message: `${PRODUCT_NAME} requested permissions to read from ${toolPath}, but you haven't granted it yet.`,
+    blockedPath: toolPath,
+    decisionReason: 'No allow rule matched (outside working directories)',
     suggestions: suggestFilePermissionUpdates({
       inputPath: toolPath,
       operation: 'read',

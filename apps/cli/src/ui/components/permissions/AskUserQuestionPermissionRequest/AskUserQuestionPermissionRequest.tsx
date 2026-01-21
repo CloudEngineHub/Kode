@@ -127,7 +127,7 @@ export function AskUserQuestionPermissionRequest({
     return (
       <Box flexDirection="column" marginTop={1}>
         <Text color={theme.error}>Invalid AskUserQuestion input.</Text>
-        <Text dimColor>Press Esc to cancel.</Text>
+        <Text dimColor>Esc to cancel.</Text>
       </Box>
     )
   }

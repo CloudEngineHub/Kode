@@ -4,7 +4,7 @@ import {
   getCurrentProjectConfig,
   saveCurrentProjectConfig,
 } from '#core/utils/config'
-import { SESSION_ID } from './utils/log'
+import { getKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
 
 // DO NOT ADD MORE STATE HERE OR BORIS WILL CURSE YOU
 const STATE: {
@@ -57,7 +57,7 @@ export function registerCostSummaryOnExit(): () => void {
       lastCost: STATE.totalCost,
       lastAPIDuration: STATE.totalAPIDuration,
       lastDuration: getTotalDuration(),
-      lastSessionId: SESSION_ID,
+      lastSessionId: getKodeAgentSessionId(),
     })
   }
 

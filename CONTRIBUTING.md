@@ -25,7 +25,6 @@
 .
 ├── apps/                  # Entrypoints (build to dist/)
 ├── packages/              # Internal workspace modules (core/protocol/tools/hosts/daemon/config/runtime)
-├── ui/                    # Presentation layer (Ink TUI + WebUI)
 ├── scripts/               # Build and utility scripts
 ├── docs/                  # Documentation
 ├── new_plan/              # vNext architecture plan
@@ -40,8 +39,8 @@ bun run build
 ```
 
 This runs `scripts/build.mjs` which creates:
-- `cli.js` - Smart runtime wrapper
-- `.npmrc` - NPM configuration
+- `cli.js` / `cli-acp.js` - runtime wrappers
+- `dist/**` - bundled runtime (Node) + assets
 
 ## Testing
 

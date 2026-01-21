@@ -1,31 +1,55 @@
 import * as React from 'react'
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { countTokens } from '#core/utils/tokens'
 import { getTheme } from '#core/utils/theme'
 import { getModelManager } from '#core/utils/model'
 import { logStartupProfile } from '#core/utils/startupProfile'
-import { getCwd } from '#core/utils/state'
-import { usePermissionContext } from '#ui-ink/context/PermissionContext'
+import { MACRO } from '#core/constants/macros'
+import { getCwd, getOriginalCwd } from '#core/utils/state'
+import { getMessagesPath } from '#core/utils/log'
+import { getTotalAPIDuration, getTotalDuration } from '#core/cost-tracker'
+import {
+  getCurrentProjectConfig,
+  getGlobalConfig,
+  saveCurrentProjectConfig,
+} from '#core/utils/config'
+import { usePermissionContext } from '#ui-ink/contexts/PermissionContext'
 import { useArrowKeyHistory } from '#ui-ink/hooks/useArrowKeyHistory'
 import { useDoublePress } from '#ui-ink/hooks/useDoublePress'
 import { useStatusLine } from '#ui-ink/hooks/useStatusLine'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import { useUnifiedCompletion } from '#ui-ink/hooks/useUnifiedCompletion'
 import { useKeypress, type Key } from '#ui-ink/hooks/useKeypress'
+import { useUndoBuffer } from '#ui-ink/hooks/useUndoBuffer'
 import { getPermissionModeCycleShortcut } from '#ui-ink/utils/permissionModeCycleShortcut'
 import { getPromptInputSpecialKeyAction } from '#ui-ink/utils/promptInputSpecialKey'
 import { setTerminalTitle } from '#cli-utils/terminal'
-import { countWrappedLines } from '#cli-utils/Cursor'
+import { Cursor, countWrappedLines } from '#cli-utils/Cursor'
+import { getCurrentOutputStyle } from '#cli-services/outputStyles'
+import { BunShell } from '#runtime/shell'
+import { listBackgroundAgentTaskSnapshots } from '#core/utils/backgroundTasks'
+import { computeContextWindowPercentages } from '#core/utils/contextWindowPercentages'
 import { submitPrompt } from './submit'
-import { usePromptPastes } from './pastes'
+import {
+  usePromptPastes,
+  type PastedImageAttachment,
+  type PastedTextSegment,
+} from './pastes'
 import type { PromptInputProps, PromptMode } from './types'
 import { PromptInputView } from './PromptInputView'
 import { useExternalEdit } from './useExternalEdit'
 import { useQuickModelSwitch } from './useQuickModelSwitch'
-import {
-  getNotifications,
-  subscribeNotifications,
-} from '#core/services/notificationCenter'
+import { getKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
+
+const PROMPT_DRAFT_KEY = 'repl'
 
 function exit(): never {
   setTerminalTitle('')
@@ -34,6 +58,7 @@ function exit(): never {
 
 function toPromptMode(value: string): { mode: PromptMode; text: string } {
   if (value.startsWith('!')) return { mode: 'bash', text: value.slice(1) }
+  if (value.startsWith('&')) return { mode: 'background', text: value.slice(1) }
   if (value.startsWith('#')) return { mode: 'koding', text: value.slice(1) }
   return { mode: 'prompt', text: value }
 }
@@ -53,6 +78,7 @@ export function PromptInput({
   commands,
   forkNumber,
   messageLogName,
+  initialPrompt,
   disableSlashCommands,
   isDisabled,
   isLoading,
@@ -70,11 +96,32 @@ export function PromptInput({
   setIsLoading,
   abortController,
   setAbortController,
+  uiRefreshCounter,
   onShowMessageSelector,
   setForkConvoWithMessagesOnTheNextRender,
   readFileTimestamps,
   onModelChange,
+  onManageTasks,
+  restorePastes,
+  onRestorePastesApplied,
+  draftPastes,
+  onDraftPastesChange,
 }: PromptInputProps): React.ReactNode {
+  type QueuedPrompt = {
+    input: string
+    mode: PromptMode
+    pastedTexts: PastedTextSegment[]
+    pastedImages: PastedImageAttachment[]
+  }
+
+  type PromptStash = {
+    input: string
+    mode: PromptMode
+    cursorOffset: number
+    pastedTexts: PastedTextSegment[]
+    pastedImages: PastedImageAttachment[]
+  }
+
   useEffect(() => {
     if (!isDisabled && !isLoading) {
       logStartupProfile('prompt_ready')
@@ -85,7 +132,8 @@ export function PromptInput({
     show: boolean
     key?: string
   }>({ show: false })
-  const [rewindMessagePending, setRewindMessagePending] = useState(false)
+  const [clearInputPending, setClearInputPending] = useState(false)
+  const [rewindPending, setRewindPending] = useState(false)
   const [message, setMessage] = useState<{ show: boolean; text?: string }>({
     show: false,
   })
@@ -93,16 +141,19 @@ export function PromptInput({
     show: boolean
     text?: string
   }>({ show: false })
-  const [toastMessage, setToastMessage] = useState<{
-    show: boolean
-    text?: string
-    kind?: 'info' | 'success' | 'warning' | 'error'
-  }>({ show: false })
-  const lastToastIdRef = useRef<string | null>(null)
-  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const placeholder = ''
   const [cursorOffset, setCursorOffset] = useState<number>(input.length)
   const [currentPwd, setCurrentPwd] = useState<string>(() => getCwd())
+  const [queuedPrompts, setQueuedPrompts] = useState<QueuedPrompt[]>([])
+  const [promptStash, setPromptStash] = useState<PromptStash | null>(null)
+  const onHistoryUserInputRef = useRef<() => void>(() => {})
+  const editorMode = getGlobalConfig().editorMode ?? 'normal'
+  const [vimMode, setVimMode] = useState<'INSERT' | 'NORMAL'>('INSERT')
+
+  useEffect(() => {
+    if (editorMode !== 'vim') return
+    setVimMode('INSERT')
+  }, [editorMode])
 
   const { cycleMode, currentMode, toolPermissionContext } =
     usePermissionContext()
@@ -120,44 +171,30 @@ export function PromptInput({
       prev.show === show && prev.text === text ? prev : { show, text },
     )
   }, [])
+  const handleClearInput = useDoublePress(setClearInputPending, () => {
+    clearPastes()
+    onInputChange('')
+    setCursorOffset(0)
+  })
+  const handleRewind = useDoublePress(setRewindPending, () => {
+    onShowMessageSelector()
+  })
 
+  const {
+    pushToBuffer: pushUndoSnapshot,
+    undo: undoOnce,
+    canUndo,
+    clearBuffer: clearUndoBuffer,
+  } = useUndoBuffer<{
+    mode: PromptMode
+    pastedTexts: PastedTextSegment[]
+    pastedImages: PastedImageAttachment[]
+  }>({ maxBufferSize: 50, debounceMs: 200 })
+
+  const cursorOffsetRef = useRef(cursorOffset)
   useEffect(() => {
-    const showLatest = () => {
-      const all = getNotifications()
-      const latest = all[all.length - 1]
-      if (!latest) return
-      if (latest.id === lastToastIdRef.current) return
-
-      const raw = latest.title
-        ? `${latest.title}: ${latest.message}`
-        : latest.message
-      const text = raw.replace(/\r?\n/g, ' ').trim()
-      if (!text) return
-
-      lastToastIdRef.current = latest.id
-      setToastMessage({ show: true, text, kind: latest.kind })
-
-      if (toastTimerRef.current) {
-        clearTimeout(toastTimerRef.current)
-      }
-      toastTimerRef.current = setTimeout(() => {
-        setToastMessage(prev => (prev.show ? { show: false } : prev))
-      }, 6000)
-    }
-
-    showLatest()
-    const unsubscribe = subscribeNotifications(showLatest)
-    return () => {
-      unsubscribe()
-      if (toastTimerRef.current) {
-        clearTimeout(toastTimerRef.current)
-      }
-    }
-  }, [])
-  const handleRewindConversation = useDoublePress(
-    setRewindMessagePending,
-    onShowMessageSelector,
-  )
+    cursorOffsetRef.current = cursorOffset
+  }, [cursorOffset])
 
   const { columns, rows } = useTerminalSize()
   const textInputColumns = Math.max(1, columns - 6)
@@ -172,6 +209,7 @@ export function PromptInput({
 
   const onChange = useCallback(
     (value: string) => {
+      onHistoryUserInputRef.current()
       const next = toPromptMode(value)
       if (next.mode !== mode) onModeChange(next.mode)
       onInputChange(next.text)
@@ -189,9 +227,15 @@ export function PromptInput({
     [mode, onInputChange, onModeChange],
   )
 
-  const statusLine = useStatusLine()
   const theme = getTheme()
   const tokenUsage = useMemo(() => countTokens(messages), [messages])
+  const totalCostUSD = useMemo(() => {
+    let total = 0
+    for (const message of messages) {
+      if (message.type === 'assistant') total += message.costUSD
+    }
+    return total
+  }, [messages])
 
   const modelInfo = useMemo(() => {
     const current = getModelManager().getModel('main')
@@ -203,7 +247,147 @@ export function PromptInput({
           currentTokens: tokenUsage,
         }
       : null
-  }, [tokenUsage, submitCount])
+  }, [submitCount, tokenUsage, uiRefreshCounter])
+
+  const statusLineUsage = useMemo(() => {
+    let totalInputTokens = 0
+    let totalOutputTokens = 0
+
+    let currentUsage: null | {
+      input_tokens: number
+      output_tokens: number
+      cache_creation_input_tokens: number
+      cache_read_input_tokens: number
+    } = null
+
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i]
+      if (!message || message.type !== 'assistant') continue
+      const usage = (message.message as unknown as { usage?: unknown }).usage
+      if (!usage || typeof usage !== 'object') continue
+
+      const rec = usage as Record<string, unknown>
+      const inputTokens = rec.input_tokens
+      const outputTokens = rec.output_tokens
+      if (typeof inputTokens !== 'number' || typeof outputTokens !== 'number') {
+        continue
+      }
+
+      currentUsage = {
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        cache_creation_input_tokens:
+          typeof rec.cache_creation_input_tokens === 'number'
+            ? rec.cache_creation_input_tokens
+            : 0,
+        cache_read_input_tokens:
+          typeof rec.cache_read_input_tokens === 'number'
+            ? rec.cache_read_input_tokens
+            : 0,
+      }
+      break
+    }
+
+    for (const message of messages) {
+      if (!message || message.type !== 'assistant') continue
+      const usage = (message.message as unknown as { usage?: unknown }).usage
+      if (!usage || typeof usage !== 'object') continue
+      const rec = usage as Record<string, unknown>
+      const inputTokens = rec.input_tokens
+      const outputTokens = rec.output_tokens
+      if (typeof inputTokens !== 'number' || typeof outputTokens !== 'number') {
+        continue
+      }
+      totalInputTokens += inputTokens
+      totalOutputTokens += outputTokens
+    }
+
+    return { totalInputTokens, totalOutputTokens, currentUsage }
+  }, [messages])
+
+  const statusLineInput = useMemo(() => {
+    const profile = getModelManager().getModel('main')
+    const outputStyleName = getCurrentOutputStyle()
+    const transcriptPath = getMessagesPath(messageLogName, forkNumber, 0)
+
+    const currentUsage = statusLineUsage.currentUsage
+    const contextWindowSize =
+      typeof profile?.contextLength === 'number' ? profile.contextLength : 0
+
+    const { used_percentage, remaining_percentage } =
+      computeContextWindowPercentages({
+        currentUsage,
+        contextWindowSize,
+      })
+    const exceeds200kTokens = currentUsage
+      ? currentUsage.input_tokens +
+          currentUsage.output_tokens +
+          currentUsage.cache_creation_input_tokens +
+          currentUsage.cache_read_input_tokens >
+        200000
+      : false
+
+    return {
+      session_id: getKodeAgentSessionId(),
+      transcript_path: transcriptPath,
+      cwd: currentPwd,
+      model: {
+        id: profile?.modelName ?? '',
+        display_name: profile?.name ?? profile?.modelName ?? '',
+      },
+      workspace: {
+        current_dir: currentPwd,
+        project_dir: getOriginalCwd(),
+      },
+      version: MACRO.VERSION,
+      output_style: { name: outputStyleName },
+      cost: {
+        total_cost_usd: totalCostUSD,
+        total_duration_ms: getTotalDuration(),
+        total_api_duration_ms: getTotalAPIDuration(),
+      },
+      context_window: {
+        total_input_tokens: statusLineUsage.totalInputTokens,
+        total_output_tokens: statusLineUsage.totalOutputTokens,
+        context_window_size: contextWindowSize,
+        current_usage: currentUsage,
+        used_percentage,
+        remaining_percentage,
+      },
+      exceeds_200k_tokens: exceeds200kTokens,
+      ...(editorMode === 'vim' ? { vim: { mode: vimMode } } : {}),
+      kode: {
+        conversation: { messageLogName, forkNumber },
+        permission_mode: toolPermissionContext.mode,
+        model: {
+          provider: profile?.provider ?? null,
+        },
+      },
+    }
+  }, [
+    currentPwd,
+    editorMode,
+    forkNumber,
+    messageLogName,
+    statusLineUsage,
+    toolPermissionContext.mode,
+    totalCostUSD,
+    vimMode,
+  ])
+
+  const { text: statusLineText, padding: statusLinePadding } =
+    useStatusLine(statusLineInput)
+
+  const defaultStatusLine = useMemo(() => {
+    if (editorMode === 'vim' && vimMode === 'INSERT') return '-- INSERT --'
+    if (mode === 'bash') return '! for bash mode'
+    if (mode === 'background') return '& to background'
+    return '? for shortcuts'
+  }, [editorMode, mode, vimMode])
+
+  const effectiveStatusLine = statusLineText ?? defaultStatusLine
+
+  const toastMessage = useMemo(() => ({ show: false as const }), [])
 
   const compact = rows < 16
   const modelInfoRows = !compact && modelInfo ? 1 : 0
@@ -216,6 +400,7 @@ export function PromptInput({
     selectedIndex,
     isActive: completionActive,
     emptyDirMessage,
+    resetCompletion,
   } = useUnifiedCompletion({
     input,
     cursorOffset,
@@ -229,21 +414,238 @@ export function PromptInput({
     completionEnabled && completionActive && suggestions.length > 0
   const visibleSuggestions = completionVisible ? suggestions : []
 
-  const { resetHistory, onHistoryUp, onHistoryDown } = useArrowKeyHistory(
-    (value: string, restoredMode: 'bash' | 'prompt') => {
-      const next = toPromptMode(restoredMode === 'bash' ? `!${value}` : value)
-      onModeChange(next.mode)
-      onInputChange(next.text)
-      setCursorOffset(next.text.length)
-    },
+  const {
+    pastedTexts,
+    pastedImages,
+    setPastedTexts,
+    setPastedImages,
+    onImagePaste,
+    onTextPaste,
+    clearPastes,
+  } = usePromptPastes({
     input,
-  )
+    cursorOffset,
+    onInputChange,
+    setCursorOffset,
+    onModeChange,
+    terminalRows: rows,
+  })
+
+  const lastRestorePastesIdRef = useRef<number | null>(null)
+  useLayoutEffect(() => {
+    if (!restorePastes) return
+    if (lastRestorePastesIdRef.current === restorePastes.id) return
+    lastRestorePastesIdRef.current = restorePastes.id
+
+    setPastedTexts(restorePastes.pastedTexts)
+    setPastedImages(restorePastes.pastedImages)
+    onDraftPastesChange?.({
+      pastedTexts: restorePastes.pastedTexts,
+      pastedImages: restorePastes.pastedImages,
+    })
+    onRestorePastesApplied?.(restorePastes.id)
+  }, [
+    onDraftPastesChange,
+    onRestorePastesApplied,
+    restorePastes,
+    setPastedImages,
+    setPastedTexts,
+  ])
+
+  const didRestoreDraftPastesRef = useRef(false)
+  useLayoutEffect(() => {
+    if (didRestoreDraftPastesRef.current) return
+    if (restorePastes) return
+    if (!draftPastes) return
+    if (pastedTexts.length > 0 || pastedImages.length > 0) {
+      didRestoreDraftPastesRef.current = true
+      return
+    }
+    if (
+      draftPastes.pastedTexts.length === 0 &&
+      draftPastes.pastedImages.length === 0
+    ) {
+      didRestoreDraftPastesRef.current = true
+      return
+    }
+
+    setPastedTexts(draftPastes.pastedTexts)
+    setPastedImages(draftPastes.pastedImages)
+    didRestoreDraftPastesRef.current = true
+  }, [
+    draftPastes,
+    pastedImages.length,
+    pastedTexts.length,
+    restorePastes,
+    setPastedImages,
+    setPastedTexts,
+  ])
+
+  const didSkipDraftPastesSyncRef = useRef(false)
+  useLayoutEffect(() => {
+    if (!onDraftPastesChange) return
+    if (!didSkipDraftPastesSyncRef.current) {
+      didSkipDraftPastesSyncRef.current = true
+      return
+    }
+    onDraftPastesChange({ pastedTexts, pastedImages })
+  }, [onDraftPastesChange, pastedImages, pastedTexts])
+
+  const didRestoreDraftRef = useRef(false)
+  useEffect(() => {
+    if (didRestoreDraftRef.current) return
+    if (initialPrompt && initialPrompt.trim()) return
+
+    const hasPendingInput =
+      input.trim().length > 0 ||
+      pastedTexts.length > 0 ||
+      pastedImages.length > 0
+    if (hasPendingInput) return
+
+    try {
+      const draft = getCurrentProjectConfig().promptDrafts?.[PROMPT_DRAFT_KEY]
+      if (!draft || typeof draft.text !== 'string' || !draft.text.trim()) return
+
+      const nextMode = draft.mode
+      const rawOffset =
+        typeof draft.cursorOffset === 'number'
+          ? draft.cursorOffset
+          : draft.text.length
+      const clampedOffset = Math.min(Math.max(0, rawOffset), draft.text.length)
+
+      didRestoreDraftRef.current = true
+      onModeChange(nextMode)
+      onInputChange(draft.text)
+      setCursorOffset(clampedOffset)
+    } catch {
+      // best-effort
+    }
+  }, [
+    initialPrompt,
+    input,
+    onInputChange,
+    onModeChange,
+    pastedImages.length,
+    pastedTexts.length,
+  ])
+
+  const lastPersistedDraftRef = useRef<{
+    text: string
+    mode: PromptMode
+    cursorOffset: number
+  } | null>(null)
+  useEffect(() => {
+    if (initialPrompt && initialPrompt.trim()) return
+
+    const normalizedCursor = Math.min(Math.max(0, cursorOffset), input.length)
+    const shouldClearDraft = input.trim().length === 0 && mode === 'prompt'
+    const nextSnapshot = {
+      text: input,
+      mode,
+      cursorOffset: normalizedCursor,
+    }
+
+    const prev = lastPersistedDraftRef.current
+    const unchanged =
+      prev &&
+      prev.text === nextSnapshot.text &&
+      prev.mode === nextSnapshot.mode &&
+      prev.cursorOffset === nextSnapshot.cursorOffset
+
+    if (shouldClearDraft && !prev) return
+    if (!shouldClearDraft && unchanged) return
+
+    const timer = setTimeout(() => {
+      try {
+        const projectConfig = getCurrentProjectConfig()
+        const promptDrafts = { ...(projectConfig.promptDrafts ?? {}) }
+
+        if (shouldClearDraft) {
+          delete promptDrafts[PROMPT_DRAFT_KEY]
+          lastPersistedDraftRef.current = null
+        } else {
+          promptDrafts[PROMPT_DRAFT_KEY] = {
+            text: nextSnapshot.text,
+            mode: nextSnapshot.mode,
+            cursorOffset: nextSnapshot.cursorOffset,
+            updatedAt: Date.now(),
+          }
+          lastPersistedDraftRef.current = nextSnapshot
+        }
+
+        saveCurrentProjectConfig({ ...projectConfig, promptDrafts })
+      } catch {
+        // best-effort
+      }
+    }, 400)
+
+    return () => clearTimeout(timer)
+  }, [cursorOffset, initialPrompt, input, mode])
+
+  const { resetHistory, onHistoryUp, onHistoryDown, onUserInput, historyIndex } =
+    useArrowKeyHistory({
+      current: {
+        text: input,
+        mode,
+        cursorOffset,
+        extra: { pastedTexts, pastedImages },
+      },
+      emptyExtra: { pastedTexts: [], pastedImages: [] },
+      onRestore: snapshot => {
+        setPastedTexts(snapshot.extra.pastedTexts)
+        setPastedImages(snapshot.extra.pastedImages)
+        onModeChange(snapshot.mode)
+        onInputChange(snapshot.text)
+        setCursorOffset(snapshot.cursorOffset)
+      },
+      buildExtraFromHistoryEntry: entry => ({
+        pastedTexts: entry.pastedTexts,
+        pastedImages: [],
+      }),
+    })
+  onHistoryUserInputRef.current = onUserInput
+
+  const hasShownHistorySearchHintRef = useRef(false)
+  useEffect(() => {
+    if (hasShownHistorySearchHintRef.current) return
+    if (historyIndex < 2) return
+
+    hasShownHistorySearchHintRef.current = true
+    handleInlineMessage(true, 'Tip: Ctrl+R to search history')
+
+    const timeoutId = setTimeout(() => {
+      setMessage(prev => {
+        if (!prev.show) return prev
+        if (prev.text !== 'Tip: Ctrl+R to search history') return prev
+        return { show: false }
+      })
+    }, 3000)
+
+    return () => clearTimeout(timeoutId)
+  }, [handleInlineMessage, historyIndex])
 
   const handleHistoryUp = () => {
-    if (!completionVisible) onHistoryUp()
+    if (completionActive) resetCompletion()
+    onHistoryUp()
   }
   const handleHistoryDown = () => {
-    if (!completionVisible) onHistoryDown()
+    if (completionActive) resetCompletion()
+
+    if (
+      typeof onManageTasks === 'function' &&
+      historyIndex === 0 &&
+      input.length === 0
+    ) {
+      const hasBackgroundTasks =
+        BunShell.getInstance().listBackgroundShells().length > 0 ||
+        listBackgroundAgentTaskSnapshots().length > 0
+      if (hasBackgroundTasks) {
+        onManageTasks()
+        return
+      }
+    }
+
+    onHistoryDown()
   }
 
   const handleQuickModelSwitch = useQuickModelSwitch({
@@ -287,29 +689,144 @@ export function PromptInput({
         return true
       }
 
+      if (
+        editorMode === 'vim' &&
+        vimMode === 'NORMAL' &&
+        key.insertable &&
+        !key.ctrl &&
+        !key.meta &&
+        inputChar.length === 1
+      ) {
+        const cursor = Cursor.fromText(
+          input,
+          textInputColumns,
+          cursorOffsetRef.current,
+        )
+
+        const applyCursor = (nextCursor: Cursor) => {
+          if (nextCursor.text !== input) onInputChange(nextCursor.text)
+          setCursorOffset(nextCursor.offset)
+        }
+
+        switch (inputChar) {
+          case 'h':
+            applyCursor(cursor.left())
+            return true
+          case 'j':
+            applyCursor(cursor.down())
+            return true
+          case 'k':
+            applyCursor(cursor.up())
+            return true
+          case 'l':
+            applyCursor(cursor.right())
+            return true
+          case '0':
+            applyCursor(cursor.startOfLine())
+            return true
+          case '$':
+            applyCursor(cursor.endOfLine())
+            return true
+          case 'w':
+            applyCursor(cursor.nextWord())
+            return true
+          case 'b':
+            applyCursor(cursor.prevWord())
+            return true
+          case 'x':
+            applyCursor(cursor.del())
+            return true
+          case 'i':
+            setVimMode('INSERT')
+            return true
+          case 'I':
+            applyCursor(cursor.startOfLine())
+            setVimMode('INSERT')
+            return true
+          case 'a':
+            applyCursor(cursor.right())
+            setVimMode('INSERT')
+            return true
+          case 'A':
+            applyCursor(cursor.endOfLine())
+            setVimMode('INSERT')
+            return true
+          default:
+            return true
+        }
+      }
+
       return false
     },
     [
       cycleMode,
+      editorMode,
       handleExternalEdit,
       handleQuickModelSwitch,
       isEditingExternally,
       isLoading,
       modeCycleShortcut,
+      onInputChange,
+      input,
+      textInputColumns,
+      vimMode,
     ],
   )
 
-  const { pastedTexts, pastedImages, onImagePaste, onTextPaste, clearPastes } =
-    usePromptPastes({
-      input,
-      cursorOffset,
-      onInputChange,
-      setCursorOffset,
-      onModeChange,
-      terminalRows: rows,
+  useEffect(() => {
+    const signature = [
+      `mode:${mode}`,
+      `input:${input}`,
+      ...pastedTexts.map(p => `text:${p.placeholder}`),
+      ...pastedImages.map(p => `image:${p.placeholder}`),
+    ].join('\n')
+
+    pushUndoSnapshot({
+      signature,
+      text: input,
+      cursorOffset: cursorOffsetRef.current,
+      extra: {
+        mode,
+        pastedTexts: [...pastedTexts],
+        pastedImages: [...pastedImages],
+      },
     })
+  }, [input, mode, pastedImages, pastedTexts, pushUndoSnapshot])
 
   async function onSubmit(value: string, isSubmittingSlashCommand = false) {
+    if (isEditingExternally) return
+
+    if (
+      !isSubmittingSlashCommand &&
+      completionVisible &&
+      suggestions.length > 0
+    ) {
+      return
+    }
+
+    if (!value) return
+    if (isDisabled) return
+    if (!value.trim()) return
+
+    if (isLoading) {
+      setQueuedPrompts(prev => [
+        ...prev,
+        {
+          input: value,
+          mode,
+          pastedTexts: [...pastedTexts],
+          pastedImages: [...pastedImages],
+        },
+      ])
+
+      clearPastes()
+      onInputChange('')
+      setCursorOffset(0)
+      return
+    }
+
+    clearUndoBuffer()
+
     await submitPrompt({
       input: value,
       mode,
@@ -337,6 +854,7 @@ export function PromptInput({
       permissionMode: currentMode,
       toolPermissionContext,
       setForkConvoWithMessagesOnTheNextRender,
+      onShowMessageSelector,
       readFileTimestamps,
       pastedTexts,
       pastedImages,
@@ -347,9 +865,194 @@ export function PromptInput({
     })
   }
 
+  const autoSubmitQueuedPromptInFlightRef = useRef(false)
+  useEffect(() => {
+    if (autoSubmitQueuedPromptInFlightRef.current) return
+    if (isLoading) return
+    if (isDisabled) return
+    if (isEditingExternally) return
+    if (input.length > 0) return
+
+    const next = queuedPrompts[0]
+    if (!next) return
+
+    autoSubmitQueuedPromptInFlightRef.current = true
+    setQueuedPrompts(prev => prev.slice(1))
+
+    void (async () => {
+      try {
+        await submitPrompt({
+          input: next.input,
+          mode: next.mode,
+          completionActive: false,
+          suggestionCount: 0,
+          isSubmittingSlashCommand: false,
+          isDisabled,
+          isLoading: false,
+          isEditingExternally,
+          abortController,
+          setIsLoading,
+          setAbortController,
+          onInputChange,
+          onModeChange,
+          setCursorOffset,
+          onSubmitCountChange,
+          onQuery,
+          setToolJSX,
+          commands,
+          forkNumber,
+          messageLogName,
+          tools,
+          verbose,
+          disableSlashCommands,
+          permissionMode: currentMode,
+          toolPermissionContext,
+          setForkConvoWithMessagesOnTheNextRender,
+          onShowMessageSelector,
+          readFileTimestamps,
+          pastedTexts: next.pastedTexts,
+          pastedImages: next.pastedImages,
+          clearPastes,
+          resetHistory,
+          setCurrentPwd,
+          exit,
+        })
+      } finally {
+        autoSubmitQueuedPromptInFlightRef.current = false
+      }
+    })()
+  }, [
+    abortController,
+    clearPastes,
+    commands,
+    currentMode,
+    disableSlashCommands,
+    forkNumber,
+    input,
+    isDisabled,
+    isEditingExternally,
+    isLoading,
+    messageLogName,
+    onInputChange,
+    onModeChange,
+    onQuery,
+    onSubmitCountChange,
+    queuedPrompts,
+    readFileTimestamps,
+    resetHistory,
+    setAbortController,
+    setCursorOffset,
+    setCurrentPwd,
+    setForkConvoWithMessagesOnTheNextRender,
+    setIsLoading,
+    setToolJSX,
+    toolPermissionContext,
+    tools,
+    verbose,
+  ])
+
   useKeypress(
     (inputChar, key) => {
-      if (mode === 'bash' && (key.backspace || key.delete)) {
+      if (clearInputPending && !key.escape) {
+        setClearInputPending(false)
+      }
+      if (rewindPending && !key.escape) {
+        setRewindPending(false)
+      }
+
+      if (key.escape && queuedPrompts.length > 0) {
+        const queuedText = queuedPrompts.map(item => item.input).join('\n')
+        const separator = queuedText && input ? '\n' : ''
+        const combined = queuedText + separator + input
+        const insertionLength = queuedText.length + (separator ? 1 : 0)
+
+        const queuedTextPastes = queuedPrompts.flatMap(item => item.pastedTexts)
+        const queuedImagePastes = queuedPrompts.flatMap(
+          item => item.pastedImages,
+        )
+
+        const uniqueModes = new Set(queuedPrompts.map(item => item.mode))
+        const nextMode =
+          uniqueModes.size === 1 && !input
+            ? queuedPrompts[0]!.mode
+            : uniqueModes.size === 1 && uniqueModes.has(mode)
+              ? mode
+              : 'prompt'
+
+        setQueuedPrompts([])
+        onModeChange(nextMode)
+        onInputChange(combined)
+        setPastedTexts(prev => [...queuedTextPastes, ...prev])
+        setPastedImages(prev => [...queuedImagePastes, ...prev])
+        setCursorOffset(
+          Math.min(combined.length, insertionLength + cursorOffset),
+        )
+        return true
+      }
+
+      if (key.escape && editorMode === 'vim' && vimMode === 'INSERT') {
+        setVimMode('NORMAL')
+        return true
+      }
+
+      if (key.ctrl && inputChar === 's') {
+        setClearInputPending(false)
+
+        if (
+          input.trim() === '' &&
+          pastedTexts.length === 0 &&
+          pastedImages.length === 0 &&
+          promptStash
+        ) {
+          onModeChange(promptStash.mode)
+          onInputChange(promptStash.input)
+          setPastedTexts(promptStash.pastedTexts)
+          setPastedImages(promptStash.pastedImages)
+          setCursorOffset(promptStash.cursorOffset)
+          setPromptStash(null)
+          return true
+        }
+
+        if (
+          input.trim() !== '' ||
+          pastedTexts.length > 0 ||
+          pastedImages.length > 0
+        ) {
+          setPromptStash({
+            input,
+            mode,
+            cursorOffset,
+            pastedTexts: [...pastedTexts],
+            pastedImages: [...pastedImages],
+          })
+          clearPastes()
+          onInputChange('')
+          setCursorOffset(0)
+          return true
+        }
+
+        return true
+      }
+
+      if (key.ctrl && inputChar === '_') {
+        setClearInputPending(false)
+        if (!canUndo) return true
+
+        const snapshot = undoOnce()
+        if (!snapshot) return true
+
+        setPastedTexts(snapshot.extra.pastedTexts)
+        setPastedImages(snapshot.extra.pastedImages)
+        onModeChange(snapshot.extra.mode)
+        onInputChange(snapshot.text)
+        setCursorOffset(snapshot.cursorOffset)
+        return true
+      }
+
+      if (
+        (mode === 'bash' || mode === 'background') &&
+        (key.backspace || key.delete)
+      ) {
         if (input === '') onModeChange('prompt')
         return
       }
@@ -363,8 +1066,27 @@ export function PromptInput({
         onModeChange('prompt')
       }
 
-      if (key.escape && messages.length > 0 && !input && !isLoading) {
-        handleRewindConversation()
+      if (
+        key.escape &&
+        !isLoading &&
+        mode === 'prompt' &&
+        !completionVisible &&
+        input.length === 0 &&
+        pastedTexts.length === 0 &&
+        pastedImages.length === 0
+      ) {
+        setClearInputPending(false)
+        handleRewind()
+        return true
+      }
+
+      if (
+        key.escape &&
+        !isLoading &&
+        (input.length > 0 || pastedTexts.length > 0 || pastedImages.length > 0)
+      ) {
+        setRewindPending(false)
+        handleClearInput()
         return true
       }
     },
@@ -386,6 +1108,7 @@ export function PromptInput({
       isDisabled={isDisabled}
       isLoading={isLoading}
       completionActive={completionVisible}
+      historyIndex={historyIndex}
       suggestions={visibleSuggestions}
       selectedIndex={selectedIndex}
       emptyDirMessage={emptyDirMessage}
@@ -402,10 +1125,12 @@ export function PromptInput({
       onSpecialKey={handleSpecialKey}
       exitMessage={exitMessage}
       message={message}
-      rewindMessagePending={rewindMessagePending}
+      clearInputPending={clearInputPending}
+      rewindPending={rewindPending}
       modelSwitchMessage={modelSwitchMessage}
       toastMessage={toastMessage}
-      statusLine={statusLine}
+      statusLine={effectiveStatusLine}
+      statusLinePadding={statusLinePadding}
       currentMode={currentMode}
       modeCycleShortcutText={modeCycleShortcut.displayText}
       showQuickModelSwitchShortcut={showQuickModelSwitchShortcut}

@@ -14,6 +14,16 @@ export {
 } from './config'
 
 export { getClients, getClientsForCliMcpConfig } from './clients'
+export { __setMcpClientsForTests } from './clients'
 
 export { getMCPTools } from './tools'
 export { getMCPCommands, runCommand } from './commands'
+
+export {
+  __resetMcpListChangedForTests,
+  getMcpListChangedVersion,
+  notifyMcpListChanged,
+  subscribeMcpListChanged,
+  type McpListChangedEvent,
+  type McpListKind,
+} from './listChanged'

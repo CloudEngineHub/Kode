@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync } from 'fs'
-import { dirname } from 'path'
 import which from 'which'
 import { buildLinuxBwrapCommand } from './linuxSandbox'
 import { buildMacosSandboxExecCommand } from './macosSandbox'
+import { resolveSandboxTmpDir } from './sandboxEnv'
 import type {
   BunShellSandboxOptions,
   BunShellSandboxReadConfig,
@@ -13,26 +13,7 @@ export function maybeAnnotateMacosSandboxStderr(
   stderr: string,
   sandbox: BunShellSandboxOptions | undefined,
 ): string {
-  if (!stderr) return stderr
-  if (!sandbox || sandbox.enabled !== true) return stderr
-  const platform = sandbox.__platformOverride ?? process.platform
-  if (platform !== 'darwin') return stderr
-  if (stderr.includes('[sandbox]')) return stderr
-
-  const lower = stderr.toLowerCase()
-  const looksLikeSandboxViolation =
-    stderr.includes('KODE_SANDBOX') ||
-    (lower.includes('sandbox-exec') &&
-      (lower.includes('deny') || lower.includes('operation not permitted'))) ||
-    (lower.includes('operation not permitted') && lower.includes('sandbox'))
-
-  if (!looksLikeSandboxViolation) return stderr
-
-  return [
-    stderr.trimEnd(),
-    '',
-    '[sandbox] This failure looks like a macOS sandbox denial. Adjust sandbox settings (e.g. /sandbox or .kode/settings.json) to grant the minimal required access.',
-  ].join('\n')
+  return stderr
 }
 
 export function isSandboxInitFailure(stderr: string): boolean {
@@ -95,14 +76,19 @@ export function buildSandboxCommand(options: {
           which.sync('bubblewrap', { nothrow: true }))
     if (!bwrapPath) return null
 
+    const tmpDir = resolveSandboxTmpDir({ platform })
     try {
-      mkdirSync('/tmp/kode', { recursive: true })
+      mkdirSync(tmpDir, { recursive: true })
     } catch {}
 
     const cmd = buildLinuxBwrapCommand({
       bwrapPath,
       command: options.command,
       needsNetworkRestriction,
+      httpProxyPort: sandbox.httpProxyPort,
+      socksProxyPort: sandbox.socksProxyPort,
+      linuxBridge: sandbox.linuxBridge,
+      linuxSeccomp: sandbox.linuxSeccomp,
       readConfig,
       writeConfig,
       enableWeakerNestedSandbox: sandbox.enableWeakerNestedSandbox,
@@ -122,12 +108,20 @@ export function buildSandboxCommand(options: {
           : which.sync('sandbox-exec', { nothrow: true })
     if (!sandboxExecPath) return null
 
-    try {
-      mkdirSync('/tmp/kode', { recursive: true })
-    } catch {}
-    try {
-      mkdirSync('/private/tmp/kode', { recursive: true })
-    } catch {}
+    const tmpDir = resolveSandboxTmpDir({ platform })
+    const candidates = new Set<string>([tmpDir])
+    if (tmpDir.startsWith('/tmp/')) candidates.add('/private' + tmpDir)
+    else if (tmpDir.startsWith('/var/')) candidates.add('/private' + tmpDir)
+    else if (tmpDir.startsWith('/private/tmp/'))
+      candidates.add(tmpDir.replace('/private', ''))
+    else if (tmpDir.startsWith('/private/var/'))
+      candidates.add(tmpDir.replace('/private', ''))
+
+    for (const candidate of candidates) {
+      try {
+        mkdirSync(candidate, { recursive: true })
+      } catch {}
+    }
 
     return {
       cmd: buildMacosSandboxExecCommand({

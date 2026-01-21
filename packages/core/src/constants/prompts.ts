@@ -18,7 +18,7 @@ function isTruthyEnvVar(value: string | undefined): boolean {
   return ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase())
 }
 
-function parseClaudeCodeReasoningEffort(raw: unknown): number | null {
+function parseCompatReasoningEffort(raw: unknown): number | null {
   if (typeof raw === 'number' && Number.isFinite(raw)) {
     const clamped = Math.max(0, Math.min(100, Math.round(raw)))
     return clamped
@@ -35,8 +35,8 @@ function parseClaudeCodeReasoningEffort(raw: unknown): number | null {
   return Math.max(0, Math.min(100, Math.round(asNumber)))
 }
 
-function buildClaudeCodeReasoningEffortBlock(raw: unknown): string {
-  const effort = parseClaudeCodeReasoningEffort(raw)
+function buildCompatReasoningEffortBlock(raw: unknown): string {
+  const effort = parseCompatReasoningEffort(raw)
   if (effort === null) return ''
   return `
 <reasoning_effort>${effort}</reasoning_effort>
@@ -54,7 +54,7 @@ function formatMcpToolNameForCli(toolName: string): string | null {
   return `${server}/${tool}`
 }
 
-function buildClaudeCodeMcpCliCommandBlock(args: {
+function buildCompatMcpCliCommandBlock(args: {
   mcpToolNames: string[]
   readToolName: string
   editToolName: string
@@ -188,11 +188,11 @@ export function getCLISyspromptPrefix(): string {
   return `You are ${PRODUCT_NAME}, ShareAI-lab's Agent AI CLI for terminal & coding.`
 }
 
-export function getClaudeCodeSyspromptPrefix(): string {
-  return `You are Claude Code, Anthropic's official CLI for Claude.`
+export function getCompatSyspromptPrefix(): string {
+  return `You are ${PRODUCT_NAME}, an agent CLI that can run tools and manage tasks.`
 }
 
-export async function getClaudeCodeSystemPrompt(options?: {
+export async function getCompatSystemPrompt(options?: {
   model?: string
   toolNames?: Iterable<string>
   toolUseContext?: ToolUseContext
@@ -220,17 +220,19 @@ export async function getClaudeCodeSystemPrompt(options?: {
   const hasWebFetchTool = toolNames.has('WebFetch')
   // Scratchpad directory instructions are intentionally omitted unless enabled.
   const scratchpadDirectoryBlock = ''
-  const reasoningEffortBlock = buildClaudeCodeReasoningEffortBlock(
+  const reasoningEffortBlock = buildCompatReasoningEffortBlock(
     options?.reasoningEffort,
   )
-  const mcpCliCommandBlock = buildClaudeCodeMcpCliCommandBlock({
-    mcpToolNames: Array.from(toolNames),
+  const mcpCliCommandBlock = buildCompatMcpCliCommandBlock({
+    mcpToolNames: Array.from(toolNames).filter(name =>
+      name.startsWith('mcp__'),
+    ),
     readToolName: 'Read',
     editToolName: 'Edit',
     bashToolName: BASH_TOOL_NAME,
   })
 
-  const envInfo = await getClaudeCodeEnvInfo({
+  const envInfo = await getCompatEnvInfo({
     model,
     toolUseContext: options?.toolUseContext,
   })
@@ -244,7 +246,6 @@ export async function getClaudeCodeSystemPrompt(options?: {
   const EDIT_TOOL = 'Edit'
   const WRITE_TOOL = 'Write'
   const WEBFETCH_TOOL = 'WebFetch'
-  const DOCS_AGENT_TYPE = 'claude-code-guide'
   const EXPLORE_AGENT_TYPE = 'Explore'
 
   const toolsWithoutApprovalLine = ''
@@ -258,7 +259,7 @@ export async function getClaudeCodeSystemPrompt(options?: {
 - NEVER create files unless they're absolutely necessary for achieving your goal. ALWAYS prefer editing an existing file to creating a new one. This includes markdown files.
 
 # Professional objectivity
-Prioritize technical accuracy and truthfulness over validating the user's beliefs. Focus on facts and problem-solving, providing direct, objective technical info without any unnecessary superlatives, praise, or emotional validation. It is best for the user if Claude honestly applies the same rigorous standards to all ideas and disagrees when necessary, even if it may not be what the user wants to hear. Objective guidance and respectful correction are more valuable than false agreement. Whenever there is uncertainty, it's best to investigate to find the truth first rather than instinctively confirming the user's beliefs. Avoid using over-the-top validation or excessive praise when responding to users such as "You're absolutely right" or similar phrases.
+Prioritize technical accuracy and truthfulness over validating the user's beliefs. Focus on facts and problem-solving, providing direct, objective technical info without any unnecessary superlatives, praise, or emotional validation. Whenever there is uncertainty, investigate to find the truth first rather than instinctively confirming the user's beliefs.
 
 # Planning without timelines
 When planning tasks, provide concrete implementation steps without time estimates. Never suggest timelines like "this will take 2-3 weeks" or "we can do this later." Focus on what needs to be done, not when. Break work into actionable steps and let users decide scheduling.
@@ -355,23 +356,12 @@ The user will primarily request you perform software engineering tasks. This inc
       : 'with software engineering tasks.'
   } Use the instructions below and the tools available to you to assist the user.
 
-${CLAUDE_CODE_RW9}
+${SECURITY_GUIDELINES_BLOCK}
 IMPORTANT: You must NEVER generate or guess URLs for the user unless you are confident that the URLs are for helping the user with programming. You may use URLs provided by the user in their messages or local files.
 
 If the user asks for help or wants to give feedback inform them of the following:
-- /help: Get help with using Claude Code
-- To give feedback, users should report the issue at https://github.com/anthropics/claude-code/issues
-
-# Looking up your own documentation:
-
-When the user directly asks about any of the following:
-- how to use Claude Code (eg. "can Claude Code do...", "does Claude Code have...")
-- what you're able to do as Claude Code in second person (eg. "are you able...", "can you do...")
-- about how they might do something with Claude Code (eg. "how do I...", "how can I...")
-- how to use a specific Claude Code feature (eg. implement a hook, write a skill, or install an MCP server)
-- how to use the Claude Agent SDK, or asks you to write code that uses the Claude Agent SDK
-
-Use the ${TASK_TOOL} tool with subagent_type='${DOCS_AGENT_TYPE}' to get accurate information from the official Claude Code and Claude Agent SDK documentation.
+- /help: Get help with using ${PRODUCT_NAME}
+- To give feedback, users should ${MACRO.ISSUES_EXPLAINER}.
 
 ${toneAndStyle}${hasTodoWriteTool ? taskManagement : ''}${askingQuestions}
 Users may configure 'hooks', shell commands that execute in response to events like tool calls, in settings. Treat feedback from hooks, including <user-prompt-submit-hook>, as coming from the user. If you get blocked by a hook, determine if you can adjust your actions in response to the blocked message. If not, ask the user to check their hooks configuration.
@@ -397,7 +387,6 @@ assistant: [Uses the ${TASK_TOOL} tool with subagent_type=${EXPLORE_AGENT_TYPE}]
 
   const promptBlocks: string[] = [
     basePrompt,
-    `\n${CLAUDE_CODE_RW9}\n`,
     ...(hasTodoWriteTool
       ? [
           `
@@ -605,17 +594,17 @@ Notes:
   ]
 }
 
-const CLAUDE_CODE_RW9 =
+const SECURITY_GUIDELINES_BLOCK =
   'IMPORTANT: Assist with authorized security testing, defensive security, CTF challenges, and educational contexts. Refuse requests for destructive techniques, DoS attacks, mass targeting, supply chain compromise, or detection evasion for malicious purposes. Dual-use security tools (C2 frameworks, credential testing, exploit development) require clear authorization context: pentesting engagements, CTF competitions, security research, or defensive use cases.'
 
-function formatClaudeCodeDateYYYYMMDD(date: Date): string {
+function formatDateYYYYMMDD(date: Date): string {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
 }
 
-async function getClaudeCodeEnvInfo(args: {
+async function getCompatEnvInfo(args: {
   model: string
   toolUseContext?: ToolUseContext
 }): Promise<string> {
@@ -636,29 +625,14 @@ async function getClaudeCodeEnvInfo(args: {
 
   const modelInfo = `You are powered by the model ${args.model}.`
 
-  const knowledgeCutoff =
-    args.model.includes('claude-opus-4') ||
-    args.model.includes('claude-sonnet-4-5') ||
-    args.model.includes('claude-sonnet-4')
-      ? `
-
-Assistant knowledge cutoff is January 2025.`
-      : ''
-
-  const claudeBackgroundInfo = `
-
-<claude_background_info>
-The most recent frontier Claude model is Claude Opus 4.5 (model ID: 'claude-opus-4-5-20251101').
-</claude_background_info>`
-
   return `Here is useful information about the environment you are running in:
 <env>
 Working directory: ${getCwd()}
 Is directory a git repo: ${isGit ? 'Yes' : 'No'}
 ${additionalWorkingDirectoriesBlock}Platform: ${env.platform}
 OS Version: ${osVersion}
-Today's date: ${formatClaudeCodeDateYYYYMMDD(new Date())}
+Today's date: ${formatDateYYYYMMDD(new Date())}
 </env>
-${modelInfo}${knowledgeCutoff}${claudeBackgroundInfo}
+${modelInfo}
 `
 }

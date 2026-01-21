@@ -44,3 +44,28 @@ test('splitLegacyTool preserves legacy tool behavior via adapter', async () => {
   }
   expect(out).toEqual([{ type: 'result', data: { ok: true } }])
 })
+
+test('splitLegacyTool does not leak async description functions', () => {
+  const inputSchema = z.object({})
+
+  const tool = {
+    name: 'AsyncDescTool',
+    description: async () => 'async description',
+    cachedDescription: 'cached description',
+    inputSchema,
+    prompt: async () => 'prompt',
+    isEnabled: async () => true,
+    isReadOnly: () => true,
+    isConcurrencySafe: () => true,
+    needsPermissions: () => false,
+    renderResultForAssistant: () => 'ok',
+    renderToolUseMessage: () => 'use',
+    call: async function* () {
+      yield { type: 'result' as const, data: { ok: true } }
+    },
+  } satisfies Tool<typeof inputSchema, { ok: boolean }>
+
+  const split = splitLegacyTool(tool)
+  expect(split.spec.description).toBe('cached description')
+  expect(typeof split.spec.description).not.toBe('function')
+})

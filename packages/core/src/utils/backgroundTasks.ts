@@ -9,6 +9,10 @@ export type BackgroundAgentStatus =
 export type BackgroundAgentTask = {
   type: 'async_agent'
   agentId: string
+  parentAgentId?: string
+  parentToolUseId?: string
+  subagentType?: string
+  model?: string
   description: string
   prompt: string
   status: BackgroundAgentStatus
@@ -42,6 +46,15 @@ export function getBackgroundAgentTaskSnapshot(
   return snapshot
 }
 
+export function listBackgroundAgentTaskSnapshots(): BackgroundAgentTask[] {
+  const out: BackgroundAgentTask[] = []
+  for (const task of backgroundTasks.values()) {
+    const { abortController: _abortController, done: _done, ...snapshot } = task
+    out.push(snapshot)
+  }
+  return out
+}
+
 export function upsertBackgroundAgentTask(
   task: BackgroundAgentTaskRuntime,
 ): void {
@@ -52,6 +65,19 @@ export function markBackgroundAgentTaskRetrieved(agentId: string): void {
   const task = backgroundTasks.get(agentId)
   if (!task) return
   task.retrieved = true
+}
+
+export function killBackgroundAgentTask(agentId: string): boolean {
+  const task = backgroundTasks.get(agentId)
+  if (!task) return false
+  if (task.status !== 'running') return false
+
+  task.status = 'killed'
+  task.completedAt = Date.now()
+  task.error = 'Killed by user'
+  upsertBackgroundAgentTask(task)
+  task.abortController.abort()
+  return true
 }
 
 export async function waitForBackgroundAgentTask(

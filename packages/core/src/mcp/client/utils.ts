@@ -1,3 +1,6 @@
+import { LEGACY_ENV } from '#core/compat/legacyEnv'
+import { KODE_HOOK_ENV } from '#core/compat/hookEnv'
+
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -85,7 +88,8 @@ function expandTemplateString(value: string, pluginRoot: string): string {
   return value.replace(/\$\{([^}]+)\}/g, (match, key) => {
     const k = String(key ?? '').trim()
     if (!k) return match
-    if (k === 'CLAUDE_PLUGIN_ROOT') return pluginRoot
+    if (k === LEGACY_ENV.pluginRoot || k === KODE_HOOK_ENV.pluginRoot)
+      return pluginRoot
     const env = process.env[k]
     return env !== undefined ? env : match
   })

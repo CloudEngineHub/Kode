@@ -161,6 +161,7 @@ const command: Command = {
     'Show token usage breakdown for the current conversation context',
   isEnabled: true,
   isHidden: false,
+  aliases: ['context'],
   type: 'local',
 
   userFacingName() {

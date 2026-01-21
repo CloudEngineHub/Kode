@@ -105,6 +105,7 @@ export abstract class Tool {
   - 上下文行支持（-A、-B、-C）
   - 文件类型过滤
 - **实现**：使用 ripgrep 二进制文件以提高性能
+- **分发**：npm 发布包通过按平台拆分的 optionalDependencies 提供 ripgrep（`@shareai-lab/kode-ripgrep-<platform>-<arch>`）；如需优先使用系统 `rg`，设置 `USE_BUILTIN_RIPGREP=0`。
 
 #### GlobTool（文件匹配工具）
 

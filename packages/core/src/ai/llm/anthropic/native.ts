@@ -16,10 +16,10 @@ import type { Tool, ToolUseContext } from '#core/tooling/Tool'
 import { getGlobalConfig, type ModelProfile } from '#core/utils/config'
 import { USER_AGENT } from '#core/utils/http'
 import {
-  buildClaudeCodeHeaders,
-  CLAUDE_CODE_DEFAULT_TIMEOUT_MS,
+  buildCompatHeaders,
+  COMPAT_DEFAULT_TIMEOUT_MS,
   type RequestHeadersProfile,
-} from '#core/ai/llm/claudeCodeFallback'
+} from '#core/ai/llm/restrictedClientCompat'
 import {
   debug as debugLogger,
   getCurrentRequest,
@@ -60,9 +60,9 @@ export { assistantMessageToMessageParam, userMessageToMessageParam }
  *
  * Vertex AI:
  * - Model-specific region variables (highest priority):
- *   - VERTEX_REGION_CLAUDE_3_5_HAIKU: Region for Claude 3.5 Haiku model
- *   - VERTEX_REGION_CLAUDE_3_5_SONNET: Region for Claude 3.5 Sonnet model
- *   - VERTEX_REGION_CLAUDE_3_7_SONNET: Region for Claude 3.7 Sonnet model
+ *   - VERTEX_REGION_CLAUDE_3_5_HAIKU: Region override for this model
+ *   - VERTEX_REGION_CLAUDE_3_5_SONNET: Region override for this model
+ *   - VERTEX_REGION_CLAUDE_3_7_SONNET: Region override for this model
  * - CLOUD_ML_REGION: Optional. The default GCP region to use for all models
  *   If specific model region not specified above
  * - ANTHROPIC_VERTEX_PROJECT_ID: Required. Your GCP project ID
@@ -134,15 +134,15 @@ export async function queryAnthropicNative(
         timeout: parseInt(
           process.env.API_TIMEOUT_MS ||
             String(
-              requestHeadersProfile === 'claude_code'
-                ? CLAUDE_CODE_DEFAULT_TIMEOUT_MS
+              requestHeadersProfile === 'compat'
+                ? COMPAT_DEFAULT_TIMEOUT_MS
                 : 60 * 1000,
             ),
           10,
         ),
         defaultHeaders:
-          requestHeadersProfile === 'claude_code'
-            ? buildClaudeCodeHeaders()
+          requestHeadersProfile === 'compat'
+            ? buildCompatHeaders()
             : {
                 'x-app': 'cli',
                 'User-Agent': USER_AGENT,
@@ -233,12 +233,18 @@ export async function queryAnthropicNative(
         attemptNumber = attempt
         start = Date.now()
 
+        const maxTokens =
+          options?.maxTokens ?? getMaxTokensFromProfile(modelProfile)
+        const thinkingBudgetTokens =
+          maxThinkingTokens > 0
+            ? Math.min(maxThinkingTokens, Math.max(0, maxTokens - 1))
+            : 0
+
         const params: Anthropic.Beta.Messages.MessageCreateParams & {
           extra_headers?: Record<string, string>
         } = {
           model,
-          max_tokens:
-            options?.maxTokens ?? getMaxTokensFromProfile(modelProfile),
+          max_tokens: maxTokens,
           messages: processedMessages,
           system: processedSystem,
           tools: toolSchemas.length > 0 ? toolSchemas : undefined,
@@ -251,13 +257,13 @@ export async function queryAnthropicNative(
             : {}),
         }
 
-        if (maxThinkingTokens > 0) {
+        if (thinkingBudgetTokens > 0) {
           params.extra_headers = {
             'anthropic-beta': 'max-tokens-3-5-sonnet-2024-07-15',
           }
           params.thinking = {
             type: 'enabled',
-            budget_tokens: maxThinkingTokens,
+            budget_tokens: thinkingBudgetTokens,
           }
         }
 
@@ -277,7 +283,7 @@ export async function queryAnthropicNative(
             messageCount: params.messages?.length || 0,
             streamMode: true,
             toolsCount: toolSchemas.length,
-            thinkingTokens: maxThinkingTokens,
+            thinkingTokens: thinkingBudgetTokens,
             timestamp: new Date().toISOString(),
             modelProfileId: modelProfile?.modelName,
             modelProfileName: modelProfile?.name,
@@ -287,6 +293,12 @@ export async function queryAnthropicNative(
             anthropic,
             params,
             signal,
+            {
+              onStreamEvent:
+                typeof toolUseContext?.options?.onStreamEvent === 'function'
+                  ? toolUseContext.options.onStreamEvent
+                  : undefined,
+            },
           )
         } else {
           // 🔥 REAL-TIME API CALL DEBUG - 使用全局日志系统 (Anthropic Non-Streaming)
@@ -303,7 +315,7 @@ export async function queryAnthropicNative(
             messageCount: params.messages?.length || 0,
             streamMode: false,
             toolsCount: toolSchemas.length,
-            thinkingTokens: maxThinkingTokens,
+            thinkingTokens: thinkingBudgetTokens,
             timestamp: new Date().toISOString(),
             modelProfileId: modelProfile?.modelName,
             modelProfileName: modelProfile?.name,

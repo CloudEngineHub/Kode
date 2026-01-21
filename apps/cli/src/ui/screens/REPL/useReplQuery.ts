@@ -1,9 +1,8 @@
 import { useCallback, type ReactNode } from 'react'
-import { getSystemPrompt } from '#core/constants/prompts'
 import { getContext } from '#core/context'
 import { getMaxThinkingTokens } from '#core/utils/thinking'
 import { getLastAssistantMessageId } from '#core/utils/messages'
-import { runTurn } from '#core/engine'
+import { buildSystemPromptForSession, runTurn } from '#core/engine'
 import { handleHashCommand } from '#core/utils/hashCommand'
 import { logError } from '#core/utils/log'
 import { debug as debugLogger } from '#core/utils/debugLogger'
@@ -25,11 +24,14 @@ import {
 
 export function useReplQuery(args: {
   disableSlashCommands: boolean
+  systemPromptOverride?: string
+  appendSystemPrompt?: string
   messages: MessageType[]
   setMessages: React.Dispatch<React.SetStateAction<MessageType[]>>
   commands: Command[]
   forkNumber: number
   messageLogName: string
+  thinkingMode?: 'auto' | 'enabled' | 'disabled'
   tools: Tool[]
   mcpClients: WrappedClient[]
   verbose: boolean
@@ -78,13 +80,17 @@ export function useReplQuery(args: {
 
       const outputStyle = getCurrentOutputStyleDefinition()
       const [systemPrompt, context, maxThinkingTokens] = await Promise.all([
-        getSystemPrompt({
+        buildSystemPromptForSession({
           disableSlashCommands: args.disableSlashCommands,
+          systemPromptOverride: args.systemPromptOverride,
+          appendSystemPrompt: args.appendSystemPrompt,
           outputStyleActive: outputStyle !== null,
           keepCodingInstructions: outputStyle?.keepCodingInstructions,
         }),
         getContext(),
-        getMaxThinkingTokens([...args.messages, lastMessage]),
+        getMaxThinkingTokens([...args.messages, lastMessage], {
+          thinkingMode: args.thinkingMode,
+        }),
       ])
 
       let lastAssistantMessage: MessageType | null = null
@@ -95,6 +101,7 @@ export function useReplQuery(args: {
         context,
         canUseTool: args.canUseTool,
         toolUseContext: {
+          agentId: 'main',
           options: {
             commands: args.commands,
             forkNumber: args.forkNumber,
@@ -104,6 +111,7 @@ export function useReplQuery(args: {
             verbose: args.verbose,
             safeMode: args.safeMode,
             maxThinkingTokens,
+            thinkingMode: args.thinkingMode,
             requestToolUsePermission: args.requestToolUsePermission,
             isKodingRequest: isKodingRequest || undefined,
             toolPermissionContext: getToolPermissionContextForConversationKey({

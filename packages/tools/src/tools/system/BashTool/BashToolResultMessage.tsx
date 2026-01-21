@@ -3,6 +3,7 @@ import { OutputLine } from './OutputLine'
 import React from 'react'
 import { getTheme } from '#core/utils/theme'
 import { Out as BashOut } from './BashTool'
+import { stripSandboxViolations } from '#runtime/shell/sandboxViolations'
 
 type Props = {
   content: Omit<BashOut, 'interrupted'>
@@ -18,7 +19,14 @@ function BashToolResultMessage({
   maxWidth,
 }: Props): React.JSX.Element {
   const { stdout, stdoutLines, stderr, stderrLines, bashId } = content
-  const outputSections = [stdout, stderr].filter(
+  const cleanedStderr = stripSandboxViolations(stderr)
+  const cleanedStderrLines =
+    cleanedStderr === stderr
+      ? stderrLines
+      : cleanedStderr
+        ? cleanedStderr.split(/\r?\n/).length
+        : 0
+  const outputSections = [stdout, cleanedStderr].filter(
     section => section !== '',
   ).length
   const reservedLines = bashId ? 1 : 0
@@ -50,10 +58,10 @@ function BashToolResultMessage({
           maxWidth={maxWidth}
         />
       ) : null}
-      {stderr !== '' ? (
+      {cleanedStderr !== '' ? (
         <OutputLine
-          content={stderr}
-          lines={stderrLines}
+          content={cleanedStderr}
+          lines={cleanedStderrLines}
           verbose={verbose}
           isError
           maxHeight={perSectionHeight}

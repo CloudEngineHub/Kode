@@ -1,5 +1,5 @@
-import { DEFAULT_MAX_TOKENS } from '#ui-ink/ui/components/model-selector/options'
-import type { ModelInfo } from '#ui-ink/ui/components/model-selector/types'
+import { DEFAULT_MAX_TOKENS } from './flow/options'
+import type { ModelInfo } from './flow/types'
 import { logError } from '#core/utils/log'
 
 type JsonObject = Record<string, unknown>

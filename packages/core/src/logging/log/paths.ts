@@ -1,13 +1,19 @@
 import { existsSync } from 'fs'
-import { randomUUID } from 'crypto'
 import { join } from 'path'
-import envPaths from 'env-paths'
+import envPathsImport from 'env-paths'
 import { PRODUCT_COMMAND } from '#core/constants/product'
 import { getKodeBaseDir } from '#core/utils/env'
 
-export const SESSION_ID = randomUUID()
+function resolveEnvPaths(): typeof envPathsImport {
+  if (typeof envPathsImport === 'function') return envPathsImport
+  const fallback = (envPathsImport as unknown as { default?: unknown }).default
+  if (typeof fallback === 'function') {
+    return fallback as typeof envPathsImport
+  }
+  throw new Error('env-paths did not resolve to a callable function')
+}
 
-const paths = envPaths(PRODUCT_COMMAND)
+const paths = resolveEnvPaths()(PRODUCT_COMMAND)
 
 function getProjectDir(cwd: string): string {
   return cwd.replace(/[^a-zA-Z0-9]/g, '-')
@@ -53,6 +59,10 @@ export function dateToFilename(date: Date): string {
 export const DATE = dateToFilename(new Date())
 
 export function getErrorsPath(): string {
+  return join(CACHE_PATHS.errors(), DATE + '.jsonl')
+}
+
+export function getLegacyErrorsPath(): string {
   return join(CACHE_PATHS.errors(), DATE + '.txt')
 }
 

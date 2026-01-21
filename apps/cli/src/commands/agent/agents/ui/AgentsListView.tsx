@@ -7,6 +7,13 @@ import type { AgentSourceFilter, AgentWithOverride } from './types'
 import { formatModelShort, titleForSource } from './utils'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 
+function agentRowKey(agent: AgentWithOverride): string {
+  const baseDir = agent.baseDir ?? ''
+  const filename = agent.filename ?? ''
+  const location = agent.location ?? ''
+  return `${agent.agentType}-${agent.source}-${location}-${baseDir}-${filename}`
+}
+
 export function AgentsListView(props: {
   source: AgentSourceFilter
   agents: AgentWithOverride[]
@@ -48,16 +55,16 @@ export function AgentsListView(props: {
   useKeypress((_input, key) => {
     if (key.escape) {
       props.onBack()
-      return
+      return true
     }
 
     if (key.return) {
       if (onCreateOption && props.onCreateNew) {
         props.onCreateNew()
-        return
+        return true
       }
       if (selectedAgent) props.onSelect(selectedAgent)
-      return
+      return true
     }
 
     if (!key.upArrow && !key.downArrow) return
@@ -69,10 +76,9 @@ export function AgentsListView(props: {
     const currentIndex = (() => {
       if (hasCreate && onCreateOption) return 0
       if (!selectedAgent) return hasCreate ? 0 : 0
+      const selectedKey = agentRowKey(selectedAgent)
       const idx = selectableAgents.findIndex(
-        a =>
-          a.agentType === selectedAgent.agentType &&
-          a.source === selectedAgent.source,
+        a => agentRowKey(a) === selectedKey,
       )
       if (idx < 0) return hasCreate ? 0 : 0
       return hasCreate ? idx + 1 : idx
@@ -89,7 +95,7 @@ export function AgentsListView(props: {
     if (hasCreate && nextIndex === 0) {
       setOnCreateOption(true)
       setSelectedAgent(null)
-      return
+      return true
     }
 
     const agentIndex = hasCreate ? nextIndex - 1 : nextIndex
@@ -97,6 +103,7 @@ export function AgentsListView(props: {
     if (nextAgent) {
       setOnCreateOption(false)
       setSelectedAgent(nextAgent)
+      return true
     }
   })
 
@@ -116,15 +123,15 @@ export function AgentsListView(props: {
     const isSelected =
       !isBuiltIn &&
       !onCreateOption &&
-      selectedAgent?.agentType === agent.agentType &&
-      selectedAgent?.source === agent.source
+      selectedAgent &&
+      agentRowKey(selectedAgent) === agentRowKey(agent)
 
     const dimmed = Boolean(isBuiltIn || agent.overriddenBy)
     const rowColor = isSelected ? theme.suggestion : undefined
     const pointer = isBuiltIn ? '' : isSelected ? `${figures.pointer} ` : '  '
 
     return (
-      <Box key={`${agent.agentType}-${agent.source}`} flexDirection="row">
+      <Box key={agentRowKey(agent)} flexDirection="row">
         <Text dimColor={dimmed && !isSelected} color={rowColor}>
           {pointer}
         </Text>
@@ -192,7 +199,7 @@ export function AgentsListView(props: {
             <Box marginY={1}>{renderCreateNew()}</Box>
           ) : null}
           <Text dimColor>
-            No agents found. Create specialized subagents that Claude can
+            No agents found. Create specialized subagents that the CLI can
             delegate to.
           </Text>
           <Text dimColor>

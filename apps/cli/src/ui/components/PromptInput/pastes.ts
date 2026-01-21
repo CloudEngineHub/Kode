@@ -13,6 +13,22 @@ export type PastedImageAttachment = {
   mediaType: string
 }
 
+function extractPastedTextId(placeholder: string): number | null {
+  const match = placeholder.match(/\[Pasted text #(\d+)(?: \+\d+ lines)?\]/)
+  if (!match?.[1]) return null
+  const id = Number(match[1])
+  if (!Number.isFinite(id) || id <= 0) return null
+  return id
+}
+
+function extractImageId(placeholder: string): number | null {
+  const match = placeholder.match(/\[Image #(\d+)\]/)
+  if (!match?.[1]) return null
+  const id = Number(match[1])
+  if (!Number.isFinite(id) || id <= 0) return null
+  return id
+}
+
 export function expandPastedTextPlaceholders(args: {
   input: string
   pastedTexts: PastedTextSegment[]
@@ -33,10 +49,60 @@ export function usePromptPastes(args: {
   onModeChange: (mode: PromptMode) => void
   terminalRows: number
 }) {
-  const [pastedTexts, setPastedTexts] = useState<PastedTextSegment[]>([])
-  const [pastedImages, setPastedImages] = useState<PastedImageAttachment[]>([])
+  const [pastedTexts, setPastedTextsState] = useState<PastedTextSegment[]>([])
+  const [pastedImages, setPastedImagesState] = useState<
+    PastedImageAttachment[]
+  >([])
   const pastedTextCounter = useRef(1)
   const pastedImageCounter = useRef(1)
+
+  const setPastedTexts = useCallback(
+    (
+      next:
+        | PastedTextSegment[]
+        | ((prev: PastedTextSegment[]) => PastedTextSegment[]),
+    ) => {
+      setPastedTextsState(prev => {
+        const resolved = typeof next === 'function' ? next(prev) : next
+
+        let maxId = 0
+        for (const segment of resolved) {
+          const id = extractPastedTextId(segment.placeholder)
+          if (id && id > maxId) maxId = id
+        }
+        if (maxId >= pastedTextCounter.current) {
+          pastedTextCounter.current = maxId + 1
+        }
+
+        return resolved
+      })
+    },
+    [],
+  )
+
+  const setPastedImages = useCallback(
+    (
+      next:
+        | PastedImageAttachment[]
+        | ((prev: PastedImageAttachment[]) => PastedImageAttachment[]),
+    ) => {
+      setPastedImagesState(prev => {
+        const resolved = typeof next === 'function' ? next(prev) : next
+
+        let maxId = 0
+        for (const segment of resolved) {
+          const id = extractImageId(segment.placeholder)
+          if (id && id > maxId) maxId = id
+        }
+        if (maxId >= pastedImageCounter.current) {
+          pastedImageCounter.current = maxId + 1
+        }
+
+        return resolved
+      })
+    },
+    [],
+  )
 
   const onImagePaste = useCallback(
     (base64Image: string): string => {

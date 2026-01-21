@@ -1,297 +1,400 @@
 import { Box, Text } from 'ink'
 import * as React from 'react'
-import { useState, useCallback } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import figures from 'figures'
 import { getTheme } from '#core/utils/theme'
 import {
   getGlobalConfig,
-  ModelPointerType,
+  type ModelPointerType,
   setModelPointer,
 } from '#core/utils/config'
 import { getModelManager, reloadModelManager } from '#core/utils/model'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
+import TextInput from '#ui-ink/components/TextInput'
+import { Select } from '#ui-ink/components/CustomSelect/select'
+import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { ModelListManager } from './ModelListManager'
 
 type Props = {
   onClose: () => void
 }
 
-type ModelPointerSetting = {
-  id: ModelPointerType | 'add-new'
-  label: string
-  description: string
-  value: string
-  options: Array<{ id: string; name: string }>
-  type: 'modelPointer' | 'action'
-  onChange(value?: string): void
+type MenuItem =
+  | {
+      type: 'pointer'
+      pointer: ModelPointerType
+      label: string
+      description: string
+    }
+  | {
+      type: 'action'
+      id: 'manage-models'
+      label: string
+      description: string
+    }
+
+const POINTER_ITEMS: Array<MenuItem & { type: 'pointer' }> = [
+  {
+    type: 'pointer',
+    pointer: 'main',
+    label: 'Main',
+    description: 'Primary model for general tasks and conversations',
+  },
+  {
+    type: 'pointer',
+    pointer: 'task',
+    label: 'Task',
+    description: 'Model for TaskTool sub-agents and automation',
+  },
+  {
+    type: 'pointer',
+    pointer: 'compact',
+    label: 'Compact',
+    description:
+      'Model used for context compression when nearing the context window',
+  },
+  {
+    type: 'pointer',
+    pointer: 'quick',
+    label: 'Quick',
+    description: 'Fast model for small operations and utilities',
+  },
+]
+
+function clampIndex(value: number, length: number): number {
+  if (length <= 0) return 0
+  return Math.max(0, Math.min(value, length - 1))
+}
+
+function formatModelLabel(model: {
+  name: string
+  modelName: string
+  provider: string
+}): string {
+  const provider = model.provider ? ` · ${model.provider}` : ''
+  return `${model.name}${provider}`
 }
 
 export function ModelConfig({ onClose }: Props): React.ReactNode {
-  const config = getGlobalConfig()
   const theme = getTheme()
-  const { rows: terminalRows } = useTerminalSize()
-  const tightLayout = terminalRows <= 18
-  const compactLayout = terminalRows <= 22
-  const containerPaddingY = tightLayout || compactLayout ? 0 : 1
+  const config = getGlobalConfig()
+  const modelManager = getModelManager()
+  const { rows, columns } = useTerminalSize()
+  const tightLayout = rows <= 18 || columns <= 72
+  const compactLayout = tightLayout || rows <= 22
+  const paddingY = tightLayout ? 0 : 1
+  const gap = tightLayout ? 0 : 1
+  const paddingX = tightLayout || compactLayout ? 1 : 2
+
+  const [refreshKey, setRefreshKey] = useState(0)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [showModelListManager, setShowModelListManager] = useState(false)
-  const [refreshKey, setRefreshKey] = useState(0)
-  const [isDeleteMode, setIsDeleteMode] = useState(false)
+  const [activePointer, setActivePointer] = useState<ModelPointerType | null>(
+    null,
+  )
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchCursorOffset, setSearchCursorOffset] = useState(0)
+  const didCloseRef = useRef(false)
 
-  const modelManager = getModelManager()
+  const safeOnClose = useCallback(() => {
+    if (didCloseRef.current) return
+    didCloseRef.current = true
+    onClose()
+  }, [onClose])
 
-  // Get available models for cycling (memoized) - without "Add New Model" option
-  const availableModels = React.useMemo((): Array<{
-    id: string
-    name: string
-  }> => {
-    const profiles = modelManager.getAvailableModels()
-    return profiles.map(p => ({ id: p.modelName, name: p.name }))
-  }, [modelManager, refreshKey]) // 依赖refreshKey来强制更新
+  const models = useMemo(() => {
+    const all = modelManager.getAvailableModels()
+    return [...all].sort((a, b) => (b.lastUsed ?? 0) - (a.lastUsed ?? 0))
+  }, [modelManager, refreshKey])
 
-  // Create menu items: model pointers + "Add New Model" as separate item
-  const menuItems = React.useMemo(() => {
-    const modelSettings: ModelPointerSetting[] = [
+  const menuItems: MenuItem[] = useMemo(
+    () => [
+      ...POINTER_ITEMS,
       {
-        id: 'main',
-        label: 'Main Model',
-        description: 'Primary model for general tasks and conversations',
-        value: config.modelPointers?.main || '',
-        options: availableModels,
-        type: 'modelPointer' as const,
-        onChange: (value: string) => handleModelPointerChange('main', value),
-      },
-      {
-        id: 'task',
-        label: 'Task Model',
-        description: 'Model for TaskTool sub-agents and automation',
-        value: config.modelPointers?.task || '',
-        options: availableModels,
-        type: 'modelPointer' as const,
-        onChange: (value: string) => handleModelPointerChange('task', value),
-      },
-      {
-        id: 'compact',
-        label: 'Compact Model',
-        description:
-          'Model used for context compression when nearing the context window',
-        value: config.modelPointers?.compact || '',
-        options: availableModels,
-        type: 'modelPointer' as const,
-        onChange: (value: string) => handleModelPointerChange('compact', value),
-      },
-      {
-        id: 'quick',
-        label: 'Quick Model',
-        description: 'Fast model for simple operations and utilities',
-        value: config.modelPointers?.quick || '',
-        options: availableModels,
-        type: 'modelPointer' as const,
-        onChange: (value: string) => handleModelPointerChange('quick', value),
-      },
-    ]
-
-    // Add menu actions as separate menu items
-    return [
-      ...modelSettings,
-      {
+        type: 'action',
         id: 'manage-models',
-        label: 'Manage Model List',
-        description: 'View, add, and delete model configurations',
-        value: '',
-        options: [],
-        type: 'action' as const,
-        onChange: () => handleManageModels(),
+        label: 'Model Library',
+        description: 'View, add, and delete model profiles',
       },
-    ]
-  }, [config.modelPointers, availableModels, refreshKey])
+    ],
+    [],
+  )
 
-  const handleModelPointerChange = (
-    pointer: ModelPointerType,
-    modelId: string,
-  ) => {
-    // Direct model assignment
-    setModelPointer(pointer, modelId)
+  React.useEffect(() => {
+    setSelectedIndex(prev => clampIndex(prev, menuItems.length))
+  }, [menuItems.length])
+
+  const closePointerPicker = useCallback(() => {
+    setActivePointer(null)
+    setSearchQuery('')
+    setSearchCursorOffset(0)
+  }, [])
+
+  const setPointer = useCallback(
+    (pointer: ModelPointerType, modelName: string) => {
+      modelManager.setPointer(pointer, modelName)
+      reloadModelManager()
+      setRefreshKey(prev => prev + 1)
+    },
+    [modelManager],
+  )
+
+  const clearPointer = useCallback((pointer: ModelPointerType) => {
+    setModelPointer(pointer, '')
     reloadModelManager()
-    // Force re-render to show updated assignment
     setRefreshKey(prev => prev + 1)
-  }
+  }, [])
 
-  const handleManageModels = () => {
-    // Launch ModelListManager for model library management
-    setShowModelListManager(true)
-  }
+  useKeypress(
+    (input, key) => {
+      if (didCloseRef.current) return true
 
-  const handleModelConfigurationComplete = () => {
-    // Model configuration is complete, return to model config screen
-    setShowModelListManager(false)
-    // 触发组件刷新，重新加载可用模型列表
-    setRefreshKey(prev => prev + 1)
-    // 将焦点重置到 "Manage Model Library" 选项
-    const manageIndex = menuItems.findIndex(item => item.id === 'manage-models')
-    if (manageIndex !== -1) {
-      setSelectedIndex(manageIndex)
-    }
-  }
-
-  // Handle keyboard input
-  const handleInput = useCallback(
-    (input: string, key: any) => {
-      if (key.escape) {
-        if (isDeleteMode) {
-          setIsDeleteMode(false) // Exit delete mode
-        } else {
-          onClose()
-        }
-        return true
-      } else if (input === 'd' && !isDeleteMode) {
-        setIsDeleteMode(true) // Enter delete mode
-        return true
-      } else if (key.upArrow) {
-        setSelectedIndex(prev => Math.max(0, prev - 1))
-        return true
-      } else if (key.downArrow) {
-        setSelectedIndex(prev => Math.min(menuItems.length - 1, prev + 1))
-        return true
-      } else if (key.return || input === ' ') {
-        const setting = menuItems[selectedIndex]
-
-        if (isDeleteMode && setting.type === 'modelPointer' && setting.value) {
-          // Delete mode: clear the pointer assignment (not delete the model config)
-          setModelPointer(setting.id as ModelPointerType, '')
-          reloadModelManager()
+      if (showModelListManager) {
+        if (key.escape) {
+          setShowModelListManager(false)
           setRefreshKey(prev => prev + 1)
-          setIsDeleteMode(false) // Exit delete mode after clearing assignment
           return true
-        } else if (setting.type === 'modelPointer') {
-          // Normal mode: cycle through available models
-          if (setting.options.length === 0) {
-            // No models available, redirect to model library management
-            handleManageModels()
+        }
+        return
+      }
+
+      const inputChar = input.length === 1 ? input : ''
+      const isUp = key.upArrow || inputChar === 'k'
+      const isDown = key.downArrow || inputChar === 'j'
+      const isHome = key.home
+      const isEnd = key.end
+      const isConfirm = key.return
+
+      if (activePointer) {
+        if (key.escape) {
+          closePointerPicker()
+          return true
+        }
+        if (inputChar === 'c') {
+          clearPointer(activePointer)
+          closePointerPicker()
+          return true
+        }
+        return
+      }
+
+      if (key.escape) {
+        safeOnClose()
+        return true
+      }
+
+      if (isHome) {
+        setSelectedIndex(0)
+        return true
+      }
+      if (isEnd) {
+        setSelectedIndex(menuItems.length - 1)
+        return true
+      }
+      if (isUp) {
+        setSelectedIndex(prev => clampIndex(prev - 1, menuItems.length))
+        return true
+      }
+      if (isDown) {
+        setSelectedIndex(prev => clampIndex(prev + 1, menuItems.length))
+        return true
+      }
+
+      if (inputChar === 'c') {
+        const item = menuItems[selectedIndex]
+        if (item?.type === 'pointer') {
+          clearPointer(item.pointer)
+          return true
+        }
+      }
+
+      if (isConfirm) {
+        const item = menuItems[selectedIndex]
+        if (!item) return true
+
+        if (item.type === 'pointer') {
+          if (models.length === 0) {
+            setShowModelListManager(true)
             return true
           }
-          const currentIndex = setting.options.findIndex(
-            opt => opt.id === setting.value,
-          )
-          const nextIndex = (currentIndex + 1) % setting.options.length
-          const nextOption = setting.options[nextIndex]
-          if (nextOption) {
-            setting.onChange(nextOption.id)
-          }
+          setActivePointer(item.pointer)
+          setSearchQuery('')
+          setSearchCursorOffset(0)
           return true
-        } else if (setting.type === 'action') {
-          // Execute action (like "Add New Model")
-          setting.onChange()
+        }
+
+        if (item.type === 'action' && item.id === 'manage-models') {
+          setShowModelListManager(true)
           return true
         }
       }
     },
-    [selectedIndex, menuItems, onClose, isDeleteMode, modelManager],
+    { isActive: true },
   )
 
-  useKeypress(handleInput, {
-    isActive: !showModelListManager,
-  })
-
-  // If showing ModelListManager, render it directly
   if (showModelListManager) {
-    return <ModelListManager onClose={handleModelConfigurationComplete} />
+    return (
+      <ModelListManager
+        onClose={() => {
+          setShowModelListManager(false)
+          setRefreshKey(prev => prev + 1)
+        }}
+      />
+    )
   }
 
-  // Main configuration screen - completely following Config component layout
-  return (
-    <Box
-      flexDirection="column"
-      borderStyle="round"
-      borderColor={theme.secondaryBorder}
-      width="100%"
-      paddingX={2}
-      paddingY={containerPaddingY}
-    >
-      <Box
-        flexDirection="column"
-        minHeight={2}
-        marginBottom={tightLayout ? 0 : 1}
+  if (activePointer) {
+    const currentValue = config.modelPointers?.[activePointer] || ''
+    const query = searchQuery.trim().toLowerCase()
+    const filtered = query
+      ? models.filter(m => {
+          const haystack =
+            `${m.name} ${m.modelName} ${m.provider}`.toLowerCase()
+          return haystack.includes(query)
+        })
+      : models
+
+    const options = filtered.map(m => ({
+      label: formatModelLabel(m),
+      value: m.modelName,
+    }))
+
+    const reservedLines =
+      (tightLayout ? 10 : compactLayout ? 12 : 14) + paddingY * 2 + gap * 4
+    const availableForList = Math.max(3, rows - reservedLines - 2)
+    const visibleOptionCount = Math.max(
+      3,
+      Math.min(12, options.length || 12, availableForList),
+    )
+
+    return (
+      <ScreenFrame
+        title={`Set ${activePointer} model`}
+        paddingX={paddingX}
+        paddingY={paddingY}
+        gap={gap}
       >
-        <Text bold>
-          Model Configuration{isDeleteMode ? ' - CLEAR MODE' : ''}
-        </Text>
+        <Box flexDirection="column" gap={gap}>
+          {!tightLayout && (
+            <Text dimColor>
+              Search and select the model profile to assign to this pointer.
+            </Text>
+          )}
+
+          <Box flexDirection="column">
+            <Text dimColor>Filter:</Text>
+            <TextInput
+              placeholder="Type to filter models…"
+              value={searchQuery}
+              onChange={value => {
+                setSearchQuery(value)
+                setSearchCursorOffset(value.length)
+              }}
+              columns={Math.max(1, Math.min(80, columns - 10))}
+              cursorOffset={searchCursorOffset}
+              onChangeCursorOffset={setSearchCursorOffset}
+              showCursor={true}
+              focus={true}
+              disableCursorMovementForUpDownKeys={true}
+            />
+          </Box>
+
+          {options.length > 0 ? (
+            <Select
+              options={options}
+              defaultValue={currentValue || undefined}
+              highlightText={query || undefined}
+              visibleOptionCount={visibleOptionCount}
+              onChange={value => {
+                setPointer(activePointer, value)
+                closePointerPicker()
+              }}
+            />
+          ) : (
+            <Text color={theme.warning}>
+              No models match your filter. Try a different query.
+            </Text>
+          )}
+
+          <Box marginTop={tightLayout ? 0 : 1}>
+            <Text dimColor wrap="truncate-end">
+              ↑/↓ navigate · Enter select · Esc back · c clear pointer
+            </Text>
+          </Box>
+        </Box>
+      </ScreenFrame>
+    )
+  }
+
+  const selectedItem = menuItems[selectedIndex]
+
+  return (
+    <ScreenFrame
+      title="Models"
+      paddingX={paddingX}
+      paddingY={paddingY}
+      gap={gap}
+    >
+      <Box flexDirection="column" gap={gap}>
         <Text dimColor>
-          {isDeleteMode
-            ? 'Press Enter/Space to clear selected pointer assignment, Esc to cancel'
-            : availableModels.length === 0
-              ? 'No models configured. Use "Configure New Model" to add your first model.'
-              : 'Configure which models to use for different tasks. Space to cycle, Enter to configure.'}
+          Configure model pointers (main/task/compact/quick) and manage
+          profiles.
         </Text>
-      </Box>
 
-      {menuItems.map((setting, i) => {
-        const isSelected = i === selectedIndex
-        let displayValue = ''
-        let actionText = ''
+        <Box flexDirection="column">
+          {menuItems.map((item, index) => {
+            const isSelected = index === selectedIndex
+            const pointerValue =
+              item.type === 'pointer'
+                ? config.modelPointers?.[item.pointer]
+                : ''
+            const profile =
+              item.type === 'pointer' && pointerValue
+                ? models.find(m => m.modelName === pointerValue)
+                : null
+            const valueText =
+              item.type === 'pointer'
+                ? profile
+                  ? `${profile.name} (${profile.provider})`
+                  : pointerValue
+                    ? pointerValue
+                    : '(not set)'
+                : ''
 
-        if (setting.type === 'modelPointer') {
-          const currentModel = setting.options.find(
-            opt => opt.id === setting.value,
-          )
-          displayValue = currentModel?.name || '(not configured)'
-          actionText = isSelected ? ' [Space to cycle]' : ''
-        } else if (setting.type === 'action') {
-          displayValue = ''
-          actionText = isSelected ? ' [Enter to configure]' : ''
-        }
-
-        return (
-          <Box key={setting.id} flexDirection="column">
-            <Box>
-              <Box width={44}>
-                <Text color={isSelected ? 'blue' : undefined}>
-                  {isSelected ? figures.pointer : ' '} {setting.label}
+            return (
+              <Box key={item.type === 'action' ? item.id : item.pointer}>
+                <Text color={isSelected ? theme.kode : theme.secondaryText}>
+                  {isSelected ? figures.pointer : ' '}
+                </Text>
+                <Text
+                  color={isSelected ? theme.text : theme.secondaryText}
+                  bold={isSelected}
+                  wrap="truncate-end"
+                >
+                  {' '}
+                  {item.label}
+                  {item.type === 'pointer' ? `: ${valueText}` : ''}
                 </Text>
               </Box>
-              <Box>
-                {setting.type === 'modelPointer' && (
-                  <Text
-                    color={
-                      displayValue !== '(not configured)'
-                        ? theme.success
-                        : theme.warning
-                    }
-                  >
-                    {displayValue}
-                  </Text>
-                )}
-                {actionText && <Text color="blue">{actionText}</Text>}
-              </Box>
-            </Box>
-            {isSelected && !tightLayout && (
-              <Box paddingLeft={2} marginBottom={1}>
-                <Text dimColor>{setting.description}</Text>
-              </Box>
-            )}
-          </Box>
-        )
-      })}
+            )
+          })}
+        </Box>
 
-      <Box
-        marginTop={tightLayout ? 0 : 1}
-        paddingTop={tightLayout ? 0 : 1}
-        borderTopColor={theme.secondaryBorder}
-        borderStyle="single"
-        borderTop
-        borderLeft={false}
-        borderRight={false}
-        borderBottom={false}
-      >
-        <Text dimColor>
-          {isDeleteMode
-            ? 'CLEAR MODE: Press Enter/Space to clear assignment, Esc to cancel'
-            : availableModels.length === 0
-              ? 'Use ↑/↓ to navigate, Enter to configure new model, Esc to exit'
-              : 'Use ↑/↓ to navigate, Space to cycle models, Enter to configure, d to clear, Esc to exit'}
-        </Text>
+        {!tightLayout && selectedItem ? (
+          <Box paddingLeft={2}>
+            <Text dimColor wrap="truncate-end">
+              {selectedItem.description}
+            </Text>
+          </Box>
+        ) : null}
+
+        <Box marginTop={tightLayout ? 0 : 1}>
+          <Text dimColor wrap="truncate-end">
+            ↑/↓ or j/k · Enter open · c clear pointer · Esc exit
+          </Text>
+        </Box>
       </Box>
-    </Box>
+    </ScreenFrame>
   )
 }

@@ -4,7 +4,7 @@ import { Message } from '#core/query'
 import { FallbackToolUseRejectedMessage } from '#ui-ink/components/FallbackToolUseRejectedMessage'
 import { useGetToolFromMessages } from './utils'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
-import { usePermissionContext } from '#ui-ink/context/PermissionContext'
+import { usePermissionContext } from '#ui-ink/contexts/PermissionContext'
 import { renderInkToolUseRejectedMessage } from '#ui-ink/toolPresenters/registry'
 
 type Props = {

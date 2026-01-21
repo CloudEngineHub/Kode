@@ -6,12 +6,18 @@ import {
   REJECT_MESSAGE,
   REJECT_MESSAGE_WITH_FEEDBACK_PREFIX,
 } from '#core/utils/messages'
-import type { Tool as ToolType, ToolUseContext } from '#core/tooling/Tool'
 import { AssistantMessage } from '#core/query'
 import { ToolUseConfirm } from '#ui-ink/components/permissions/PermissionRequest'
 import { AbortError } from '#core/utils/errors'
 import { logError } from '#core/utils/log'
 import type { ToolPermissionContextUpdate } from '#core/types/toolPermissionContext'
+import type { UnreachablePermissionRuleWarning } from '#core/permissions'
+import { findUnreachablePermissionRules } from '#core/permissions'
+import {
+  resolveToolDescription,
+  type Tool as ToolType,
+  type ToolUseContext,
+} from '#core/tooling/Tool'
 
 type SetState<T> = React.Dispatch<React.SetStateAction<T>>
 
@@ -32,6 +38,11 @@ export type CanUseToolFn = (
 
 function useCanUseTool(
   setToolUseConfirm: SetState<ToolUseConfirm | null>,
+  options?: {
+    onPermissionRuleWarnings?: (
+      warnings: UnreachablePermissionRuleWarning[],
+    ) => void
+  },
 ): CanUseToolFn {
   return useCallback<CanUseToolFn>(
     async (tool, input, toolUseContext, assistantMessage) => {
@@ -81,9 +92,7 @@ function useCanUseTool(
             }
 
             const [description, commandPrefix] = await Promise.all([
-              typeof tool.description === 'function'
-                ? tool.description(input as never)
-                : Promise.resolve(tool.description ?? `Tool: ${tool.name}`),
+              resolveToolDescription(tool, input as never),
               tool === BashTool
                 ? getCommandSubcommandPrefix(
                     inputSchema.parse(input).command, // already validated upstream, so ok to parse (as opposed to safeParse)
@@ -107,14 +116,31 @@ function useCanUseTool(
               commandPrefix,
               toolUseContext,
               suggestions: deniedResult.suggestions,
-              riskScore: null,
+              blockedPath:
+                typeof deniedResult.blockedPath === 'string'
+                  ? deniedResult.blockedPath
+                  : undefined,
+              decisionReason:
+                typeof deniedResult.decisionReason === 'string'
+                  ? deniedResult.decisionReason
+                  : undefined,
+              riskScore:
+                typeof deniedResult.riskScore === 'number'
+                  ? deniedResult.riskScore
+                  : null,
               onAbort() {
                 logCancelledEvent()
                 resolveWithCancelledAndAbortAllToolCalls()
               },
               onAllow(type) {
                 if (type === 'permanent') {
-                } else {
+                  const ctx = toolUseContext.options?.toolPermissionContext
+                  if (ctx) {
+                    const warnings = findUnreachablePermissionRules(ctx)
+                    if (warnings.length > 0) {
+                      options?.onPermissionRuleWarnings?.(warnings)
+                    }
+                  }
                 }
                 resolve({ result: true })
               },

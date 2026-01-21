@@ -56,7 +56,10 @@ export function useUnifiedCompletionTabKey(args: {
             preview = `/${nextSuggestion.value}`
           } else if (args.state.context.type === 'agent') {
             preview = `@${nextSuggestion.value}`
-          } else if (nextSuggestion.isSmartMatch) {
+          } else if (
+            nextSuggestion.isSmartMatch ||
+            args.state.context.trigger === '@'
+          ) {
             preview = `@${nextSuggestion.value}`
           } else {
             preview = nextSuggestion.value
@@ -108,7 +111,7 @@ export function useUnifiedCompletionTabKey(args: {
         preview = `/${firstSuggestion.value}`
       } else if (context.type === 'agent') {
         preview = `@${firstSuggestion.value}`
-      } else if (firstSuggestion.isSmartMatch) {
+      } else if (firstSuggestion.isSmartMatch || context.trigger === '@') {
         preview = `@${firstSuggestion.value}`
       } else {
         preview = firstSuggestion.value

@@ -61,6 +61,17 @@ describe('AskUserQuestionTool schema parity', () => {
     ).toBe(true)
   })
 
+  test('accepts optional answers and metadata (official schema)', () => {
+    expect(
+      AskUserQuestionTool.inputSchema.safeParse(
+        makeValidInput({
+          answers: { 'Which option?': 'A' },
+          metadata: { source: 'remember' },
+        }),
+      ).success,
+    ).toBe(true)
+  })
+
   test('rejects out-of-range question counts', () => {
     expect(
       AskUserQuestionTool.inputSchema.safeParse({ questions: [] }).success,
@@ -188,31 +199,37 @@ describe('AskUserQuestionTool schema parity', () => {
     ).toBe(false)
   })
 
-  test('is strict at the top level but tolerant for nested objects', () => {
-    expect(
-      AskUserQuestionTool.inputSchema.safeParse(
-        makeValidInput({ extra: 'nope' }),
-      ).success,
-    ).toBe(false)
+  test('ignores unknown keys at the top level and inside nested objects', () => {
+    const topLevel = AskUserQuestionTool.inputSchema.safeParse(
+      makeValidInput({ extra: 'nope' }),
+    )
+    expect(topLevel.success).toBe(true)
+    if (topLevel.success) {
+      expect('extra' in topLevel.data).toBe(false)
+    }
 
-    expect(
-      AskUserQuestionTool.inputSchema.safeParse(
-        makeValidInput({
-          questions: [
-            {
-              question: 'Q?',
-              header: 'H',
-              extraQuestionField: 123,
-              options: [
-                { label: 'A', description: 'A', extraOptionField: true },
-                { label: 'B', description: 'B', extraOptionField: false },
-              ],
-              multiSelect: false,
-            },
-          ],
-        }),
-      ).success,
-    ).toBe(true)
+    const nested = AskUserQuestionTool.inputSchema.safeParse(
+      makeValidInput({
+        questions: [
+          {
+            question: 'Q?',
+            header: 'H',
+            extraQuestionField: 123,
+            options: [
+              { label: 'A', description: 'A', extraOptionField: true },
+              { label: 'B', description: 'B', extraOptionField: false },
+            ],
+            multiSelect: false,
+          },
+        ],
+      }),
+    )
+    expect(nested.success).toBe(true)
+    if (nested.success) {
+      const q = nested.data.questions[0]
+      expect('extraQuestionField' in q).toBe(false)
+      expect('extraOptionField' in q.options[0]).toBe(false)
+    }
   })
 
   test('renderResultForAssistant matches expected formatting', () => {

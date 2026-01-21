@@ -7,12 +7,9 @@ import type { ToolPermissionContext } from '#core/types/toolPermissionContext'
 import { getPermissionKey } from '../permissionKey'
 import type { PermissionResult } from '../types'
 
-// Compatibility: preapproved WebFetch hosts/paths.
+// Preapproved WebFetch hosts/paths to reduce permission prompts for common documentation sites.
 const WEBFETCH_PREAPPROVED_HOSTS_AND_PATHS = new Set<string>([
-  'platform.claude.com',
-  'code.claude.com',
   'modelcontextprotocol.io',
-  'github.com/anthropics',
   'docs.python.org',
   'en.cppreference.com',
   'docs.oracle.com',
@@ -135,17 +132,21 @@ export function checkWebPermission(args: {
     const matchesWebSearchRule = (rule: string): boolean =>
       rule === args.tool.name || rule === permissionKey
 
-    if (args.effectiveDeniedTools.some(matchesWebSearchRule)) {
+    const deniedRule = args.effectiveDeniedTools.find(matchesWebSearchRule)
+    if (deniedRule) {
       return {
         result: false,
         message: `Permission to use ${args.tool.name} has been denied.`,
         shouldPromptUser: false,
+        decisionReason: deniedRule,
       }
     }
-    if (args.effectiveAskedTools.some(matchesWebSearchRule)) {
+    const askedRule = args.effectiveAskedTools.find(matchesWebSearchRule)
+    if (askedRule) {
       return {
         result: false,
         message: `${PRODUCT_NAME} requested permissions to use ${args.tool.name}, but you haven't granted it yet.`,
+        decisionReason: askedRule,
       }
     }
     if (args.effectiveAllowedTools.some(matchesWebSearchRule)) {
@@ -155,6 +156,7 @@ export function checkWebPermission(args: {
     return {
       result: false,
       message: `${PRODUCT_NAME} requested permissions to use ${args.tool.name}, but you haven't granted it yet.`,
+      decisionReason: 'No allow rule matched',
     }
   }
 
@@ -191,17 +193,21 @@ export function checkWebPermission(args: {
     return ruleContent === actualRuleContent
   }
 
-  if (args.effectiveDeniedTools.some(matchesWebFetchRule)) {
+  const deniedRule = args.effectiveDeniedTools.find(matchesWebFetchRule)
+  if (deniedRule) {
     return {
       result: false,
       message: `Permission to use ${args.tool.name} has been denied.`,
       shouldPromptUser: false,
+      decisionReason: deniedRule,
     }
   }
-  if (args.effectiveAskedTools.some(matchesWebFetchRule)) {
+  const askedRule = args.effectiveAskedTools.find(matchesWebFetchRule)
+  if (askedRule) {
     return {
       result: false,
       message: `${PRODUCT_NAME} requested permissions to use ${args.tool.name}, but you haven't granted it yet.`,
+      decisionReason: askedRule,
     }
   }
   if (args.effectiveAllowedTools.some(matchesWebFetchRule)) {
@@ -211,5 +217,6 @@ export function checkWebPermission(args: {
   return {
     result: false,
     message: `${PRODUCT_NAME} requested permissions to use ${args.tool.name}, but you haven't granted it yet.`,
+    decisionReason: 'No allow rule matched',
   }
 }

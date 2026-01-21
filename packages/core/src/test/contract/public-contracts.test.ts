@@ -16,6 +16,7 @@ describe('public contracts (refactor safety net)', () => {
       'Bash',
       'TaskOutput',
       'KillShell',
+      'LS',
       'Glob',
       'Grep',
       'LSP',
@@ -33,6 +34,7 @@ describe('public contracts (refactor safety net)', () => {
       'Skill',
       'ListMcpResourcesTool',
       'ReadMcpResourceTool',
+      'MCPSearch',
       'mcp',
     ])
     expect(new Set(toolNames).size).toBe(toolNames.length)
@@ -150,9 +152,8 @@ describe('public contracts (refactor safety net)', () => {
   })
 
   test('apps/cli/src/dispatch.ts matches old_version_2 output (help/version)', () => {
-    const oldRoot =
-      process.env.KODE_OLD_VERSION_2_ROOT ??
-      '/Users/baicai/Desktop/MyT/Kode/pr/Kode-cli-old_version_2'
+    const oldRoot = process.env.KODE_OLD_VERSION_2_ROOT
+    if (!oldRoot) return
 
     if (!existsSync(oldRoot)) return
 

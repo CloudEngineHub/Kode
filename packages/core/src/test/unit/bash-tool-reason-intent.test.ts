@@ -2,16 +2,22 @@ import { describe, expect, test } from 'bun:test'
 import { BashTool } from '#tools/tools/system/BashTool/BashTool'
 
 describe('BashTool schema (compatibility)', () => {
-  test('rejects non-reference fields (reason/intent)', () => {
+  test('ignores unknown fields (reason/intent)', () => {
     expect(() =>
       BashTool.inputSchema.parse({ command: 'echo hi' }),
     ).not.toThrow()
-    expect(() =>
-      BashTool.inputSchema.parse({ command: 'echo hi', reason: 'Say hi' }),
-    ).toThrow()
-    expect(() =>
-      BashTool.inputSchema.parse({ command: 'echo hi', intent: 'Say hi' }),
-    ).toThrow()
+
+    const withReason = BashTool.inputSchema.parse({
+      command: 'echo hi',
+      reason: 'Say hi',
+    } as any)
+    expect('reason' in withReason).toBe(false)
+
+    const withIntent = BashTool.inputSchema.parse({
+      command: 'echo hi',
+      intent: 'Say hi',
+    } as any)
+    expect('intent' in withIntent).toBe(false)
   })
 
   test('renderToolUseMessage only includes description in verbose mode', () => {

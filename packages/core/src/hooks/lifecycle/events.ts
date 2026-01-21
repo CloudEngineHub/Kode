@@ -14,6 +14,7 @@ import {
   getHookStopDecision,
   getHookSystemMessage,
 } from '../types'
+import { getDisableAllHooksState } from '../disableAllHooks'
 import {
   coerceHookMessage,
   coerceHookPermissionMode,
@@ -169,6 +170,15 @@ export async function runStopHooks(args: {
   signal?: AbortSignal
 }): Promise<StopHookOutcome> {
   const projectDir = args.cwd ?? getCwd()
+  if (getDisableAllHooksState({ projectDir }).disabled) {
+    return {
+      decision: 'approve',
+      warnings: [],
+      systemMessages: [],
+      additionalContexts: [],
+    }
+  }
+
   const applicable = getApplicableMatchers(projectDir, args.hookEvent)
   if (applicable.length === 0) {
     return {
@@ -228,6 +238,15 @@ export async function runUserPromptSubmitHooks(args: {
   signal?: AbortSignal
 }): Promise<UserPromptHookOutcome> {
   const projectDir = args.cwd ?? getCwd()
+  if (getDisableAllHooksState({ projectDir }).disabled) {
+    return {
+      decision: 'allow',
+      warnings: [],
+      systemMessages: [],
+      additionalContexts: [],
+    }
+  }
+
   const applicable = getApplicableMatchers(projectDir, 'UserPromptSubmit')
   if (applicable.length === 0) {
     return {
@@ -284,6 +303,10 @@ export async function runSessionEndHooks(args: {
   signal?: AbortSignal
 }): Promise<{ warnings: string[]; systemMessages: string[] }> {
   const projectDir = args.cwd ?? getCwd()
+  if (getDisableAllHooksState({ projectDir }).disabled) {
+    return { warnings: [], systemMessages: [] }
+  }
+
   const applicable = getApplicableMatchers(projectDir, 'SessionEnd')
   if (applicable.length === 0) return { warnings: [], systemMessages: [] }
 

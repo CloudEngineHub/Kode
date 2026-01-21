@@ -165,6 +165,7 @@ describe('Agent Skills compatibility (discovery + prompt)', () => {
   test('SkillTool.prompt includes skill location path when available', async () => {
     await withEnv(
       {
+        HOME: homeDir,
         KODE_CONFIG_DIR: join(homeDir, '.kode'),
         KODE_SKILLS_STRICT: undefined,
       },
@@ -189,6 +190,142 @@ describe('Agent Skills compatibility (discovery + prompt)', () => {
         const prompt = await SkillTool.prompt()
         expect(prompt).toContain('<name>\nalpha\n</name>')
         expect(prompt).toContain(`<location>\n${skillFile}\n</location>`)
+      },
+    )
+  })
+
+  test('discovers skills from ancestor .claude/skills when cwd is a subdirectory', async () => {
+    await withEnv(
+      {
+        HOME: homeDir,
+        KODE_CONFIG_DIR: join(homeDir, '.kode'),
+        KODE_SKILLS_STRICT: undefined,
+      },
+      async () => {
+        const legacySkillDir = join(
+          projectDir,
+          '.claude',
+          'skills',
+          'legacy-skill',
+        )
+        mkdirSync(legacySkillDir, { recursive: true })
+        const legacySkillFile = join(legacySkillDir, 'SKILL.md')
+        writeFileSync(
+          legacySkillFile,
+          [
+            '---',
+            'name: legacy-skill',
+            'description: Legacy skill from ancestor .claude/skills',
+            '---',
+            '',
+            '# Legacy',
+          ].join('\n'),
+          'utf8',
+        )
+
+        const deepDir = join(projectDir, 'src', 'nested')
+        mkdirSync(deepDir, { recursive: true })
+        await setCwd(deepDir)
+
+        reloadCustomCommands()
+        const cmds = await loadCustomCommands()
+        const skill = cmds.find(c => c.isSkill && c.name === 'legacy-skill')
+        expect(skill).toBeTruthy()
+        expect(skill?.filePath).toBe(legacySkillFile)
+      },
+    )
+  })
+
+  test('prefers .kode/skills over .claude/skills for conflicting skill names', async () => {
+    await withEnv(
+      {
+        HOME: homeDir,
+        KODE_CONFIG_DIR: join(homeDir, '.kode'),
+        KODE_SKILLS_STRICT: undefined,
+      },
+      async () => {
+        const name = 'winner'
+
+        const kodeSkillDir = join(projectDir, '.kode', 'skills', name)
+        mkdirSync(kodeSkillDir, { recursive: true })
+        const kodeSkillFile = join(kodeSkillDir, 'SKILL.md')
+        writeFileSync(
+          kodeSkillFile,
+          [
+            '---',
+            `name: ${name}`,
+            'description: Kode skill should win',
+            '---',
+            '',
+            '# Kode',
+          ].join('\n'),
+          'utf8',
+        )
+
+        const legacySkillDir = join(projectDir, '.claude', 'skills', name)
+        mkdirSync(legacySkillDir, { recursive: true })
+        writeFileSync(
+          join(legacySkillDir, 'SKILL.md'),
+          [
+            '---',
+            `name: ${name}`,
+            'description: Legacy skill should lose',
+            '---',
+            '',
+            '# Legacy',
+          ].join('\n'),
+          'utf8',
+        )
+
+        reloadCustomCommands()
+        const cmds = await loadCustomCommands()
+        const skill = cmds.find(c => c.isSkill && c.userFacingName() === name)
+        expect(skill).toBeTruthy()
+        expect(skill?.filePath).toBe(kodeSkillFile)
+        expect(skill?.description).toContain('Kode skill should win')
+      },
+    )
+  })
+
+  test('discovers nested .claude/skills directories in ancestor traversal', async () => {
+    await withEnv(
+      {
+        HOME: homeDir,
+        KODE_CONFIG_DIR: join(homeDir, '.kode'),
+        KODE_SKILLS_STRICT: undefined,
+      },
+      async () => {
+        const subproject = join(projectDir, 'packages', 'subproj')
+        const nestedSkillDir = join(
+          subproject,
+          '.claude',
+          'skills',
+          'nested-skill',
+        )
+        mkdirSync(nestedSkillDir, { recursive: true })
+        const nestedSkillFile = join(nestedSkillDir, 'SKILL.md')
+        writeFileSync(
+          nestedSkillFile,
+          [
+            '---',
+            'name: nested-skill',
+            'description: Nested legacy skill',
+            '---',
+            '',
+            '# Nested',
+          ].join('\n'),
+          'utf8',
+        )
+
+        const deepDir = join(subproject, 'src')
+        mkdirSync(deepDir, { recursive: true })
+        await setCwd(deepDir)
+
+        reloadCustomCommands()
+        const cmds = await loadCustomCommands()
+        const skill = cmds.find(c => c.isSkill && c.name === 'nested-skill')
+        expect(skill).toBeTruthy()
+        expect(skill?.filePath).toBe(nestedSkillFile)
       },
     )
   })

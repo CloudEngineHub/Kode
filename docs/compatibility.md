@@ -11,13 +11,13 @@ Kode is **not affiliated with Anthropic**. “Claude Code” is referenced here 
 
 Kode generally **writes to `.kode`** and may read from `.claude` for compatibility.
 
-Note: the interactive `/agents` UI creates new agent files under `.claude/agents` by default, while still loading `.kode/agents`.
+Note: the interactive `/agents` UI creates new agent files under `.kode/agents` by default, while still loading legacy `.claude/agents`.
 
 ## What’s Supported
 
 - Agents
   - Read: `./.kode/agents`, `~/.kode/agents`, `./.claude/agents`, `~/.claude/agents`
-  - Write (via `/agents`): `./.claude/agents`, `~/.claude/agents` (edits legacy `.kode/agents` if that’s where the agent currently lives)
+  - Write (via `/agents`): `./.kode/agents`, `~/.kode/agents` (edits legacy `.claude/agents` when that’s where the agent currently lives)
 - Output styles (`/output-style`)
   - Selection stored in: `./.kode/settings.local.json` (legacy `./.claude/settings.local.json`)
   - Custom styles discovered from: `./.kode/output-styles`, `~/.kode/output-styles`, `./.claude/output-styles`, `~/.claude/output-styles`

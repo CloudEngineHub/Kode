@@ -19,7 +19,7 @@
 
 ## 📢 更新日志
 
-**2025-12-22**：原生优先分发（Windows 开箱即用）。Kode 会优先使用缓存的原生二进制文件，并在需要时回退到 Node.js 运行时。详见 `docs/binary-distribution.md`。
+**2025-12-22**：npm + optionalDependencies 分发（全平台）。Kode 优先使用按平台拆分的原生二进制包（`@shareai-lab/kode-bin-*`），并在需要时回退到 Node.js 入口；同时会在 GitHub Releases 发布单文件二进制。详见 `docs/binary-distribution.md`。
 
 ## 🤝 AGENTS.md 标准支持
 
@@ -73,6 +73,12 @@ npm install -g @shareai-lab/kode
 > ```bash
 > npm install -g @shareai-lab/kode --registry=https://registry.npmmirror.com
 > ```
+>
+> Kode 搜索默认使用 ripgrep（`rg`）。npm 发布包通过按平台拆分的 `optionalDependencies` 提供（`@shareai-lab/kode-ripgrep-<platform>-<arch>`）。如果你安装时禁用了 optionalDependencies（例如 `--no-optional`），请自行安装系统 `rg` 或设置 `KODE_RIPGREP_PATH`。
+>
+> Kode 也通过按平台拆分的 `optionalDependencies` 提供可选原生 CLI 二进制（`@shareai-lab/kode-bin-<platform>-<arch>`）。如果你安装时禁用了 optionalDependencies（`--no-optional`/`--omit=optional`），则会走 Node.js 入口（`dist/index.js`）。
+>
+> npm 安装过程不会从 GitHub 下载任何二进制文件。（可选的单文件二进制在 GitHub Releases，和 npm 安装是两套独立发布流程。）
 
 开发版（最新特性）：
 
@@ -85,18 +91,13 @@ npm install -g @shareai-lab/kode@dev
 - `kwa` - Kode With Agent（备选）
 - `kd` - 超短别名
 
-### 原生二进制（Windows 开箱即用）
+### 单文件二进制（可选）
 
-- 无需 WSL / Git Bash。
-- `postinstall` 会尽力从 GitHub Releases 下载原生二进制文件到 `${KODE_BIN_DIR:-~/.kode/bin}/<version>/<platform>-<arch>/kode(.exe)`。
-- 入口包装器（`cli.js`）会优先使用原生二进制，并在需要时回退到 Node.js 运行时（`node dist/index.js`）。
+如果你希望“绿色运行”（不通过 npm 安装），可以从 GitHub Releases 下载对应平台的 Bun 编译产物：
 
-可选覆盖：
-- 镜像下载源：`KODE_BINARY_BASE_URL`
-- 禁用下载：`KODE_SKIP_BINARY_DOWNLOAD=1`
-- 缓存目录：`KODE_BIN_DIR`
+- https://github.com/shareAI-lab/kode/releases
 
-详见 `docs/binary-distribution.md`。
+详见 `docs/binary-distribution.md`（资产命名、本地构建）。
 
 ### 配置 / API Key
 
@@ -357,7 +358,7 @@ kode mcp remove <name>
 ## 常见排障
 
 - 模型：用 `/model`，或 `kode models import kode-models.yaml` 导入团队共享模型配置；确认所需 API Key 环境变量已设置。
-- Windows：若原生二进制下载失败/被阻断，可设置 `KODE_BINARY_BASE_URL`（镜像）或 `KODE_SKIP_BINARY_DOWNLOAD=1`（禁用下载）；包装器会回退到 Node.js 运行时（`dist/index.js`）。
+- Windows：默认走 npm 安装即可；如需单文件可执行程序，请使用 GitHub Release 中对应平台的资产。
 - MCP：用 `kode mcp list` 查看状态；若服务较慢可调 `MCP_CONNECTION_TIMEOUT_MS`、`MCP_SERVER_CONNECTION_BATCH_SIZE`、`MCP_TOOL_TIMEOUT`。
 - Sandbox：Linux 安装 `bwrap`（bubblewrap），或设置 `KODE_SYSTEM_SANDBOX=0` 关闭。
 

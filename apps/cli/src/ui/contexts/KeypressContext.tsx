@@ -76,6 +76,8 @@ const KEY_INFO_MAP: Record<
   '[[6~': { name: 'pagedown' },
   '[9u': { name: 'tab' },
   '[13u': { name: 'return' },
+  '[13$': { name: 'return', shift: true },
+  '[13^': { name: 'return', ctrl: true },
   '[27u': { name: 'escape' },
   '[127u': { name: 'backspace' },
   '[57414u': { name: 'return' }, // Numpad Enter
@@ -434,6 +436,11 @@ function* emitKeys(
     } else if (ch === '\b' || ch === '\x7f') {
       name = 'backspace'
       meta = escaped
+    } else if (!escaped && ch === '\x1f') {
+      // Ctrl+_ (unit separator) is commonly used as an "undo" shortcut.
+      // Treat it like other Ctrl+<key> combos so downstream handlers can bind it.
+      name = '_'
+      ctrl = true
     } else if (ch === ESC) {
       name = 'escape'
       meta = escaped
@@ -639,10 +646,22 @@ export function KeypressProvider({
   useEffect(() => {
     const wasRaw = stdin.isRaw
     if (wasRaw === false) {
-      setRawMode(true)
+      try {
+        setRawMode(true)
+      } catch (error) {
+        debugLogger.warn('KEYPRESS_RAWMODE_ENABLE_FAILED', {
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
     }
 
-    process.stdin.setEncoding('utf8')
+    try {
+      process.stdin.setEncoding('utf8')
+    } catch (error) {
+      debugLogger.warn('KEYPRESS_SET_ENCODING_FAILED', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
 
     let processor = broadcast
     if (!terminalCapabilityManager.isBracketedPasteEnabled()) {
@@ -667,7 +686,11 @@ export function KeypressProvider({
     return () => {
       stdin.removeListener('data', dataListener)
       if (wasRaw === false) {
-        setRawMode(false)
+        try {
+          setRawMode(false)
+        } catch {
+          // best-effort only
+        }
       }
     }
   }, [stdin, setRawMode, debugKeystrokeLogging, broadcast])

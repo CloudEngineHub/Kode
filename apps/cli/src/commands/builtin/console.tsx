@@ -1,6 +1,6 @@
 import type { Command } from '../types'
 import * as React from 'react'
-import { TuiConsoleDialog } from '#ui-ink/components/TuiConsoleDialog'
+import { ConsoleScreen } from '#ui-ink/screens/overlays/ConsoleScreen'
 
 const consoleCommand = {
   type: 'local-jsx',
@@ -10,7 +10,7 @@ const consoleCommand = {
   isHidden: false,
   ui: { displayMode: 'fullscreen' },
   async call(onDone) {
-    return <TuiConsoleDialog onDone={onDone} />
+    return <ConsoleScreen onDone={onDone} />
   },
   userFacingName() {
     return 'console'

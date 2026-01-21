@@ -1,15 +1,17 @@
 import { last } from 'lodash-es'
 import type { Command } from '#cli-commands'
-import { getSystemPrompt } from '#core/constants/prompts'
 import { getContext } from '#core/context'
 import { getTotalCost } from '#core/cost-tracker'
-import { Message, query } from '#core/query'
+import type { Message } from '#core/query'
+import { query } from '#core/query'
 import type { CanUseToolFn } from '#core/permissions/canUseTool'
-import { Tool } from '#core/tooling/Tool'
-import { getModelManager } from '#core/utils/model'
+import type { Tool } from '#core/tooling/Tool'
+import { buildSystemPromptForSession } from '#core/engine'
 import { setCwd } from '#core/utils/state'
 import { getMessagesPath, overwriteLog } from '#core/utils/log'
 import { createUserMessage } from '#core/utils/messages'
+import { getMaxThinkingTokens } from '#core/utils/thinking'
+import { getCurrentOutputStyleDefinition } from '#cli-services/outputStyles'
 
 type Props = {
   commands: Command[]
@@ -20,9 +22,38 @@ type Props = {
   cwd: string
   tools: Tool[]
   verbose?: boolean
+  disableSlashCommands?: boolean
+  systemPromptOverride?: string
+  appendSystemPrompt?: string
+  maxThinkingTokens?: number
+  maxTurns?: number
+  maxBudgetUsd?: number
   initialMessages?: Message[]
   persistSession?: boolean
 }
+
+type AskDeps = Partial<{
+  getContext: (...args: Parameters<typeof getContext>) => ReturnType<typeof getContext>
+  getTotalCost: (...args: Parameters<typeof getTotalCost>) => ReturnType<typeof getTotalCost>
+  query: (...args: Parameters<typeof query>) => ReturnType<typeof query>
+  buildSystemPromptForSession: (
+    ...args: Parameters<typeof buildSystemPromptForSession>
+  ) => ReturnType<typeof buildSystemPromptForSession>
+  setCwd: (...args: Parameters<typeof setCwd>) => ReturnType<typeof setCwd>
+  getMessagesPath: (
+    ...args: Parameters<typeof getMessagesPath>
+  ) => ReturnType<typeof getMessagesPath>
+  overwriteLog: (...args: Parameters<typeof overwriteLog>) => ReturnType<typeof overwriteLog>
+  createUserMessage: (
+    ...args: Parameters<typeof createUserMessage>
+  ) => ReturnType<typeof createUserMessage>
+  getCurrentOutputStyleDefinition: (
+    ...args: Parameters<typeof getCurrentOutputStyleDefinition>
+  ) => ReturnType<typeof getCurrentOutputStyleDefinition>
+  getMaxThinkingTokens: (
+    ...args: Parameters<typeof getMaxThinkingTokens>
+  ) => ReturnType<typeof getMaxThinkingTokens>
+}>
 
 // Sends a single prompt to the Anthropic Messages API and returns the response.
 // Assumes the CLI is being used non-interactively: it will not ask the user
@@ -36,24 +67,72 @@ export async function ask({
   cwd,
   tools,
   verbose = false,
+  disableSlashCommands,
+  systemPromptOverride,
+  appendSystemPrompt,
+  maxThinkingTokens,
+  maxTurns,
+  maxBudgetUsd,
   initialMessages,
   persistSession = true,
-}: Props): Promise<{
+}: Props, deps?: AskDeps): Promise<{
   resultText: string
   totalCost: number
   messageHistoryFile: string
 }> {
-  await setCwd(cwd)
-  const message = createUserMessage(prompt)
+  const setCwdImpl = deps?.setCwd ?? setCwd
+  const createUserMessageImpl = deps?.createUserMessage ?? createUserMessage
+  const getCurrentOutputStyleDefinitionImpl =
+    deps?.getCurrentOutputStyleDefinition ?? getCurrentOutputStyleDefinition
+  const getMaxThinkingTokensImpl =
+    deps?.getMaxThinkingTokens ?? getMaxThinkingTokens
+  const buildSystemPromptForSessionImpl =
+    deps?.buildSystemPromptForSession ?? buildSystemPromptForSession
+  const getContextImpl = deps?.getContext ?? getContext
+  const queryImpl = deps?.query ?? query
+  const getMessagesPathImpl = deps?.getMessagesPath ?? getMessagesPath
+  const overwriteLogImpl = deps?.overwriteLog ?? overwriteLog
+  const getTotalCostImpl = deps?.getTotalCost ?? getTotalCost
+
+  await setCwdImpl(cwd)
+  const message = createUserMessageImpl(prompt)
   const messages: Message[] = [...(initialMessages ?? []), message]
 
-  const [systemPrompt, context, model] = await Promise.all([
-    getSystemPrompt(),
-    getContext(),
-    getModelManager().getModelName('main'),
+  const effectiveMaxThinkingTokens = (() => {
+    if (
+      typeof maxThinkingTokens === 'number' &&
+      Number.isFinite(maxThinkingTokens) &&
+      maxThinkingTokens >= 0
+    ) {
+      return Math.trunc(maxThinkingTokens)
+    }
+    return undefined
+  })()
+
+  const effectiveMaxTurns = (() => {
+    if (typeof maxTurns !== 'number' || !Number.isFinite(maxTurns)) {
+      return undefined
+    }
+    if (maxTurns <= 0) return undefined
+    return Math.trunc(maxTurns)
+  })()
+
+  const outputStyle = getCurrentOutputStyleDefinitionImpl()
+  const [systemPrompt, context, computedMaxThinkingTokens] = await Promise.all([
+    buildSystemPromptForSessionImpl({
+      disableSlashCommands,
+      systemPromptOverride,
+      appendSystemPrompt,
+      outputStyleActive: outputStyle !== null,
+      keepCodingInstructions: outputStyle?.keepCodingInstructions,
+    }),
+    getContextImpl(),
+    effectiveMaxThinkingTokens !== undefined
+      ? Promise.resolve(effectiveMaxThinkingTokens)
+      : getMaxThinkingTokensImpl(messages),
   ])
 
-  for await (const m of query(
+  for await (const m of queryImpl(
     messages,
     systemPrompt,
     context,
@@ -64,9 +143,12 @@ export async function ask({
         tools,
         verbose,
         safeMode,
+        maxTurns: effectiveMaxTurns,
+        maxBudgetUsd:
+          typeof maxBudgetUsd === 'number' ? maxBudgetUsd : undefined,
         forkNumber: 0,
         messageLogName: 'unused',
-        maxThinkingTokens: 0,
+        maxThinkingTokens: computedMaxThinkingTokens,
         persistSession,
       },
       abortController: new AbortController(),
@@ -96,12 +178,12 @@ export async function ask({
   }
 
   // Write a message log that can be viewed with `kode log`
-  const messageHistoryFile = getMessagesPath(messageLogName, 0, 0)
-  overwriteLog(messageHistoryFile, messages)
+  const messageHistoryFile = getMessagesPathImpl(messageLogName, 0, 0)
+  overwriteLogImpl(messageHistoryFile, messages)
 
   return {
     resultText: textContent.text,
-    totalCost: getTotalCost(),
+    totalCost: getTotalCostImpl(),
     messageHistoryFile,
   }
 }

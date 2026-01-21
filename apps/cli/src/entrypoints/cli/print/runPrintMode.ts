@@ -2,9 +2,11 @@ import { addToHistory } from '#core/history'
 import { hasPermissionsToUseTool } from '#core/permissions'
 import { dateToFilename } from '#core/utils/log'
 
+import type { Command } from '#cli-commands'
 import type { WrappedClient } from '#core/mcp/client'
 import type { Message } from '#core/query'
 import type { Tool } from '#core/tooling/Tool'
+import type { ask as askImpl } from '#cli-utils/ask'
 
 export type RunPrintModeArgs = {
   prompt: string | undefined
@@ -19,12 +21,16 @@ export type RunPrintModeArgs = {
   inputFormat?: string
   jsonSchema?: string
   permissionPromptTool?: string | null
+  maxThinkingTokens?: number
+  maxTurns?: number
+  maxBudgetUsd?: number
+  includePartialMessages?: boolean
   replayUserMessages?: boolean
 
   cliTools?: unknown
   tools: Tool[]
-  commands: Array<{ isHidden?: boolean; userFacingName: () => string }>
-  ask: (args: unknown) => Promise<{ resultText: string }>
+  commands: Command[]
+  ask: typeof askImpl
 
   initialMessages?: Message[]
   sessionPersistence?: boolean
@@ -55,6 +61,10 @@ export async function runPrintMode({
   inputFormat,
   jsonSchema,
   permissionPromptTool,
+  maxThinkingTokens,
+  maxTurns,
+  maxBudgetUsd,
+  includePartialMessages,
   replayUserMessages,
   cliTools,
   tools,
@@ -106,6 +116,13 @@ export async function runPrintMode({
     ? String(permissionPromptTool).trim()
     : null
 
+  if (includePartialMessages && normalizedOutputFormat !== 'stream-json') {
+    console.error(
+      'Error: --include-partial-messages requires --print and --output-format=stream-json.',
+    )
+    process.exit(1)
+  }
+
   if (normalizedPermissionPromptTool) {
     if (normalizedPermissionPromptTool !== 'stdio') {
       console.error(
@@ -132,7 +149,7 @@ export async function runPrintMode({
     normalizedOutputFormat !== 'stream-json'
   ) {
     console.error(
-      'Error: --input-format=stream-json requires --output-format=stream-json',
+      'Error: --input-format=stream-json requires output-format=stream-json.',
     )
     process.exit(1)
   }
@@ -143,7 +160,7 @@ export async function runPrintMode({
       normalizedOutputFormat !== 'stream-json'
     ) {
       console.error(
-        'Error: --replay-user-messages requires --input-format=stream-json and --output-format=stream-json',
+        'Error: --replay-user-messages requires both --input-format=stream-json and --output-format=stream-json.',
       )
       process.exit(1)
     }
@@ -196,19 +213,60 @@ export async function runPrintMode({
 
   if (normalizedOutputFormat === 'text') {
     addToHistory(inputPrompt)
-    const { resultText: response } = await ask({
-      commands,
-      hasPermissionsToUseTool,
-      messageLogName: dateToFilename(new Date()),
-      prompt: inputPrompt,
-      cwd,
-      tools: toolsForPrint,
-      safeMode: safe,
-      initialMessages,
-      persistSession: sessionPersistence !== false,
-    })
-    process.stdout.write(`${response}\n`)
-    process.exit(0)
+    try {
+      const { resultText: response, totalCost } = await ask({
+        commands,
+        hasPermissionsToUseTool,
+        messageLogName: dateToFilename(new Date()),
+        prompt: inputPrompt,
+        cwd,
+        tools: toolsForPrint,
+        safeMode: safe,
+        disableSlashCommands,
+        systemPromptOverride,
+        appendSystemPrompt,
+        maxThinkingTokens,
+        maxTurns,
+        maxBudgetUsd,
+        initialMessages,
+        persistSession: sessionPersistence !== false,
+      })
+
+      const budgetExceeded =
+        typeof maxBudgetUsd === 'number' &&
+        Number.isFinite(maxBudgetUsd) &&
+        maxBudgetUsd > 0 &&
+        totalCost >= maxBudgetUsd
+
+      if (budgetExceeded) {
+        process.stdout.write(
+          `Error: Exceeded USD budget (${maxBudgetUsd})\n`,
+        )
+        process.exit(0)
+      }
+
+      process.stdout.write(`${response}\n`)
+      process.exit(0)
+    } catch (error) {
+      const { MaxBudgetUsdExceededError } = await import(
+        '#core/errors/maxBudgetUsd'
+      )
+      const { MaxTurnsExceededError } = await import('#core/errors/maxTurns')
+      if (error instanceof MaxBudgetUsdExceededError) {
+        const budget = maxBudgetUsd ?? error.maxBudgetUsd
+        process.stdout.write(`Error: Exceeded USD budget (${budget})\n`)
+        process.exit(0)
+      }
+      if (error instanceof MaxTurnsExceededError) {
+        process.stdout.write(
+          `Error: Reached max turns limit (${error.maxTurns})\n`,
+        )
+        process.exit(0)
+      }
+
+      process.stdout.write('Execution error\n')
+      process.exit(1)
+    }
   }
 
   if (
@@ -248,6 +306,10 @@ export async function runPrintMode({
     systemPromptOverride,
     appendSystemPrompt,
     disableSlashCommands,
+    maxThinkingTokens,
+    maxTurns,
+    maxBudgetUsd,
+    includePartialMessages,
     allowedTools,
     disallowedTools,
     addDir,

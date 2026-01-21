@@ -12,6 +12,8 @@ export type REPLProps = {
   safeMode?: boolean
   debug?: boolean
   disableSlashCommands?: boolean
+  systemPromptOverride?: string
+  appendSystemPrompt?: string
   initialForkNumber?: number | undefined
   initialPrompt: string | undefined
   messageLogName: string

@@ -37,7 +37,7 @@ export async function savePermission(
     return
   }
 
-  // Persistence: write allow rules to .kode/settings.local.json (legacy .claude is read-compatible)
+  // Persistence: write allow rules to .kode/settings.local.json (legacy settings are read-compatible)
   try {
     const update = {
       type: 'addRules' as const,

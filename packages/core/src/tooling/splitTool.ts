@@ -54,7 +54,11 @@ export function splitLegacyTool<
 >(tool: Tool<TInput, TOutput>): SplitTool<TInput, TOutput> {
   const spec: ToolSpec<TInput, TOutput> = {
     name: tool.name,
-    description: tool.description,
+    // Tool descriptions may be async functions; adapters/spec consumers must not receive a Promise-returning function here.
+    // Prefer the cached (resolved) string description when available.
+    description:
+      tool.cachedDescription ??
+      (typeof tool.description === 'string' ? tool.description : undefined),
     inputSchema: tool.inputSchema,
     inputJSONSchema: tool.inputJSONSchema,
     prompt: tool.prompt,

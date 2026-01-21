@@ -16,8 +16,8 @@ describe('MCP server (stdio)', () => {
     const transport = new StdioClientTransport({
       command: process.execPath,
       args: [
-        '-e',
-        "import('./apps/kode/src/entrypoints/mcpServer.ts').then((m)=>m.startMCPServer(process.cwd())).catch((e)=>{console.error(e);process.exit(1);})",
+        'apps/cli/src/dispatch.ts',
+        '--mcp-server',
       ],
       cwd: repoRoot,
       env: {

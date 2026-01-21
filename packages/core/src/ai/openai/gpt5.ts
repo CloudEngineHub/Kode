@@ -20,7 +20,7 @@ export async function getGPT5CompletionWithProfile(
   attempt: number = 0,
   maxAttempts: number = 10,
   signal?: AbortSignal,
-  requestHeadersProfile?: import('#core/ai/llm/claudeCodeFallback').RequestHeadersProfile,
+  requestHeadersProfile?: import('#core/ai/llm/restrictedClientCompat').RequestHeadersProfile,
 ): Promise<OpenAI.ChatCompletion | AsyncIterable<OpenAI.ChatCompletionChunk>> {
   const profile = modelProfile as { baseURL?: string; provider?: string } | null
   const features = getModelFeatures(opts.model)

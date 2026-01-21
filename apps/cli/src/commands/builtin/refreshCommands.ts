@@ -1,5 +1,5 @@
 import type { Command } from '../types'
-import { reloadCustomCommands } from '#cli-services/customCommands'
+import { reloadCustomCommandsForSession } from '#cli-services/customCommands'
 import { debug as debugLogger } from '#core/utils/debugLogger'
 import { logError } from '#core/utils/log'
 
@@ -27,14 +27,9 @@ const refreshCommands = {
   isHidden: false,
   async call(_, context) {
     try {
-      // Clear custom commands cache to force filesystem rescan
-      reloadCustomCommands()
+      await reloadCustomCommandsForSession()
 
       const { getCommands } = await import('../registry')
-
-      // Clear the main commands cache to ensure full reload
-      // This ensures that changes to custom commands are reflected in the main command list
-      getCommands.cache.clear?.()
 
       // Reload commands to get updated count and validate the refresh
       const commands = await getCommands()

@@ -1,5 +1,5 @@
 import type { Command } from '../types'
-import { Help } from '#ui-ink/components/Help'
+import { HelpScreen } from '#ui-ink/screens/overlays/HelpScreen'
 import * as React from 'react'
 
 const help = {
@@ -10,7 +10,9 @@ const help = {
   isHidden: false,
   ui: { displayMode: 'fullscreen' },
   async call(onDone, context) {
-    return <Help commands={context.options?.commands || []} onClose={onDone} />
+    return (
+      <HelpScreen commands={context.options?.commands || []} onDone={onDone} />
+    )
   },
   userFacingName() {
     return 'help'

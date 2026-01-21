@@ -1,6 +1,9 @@
+import { randomUUID } from 'crypto'
+
 import { addToHistory } from '#core/history'
 import { hasPermissionsToUseTool } from '#core/permissions'
 import { isUuid } from '#core/utils/uuid'
+import { LEGACY_ENV } from '#core/compat/legacyEnv'
 
 import type { WrappedClient } from '#core/mcp/client'
 import type { Message } from '#core/query'
@@ -33,6 +36,10 @@ export type RunNonTextPrintModeArgs = {
   normalizedInputFormat: 'text' | 'stream-json'
   normalizedPermissionPromptTool: string | null
   replayUserMessages?: boolean
+  maxThinkingTokens?: number
+  maxTurns?: number
+  maxBudgetUsd?: number
+  includePartialMessages?: boolean
 
   toolsForPrint: Tool[]
   commands: Array<{ isHidden?: boolean; userFacingName: () => string }>
@@ -78,7 +85,7 @@ export async function runNonTextPrintMode(
   args: RunNonTextPrintModeArgs,
 ): Promise<void> {
   const { createUserMessage } = await import('#core/utils/messages')
-  const { getTotalCost } = await import('#core/cost-tracker')
+  const { getTotalCost, getTotalAPIDuration } = await import('#core/cost-tracker')
   const { buildSystemPromptForSession, getSessionContext, runTurn, query } =
     await import('#core/engine')
   const { getKodeAgentSessionId } =
@@ -97,6 +104,13 @@ export async function runNonTextPrintMode(
   const sessionIdForSdk = getKodeAgentSessionId()
   const startedAt = Date.now()
   const sdkMessages: unknown[] = []
+  const shouldIncludePartialMessages =
+    args.normalizedOutputFormat === 'stream-json' &&
+    Boolean(args.includePartialMessages)
+
+  const writeSdkLine = (obj: unknown) => {
+    process.stdout.write(JSON.stringify(obj) + '\n')
+  }
 
   const normalizedJsonSchema =
     typeof args.jsonSchema === 'string' ? args.jsonSchema.trim() : ''
@@ -232,9 +246,35 @@ export async function runNonTextPrintMode(
     tools: args.toolsForPrint,
     verbose: true,
     safeMode: Boolean(args.safe),
+    maxTurns:
+      typeof args.maxTurns === 'number' &&
+      Number.isFinite(args.maxTurns) &&
+      args.maxTurns > 0
+        ? Math.trunc(args.maxTurns)
+        : undefined,
+    maxBudgetUsd:
+      typeof args.maxBudgetUsd === 'number' ? args.maxBudgetUsd : undefined,
+    ...(shouldIncludePartialMessages
+      ? {
+          onStreamEvent: (event: unknown) => {
+            writeSdkLine({
+              type: 'stream_event',
+              event,
+              session_id: sessionIdForSdk,
+              parent_tool_use_id: null,
+              uuid: randomUUID(),
+            })
+          },
+        }
+      : {}),
     forkNumber: 0,
     messageLogName: 'unused',
-    maxThinkingTokens: 0,
+    maxThinkingTokens:
+      typeof args.maxThinkingTokens === 'number' &&
+      Number.isFinite(args.maxThinkingTokens) &&
+      args.maxThinkingTokens >= 0
+        ? Math.trunc(args.maxThinkingTokens)
+        : 0,
     persistSession: args.sessionPersistence !== false,
     toolPermissionContext,
     mcpClients: args.mcpClients,
@@ -259,11 +299,8 @@ export async function runNonTextPrintMode(
     cwd: args.cwd,
     tools: availableTools,
     slashCommands,
+    uuid: randomUUID(),
   })
-
-  const writeSdkLine = (obj: unknown) => {
-    process.stdout.write(JSON.stringify(obj) + '\n')
-  }
 
   if (args.normalizedOutputFormat === 'stream-json') {
     writeSdkLine(initMsg)
@@ -328,6 +365,40 @@ export async function runNonTextPrintMode(
     const { runKodeAgentStreamJsonSession } =
       await import('#protocol/utils/kodeAgentStreamJsonSession')
 
+    const exitAfterStopDelayMs = (() => {
+      const raw =
+        process.env.KODE_EXIT_AFTER_STOP_DELAY ??
+        process.env[LEGACY_ENV.codeExitAfterStopDelay]
+      if (!raw) return null
+      const n = parseInt(String(raw), 10)
+      return Number.isFinite(n) && n > 0 ? n : null
+    })()
+
+    let idleTimer: ReturnType<typeof setTimeout> | null = null
+    let idleStartedAt = 0
+    let isProcessing = false
+
+    const stopIdleTimer = () => {
+      if (!idleTimer) return
+      clearTimeout(idleTimer)
+      idleTimer = null
+    }
+
+    const startIdleTimer = () => {
+      if (exitAfterStopDelayMs === null) return
+      stopIdleTimer()
+      idleStartedAt = Date.now()
+      idleTimer = setTimeout(() => {
+        const elapsed = Date.now() - idleStartedAt
+        if (isProcessing) return
+        if (elapsed < exitAfterStopDelayMs) return
+        process.stderr.write(
+          `Exiting after ${exitAfterStopDelayMs}ms of idle time\n`,
+        )
+        process.exit(0)
+      }, exitAfterStopDelayMs)
+    }
+
     const isRecord = (value: unknown): value is Record<string, unknown> =>
       Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 
@@ -369,6 +440,19 @@ export async function runNonTextPrintMode(
       },
       replayUserMessages: Boolean(args.replayUserMessages),
       getTotalCostUsd: () => getTotalCost(),
+      getTotalApiDurationMs: () => getTotalAPIDuration(),
+      maxBudgetUsd: args.maxBudgetUsd,
+      onProcessingStateChange:
+        exitAfterStopDelayMs !== null
+          ? processing => {
+              isProcessing = processing
+              if (processing) {
+                stopIdleTimer()
+                return
+              }
+              startIdleTimer()
+            }
+          : undefined,
       onActiveTurnAbortControllerChanged: controller => {
         activeTurnAbortController = controller
       },
@@ -381,6 +465,10 @@ export async function runNonTextPrintMode(
   addToHistory(args.inputPrompt)
   const userMsg = createUserMessage(args.inputPrompt)
   const baseMessages = [...(args.initialMessages ?? []), userMsg]
+  if (typeof args.maxThinkingTokens !== 'number') {
+    const { getMaxThinkingTokens } = await import('#core/utils/thinking')
+    printOptions.maxThinkingTokens = await getMaxThinkingTokens(baseMessages)
+  }
 
   const sdkUser = kodeMessageToSdkMessage(userMsg, sessionIdForSdk)
   if (sdkUser) {
@@ -420,6 +508,8 @@ export async function runNonTextPrintMode(
     sdkMessages,
     startedAt,
     getTotalCostUsd: () => getTotalCost(),
+    getTotalApiDurationMs: () => getTotalAPIDuration(),
+    maxBudgetUsd: args.maxBudgetUsd,
     jsonSchema: parsedJsonSchema,
     verbose: args.verbose,
   })

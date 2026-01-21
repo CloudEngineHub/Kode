@@ -51,32 +51,19 @@ describe('repo structure contract', () => {
   it('keeps the expected top-level layout', () => {
     const repoRoot = getRepoRootOrNull() ?? process.cwd()
 
-    for (const dir of [
-      'apps',
-      'packages',
-      'ui',
-      'scripts',
-      'docs',
-      'examples',
-    ]) {
+    for (const dir of ['apps', 'packages', 'scripts', 'docs', 'examples']) {
       expect(isDirectory(join(repoRoot, dir))).toBe(true)
     }
   })
 
-  it('keeps apps/ as a single-app (kode) layout', () => {
+  it('keeps apps/ as a multi-app workspace layout', () => {
     const repoRoot = getRepoRootOrNull() ?? process.cwd()
     const appsDir = join(repoRoot, 'apps')
     expect(isDirectory(appsDir)).toBe(true)
 
-    const entries = readdirSync(appsDir, { withFileTypes: true })
-    const unexpected = entries
-      .filter(entry => !entry.name.startsWith('.'))
-      .filter(entry => entry.name !== 'README.md' && entry.name !== 'kode')
-      .map(entry => entry.name)
-      .sort()
-
-    expect(unexpected).toEqual([])
-    expect(isDirectory(join(appsDir, 'kode'))).toBe(true)
+    expect(isDirectory(join(appsDir, 'cli'))).toBe(true)
+    expect(isDirectory(join(appsDir, 'server'))).toBe(true)
+    expect(isDirectory(join(appsDir, 'web'))).toBe(true)
   })
 
   it('does not track legacy/forbidden paths', () => {
@@ -89,7 +76,7 @@ describe('repo structure contract', () => {
     const tracked = listTrackedFiles(repoRoot)
     const deleted = new Set(listDeletedTrackedFiles(repoRoot))
     const effectiveTracked = tracked.filter(file => !deleted.has(file))
-    const forbiddenPrefixes = ['src/', 'vendor/', '.claude/', '.kode/']
+    const forbiddenPrefixes = ['src/', 'vendor/', 'dist/', 'node_modules/']
     const forbiddenFiles = ['main.js']
 
     const offenders = effectiveTracked.filter(
@@ -107,8 +94,10 @@ describe('repo structure contract', () => {
     expect(existsSync(gitignorePath)).toBe(true)
 
     const content = readFileSync(gitignorePath, 'utf8')
-    expect(content).toContain('\n.claude/\n')
-    expect(content).toContain('\n.kode/\n')
+    expect(content).toContain('\n.tmp/\n')
+    expect(content).toContain('\nvendor/\n')
+    expect(content).toContain('\n.kode/settings.local.json\n')
+    expect(content).toContain('\n.claude/settings.local.json\n')
   })
 
   it('examples do not reference the removed root src/ layout', () => {

@@ -10,6 +10,35 @@ const toolPermissionContextByConversationKey = new Map<
   ToolPermissionContext
 >()
 
+type ToolPermissionContextListener = (event: {
+  conversationKey: string
+  context: ToolPermissionContext
+}) => void
+
+const toolPermissionContextListeners = new Set<ToolPermissionContextListener>()
+
+function notifyToolPermissionContextListeners(event: {
+  conversationKey: string
+  context: ToolPermissionContext
+}): void {
+  for (const listener of toolPermissionContextListeners) {
+    try {
+      listener(event)
+    } catch {
+      // Listener errors should not break permission enforcement.
+    }
+  }
+}
+
+export function subscribeToolPermissionContextUpdates(
+  listener: ToolPermissionContextListener,
+): () => void {
+  toolPermissionContextListeners.add(listener)
+  return () => {
+    toolPermissionContextListeners.delete(listener)
+  }
+}
+
 export function getToolPermissionContextForConversationKey(options: {
   conversationKey: string
   isBypassPermissionsModeAvailable: boolean
@@ -40,6 +69,10 @@ export function getToolPermissionContextForConversationKey(options: {
 
     if (next !== existing) {
       toolPermissionContextByConversationKey.set(options.conversationKey, next)
+      notifyToolPermissionContextListeners({
+        conversationKey: options.conversationKey,
+        context: next,
+      })
     }
 
     return next
@@ -60,6 +93,10 @@ export function setToolPermissionContextForConversationKey(options: {
     options.conversationKey,
     options.context,
   )
+  notifyToolPermissionContextListeners({
+    conversationKey: options.conversationKey,
+    context: options.context,
+  })
 }
 
 export function applyToolPermissionContextUpdateForConversationKey(options: {
@@ -73,9 +110,14 @@ export function applyToolPermissionContextUpdateForConversationKey(options: {
   })
   const next = applyToolPermissionContextUpdate(prev, options.update)
   toolPermissionContextByConversationKey.set(options.conversationKey, next)
+  notifyToolPermissionContextListeners({
+    conversationKey: options.conversationKey,
+    context: next,
+  })
   return next
 }
 
 export function __resetToolPermissionContextStateForTests(): void {
   toolPermissionContextByConversationKey.clear()
+  toolPermissionContextListeners.clear()
 }

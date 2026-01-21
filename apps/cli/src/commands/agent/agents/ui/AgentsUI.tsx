@@ -147,7 +147,7 @@ export function AgentsUI({ onExit }: { onExit: (message?: string) => void }) {
     return (
       <CreateAgentWizard
         tools={tools}
-        existingAgents={activeAgents}
+        existingAgents={allAgents}
         onCancel={() => setMode(mode.previousMode)}
         onComplete={async message => {
           setChanges(prev => [...prev, message])

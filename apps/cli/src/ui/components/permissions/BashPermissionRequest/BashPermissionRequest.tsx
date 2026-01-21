@@ -9,10 +9,13 @@ import {
   type ToolUseConfirm,
   toolUseConfirmGetPrefix,
 } from '#ui-ink/components/permissions/PermissionRequest'
-import { PermissionRequestTitle } from '#ui-ink/components/permissions/PermissionRequestTitle'
+import { textColorForRiskScore } from '#ui-ink/components/permissions/PermissionRequestTitle'
 import { logUnaryPermissionEvent } from '#ui-ink/components/permissions/utils'
 import { Select } from '#ui-ink/components/CustomSelect/select'
 import { toolUseOptions } from '#ui-ink/components/permissions/toolUseOptions'
+import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
+import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
+import { PermissionRequestDetails } from '#ui-ink/components/permissions/PermissionRequestDetails'
 
 type Props = {
   toolUseConfirm: ToolUseConfirm
@@ -24,6 +27,7 @@ export function BashPermissionRequest({
   onDone,
 }: Props): React.ReactNode {
   const theme = getTheme()
+  const layout = useScreenLayout()
 
   // ok to use parse since we've already validated args earliers
   const { command, run_in_background, description } =
@@ -37,94 +41,99 @@ export function BashPermissionRequest({
   usePermissionRequestLogging(toolUseConfirm, unaryEvent)
 
   return (
-    <Box
-      flexDirection="column"
-      borderStyle="round"
-      borderColor={theme.permission}
-      marginTop={1}
-      paddingLeft={1}
-      paddingRight={1}
-      paddingBottom={1}
-    >
-      <PermissionRequestTitle
-        title="Bash command"
-        riskScore={toolUseConfirm.riskScore}
-      />
-      <Box flexDirection="column" paddingX={2} paddingY={1}>
-        <Text>
-          {BashTool.renderToolUseMessage({
-            command,
-            run_in_background,
-            description,
-          })}
-        </Text>
-        <Text color={theme.secondaryText}>{toolUseConfirm.description}</Text>
-      </Box>
+    <Box marginTop={1} width="100%">
+      <ScreenFrame
+        title="Bash command permission"
+        titleColor={textColorForRiskScore(toolUseConfirm.riskScore)}
+        paddingX={layout.paddingX}
+        paddingY={layout.tightLayout ? 0 : layout.paddingY}
+        gap={layout.gap}
+      >
+        <Box flexDirection="column" gap={layout.gap}>
+          <Box flexDirection="column">
+            <Text wrap="truncate-end">
+              {BashTool.renderToolUseMessage({
+                command,
+                run_in_background,
+                description,
+              })}
+            </Text>
+            <Text dimColor wrap="truncate-end">
+              {toolUseConfirm.description}
+            </Text>
+            <PermissionRequestDetails toolUseConfirm={toolUseConfirm} />
+          </Box>
 
-      <Box flexDirection="column">
-        <Text>Do you want to proceed?</Text>
-        <Select
-          options={toolUseOptions({ toolUseConfirm, command })}
-          onChange={newValue => {
-            switch (newValue) {
-              case 'yes':
-                logUnaryPermissionEvent(
-                  'tool_use_single',
-                  toolUseConfirm,
-                  'accept',
-                )
-                toolUseConfirm.onAllow('temporary')
-                onDone()
-                break
-              case 'yes-dont-ask-again-prefix': {
-                const prefix = toolUseConfirmGetPrefix(toolUseConfirm)
-                if (prefix !== null) {
-                  logUnaryPermissionEvent(
-                    'tool_use_single',
-                    toolUseConfirm,
-                    'accept',
-                  )
-                  savePermission(
-                    toolUseConfirm.tool,
-                    toolUseConfirm.input,
-                    prefix,
-                    toolUseConfirm.toolUseContext,
-                  ).then(() => {
-                    toolUseConfirm.onAllow('permanent')
+          <Box flexDirection="column">
+            <Text>Allow this command?</Text>
+            <Select
+              options={toolUseOptions({ toolUseConfirm, command })}
+              onChange={newValue => {
+                switch (newValue) {
+                  case 'yes':
+                    logUnaryPermissionEvent(
+                      'tool_use_single',
+                      toolUseConfirm,
+                      'accept',
+                    )
+                    toolUseConfirm.onAllow('temporary')
                     onDone()
-                  })
+                    break
+                  case 'yes-dont-ask-again-prefix': {
+                    const prefix = toolUseConfirmGetPrefix(toolUseConfirm)
+                    if (prefix !== null) {
+                      logUnaryPermissionEvent(
+                        'tool_use_single',
+                        toolUseConfirm,
+                        'accept',
+                      )
+                      savePermission(
+                        toolUseConfirm.tool,
+                        toolUseConfirm.input,
+                        prefix,
+                        toolUseConfirm.toolUseContext,
+                      ).then(() => {
+                        toolUseConfirm.onAllow('permanent')
+                        onDone()
+                      })
+                    }
+                    break
+                  }
+                  case 'yes-dont-ask-again-full':
+                    logUnaryPermissionEvent(
+                      'tool_use_single',
+                      toolUseConfirm,
+                      'accept',
+                    )
+                    savePermission(
+                      toolUseConfirm.tool,
+                      toolUseConfirm.input,
+                      null, // Save without prefix
+                      toolUseConfirm.toolUseContext,
+                    ).then(() => {
+                      toolUseConfirm.onAllow('permanent')
+                      onDone()
+                    })
+                    break
+                  case 'no':
+                    logUnaryPermissionEvent(
+                      'tool_use_single',
+                      toolUseConfirm,
+                      'reject',
+                    )
+                    toolUseConfirm.onReject()
+                    onDone()
+                    break
                 }
-                break
-              }
-              case 'yes-dont-ask-again-full':
-                logUnaryPermissionEvent(
-                  'tool_use_single',
-                  toolUseConfirm,
-                  'accept',
-                )
-                savePermission(
-                  toolUseConfirm.tool,
-                  toolUseConfirm.input,
-                  null, // Save without prefix
-                  toolUseConfirm.toolUseContext,
-                ).then(() => {
-                  toolUseConfirm.onAllow('permanent')
-                  onDone()
-                })
-                break
-              case 'no':
-                logUnaryPermissionEvent(
-                  'tool_use_single',
-                  toolUseConfirm,
-                  'reject',
-                )
-                toolUseConfirm.onReject()
-                onDone()
-                break
-            }
-          }}
-        />
-      </Box>
+              }}
+            />
+          </Box>
+
+          <Text dimColor wrap="truncate-end">
+            Enter to confirm · Esc to reject
+          </Text>
+        </Box>
+      </ScreenFrame>
     </Box>
   )
 }

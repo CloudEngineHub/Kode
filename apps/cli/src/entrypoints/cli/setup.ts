@@ -48,6 +48,12 @@ export async function setup(cwd: string, safeMode?: boolean): Promise<void> {
     return
   }
 
+  const { startCustomCommandWatcher } =
+    await import('#cli-services/customCommands')
+  await startCustomCommandWatcher(() => {
+    debugLogger.info('CUSTOM_COMMANDS_HOT_RELOADED', { ok: true })
+  })
+
   cleanupOldMessageFilesInBackground()
   getContext() // Pre-fetch all context data at once
 

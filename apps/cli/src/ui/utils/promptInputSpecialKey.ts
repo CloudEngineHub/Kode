@@ -27,6 +27,10 @@ export function getPromptInputSpecialKeyAction(args: {
     return 'modelSwitch'
   }
 
+  if (args.key.ctrl && (args.inputChar === 'g' || args.inputChar === 'G')) {
+    return 'externalEditor'
+  }
+
   if (
     args.inputChar === '©' ||
     (optionOrMeta && (args.inputChar === 'g' || args.inputChar === 'G'))

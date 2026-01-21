@@ -12,6 +12,11 @@ import { getCodeStyle } from '#core/utils/style'
 import { clearTerminal } from '#cli-utils/terminal'
 import { resetReminderSession } from '#core/services/systemReminder'
 import { resetFileFreshnessSession } from '#core/services/fileFreshness'
+import {
+  appendSessionJsonlFromMessage,
+  appendSessionSummaryRecord,
+} from '#protocol/utils/kodeAgentSessionLog'
+import { getCwd } from '#core/utils/state'
 
 const COMPRESSION_PROMPT = `Please provide a comprehensive summary of our conversation structured as follows:
 
@@ -98,14 +103,36 @@ const compact = {
       cache_read_input_tokens: 0,
     }
 
+    const compactedIntro = createUserMessage(
+      `Context has been compressed using structured 8-section algorithm. All essential information has been preserved for seamless continuation.`,
+    )
+
+    if (process.env.NODE_ENV !== 'test') {
+      try {
+        const cwd = getCwd()
+        appendSessionJsonlFromMessage({
+          cwd,
+          message: compactedIntro,
+          toolUseContext: { agentId: 'main' },
+        })
+        appendSessionJsonlFromMessage({
+          cwd,
+          message: summaryResponse,
+          toolUseContext: { agentId: 'main' },
+        })
+        appendSessionSummaryRecord({
+          cwd,
+          summary,
+          leafUuid: summaryResponse.uuid,
+        })
+      } catch {
+        // best-effort only
+      }
+    }
+
     await clearTerminal()
     getMessagesSetter()([])
-    setForkConvoWithMessagesOnTheNextRender([
-      createUserMessage(
-        `Context has been compressed using structured 8-section algorithm. All essential information has been preserved for seamless continuation.`,
-      ),
-      summaryResponse,
-    ])
+    setForkConvoWithMessagesOnTheNextRender([compactedIntro, summaryResponse])
     getContext.cache.clear?.()
     getCodeStyle.cache.clear?.()
     resetFileFreshnessSession()

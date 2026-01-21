@@ -4,8 +4,14 @@ import { MCPServerMultiselectDialog } from '#ui-ink/components/MCPServerMultisel
 import { MCPServerApprovalDialog } from '#ui-ink/components/MCPServerApprovalDialog'
 import { KeypressProvider } from '#ui-ink/contexts/KeypressContext'
 import { getMcprcServerStatus } from '#core/mcp/client'
-import { getProjectMcpServerDefinitions } from '#core/utils/config'
-import { withEphemeralAlternateScreen } from '#cli-utils/terminal'
+import {
+  getGlobalConfig,
+  getProjectMcpServerDefinitions,
+} from '#core/utils/config'
+import {
+  clearScrollback,
+  withEphemeralAlternateScreen,
+} from '#cli-utils/terminal'
 import { renderWithTuiStdio } from '#ui-ink/utils/inkRender'
 
 export async function handleMcprcServerApprovals(): Promise<void> {
@@ -51,4 +57,10 @@ export async function handleMcprcServerApprovals(): Promise<void> {
       }
     })
   })
+
+  // Keep Kode's default behavior (preserve scrollback) unless the user explicitly
+  // opted into wiping it for sensitive dialogs.
+  if (getGlobalConfig().wipeScrollbackOnClear) {
+    await clearScrollback()
+  }
 }

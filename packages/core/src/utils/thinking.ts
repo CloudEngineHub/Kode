@@ -1,18 +1,32 @@
 import { last } from 'lodash-es'
 import type { Message } from '#core/query'
-import { getLastAssistantMessageId } from './messages'
-import { USE_BEDROCK, USE_VERTEX, getModelManager } from './model'
+import { getGlobalConfig } from '#config'
+import { getModelManager } from './model'
+
+const ULTRATHINK_TOKENS = 31_999
+const ULTRATHINK_REGEX = /\bultrathink\b/i
 
 export async function getMaxThinkingTokens(
   messages: Message[],
+  options?: { thinkingMode?: 'auto' | 'enabled' | 'disabled' },
 ): Promise<number> {
   if (process.env.MAX_THINKING_TOKENS) {
     const tokens = parseInt(process.env.MAX_THINKING_TOKENS, 10)
-    return tokens
+    return Number.isFinite(tokens) && tokens > 0 ? tokens : 0
   }
 
   if (Boolean(process.env.THINK_TOOL)) {
     return 0
+  }
+
+  const thinkingMode =
+    options?.thinkingMode ?? getGlobalConfig().thinkingMode ?? 'auto'
+  if (thinkingMode === 'disabled') {
+    return 0
+  }
+
+  if (thinkingMode === 'enabled') {
+    return ULTRATHINK_TOKENS
   }
 
   const lastMessage = last(messages)
@@ -23,41 +37,24 @@ export async function getMaxThinkingTokens(
     return 0
   }
 
-  const content = lastMessage.message.content.toLowerCase()
-  if (
-    content.includes('think harder') ||
-    content.includes('think intensely') ||
-    content.includes('think longer') ||
-    content.includes('think really hard') ||
-    content.includes('think super hard') ||
-    content.includes('think very hard') ||
-    content.includes('ultrathink')
-  ) {
-    return 32_000 - 1
-  }
-
-  if (
-    content.includes('think about it') ||
-    content.includes('think a lot') ||
-    content.includes('think hard') ||
-    content.includes('think more') ||
-    content.includes('megathink')
-  ) {
-    return 10_000
-  }
-
-  if (content.includes('think')) {
-    return 4_000
-  }
-
-  return 0
+  return ULTRATHINK_REGEX.test(lastMessage.message.content)
+    ? ULTRATHINK_TOKENS
+    : 0
 }
 
 export async function getReasoningEffort(
   modelProfile: any,
   messages: Message[],
+  options?: {
+    thinkingTokens?: number
+    thinkingMode?: 'auto' | 'enabled' | 'disabled'
+  },
 ): Promise<'low' | 'medium' | 'high' | null> {
-  const thinkingTokens = await getMaxThinkingTokens(messages)
+  const thinkingTokens =
+    options?.thinkingTokens ??
+    (await getMaxThinkingTokens(messages, {
+      thinkingMode: options?.thinkingMode,
+    }))
 
   // Get reasoning effort from ModelProfile first, then fallback to config
   let reasoningEffort: 'low' | 'medium' | 'high' | undefined
@@ -70,7 +67,6 @@ export async function getReasoningEffort(
           ? 'low'
           : 'medium'
   } else {
-    // 🔧 Fix: Use ModelManager fallback instead of legacy config
     const modelManager = getModelManager()
     const fallbackProfile = modelManager.getModel('main')
     const effort = fallbackProfile?.reasoningEffort

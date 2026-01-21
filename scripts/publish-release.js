@@ -84,11 +84,9 @@ async function publishRelease() {
       process.exit(0)
     }
 
-    // 5. 更新版本号
-    console.log('📝 Updating version...')
-    const originalPackageJson = { ...packageJson }
-    packageJson.version = newVersion
-    writeFileSync(packagePath, JSON.stringify(packageJson, null, 2))
+    // 5. 更新版本号（同步 workspace 里的平台包版本 + 主包 optionalDependencies）
+    console.log('📝 Updating versions...')
+    execSync(`node scripts/set-version.mjs ${newVersion}`, { stdio: 'inherit' })
 
     // 6. 运行测试
     console.log('🧪 Running tests...')
@@ -96,22 +94,66 @@ async function publishRelease() {
       execSync('npm run typecheck', { stdio: 'inherit' })
       execSync('npm test', { stdio: 'inherit' })
     } catch (error) {
-      console.log('❌ Tests failed, rolling back version...')
-      writeFileSync(packagePath, JSON.stringify(originalPackageJson, null, 2))
+      console.log(
+        '❌ Tests failed. Please rollback version changes (git checkout).',
+      )
       process.exit(1)
     }
 
-    // 7. 构建项目
+    // 7. 准备 ripgrep 平台包（发布时生成二进制）
+    console.log('🧰 Preparing ripgrep platform packages...')
+    execSync('bun run scripts/ensure-ripgrep.mjs', { stdio: 'inherit' })
+    execSync('node scripts/prepare-ripgrep-packages.mjs', { stdio: 'inherit' })
+
+    // 8. 准备 Kode 原生二进制平台包（需要已构建/下载各平台二进制到 dist/bin 或 artifacts/）
+    console.log('🧰 Preparing Kode binary platform packages...')
+    execSync('node scripts/prepare-kode-bin-packages.mjs', { stdio: 'inherit' })
+
+    // 9. 构建项目
     console.log('🔨 Building project...')
     execSync('npm run build', { stdio: 'inherit' })
 
-    // 8. 运行预发布检查
+    // 10. 运行预发布检查
     console.log('🔍 Running pre-publish checks...')
     execSync('bun run scripts/prepublish-check.js', { stdio: 'inherit' })
 
-    // 9. 发布到 npm
-    console.log('📤 Publishing to npm...')
-    execSync('npm publish --access public', { stdio: 'inherit' })
+    // 11. 发布到 npm（先发布二进制/rg 平台包，再发布主包）
+    console.log('📤 Publishing Kode binary platform packages...')
+    const kodeBinDirs = [
+      'packages/kode-bin-darwin-arm64',
+      'packages/kode-bin-darwin-x64',
+      'packages/kode-bin-linux-arm64',
+      'packages/kode-bin-linux-x64',
+      'packages/kode-bin-win32-arm64',
+      'packages/kode-bin-win32-x64',
+    ]
+    for (const dir of kodeBinDirs) {
+      execSync(`npm publish --access public --ignore-scripts`, {
+        stdio: 'inherit',
+        cwd: path.join(process.cwd(), dir),
+      })
+    }
+
+    console.log('📤 Publishing ripgrep platform packages...')
+    const ripgrepDirs = [
+      'packages/kode-ripgrep-darwin-arm64',
+      'packages/kode-ripgrep-darwin-x64',
+      'packages/kode-ripgrep-linux-arm64',
+      'packages/kode-ripgrep-linux-x64',
+      'packages/kode-ripgrep-win32-arm64',
+      'packages/kode-ripgrep-win32-x64',
+    ]
+    for (const dir of ripgrepDirs) {
+      execSync(`npm publish --access public --ignore-scripts`, {
+        stdio: 'inherit',
+        cwd: path.join(process.cwd(), dir),
+      })
+    }
+
+    console.log('📤 Publishing main package...')
+    execSync('npm publish --access public --ignore-scripts', {
+      stdio: 'inherit',
+    })
 
     console.log('\n🎉 Production release published successfully!')
     console.log(`📦 Version: ${newVersion}`)
@@ -122,19 +164,15 @@ async function publishRelease() {
     )
 
     console.log('\n💡 Next steps:')
-    console.log('   - Commit the version change to git')
-    console.log('   - Create a git tag for this release')
-    console.log('   - Push changes to the repository')
+    console.log(
+      '   - Commit the version sync (package.json + packages/kode-{bin,ripgrep}-*/package.json)',
+    )
+    console.log('   - Create a git tag for this release (v<version>)')
+    console.log('   - Push commits and tags to the repository')
   } catch (error) {
     console.error('❌ Production release failed:', error.message)
 
-    // 尝试恢复 package.json
-    try {
-      const packagePath = path.join(process.cwd(), 'package.json')
-      const originalContent = readFileSync(packagePath, 'utf8')
-      // 如果版本被修改了，尝试恢复（这里简化处理）
-      console.log('🔄 Please manually restore package.json if needed')
-    } catch {}
+    console.log('🔄 Please manually restore versions if needed (git checkout).')
 
     process.exit(1)
   } finally {

@@ -8,6 +8,7 @@ import {
   createProgressMessage,
   createUserMessage,
 } from '#core/utils/messages'
+import { maybePersistOversizedToolResult } from '#core/utils/toolResultPersistence'
 import {
   getHookTranscriptPath,
   queueHookAdditionalContexts,
@@ -222,7 +223,12 @@ export async function* checkPermissionsAndCallTool(
           const rawContent =
             result.resultForAssistant ??
             tool.renderResultForAssistant(result.data as never)
-          const content = toToolResultContent(rawContent)
+          const content = maybePersistOversizedToolResult({
+            cwd: getCwd(),
+            toolUseId: toolUseID,
+            content: toToolResultContent(rawContent),
+            maxResultSizeChars: tool.maxResultSizeChars,
+          })
           const newMessages = Array.isArray(result.newMessages)
             ? result.newMessages.filter(isPipelineMessage)
             : []

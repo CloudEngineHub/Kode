@@ -49,9 +49,10 @@ export function useMessageSelectorSelect(args: {
       setImmediate(async () => {
         await clearTerminal()
         args.setMessages([])
-        args.setForkConvoWithMessagesOnTheNextRender(
-          args.messages.slice(0, selectedIndex),
-        )
+        const forkMessages = args.messages
+          .slice(0, selectedIndex)
+          .filter(m => m.type !== 'progress')
+        args.setForkConvoWithMessagesOnTheNextRender(forkMessages)
         if (message.type === 'user') {
           args.setInputValue(extractMessageText(message.message.content))
         }

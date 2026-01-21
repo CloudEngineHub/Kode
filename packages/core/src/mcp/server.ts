@@ -7,7 +7,11 @@ import {
 import { setCwd } from '#core/utils/state'
 import { logError } from '#core/utils/log'
 import { createAssistantMessage } from '#core/utils/messages'
-import type { Tool, ToolUseContext } from '#core/tooling/Tool'
+import {
+  resolveToolDescription,
+  type Tool,
+  type ToolUseContext,
+} from '#core/tooling/Tool'
 import { getAllTools } from '#tools'
 import { lastX } from '#core/utils/generators'
 import { MACRO } from '#core/constants/macros'
@@ -16,6 +20,7 @@ import {
   getMcpToolDescription,
   getMcpToolInputSchema,
 } from '#core/tooling/mcpToolSchema'
+import { LEGACY_ENV } from '#core/compat/legacyEnv'
 
 const state: {
   readFileTimestamps: Record<string, number>
@@ -26,12 +31,23 @@ const state: {
 const MCP_COMMANDS: unknown[] = []
 const MCP_TOOLS: Tool[] = [...getAllTools()]
 
+function getMcpServerName(): string {
+  const raw =
+    process.env.KODE_MCP_SERVER_NAME ??
+    process.env.MCP_SERVER_NAME ??
+    process.env[LEGACY_ENV.codeMcpServerName] ??
+    ''
+  const trimmed = typeof raw === 'string' ? raw.trim() : ''
+  return trimmed || 'kode/tengu'
+}
+
 export async function startMCPServer(cwd: string): Promise<void> {
   await setCwd(cwd)
+  await Promise.all(MCP_TOOLS.map(tool => resolveToolDescription(tool)))
   const server = new Server(
     {
-      // Keep this identifier stable for compatibility with existing clients/tools.
-      name: 'claude/tengu',
+      // Allow legacy clients to override the server identifier while keeping a Kode-first default.
+      name: getMcpServerName(),
       version: MACRO.VERSION,
     },
     {

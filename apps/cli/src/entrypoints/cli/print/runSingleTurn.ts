@@ -1,6 +1,9 @@
 import type { CanUseToolFn } from '#core/permissions/canUseTool'
 import type { Message } from '#core/query'
 import type { QueryToolUseContext } from '#core/engine'
+import { MaxBudgetUsdExceededError } from '#core/errors/maxBudgetUsd'
+import { MaxTurnsExceededError } from '#core/errors/maxTurns'
+import { randomUUID } from 'crypto'
 
 type RunTurnFn = (args: {
   messages: Message[]
@@ -17,7 +20,7 @@ type KodeMessageToSdkMessageFn = (
 
 type MakeSdkResultMessageFn = (args: {
   sessionId: string
-  result: string
+  result?: string
   structuredOutput?: Record<string, unknown>
   numTurns: number
   usage?: unknown
@@ -25,6 +28,8 @@ type MakeSdkResultMessageFn = (args: {
   durationMs: number
   durationApiMs: number
   isError: boolean
+  subtype?: string
+  uuid?: string
 }) => unknown
 
 export async function runSingleTurnPrint(args: {
@@ -42,6 +47,8 @@ export async function runSingleTurnPrint(args: {
   sdkMessages: unknown[]
   startedAt: number
   getTotalCostUsd: () => number
+  getTotalApiDurationMs: () => number
+  maxBudgetUsd?: number
   jsonSchema: Record<string, unknown> | null
   verbose: boolean | undefined
 }): Promise<void> {
@@ -69,6 +76,23 @@ export async function runSingleTurnPrint(args: {
     } catch {}
     queryError = e
   }
+
+  const totalCostUsd = args.getTotalCostUsd()
+  const turnsFromContext = (args.toolUseContext as unknown as { turnCount?: unknown })
+    .turnCount
+  const numTurns = (() => {
+    if (typeof turnsFromContext !== 'number') return 0
+    if (!Number.isFinite(turnsFromContext) || turnsFromContext < 0) return 0
+    return Math.trunc(turnsFromContext)
+  })()
+
+  const budgetExceeded =
+    typeof args.maxBudgetUsd === 'number' &&
+    Number.isFinite(args.maxBudgetUsd) &&
+    args.maxBudgetUsd > 0 &&
+    totalCostUsd >= args.maxBudgetUsd
+
+  const maxTurnsExceeded = queryError instanceof MaxTurnsExceededError
 
   const textFromAssistant =
     lastAssistant && lastAssistant.type === 'assistant'
@@ -99,7 +123,7 @@ export async function runSingleTurnPrint(args: {
           : ''
 
   let structuredOutput: Record<string, unknown> | undefined
-  if (args.jsonSchema && !queryError) {
+  if (args.jsonSchema && !queryError && !budgetExceeded && !maxTurnsExceeded) {
     try {
       const raw = typeof textFromAssistant === 'string' ? textFromAssistant : ''
       const fenced = raw.trim()
@@ -137,23 +161,50 @@ export async function runSingleTurnPrint(args: {
     lastAssistant && lastAssistant.type === 'assistant'
       ? lastAssistant.message?.usage
       : undefined
-  const totalCostUsd = args.getTotalCostUsd()
   const durationMs = Date.now() - args.startedAt
+
+  const shouldReturnMaxTurnsExceeded = maxTurnsExceeded
+  const shouldReturnBudgetExceeded =
+    !shouldReturnMaxTurnsExceeded &&
+    (budgetExceeded || queryError instanceof MaxBudgetUsdExceededError)
+
+  const resultNumTurns = (() => {
+    if (shouldReturnMaxTurnsExceeded && queryError instanceof MaxTurnsExceededError) {
+      return queryError.turnCount
+    }
+    return Math.max(numTurns, 1)
+  })()
+
   const resultMsg = args.makeSdkResultMessage({
     sessionId: args.sessionId,
-    result: String(text),
-    structuredOutput,
-    numTurns: 1,
+    result:
+      shouldReturnBudgetExceeded || shouldReturnMaxTurnsExceeded
+        ? undefined
+        : String(text),
+    structuredOutput:
+      shouldReturnBudgetExceeded || shouldReturnMaxTurnsExceeded
+        ? undefined
+        : structuredOutput,
+    numTurns: resultNumTurns,
     usage,
     totalCostUsd,
     durationMs,
-    durationApiMs: 0,
-    isError: Boolean(queryError),
+    durationApiMs: args.getTotalApiDurationMs(),
+    isError:
+      shouldReturnBudgetExceeded || shouldReturnMaxTurnsExceeded
+        ? false
+        : Boolean(queryError),
+    subtype: shouldReturnMaxTurnsExceeded
+      ? 'error_max_turns'
+      : shouldReturnBudgetExceeded
+        ? 'error_max_budget_usd'
+        : undefined,
+    uuid: randomUUID(),
   })
 
   if (args.outputFormat === 'stream-json') {
     args.writeSdkLine(resultMsg)
-    process.exit(0)
+    process.exit((resultMsg as any)?.is_error ? 1 : 0)
   }
 
   args.sdkMessages.push(resultMsg)
@@ -162,5 +213,5 @@ export async function runSingleTurnPrint(args: {
   } else {
     process.stdout.write(`${JSON.stringify(resultMsg, null, 2)}\n`)
   }
-  process.exit(0)
+  process.exit((resultMsg as any)?.is_error ? 1 : 0)
 }

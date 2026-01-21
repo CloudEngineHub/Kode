@@ -6,6 +6,19 @@ import type {
 } from '#cli-utils/completion/types'
 import type { CompletionState } from './types'
 
+function getPreviewText(
+  suggestion: UnifiedSuggestion,
+  context: CompletionContext,
+): string {
+  if (context.type === 'command') return `/${suggestion.value}`
+  if (context.type === 'agent') return `@${suggestion.value}`
+  if (suggestion.isSmartMatch) return `@${suggestion.value}`
+  if (context.type === 'file' && context.trigger === '@') {
+    return `@${suggestion.value}`
+  }
+  return suggestion.value
+}
+
 export function useUnifiedCompletionNavigationKeys(args: {
   input: string
   state: CompletionState
@@ -27,6 +40,14 @@ export function useUnifiedCompletionNavigationKeys(args: {
   useKeypress(
     (inputChar, key) => {
       if (!args.isEnabled) return false
+
+      const preferHistoryNavigation =
+        !args.input.includes('\n') && !key.ctrl && !key.meta
+
+      if (preferHistoryNavigation && (key.upArrow || key.downArrow)) {
+        return false
+      }
+
       if (
         key.return &&
         !key.shift &&
@@ -37,17 +58,9 @@ export function useUnifiedCompletionNavigationKeys(args: {
         const selectedSuggestion =
           args.state.suggestions[args.state.selectedIndex]
         if (selectedSuggestion && args.state.context) {
-          let completion: string
-
-          if (args.state.context.type === 'command') {
-            completion = `/${selectedSuggestion.value} `
-          } else if (args.state.context.type === 'agent') {
-            completion = `@${selectedSuggestion.value} `
-          } else if (selectedSuggestion.isSmartMatch) {
-            completion = `@${selectedSuggestion.value} `
-          } else {
-            completion = selectedSuggestion.value + ' '
-          }
+          const preview = getPreviewText(selectedSuggestion, args.state.context)
+          const isDirectory = selectedSuggestion.value.endsWith('/')
+          const completion = `${preview}${isDirectory ? '' : ' '}`
 
           const currentWord = args.input.slice(args.state.context.startPos)
           const nextSpaceIndex = currentWord.indexOf(' ')
@@ -71,7 +84,13 @@ export function useUnifiedCompletionNavigationKeys(args: {
         return false
 
       const handleNavigation = (newIndex: number) => {
-        const previewValue = args.state.suggestions[newIndex].value
+        if (!args.state.context) {
+          args.updateState({ selectedIndex: newIndex })
+          return
+        }
+
+        const suggestion = args.state.suggestions[newIndex]
+        const previewValue = getPreviewText(suggestion, args.state.context)
 
         if (args.state.preview?.isActive && args.state.context) {
           const newInput =
@@ -99,14 +118,19 @@ export function useUnifiedCompletionNavigationKeys(args: {
         }
       }
 
-      if (key.downArrow) {
+      const handleUp =
+        key.upArrow || (key.ctrl && inputChar === 'p') ? true : false
+      const handleDown =
+        key.downArrow || (key.ctrl && inputChar === 'n') ? true : false
+
+      if (handleDown) {
         const nextIndex =
           (args.state.selectedIndex + 1) % args.state.suggestions.length
         handleNavigation(nextIndex)
         return true
       }
 
-      if (key.upArrow) {
+      if (handleUp) {
         const nextIndex =
           args.state.selectedIndex === 0
             ? args.state.suggestions.length - 1
@@ -127,25 +151,22 @@ export function useUnifiedCompletionNavigationKeys(args: {
 
         if (!args.state.context) return false
 
-        const currentWordAtContext = args.input.slice(
-          args.state.context.startPos,
-          args.state.context.startPos + selectedSuggestion.value.length,
-        )
-
-        if (currentWordAtContext !== selectedSuggestion.value) {
-          args.completeWith(selectedSuggestion, args.state.context)
-        }
+        args.completeWith(selectedSuggestion, args.state.context)
 
         args.resetCompletion()
 
         if (isDirectory) {
           setTimeout(() => {
             if (!args.state.context) return
+            const inserted = getPreviewText(
+              selectedSuggestion,
+              args.state.context,
+            )
+            const nextEndPos = args.state.context.startPos + inserted.length
             const newContext: CompletionContext = {
               ...args.state.context,
               prefix: selectedSuggestion.value,
-              endPos:
-                args.state.context.startPos + selectedSuggestion.value.length,
+              endPos: nextEndPos,
             }
 
             const newSuggestions = args.generateSuggestions(newContext)

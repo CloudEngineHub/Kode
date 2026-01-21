@@ -3,6 +3,12 @@ import { logError } from '#core/utils/log'
 import type { SandboxRuntimeConfig } from './sandboxConfig'
 import { startHttpProxy } from './sandboxNetworkInfrastructure/httpProxy'
 import { startSocks5Proxy } from './sandboxNetworkInfrastructure/socks5Proxy'
+import {
+  startLinuxSandboxBridge,
+  stopLinuxSandboxBridge,
+  type LinuxSandboxBridge,
+  type LinuxSandboxBridgeState,
+} from './sandboxNetworkInfrastructure/linuxBridge'
 
 export type SandboxNetworkPermissionQuery = { host: string; port: number }
 export type SandboxNetworkPermissionCallback = (
@@ -12,6 +18,7 @@ export type SandboxNetworkPermissionCallback = (
 export type SandboxNetworkInfrastructurePorts = {
   httpProxyPort: number
   socksProxyPort: number
+  linuxBridge?: LinuxSandboxBridge
 }
 
 type ActiveState = {
@@ -21,6 +28,7 @@ type ActiveState = {
   socksProxyServer: net.Server | null
   httpProxyPort: number | null
   socksProxyPort: number | null
+  linuxBridge: LinuxSandboxBridgeState | null
   initializationPromise: Promise<SandboxNetworkInfrastructurePorts> | null
   cleanupRegistered: boolean
   sessionAllowedHosts: Set<string>
@@ -36,6 +44,7 @@ const active: ActiveState = {
   socksProxyServer: null,
   httpProxyPort: null,
   socksProxyPort: null,
+  linuxBridge: null,
   initializationPromise: null,
   cleanupRegistered: false,
   sessionAllowedHosts: new Set(),
@@ -135,15 +144,25 @@ function registerCleanupOnce(): void {
 async function cleanupSandboxNetworkInfrastructure(): Promise<void> {
   const httpServer = active.httpProxyServer
   const socksServer = active.socksProxyServer
+  const linuxBridge = active.linuxBridge
   active.httpProxyServer = null
   active.socksProxyServer = null
   active.httpProxyPort = null
   active.socksProxyPort = null
+  active.linuxBridge = null
   active.initializationPromise = null
 
   active.sessionAllowedHosts.clear()
   active.sessionDeniedHosts.clear()
   active.inflightPermissionRequests.clear()
+
+  if (linuxBridge) {
+    try {
+      stopLinuxSandboxBridge(linuxBridge)
+    } catch (error) {
+      logError(error)
+    }
+  }
 
   await Promise.allSettled([
     httpServer
@@ -170,6 +189,7 @@ async function cleanupSandboxNetworkInfrastructure(): Promise<void> {
 export async function ensureSandboxNetworkInfrastructure(options: {
   runtimeConfig: SandboxRuntimeConfig
   permissionCallback?: SandboxNetworkPermissionCallback | null
+  platform?: NodeJS.Platform
 }): Promise<SandboxNetworkInfrastructurePorts> {
   active.config = options.runtimeConfig
   active.permissionCallback = options.permissionCallback ?? null
@@ -179,6 +199,8 @@ export async function ensureSandboxNetworkInfrastructure(options: {
   registerCleanupOnce()
 
   active.initializationPromise = (async () => {
+    const platform = options.platform ?? process.platform
+
     const httpProxyPort =
       options.runtimeConfig.network.httpProxyPort !== undefined
         ? options.runtimeConfig.network.httpProxyPort
@@ -202,7 +224,20 @@ export async function ensureSandboxNetworkInfrastructure(options: {
     active.httpProxyPort = httpProxyPort
     active.socksProxyPort = socksProxyPort
 
-    return { httpProxyPort, socksProxyPort }
+    let linuxBridge: LinuxSandboxBridge | undefined
+    if (platform === 'linux') {
+      const bridge = await startLinuxSandboxBridge({
+        hostHttpProxyPort: httpProxyPort,
+        hostSocksProxyPort: socksProxyPort,
+      })
+      active.linuxBridge = bridge
+      linuxBridge = {
+        httpSocketPath: bridge.httpSocketPath,
+        socksSocketPath: bridge.socksSocketPath,
+      }
+    }
+
+    return { httpProxyPort, socksProxyPort, linuxBridge }
   })().catch(async error => {
     active.initializationPromise = null
     await cleanupSandboxNetworkInfrastructure()
@@ -215,10 +250,17 @@ export async function ensureSandboxNetworkInfrastructure(options: {
 export function getSandboxNetworkInfrastructurePorts(): SandboxNetworkInfrastructurePorts | null {
   if (active.httpProxyPort === null || active.socksProxyPort === null)
     return null
-  return {
+  const ports: SandboxNetworkInfrastructurePorts = {
     httpProxyPort: active.httpProxyPort,
     socksProxyPort: active.socksProxyPort,
   }
+  if (active.linuxBridge) {
+    ports.linuxBridge = {
+      httpSocketPath: active.linuxBridge.httpSocketPath,
+      socksSocketPath: active.linuxBridge.socksSocketPath,
+    }
+  }
+  return ports
 }
 
 export async function __resetSandboxNetworkInfrastructureForTests(): Promise<void> {

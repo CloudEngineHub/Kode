@@ -9,7 +9,10 @@ import type { BinaryFeedbackResult } from '#core/query'
 import { getTotalCost } from '#core/cost-tracker'
 import { useCostSummary } from '#ui-ink/hooks/useCostSummary'
 import { useLogStartupTime } from '#ui-ink/hooks/useLogStartupTime'
-import { useApiKeyVerification } from '#ui-ink/hooks/useApiKeyVerification'
+import {
+  useApiKeyVerification,
+  type VerificationStatus,
+} from '#ui-ink/hooks/useApiKeyVerification'
 import { useCancelRequest } from '#ui-ink/hooks/useCancelRequest'
 import useCanUseTool from '#ui-ink/hooks/useCanUseTool'
 import { useLogMessages } from '#ui-ink/hooks/useLogMessages'
@@ -20,14 +23,28 @@ import {
 } from '#core/messages'
 import type { Message as MessageType } from '#core/query'
 import { getGlobalConfig, saveGlobalConfig } from '#core/utils/config'
-import { getNextAvailableLogForkNumber } from '#core/utils/log'
+import { getNextAvailableLogForkNumber, logError } from '#core/utils/log'
 import { getOriginalCwd } from '#core/utils/state'
-import { Help } from '#ui-ink/components/Help'
-import { Config } from '#ui-ink/components/Config'
-import { OpenFileDialog } from '#ui-ink/components/OpenFileDialog'
-import { TuiConsoleDialog } from '#ui-ink/components/TuiConsoleDialog'
-import { TuiNotificationsDialog } from '#ui-ink/components/TuiNotificationsDialog'
+import { MACRO } from '#core/constants/macros'
+import { subscribeAgentReloads } from '#core/agent/events'
+import { subscribeCustomCommandReloads } from '#cli-services/customCommands'
+import { HelpScreen } from '#ui-ink/screens/overlays/HelpScreen'
+import { ShortcutsScreen } from '#ui-ink/screens/overlays/ShortcutsScreen'
+import { ConfigScreen } from '#ui-ink/screens/overlays/ConfigScreen'
+import { OpenFileScreen } from '#ui-ink/screens/overlays/OpenFileScreen'
+import { ConsoleScreen } from '#ui-ink/screens/overlays/ConsoleScreen'
+import { NotificationsScreen } from '#ui-ink/screens/overlays/NotificationsScreen'
+import { TranscriptScreen } from '#ui-ink/screens/overlays/TranscriptScreen'
+import { CommandPaletteScreen } from '#ui-ink/screens/overlays/CommandPaletteScreen'
+import { TasksScreen } from '#ui-ink/screens/overlays/TasksScreen'
+import { TodosScreen } from '#ui-ink/screens/overlays/TodosScreen'
+import { HistorySearchScreen } from '#ui-ink/screens/overlays/HistorySearchScreen'
+import { ModelPickerScreen } from '#ui-ink/screens/overlays/ModelPickerScreen'
+import { ThinkingToggleScreen } from '#ui-ink/screens/overlays/ThinkingToggleScreen'
+import { ModelConfig } from '#ui-ink/components/ModelConfig'
+import { Doctor } from '#ui-ink/screens/Doctor'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
+import { submitPrompt } from '#ui-ink/components/PromptInput/submit'
 import { useTranscriptItems } from './useTranscriptItems'
 import { useRequestToolUsePermission } from './useRequestToolUsePermission'
 import { useReplQuery } from './useReplQuery'
@@ -35,6 +52,17 @@ import { useReplInit } from './useReplInit'
 import { buildPromptInputProps } from './promptInputProps'
 import { useMessageSelectorSelect } from './useMessageSelectorSelect'
 import type { BinaryFeedbackContext, REPLProps } from './types'
+import { ensureLspManagerInitialized } from '#tools/tools/system/LspTool/call'
+import { describeToolPermissionRuleSource } from '#core/permissions/ruleString'
+import { triggerModelConfigChange } from '#core/messages'
+import {
+  clearViewport,
+  enterAlternateScreen,
+  exitAlternateScreen,
+} from '#cli-utils/terminal'
+import { getModelManager } from '#core/utils/model'
+import { getToolPermissionContextForConversationKey } from '#core/utils/toolPermissionContextState'
+import type { PromptMode } from '#ui-ink/components/PromptInput/types'
 
 export function useReplController(props: REPLProps) {
   const debug = props.debug ?? false
@@ -42,12 +70,59 @@ export function useReplController(props: REPLProps) {
   const safeMode = Boolean(props.safeMode)
   const mcpClients = props.mcpClients ?? []
   const isDefaultModel = props.isDefaultModel ?? true
-  const updateAvailableVersion = props.initialUpdateVersion ?? null
-  const updateCommands = props.initialUpdateCommands ?? null
+  const [updateAvailableVersion, setUpdateAvailableVersion] = useState<
+    string | null
+  >(() => props.initialUpdateVersion ?? null)
+  const [updateCommands, setUpdateCommands] = useState<string[] | null>(() =>
+    props.initialUpdateCommands ? [...props.initialUpdateCommands] : null,
+  )
 
   const [verbose, setVerbose] = useState(() => {
     return props.verbose ?? getGlobalConfig().verbose
   })
+
+  const [commands, setCommands] = useState(() => props.commands)
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'test') return
+    if (updateAvailableVersion || updateCommands) return
+
+    let cancelled = false
+    ;(async () => {
+      try {
+        const [{ getLatestVersion, getUpdateCommandSuggestions }, semverMod] =
+          await Promise.all([
+            import('#core/utils/autoUpdater'),
+            import('semver'),
+          ])
+
+        const semverModule = semverMod as unknown as Record<string, unknown>
+        const semver =
+          typeof semverModule.gt === 'function'
+            ? semverModule
+            : typeof (semverModule.default as any)?.gt === 'function'
+              ? (semverModule.default as any)
+              : null
+        if (!semver) return
+
+        const latest = await getLatestVersion()
+        if (!latest || typeof latest !== 'string') return
+
+        if (!semver.gt(latest, MACRO.VERSION)) return
+        const cmds = await getUpdateCommandSuggestions()
+
+        if (cancelled) return
+        setUpdateAvailableVersion(latest)
+        setUpdateCommands(cmds)
+      } catch {
+        // best-effort only
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [updateAvailableVersion, updateCommands])
 
   const [forkNumber, setForkNumber] = useState(
     getNextAvailableLogForkNumber(
@@ -71,6 +146,73 @@ export function useReplController(props: REPLProps) {
     shouldHidePromptInput: boolean
     displayMode?: 'inline' | 'fullscreen'
   } | null>(null)
+
+  const toolJSXRef = useRef<typeof toolJSX>(toolJSX)
+  useEffect(() => {
+    toolJSXRef.current = toolJSX
+  }, [toolJSX])
+
+  const ephemeralFullscreenAltScreenRef = useRef(false)
+  useEffect(() => {
+    return () => {
+      if (ephemeralFullscreenAltScreenRef.current) {
+        ephemeralFullscreenAltScreenRef.current = false
+        exitAlternateScreen()
+      }
+    }
+  }, [])
+
+  const setToolJSXWithClear = useCallback(
+    (next: typeof toolJSX) => {
+      const prevMode = toolJSXRef.current?.displayMode
+      const nextMode = next?.displayMode
+
+      const prevFull = prevMode === 'fullscreen'
+      const nextFull = nextMode === 'fullscreen'
+
+      const screenReaderEnv =
+        process.env.KODE_SCREEN_READER ?? process.env.SCREENREADER
+      const canUseAltScreen =
+        process.stdin.isTTY && process.stdout.isTTY && !screenReaderEnv
+
+      const useEphemeralAltScreen =
+        canUseAltScreen && getGlobalConfig().useAlternateBuffer !== true
+
+      // When running in the main buffer (scrollback enabled), opening a fullscreen
+      // TUI view leaves the entire screen in scrollback. To preserve scrollback
+      // while keeping fullscreen dialogs clean, temporarily switch to the
+      // terminal alternate screen for fullscreen tool views.
+      if (useEphemeralAltScreen) {
+        if (!prevFull && nextFull) {
+          enterAlternateScreen()
+          void clearViewport()
+          ephemeralFullscreenAltScreenRef.current = true
+        } else if (prevFull && !nextFull) {
+          if (ephemeralFullscreenAltScreenRef.current) {
+            ephemeralFullscreenAltScreenRef.current = false
+            exitAlternateScreen()
+          }
+        } else if (
+          prevFull &&
+          nextFull &&
+          ephemeralFullscreenAltScreenRef.current
+        ) {
+          // Ensure clean transitions between fullscreen tool screens.
+          void clearViewport()
+        }
+      } else {
+        if (prevFull !== nextFull) {
+          // Clear immediately before the first paint to avoid "sometimes starts high/sometimes low"
+          // artifacts caused by Ink's dynamic region reconciliation.
+          void clearViewport()
+        }
+      }
+
+      toolJSXRef.current = next
+      setToolJSX(next)
+    },
+    [setToolJSX],
+  )
   const [toolUseConfirm, setToolUseConfirm] = useState<ToolUseConfirm | null>(
     null,
   )
@@ -78,9 +220,30 @@ export function useReplController(props: REPLProps) {
     props.initialMessages ?? [],
   )
   const [inputValue, setInputValue] = useState('')
-  const [inputMode, setInputMode] = useState<'bash' | 'prompt' | 'koding'>(
-    'prompt',
-  )
+  const [inputMode, setInputMode] = useState<PromptMode>('prompt')
+  const [restorePastes, setRestorePastes] = useState<
+    | {
+        id: number
+        pastedTexts: Array<{ placeholder: string; text: string }>
+        pastedImages: Array<{
+          placeholder: string
+          data: string
+          mediaType: string
+        }>
+      }
+    | undefined
+  >(undefined)
+  const [draftPastes, setDraftPastes] = useState<{
+    pastedTexts: Array<{ placeholder: string; text: string }>
+    pastedImages: Array<{
+      placeholder: string
+      data: string
+      mediaType: string
+    }>
+  }>({ pastedTexts: [], pastedImages: [] })
+  const [sessionThinkingMode, setSessionThinkingMode] = useState<
+    'enabled' | 'auto' | null
+  >(null)
   const [submitCount, setSubmitCount] = useState(0)
   const [isMessageSelectorVisible, setIsMessageSelectorVisible] =
     useState(false)
@@ -90,17 +253,162 @@ export function useReplController(props: REPLProps) {
   )
   const [binaryFeedbackContext, setBinaryFeedbackContext] =
     useState<BinaryFeedbackContext | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const dismissToolView = useCallback(() => {
-    setToolJSX(null)
-  }, [])
+    setToolJSXWithClear(null)
+  }, [setToolJSXWithClear])
 
   const openToolView = useCallback(
     (view: NonNullable<typeof toolJSX>) => {
-      setToolJSX(view)
+      setToolJSXWithClear(view)
     },
-    [setToolJSX],
+    [setToolJSXWithClear],
   )
+
+  const openTasksScreen = useCallback(() => {
+    openToolView({
+      jsx: <TasksScreen onDone={dismissToolView} />,
+      shouldHidePromptInput: true,
+      displayMode: 'fullscreen',
+    })
+  }, [dismissToolView, openToolView])
+
+  const openTodosScreen = useCallback(() => {
+    openToolView({
+      jsx: <TodosScreen agentId="main" onDone={dismissToolView} />,
+      shouldHidePromptInput: true,
+      displayMode: 'fullscreen',
+    })
+  }, [dismissToolView, openToolView])
+
+  type ReplOnQueryFn = (
+    newMessages: MessageType[],
+    passedAbortController?: AbortController,
+  ) => Promise<void>
+
+  const apiKeyStatusRef = useRef<VerificationStatus>('loading')
+  const onQueryRef = useRef<ReplOnQueryFn | null>(null)
+
+  const openHistorySearchScreen = useCallback(() => {
+    openToolView({
+      jsx: (
+        <HistorySearchScreen
+          onDone={result => {
+            dismissToolView()
+
+            if (result.action === 'cancel') return
+
+            const selected = result.value
+            const pastedTexts = result.pastedTexts
+            const mode: PromptMode = selected.startsWith('!')
+              ? 'bash'
+              : selected.startsWith('&')
+                ? 'background'
+                : selected.startsWith('#')
+                  ? 'koding'
+                  : 'prompt'
+            const text =
+              mode === 'bash' || mode === 'background' || mode === 'koding'
+                ? selected.slice(1)
+                : selected
+
+            if (result.action === 'accept') {
+              setInputMode(mode)
+              setInputValue(text)
+              setRestorePastes({
+                id: Date.now(),
+                pastedTexts,
+                pastedImages: [],
+              })
+              return
+            }
+
+            if (isLoading || apiKeyStatusRef.current !== 'valid') {
+              setInputMode(mode)
+              setInputValue(text)
+              setRestorePastes({
+                id: Date.now(),
+                pastedTexts,
+                pastedImages: [],
+              })
+              return
+            }
+
+            void (async () => {
+              const conversationKey = `${props.messageLogName}:${forkNumber}`
+              const toolPermissionContext =
+                getToolPermissionContextForConversationKey({
+                  conversationKey,
+                  isBypassPermissionsModeAvailable: !safeMode,
+                })
+
+              const exit = (): never => {
+                process.exit(0)
+              }
+
+              await submitPrompt({
+                input: text,
+                mode,
+                completionActive: false,
+                suggestionCount: 0,
+                isSubmittingSlashCommand: false,
+                isDisabled: apiKeyStatusRef.current !== 'valid',
+                isLoading: false,
+                isEditingExternally: false,
+                abortController,
+                setIsLoading,
+                setAbortController,
+                onInputChange: setInputValue,
+                onModeChange: setInputMode,
+                setCursorOffset: () => {},
+                onSubmitCountChange: setSubmitCount,
+                onQuery: async (...args) => {
+                  await onQueryRef.current?.(...args)
+                },
+                setToolJSX: setToolJSXWithClear,
+                commands,
+                forkNumber,
+                messageLogName: props.messageLogName,
+                tools: props.tools,
+                verbose,
+                disableSlashCommands,
+                permissionMode: toolPermissionContext.mode,
+                toolPermissionContext,
+                setForkConvoWithMessagesOnTheNextRender,
+                readFileTimestamps: readFileTimestampsRef.current,
+                pastedTexts,
+                pastedImages: [],
+                clearPastes: () => {},
+                resetHistory: () => {},
+                setCurrentPwd: () => {},
+                exit,
+              })
+            })()
+          }}
+        />
+      ),
+      shouldHidePromptInput: true,
+      displayMode: 'fullscreen',
+    })
+  }, [
+    abortController,
+    commands,
+    disableSlashCommands,
+    dismissToolView,
+    forkNumber,
+    isLoading,
+    openToolView,
+    props.messageLogName,
+    props.tools,
+    safeMode,
+    setAbortController,
+    setForkConvoWithMessagesOnTheNextRender,
+    setIsLoading,
+    setToolJSXWithClear,
+    verbose,
+  ])
 
   useKeypress(
     (inputChar, key) => {
@@ -111,17 +419,97 @@ export function useReplController(props: REPLProps) {
         showingCostDialog ||
         isMessageSelectorVisible
 
+      if (key.ctrl && inputChar === 'c' && isLoading) {
+        setToolJSXWithClear(null)
+        setToolUseConfirm(null)
+        setBinaryFeedbackContext(null)
+        onCancel()
+        return true
+      }
+
       if (hasModal) return
 
-      // Ctrl+O: toggle verbose transcript (expand/collapse long outputs)
+      if (key.ctrl && inputChar === 't') {
+        openTodosScreen()
+        return true
+      }
+
       if (key.ctrl && inputChar === 'o') {
-        setVerbose(prev => !prev)
+        openToolView({
+          jsx: (
+            <TranscriptScreen
+              onDone={dismissToolView}
+              label={`${props.messageLogName}-${forkNumber}`}
+              initialFollow={true}
+            />
+          ),
+          shouldHidePromptInput: true,
+          displayMode: 'fullscreen',
+        })
+        return true
+      }
+
+      if (key.ctrl && inputChar === 'r') {
+        openHistorySearchScreen()
+        return true
+      }
+
+      if (key.meta && inputChar === 't') {
+        const effectiveThinkingMode =
+          sessionThinkingMode ?? getGlobalConfig().thinkingMode ?? 'auto'
+        const currentValue = effectiveThinkingMode === 'enabled'
+        const isMidConversation =
+          messages.some(m => m.type === 'assistant') ||
+          messages.some(m => m.type === 'user' && !(m as any)?.isMeta)
+
+        openToolView({
+          jsx: (
+            <ThinkingToggleScreen
+              currentValue={currentValue}
+              isMidConversation={isMidConversation}
+              onSelect={enabled => {
+                setSessionThinkingMode(enabled ? 'enabled' : 'auto')
+                showToast(`Thinking: ${enabled ? 'ON' : 'OFF'}`)
+              }}
+              onDone={dismissToolView}
+            />
+          ),
+          shouldHidePromptInput: true,
+          displayMode: 'fullscreen',
+        })
+        return true
+      }
+
+      if (key.meta && inputChar === 'p') {
+        openToolView({
+          jsx: (
+            <ModelPickerScreen
+              onDone={dismissToolView}
+              onSelectModel={modelName => {
+                const modelManager = getModelManager()
+                modelManager.setPointer('main', modelName)
+                triggerModelConfigChange()
+              }}
+            />
+          ),
+          shouldHidePromptInput: true,
+          displayMode: 'fullscreen',
+        })
+        return true
+      }
+
+      if (inputChar === '?' && inputValue.trim().length === 0) {
+        openToolView({
+          jsx: <ShortcutsScreen onDone={dismissToolView} />,
+          shouldHidePromptInput: true,
+          displayMode: 'fullscreen',
+        })
         return true
       }
 
       if (key.name === 'f1') {
         openToolView({
-          jsx: <Help commands={props.commands} onClose={dismissToolView} />,
+          jsx: <HelpScreen commands={commands} onDone={dismissToolView} />,
           shouldHidePromptInput: true,
           displayMode: 'fullscreen',
         })
@@ -130,7 +518,7 @@ export function useReplController(props: REPLProps) {
 
       if (key.name === 'f2') {
         openToolView({
-          jsx: <Config onClose={dismissToolView} />,
+          jsx: <ConfigScreen onClose={dismissToolView} />,
           shouldHidePromptInput: true,
           displayMode: 'fullscreen',
         })
@@ -139,7 +527,7 @@ export function useReplController(props: REPLProps) {
 
       if (key.name === 'f3') {
         openToolView({
-          jsx: <OpenFileDialog onDone={dismissToolView} />,
+          jsx: <OpenFileScreen onDone={dismissToolView} />,
           shouldHidePromptInput: true,
           displayMode: 'fullscreen',
         })
@@ -148,7 +536,7 @@ export function useReplController(props: REPLProps) {
 
       if (key.name === 'f4') {
         openToolView({
-          jsx: <TuiConsoleDialog onDone={dismissToolView} />,
+          jsx: <ConsoleScreen onDone={dismissToolView} />,
           shouldHidePromptInput: true,
           displayMode: 'fullscreen',
         })
@@ -157,7 +545,145 @@ export function useReplController(props: REPLProps) {
 
       if (key.name === 'f5') {
         openToolView({
-          jsx: <TuiNotificationsDialog onDone={dismissToolView} />,
+          jsx: <NotificationsScreen onDone={dismissToolView} />,
+          shouldHidePromptInput: true,
+          displayMode: 'fullscreen',
+        })
+        return true
+      }
+
+      if (key.name === 'f6') {
+        openToolView({
+          jsx: (
+            <TranscriptScreen
+              onDone={dismissToolView}
+              label={`${props.messageLogName}-${forkNumber}`}
+            />
+          ),
+          shouldHidePromptInput: true,
+          displayMode: 'fullscreen',
+        })
+        return true
+      }
+
+      if (key.name === 'f8') {
+        openTasksScreen()
+        return true
+      }
+
+      if (key.name === 'f7') {
+        openToolView({
+          jsx: (
+            <CommandPaletteScreen
+              onDone={action => {
+                if (!action) {
+                  dismissToolView()
+                  return
+                }
+
+                if (action === 'help') {
+                  openToolView({
+                    jsx: (
+                      <HelpScreen
+                        commands={commands}
+                        onDone={dismissToolView}
+                      />
+                    ),
+                    shouldHidePromptInput: true,
+                    displayMode: 'fullscreen',
+                  })
+                  return
+                }
+
+                if (action === 'config') {
+                  openToolView({
+                    jsx: <ConfigScreen onClose={dismissToolView} />,
+                    shouldHidePromptInput: true,
+                    displayMode: 'fullscreen',
+                  })
+                  return
+                }
+
+                if (action === 'open') {
+                  openToolView({
+                    jsx: <OpenFileScreen onDone={dismissToolView} />,
+                    shouldHidePromptInput: true,
+                    displayMode: 'fullscreen',
+                  })
+                  return
+                }
+
+                if (action === 'console') {
+                  openToolView({
+                    jsx: <ConsoleScreen onDone={dismissToolView} />,
+                    shouldHidePromptInput: true,
+                    displayMode: 'fullscreen',
+                  })
+                  return
+                }
+
+                if (action === 'notifications') {
+                  openToolView({
+                    jsx: <NotificationsScreen onDone={dismissToolView} />,
+                    shouldHidePromptInput: true,
+                    displayMode: 'fullscreen',
+                  })
+                  return
+                }
+
+                if (action === 'transcript') {
+                  openToolView({
+                    jsx: (
+                      <TranscriptScreen
+                        onDone={dismissToolView}
+                        label={`${props.messageLogName}-${forkNumber}`}
+                      />
+                    ),
+                    shouldHidePromptInput: true,
+                    displayMode: 'fullscreen',
+                  })
+                  return
+                }
+
+                if (action === 'doctor') {
+                  openToolView({
+                    jsx: <Doctor onDone={dismissToolView} doctorMode={true} />,
+                    shouldHidePromptInput: true,
+                    displayMode: 'fullscreen',
+                  })
+                  return
+                }
+
+                if (action === 'model') {
+                  try {
+                    abortController?.abort?.()
+                  } catch {}
+                  setIsLoading(false)
+
+                  openToolView({
+                    jsx: (
+                      <ModelConfig
+                        onClose={() => {
+                          import('#core/utils/model').then(
+                            ({ reloadModelManager }) => {
+                              reloadModelManager()
+                              triggerModelConfigChange()
+                              dismissToolView()
+                            },
+                          )
+                        }}
+                      />
+                    ),
+                    shouldHidePromptInput: true,
+                    displayMode: 'fullscreen',
+                  })
+                  return
+                }
+
+                dismissToolView()
+              }}
+            />
+          ),
           shouldHidePromptInput: true,
           displayMode: 'fullscreen',
         })
@@ -179,6 +705,14 @@ export function useReplController(props: REPLProps) {
   const readFileTimestampsRef = useRef<{ [filename: string]: number }>({})
 
   const { status: apiKeyStatus, reverify } = useApiKeyVerification()
+  useEffect(() => {
+    apiKeyStatusRef.current = apiKeyStatus
+  }, [apiKeyStatus])
+
+  useEffect(() => {
+    // Best-effort eager init so the first LSP tool call doesn't pay process startup latency.
+    void ensureLspManagerInitialized().catch(() => {})
+  }, [])
 
   const onCancel = useCallback(() => {
     if (!isLoading) return
@@ -193,7 +727,7 @@ export function useReplController(props: REPLProps) {
   }, [abortController, isLoading, toolUseConfirm])
 
   useCancelRequest(
-    setToolJSX,
+    setToolJSXWithClear,
     setToolUseConfirm,
     setBinaryFeedbackContext,
     onCancel,
@@ -216,18 +750,114 @@ export function useReplController(props: REPLProps) {
     }
   }, [messages, showCostDialog, haveShownCostDialog])
 
-  const canUseTool = useCanUseTool(setToolUseConfirm)
+  const showToast = useCallback((text: string) => {
+    setToast(text)
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current)
+    }
+    toastTimeoutRef.current = setTimeout(() => setToast(null), 6000)
+  }, [])
+
+  const ultrathinkToastActiveRef = useRef(false)
+  useEffect(() => {
+    if (inputMode === 'bash' || inputMode === 'background') {
+      ultrathinkToastActiveRef.current = false
+      return
+    }
+
+    const hasUltrathink = /\bultrathink\b/i.test(inputValue)
+    const effectiveThinkingMode =
+      sessionThinkingMode ?? getGlobalConfig().thinkingMode ?? 'auto'
+
+    if (
+      hasUltrathink &&
+      !ultrathinkToastActiveRef.current &&
+      effectiveThinkingMode === 'auto'
+    ) {
+      showToast('Thinking on')
+    }
+
+    ultrathinkToastActiveRef.current = hasUltrathink
+  }, [inputMode, inputValue, sessionThinkingMode, showToast])
+
+  useEffect(() => {
+    return subscribeAgentReloads(event => {
+      const count = event.changedPaths.length
+      showToast(
+        count > 0
+          ? `Agents reloaded (${count} file${count === 1 ? '' : 's'})`
+          : 'Agents reloaded',
+      )
+    })
+  }, [showToast])
+
+  useEffect(() => {
+    let cancelled = false
+    const unsubscribe = subscribeCustomCommandReloads(event => {
+      const count = event.changedPaths.length
+      showToast(
+        count > 0
+          ? `Commands reloaded (${count} change${count === 1 ? '' : 's'})`
+          : 'Commands reloaded',
+      )
+
+      void (async () => {
+        try {
+          const { getCommands } = await import('#cli-commands')
+          const next = await getCommands()
+          if (cancelled) return
+          setCommands(next)
+          setUiRefreshCounter(prev => prev + 1)
+        } catch (error) {
+          logError(error)
+        }
+      })()
+    })
+
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
+  }, [showToast])
+
+  useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current)
+        toastTimeoutRef.current = null
+      }
+    }
+  }, [])
+
+  const canUseTool = useCanUseTool(setToolUseConfirm, {
+    onPermissionRuleWarnings: warnings => {
+      const first = warnings[0]
+      const example = first
+        ? `${first.rule} (${describeToolPermissionRuleSource(first.source)})`
+        : ''
+      const fix = first?.fix ? ` Fix: ${first.fix}` : ''
+      showToast(
+        `Permission rules: ${warnings.length} unreachable rule${
+          warnings.length === 1 ? '' : 's'
+        } detected${example ? ` (e.g. ${example})` : ''}.${fix}`,
+      )
+    },
+  })
   const requestToolUsePermission = useRequestToolUsePermission({
     setToolUseConfirm,
   })
 
   const onQuery = useReplQuery({
     disableSlashCommands,
+    systemPromptOverride: props.systemPromptOverride,
+    appendSystemPrompt: props.appendSystemPrompt,
     messages,
     setMessages,
-    commands: props.commands,
+    commands,
     forkNumber,
     messageLogName: props.messageLogName,
+    thinkingMode:
+      sessionThinkingMode ?? getGlobalConfig().thinkingMode ?? 'auto',
     tools: props.tools,
     mcpClients,
     verbose,
@@ -235,15 +865,18 @@ export function useReplController(props: REPLProps) {
     requestToolUsePermission,
     canUseTool,
     readFileTimestamps: readFileTimestampsRef.current,
-    setToolJSX,
+    setToolJSX: setToolJSXWithClear,
     getBinaryFeedbackResponse,
     setAbortController,
     setIsLoading,
   })
+  useEffect(() => {
+    onQueryRef.current = onQuery
+  }, [onQuery])
 
   const onInit = useReplInit({
     initialPrompt: props.initialPrompt,
-    commands: props.commands,
+    commands,
     forkNumber,
     messageLogName: props.messageLogName,
     tools: props.tools,
@@ -251,7 +884,7 @@ export function useReplController(props: REPLProps) {
     verbose,
     safeMode,
     messages,
-    setToolJSX,
+    setToolJSX: setToolJSXWithClear,
     readFileTimestamps: readFileTimestampsRef.current,
     setForkConvoWithMessagesOnTheNextRender,
     reverify,
@@ -335,18 +968,19 @@ export function useReplController(props: REPLProps) {
   }, [])
 
   const promptInputProps = buildPromptInputProps({
-    commands: props.commands,
+    commands,
     forkNumber,
     messageLogName: props.messageLogName,
+    initialPrompt: props.initialPrompt,
     tools: props.tools,
     disableSlashCommands,
-    isDisabled: apiKeyStatus === 'invalid',
+    isDisabled: apiKeyStatus !== 'valid',
     isLoading,
     onQuery,
     debug,
     verbose,
     messages,
-    setToolJSX,
+    setToolJSX: setToolJSXWithClear,
     input: inputValue,
     onInputChange: setInputValue,
     mode: inputMode,
@@ -360,6 +994,17 @@ export function useReplController(props: REPLProps) {
     setForkConvoWithMessagesOnTheNextRender,
     readFileTimestamps: readFileTimestampsRef.current,
     abortController,
+    onManageTasks: openTasksScreen,
+    restorePastes,
+    onRestorePastesApplied: id => {
+      setRestorePastes(prev => {
+        if (!prev) return prev
+        if (prev.id !== id) return prev
+        return undefined
+      })
+    },
+    draftPastes,
+    onDraftPastesChange: setDraftPastes,
   })
 
   const handleMessageSelectorSelect = useMessageSelectorSelect({
@@ -381,6 +1026,7 @@ export function useReplController(props: REPLProps) {
     toolJSX,
     toolUseConfirm,
     setToolUseConfirm,
+    toast,
     binaryFeedbackContext,
     setBinaryFeedbackContext,
     isLoading,

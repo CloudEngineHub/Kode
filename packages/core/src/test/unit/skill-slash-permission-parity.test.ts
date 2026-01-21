@@ -4,6 +4,7 @@ import { join } from 'path'
 import { hasPermissionsToUseTool } from '#core/permissions'
 import { FileEditTool } from '#tools/tools/filesystem/FileEditTool/FileEditTool'
 import { FileReadTool } from '#tools/tools/filesystem/FileReadTool/FileReadTool'
+import { FileWriteTool } from '#tools/tools/filesystem/FileWriteTool/FileWriteTool'
 import { SlashCommandTool } from '#tools/tools/interaction/SlashCommandTool/SlashCommandTool'
 import { SkillTool } from '#tools/tools/interaction/SkillTool/SkillTool'
 import {
@@ -124,6 +125,29 @@ describe('Skill/SlashCommand parity: contextModifier effects', () => {
 })
 
 describe('Permission parity: matching rule patterns + skill prefixes', () => {
+  test('commandAllowedTools participates in the same file permission engine (Read(~/**))', async () => {
+    const filePath = join(homedir(), 'some-file.txt')
+    const ctx = makeContext({
+      options: { commandAllowedTools: ['Read(~/**)'] },
+    })
+    const result = await hasPermissionsToUseTool(
+      FileReadTool,
+      { file_path: filePath },
+      ctx,
+      createAssistantMessage(''),
+    )
+    expect(result.result).toBe(true)
+
+    const ctxWithoutCommandTools = makeContext()
+    const without = await hasPermissionsToUseTool(
+      FileReadTool,
+      { file_path: filePath },
+      ctxWithoutCommandTools,
+      createAssistantMessage(''),
+    )
+    expect(without.result).toBe(false)
+  })
+
   test('FileReadTool matches allowedTools path patterns (Read(~/**))', async () => {
     const cfg = getCurrentProjectConfig()
     cfg.allowedTools = ['Read(~/**)']
@@ -154,6 +178,38 @@ describe('Permission parity: matching rule patterns + skill prefixes', () => {
       createAssistantMessage(''),
     )
     expect(result.result).toBe(true)
+  })
+
+  test('FileWriteTool matches allowedTools path patterns (Write(~/**))', async () => {
+    const cfg = getCurrentProjectConfig()
+    cfg.allowedTools = ['Write(~/**)']
+    saveCurrentProjectConfig(cfg)
+
+    const filePath = join(homedir(), 'some-file.txt')
+    const ctx = makeContext()
+    const result = await hasPermissionsToUseTool(
+      FileWriteTool,
+      { file_path: filePath, content: 'hi' },
+      ctx,
+      createAssistantMessage(''),
+    )
+    expect(result.result).toBe(true)
+  })
+
+  test('Read-only allowedTools does not grant write permissions', async () => {
+    const cfg = getCurrentProjectConfig()
+    cfg.allowedTools = ['Read(~/**)']
+    saveCurrentProjectConfig(cfg)
+
+    const filePath = join(homedir(), 'some-file.txt')
+    const ctx = makeContext()
+    const result = await hasPermissionsToUseTool(
+      FileWriteTool,
+      { file_path: filePath, content: 'hi' },
+      ctx,
+      createAssistantMessage(''),
+    )
+    expect(result.result).toBe(false)
   })
 
   test('SkillTool supports namespace prefix rules (Skill(ns:*))', async () => {

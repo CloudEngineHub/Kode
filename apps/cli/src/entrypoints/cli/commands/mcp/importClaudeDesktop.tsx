@@ -92,12 +92,17 @@ export function registerMcpImportClaudeDesktopCommand(args: {
         const reactModule = await import('react')
         const inkjsui = await import('@inkjs/ui')
         const utilsTheme = await import('#core/utils/theme')
+        const uiFrame = await import('#ui-ink/primitives/layout/ScreenFrame')
+        const uiLayout =
+          await import('#ui-ink/primitives/layout/useScreenLayout')
 
         const { render } = ink
         const React = reactModule
         const { MultiSelect } = inkjsui
         const { Box, Text } = ink
         const { getTheme } = utilsTheme
+        const { ScreenFrame } = uiFrame
+        const { useScreenLayout } = uiLayout
 
         await new Promise<void>(resolve => {
           function ClaudeDesktopImport() {
@@ -107,6 +112,7 @@ export function registerMcpImportClaudeDesktopCommand(args: {
               [] as { name: string; success: boolean }[],
             )
             const theme = getTheme()
+            const layout = useScreenLayout()
 
             const importServers = async (selectedServers: string[]) => {
               const results: Array<{ name: string; success: boolean }> = []
@@ -174,54 +180,41 @@ export function registerMcpImportClaudeDesktopCommand(args: {
             }
 
             return (
-              <Box flexDirection="column" padding={1}>
-                <Box
-                  flexDirection="column"
-                  borderStyle="round"
-                  borderColor={theme.kode}
-                  padding={1}
-                  width={'100%'}
-                >
-                  <Text bold color={theme.kode}>
-                    Import MCP Servers from Desktop Config
+              <ScreenFrame
+                title="Import MCP servers"
+                titleColor={theme.kode}
+                paddingX={layout.paddingX}
+                paddingY={layout.paddingY}
+                gap={layout.gap}
+              >
+                <Box flexDirection="column" gap={layout.gap}>
+                  <Text dimColor wrap="truncate-end">
+                    Found {numServers} servers in the desktop config.
                   </Text>
 
-                  <Box marginY={1}>
-                    <Text>
-                      Found {numServers} MCP servers in the desktop config.
-                    </Text>
-                  </Box>
+                  <Text>Select the servers you want to import:</Text>
 
-                  <Text>Please select the servers you want to import:</Text>
+                  <MultiSelect
+                    options={serverNames.map(name => ({
+                      label: name,
+                      value: name,
+                    }))}
+                    defaultValue={serverNames}
+                    onSubmit={handleConfirm}
+                  />
 
-                  <Box marginTop={1}>
-                    <MultiSelect
-                      options={serverNames.map(name => ({
-                        label: name,
-                        value: name,
-                      }))}
-                      defaultValue={serverNames}
-                      onSubmit={handleConfirm}
-                    />
-                  </Box>
-                </Box>
-
-                <Box marginTop={0} marginLeft={3}>
-                  <Text dimColor>
-                    Space to select · Enter to confirm · Esc to cancel
+                  <Text dimColor wrap="truncate-end">
+                    Space select · Enter confirm · Esc cancel
                   </Text>
-                </Box>
 
-                {isFinished && (
-                  <Box marginTop={1}>
-                    <Text color={theme.success}>
-                      Successfully imported{' '}
-                      {importResults.filter(r => r.success).length} MCP server
-                      to local config.
+                  {isFinished ? (
+                    <Text color={theme.success} wrap="truncate-end">
+                      Imported {importResults.filter(r => r.success).length}{' '}
+                      servers to local config.
                     </Text>
-                  </Box>
-                )}
-              </Box>
+                  ) : null}
+                </Box>
+              </ScreenFrame>
             )
           }
 

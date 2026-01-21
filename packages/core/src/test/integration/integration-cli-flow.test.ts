@@ -1,8 +1,8 @@
 /**
- * Integration Test: Full Claude.ts Flow (Model-Agnostic)
+ * Integration Test: Full CLI Flow (Model-Agnostic)
  *
  * This test exercises the same code path the CLI uses:
- * claude.ts → ModelAdapterFactory → adapter → API
+ * llm.ts → ModelAdapterFactory → adapter → API
  */
 
 import { describe, expect, test } from 'bun:test'
@@ -15,13 +15,13 @@ import {
   getActiveProfile,
 } from './integration-cli-flow.shared'
 
-describe('🔌 Integration: Full Claude.ts Flow (Model-Agnostic)', () => {
+describe('🔌 Integration: Full CLI Flow (Model-Agnostic)', () => {
   if (ACTIVE_PRODUCTION_MODELS.length === 0) {
-    test.skip('✅ End-to-end flow through claude.ts path (requires API keys)', () => {})
+    test.skip('✅ End-to-end flow through CLI path (requires API keys)', () => {})
     return
   }
 
-  test('✅ End-to-end flow through claude.ts path', async () => {
+  test('✅ End-to-end flow through CLI path', async () => {
     const ACTIVE_PROFILE = getActiveProfile()
 
     console.log('\n🔧 TEST CONFIGURATION:')

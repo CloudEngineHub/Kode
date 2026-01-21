@@ -1,19 +1,18 @@
 import { join } from 'node:path'
 import { homedir } from 'node:os'
+import { getKodeRoot } from './dataRoots'
 
-const CONFIG_BASE_DIR = '.kode'
 const CONFIG_FILE = '.kode.json'
 
 export function getKodeBaseDir(): string {
-  return (
-    process.env.KODE_CONFIG_DIR ??
-    process.env.CLAUDE_CONFIG_DIR ??
-    join(homedir(), CONFIG_BASE_DIR)
-  )
+  return getKodeRoot()
 }
 
 export function getGlobalConfigFilePath(): string {
-  return process.env.KODE_CONFIG_DIR || process.env.CLAUDE_CONFIG_DIR
+  const hasOverride = Boolean(
+    process.env.KODE_CONFIG_DIR || process.env.ANYKODE_CONFIG_DIR,
+  )
+  return hasOverride
     ? join(getKodeBaseDir(), 'config.json')
     : join(homedir(), CONFIG_FILE)
 }

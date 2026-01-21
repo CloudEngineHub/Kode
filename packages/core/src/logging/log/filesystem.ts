@@ -1,4 +1,11 @@
-import { existsSync, mkdirSync, writeFileSync } from 'fs'
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from 'fs'
 
 const PERMISSION_ERROR_CODES = new Set(['EACCES', 'EPERM', 'EROFS'])
 
@@ -29,8 +36,31 @@ export function safeWriteFile(
   data: string,
   encoding: BufferEncoding = 'utf8',
 ): boolean {
+  const tmpPath = `${path}.${process.pid}.${Date.now()}.tmp`
   try {
-    writeFileSync(path, data, encoding)
+    writeFileSync(tmpPath, data, encoding)
+    renameSync(tmpPath, path)
+    return true
+  } catch (error) {
+    try {
+      unlinkSync(tmpPath)
+    } catch {
+      // ignore
+    }
+    if (isPermissionError(error)) {
+      return false
+    }
+    throw error
+  }
+}
+
+export function safeAppendFile(
+  path: string,
+  data: string,
+  encoding: BufferEncoding = 'utf8',
+): boolean {
+  try {
+    appendFileSync(path, data, { encoding })
     return true
   } catch (error) {
     if (isPermissionError(error)) {

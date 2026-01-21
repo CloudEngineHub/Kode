@@ -15,6 +15,13 @@ export type SdkMessage =
       uuid?: string
     }
   | {
+      type: 'stream_event'
+      event: unknown
+      session_id: string
+      parent_tool_use_id?: string | null
+      uuid?: string
+    }
+  | {
       type: 'user'
       session_id?: string
       uuid?: string
@@ -30,7 +37,11 @@ export type SdkMessage =
     }
   | {
       type: 'result'
-      subtype: 'success' | 'error_during_execution' | 'error_max_turns'
+      subtype:
+        | 'success'
+        | 'error_during_execution'
+        | 'error_max_turns'
+        | 'error_max_budget_usd'
       result?: string
       structured_output?: Record<string, unknown>
       num_turns: number
@@ -40,6 +51,7 @@ export type SdkMessage =
       duration_api_ms: number
       is_error: boolean
       session_id: string
+      uuid?: string
     }
   | {
       type: 'log'
@@ -52,6 +64,7 @@ export function makeSdkInitMessage(args: {
   model?: string
   tools?: string[]
   slashCommands?: string[]
+  uuid?: string
 }): SdkMessage {
   return {
     type: 'system',
@@ -60,13 +73,14 @@ export function makeSdkInitMessage(args: {
     cwd: args.cwd,
     model: args.model,
     tools: args.tools,
+    ...(args.uuid ? { uuid: args.uuid } : {}),
     ...(args.slashCommands ? { slash_commands: args.slashCommands } : {}),
   }
 }
 
 export function makeSdkResultMessage(args: {
   sessionId: string
-  result: string
+  result?: string
   structuredOutput?: Record<string, unknown>
   numTurns: number
   usage?: any
@@ -74,11 +88,14 @@ export function makeSdkResultMessage(args: {
   durationMs: number
   durationApiMs: number
   isError: boolean
+  subtype?: Extract<SdkMessage, { type: 'result' }>['subtype']
+  uuid?: string
 }): SdkMessage {
   return {
     type: 'result',
-    subtype: args.isError ? 'error_during_execution' : 'success',
-    result: args.result,
+    subtype:
+      args.subtype ?? (args.isError ? 'error_during_execution' : 'success'),
+    ...(args.result !== undefined ? { result: args.result } : {}),
     ...(args.structuredOutput
       ? { structured_output: args.structuredOutput }
       : {}),
@@ -89,5 +106,6 @@ export function makeSdkResultMessage(args: {
     duration_api_ms: args.durationApiMs,
     is_error: args.isError,
     session_id: args.sessionId,
+    ...(args.uuid ? { uuid: args.uuid } : {}),
   }
 }

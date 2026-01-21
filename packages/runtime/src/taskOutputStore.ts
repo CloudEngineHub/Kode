@@ -7,14 +7,10 @@ import {
   writeFileSync,
 } from 'fs'
 import { dirname, join } from 'path'
-import { homedir } from 'os'
+import { getKodeRoot } from '#config/dataRoots'
 
 function getKodeBaseDir(): string {
-  return (
-    process.env.KODE_CONFIG_DIR ??
-    process.env.CLAUDE_CONFIG_DIR ??
-    join(homedir(), '.kode')
-  )
+  return getKodeRoot()
 }
 
 // Compatibility: project directory is a sanitized cwd string.

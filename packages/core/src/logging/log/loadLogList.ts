@@ -1,7 +1,6 @@
 import {
   existsSync,
   mkdirSync,
-  readFileSync,
   readdirSync,
   statSync,
   copyFileSync,
@@ -12,6 +11,7 @@ import { join } from 'path'
 import type { LogOption, SerializedMessage } from '#core/types/logs'
 
 import { logError } from './errors'
+import { readJsonLog } from './jsonLog'
 import { CACHE_PATHS, LEGACY_CACHE_PATHS, parseLogFilename } from './paths'
 import { parseISOString, sortLogs } from './util'
 
@@ -106,8 +106,7 @@ export async function loadLogList(
   const logData = await Promise.all(
     uniqueFiles.map(async ({ file, dirPath }, i) => {
       const fullPath = join(dirPath, file)
-      const content = readFileSync(fullPath, 'utf8')
-      const messages = JSON.parse(content) as SerializedMessage[]
+      const messages = readJsonLog(fullPath) as SerializedMessage[]
       const firstMessage = messages[0]
       const lastMessage = messages[messages.length - 1]
       const firstPrompt =

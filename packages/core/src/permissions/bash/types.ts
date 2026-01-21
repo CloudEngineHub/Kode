@@ -26,6 +26,8 @@ export type BashPermissionResult =
       message: string
       shouldPromptUser?: boolean
       suggestions?: ToolPermissionContextUpdate[]
+      blockedPath?: string
+      decisionReason?: string
     }
 
 export type Redirection = { target: string; operator: '>' | '>>' }

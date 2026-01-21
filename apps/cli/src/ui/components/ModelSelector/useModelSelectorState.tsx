@@ -1,19 +1,19 @@
 import { useState } from 'react'
 import { getGlobalConfig, type ProviderType } from '#core/utils/config'
-import type { ConnectionTestResult } from '#ui-ink/ui/components/model-selector/actions/connectionTest'
+import type { ConnectionTestResult } from './flow/actions/connectionTest'
 import {
   DEFAULT_CONTEXT_LENGTH,
   DEFAULT_MAX_TOKENS,
   type ReasoningEffortOption,
   type RequestStrategyOption,
-} from '#ui-ink/ui/components/model-selector/options'
+} from './flow/options'
 import {
   createInitialScreenStack,
   getCurrentScreen,
   pushScreen,
   type ModelSelectorScreen,
-} from '#ui-ink/ui/components/model-selector/state'
-import type { ModelInfo } from '#ui-ink/ui/components/model-selector/types'
+} from './flow/state'
+import type { ModelInfo } from './flow/types'
 
 export function useModelSelectorState(opts: { skipModelType: boolean }) {
   const config = getGlobalConfig()

@@ -4,6 +4,8 @@ import chalk from 'chalk'
 import type { Command } from '../types'
 import { Select } from '#ui-ink/components/CustomSelect/select'
 import { getTheme } from '#core/utils/theme'
+import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
+import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import {
   DEFAULT_OUTPUT_STYLE,
   getAvailableOutputStyles,
@@ -26,6 +28,7 @@ function OutputStyleMenu({
   onDone: (result?: string) => void
 }): React.ReactNode {
   const theme = getTheme()
+  const layout = useScreenLayout()
   const doneRef = useRef(false)
 
   const styles = useMemo(() => getAvailableOutputStyles(), [])
@@ -56,32 +59,38 @@ function OutputStyleMenu({
   })
 
   return (
-    <>
-      <Box
-        flexDirection="column"
-        gap={1}
-        padding={1}
-        borderStyle="round"
-        borderColor={theme.secondary}
-      >
-        <Text bold>Output style</Text>
-        <Text dimColor>Current: {resolvedCurrentStyle}</Text>
-        <Text>Choose a style:</Text>
+    <ScreenFrame
+      title="Output Style"
+      paddingX={layout.paddingX}
+      paddingY={layout.paddingY}
+      gap={layout.gap}
+    >
+      <Box flexDirection="column" gap={layout.gap}>
+        <Text dimColor wrap="truncate-end">
+          Current: {resolvedCurrentStyle}
+        </Text>
+        <Text dimColor wrap="truncate-end">
+          Choose how Kode formats assistant output (verbosity, structure, etc).
+        </Text>
+
         <Select
           options={styleNames.map(name => ({ label: name, value: name }))}
           defaultValue={resolvedCurrentStyle}
-          visibleOptionCount={Math.min(10, Math.max(5, styleNames.length))}
+          visibleOptionCount={Math.min(12, Math.max(5, styleNames.length))}
           onChange={value => {
             const next = normalizeStyleName(value)
             setCurrentOutputStyle(next)
             finish(`Set output style to ${chalk.bold(next)}`)
           }}
         />
+
+        <Box marginTop={layout.tightLayout ? 0 : 1}>
+          <Text dimColor wrap="truncate-end">
+            ↑/↓ navigate · Enter select · Esc close
+          </Text>
+        </Box>
       </Box>
-      <Box marginLeft={3}>
-        <Text dimColor>↑↓ Navigate · Enter select · Esc cancel</Text>
-      </Box>
-    </>
+    </ScreenFrame>
   )
 }
 

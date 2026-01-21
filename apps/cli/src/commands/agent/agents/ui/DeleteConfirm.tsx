@@ -1,7 +1,7 @@
 import React from 'react'
 import { Box, Text } from 'ink'
 import { Select } from '#ui-ink/components/CustomSelect/select'
-import { panelBorderColor, themeColor } from './colors'
+import { themeColor } from './colors'
 import { Instructions, Panel } from './components'
 import type { AgentWithOverride } from './types'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
@@ -12,16 +12,15 @@ export function DeleteConfirm(props: {
   onCancel: () => void
 }) {
   useKeypress((_input, key) => {
-    if (key.escape) props.onCancel()
+    if (key.escape) {
+      props.onCancel()
+      return true
+    }
   })
 
   return (
     <>
-      <Panel
-        title="Delete agent"
-        borderColor={panelBorderColor('error')}
-        titleColor={themeColor('error')}
-      >
+      <Panel title="Delete agent" titleColor={themeColor('error')}>
         <Box flexDirection="column" gap={1}>
           <Text>
             Are you sure you want to delete the agent{' '}

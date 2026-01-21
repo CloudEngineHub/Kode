@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import models from '#core/constants/models'
-import type { ModelInfo } from '#ui-ink/ui/components/model-selector/types'
+import type { ModelInfo } from './flow/types'
 
 function formatNumber(num: number): string {
   if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`

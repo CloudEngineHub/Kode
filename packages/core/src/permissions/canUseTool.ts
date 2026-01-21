@@ -14,5 +14,8 @@ export type CanUseToolFn = (
       message: string
       shouldPromptUser?: boolean
       suggestions?: ToolPermissionContextUpdate[]
+      blockedPath?: string
+      decisionReason?: string
+      riskScore?: number | null
     }
 >

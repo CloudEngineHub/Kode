@@ -123,6 +123,14 @@ export const getProjectDocs = memoize(async (): Promise<string | null> => {
   return getProjectDocsForCwd(getCwd())
 })
 
+export function clearContextCache(): void {
+  getReadme.cache.clear?.()
+  getProjectDocs.cache.clear?.()
+  getGitStatus.cache.clear?.()
+  getDirectoryStructure.cache.clear?.()
+  getContext.cache.clear?.()
+}
+
 export const getGitStatus = memoize(async (): Promise<string | null> => {
   if (process.env.NODE_ENV === 'test') {
     // Avoid cycles in tests

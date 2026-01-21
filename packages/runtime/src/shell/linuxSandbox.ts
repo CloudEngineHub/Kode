@@ -5,6 +5,7 @@ import type {
   BunShellSandboxReadConfig,
   BunShellSandboxWriteConfig,
 } from './types'
+import { buildSandboxEnvAssignments } from './sandboxEnv'
 
 export function hasGlobPattern(value: string): boolean {
   return (
@@ -123,6 +124,10 @@ export function buildLinuxBwrapCommand(options: {
   bwrapPath: string
   command: string
   needsNetworkRestriction?: boolean
+  httpProxyPort?: number
+  socksProxyPort?: number
+  linuxBridge?: { httpSocketPath: string; socksSocketPath: string }
+  linuxSeccomp?: { applySeccompPath: string; bpfPath: string }
   readConfig?: BunShellSandboxReadConfig
   writeConfig?: BunShellSandboxWriteConfig
   enableWeakerNestedSandbox?: boolean
@@ -131,6 +136,31 @@ export function buildLinuxBwrapCommand(options: {
   homeDir?: string
 }): string[] {
   const args: string[] = []
+
+  const bridge =
+    options.needsNetworkRestriction === true ? options.linuxBridge : undefined
+
+  const shQuote = (value: string): string =>
+    `'${value.replace(/'/g, `'\"'\"'`)}'`
+
+  const seccompCommand = options.linuxSeccomp
+    ? [
+        shQuote(options.linuxSeccomp.applySeccompPath),
+        shQuote(options.linuxSeccomp.bpfPath),
+        shQuote(options.binShellPath),
+        '-c',
+        shQuote(options.command),
+      ].join(' ')
+    : options.command
+
+  const command = bridge
+    ? [
+        `socat TCP-LISTEN:${options.httpProxyPort ?? 3128},fork,reuseaddr UNIX-CONNECT:${bridge.httpSocketPath} >/dev/null 2>&1 &`,
+        `socat TCP-LISTEN:${options.socksProxyPort ?? 1080},fork,reuseaddr UNIX-CONNECT:${bridge.socksSocketPath} >/dev/null 2>&1 &`,
+        'trap "kill %1 %2 2>/dev/null; exit" EXIT',
+        seccompCommand,
+      ].join('\n')
+    : seccompCommand
 
   // Safer defaults: isolate namespaces and ensure sandbox dies with the parent.
   args.push(
@@ -151,20 +181,24 @@ export function buildLinuxBwrapCommand(options: {
     }),
   )
 
-  // Provide a minimal /dev and compatibility temp env.
-  args.push(
-    '--dev',
-    '/dev',
-    '--setenv',
-    'SANDBOX_RUNTIME',
-    '1',
-    '--setenv',
-    'TMPDIR',
-    '/tmp/kode',
-  )
+  // Provide a minimal /dev and compatibility env.
+  args.push('--dev', '/dev')
+
+  const envAssignments = buildSandboxEnvAssignments({
+    httpProxyPort: bridge ? options.httpProxyPort : undefined,
+    socksProxyPort: bridge ? options.socksProxyPort : undefined,
+    platform: 'linux',
+  })
+  for (const entry of envAssignments) {
+    const idx = entry.indexOf('=')
+    if (idx === -1) continue
+    const key = entry.slice(0, idx)
+    const value = entry.slice(idx + 1)
+    args.push('--setenv', key, value)
+  }
   if (!options.enableWeakerNestedSandbox) args.push('--proc', '/proc')
 
-  args.push('--', options.binShellPath, '-c', options.command)
+  args.push('--', options.binShellPath, '-c', command)
 
   return [options.bwrapPath, ...args]
 }

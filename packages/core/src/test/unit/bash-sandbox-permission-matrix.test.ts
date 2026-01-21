@@ -36,6 +36,7 @@ function makeToolUseContext(
       __sandboxHomeDir: overrides.homeDir,
       __sandboxPlatform: 'linux',
       __sandboxBwrapPath: '/usr/bin/bwrap',
+      __sandboxSocatPath: '/usr/bin/socat',
     },
   }
 }
@@ -93,6 +94,7 @@ describe('Bash sandbox permission matrix (compatibility)', () => {
       result: false,
       shouldPromptUser: false,
       message: 'Permission to use Bash with command echo hi has been denied.',
+      decisionReason: 'Bash(echo hi)',
     })
   })
 

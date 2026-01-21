@@ -18,10 +18,18 @@ export function ColorPicker(props: {
   )
 
   useKeypress((_input, key) => {
-    if (key.upArrow) setIndex(i => (i > 0 ? i - 1 : COLOR_OPTIONS.length - 1))
-    else if (key.downArrow)
+    if (key.upArrow) {
+      setIndex(i => (i > 0 ? i - 1 : COLOR_OPTIONS.length - 1))
+      return true
+    }
+    if (key.downArrow) {
       setIndex(i => (i < COLOR_OPTIONS.length - 1 ? i + 1 : 0))
-    else if (key.return) props.onConfirm(COLOR_OPTIONS[index] ?? 'automatic')
+      return true
+    }
+    if (key.return) {
+      props.onConfirm(COLOR_OPTIONS[index] ?? 'automatic')
+      return true
+    }
   })
 
   return (

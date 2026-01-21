@@ -19,9 +19,15 @@ import { connectToServer } from './connection'
 import { getMcpServerConnectionBatchSize } from './settings'
 import type { WrappedClient } from './types'
 
+let clientsOverrideForTests: WrappedClient[] | null = null
+
 export const getClients = memoize(async (): Promise<WrappedClient[]> => {
   if (process.env.CI && process.env.NODE_ENV !== 'test') {
     return []
+  }
+
+  if (process.env.NODE_ENV === 'test' && clientsOverrideForTests) {
+    return clientsOverrideForTests
   }
 
   const pluginServers = listPluginMCPServers()
@@ -72,6 +78,11 @@ export const getClients = memoize(async (): Promise<WrappedClient[]> => {
 
   return results
 })
+
+export function __setMcpClientsForTests(clients: WrappedClient[] | null): void {
+  clientsOverrideForTests = clients
+  getClients.cache.clear()
+}
 
 export async function getClientsForCliMcpConfig(options: {
   mcpConfig?: string[]

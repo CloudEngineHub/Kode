@@ -64,6 +64,15 @@ export type ProjectConfig = {
   context: Record<string, string>
   contextFiles?: string[]
   history: string[]
+  promptDrafts?: Record<
+    string,
+    {
+      text: string
+      mode: 'prompt' | 'bash' | 'background' | 'koding'
+      cursorOffset: number
+      updatedAt: number
+    }
+  >
   dontCrawlDirectory?: boolean
   enableArchitectTool?: boolean
   mcpContextUris: string[]
@@ -86,6 +95,7 @@ export const DEFAULT_PROJECT_CONFIG: ProjectConfig = {
   askedTools: [],
   context: {},
   history: [],
+  promptDrafts: {},
   dontCrawlDirectory: false,
   enableArchitectTool: false,
   mcpContextUris: [],
@@ -143,9 +153,12 @@ export type ProviderType =
   | 'custom-openai'
   | (string & {})
 
-export type ClaudeCodeRequestStrategy =
+export type RequestStrategy =
   | 'auto'
   | 'kode'
+  | 'compat_headers'
+  | 'compat_headers_system'
+  | 'compat_full'
   | 'claude_code_headers'
   | 'claude_code_headers_system'
   | 'claude_code_full'
@@ -159,7 +172,7 @@ export type ModelProfile = {
   maxTokens: number
   contextLength: number
   reasoningEffort?: 'low' | 'medium' | 'high' | 'minimal' | string
-  requestStrategy?: ClaudeCodeRequestStrategy
+  requestStrategy?: RequestStrategy
   isActive: boolean
   createdAt: number
   lastUsed?: number
@@ -189,6 +202,8 @@ export type GlobalConfig = {
   autoUpdaterStatus?: AutoUpdaterStatus
   userID?: string
   theme: ThemeNames
+  editorMode?: 'normal' | 'vim' | 'emacs'
+  thinkingMode?: 'auto' | 'enabled' | 'disabled'
   hasCompletedOnboarding?: boolean
   lastPlanModeUse?: number
   lastOnboardingVersion?: string
@@ -218,6 +233,8 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfig = {
   numStartups: 0,
   autoUpdaterStatus: 'not_configured',
   theme: 'dark',
+  editorMode: 'normal',
+  thinkingMode: 'auto',
   preferredNotifChannel: 'iterm2',
   verbose: false,
   useAlternateBuffer: false,
@@ -241,6 +258,8 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfig = {
 export const GLOBAL_CONFIG_KEYS = [
   'autoUpdaterStatus',
   'theme',
+  'editorMode',
+  'thinkingMode',
   'hasCompletedOnboarding',
   'lastOnboardingVersion',
   'lastReleaseNotesSeen',

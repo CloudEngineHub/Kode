@@ -3,8 +3,17 @@ import { parse, quote, type ParseEntry } from 'shell-quote'
 const SINGLE_QUOTE = '__SINGLE_QUOTE__'
 const DOUBLE_QUOTE = '__DOUBLE_QUOTE__'
 const NEW_LINE = '__NEW_LINE__'
+const LINE_CONTINUATION_RE = /\\\r?\n/g
 
-export const SAFE_SHELL_SEPARATORS = new Set(['&&', '||', ';', '|', ';;'])
+export const SAFE_SHELL_SEPARATORS = new Set([
+  '&&',
+  '||',
+  ';',
+  '&',
+  '|',
+  '|&',
+  ';;',
+])
 
 export type ParsedShellTokens =
   | { success: true; tokens: ParseEntry[] }
@@ -41,17 +50,23 @@ function hasCommentToken(entry: unknown): boolean {
   return !!record && 'comment' in record
 }
 
+export function normalizeBashLineContinuations(command: string): string {
+  if (!command.includes('\\')) return command
+  return command.replace(LINE_CONTINUATION_RE, '')
+}
+
 export function parseShellTokens(
   command: string,
   options?: { preserveNewlines?: boolean },
 ): ParsedShellTokens {
   try {
+    const normalizedCommand = normalizeBashLineContinuations(command)
     const input = options?.preserveNewlines
-      ? command
+      ? normalizedCommand
           .replaceAll('"', `"${DOUBLE_QUOTE}`)
           .replaceAll("'", `'${SINGLE_QUOTE}`)
           .replaceAll('\n', `\n${NEW_LINE}\n`)
-      : command
+      : normalizedCommand
           .replaceAll('"', `"${DOUBLE_QUOTE}`)
           .replaceAll("'", `'${SINGLE_QUOTE}`)
 
@@ -180,6 +195,16 @@ export function rebuildCommandFromTokens(
       }
     }
 
+    // Bash `&>` / `&>>` redirects stdout+stderr.
+    // `shell-quote` tokenizes this as `{op:'&'},{op:'>'}` (or `>>`), so we
+    // reconstruct a single operator to preserve semantics.
+    if (op === '&' && (isOpToken(next, '>') || isOpToken(next, '>>'))) {
+      const combined = isOpToken(next, '>>') ? '&>>' : '&>'
+      out = joinTokensWithMinimalSpacing(out, combined, false)
+      i++
+      continue
+    }
+
     if (op === '<' && isOpToken(next, '<')) {
       const after = tokens[i + 2]
       if (typeof after === 'string') {
@@ -230,7 +255,7 @@ export function rebuildCommandFromTokens(
       continue
     }
 
-    if (['&&', '||', '|', ';', '>', '>>', '<'].includes(op)) {
+    if (['&&', '||', '|', '|&', ';', ';;', '&', '>', '>>', '<'].includes(op)) {
       out = joinTokensWithMinimalSpacing(out, op, false)
       continue
     }
@@ -252,7 +277,9 @@ export function splitBashCommandIntoSubcommands(command: string): string[] {
     currentTokens = []
   }
 
-  for (const token of parsed.tokens) {
+  for (let i = 0; i < parsed.tokens.length; i++) {
+    const token = parsed.tokens[i]
+    const next = parsed.tokens[i + 1]
     if (typeof token === 'string') {
       const restored = restoreShellStringToken(token)
       if (isSafeNewlineMarker(restored)) {
@@ -261,6 +288,12 @@ export function splitBashCommandIntoSubcommands(command: string): string[] {
       }
     }
     const op = getShellTokenOp(token)
+    // `&>` / `&>>` is a redirection operator, not a command separator.
+    if (op === '&' && (isOpToken(next, '>') || isOpToken(next, '>>'))) {
+      currentTokens.push(token)
+      continue
+    }
+
     if (op && SAFE_SHELL_SEPARATORS.has(op)) {
       flush()
       continue

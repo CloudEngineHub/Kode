@@ -1,5 +1,5 @@
 import { debug as debugLogger } from '#core/utils/debugLogger'
-import { fetchModelsForProvider } from '#ui-ink/ui/components/model-selector/actions/fetchModels'
+import { fetchModelsForProvider } from './flow/actions/fetchModels'
 import {
   CONTEXT_LENGTH_OPTIONS,
   DEFAULT_CONTEXT_LENGTH,
@@ -7,9 +7,9 @@ import {
   MAX_TOKENS_OPTIONS,
   REASONING_EFFORT_OPTIONS,
   REQUEST_STRATEGY_OPTIONS,
-} from '#ui-ink/ui/components/model-selector/options'
-import type { ModelInfo } from '#ui-ink/ui/components/model-selector/types'
-import * as modelFetchers from '#ui-ink/ui/components/model-selector/modelFetchers'
+} from './flow/options'
+import type { ModelInfo } from './flow/types'
+import * as modelFetchers from './flow/modelFetchers'
 import { logError } from '#core/utils/log'
 import { fetchOllamaModels } from './fetchOllamaModels'
 import type { ModelSelectorState } from './useModelSelectorState'

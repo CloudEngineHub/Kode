@@ -2,8 +2,16 @@ import { last, memoize } from 'lodash-es'
 
 import type { TextBlock } from '@anthropic-ai/sdk/resources/index.mjs'
 
+import React from 'react'
+
 import type { Message as ConversationMessage } from '#core/query'
 import { hasPermissionsToUseTool } from '#core/permissions'
+import type { SetToolJSXFn } from '#core/tooling/Tool'
+import { saveAgentTranscript } from '#core/utils/agentTranscripts'
+import {
+  upsertBackgroundAgentTask,
+  type BackgroundAgentTaskRuntime,
+} from '#core/utils/backgroundTasks'
 import { countTokens } from '#core/utils/tokens'
 import {
   getMessagesPath,
@@ -14,7 +22,10 @@ import {
   createAssistantMessage,
   getLastAssistantMessageId,
 } from '#core/utils/messages'
+import { appendTaskOutput, touchTaskOutputFile } from '#runtime/taskOutputStore'
+import { BashToolRunInBackgroundOverlay } from '#tools/tools/system/BashTool/BashToolRunInBackgroundOverlay'
 
+import { asyncLaunchMessage } from './assistantText'
 import type { PreparedTaskToolRun } from './callTypes'
 import type { Input, Output, TaskUsage } from './schema'
 
@@ -25,6 +36,17 @@ function isTextBlock(block: unknown): block is TextBlock {
     (block as { type?: unknown }).type === 'text' &&
     typeof (block as { text?: unknown }).text === 'string'
   )
+}
+
+function getAssistantText(message: ConversationMessage): string {
+  if (message.type !== 'assistant') return ''
+  const content = message.message.content
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return ''
+  return content
+    .filter(isTextBlock)
+    .map(b => b.text)
+    .join('\n')
 }
 
 type ToolUseLikeBlock = {
@@ -45,6 +67,12 @@ function isToolUseLikeBlock(block: unknown): block is ToolUseLikeBlock {
   }
   const name = (block as { name?: unknown }).name
   return typeof name === 'string'
+}
+
+function isIteratorYieldResult<T, TReturn>(
+  result: IteratorResult<T, TReturn>,
+): result is IteratorYieldResult<T> {
+  return result.done !== true
 }
 
 function truncate(text: string, maxLen: number): string {
@@ -177,9 +205,22 @@ function normalizeUsage(rawUsage: unknown): TaskUsage {
 export async function* callTaskToolForeground(
   input: Input,
   prepared: PreparedTaskToolRun,
+  options?: {
+    setToolJSX?: SetToolJSXFn
+    backgroundMetadata?: {
+      parentAgentId?: string
+      parentToolUseId?: string
+      subagentType?: string
+      model?: string
+    }
+  },
 ): AsyncGenerator<
   | { type: 'progress'; content: ConversationMessage }
-  | { type: 'result'; data: Output; resultForAssistant: TextBlock[] }
+  | {
+      type: 'result'
+      data: Output
+      resultForAssistant: string | TextBlock[]
+    }
 > {
   const getSidechainNumber = memoize(() =>
     getNextAvailableLogSidechainNumber(
@@ -189,10 +230,49 @@ export async function* callTaskToolForeground(
   )
 
   const PROGRESS_THROTTLE_MS = 200
+  const PROGRESS_INITIAL_DELAY_MS = 1800
   const MAX_RECENT_ACTIONS = 6
   let lastProgressEmitAt = 0
   let lastEmittedToolUseCount = 0
   const recentActions: string[] = []
+  const setToolJSX = options?.setToolJSX
+
+  let backgroundRequested = false
+  let resolveBackgroundRequested: (() => void) | null = null
+  const backgroundRequestedPromise = new Promise<void>(resolve => {
+    resolveBackgroundRequested = resolve
+  })
+
+  const requestBackground = () => {
+    if (backgroundRequested) return
+    backgroundRequested = true
+    resolveBackgroundRequested?.()
+  }
+
+  let backgrounded = false
+  const runAbortController = new AbortController()
+  const onParentAbort = () => {
+    if (backgrounded) return
+    runAbortController.abort()
+  }
+  prepared.abortController.signal.addEventListener('abort', onParentAbort)
+
+  let overlayTimeout: ReturnType<typeof setTimeout> | null = null
+  if (setToolJSX) {
+    overlayTimeout = setTimeout(() => {
+      if (backgrounded) return
+      if (runAbortController.signal.aborted) return
+      setToolJSX({
+        jsx: React.createElement(BashToolRunInBackgroundOverlay, {
+          onBackground: requestBackground,
+        }),
+        shouldHidePromptInput: false,
+      })
+    }, PROGRESS_INITIAL_DELAY_MS)
+    overlayTimeout.unref?.()
+  }
+
+  touchTaskOutputFile(prepared.agentId)
 
   const addRecentAction = (action: string) => {
     const trimmed = action.trim()
@@ -219,57 +299,205 @@ export async function* callTaskToolForeground(
   lastProgressEmitAt = Date.now()
 
   let toolUseCount = 0
-  for await (const message of prepared.queryFn(
-    prepared.messagesForQuery,
-    prepared.systemPrompt,
-    prepared.context,
-    hasPermissionsToUseTool,
-    {
-      abortController: prepared.abortController,
-      options: prepared.queryOptions,
-      messageId: getLastAssistantMessageId(prepared.messagesForQuery),
-      agentId: prepared.agentId,
-      readFileTimestamps: prepared.readFileTimestamps,
-      setToolJSX: () => {},
-    },
-  )) {
+  const recordMessage = (message: ConversationMessage, persistLog: boolean) => {
     prepared.messagesForQuery.push(message)
     prepared.transcriptMessages.push(message)
 
-    overwriteLog(
-      getMessagesPath(
-        prepared.messageLogName,
-        prepared.forkNumber,
-        getSidechainNumber(),
-      ),
-      prepared.transcriptMessages.filter(m => m.type !== 'progress'),
-      { conversationKey: `${prepared.messageLogName}:${prepared.forkNumber}` },
-    )
+    if (persistLog) {
+      overwriteLog(
+        getMessagesPath(
+          prepared.messageLogName,
+          prepared.forkNumber,
+          getSidechainNumber(),
+        ),
+        prepared.transcriptMessages.filter(m => m.type !== 'progress'),
+        {
+          conversationKey: `${prepared.messageLogName}:${prepared.forkNumber}`,
+        },
+      )
+    }
 
     if (message.type === 'assistant') {
+      const assistantText = getAssistantText(message)
+      if (assistantText) {
+        appendTaskOutput(prepared.agentId, assistantText.trimEnd() + '\n')
+      }
+
       for (const block of message.message.content) {
         if (!isToolUseLikeBlock(block)) continue
         toolUseCount += 1
         addRecentAction(summarizeToolUse(block.name, block.input))
       }
     }
+  }
 
-    const now = Date.now()
-    const hasNewToolUses = toolUseCount > lastEmittedToolUseCount
-    const shouldEmit =
-      hasNewToolUses &&
-      (lastEmittedToolUseCount === 0 ||
-        now - lastProgressEmitAt >= PROGRESS_THROTTLE_MS)
-    if (shouldEmit) {
-      yield {
-        type: 'progress',
-        content: createAssistantMessage(
-          `<tool-progress>${renderProgressText(toolUseCount)}</tool-progress>`,
-        ),
-      }
-      lastEmittedToolUseCount = toolUseCount
-      lastProgressEmitAt = now
+  const queryIterator = prepared
+    .queryFn(
+      prepared.messagesForQuery,
+      prepared.systemPrompt,
+      prepared.context,
+      hasPermissionsToUseTool,
+      {
+        abortController: runAbortController,
+        options: prepared.queryOptions,
+        messageId: getLastAssistantMessageId(prepared.messagesForQuery),
+        agentId: prepared.agentId,
+        readFileTimestamps: prepared.readFileTimestamps,
+        setToolJSX: () => {},
+      },
+    )
+    [Symbol.asyncIterator]()
+
+  let nextPromise = queryIterator.next()
+
+  const startBackgroundTask = (
+    firstNextPromise: Promise<IteratorResult<ConversationMessage, void>>,
+  ): BackgroundAgentTaskRuntime => {
+    const taskRecord: BackgroundAgentTaskRuntime = {
+      type: 'async_agent',
+      agentId: prepared.agentId,
+      parentAgentId: options?.backgroundMetadata?.parentAgentId,
+      parentToolUseId: options?.backgroundMetadata?.parentToolUseId,
+      subagentType: options?.backgroundMetadata?.subagentType,
+      model: options?.backgroundMetadata?.model,
+      description: input.description,
+      prompt: prepared.effectivePrompt,
+      status: 'running',
+      startedAt: prepared.startTime,
+      messages: [...prepared.transcriptMessages],
+      abortController: runAbortController,
+      done: Promise.resolve(),
     }
+
+    taskRecord.done = (async () => {
+      try {
+        let iterResult = await firstNextPromise
+        while (isIteratorYieldResult(iterResult)) {
+          recordMessage(iterResult.value, false)
+          taskRecord.messages = [...prepared.transcriptMessages]
+          upsertBackgroundAgentTask(taskRecord)
+          iterResult = await queryIterator.next()
+        }
+
+        const lastAssistant = last(
+          prepared.transcriptMessages.filter(m => m.type === 'assistant'),
+        )
+        const content =
+          lastAssistant?.type === 'assistant'
+            ? lastAssistant.message.content.filter(isTextBlock)
+            : []
+        const resultText = content.map(b => b.text).join('\n')
+
+        if (taskRecord.status !== 'killed') {
+          taskRecord.status = 'completed'
+          taskRecord.completedAt = Date.now()
+          taskRecord.resultText = resultText
+        } else {
+          taskRecord.completedAt = taskRecord.completedAt ?? Date.now()
+          if (resultText) taskRecord.resultText = resultText
+          appendTaskOutput(
+            prepared.agentId,
+            '\n[task killed]\n'.replace(/^\n+/, ''),
+          )
+        }
+
+        taskRecord.messages = [...prepared.transcriptMessages]
+        upsertBackgroundAgentTask(taskRecord)
+        saveAgentTranscript(prepared.agentId, prepared.transcriptMessages)
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e)
+
+        if (
+          taskRecord.status === 'killed' ||
+          runAbortController.signal.aborted
+        ) {
+          taskRecord.status = 'killed'
+          taskRecord.completedAt = taskRecord.completedAt ?? Date.now()
+          taskRecord.error = taskRecord.error ?? (message || 'Killed by user')
+          appendTaskOutput(
+            prepared.agentId,
+            '\n[task killed]\n'.replace(/^\n+/, ''),
+          )
+        } else {
+          taskRecord.status = 'failed'
+          taskRecord.completedAt = Date.now()
+          taskRecord.error = message
+          appendTaskOutput(
+            prepared.agentId,
+            `\n[error] ${message}\n`.replace(/^\n+/, ''),
+          )
+        }
+
+        taskRecord.messages = [...prepared.transcriptMessages]
+        upsertBackgroundAgentTask(taskRecord)
+      }
+    })()
+
+    upsertBackgroundAgentTask(taskRecord)
+    return taskRecord
+  }
+
+  try {
+    while (true) {
+      const raced = await Promise.race([
+        nextPromise.then(res => ({ kind: 'next' as const, res })),
+        backgroundRequestedPromise.then(() => ({
+          kind: 'background' as const,
+        })),
+      ])
+
+      if (raced.kind === 'background') {
+        backgrounded = true
+        prepared.abortController.signal.removeEventListener(
+          'abort',
+          onParentAbort,
+        )
+        if (overlayTimeout) clearTimeout(overlayTimeout)
+        overlayTimeout = null
+
+        startBackgroundTask(nextPromise)
+        const output: Output = {
+          status: 'async_launched',
+          agentId: prepared.agentId,
+          description: input.description,
+          prompt: prepared.effectivePrompt,
+        }
+
+        yield {
+          type: 'result',
+          data: output,
+          resultForAssistant: asyncLaunchMessage(prepared.agentId),
+        }
+        return
+      }
+
+      const iterResult = raced.res
+      if (!isIteratorYieldResult(iterResult)) break
+      recordMessage(iterResult.value, true)
+
+      const now = Date.now()
+      const hasNewToolUses = toolUseCount > lastEmittedToolUseCount
+      const shouldEmit =
+        hasNewToolUses &&
+        (lastEmittedToolUseCount === 0 ||
+          now - lastProgressEmitAt >= PROGRESS_THROTTLE_MS)
+      if (shouldEmit) {
+        yield {
+          type: 'progress',
+          content: createAssistantMessage(
+            `<tool-progress>${renderProgressText(toolUseCount)}</tool-progress>`,
+          ),
+        }
+        lastEmittedToolUseCount = toolUseCount
+        lastProgressEmitAt = now
+      }
+
+      nextPromise = queryIterator.next()
+    }
+  } finally {
+    if (overlayTimeout) clearTimeout(overlayTimeout)
+    prepared.abortController.signal.removeEventListener('abort', onParentAbort)
+    setToolJSX?.(null)
   }
 
   const lastAssistant = last(

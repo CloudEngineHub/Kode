@@ -1,8 +1,20 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import {
+  chmodSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readlinkSync,
+  renameSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs'
+import { dirname, isAbsolute, join, resolve } from 'node:path'
 
 import { getCwd } from './cwd'
+import { resolveDataRoots } from './dataRoots'
+import { legacyConfigPathInProject } from './compat/legacyPaths'
 
 export type SettingsDestination =
   | 'localSettings'
@@ -20,96 +32,29 @@ function logError(error: unknown): void {
   }
 }
 
-function normalizeOverride(value: unknown): string | null {
-  if (typeof value !== 'string') return null
-  const trimmed = value.trim()
-  return trimmed ? resolve(trimmed) : null
-}
-
-function dedupeStrings(values: string[]): string[] {
-  const out: string[] = []
-  const seen = new Set<string>()
-  for (const value of values) {
-    if (!value) continue
-    if (seen.has(value)) continue
-    seen.add(value)
-    out.push(value)
-  }
-  return out
-}
-
-function getDefaultHomeDir(): string {
-  const envHome =
-    typeof process.env.HOME === 'string'
-      ? process.env.HOME
-      : typeof process.env.USERPROFILE === 'string'
-        ? process.env.USERPROFILE
-        : ''
-  const trimmed = envHome.trim()
-  if (trimmed) return trimmed
-  return homedir()
-}
-
-function getUserKodeBaseDir(options?: {
-  homeDir?: string
-  respectEnvOverride?: boolean
-}): string {
-  const respectEnvOverride = options?.respectEnvOverride ?? true
-  if (respectEnvOverride) {
-    const override = normalizeOverride(
-      process.env.KODE_CONFIG_DIR ?? process.env.CLAUDE_CONFIG_DIR,
-    )
-    if (override) return override
-  }
-  const home = options?.homeDir ?? getDefaultHomeDir()
-  return join(home, '.kode')
-}
-
-function getUserLegacyBaseDir(options?: {
-  homeDir?: string
-  respectEnvOverride?: boolean
-}): string {
-  const respectEnvOverride = options?.respectEnvOverride ?? true
-  if (respectEnvOverride) {
-    const override = normalizeOverride(process.env.CLAUDE_CONFIG_DIR)
-    if (override) return override
-  }
-  const home = options?.homeDir ?? getDefaultHomeDir()
-  return join(home, '.claude')
-}
-
 export function getSettingsFileCandidates(options: {
   destination: SettingsDestination
   projectDir?: string
   homeDir?: string
 }): { primary: string; legacy: string[] } | null {
   const projectDir = options.projectDir ?? getCwd()
-  const homeDir = options.homeDir ?? getDefaultHomeDir()
   const respectEnvOverride = options.homeDir === undefined
 
   switch (options.destination) {
     case 'localSettings': {
       const primary = join(projectDir, '.kode', 'settings.local.json')
-      const legacy = [join(projectDir, '.claude', 'settings.local.json')]
+      const legacy = [legacyConfigPathInProject(projectDir, 'settings.local.json')]
       return { primary, legacy }
     }
     case 'projectSettings': {
       const primary = join(projectDir, '.kode', 'settings.json')
-      const legacy = [join(projectDir, '.claude', 'settings.json')]
+      const legacy = [legacyConfigPathInProject(projectDir, 'settings.json')]
       return { primary, legacy }
     }
     case 'userSettings': {
-      const primary = join(
-        getUserKodeBaseDir({ homeDir, respectEnvOverride }),
-        'settings.json',
-      )
-      const legacy = dedupeStrings([
-        join(
-          getUserLegacyBaseDir({ homeDir, respectEnvOverride }),
-          'settings.json',
-        ),
-        join(homeDir, '.claude', 'settings.json'),
-      ])
+      const roots = resolveDataRoots({ homeDir: options.homeDir, respectEnvOverride })
+      const primary = join(roots.kodeRoot, 'settings.json')
+      const legacy = roots.claudeCompatRoots.map(root => join(root, 'settings.json'))
       return { primary, legacy }
     }
     default:
@@ -135,7 +80,86 @@ export function writeSettingsFile(
   settings: SettingsFile,
 ): void {
   mkdirSync(dirname(filePath), { recursive: true })
-  writeFileSync(filePath, JSON.stringify(settings, null, 2) + '\n', 'utf-8')
+  const content = JSON.stringify(settings, null, 2) + '\n'
+  writeFileAtomicThroughSymlink(filePath, content)
+}
+
+function resolveSymlinkTargetForWrite(filePath: string): string {
+  try {
+    const stat = lstatSync(filePath)
+    if (!stat.isSymbolicLink()) return filePath
+    const link = readlinkSync(filePath)
+    return isAbsolute(link) ? link : resolve(dirname(filePath), link)
+  } catch {
+    return filePath
+  }
+}
+
+function writeFileAtomicThroughSymlink(
+  filePath: string,
+  content: string,
+  options?: { encoding?: BufferEncoding; mode?: number },
+): void {
+  const encoding = options?.encoding ?? 'utf-8'
+  const targetPath = resolveSymlinkTargetForWrite(filePath)
+
+  mkdirSync(dirname(targetPath), { recursive: true })
+
+  const tmpPath = `${targetPath}.tmp.${process.pid}.${Date.now()}`
+  let existingMode: number | undefined
+  const targetExists = existsSync(targetPath)
+  if (targetExists) {
+    try {
+      existingMode = statSync(targetPath).mode
+    } catch {
+      // ignore
+    }
+  } else if (options?.mode !== undefined) {
+    existingMode = options.mode
+  }
+
+  try {
+    writeFileSync(tmpPath, content, {
+      encoding,
+      ...(existingMode !== undefined && !targetExists
+        ? { mode: existingMode }
+        : {}),
+    })
+
+    if (targetExists && existingMode !== undefined) {
+      try {
+        chmodSync(tmpPath, existingMode)
+      } catch {
+        // ignore
+      }
+    }
+
+    try {
+      renameSync(tmpPath, targetPath)
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException | undefined)?.code
+      if (
+        code &&
+        ['EEXIST', 'EPERM'].includes(code) &&
+        existsSync(targetPath)
+      ) {
+        unlinkSync(targetPath)
+        renameSync(tmpPath, targetPath)
+      } else {
+        throw error
+      }
+    }
+  } catch (error) {
+    try {
+      if (existsSync(tmpPath)) unlinkSync(tmpPath)
+    } catch {
+      // ignore
+    }
+    writeFileSync(targetPath, content, {
+      encoding,
+      ...(options?.mode ? { mode: options.mode } : {}),
+    })
+  }
 }
 
 export function loadSettingsWithLegacyFallback(options: {
@@ -182,15 +206,4 @@ export function saveSettingsToPrimaryAndSyncLegacy(options: {
   if (!candidates) return
 
   writeSettingsFile(candidates.primary, options.settings)
-
-  if (!options.syncLegacyIfExists) return
-  for (const legacyPath of candidates.legacy) {
-    if (legacyPath === candidates.primary) continue
-    if (!existsSync(legacyPath)) continue
-    try {
-      writeSettingsFile(legacyPath, options.settings)
-    } catch (error) {
-      logError(error)
-    }
-  }
 }

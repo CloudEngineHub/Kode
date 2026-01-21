@@ -17,6 +17,7 @@ export async function createAnthropicStreamingMessage(
   anthropic: AnthropicClient,
   params: Anthropic.Beta.Messages.MessageCreateParams,
   signal: AbortSignal,
+  options?: { onStreamEvent?: (event: unknown) => void },
 ): Promise<any> {
   const stream = await anthropic.beta.messages.create(
     {
@@ -38,6 +39,10 @@ export async function createAnthropicStreamingMessage(
   let hasMarkedStreaming = false
 
   for await (const event of stream) {
+    try {
+      options?.onStreamEvent?.(event)
+    } catch {}
+
     if (signal.aborted) {
       debugLogger.flow('STREAM_ABORTED', {
         eventType: event.type,

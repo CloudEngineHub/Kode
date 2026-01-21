@@ -9,7 +9,7 @@ export function getModelInputTokenCostUSD(model: string): number {
     }
   }
   // Default fallback cost for unknown models
-  return 0.000003 // Default to Claude 3 Haiku cost
+  return 0.000003 // Default fallback cost (USD per token)
 }
 
 export function getModelOutputTokenCostUSD(model: string): number {
@@ -21,5 +21,5 @@ export function getModelOutputTokenCostUSD(model: string): number {
     }
   }
   // Default fallback cost for unknown models
-  return 0.000015 // Default to Claude 3 Haiku cost
+  return 0.000015 // Default fallback cost (USD per token)
 }

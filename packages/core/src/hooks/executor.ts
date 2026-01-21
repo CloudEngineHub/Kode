@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 
 import type { Hook, HookEventName, HookMatcher, PromptHook } from './types'
 import { asRecord } from './types'
+import { buildHookExecEnv } from '#core/compat/hookEnv'
 
 export type HookExecutionResult = {
   exitCode: number
@@ -366,8 +367,7 @@ export async function executeHooksForMatchers(args: {
       })
 
       const env: Record<string, string> = {
-        CLAUDE_PROJECT_DIR: args.cwd,
-        ...(hook.pluginRoot ? { CLAUDE_PLUGIN_ROOT: hook.pluginRoot } : {}),
+        ...buildHookExecEnv({ projectDir: args.cwd, pluginRoot: hook.pluginRoot }),
         ...(args.baseEnv ?? {}),
       }
 

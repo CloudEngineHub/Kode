@@ -2,6 +2,7 @@ import { basename, dirname, join, resolve } from 'node:path'
 import { copyFileSync, existsSync, lstatSync } from 'node:fs'
 
 import { getCwd } from '#core/utils/state'
+import { legacyPluginPathInProject } from '#core/compat/legacyPaths'
 
 import type { PluginScope } from '../types'
 import {
@@ -67,9 +68,8 @@ export function installSkillPlugin(
     '.kode-plugin',
     'plugin.json',
   )
-  const legacyManifestPath = join(
+  const legacyManifestPath = legacyPluginPathInProject(
     entrySourceBase,
-    '.claude-plugin',
     'plugin.json',
   )
   const pluginManifestPath = existsSync(primaryManifestPath)

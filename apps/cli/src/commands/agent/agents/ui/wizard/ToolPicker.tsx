@@ -209,27 +209,27 @@ export function ToolPicker(props: {
   useKeypress((_input, key) => {
     if (key.escape) {
       props.onCancel()
-      return
+      return true
     }
 
     if (key.return) {
       const item = items[cursorIndex]
       if (item && !item.isHeader) item.action()
-      return
+      return true
     }
 
     if (key.upArrow) {
       let next = cursorIndex - 1
       while (next > 0 && items[next]?.isHeader) next--
       setCursorIndex(Math.max(0, next))
-      return
+      return true
     }
 
     if (key.downArrow) {
       let next = cursorIndex + 1
       while (next < items.length - 1 && items[next]?.isHeader) next++
       setCursorIndex(Math.min(items.length - 1, next))
-      return
+      return true
     }
   })
 

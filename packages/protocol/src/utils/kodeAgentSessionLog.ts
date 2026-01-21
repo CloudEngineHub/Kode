@@ -8,12 +8,16 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { homedir } from 'node:os'
 
 import pkg from '../../../../package.json'
+import { getKodeRoot, resolveDataRoots } from '#config/dataRoots'
 
 import type { JsonlEnvelopeBase, SessionJsonlEntry } from '../sessionJsonl'
 import { getKodeAgentSessionId } from './kodeAgentSessionId'
+import {
+  getKodeAgentSessionForkInfo,
+  resetKodeAgentSessionForkInfoForTests,
+} from './kodeAgentSessionForkInfo'
 import {
   clearSessionSlugCache,
   getOrCreateSessionSlug,
@@ -75,24 +79,48 @@ function isAssistantMessage(
   return true
 }
 
-function getKodeBaseDir(): string {
-  return (
-    process.env.KODE_CONFIG_DIR ??
-    process.env.CLAUDE_CONFIG_DIR ??
-    join(homedir(), '.kode')
-  )
+export function getSessionStoreRoots(): string[] {
+  return resolveDataRoots().allRoots
 }
 
-function getSessionStoreBaseDir(): string {
-  return getKodeBaseDir()
+function getPrimarySessionStoreRoot(): string {
+  return getKodeRoot()
 }
 
 export function sanitizeProjectNameForSessionStore(cwd: string): string {
   return cwd.replace(/[^a-zA-Z0-9]/g, '-')
 }
 
+function getGitTopLevelBestEffort(cwd: string): string | null {
+  try {
+    const stdout = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+      cwd,
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 750,
+    })
+    const root = stdout.toString('utf8').trim()
+    return root || null
+  } catch {
+    return null
+  }
+}
+
+export function getSessionStoreProjectNameCandidatesForRead(
+  cwd: string,
+): string[] {
+  const names = new Set<string>()
+  names.add(sanitizeProjectNameForSessionStore(cwd))
+
+  const gitTopLevel = getGitTopLevelBestEffort(cwd)
+  if (gitTopLevel) {
+    names.add(sanitizeProjectNameForSessionStore(gitTopLevel))
+  }
+
+  return Array.from(names)
+}
+
 export function getSessionProjectsDir(): string {
-  return join(getSessionStoreBaseDir(), 'projects')
+  return join(getPrimarySessionStoreRoot(), 'projects')
 }
 
 export function getSessionProjectDir(cwd: string): string {
@@ -108,9 +136,15 @@ export function getSessionLogFilePath(args: {
 
 export function getAgentLogFilePath(args: {
   cwd: string
+  sessionId: string
   agentId: string
 }): string {
-  return join(getSessionProjectDir(args.cwd), `agent-${args.agentId}.jsonl`)
+  return join(
+    getSessionProjectDir(args.cwd),
+    args.sessionId,
+    'subagents',
+    `agent-${args.agentId}.jsonl`,
+  )
 }
 
 function safeMkdir(dir: string): void {
@@ -258,11 +292,12 @@ export function appendSessionJsonlFromMessage(args: {
   const agentId = (toolUseContext.agentId ?? 'main').trim() || 'main'
   const isSidechain = agentId !== 'main'
   const gitBranch = getGitBranchBestEffort(cwd)
+  const forkInfo = getKodeAgentSessionForkInfo()
 
   const target = resolvePersistTarget(toolUseContext)
   const filePath =
     target.kind === 'agent'
-      ? getAgentLogFilePath({ cwd, agentId: target.agentId })
+      ? getAgentLogFilePath({ cwd, sessionId, agentId: target.agentId })
       : getSessionLogFilePath({ cwd, sessionId: target.sessionId })
 
   if (!lastUuidByFile.has(filePath)) {
@@ -285,6 +320,7 @@ export function appendSessionJsonlFromMessage(args: {
     userType,
     cwd,
     sessionId,
+    ...(forkInfo ? { ...forkInfo } : {}),
     version: pkg.version,
     ...(gitBranch ? { gitBranch } : {}),
     agentId,
@@ -382,6 +418,7 @@ export function resetSessionJsonlStateForTests(): void {
   lastUuidByFile.clear()
   snapshotWrittenByFile.clear()
   clearSessionSlugCache()
+  resetKodeAgentSessionForkInfoForTests()
   gitBranchCache = null
   currentSessionCustomTitle = null
   currentSessionTag = null

@@ -2,8 +2,9 @@ import { getGlobalConfig, getOrCreateUserID } from './config'
 import { memoize } from 'lodash-es'
 import { env } from './env'
 import { execFileNoThrow } from './execFileNoThrow'
-import { logError, SESSION_ID } from './log'
+import { logError } from './log'
 import { MACRO } from '#core/constants/macros'
+import { getKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
 export const getGitEmail = memoize(async (): Promise<string | undefined> => {
   const result = await execFileNoThrow('git', ['config', 'user.email'])
   if (result.code !== 0) {
@@ -29,7 +30,7 @@ export const getUser = memoize(async (): Promise<SimpleUser> => {
   return {
     customIDs: {
       // for session level tests
-      sessionId: SESSION_ID,
+      sessionId: getKodeAgentSessionId(),
     },
     userID,
     appVersion: MACRO.VERSION,

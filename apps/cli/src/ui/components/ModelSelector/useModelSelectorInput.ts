@@ -1,10 +1,7 @@
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
-import {
-  CONTEXT_LENGTH_OPTIONS,
-  DEFAULT_CONTEXT_LENGTH,
-} from '#ui-ink/ui/components/model-selector/options'
-import type { ModelSelectorScreen } from '#ui-ink/ui/components/model-selector/state'
-import type { ConnectionTestResult } from '#ui-ink/ui/components/model-selector/actions/connectionTest'
+import { CONTEXT_LENGTH_OPTIONS, DEFAULT_CONTEXT_LENGTH } from './flow/options'
+import type { ModelSelectorScreen } from './flow/state'
+import type { ConnectionTestResult } from './flow/actions/connectionTest'
 import type { ProviderType } from '#core/utils/config'
 import { logError } from '#core/utils/log'
 
@@ -40,7 +37,7 @@ export function useModelSelectorInput(args: {
   activeFieldIndex: number
   setActiveFieldIndex: (value: number | ((prev: number) => number)) => void
 
-  handleProviderSelection: (provider: string) => void
+  handleProviderSelection: (provider: string) => void | Promise<void>
   handleApiKeySubmit: (key: string) => void | Promise<void>
   fetchModelsWithRetry: () => Promise<unknown>
   navigateTo: (screen: ModelSelectorScreen) => void
@@ -57,82 +54,158 @@ export function useModelSelectorInput(args: {
   handleModelParamsSubmit: () => void
 }) {
   useKeypress((input, key) => {
+    const inputChar = input.length === 1 ? input : ''
+
+    const clampIndex = (next: number, length: number) => {
+      if (length <= 0) return 0
+      return Math.max(0, Math.min(next, length - 1))
+    }
+
+    const isUp = key.upArrow || inputChar === 'k'
+    const isDown = key.downArrow || inputChar === 'j'
+    const isPageUp = key.pageUp
+    const isPageDown = key.pageDown
+    const isHome = key.home
+    const isEnd = key.end
+
+    const pageJump = 5
+
     if (args.currentScreen === 'provider') {
-      if (key.upArrow) {
-        args.setProviderFocusIndex(prev =>
-          args.mainMenuOptions.length === 0
-            ? 0
-            : (prev - 1 + args.mainMenuOptions.length) %
-              args.mainMenuOptions.length,
+      if (isHome) {
+        args.setProviderFocusIndex(0)
+        return true
+      }
+      if (isEnd) {
+        args.setProviderFocusIndex(
+          clampIndex(
+            args.mainMenuOptions.length - 1,
+            args.mainMenuOptions.length,
+          ),
         )
         return true
       }
-      if (key.downArrow) {
+      if (isUp) {
         args.setProviderFocusIndex(prev =>
-          args.mainMenuOptions.length === 0
-            ? 0
-            : (prev + 1) % args.mainMenuOptions.length,
+          clampIndex(prev - 1, args.mainMenuOptions.length),
+        )
+        return true
+      }
+      if (isDown) {
+        args.setProviderFocusIndex(prev =>
+          clampIndex(prev + 1, args.mainMenuOptions.length),
+        )
+        return true
+      }
+      if (isPageUp) {
+        args.setProviderFocusIndex(prev =>
+          clampIndex(prev - pageJump, args.mainMenuOptions.length),
+        )
+        return true
+      }
+      if (isPageDown) {
+        args.setProviderFocusIndex(prev =>
+          clampIndex(prev + pageJump, args.mainMenuOptions.length),
         )
         return true
       }
       if (key.return) {
         const opt = args.mainMenuOptions[args.providerFocusIndex]
         if (opt) {
-          args.handleProviderSelection(opt.value)
+          void args.handleProviderSelection(opt.value)
         }
         return true
       }
     }
 
     if (args.currentScreen === 'partnerProviders') {
-      if (key.upArrow) {
-        args.setPartnerProviderFocusIndex(prev =>
-          args.partnerProviderOptions.length === 0
-            ? 0
-            : (prev - 1 + args.partnerProviderOptions.length) %
-              args.partnerProviderOptions.length,
+      if (isHome) {
+        args.setPartnerProviderFocusIndex(0)
+        return true
+      }
+      if (isEnd) {
+        args.setPartnerProviderFocusIndex(
+          clampIndex(
+            args.partnerProviderOptions.length - 1,
+            args.partnerProviderOptions.length,
+          ),
         )
         return true
       }
-      if (key.downArrow) {
+      if (isUp) {
         args.setPartnerProviderFocusIndex(prev =>
-          args.partnerProviderOptions.length === 0
-            ? 0
-            : (prev + 1) % args.partnerProviderOptions.length,
+          clampIndex(prev - 1, args.partnerProviderOptions.length),
+        )
+        return true
+      }
+      if (isDown) {
+        args.setPartnerProviderFocusIndex(prev =>
+          clampIndex(prev + 1, args.partnerProviderOptions.length),
+        )
+        return true
+      }
+      if (isPageUp) {
+        args.setPartnerProviderFocusIndex(prev =>
+          clampIndex(prev - pageJump, args.partnerProviderOptions.length),
+        )
+        return true
+      }
+      if (isPageDown) {
+        args.setPartnerProviderFocusIndex(prev =>
+          clampIndex(prev + pageJump, args.partnerProviderOptions.length),
         )
         return true
       }
       if (key.return) {
         const opt = args.partnerProviderOptions[args.partnerProviderFocusIndex]
         if (opt) {
-          args.handleProviderSelection(opt.value)
+          void args.handleProviderSelection(opt.value)
         }
         return true
       }
     }
 
     if (args.currentScreen === 'partnerCodingPlans') {
-      if (key.upArrow) {
-        args.setCodingPlanFocusIndex(prev =>
-          args.codingPlanOptions.length === 0
-            ? 0
-            : (prev - 1 + args.codingPlanOptions.length) %
-              args.codingPlanOptions.length,
+      if (isHome) {
+        args.setCodingPlanFocusIndex(0)
+        return true
+      }
+      if (isEnd) {
+        args.setCodingPlanFocusIndex(
+          clampIndex(
+            args.codingPlanOptions.length - 1,
+            args.codingPlanOptions.length,
+          ),
         )
         return true
       }
-      if (key.downArrow) {
+      if (isUp) {
         args.setCodingPlanFocusIndex(prev =>
-          args.codingPlanOptions.length === 0
-            ? 0
-            : (prev + 1) % args.codingPlanOptions.length,
+          clampIndex(prev - 1, args.codingPlanOptions.length),
+        )
+        return true
+      }
+      if (isDown) {
+        args.setCodingPlanFocusIndex(prev =>
+          clampIndex(prev + 1, args.codingPlanOptions.length),
+        )
+        return true
+      }
+      if (isPageUp) {
+        args.setCodingPlanFocusIndex(prev =>
+          clampIndex(prev - pageJump, args.codingPlanOptions.length),
+        )
+        return true
+      }
+      if (isPageDown) {
+        args.setCodingPlanFocusIndex(prev =>
+          clampIndex(prev + pageJump, args.codingPlanOptions.length),
         )
         return true
       }
       if (key.return) {
         const opt = args.codingPlanOptions[args.codingPlanFocusIndex]
         if (opt) {
-          args.handleProviderSelection(opt.value)
+          void args.handleProviderSelection(opt.value)
         }
         return true
       }
@@ -197,7 +270,7 @@ export function useModelSelectorInput(args: {
         return true
       }
 
-      if (key.upArrow) {
+      if (isUp) {
         const currentIndex = CONTEXT_LENGTH_OPTIONS.findIndex(
           opt => opt.value === args.contextLength,
         )
@@ -213,7 +286,7 @@ export function useModelSelectorInput(args: {
         return true
       }
 
-      if (key.downArrow) {
+      if (isDown) {
         const currentIndex = CONTEXT_LENGTH_OPTIONS.findIndex(
           opt => opt.value === args.contextLength,
         )

@@ -1,5 +1,5 @@
 import { memoize } from 'lodash-es'
-import type { Tool } from '#core/tooling/Tool'
+import { resolveToolDescription, type Tool } from '#core/tooling/Tool'
 
 import { AskExpertModelTool } from '#tools/tools/ai/AskExpertModelTool/AskExpertModelTool'
 import { AskUserQuestionTool } from '#tools/tools/interaction/AskUserQuestionTool/AskUserQuestionTool'
@@ -27,7 +27,7 @@ import { TodoWriteTool } from '#tools/tools/interaction/TodoWriteTool/TodoWriteT
 import { WebFetchTool } from '#tools/tools/network/WebFetchTool/WebFetchTool'
 import { WebSearchTool } from '#tools/tools/search/WebSearchTool/WebSearchTool'
 
-import { getMCPTools } from '#core/mcp/client'
+import { getMCPTools, getMcpListChangedVersion } from '#core/mcp/client'
 
 // Base tool list for the CLI toolset
 export const getAllTools = (): Tool[] => [
@@ -63,12 +63,24 @@ export const getTools = memoize(
     const tools = [...getAllTools(), ...(await getMCPTools())]
 
     const isEnabled = await Promise.all(tools.map(tool => tool.isEnabled()))
-    return tools.filter((_, i) => isEnabled[i])
+    const enabledTools = tools.filter((_, i) => isEnabled[i])
+
+    // Populate cachedDescription for adapters that require synchronous access.
+    await Promise.all(enabledTools.map(tool => resolveToolDescription(tool)))
+
+    return enabledTools
   },
+  (_includeOptional?: boolean) =>
+    `${_includeOptional ?? ''}:mcp-tools@${getMcpListChangedVersion('tools')}`,
 )
 
 export const getReadOnlyTools = memoize(async (): Promise<Tool[]> => {
   const tools = getAllTools().filter(tool => tool.isReadOnly())
   const isEnabled = await Promise.all(tools.map(tool => tool.isEnabled()))
-  return tools.filter((_, index) => isEnabled[index])
+  const enabledTools = tools.filter((_, index) => isEnabled[index])
+
+  // Populate cachedDescription for adapters that require synchronous access.
+  await Promise.all(enabledTools.map(tool => resolveToolDescription(tool)))
+
+  return enabledTools
 })

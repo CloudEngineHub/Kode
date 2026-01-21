@@ -17,7 +17,7 @@ function write(
   if (!shouldLog()) return
   const suffix = data ? ` ${JSON.stringify(data)}` : ''
   // eslint-disable-next-line no-console
-  console.log(`[config:${level}] ${event}${suffix}`)
+  console.error(`[config:${level}] ${event}${suffix}`)
 }
 
 export const debug = {

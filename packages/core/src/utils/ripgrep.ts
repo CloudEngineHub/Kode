@@ -1,9 +1,9 @@
-import { findActualExecutable } from 'spawn-rx'
 import { memoize } from 'lodash-es'
 import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import * as path from 'path'
+import which from 'which'
 import { logError } from './log'
 import { execFileNoThrow } from './execFileNoThrow'
 import { execFile } from 'child_process'
@@ -28,25 +28,68 @@ function clearMemoizeCache(value: unknown): void {
   candidate.cache?.clear?.()
 }
 
-function getVscodeRipgrepPathOrThrow(): string {
+function parseBooleanEnv(value: string | undefined): boolean | undefined {
+  if (value === undefined) return undefined
+  const normalized = value.trim().toLowerCase()
+  if (!normalized) return undefined
+  if (normalized === '0' || normalized === 'false' || normalized === 'no')
+    return false
+  if (normalized === '1' || normalized === 'true' || normalized === 'yes')
+    return true
+  return undefined
+}
+
+function shouldUseBuiltinRipgrep(): boolean {
+  // Upstream compatibility: USE_BUILTIN_RIPGREP=0 opts out.
+  // Kode-first alias: KODE_USE_BUILTIN_RIPGREP (same semantics).
+  const raw =
+    process.env.KODE_USE_BUILTIN_RIPGREP ?? process.env.USE_BUILTIN_RIPGREP
+  const parsed = parseBooleanEnv(raw)
+  if (parsed !== undefined) return parsed
+  return true
+}
+
+function getVscodeRipgrepPathOrNull(): string | null {
   try {
     const req = createRequire(getCurrentModuleUrl())
     const mod = req('@vscode/ripgrep') as { rgPath?: unknown }
     if (typeof mod?.rgPath === 'string' && mod.rgPath.trim()) return mod.rgPath
-  } catch (err) {
-    throw new Error(
-      [
-        '@vscode/ripgrep is required but could not be loaded.',
-        'Fix:',
-        '- Reinstall dependencies: bun install',
-        '- Or install ripgrep system-wide and ensure `rg` is on PATH',
-        err instanceof Error ? `Reason: ${err.message}` : '',
-      ]
-        .filter(Boolean)
-        .join('\n'),
-    )
+  } catch {
+    // @vscode/ripgrep is an optional fallback.
   }
-  throw new Error('Invalid @vscode/ripgrep export: rgPath missing')
+  return null
+}
+
+function getKodeRipgrepPackageNames(): string[] {
+  const platform = process.platform
+  const arch = process.arch
+
+  const names = [`@shareai-lab/kode-ripgrep-${platform}-${arch}`]
+
+  // Some Windows ARM setups can run x64 binaries under emulation.
+  if (platform === 'win32' && arch === 'arm64') {
+    names.push(`@shareai-lab/kode-ripgrep-win32-x64`)
+  }
+
+  return names
+}
+
+function getKodeRipgrepPathOrNull(): string | null {
+  const req = createRequire(getCurrentModuleUrl())
+  for (const name of getKodeRipgrepPackageNames()) {
+    try {
+      const mod = req(name) as { rgPath?: unknown }
+      const rgPath = typeof mod?.rgPath === 'string' ? mod.rgPath : null
+      if (rgPath && existsSync(rgPath)) {
+        d('packaged ripgrep resolved as: %s (%s)', rgPath, name)
+        return rgPath
+      }
+    } catch {
+      // Optional dependency; ignore if not present.
+    }
+  }
+
+  return null
 }
 
 function findRipgrepVendorRoot(): string | null {
@@ -109,34 +152,55 @@ function resolveVendorRipgrepPathOrNull(): string | null {
   return ret
 }
 
+function resolveSystemRipgrepPathOrNull(): string | null {
+  const resolved = which.sync('rg', { nothrow: true })
+  if (typeof resolved === 'string' && resolved.trim()) {
+    d('system ripgrep resolved as: %s', resolved)
+    return resolved
+  }
+  return null
+}
+
 export const getRipgrepPath = memoize((): string => {
   const explicit = resolveExplicitRipgrepPathOrThrow()
   if (explicit) return explicit
 
-  const vscodeRgPath = getVscodeRipgrepPathOrThrow()
-
-  const useBuiltinRipgrep = !!process.env.USE_BUILTIN_RIPGREP
+  const useBuiltinRipgrep = shouldUseBuiltinRipgrep()
   if (useBuiltinRipgrep) {
-    d('Using builtin ripgrep because USE_BUILTIN_RIPGREP is set')
+    const packaged = getKodeRipgrepPathOrNull()
+    if (packaged) return packaged
+
     const vendor = resolveVendorRipgrepPathOrNull()
     if (vendor) return vendor
-    return vscodeRgPath
   }
 
-  const { cmd } = findActualExecutable('rg', [])
-  d(`ripgrep initially resolved as: ${cmd}`)
-  if (cmd !== 'rg') return cmd
+  const system = resolveSystemRipgrepPathOrNull()
+  if (system) return system
 
-  const vendor = resolveVendorRipgrepPathOrNull()
-  if (vendor) return vendor
+  // Optional fallback: @vscode/ripgrep (may not be installed; may rely on postinstall downloads).
+  const vscodeRgPath = getVscodeRipgrepPathOrNull()
+  if (vscodeRgPath) return vscodeRgPath
 
-  // Default fallback: ship a known-good ripgrep via @vscode/ripgrep.
-  return vscodeRgPath
+  const useBuiltinRaw =
+    process.env.KODE_USE_BUILTIN_RIPGREP ?? process.env.USE_BUILTIN_RIPGREP
+  throw new Error(
+    [
+      'ripgrep (rg) is required but could not be found.',
+      '',
+      'Fix:',
+      '- Install ripgrep and ensure `rg` is on PATH',
+      '- Or set KODE_RIPGREP_PATH to a ripgrep executable',
+      useBuiltinRipgrep
+        ? `- Or install @shareai-lab/kode-ripgrep-${process.platform}-${process.arch}`
+        : `- Note: builtin ripgrep is disabled (USE_BUILTIN_RIPGREP=${JSON.stringify(useBuiltinRaw)})`,
+    ].join('\n'),
+  )
 })
 
 export async function ensureRipgrepReady(): Promise<string> {
-  await codesignRipgrepIfNecessary()
-  return getRipgrepPath()
+  const rg = getRipgrepPath()
+  await codesignRipgrepIfNecessary(rg)
+  return rg
 }
 
 export async function ripGrep(
@@ -145,8 +209,8 @@ export async function ripGrep(
   abortSignal: AbortSignal,
   options?: { sandbox?: BunShellSandboxOptions },
 ): Promise<string[]> {
-  await codesignRipgrepIfNecessary()
   const rg = getRipgrepPath()
+  await codesignRipgrepIfNecessary(rg)
   d('ripgrep called: %s %o', rg, target, args)
 
   // NB: When running interactively, ripgrep does not require a path as its last
@@ -211,19 +275,30 @@ export async function listAllContentFiles(
 }
 
 let alreadyDoneSignCheck = false
-async function codesignRipgrepIfNecessary() {
+async function codesignRipgrepIfNecessary(rgPath: string) {
   if (process.platform !== 'darwin' || alreadyDoneSignCheck) {
     return
   }
 
   alreadyDoneSignCheck = true
 
+  // Only attempt to sign ripgrep binaries we "own" (downloaded via @vscode/ripgrep).
+  // System ripgrep (e.g. Homebrew) should not be modified.
+  if (
+    !rgPath.includes(
+      `${path.sep}node_modules${path.sep}.pnpm${path.sep}@vscode+ripgrep@`,
+    ) &&
+    !rgPath.includes(`${path.sep}node_modules${path.sep}@vscode${path.sep}`)
+  ) {
+    return
+  }
+
   // First, check to see if ripgrep is already signed
   d('checking if ripgrep is already signed')
   const lines = (
     await execFileNoThrow(
       'codesign',
-      ['-vv', '-d', getRipgrepPath()],
+      ['-vv', '-d', rgPath],
       undefined,
       undefined,
       false,
@@ -243,7 +318,7 @@ async function codesignRipgrepIfNecessary() {
       '-',
       '--force',
       '--preserve-metadata=entitlements,requirements,flags,runtime',
-      getRipgrepPath(),
+      rgPath,
     ])
 
     if (signResult.code !== 0) {
@@ -257,7 +332,7 @@ async function codesignRipgrepIfNecessary() {
     const quarantineResult = await execFileNoThrow('xattr', [
       '-d',
       'com.apple.quarantine',
-      getRipgrepPath(),
+      rgPath,
     ])
 
     if (quarantineResult.code !== 0) {

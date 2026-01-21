@@ -18,9 +18,20 @@ const PluginManifestSchema = z
     commands: z.union([z.string(), z.array(z.string())]).optional(),
     agents: z.union([z.string(), z.array(z.string())]).optional(),
     skills: z.union([z.string(), z.array(z.string())]).optional(),
-    hooks: z.union([z.string(), z.record(z.string(), z.unknown())]).optional(),
+    outputStyles: z.union([z.string(), z.array(z.string())]).optional(),
+    hooks: z
+      .union([
+        z.string(),
+        z.array(z.string()),
+        z.record(z.string(), z.unknown()),
+      ])
+      .optional(),
     mcpServers: z
-      .union([z.string(), z.record(z.string(), z.unknown())])
+      .union([
+        z.string(),
+        z.array(z.string()),
+        z.record(z.string(), z.unknown()),
+      ])
       .optional(),
   })
   .passthrough()

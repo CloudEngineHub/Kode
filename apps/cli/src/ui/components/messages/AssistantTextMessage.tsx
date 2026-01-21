@@ -1,6 +1,7 @@
 import { TextBlockParam } from '@anthropic-ai/sdk/resources/index.mjs'
 import React from 'react'
 import { AssistantBashOutputMessage } from './AssistantBashOutputMessage'
+import { AssistantBackgroundTaskOutputMessage } from './AssistantBackgroundTaskOutputMessage'
 import { AssistantLocalCommandOutputMessage } from './AssistantLocalCommandOutputMessage'
 import { getTheme } from '#core/utils/theme'
 import { Box, Text } from 'ink'
@@ -152,6 +153,11 @@ export function AssistantTextMessage({
         maxWidth={contentWidth}
       />
     )
+  }
+
+  // Show background task output
+  if (text.startsWith('<background-task-output')) {
+    return <AssistantBackgroundTaskOutputMessage content={text} />
   }
 
   // Show command output

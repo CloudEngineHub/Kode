@@ -86,9 +86,9 @@ interface ModelProfile {
 
 实现入口（代码引用）：
 
-- 回退计划与错误分类：`packages/core/src/ai/llm/claudeCodeFallback.ts`
-- LLM 调用链路按 step 切换 headers/prompt/tools：`packages/core/src/ai/llm.ts:337`
-- 模型配置页连接测试（真实 tool-use 写文件验证）：`apps/cli/src/ui/ui/components/model-selector/actions/connectionTest/testAnthropicMessagesEndpoint.ts`、`apps/cli/src/ui/ui/components/model-selector/actions/connectionTest/testChatEndpoint.ts`
+- 回退计划与错误分类：`packages/core/src/ai/llm/restrictedClientCompat.ts`
+- LLM 调用链路按 step 切换 headers/prompt/tools：`packages/core/src/ai/llm.ts`
+- 模型配置页连接测试（真实 tool-use 写文件验证）：`apps/cli/src/ui/components/ModelSelector/flow/actions/connectionTest/testAnthropicMessagesEndpoint.ts`、`apps/cli/src/ui/components/ModelSelector/flow/actions/connectionTest/testChatEndpoint.ts`
 
 ### 模型指针
 

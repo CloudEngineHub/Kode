@@ -8,7 +8,12 @@ import {
   getAgentTranscript,
   saveAgentTranscript,
 } from '#core/utils/agentTranscripts'
+import { getCwd } from '#core/utils/state'
 import { getMaxThinkingTokens } from '#core/utils/thinking'
+import { createDefaultToolPermissionContext } from '#core/types/toolPermissionContext'
+import { LEGACY_ENV } from '#core/compat/legacyEnv'
+import { getKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
+import { loadKodeAgentSidechainMessagesForResume } from '#protocol/utils/kodeAgentSessionLoad'
 
 import { getTaskTools } from './prompt'
 import { buildForkContextForAgent } from './forkContext'
@@ -79,7 +84,8 @@ export async function* callTaskTool(
   const normalizedAgentModel = normalizeAgentModelName(agentConfig.model)
   const defaultSubagentModel = 'task'
   const envSubagentModel =
-    process.env.KODE_SUBAGENT_MODEL ?? process.env.CLAUDE_CODE_SUBAGENT_MODEL
+    process.env.KODE_SUBAGENT_MODEL ??
+    process.env[LEGACY_ENV.codeSubagentModel]
   const modelToUse: string =
     (typeof envSubagentModel === 'string' && envSubagentModel.trim()
       ? envSubagentModel.trim()
@@ -118,16 +124,28 @@ export async function* callTaskTool(
   }
 
   const agentId = input.resume || generateAgentId()
-  const baseTranscript = input.resume
-    ? (getAgentTranscript(input.resume)?.filter(m => m.type !== 'progress') ??
-      null)
-    : []
-  if (input.resume && baseTranscript === null) {
-    throw new Error(`No transcript found for agent ID: ${input.resume}`)
+  let baseTranscript: any[] = []
+  if (input.resume) {
+    const cached = getAgentTranscript(input.resume)
+    if (cached) {
+      baseTranscript = cached.filter(m => m.type !== 'progress')
+    } else {
+      const loaded = loadKodeAgentSidechainMessagesForResume({
+        cwd: getCwd(),
+        sessionId: getKodeAgentSessionId(),
+        agentId: input.resume,
+      })
+      if (loaded.length === 0) {
+        throw new Error(`No transcript found for agent ID: ${input.resume}`)
+      }
+      baseTranscript = loaded
+      saveAgentTranscript(input.resume, loaded as any)
+    }
   }
 
   const { forkContextMessages, promptMessages } = buildForkContextForAgent({
-    enabled: agentConfig.forkContext === true,
+    enabled:
+      agentConfig.forkContext === true || options.forceForkContext === true,
     prompt: effectivePrompt,
     toolUseId: toolUseContext.toolUseId,
     messageLogName,
@@ -140,7 +158,9 @@ export async function* callTaskTool(
   const [baseSystemPrompt, context, maxThinkingTokens] = await Promise.all([
     getAgentPrompt(),
     getContext(),
-    getMaxThinkingTokens(messagesForQuery),
+    getMaxThinkingTokens(messagesForQuery, {
+      thinkingMode: options.thinkingMode,
+    }),
   ])
   const systemPrompt =
     agentConfig.systemPrompt && agentConfig.systemPrompt.length > 0
@@ -150,13 +170,16 @@ export async function* callTaskTool(
   const agentPermissionMode = normalizeAgentPermissionMode(
     agentConfig.permissionMode,
   )
-  const toolPermissionContext = applyAgentPermissionMode(
-    options.toolPermissionContext,
-    {
+  const baseToolPermissionContext =
+    options.toolPermissionContext ??
+    createDefaultToolPermissionContext({
+      isBypassPermissionsModeAvailable: !safeMode,
+    })
+  const toolPermissionContext =
+    applyAgentPermissionMode(baseToolPermissionContext, {
       agentPermissionMode,
       safeMode,
-    },
-  )
+    }) ?? baseToolPermissionContext
 
   const queryOptions: TaskToolQueryOptions = {
     safeMode,
@@ -165,8 +188,9 @@ export async function* callTaskTool(
     tools,
     commands: [],
     verbose,
-    permissionMode: 'dontAsk',
+    permissionMode: toolPermissionContext.mode,
     toolPermissionContext,
+    commandAllowedTools: options.commandAllowedTools,
     maxThinkingTokens,
     model: modelToUse,
     mcpClients: options.mcpClients,
@@ -189,11 +213,28 @@ export async function* callTaskTool(
   }
 
   if (input.run_in_background) {
-    yield* callTaskToolBackground(input, prepared)
+    yield* callTaskToolBackground(input, prepared, {
+      parentAgentId: toolUseContext.agentId,
+      parentToolUseId: toolUseContext.toolUseId,
+      subagentType: input.subagent_type,
+      model: modelToUse,
+    })
     return
   }
 
-  for await (const chunk of callTaskToolForeground(input, prepared)) {
+  const setToolJSXMaybe = (toolUseContext as any).setToolJSX as unknown
+  const setToolJSX =
+    typeof setToolJSXMaybe === 'function' ? (setToolJSXMaybe as any) : undefined
+
+  for await (const chunk of callTaskToolForeground(input, prepared, {
+    setToolJSX,
+    backgroundMetadata: {
+      parentAgentId: toolUseContext.agentId,
+      parentToolUseId: toolUseContext.toolUseId,
+      subagentType: input.subagent_type,
+      model: modelToUse,
+    },
+  })) {
     if (chunk.type === 'result') {
       saveAgentTranscript(prepared.agentId, prepared.transcriptMessages)
     }

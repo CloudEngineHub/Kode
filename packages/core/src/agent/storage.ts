@@ -1,9 +1,12 @@
-import { existsSync, readdirSync, statSync } from 'fs'
+import { existsSync } from 'fs'
 import type { Dirent } from 'fs'
+import { readdir, stat } from 'fs/promises'
 import { dirname, join, resolve } from 'path'
 import { homedir } from 'os'
+import { resolveDataRoots } from '#config/dataRoots'
+import { LEGACY_CONFIG_SUBDIRS } from '#core/compat/legacyPaths'
 
-export function getClaudePolicyBaseDir(): string {
+export function getLegacyPolicyBaseDir(): string {
   switch (process.platform) {
     case 'darwin':
       return '/Library/Application Support/ClaudeCode'
@@ -13,6 +16,19 @@ export function getClaudePolicyBaseDir(): string {
         : 'C:\\ProgramData\\ClaudeCode'
     default:
       return '/etc/claude-code'
+  }
+}
+
+export function getSystemPolicyBaseDir(): string {
+  switch (process.platform) {
+    case 'darwin':
+      return '/Library/Application Support/Kode'
+    case 'win32':
+      return existsSync('C:\\Program Files\\Kode')
+        ? 'C:\\Program Files\\Kode'
+        : 'C:\\ProgramData\\Kode'
+    default:
+      return '/etc/kode'
   }
 }
 
@@ -35,15 +51,12 @@ export function dedupeStrings(values: string[]): string[] {
 }
 
 export function getUserConfigRoots(): string[] {
-  const claudeOverride = normalizeOverride(process.env.CLAUDE_CONFIG_DIR)
-  const kodeOverride = normalizeOverride(process.env.KODE_CONFIG_DIR)
+  return resolveDataRoots().allRoots
+}
 
-  const hasAnyOverride = Boolean(claudeOverride || kodeOverride)
-  if (hasAnyOverride) {
-    return dedupeStrings([claudeOverride ?? '', kodeOverride ?? ''])
-  }
-
-  return dedupeStrings([join(homedir(), '.claude'), join(homedir(), '.kode')])
+export function getPolicyBaseDirs(): string[] {
+  // Order matters: legacy is scanned first so Kode-first policy wins when both exist.
+  return dedupeStrings([getLegacyPolicyBaseDir(), getSystemPolicyBaseDir()])
 }
 
 export function findProjectAgentDirs(cwd: string): string[] {
@@ -51,51 +64,69 @@ export function findProjectAgentDirs(cwd: string): string[] {
   const home = resolve(homedir())
   let current = resolve(cwd)
 
-  while (current !== home) {
-    const claudeDir = join(current, '.claude', 'agents')
-    if (existsSync(claudeDir)) result.push(claudeDir)
+  const levels: Array<{ claudeDir: string; kodeDir: string }> = []
 
-    const kodeDir = join(current, '.kode', 'agents')
-    if (existsSync(kodeDir)) result.push(kodeDir)
+  while (current !== home) {
+    levels.push({
+      claudeDir: join(current, LEGACY_CONFIG_SUBDIRS.agents),
+      kodeDir: join(current, '.kode', 'agents'),
+    })
 
     const parent = dirname(current)
     if (parent === current) break
     current = parent
   }
 
+  // Apply deterministic precedence:
+  // - ancestor directories are lower priority than descendants
+  // - legacy dirs are lower priority than primary dirs at the same level
+  for (const level of levels.reverse()) {
+    if (existsSync(level.claudeDir)) result.push(level.claudeDir)
+    if (existsSync(level.kodeDir)) result.push(level.kodeDir)
+  }
+
   return result
 }
 
-export function listMarkdownFilesRecursively(rootDir: string): string[] {
+export async function listMarkdownFilesRecursively(
+  rootDir: string,
+): Promise<string[]> {
   const files: string[] = []
   const visitedDirs = new Set<string>()
+  const toVisit: string[] = [rootDir]
 
-  const walk = (dirPath: string) => {
-    let dirStat: ReturnType<typeof statSync>
+  if (!existsSync(rootDir)) return []
+
+  while (toVisit.length > 0) {
+    const dirPath = toVisit.pop()!
+    let dirStat: Awaited<ReturnType<typeof stat>>
     try {
-      dirStat = statSync(dirPath)
+      dirStat = await stat(dirPath)
     } catch {
-      return
+      continue
     }
-    if (!dirStat.isDirectory()) return
+
+    if (!dirStat.isDirectory()) continue
 
     const dirKey = `${dirStat.dev}:${dirStat.ino}`
-    if (visitedDirs.has(dirKey)) return
+    if (visitedDirs.has(dirKey)) continue
     visitedDirs.add(dirKey)
 
     let entries: Dirent[]
     try {
-      entries = readdirSync(dirPath, { withFileTypes: true })
+      entries = await readdir(dirPath, { withFileTypes: true })
     } catch {
-      return
+      continue
     }
+
+    entries.sort((a, b) => a.name.localeCompare(b.name))
 
     for (const entry of entries) {
       const name = String(entry.name ?? '')
       const fullPath = join(dirPath, name)
 
       if (entry.isDirectory()) {
-        walk(fullPath)
+        toVisit.push(fullPath)
         continue
       }
 
@@ -106,9 +137,9 @@ export function listMarkdownFilesRecursively(rootDir: string): string[] {
 
       if (entry.isSymbolicLink()) {
         try {
-          const st = statSync(fullPath)
+          const st = await stat(fullPath)
           if (st.isDirectory()) {
-            walk(fullPath)
+            toVisit.push(fullPath)
           } else if (st.isFile() && name.endsWith('.md')) {
             files.push(fullPath)
           }
@@ -119,7 +150,5 @@ export function listMarkdownFilesRecursively(rootDir: string): string[] {
     }
   }
 
-  if (!existsSync(rootDir)) return []
-  walk(rootDir)
-  return files
+  return files.sort()
 }

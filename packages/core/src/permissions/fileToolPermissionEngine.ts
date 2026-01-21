@@ -11,8 +11,10 @@ export { matchPermissionRuleForPath } from './fileToolPermissionEngine/rules'
 
 export {
   getPlanFileWritePrivilegeForContext,
+  getSpecialAllowedWriteReason,
   getSpecialAllowedReadReason,
   getWriteSafetyCheckForPath,
+  isSpecialAllowedWritePathForContext,
   isPlanFileForContext,
 } from './fileToolPermissionEngine/plan'
 

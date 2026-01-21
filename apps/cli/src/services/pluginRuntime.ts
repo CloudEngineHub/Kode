@@ -5,6 +5,10 @@ import { glob } from 'glob'
 import { z } from 'zod'
 import { getCwd } from '#core/utils/state'
 import {
+  LEGACY_PLUGIN_DIRNAME,
+  legacyPluginPathInProject,
+} from '#core/compat/legacyPaths'
+import {
   setSessionPlugins,
   type SessionPlugin,
 } from '#core/utils/sessionPlugins'
@@ -16,8 +20,12 @@ const PluginManifestSchema = z
     agents: z.union([z.string(), z.array(z.string())]).optional(),
     skills: z.union([z.string(), z.array(z.string())]).optional(),
     outputStyles: z.union([z.string(), z.array(z.string())]).optional(),
-    hooks: z.union([z.string(), z.array(z.string())]).optional(),
-    mcpServers: z.union([z.string(), z.array(z.string())]).optional(),
+    hooks: z
+      .union([z.string(), z.array(z.string()), z.record(z.unknown())])
+      .optional(),
+    mcpServers: z
+      .union([z.string(), z.array(z.string()), z.record(z.unknown())])
+      .optional(),
   })
   .passthrough()
 
@@ -108,13 +116,13 @@ function resolveManifestPaths(
 
 function loadPluginFromDir(rootDir: string): SessionPlugin {
   const primaryManifestPath = join(rootDir, '.kode-plugin', 'plugin.json')
-  const legacyManifestPath = join(rootDir, '.claude-plugin', 'plugin.json')
+  const legacyManifestPath = legacyPluginPathInProject(rootDir, 'plugin.json')
   const manifestPath = existsSync(primaryManifestPath)
     ? primaryManifestPath
     : legacyManifestPath
   if (!existsSync(manifestPath)) {
     throw new Error(
-      `Plugin manifest not found (expected .kode-plugin/plugin.json or .claude-plugin/plugin.json)`,
+      `Plugin manifest not found (expected .kode-plugin/plugin.json or ${LEGACY_PLUGIN_DIRNAME}/plugin.json)`,
     )
   }
 
@@ -213,11 +221,14 @@ export async function configureSessionPlugins(args: {
 
   setSessionPlugins(plugins)
 
+  // Ensure agents pick up plugin changes.
+  const { clearAgentCache } = await import('#core/utils/agentLoader')
+  clearAgentCache()
+
   // Ensure commands pick up plugin changes without requiring /refresh-commands.
-  const { reloadCustomCommands } = await import('#cli-services/customCommands')
-  reloadCustomCommands()
-  const { getCommands } = await import('#cli-commands')
-  getCommands.cache.clear?.()
+  const { reloadCustomCommandsForSession } =
+    await import('#cli-services/customCommands')
+  await reloadCustomCommandsForSession()
 
   // Ensure MCP client/tool caches pick up plugin changes.
   const { getClients, getMCPTools } = await import('#core/mcp/client')

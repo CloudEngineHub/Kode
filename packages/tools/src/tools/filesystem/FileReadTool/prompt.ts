@@ -1,4 +1,4 @@
-import { isClaudeCodeFirstParty } from '#core/utils/claudeCode'
+import { isAnthropicFirstPartyRuntime } from '#core/utils/anthropicProviderRuntime'
 
 const MAX_LINES_TO_READ = 2000
 const MAX_LINE_LENGTH = 2000
@@ -6,7 +6,7 @@ const MAX_LINE_LENGTH = 2000
 export const DESCRIPTION = 'Read a file from the local filesystem.'
 
 export function getPrompt(): string {
-  const pdfLine = isClaudeCodeFirstParty()
+  const pdfLine = isAnthropicFirstPartyRuntime()
     ? '\n- This tool can read PDF files (.pdf). PDFs are processed page by page, extracting both text and visual content for analysis.'
     : ''
 

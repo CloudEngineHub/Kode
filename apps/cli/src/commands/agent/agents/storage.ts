@@ -12,13 +12,14 @@ import { getCwd } from '#core/utils/state'
 import type { AgentConfig } from '#core/utils/agentLoader'
 import { debug as debugLogger } from '#core/utils/debugLogger'
 import { logError } from '#core/utils/log'
+import { LEGACY_CONFIG_DIRNAME } from '#core/compat/legacyPaths'
 
 import { generateAgentFileContent } from './generation'
 
 export type AgentLocation = 'user' | 'project'
 
-const PRIMARY_FOLDER = '.claude'
-const LEGACY_FOLDER = '.kode'
+const PRIMARY_FOLDER = '.kode'
+const LEGACY_FOLDER = LEGACY_CONFIG_DIRNAME
 const AGENTS_DIR = 'agents'
 
 export function getAgentDirectory(location: AgentLocation): string {

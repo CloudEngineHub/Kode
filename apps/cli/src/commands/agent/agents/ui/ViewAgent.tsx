@@ -15,7 +15,10 @@ export function ViewAgent(props: {
   onBack: () => void
 }) {
   useKeypress((_input, key) => {
-    if (key.escape || key.return) props.onBack()
+    if (key.escape || key.return) {
+      props.onBack()
+      return true
+    }
   })
 
   const toolNames = new Set(props.tools.map(t => t.name))
@@ -49,7 +52,7 @@ export function ViewAgent(props: {
     const baseDir = props.agent.baseDir
     const file = `${props.agent.filename ?? props.agent.agentType}.md`
     if (props.agent.source === 'projectSettings')
-      return join('.claude', 'agents', file)
+      return join('.kode', 'agents', file)
     if (baseDir) return join(baseDir, file)
     return props.agent.source
   })()
@@ -84,7 +87,7 @@ export function ViewAgent(props: {
           <Text dimColor>{sourceLine}</Text>
           <Box flexDirection="column">
             <Text>
-              <Text bold>Description</Text> (tells Claude when to use this
+              <Text bold>Description</Text> (tells the agent when to use this
               agent):
             </Text>
             <Box marginLeft={2}>

@@ -2,6 +2,7 @@ import { cwd } from 'process'
 import type { Command } from '@commander-js/extra-typings'
 
 import { getCwd, setCwd } from '#core/utils/state'
+import { LEGACY_PLUGIN_DIRNAME } from '#core/compat/legacyPaths'
 
 import { registerMarketplaceCommands } from './marketplace'
 
@@ -29,7 +30,7 @@ export function registerPluginCommands(program: Command): void {
   const pluginMarketplaceCmd = pluginCmd
     .command('marketplace')
     .description(
-      'Manage marketplaces (.kode-plugin/marketplace.json; legacy .claude-plugin supported)',
+      `Manage marketplaces (.kode-plugin/marketplace.json; legacy ${LEGACY_PLUGIN_DIRNAME} supported)`,
     )
 
   registerMarketplaceCommands(pluginMarketplaceCmd)
@@ -269,7 +270,7 @@ export function registerPluginCommands(program: Command): void {
   const marketplaceCmd = skillsCmd
     .command('marketplace')
     .description(
-      'Manage skill marketplaces (.kode-plugin/marketplace.json; legacy .claude-plugin supported)',
+      `Manage skill marketplaces (.kode-plugin/marketplace.json; legacy ${LEGACY_PLUGIN_DIRNAME} supported)`,
     )
 
   registerMarketplaceCommands(marketplaceCmd)

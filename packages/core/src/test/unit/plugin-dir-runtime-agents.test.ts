@@ -2,46 +2,43 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
+
 import { configureSessionPlugins } from '#cli-services/pluginRuntime'
-import { clearAgentCache, getAgentByType } from '#core/utils/agentLoader'
+import {
+  clearAgentCache,
+  getAgentByType,
+  getAvailableAgentTypes,
+} from '#core/utils/agentLoader'
 import { __resetSessionPluginsForTests } from '#core/utils/sessionPlugins'
 import { setCwd } from '#core/utils/state'
 
-describe('--plugin-dir runtime: agent discovery', () => {
+describe('--plugin-dir runtime: agents cache refresh', () => {
   const runnerCwd = process.cwd()
+
   let projectDir: string
   let pluginDir: string
 
   beforeEach(async () => {
-    projectDir = mkdtempSync(join(tmpdir(), 'kode-plugin-dir-agents-'))
+    __resetSessionPluginsForTests()
+    clearAgentCache()
+
+    projectDir = mkdtempSync(join(tmpdir(), 'kode-plugin-agents-'))
     await setCwd(projectDir)
 
-    pluginDir = join(projectDir, 'demo-plugin')
+    pluginDir = join(projectDir, 'my-plugin')
     mkdirSync(join(pluginDir, '.kode-plugin'), { recursive: true })
     writeFileSync(
       join(pluginDir, '.kode-plugin', 'plugin.json'),
-      JSON.stringify(
-        { name: 'demo-plugin', version: '0.1.0', agents: './extra-agent.md' },
-        null,
-        2,
-      ) + '\n',
+      JSON.stringify({ name: 'my-plugin', version: '1.0.0' }, null, 2) + '\n',
       'utf8',
     )
 
     mkdirSync(join(pluginDir, 'agents'), { recursive: true })
     writeFileSync(
-      join(pluginDir, 'agents', 'demo-agent.md'),
-      `---\nname: demo-agent\ndescription: Demo agent\ntools: [\"Read\"]\n---\n\nYou are a demo agent.\n`,
+      join(pluginDir, 'agents', 'my-agent.md'),
+      `---\nname: my-plugin-agent\ndescription: Test agent\n---\n\nYou are a test agent.\n`,
       'utf8',
     )
-    writeFileSync(
-      join(pluginDir, 'extra-agent.md'),
-      `---\nname: extra-agent\ndescription: Extra agent\ntools: [\"Read\"]\n---\n\nYou are an extra agent.\n`,
-      'utf8',
-    )
-
-    await configureSessionPlugins({ pluginDirs: [pluginDir] })
-    clearAgentCache()
   })
 
   afterEach(async () => {
@@ -51,17 +48,16 @@ describe('--plugin-dir runtime: agent discovery', () => {
     rmSync(projectDir, { recursive: true, force: true })
   })
 
-  test('loads plugin agent', async () => {
-    const agent = await getAgentByType('demo-agent')
-    expect(agent).toBeTruthy()
-    expect(agent?.agentType).toBe('demo-agent')
-    expect(agent?.location).toBe('plugin')
-  })
+  test('configureSessionPlugins clears agent caches so plugin agents become visible', async () => {
+    const before = await getAvailableAgentTypes()
+    expect(before).not.toContain('my-plugin-agent')
 
-  test('loads plugin agent from manifest file path', async () => {
-    const agent = await getAgentByType('extra-agent')
-    expect(agent).toBeTruthy()
-    expect(agent?.agentType).toBe('extra-agent')
-    expect(agent?.location).toBe('plugin')
+    await configureSessionPlugins({ pluginDirs: [pluginDir] })
+
+    const after = await getAvailableAgentTypes()
+    expect(after).toContain('my-plugin-agent')
+
+    const agent = await getAgentByType('my-plugin-agent')
+    expect(agent?.source).toBe('plugin')
   })
 })

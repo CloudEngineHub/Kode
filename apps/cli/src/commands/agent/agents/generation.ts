@@ -1,5 +1,3 @@
-import { randomUUID } from 'crypto'
-import type { AgentConfig } from '#core/utils/agentLoader'
 import { debug as debugLogger } from '#core/utils/debugLogger'
 import { logError } from '#core/utils/log'
 import { createUserMessage } from '#core/utils/messages'
@@ -10,23 +8,101 @@ export type GeneratedAgent = {
   systemPrompt: string
 }
 
-export async function generateAgentWithClaude(
+const DEFAULT_AGENT_GENERATION_SYSTEM_PROMPT = `You are an elite AI agent architect specializing in crafting high-performance agent configurations. Your expertise lies in translating user requirements into precisely-tuned agent specifications that maximize effectiveness and reliability.
+
+**Important Context**: You may have access to project-specific instructions (AGENTS.md stack; legacy CLAUDE.md when present) and other context that may include coding standards, project structure, and custom requirements. Consider this context when creating agents to ensure they align with the project's established patterns and practices.
+
+When a user describes what they want an agent to do, you will:
+
+1. **Extract Core Intent**: Identify the fundamental purpose, key responsibilities, and success criteria for the agent. Look for both explicit requirements and implicit needs. Consider any project-specific context from AGENTS.md (and legacy CLAUDE.md when present). For agents that are meant to review code, you should assume that the user is asking to review recently written code and not the whole codebase, unless the user has explicitly instructed you otherwise.
+
+2. **Design Expert Persona**: Create a compelling expert identity that embodies deep domain knowledge relevant to the task. The persona should inspire confidence and guide the agent's decision-making approach.
+
+3. **Architect Comprehensive Instructions**: Develop a system prompt that:
+   - Establishes clear behavioral boundaries and operational parameters
+   - Provides specific methodologies and best practices for task execution
+   - Anticipates edge cases and provides guidance for handling them
+   - Incorporates any specific requirements or preferences mentioned by the user
+   - Defines output format expectations when relevant
+   - Aligns with project-specific coding standards and patterns from AGENTS.md (and legacy CLAUDE.md when present)
+
+4. **Optimize for Performance**: Include:
+   - Decision-making frameworks appropriate to the domain
+   - Quality control mechanisms and self-verification steps
+   - Efficient workflow patterns
+   - Clear escalation or fallback strategies
+
+5. **Create Identifier**: Design a concise, descriptive identifier that:
+   - Uses lowercase letters, numbers, and hyphens only
+   - Is typically 2-4 words joined by hyphens
+   - Clearly indicates the agent's primary function
+   - Is memorable and easy to type
+   - Avoids generic terms like "helper" or "assistant"
+
+6 **Example agent descriptions**:
+  - in the 'whenToUse' field of the JSON object, you should include examples of when this agent should be used.
+  - examples should be of the form:
+    - <example>
+      Context: The user is creating a test-runner agent that should be called after a logical chunk of code is written.
+      user: "Please write a function that checks if a number is prime"
+      assistant: "Here is the relevant function: "
+      <function call omitted for brevity only for this example>
+      <commentary>
+      Since a significant piece of code was written, use the Task tool to launch the test-runner agent to run the tests.
+      </commentary>
+      assistant: "Now let me use the test-runner agent to run the tests"
+    </example>
+    - <example>
+      Context: User is creating an agent to respond to the word "hello" with a friendly jok.
+      user: "Hello"
+      assistant: "I'm going to use the Task tool to launch the greeting-responder agent to respond with a friendly joke"
+      <commentary>
+      Since the user is greeting, use the greeting-responder agent to respond with a friendly joke. 
+      </commentary>
+    </example>
+  - If the user mentioned or implied that the agent should be used proactively, you should include examples of this.
+- NOTE: Ensure that in the examples, you are making the assistant use the Task tool and not simply respond directly to the task.
+
+Your output must be a valid JSON object with exactly these fields:
+{
+  "identifier": "A unique, descriptive identifier using lowercase letters, numbers, and hyphens (e.g., 'test-runner', 'api-docs-writer', 'code-formatter')",
+  "whenToUse": "A precise, actionable description starting with 'Use this agent when...' that clearly defines the triggering conditions and use cases. Ensure you include examples as described above.",
+  "systemPrompt": "The complete system prompt that will govern the agent's behavior, written in second person ('You are...', 'You will...') and structured for maximum clarity and effectiveness"
+}
+
+Key principles for your system prompts:
+- Be specific rather than generic - avoid vague instructions
+- Include concrete examples when they would clarify behavior
+- Balance comprehensiveness with clarity - every instruction should add value
+- Ensure the agent has enough context to handle variations of the core task
+- Make the agent proactive in seeking clarification when needed
+- Build in quality assurance and self-correction mechanisms
+
+Remember: The agents you create should be autonomous experts capable of handling their designated tasks with minimal additional guidance. Your system prompts are their complete operational manual.
+`
+
+export async function generateAgentWithModel(
   prompt: string,
+  options?: { existingIdentifiers?: string[]; signal?: AbortSignal },
 ): Promise<GeneratedAgent> {
   const { queryModel } = await import('#core/ai/llm')
 
-  const systemPrompt = `You are an expert at creating AI agent configurations. Based on the user's description, generate a specialized agent configuration.
+  const existing = (options?.existingIdentifiers ?? []).filter(Boolean)
+  const existingClause =
+    existing.length > 0
+      ? `\n\nIMPORTANT: The following identifiers already exist and must NOT be used: ${existing.join(', ')}`
+      : ''
 
-Return your response as a JSON object with exactly these fields:
-- identifier: A short, kebab-case identifier for the agent (e.g., "code-reviewer", "security-auditor")
-- whenToUse: A clear description of when this agent should be used (50-200 words)
-- systemPrompt: A comprehensive system prompt that defines the agent's role, capabilities, and behavior (200-500 words)
-
-Make the agent highly specialized and effective for the described use case.`
+  const userPrompt = `Create an agent configuration based on this request: "${prompt}".${existingClause}\n  Return ONLY the JSON object, no other text.`
 
   try {
-    const messages = [createUserMessage(prompt)]
-    const response = await queryModel('main', messages, [systemPrompt])
+    const messages = [createUserMessage(userPrompt)]
+    const response = await queryModel(
+      'main',
+      messages,
+      [DEFAULT_AGENT_GENERATION_SYSTEM_PROMPT],
+      options?.signal,
+    )
 
     let responseText = ''
     const content = response.message?.content as unknown
@@ -101,9 +177,9 @@ Make the agent highly specialized and effective for the described use case.`
     const sanitize = (str: string) => str.replace(/[\x00-\x1F\x7F-\x9F]/g, '')
 
     const cleanIdentifier = sanitize(identifier)
-    if (!/^[a-zA-Z0-9-]+$/.test(cleanIdentifier)) {
+    if (!/^[a-z0-9-]+$/.test(cleanIdentifier)) {
       throw new Error(
-        'Invalid identifier format: only letters, numbers, and hyphens allowed',
+        'Invalid identifier format: only lowercase letters, numbers, and hyphens allowed',
       )
     }
 
@@ -117,25 +193,18 @@ Make the agent highly specialized and effective for the described use case.`
     debugLogger.warn('AGENT_GENERATION_FAILED', {
       error: error instanceof Error ? error.message : String(error),
     })
-
-    const fallbackId = prompt
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .slice(0, 30)
-
-    return {
-      identifier: fallbackId || 'custom-agent',
-      whenToUse: `Use this agent when you need assistance with: ${prompt}`,
-      systemPrompt: `You are a specialized assistant focused on helping with ${prompt}. Provide expert-level assistance in this domain.`,
-    }
+    throw error
   }
 }
 
-export function validateAgentType(
-  agentType: string,
-  existingAgents: AgentConfig[] = [],
-): {
+export async function generateAgentDraft(
+  prompt: string,
+  options?: { existingIdentifiers?: string[]; signal?: AbortSignal },
+): Promise<GeneratedAgent> {
+  return generateAgentWithModel(prompt, options)
+}
+
+export function validateAgentType(agentType: string): {
   isValid: boolean
   errors: string[]
   warnings: string[]
@@ -148,12 +217,10 @@ export function validateAgentType(
     return { isValid: false, errors, warnings }
   }
 
-  if (!/^[a-zA-Z]/.test(agentType)) {
-    errors.push('Agent type must start with a letter')
-  }
-
-  if (!/^[a-zA-Z0-9-]+$/.test(agentType)) {
-    errors.push('Agent type can only contain letters, numbers, and hyphens')
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$/.test(agentType)) {
+    errors.push(
+      'Agent type must start and end with alphanumeric characters and contain only letters, numbers, and hyphens',
+    )
   }
 
   if (agentType.length < 3) {
@@ -162,22 +229,6 @@ export function validateAgentType(
 
   if (agentType.length > 50) {
     errors.push('Agent type must be less than 50 characters')
-  }
-
-  const reserved = ['help', 'exit', 'quit', 'agents', 'task']
-  if (reserved.includes(agentType.toLowerCase())) {
-    errors.push('This name is reserved')
-  }
-
-  const duplicate = existingAgents.find(a => a.agentType === agentType)
-  if (duplicate) {
-    errors.push(
-      `An agent with this name already exists in ${duplicate.location}`,
-    )
-  }
-
-  if (agentType.includes('--')) {
-    warnings.push('Consider avoiding consecutive hyphens')
   }
 
   return {
@@ -194,10 +245,7 @@ export type AgentDraftForValidation = {
   selectedTools?: string[]
 }
 
-export function validateAgentConfig(
-  config: AgentDraftForValidation,
-  existingAgents: AgentConfig[] = [],
-): {
+export function validateAgentConfig(config: AgentDraftForValidation): {
   isValid: boolean
   errors: string[]
   warnings: string[]
@@ -206,29 +254,35 @@ export function validateAgentConfig(
   const warnings: string[] = []
 
   if (config.agentType) {
-    const typeValidation = validateAgentType(config.agentType, existingAgents)
+    const typeValidation = validateAgentType(config.agentType)
     errors.push(...typeValidation.errors)
     warnings.push(...typeValidation.warnings)
   }
 
   if (!config.whenToUse) {
-    errors.push('Description is required')
+    errors.push('Description (description) is required')
   } else if (config.whenToUse.length < 10) {
     warnings.push(
       'Description should be more descriptive (at least 10 characters)',
     )
+  } else if (config.whenToUse.length > 5000) {
+    warnings.push('Description is very long (over 5000 characters)')
   }
 
   if (!config.systemPrompt) {
     errors.push('System prompt is required')
   } else if (config.systemPrompt.length < 20) {
-    warnings.push(
-      'System prompt might be too short for effective agent behavior',
-    )
+    errors.push('System prompt is too short (minimum 20 characters)')
+  } else if (config.systemPrompt.length > 10_000) {
+    warnings.push('System prompt is very long (over 10,000 characters)')
   }
 
-  if (!config.selectedTools || config.selectedTools.length === 0) {
-    warnings.push('No tools selected - agent will have limited capabilities')
+  if (config.selectedTools === undefined) {
+    warnings.push('Agent has access to all tools')
+  } else if (config.selectedTools.length === 0) {
+    warnings.push(
+      'No tools selected - agent will have very limited capabilities',
+    )
   }
 
   return {
@@ -246,10 +300,13 @@ export function generateAgentFileContent(
   model?: string,
   color?: string,
 ): string {
-  // Match legacy `.claude` agent file generator format:
-  // - description uses literal "\n" escapes
-  // - tools is an optional comma-separated scalar (omitted when "*" / inherit-all)
-  const desc = description.replace(/\n/g, '\\n')
+  // Quote + escape description and use literal "\n" sequences so the YAML frontmatter
+  // stays one-line and parseable even when the description contains colons, quotes, or
+  // backslashes.
+  const escapedDescription = description
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '\\\\n')
 
   const toolsList =
     tools === '*'
@@ -265,5 +322,5 @@ export function generateAgentFileContent(
   const modelLine = model ? `\nmodel: ${model}` : ''
   const colorLine = color ? `\ncolor: ${color}` : ''
 
-  return `---\nname: ${agentType}\ndescription: ${desc}${toolsLine}${modelLine}${colorLine}\n---\n\n${systemPrompt}\n`
+  return `---\nname: ${agentType}\ndescription: "${escapedDescription}"${toolsLine}${modelLine}${colorLine}\n---\n\n${systemPrompt}\n`
 }

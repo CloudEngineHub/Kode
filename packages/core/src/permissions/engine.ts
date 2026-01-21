@@ -18,7 +18,7 @@ import {
   expandSymlinkPaths,
   getWriteSafetyCheckForPath,
   isPathInWorkingDirectories,
-  isPlanFileForContext,
+  isSpecialAllowedWritePathForContext,
   matchPermissionRuleForPath,
   suggestFilePermissionUpdates,
 } from '#core/utils/permissions/fileToolPermissionEngine'
@@ -180,7 +180,7 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
     return { result: true }
   }
 
-  const effectiveToolPermissionContext =
+  let effectiveToolPermissionContext =
     toolPermissionContext ??
     (() => {
       const fallback = createDefaultToolPermissionContext({
@@ -199,6 +199,25 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
       return fallback
     })()
 
+  if (toolPermissionContext) {
+    effectiveToolPermissionContext = {
+      ...toolPermissionContext,
+      alwaysAllowRules: { ...toolPermissionContext.alwaysAllowRules },
+      alwaysDenyRules: { ...toolPermissionContext.alwaysDenyRules },
+      alwaysAskRules: { ...toolPermissionContext.alwaysAskRules },
+    }
+  }
+
+  // Per-command allowedTools (e.g. `Read(~/**)`) must participate in the same
+  // rule engine as persisted permission rules.
+  if (commandAllowedTools.length > 0) {
+    const existing =
+      effectiveToolPermissionContext.alwaysAllowRules.command ?? []
+    effectiveToolPermissionContext.alwaysAllowRules.command = [
+      ...new Set([...existing, ...commandAllowedTools]),
+    ]
+  }
+
   const checkEditPermissionForPath = (toolPath: string): PermissionResult => {
     const candidates = expandSymlinkPaths(toolPath)
 
@@ -214,17 +233,24 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
           result: false,
           message: `Permission to edit ${toolPath} has been denied.`,
           shouldPromptUser: false,
+          blockedPath: toolPath,
+          decisionReason: deniedRule,
         }
       }
     }
 
-    if (isPlanFileForContext({ inputPath: toolPath, context })) {
+    if (isSpecialAllowedWritePathForContext({ inputPath: toolPath, context })) {
       return { result: true }
     }
 
     const safety = getWriteSafetyCheckForPath(toolPath)
     if ('message' in safety) {
-      return { result: false, message: safety.message }
+      return {
+        result: false,
+        message: safety.message,
+        blockedPath: toolPath,
+        decisionReason: safety.message,
+      }
     }
 
     for (const candidate of candidates) {
@@ -238,6 +264,8 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
         return {
           result: false,
           message: `${PRODUCT_NAME} requested permissions to write to ${toolPath}, but you haven't granted it yet.`,
+          blockedPath: toolPath,
+          decisionReason: askedRule,
         }
       }
     }
@@ -264,6 +292,8 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
     return {
       result: false,
       message: `${PRODUCT_NAME} requested permissions to write to ${toolPath}, but you haven't granted it yet.`,
+      blockedPath: toolPath,
+      decisionReason: 'No allow rule matched (outside working directories)',
       suggestions: suggestFilePermissionUpdates({
         inputPath: toolPath,
         operation: 'write',

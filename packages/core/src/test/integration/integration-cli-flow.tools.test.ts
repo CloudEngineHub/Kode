@@ -17,7 +17,7 @@ function getInputItems(request: unknown): unknown[] {
   return Array.isArray(input) ? input : []
 }
 
-describe('🔌 Integration: Full Claude.ts Flow (Tools)', () => {
+describe('🔌 Integration: Full CLI Flow (Tools)', () => {
   if (ACTIVE_PRODUCTION_MODELS.length === 0) {
     test.skip('✅ Tools flow (requires API keys)', () => {})
     return

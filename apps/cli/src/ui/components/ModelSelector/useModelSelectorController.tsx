@@ -1,12 +1,9 @@
 import { useEffect, useMemo } from 'react'
 import { getTheme } from '#core/utils/theme'
 import { useExitOnCtrlCD } from '#ui-ink/hooks/useExitOnCtrlCD'
-import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
-import {
-  CONTEXT_LENGTH_OPTIONS,
-  DEFAULT_CONTEXT_LENGTH,
-} from '#ui-ink/ui/components/model-selector/options'
-import { printModelConfig } from '#ui-ink/ui/components/model-selector/printModelConfig'
+import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
+import { CONTEXT_LENGTH_OPTIONS, DEFAULT_CONTEXT_LENGTH } from './flow/options'
+import { printModelConfig } from './flow/printModelConfig'
 import type { ModelSelectorProps } from './types'
 import type { ModelSelectorViewProps } from './viewTypes'
 import { useModelSelectorInput } from './useModelSelectorInput'
@@ -14,7 +11,7 @@ import { useModelSelectorMenus } from './useModelSelectorMenus'
 import { useModelSelectorModelOptions } from './useModelSelectorModelOptions'
 import { useModelSelectorState } from './useModelSelectorState'
 import { useModelSelectorActions } from './useModelSelectorActions'
-import { useEscapeNavigation } from '#ui-ink/ui/components/model-selector/useEscapeNavigation'
+import { useEscapeNavigation } from './flow/useEscapeNavigation'
 
 function normalizeProviderForApiKeyEnvVar(provider: string): string {
   // Some "coding plan" providers share auth with their base provider.
@@ -43,12 +40,13 @@ export function useModelSelectorController(
   props: ModelSelectorProps,
 ): ModelSelectorViewProps {
   const theme = getTheme()
-  const { rows: terminalRows, columns: terminalColumns } = useTerminalSize()
-  const tightLayout = terminalRows <= 18 || terminalColumns <= 66
-  const compactLayout =
-    tightLayout || terminalRows <= 22 || terminalColumns <= 76
-  const containerPaddingY = tightLayout ? 0 : compactLayout ? 0 : 1
-  const containerGap = tightLayout ? 0 : 1
+  const layout = useScreenLayout({ compactColumns: 76 })
+  const terminalRows = layout.rows
+  const terminalColumns = layout.columns
+  const tightLayout = layout.tightLayout
+  const compactLayout = layout.compactLayout
+  const containerPaddingY = layout.paddingY
+  const containerGap = layout.gap
 
   const exitState = useExitOnCtrlCD(() => process.exit(0))
   const exitStateForScreens = useMemo(

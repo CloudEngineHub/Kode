@@ -4,12 +4,13 @@ import type { Message } from '#core/query'
 import type { SetToolJSXFn } from '#core/tooling/Tool'
 import type { Tool } from '#core/tooling/Tool'
 
-export type PromptMode = 'bash' | 'prompt' | 'koding'
+export type PromptMode = 'bash' | 'background' | 'prompt' | 'koding'
 
 export type PromptInputProps = {
   commands: Command[]
   forkNumber: number
   messageLogName: string
+  initialPrompt?: string
   disableSlashCommands?: boolean
   isDisabled: boolean
   isLoading: boolean
@@ -38,4 +39,32 @@ export type PromptInputProps = {
   abortController: AbortController | null
   onModelChange?: () => void
   uiRefreshCounter?: number
+  onManageTasks?: () => void
+  shortcutsOpen?: boolean
+  restorePastes?: {
+    id: number
+    pastedTexts: Array<{ placeholder: string; text: string }>
+    pastedImages: Array<{
+      placeholder: string
+      data: string
+      mediaType: string
+    }>
+  }
+  onRestorePastesApplied?: (id: number) => void
+  draftPastes?: {
+    pastedTexts: Array<{ placeholder: string; text: string }>
+    pastedImages: Array<{
+      placeholder: string
+      data: string
+      mediaType: string
+    }>
+  }
+  onDraftPastesChange?: (next: {
+    pastedTexts: Array<{ placeholder: string; text: string }>
+    pastedImages: Array<{
+      placeholder: string
+      data: string
+      mediaType: string
+    }>
+  }) => void
 }

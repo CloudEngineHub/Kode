@@ -1,8 +1,15 @@
-import { appendFileSync, existsSync, mkdirSync } from 'fs'
-import { homedir } from 'os'
-import { join } from 'path'
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  symlinkSync,
+  unlinkSync,
+} from 'fs'
+import { dirname, join } from 'path'
 
-import { SESSION_ID } from '#core/utils/log'
+import { LEGACY_ENV } from '#core/compat/legacyEnv'
+import { getKodeBaseDir } from '#core/utils/env'
+import { getKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
 
 import { isDebugMode } from './mode'
 import type { LogEntry } from './types'
@@ -10,18 +17,71 @@ import type { LogEntry } from './types'
 export const STARTUP_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-')
 const REQUEST_START_TIME = Date.now()
 
-export const KODE_DIR = join(homedir(), '.kode')
+export function getKodeDir(): string {
+  return getKodeBaseDir()
+}
+
+export const KODE_DIR = getKodeDir()
 
 function getProjectDir(cwd: string): string {
   return cwd.replace(/[^a-zA-Z0-9]/g, '-')
 }
 
+function getDebugLogFileOverride(): string | null {
+  const override =
+    process.env.KODE_DEBUG_LOG_PATH ??
+    process.env[LEGACY_ENV.codeDebugLogsDir]
+
+  if (!override) return null
+  const trimmed = String(override).trim()
+  return trimmed ? trimmed : null
+}
+
 export const DEBUG_PATHS = {
-  base: () => join(KODE_DIR, getProjectDir(process.cwd()), 'debug'),
-  detailed: () => join(DEBUG_PATHS.base(), `${STARTUP_TIMESTAMP}-detailed.log`),
+  base: () => join(getKodeDir(), getProjectDir(process.cwd()), 'debug'),
+  detailed: () =>
+    getDebugLogFileOverride() ??
+    join(DEBUG_PATHS.base(), `${getKodeAgentSessionId()}.txt`),
   flow: () => join(DEBUG_PATHS.base(), `${STARTUP_TIMESTAMP}-flow.log`),
   api: () => join(DEBUG_PATHS.base(), `${STARTUP_TIMESTAMP}-api.log`),
   state: () => join(DEBUG_PATHS.base(), `${STARTUP_TIMESTAMP}-state.log`),
+  latest: () => join(dirname(DEBUG_PATHS.detailed()), 'latest'),
+}
+
+type SymlinkState = { linkPath: string; targetPath: string }
+let latestSymlinkState: SymlinkState | null = null
+
+function createLatestSymlink(): void {
+  if (process.argv[2] === '--ripgrep') return
+
+  try {
+    const latestPath = DEBUG_PATHS.latest()
+    const detailedPath = DEBUG_PATHS.detailed()
+
+    const logDir = dirname(detailedPath)
+    if (!existsSync(logDir)) return
+
+    if (
+      latestSymlinkState?.linkPath === latestPath &&
+      latestSymlinkState?.targetPath === detailedPath &&
+      existsSync(latestPath)
+    ) {
+      return
+    }
+
+    if (existsSync(latestPath)) {
+      try {
+        unlinkSync(latestPath)
+      } catch {
+        // ignore: may fail on Windows or permission issues
+      }
+    }
+
+    symlinkSync(detailedPath, latestPath)
+    latestSymlinkState = { linkPath: latestPath, targetPath: detailedPath }
+  } catch {
+    // ignore: symlink creation may fail on Windows or certain filesystems
+  }
 }
 
 export function ensureDebugDir(): void {
@@ -29,6 +89,13 @@ export function ensureDebugDir(): void {
   if (!existsSync(debugDir)) {
     mkdirSync(debugDir, { recursive: true })
   }
+
+  const detailedDir = dirname(DEBUG_PATHS.detailed())
+  if (detailedDir !== debugDir && !existsSync(detailedDir)) {
+    mkdirSync(detailedDir, { recursive: true })
+  }
+
+  createLatestSymlink()
 }
 
 export function writeToFile(filePath: string, entry: LogEntry): void {
@@ -40,7 +107,7 @@ export function writeToFile(filePath: string, entry: LogEntry): void {
       JSON.stringify(
         {
           ...entry,
-          sessionId: SESSION_ID,
+          sessionId: getKodeAgentSessionId(),
           pid: process.pid,
           uptime: Date.now() - REQUEST_START_TIME,
         },

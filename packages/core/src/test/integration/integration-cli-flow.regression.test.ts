@@ -7,7 +7,7 @@ import {
   getActiveProfile,
 } from './integration-cli-flow.shared'
 
-describe('🔌 Integration: Full Claude.ts Flow (Regression)', () => {
+describe('🔌 Integration: Full CLI Flow (Regression)', () => {
   if (ACTIVE_PRODUCTION_MODELS.length === 0) {
     test.skip('✅ Regression tests (requires API keys)', () => {})
     return

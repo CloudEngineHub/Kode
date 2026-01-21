@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 
 import type {
   CompletionContext,
@@ -32,6 +32,142 @@ function shouldAutoTrigger(context: CompletionContext): boolean {
   }
 }
 
+export function __computeAutoTriggerActionForTests(args: {
+  input: string
+  previousInput: string
+  now: number
+  lastInputTime: number
+  isEnabled: boolean
+  state: CompletionState
+  context: CompletionContext | null
+  generateSuggestions: (context: CompletionContext) => UnifiedSuggestion[]
+}): {
+  nextLastInput: string
+  nextLastInputTime: number
+  action: 'none' | 'reset' | 'activate'
+  suggestions?: UnifiedSuggestion[]
+  context?: CompletionContext
+} {
+  if (args.previousInput === args.input) {
+    return {
+      nextLastInput: args.previousInput,
+      nextLastInputTime: args.lastInputTime,
+      action: 'none',
+    }
+  }
+
+  if (!args.isEnabled) {
+    return {
+      nextLastInput: args.input,
+      nextLastInputTime: args.lastInputTime,
+      action: args.state.isActive ? 'reset' : 'none',
+    }
+  }
+
+  const timeSinceLastInput = args.now - args.lastInputTime
+  const isPossiblyIMEInput = timeSinceLastInput > 0 && timeSinceLastInput < 150
+
+  const inputLengthChange = Math.abs(
+    args.input.length - args.previousInput.length,
+  )
+  const isHistoryNavigation =
+    (inputLengthChange > 10 ||
+      (inputLengthChange > 5 &&
+        !args.input.includes(args.previousInput.slice(-5)))) &&
+    args.input !== args.previousInput
+
+  const shouldAutoHideSingleMatch = (
+    suggestion: UnifiedSuggestion,
+    context: CompletionContext,
+  ): boolean => {
+    const currentInput = args.input.slice(context.startPos, context.endPos)
+
+    if (context.type === 'file') {
+      if (suggestion.value.endsWith('/')) return false
+      if (currentInput === suggestion.value) return true
+      if (
+        currentInput.endsWith('/' + suggestion.value) ||
+        currentInput.endsWith(suggestion.value)
+      ) {
+        return true
+      }
+      return false
+    }
+
+    if (context.type === 'command') {
+      return currentInput === `/${suggestion.value}`
+    }
+
+    if (context.type === 'agent') {
+      return currentInput === `@${suggestion.value}`
+    }
+
+    return false
+  }
+
+  const nextLastInputTime = args.now
+  const nextLastInput = args.input
+
+  if (args.state.preview?.isActive || args.now < args.state.suppressUntil) {
+    return { nextLastInput, nextLastInputTime, action: 'none' }
+  }
+
+  if (isHistoryNavigation && args.state.isActive) {
+    return { nextLastInput, nextLastInputTime, action: 'reset' }
+  }
+
+  // 立即关闭补全面板如果 context 不存在但面板仍然激活
+  // 这解决了删除 "/" 或 "@" 后补全面板不关闭的问题
+  if (!args.context && args.state.isActive) {
+    return { nextLastInput, nextLastInputTime, action: 'reset' }
+  }
+
+  // 如果可能是 IME 输入且面板未激活，暂时不触发补全
+  // 这可以减少中文输入时的干扰
+  if (isPossiblyIMEInput && !args.state.isActive) {
+    return { nextLastInput, nextLastInputTime, action: 'none' }
+  }
+
+  if (args.context && shouldAutoTrigger(args.context)) {
+    const newSuggestions = args.generateSuggestions(args.context)
+
+    if (newSuggestions.length === 0) {
+      return { nextLastInput, nextLastInputTime, action: 'reset' }
+    }
+
+    if (
+      newSuggestions.length === 1 &&
+      shouldAutoHideSingleMatch(newSuggestions[0], args.context)
+    ) {
+      return { nextLastInput, nextLastInputTime, action: 'reset' }
+    }
+
+    return {
+      nextLastInput,
+      nextLastInputTime,
+      action: 'activate',
+      suggestions: newSuggestions,
+      context: args.context,
+    }
+  }
+
+  if (args.state.context) {
+    const current = args.context
+    const previous = args.state.context
+    const contextChanged =
+      !current ||
+      previous.type !== current.type ||
+      previous.startPos !== current.startPos ||
+      !current.prefix.startsWith(previous.prefix)
+
+    if (contextChanged) {
+      return { nextLastInput, nextLastInputTime, action: 'reset' }
+    }
+  }
+
+  return { nextLastInput, nextLastInputTime, action: 'none' }
+}
+
 export function useUnifiedCompletionAutoTrigger(args: {
   input: string
   cursorOffset: number
@@ -48,112 +184,30 @@ export function useUnifiedCompletionAutoTrigger(args: {
   const lastInputRef = useRef('')
   const lastInputTimeRef = useRef(0)
 
-  const shouldAutoHideSingleMatch = useCallback(
-    (suggestion: UnifiedSuggestion, context: CompletionContext): boolean => {
-      const currentInput = args.input.slice(context.startPos, context.endPos)
-
-      if (context.type === 'file') {
-        if (suggestion.value.endsWith('/')) return false
-        if (currentInput === suggestion.value) return true
-        if (
-          currentInput.endsWith('/' + suggestion.value) ||
-          currentInput.endsWith(suggestion.value)
-        ) {
-          return true
-        }
-        return false
-      }
-
-      if (context.type === 'command') {
-        return currentInput === `/${suggestion.value}`
-      }
-
-      if (context.type === 'agent') {
-        return currentInput === `@${suggestion.value}`
-      }
-
-      return false
-    },
-    [args.input],
-  )
-
   useEffect(() => {
-    if (lastInputRef.current === args.input) return
-    if (!args.isEnabled) {
-      if (args.state.isActive) {
-        args.resetCompletion()
-      }
-      lastInputRef.current = args.input
-      return
-    }
-
     const now = Date.now()
-    const timeSinceLastInput = now - lastInputTimeRef.current
-    lastInputTimeRef.current = now
-
-    // 检测可能的 IME 输入：快速连续的输入（< 150ms）
-    // 这有助于减少中文输入时的补全面板闪烁
-    const isPossiblyIMEInput =
-      timeSinceLastInput > 0 && timeSinceLastInput < 150
-
-    const inputLengthChange = Math.abs(
-      args.input.length - lastInputRef.current.length,
-    )
-    const isHistoryNavigation =
-      (inputLengthChange > 10 ||
-        (inputLengthChange > 5 &&
-          !args.input.includes(lastInputRef.current.slice(-5)))) &&
-      args.input !== lastInputRef.current
-
-    lastInputRef.current = args.input
-
-    if (args.state.preview?.isActive || Date.now() < args.state.suppressUntil) {
-      return
-    }
-
-    if (isHistoryNavigation && args.state.isActive) {
-      args.resetCompletion()
-      return
-    }
-
     const context = args.getWordAtCursor()
+    const result = __computeAutoTriggerActionForTests({
+      input: args.input,
+      previousInput: lastInputRef.current,
+      now,
+      lastInputTime: lastInputTimeRef.current,
+      isEnabled: args.isEnabled,
+      state: args.state,
+      context,
+      generateSuggestions: args.generateSuggestions,
+    })
 
-    // 立即关闭补全面板如果 context 不存在但面板仍然激活
-    // 这解决了删除 "/" 或 "@" 后补全面板不关闭的问题
-    if (!context && args.state.isActive) {
+    lastInputRef.current = result.nextLastInput
+    lastInputTimeRef.current = result.nextLastInputTime
+
+    if (result.action === 'reset') {
       args.resetCompletion()
       return
     }
 
-    // 如果可能是 IME 输入且面板未激活，暂时不触发补全
-    // 这可以减少中文输入时的干扰
-    if (isPossiblyIMEInput && !args.state.isActive) {
-      return
-    }
-
-    if (context && shouldAutoTrigger(context)) {
-      const newSuggestions = args.generateSuggestions(context)
-
-      if (newSuggestions.length === 0) {
-        args.resetCompletion()
-      } else if (
-        newSuggestions.length === 1 &&
-        shouldAutoHideSingleMatch(newSuggestions[0], context)
-      ) {
-        args.resetCompletion()
-      } else {
-        args.activateCompletion(newSuggestions, context)
-      }
-    } else if (args.state.context) {
-      const contextChanged =
-        !context ||
-        args.state.context.type !== context.type ||
-        args.state.context.startPos !== context.startPos ||
-        !context.prefix.startsWith(args.state.context.prefix)
-
-      if (contextChanged) {
-        args.resetCompletion()
-      }
+    if (result.action === 'activate' && result.suggestions && result.context) {
+      args.activateCompletion(result.suggestions, result.context)
     }
   }, [args.input, args.cursorOffset, args.isEnabled, args.state.isActive])
 }

@@ -188,13 +188,13 @@ export function useTextInput({
       return
     }
 
-    // Multiline chat input: Enter submits, Option/Alt+Enter inserts newline.
+    // Multiline chat input: Enter submits, Shift+Enter and Option/Alt+Enter insert newline.
     const optionPressed = (() => {
       if (!('option' in key)) return false
       const optionValue = (key as unknown as Record<string, unknown>).option
       return optionValue === true
     })()
-    if (key.meta || optionPressed) {
+    if (key.shift || key.meta || optionPressed) {
       return getCursor().insert('\n')
     }
 

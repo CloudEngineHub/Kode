@@ -1,4 +1,5 @@
 import { Box, Text } from 'ink'
+import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { extname, relative } from 'node:path'
 import * as React from 'react'
@@ -7,6 +8,8 @@ import type { Tool } from '#core/tooling/Tool'
 import { getCwd } from '#core/utils/state'
 import { findSimilarFile, normalizeFilePath } from '#core/utils/file'
 import { getTheme } from '#core/utils/theme'
+import { getKodeBaseDir } from '#core/utils/env'
+import { LEGACY_ENV } from '#config/compat/legacyEnv'
 import { DESCRIPTION, getPrompt } from './prompt'
 import { hasReadPermission } from '#core/utils/permissions/filesystem'
 import { secureFileService } from '#core/utils/secureFile'
@@ -21,6 +24,55 @@ import {
 } from './constants'
 import { renderResultForAssistant } from './renderResultForAssistant'
 import { callFileReadTool } from './call'
+
+function toPosixPath(value: string): string {
+  return value.replace(/\\/g, '/')
+}
+
+function isPosixPathWithinDir(posixPath: string, dirPosix: string): boolean {
+  return posixPath === dirPosix || posixPath.startsWith(`${dirPosix}/`)
+}
+
+function getProjectKeyFromCwd(): string {
+  return getCwd().replace(/[^a-zA-Z0-9]/g, '-')
+}
+
+function getLegacyTmpBaseDir(): string {
+  const override = process.env[LEGACY_ENV.codeTmpDir]
+  if (typeof override === 'string') {
+    const trimmed = override.trim()
+    if (trimmed) return trimmed
+  }
+  if (process.platform === 'win32') {
+    return process.env.TEMP?.trim() || tmpdir()
+  }
+  return '/tmp'
+}
+
+function extractTaskOutputIdFromPath(filePath: string): string | null {
+  const posix = toPosixPath(normalizeFilePath(filePath))
+  const projectKey = getProjectKeyFromCwd()
+
+  const tasksDirs = [
+    toPosixPath(path.join(getKodeBaseDir(), projectKey, 'tasks')),
+    toPosixPath(
+      path.join(getLegacyTmpBaseDir(), 'claude', projectKey, 'tasks'),
+    ),
+  ]
+
+  for (const tasksDir of tasksDirs) {
+    const prefix = `${tasksDir}/`
+    if (!posix.startsWith(prefix)) continue
+    if (!posix.endsWith('.output')) continue
+
+    const id = posix.slice(prefix.length, -'.output'.length)
+    if (id.length === 0 || id.length > 20) continue
+    if (!/^[a-zA-Z0-9_-]+$/.test(id)) continue
+    return id
+  }
+
+  return null
+}
 
 const inputSchema = z.strictObject({
   file_path: z.string().describe('The absolute path to the file to read'),
@@ -53,7 +105,22 @@ export const FileReadTool = {
   isConcurrencySafe() {
     return true // FileRead is read-only, safe for concurrent execution
   },
-  userFacingName() {
+  userFacingName(input?: z.infer<typeof inputSchema>) {
+    const filePath = input?.file_path
+    if (!filePath) return 'Read'
+
+    const absolute = normalizeFilePath(filePath)
+    const absolutePosix = toPosixPath(absolute)
+
+    const planDirPosix = toPosixPath(path.join(getKodeBaseDir(), 'plans'))
+    if (isPosixPathWithinDir(absolutePosix, planDirPosix)) {
+      return 'Reading Plan'
+    }
+
+    if (extractTaskOutputIdFromPath(absolutePosix)) {
+      return 'Read agent output'
+    }
+
     return 'Read'
   },
   async isEnabled() {
@@ -169,14 +236,8 @@ export const FileReadTool = {
 
     return { result: true }
   },
-  async *call(
-    { file_path, offset = 1, limit = undefined },
-    { readFileTimestamps },
-  ) {
-    yield* callFileReadTool(
-      { file_path, offset, limit },
-      { readFileTimestamps },
-    )
+  async *call({ file_path, offset = 1, limit = undefined }, ctx) {
+    yield* callFileReadTool({ file_path, offset, limit }, ctx)
   },
   renderResultForAssistant,
 } satisfies Tool<typeof inputSchema, FileReadToolData>

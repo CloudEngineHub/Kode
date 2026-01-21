@@ -14,6 +14,11 @@ import { BunShell, buildLinuxBwrapCommand } from '#runtime/shell'
 
 describe('BunShell Linux bwrap sandbox (compatibility)', () => {
   test('buildLinuxBwrapCommand generates expected bwrap args (read deny + write allow + denyWithinAllow + unshare-net)', () => {
+    const previousKodeTmp = process.env.KODE_TMPDIR
+    const previousClaudeTmp = process.env.CLAUDE_CODE_TMPDIR
+    delete process.env.KODE_TMPDIR
+    delete process.env.CLAUDE_CODE_TMPDIR
+
     const root = mkdtempSync(join(tmpdir(), 'kode-bwrap-'))
     try {
       const allowDir = join(root, 'allow')
@@ -95,6 +100,10 @@ describe('BunShell Linux bwrap sandbox (compatibility)', () => {
       expect(cmd).toEqual(expected)
     } finally {
       rmSync(root, { recursive: true, force: true })
+      if (previousKodeTmp === undefined) delete process.env.KODE_TMPDIR
+      else process.env.KODE_TMPDIR = previousKodeTmp
+      if (previousClaudeTmp === undefined) delete process.env.CLAUDE_CODE_TMPDIR
+      else process.env.CLAUDE_CODE_TMPDIR = previousClaudeTmp
     }
   })
 
@@ -129,9 +138,7 @@ describe('BunShell Linux bwrap sandbox (compatibility)', () => {
         },
       })
       expect(optional.stdout.trim()).toBe('ok')
-      expect(optional.stderr).toContain(
-        '[sandbox] unavailable, ran without isolation.',
-      )
+      expect(optional.stderr.trim()).toBe('')
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
@@ -162,9 +169,7 @@ describe('BunShell Linux bwrap sandbox (compatibility)', () => {
       })
 
       expect(result.stdout.trim()).toBe('ok')
-      expect(result.stderr).toContain(
-        '[sandbox] failed to start, ran without isolation.',
-      )
+      expect(result.stderr.trim()).toBe('')
     } finally {
       rmSync(root, { recursive: true, force: true })
     }

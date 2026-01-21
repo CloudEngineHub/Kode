@@ -40,6 +40,30 @@ export type BunShellSandboxOptions = {
   // Back-compat: legacy allowNetwork flag (when true, disables network restriction).
   allowNetwork?: boolean
 
+  /**
+   * Linux-only compatibility: when network is restricted via `--unshare-net`,
+   * sandboxed processes can only reach the host HTTP/SOCKS proxies via a pair of
+   * Unix socket bridge endpoints.
+   *
+   * The host creates `UNIX-LISTEN` sockets that forward to the host proxy ports,
+   * and the sandbox starts `socat TCP-LISTEN` forwarders to expose them as
+   * localhost TCP ports (3128/1080 by convention).
+   */
+  linuxBridge?: {
+    httpSocketPath: string
+    socksSocketPath: string
+  }
+
+  /**
+   * Linux-only compatibility: optional Unix socket blocking via seccomp.
+   * When present, the sandbox script runs:
+   *   apply-seccomp <bpfPath> <shell> -c <command>
+   */
+  linuxSeccomp?: {
+    applySeccompPath: string
+    bpfPath: string
+  }
+
   // Compatibility: sandbox network settings.
   allowUnixSockets?: string[]
   allowAllUnixSockets?: boolean
@@ -65,6 +89,7 @@ export type BunShellSandboxOptions = {
 
 export type BunShellExecOptions = {
   sandbox?: BunShellSandboxOptions
+  stdin?: string
   onStdoutChunk?: (chunk: string) => void
   onStderrChunk?: (chunk: string) => void
 }
@@ -80,6 +105,7 @@ export type BackgroundShellStatusAttachment = {
 export type BashNotification = {
   type: 'bash_notification'
   taskId: string
+  taskType?: string
   description: string
   status: 'completed' | 'failed' | 'killed'
   exitCode?: number

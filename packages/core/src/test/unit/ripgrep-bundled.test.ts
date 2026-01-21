@@ -1,5 +1,10 @@
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
+import {
+  chmodSync,
+  mkdtempSync,
+  mkdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
@@ -7,9 +12,6 @@ import {
   getRipgrepPath,
   resetRipgrepPathCacheForTests,
 } from '#core/utils/ripgrep'
-const vscodeRgPath = (
-  createRequire(import.meta.url)('@vscode/ripgrep') as { rgPath: string }
-).rgPath
 
 const ORIGINAL_ENV = { ...process.env }
 
@@ -43,11 +45,24 @@ afterEach(() => {
   resetRipgrepPathCacheForTests()
 })
 
+function getPlatformExecutableName(): string {
+  return process.platform === 'win32' ? 'rg.exe' : 'rg'
+}
+
+function writeExecutableStub(filePath: string) {
+  if (process.platform === 'win32') {
+    writeFileSync(filePath, 'stub')
+    return
+  }
+  writeFileSync(filePath, '#!/bin/sh\n\necho ripgrep\n')
+  chmodSync(filePath, 0o755)
+}
+
 test('uses KODE_RIPGREP_PATH when set', () => {
   const dir = mkdtempSync(join(tmpdir(), 'kode-rg-path-'))
   try {
-    const fakeRg = join(dir, process.platform === 'win32' ? 'rg.exe' : 'rg')
-    writeFileSync(fakeRg, '#!/bin/sh\necho rg\n')
+    const fakeRg = join(dir, getPlatformExecutableName())
+    writeExecutableStub(fakeRg)
 
     setEnv({ KODE_RIPGREP_PATH: fakeRg })
     expect(getRipgrepPath()).toBe(fakeRg)
@@ -56,43 +71,127 @@ test('uses KODE_RIPGREP_PATH when set', () => {
   }
 })
 
-test('prefers rg found on PATH over bundled fallback', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'kode-rg-path-first-'))
+test('prefers bundled ripgrep when available (default)', () => {
+  const root = mkdtempSync(join(tmpdir(), 'kode-rg-vendor-first-'))
   try {
-    const fakeRg = join(process.platform === 'win32' ? 'rg.exe' : 'rg')
-    writeFileSync(fakeRg, 'stub')
-    if (process.platform !== 'win32') {
-      chmodSync(fakeRg, 0o755)
-    }
+    const vendorRoot = join(root, 'vendor', 'ripgrep')
+    const vendorDirName =
+      process.platform === 'win32'
+        ? `${process.arch}-win32`
+        : `${process.arch}-${process.platform}`
+    const vendorRg = join(
+      vendorRoot,
+      vendorDirName,
+      getPlatformExecutableName(),
+    )
+    mkdirSync(join(vendorRoot, vendorDirName), { recursive: true })
+    writeExecutableStub(vendorRg)
+
+    const pathDir = join(root, 'path')
+    mkdirSync(pathDir, { recursive: true })
+    const pathRg = join(pathDir, getPlatformExecutableName())
+    writeExecutableStub(pathRg)
 
     const oldPath = process.env.PATH
     const sep = process.platform === 'win32' ? ';' : ':'
-    setEnv({ PATH: [dir, oldPath].filter(Boolean).join(sep) })
+    setEnv({
+      KODE_RIPGREP_VENDOR_ROOT: vendorRoot,
+      PATH: [pathDir, oldPath].filter(Boolean).join(sep),
+    })
 
-    expect(getRipgrepPath()).toBe(fakeRg)
+    expect(getRipgrepPath()).toBe(vendorRg)
   } finally {
-    rmSync(dir, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true })
   }
 })
 
-test('falls back to @vscode/ripgrep when rg is missing from PATH', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'kode-rg-fallback-'))
+test('prefers packaged ripgrep optionalDependency when present (default)', () => {
+  const root = mkdtempSync(join(tmpdir(), 'kode-rg-packaged-first-'))
+  const scopeDir = join(process.cwd(), 'node_modules', '@shareai-lab')
+  const pkgName = `kode-ripgrep-${process.platform}-${process.arch}`
+  const pkgDir = join(scopeDir, pkgName)
+
   try {
+    const binName = getPlatformExecutableName()
+    const binDir = join(pkgDir, 'bin')
+    const binPath = join(binDir, binName)
+    mkdirSync(binDir, { recursive: true })
+    writeExecutableStub(binPath)
+
+    const indexJs = [
+      "const path = require('node:path')",
+      '',
+      'module.exports = {',
+      `  rgPath: path.join(__dirname, 'bin', ${JSON.stringify(binName)}),`,
+      '}',
+      '',
+    ].join('\n')
+    writeFileSync(join(pkgDir, 'index.js'), indexJs)
+
     setEnv({
+      KODE_USE_BUILTIN_RIPGREP: '1',
       PATH: '',
     })
 
-    expect(getRipgrepPath()).toBe(vscodeRgPath)
+    expect(getRipgrepPath()).toBe(binPath)
   } finally {
-    rmSync(dir, { recursive: true, force: true })
+    rmSync(pkgDir, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true })
   }
 })
 
-test('falls back to @vscode/ripgrep when forced (USE_BUILTIN_RIPGREP)', () => {
-  setEnv({
-    USE_BUILTIN_RIPGREP: '1',
-    PATH: '',
-  })
+test('uses rg found on PATH when builtin is disabled (USE_BUILTIN_RIPGREP=0)', () => {
+  const root = mkdtempSync(join(tmpdir(), 'kode-rg-path-only-'))
+  try {
+    const vendorRoot = join(root, 'vendor', 'ripgrep')
+    const vendorDirName =
+      process.platform === 'win32'
+        ? `${process.arch}-win32`
+        : `${process.arch}-${process.platform}`
+    const vendorRg = join(
+      vendorRoot,
+      vendorDirName,
+      getPlatformExecutableName(),
+    )
+    mkdirSync(join(vendorRoot, vendorDirName), { recursive: true })
+    writeExecutableStub(vendorRg)
 
-  expect(getRipgrepPath()).toBe(vscodeRgPath)
+    const pathDir = join(root, 'path')
+    mkdirSync(pathDir, { recursive: true })
+    const pathRg = join(pathDir, getPlatformExecutableName())
+    writeExecutableStub(pathRg)
+
+    const oldPath = process.env.PATH
+    const sep = process.platform === 'win32' ? ';' : ':'
+    setEnv({
+      KODE_RIPGREP_VENDOR_ROOT: vendorRoot,
+      USE_BUILTIN_RIPGREP: '0',
+      PATH: [pathDir, oldPath].filter(Boolean).join(sep),
+    })
+
+    expect(getRipgrepPath()).toBe(pathRg)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('falls back to rg found on PATH when vendor is unavailable', () => {
+  const root = mkdtempSync(join(tmpdir(), 'kode-rg-path-fallback-'))
+  try {
+    const pathDir = join(root, 'path')
+    mkdirSync(pathDir, { recursive: true })
+    const pathRg = join(pathDir, getPlatformExecutableName())
+    writeExecutableStub(pathRg)
+
+    const oldPath = process.env.PATH
+    const sep = process.platform === 'win32' ? ';' : ':'
+    setEnv({
+      KODE_RIPGREP_VENDOR_ROOT: join(root, 'missing-vendor'),
+      PATH: [pathDir, oldPath].filter(Boolean).join(sep),
+    })
+
+    expect(getRipgrepPath()).toBe(pathRg)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })

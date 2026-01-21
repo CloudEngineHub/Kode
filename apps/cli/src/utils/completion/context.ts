@@ -66,6 +66,7 @@ export function getCompletionContext(args: {
       prefix: isCommand ? word.slice(1) : word,
       startPos: start,
       endPos: cursorOffset,
+      trigger: '/',
     }
   }
 
@@ -73,12 +74,19 @@ export function getCompletionContext(args: {
     const content = word.slice(1)
     if (word.includes('@', 1)) return null
     return {
-      type: 'agent',
+      type: 'file',
       prefix: content,
       startPos: start,
       endPos: cursorOffset,
+      trigger: '@',
     }
   }
 
-  return { type: 'file', prefix: word, startPos: start, endPos: cursorOffset }
+  return {
+    type: 'file',
+    prefix: word,
+    startPos: start,
+    endPos: cursorOffset,
+    trigger: null,
+  }
 }

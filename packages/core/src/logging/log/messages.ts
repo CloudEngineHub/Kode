@@ -1,9 +1,9 @@
 import { dirname } from 'path'
 import { MACRO } from '#core/constants/macros'
 import { getPlanSlugForConversationKey } from '#core/utils/planMode'
+import { getKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
 
 import { safeMkdir, safeWriteFile } from './filesystem'
-import { SESSION_ID } from './paths'
 
 export function overwriteLog(
   path: string,
@@ -32,7 +32,7 @@ export function overwriteLog(
     ...(slug ? { slug } : {}),
     cwd: process.cwd(),
     userType: process.env.USER_TYPE,
-    sessionId: SESSION_ID,
+    sessionId: getKodeAgentSessionId(),
     timestamp: new Date().toISOString(),
     version: MACRO.VERSION,
   }))

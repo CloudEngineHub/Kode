@@ -42,6 +42,12 @@ export interface ToolUseContext {
   commandSource?: CommandSource
   abortController: AbortController
   readFileTimestamps: { [filePath: string]: number }
+  /**
+   * Optional content hashes captured at read time, keyed by absolute file path.
+   * Used to avoid false-positive "modified since read" guards when a file is
+   * touched (mtime updated) without content changes.
+   */
+  readFileHashes?: { [filePath: string]: string }
   options?: {
     commands?: any[]
     tools?: any[]
@@ -63,9 +69,40 @@ export interface ToolUseContext {
      * additions through separate config objects.
      */
     getCustomSystemPromptAdditions?: () => string[]
+    /**
+     * Host-provided UI hook to open the message selector (rewind picker).
+     *
+     * Used by parity commands like `/rewind` without coupling core logic to Ink.
+     */
+    openMessageSelector?: () => void
+    /**
+     * Optional streaming callback invoked with provider-native stream events.
+     *
+     * Used by SDK/print-mode to optionally emit `stream_event` messages
+     * (`--include-partial-messages`) without coupling core to any host UI.
+     */
+    onStreamEvent?: (event: unknown) => void
+    /**
+     * Optional total USD budget cap for non-interactive / SDK flows.
+     * When the accumulated API cost meets or exceeds this value, core should
+     * stop before making additional model calls.
+     */
+    maxBudgetUsd?: number
+    /**
+     * Optional max agentic turns cap for non-interactive / SDK flows.
+     * When the number of model calls in the current run reaches this value,
+     * core should stop before making additional model calls.
+     */
+    maxTurns?: number
     forkNumber?: number
     messageLogName?: string
+    /**
+     * Force including main-thread fork context messages when launching a sub-agent.
+     * Used for legacy-compatible features like skill frontmatter `context: fork`.
+     */
+    forceForkContext?: boolean
     maxThinkingTokens?: any
+    thinkingMode?: 'auto' | 'enabled' | 'disabled'
     model?: string
     commandAllowedTools?: string[]
     isKodingRequest?: boolean
@@ -122,6 +159,9 @@ export interface ToolUseContext {
     __sandboxHomeDir?: string
     __sandboxPlatform?: NodeJS.Platform
     __sandboxBwrapPath?: string | null
+    __sandboxSocatPath?: string | null
+    __sandboxApplySeccompPath?: string | null
+    __sandboxSeccompBpfPath?: string | null
     /**
      * UI-collected answers for AskUserQuestion tool runs.
      * Stored by toolUseId to avoid mutating the tool input schema.
@@ -155,6 +195,7 @@ export interface Tool<
   TOutput = any,
 > {
   name: string
+  maxResultSizeChars?: number
   /**
    * Compatibility note: MCP tools are tagged and treated specially (e.g. MCPSearch).
    * This stays optional so non-MCP tools do not need to care.
@@ -212,6 +253,53 @@ export interface Tool<
     void,
     unknown
   >
+}
+
+/**
+ * Resolve tool description asynchronously.
+ *
+ * Many tools implement `description` as an async function (sometimes dependent on input).
+ * Callers that can await should use this to avoid accidentally treating an async
+ * description as a string.
+ *
+ * When called without `input`, this function will populate `tool.cachedDescription`
+ * to enable synchronous access via `getToolDescription()` (e.g. in adapters).
+ */
+export async function resolveToolDescription<
+  TInput extends z.ZodTypeAny = z.ZodTypeAny,
+>(tool: Tool<TInput>, input?: z.infer<TInput>): Promise<string> {
+  if (input === undefined && tool.cachedDescription) {
+    return tool.cachedDescription
+  }
+
+  if (typeof tool.description === 'string') {
+    if (input === undefined && !tool.cachedDescription) {
+      tool.cachedDescription = tool.description
+    }
+    return tool.description
+  }
+
+  if (typeof tool.description === 'function') {
+    try {
+      const resolved = await tool.description(input)
+      const description =
+        typeof resolved === 'string' && resolved.trim()
+          ? resolved
+          : `Tool: ${tool.name}`
+      if (input === undefined) {
+        tool.cachedDescription = description
+      }
+      return description
+    } catch {
+      // Fall through to a safe fallback.
+    }
+  }
+
+  const fallback = `Tool: ${tool.name}`
+  if (input === undefined && !tool.cachedDescription) {
+    tool.cachedDescription = fallback
+  }
+  return fallback
 }
 
 /**

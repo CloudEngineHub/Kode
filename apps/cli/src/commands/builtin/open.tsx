@@ -1,6 +1,6 @@
 import type { Command } from '../types'
 import * as React from 'react'
-import { OpenFileDialog } from '#ui-ink/components/OpenFileDialog'
+import { OpenFileScreen } from '#ui-ink/screens/overlays/OpenFileScreen'
 
 const open = {
   type: 'local-jsx',
@@ -10,7 +10,7 @@ const open = {
   isHidden: false,
   ui: { displayMode: 'fullscreen' },
   async call(onDone) {
-    return <OpenFileDialog onDone={onDone} />
+    return <OpenFileScreen onDone={onDone} />
   },
   userFacingName() {
     return 'open'

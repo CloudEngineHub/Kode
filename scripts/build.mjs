@@ -7,7 +7,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve, sep } from 'node:path'
 import * as esbuild from 'esbuild'
 
 const OUT_DIR = 'dist'
@@ -204,10 +204,38 @@ async function main() {
     )
   }
 
-  // Copy vendor assets if present (ripgrep, future bundled tools)
+  // Best-effort: build Linux seccomp assets for the current arch (Unix socket blocking).
+  // CI release workflows assemble both x64+arm64 assets before publishing the main package.
+  if (process.platform === 'linux') {
+    try {
+      runOrThrow(['node', 'scripts/build-seccomp-assets.mjs'])
+    } catch (err) {
+      console.warn(
+        '⚠️  Could not build Linux seccomp assets:',
+        err instanceof Error ? err.message : String(err),
+      )
+    }
+  }
+
+  // Copy vendor assets if present (future bundled tools).
+  // NOTE: ripgrep is distributed via npm optionalDependencies to avoid GitHub downloads
+  // and to keep the main package small.
   try {
     if (existsSync('vendor')) {
-      cpSync('vendor', join(OUT_DIR, 'vendor'), { recursive: true })
+      const vendorRoot = resolve('vendor')
+      const ripgrepRoot = resolve('vendor', 'ripgrep')
+      cpSync('vendor', join(OUT_DIR, 'vendor'), {
+        recursive: true,
+        filter: src => {
+          const abs = resolve(src)
+          if (abs === ripgrepRoot) return false
+          if (abs.startsWith(ripgrepRoot + sep)) return false
+          // Also skip the "vendor/ripgrep" path on platforms where `resolve()` normalizes differently.
+          if (abs === vendorRoot + sep + 'ripgrep') return false
+          if (abs.startsWith(vendorRoot + sep + 'ripgrep' + sep)) return false
+          return true
+        },
+      })
     }
   } catch (err) {
     console.warn(
@@ -217,7 +245,7 @@ async function main() {
   }
 
   // Generate Node-based CLI shim (npm bin points here)
-  // - Prefer cached native binary (Windows OOTB)
+  // - Prefer native binary via npm optionalDependencies (@shareai-lab/kode-bin-<platform>-<arch>)
   // - Fallback to Node runtime (no Bun required)
   cpSync(join('scripts', 'cli-wrapper.cjs'), 'cli.js')
   try {
@@ -240,14 +268,16 @@ async function main() {
     )
   }
 
-  // Create .npmrc file (kept intentionally tiny)
-  writeFileSync(
-    '.npmrc',
-    `# Kode npm configuration
-package-lock=false
-save-exact=true
-`,
-  )
+  // Generate Node-based mcp-cli shim (npm bin points here)
+  cpSync(join('scripts', 'mcp-cli-wrapper.cjs'), 'mcp-cli.js')
+  try {
+    chmodSync('mcp-cli.js', 0o755)
+  } catch (err) {
+    console.warn(
+      '⚠️  Could not make mcp-cli.js executable:',
+      err instanceof Error ? err.message : String(err),
+    )
+  }
 
   console.log('✅ Build completed')
   console.log('📋 Outputs:')
@@ -266,6 +296,7 @@ save-exact=true
   console.log('  - apps/server/static/* (if available)')
   console.log('  - cli.js')
   console.log('  - cli-acp.js')
+  console.log('  - mcp-cli.js')
 }
 
 main().catch(err => {

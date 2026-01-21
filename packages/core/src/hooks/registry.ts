@@ -1,7 +1,10 @@
 import { readFileSync, statSync } from 'fs'
 import { minimatch } from 'minimatch'
 
-import { loadSettingsWithLegacyFallback } from '#config'
+import {
+  loadSettingsWithLegacyFallback,
+  type SettingsDestination,
+} from '#config'
 import { logError } from '#core/utils/log'
 import { getSessionPlugins } from '#core/utils/sessionPlugins'
 
@@ -23,6 +26,25 @@ type CachedHooks = {
 
 const settingsHooksCache = new Map<string, CachedHooks>()
 const pluginHooksCache = new Map<string, CachedHooks>()
+
+export type HookConfigSource =
+  | {
+      kind: 'settings'
+      destination: SettingsDestination
+      path: string
+    }
+  | {
+      kind: 'plugin'
+      pluginRoot: string
+      path: string
+    }
+
+export type HookConfigEntry = {
+  event: HookEventName
+  matcher: string
+  hook: Hook
+  source: HookConfigSource
+}
 
 function isCommandHook(value: unknown): value is CommandHook {
   const record = asRecord(value)
@@ -121,27 +143,42 @@ export function loadSettingsMatchers(
   projectDir: string,
   event: HookEventName,
 ): HookMatcher[] {
-  const loaded = loadSettingsWithLegacyFallback({
-    destination: 'projectSettings',
-    projectDir,
-    migrateToPrimary: true,
-  })
-  const settingsPath = loaded.usedPath
-  if (!settingsPath) return []
-  try {
-    const stat = statSync(settingsPath)
-    const cached = settingsHooksCache.get(settingsPath)
-    if (cached && cached.mtimeMs === stat.mtimeMs)
-      return cached.byEvent[event] ?? []
+  const destinations: SettingsDestination[] = [
+    'userSettings',
+    'projectSettings',
+    'localSettings',
+  ]
 
-    const parsed = loaded.settings as SettingsFileWithHooks | null
-    const byEvent = parseHooksByEvent(parsed?.hooks)
-    settingsHooksCache.set(settingsPath, { mtimeMs: stat.mtimeMs, byEvent })
-    return byEvent[event] ?? []
-  } catch {
-    settingsHooksCache.delete(settingsPath)
-    return []
+  const out: HookMatcher[] = []
+
+  for (const destination of destinations) {
+    const loaded = loadSettingsWithLegacyFallback({
+      destination,
+      projectDir,
+      migrateToPrimary: true,
+    })
+    const settingsPath = loaded.usedPath
+    if (!settingsPath) continue
+
+    try {
+      const stat = statSync(settingsPath)
+      const cached = settingsHooksCache.get(settingsPath)
+      if (cached && cached.mtimeMs === stat.mtimeMs) {
+        out.push(...(cached.byEvent[event] ?? []))
+        continue
+      }
+
+      const parsed = loaded.settings as SettingsFileWithHooks | null
+      const byEvent = parseHooksByEvent(parsed?.hooks)
+      settingsHooksCache.set(settingsPath, { mtimeMs: stat.mtimeMs, byEvent })
+      out.push(...(byEvent[event] ?? []))
+    } catch {
+      settingsHooksCache.delete(settingsPath)
+      continue
+    }
   }
+
+  return out
 }
 
 export function matcherMatchesTool(matcher: string, toolName: string): boolean {
@@ -214,6 +251,135 @@ export function loadPluginMatchers(
       )
     }
   }
+  return out
+}
+
+export function listHookConfigurations(projectDir: string): HookConfigEntry[] {
+  const out: HookConfigEntry[] = []
+
+  const destinations: SettingsDestination[] = [
+    'userSettings',
+    'projectSettings',
+    'localSettings',
+  ]
+
+  for (const destination of destinations) {
+    const loaded = loadSettingsWithLegacyFallback({
+      destination,
+      projectDir,
+      migrateToPrimary: true,
+    })
+    const settingsPath = loaded.usedPath
+    if (!settingsPath) continue
+
+    try {
+      const stat = statSync(settingsPath)
+      const cached = settingsHooksCache.get(settingsPath)
+      const byEvent =
+        cached && cached.mtimeMs === stat.mtimeMs
+          ? cached.byEvent
+          : (() => {
+              const parsed = loaded.settings as SettingsFileWithHooks | null
+              const computed = parseHooksByEvent(parsed?.hooks)
+              settingsHooksCache.set(settingsPath, {
+                mtimeMs: stat.mtimeMs,
+                byEvent: computed,
+              })
+              return computed
+            })()
+
+      for (const [event, matchers] of Object.entries(byEvent) as Array<
+        [HookEventName, HookMatcher[] | undefined]
+      >) {
+        for (const matcher of matchers ?? []) {
+          for (const hook of matcher.hooks) {
+            out.push({
+              event,
+              matcher: matcher.matcher,
+              hook,
+              source: { kind: 'settings', destination, path: settingsPath },
+            })
+          }
+        }
+      }
+    } catch {
+      settingsHooksCache.delete(settingsPath)
+    }
+  }
+
+  const plugins = getSessionPlugins()
+  for (const plugin of plugins) {
+    for (const hookPath of plugin.hooksFiles ?? []) {
+      try {
+        const stat = statSync(hookPath)
+        const cached = pluginHooksCache.get(hookPath)
+        const byEvent =
+          cached && cached.mtimeMs === stat.mtimeMs
+            ? cached.byEvent
+            : (() => {
+                const raw = readFileSync(hookPath, 'utf8')
+                const parsed = JSON.parse(raw) as HookFileEnvelope
+                const hookObj =
+                  parsed && typeof parsed === 'object' && parsed.hooks
+                    ? parsed.hooks
+                    : parsed
+                const computed = parseHooksByEvent(hookObj)
+                pluginHooksCache.set(hookPath, {
+                  mtimeMs: stat.mtimeMs,
+                  byEvent: computed,
+                })
+                return computed
+              })()
+
+        for (const [event, matchers] of Object.entries(byEvent) as Array<
+          [HookEventName, HookMatcher[] | undefined]
+        >) {
+          for (const matcher of matchers ?? []) {
+            for (const hook of matcher.hooks) {
+              out.push({
+                event,
+                matcher: matcher.matcher,
+                hook: { ...hook, pluginRoot: plugin.rootDir },
+                source: {
+                  kind: 'plugin',
+                  pluginRoot: plugin.rootDir,
+                  path: hookPath,
+                },
+              })
+            }
+          }
+        }
+      } catch (err) {
+        logError(err)
+      }
+    }
+
+    const inlineByEvent = loadInlinePluginHooksByEvent({
+      manifestPath: plugin.manifestPath,
+      manifest: plugin.manifest,
+    })
+    if (!inlineByEvent) continue
+
+    for (const [event, matchers] of Object.entries(inlineByEvent) as Array<
+      [HookEventName, HookMatcher[] | undefined]
+    >) {
+      for (const matcher of matchers ?? []) {
+        for (const hook of matcher.hooks) {
+          out.push({
+            event,
+            matcher: matcher.matcher,
+            hook: { ...hook, pluginRoot: plugin.rootDir },
+            source: {
+              kind: 'plugin',
+              pluginRoot: plugin.rootDir,
+              path: `${plugin.manifestPath}#inlineHooks`,
+            },
+          })
+        }
+      }
+    }
+  }
+
   return out
 }
 

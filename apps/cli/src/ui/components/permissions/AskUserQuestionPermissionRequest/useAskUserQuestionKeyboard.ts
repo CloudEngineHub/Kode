@@ -67,7 +67,7 @@ export function useAskUserQuestionKeyboard(args: {
   useKeypress((input, key) => {
     if (key.escape) {
       args.onCancel()
-      return
+      return true
     }
 
     const isMultiSelectQuestion =

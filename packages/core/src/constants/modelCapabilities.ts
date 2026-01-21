@@ -72,7 +72,7 @@ export const MODEL_CAPABILITIES_REGISTRY: Record<string, ModelCapabilities> = {
   'gpt-4-turbo': CHAT_COMPLETIONS_CAPABILITIES,
   'gpt-4': CHAT_COMPLETIONS_CAPABILITIES,
 
-  // Claude series (supported through conversion layer)
+  // Anthropic model IDs (supported through conversion layer)
   'claude-3-5-sonnet-20241022': CHAT_COMPLETIONS_CAPABILITIES,
   'claude-3-5-haiku-20241022': CHAT_COMPLETIONS_CAPABILITIES,
   'claude-3-opus-20240229': CHAT_COMPLETIONS_CAPABILITIES,

@@ -20,6 +20,7 @@ import { applyEdit } from './utils'
 import { hasWritePermission } from '#core/utils/permissions/filesystem'
 import { PROJECT_FILE } from '#core/constants/product'
 import { normalizeLineEndings } from '#core/utils/paste'
+import { sha256File } from '#core/utils/sha256'
 
 const inputSchema = z.strictObject({
   file_path: z.string().describe('The absolute path to the file to modify'),
@@ -65,7 +66,7 @@ export const FileEditTool = {
   },
   async validateInput(
     { file_path, old_string, new_string, replace_all },
-    { readFileTimestamps },
+    { readFileTimestamps, readFileHashes },
   ) {
     if (old_string === new_string) {
       return {
@@ -133,11 +134,35 @@ export const FileEditTool = {
     const stats = statSync(fullFilePath)
     const lastWriteTime = stats.mtimeMs
     if (lastWriteTime > readTimestamp) {
-      return {
-        result: false,
-        message:
-          'File has been modified since read, either by the user or by a linter. Read it again before attempting to write it.',
+      const lastReadHash = readFileHashes?.[fullFilePath]
+      if (!lastReadHash) {
+        return {
+          result: false,
+          message:
+            'File has been modified since read, either by the user or by a linter. Read it again before attempting to write it.',
+        }
       }
+
+      let currentHash: string
+      try {
+        currentHash = await sha256File(fullFilePath)
+      } catch {
+        return {
+          result: false,
+          message:
+            'File has been modified since read, either by the user or by a linter. Read it again before attempting to write it.',
+        }
+      }
+      if (currentHash !== lastReadHash) {
+        return {
+          result: false,
+          message:
+            'File has been modified since read, either by the user or by a linter. Read it again before attempting to write it.',
+        }
+      }
+
+      // The file was touched (mtime changed) without content changes. Treat as fresh.
+      readFileTimestamps[fullFilePath] = lastWriteTime
     }
 
     const file = await readFileBun(fullFilePath)
@@ -177,7 +202,7 @@ export const FileEditTool = {
   },
   async *call(
     { file_path, old_string, new_string, replace_all },
-    { readFileTimestamps },
+    { readFileTimestamps, readFileHashes },
   ) {
     const fullFilePath = isAbsolute(file_path)
       ? file_path
@@ -186,10 +211,34 @@ export const FileEditTool = {
     if (fileExistsBun(fullFilePath)) {
       const readTimestamp = readFileTimestamps[fullFilePath]
       const lastWriteTime = statSync(fullFilePath).mtimeMs
-      if (!readTimestamp || lastWriteTime > readTimestamp) {
+      if (!readTimestamp) {
         throw new Error(
           'File has been unexpectedly modified. Read it again before attempting to write it.',
         )
+      }
+      if (lastWriteTime > readTimestamp) {
+        const lastReadHash = readFileHashes?.[fullFilePath]
+        if (lastReadHash) {
+          let currentHash: string
+          try {
+            currentHash = await sha256File(fullFilePath)
+          } catch {
+            throw new Error(
+              'File has been unexpectedly modified. Read it again before attempting to write it.',
+            )
+          }
+          if (currentHash === lastReadHash) {
+            readFileTimestamps[fullFilePath] = lastWriteTime
+          } else {
+            throw new Error(
+              'File has been unexpectedly modified. Read it again before attempting to write it.',
+            )
+          }
+        } else {
+          throw new Error(
+            'File has been unexpectedly modified. Read it again before attempting to write it.',
+          )
+        }
       }
     }
 
@@ -218,6 +267,14 @@ export const FileEditTool = {
 
     // Update read timestamp, to invalidate stale writes
     readFileTimestamps[fullFilePath] = statSync(fullFilePath).mtimeMs
+
+    if (readFileHashes) {
+      try {
+        readFileHashes[fullFilePath] = await sha256File(fullFilePath)
+      } catch {
+        // ignore
+      }
+    }
 
     // Emit file edited event for system reminders
     emitReminderEvent('file:edited', {

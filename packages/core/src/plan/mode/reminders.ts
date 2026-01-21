@@ -1,7 +1,9 @@
+import { LEGACY_ENV } from '#core/compat/legacyEnv'
+
 function getMaxParallelExploreAgents(): number {
   const raw =
     process.env.KODE_PLAN_V2_EXPLORE_AGENT_COUNT ??
-    process.env.CLAUDE_CODE_PLAN_V2_EXPLORE_AGENT_COUNT
+    process.env[LEGACY_ENV.codePlanV2ExploreAgentCount]
   if (raw) {
     const parsed = Number.parseInt(raw, 10)
     if (Number.isFinite(parsed) && parsed > 0 && parsed <= 10) return parsed
@@ -12,7 +14,7 @@ function getMaxParallelExploreAgents(): number {
 function getMaxParallelPlanAgents(): number {
   const raw =
     process.env.KODE_PLAN_V2_AGENT_COUNT ??
-    process.env.CLAUDE_CODE_PLAN_V2_AGENT_COUNT
+    process.env[LEGACY_ENV.codePlanV2AgentCount]
   if (raw) {
     const parsed = Number.parseInt(raw, 10)
     if (Number.isFinite(parsed) && parsed > 0 && parsed <= 10) return parsed

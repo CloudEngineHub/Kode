@@ -5,6 +5,7 @@ import { PassThrough } from 'stream'
 import stripAnsi from 'strip-ansi'
 import { TodosViewForTests } from '#cli-commands/builtin/todos'
 import { setTodos } from '#core/utils/todoStorage'
+import { KeypressProvider } from '#ui-ink/contexts/KeypressContext'
 
 async function renderToText(element: React.ReactElement): Promise<string> {
   const stdin = new PassThrough() as PassThrough & {
@@ -32,11 +33,16 @@ async function renderToText(element: React.ReactElement): Promise<string> {
     rawOutput += chunk.toString('utf8')
   })
 
-  const instance = render(<Box>{element}</Box>, {
-    stdin: stdin as unknown as NodeJS.ReadStream,
-    stdout: stdout as unknown as NodeJS.WriteStream,
-    exitOnCtrlC: false,
-  })
+  const instance = render(
+    <KeypressProvider>
+      <Box>{element}</Box>
+    </KeypressProvider>,
+    {
+      stdin: stdin as unknown as NodeJS.ReadStream,
+      stdout: stdout as unknown as NodeJS.WriteStream,
+      exitOnCtrlC: false,
+    },
+  )
 
   await new Promise(resolve => setTimeout(resolve, 0))
   instance.unmount()
@@ -44,12 +50,12 @@ async function renderToText(element: React.ReactElement): Promise<string> {
   return stripAnsi(rawOutput)
 }
 
-describe('/todos command (Claude zE9 parity)', () => {
+describe('/todos command (legacy parity)', () => {
   beforeEach(() => {
     setTodos([])
   })
 
-  test('empty list prints Claude empty message', async () => {
+  test('empty list prints expected empty message', async () => {
     const out = await renderToText(
       <TodosViewForTests agentId={undefined} onClose={() => {}} />,
     )

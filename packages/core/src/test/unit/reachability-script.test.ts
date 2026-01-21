@@ -6,7 +6,7 @@ import { join } from 'node:path'
 
 describe('scripts/analyze-reachability.mjs', () => {
   test(
-    'writes a stable JSON report for apps/kode/src/index.ts',
+    'writes a stable JSON report for apps/cli/src/dispatch.ts',
     () => {
       const tmpDir = mkdtempSync(join(tmpdir(), 'kode-reachability-tests-'))
       const outFile = join(tmpDir, 'report.json')
@@ -32,8 +32,8 @@ describe('scripts/analyze-reachability.mjs', () => {
         expect(report).toHaveProperty('unreachable')
         expect(report).toHaveProperty('counts')
 
-        expect(report.entrypoints).toContain('apps/kode/src/index.ts')
-        expect(report.reachable).toContain('apps/kode/src/index.ts')
+        expect(report.entrypoints).toContain('apps/cli/src/dispatch.ts')
+        expect(report.reachable).toContain('apps/cli/src/dispatch.ts')
 
         expect(typeof report.counts.total).toBe('number')
         expect(typeof report.counts.reachable).toBe('number')

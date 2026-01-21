@@ -45,6 +45,7 @@ describe('Tool prompt/description/schema parity', () => {
     const keys = Object.keys(schema.shape).sort()
     expect(keys).toEqual(
       [
+        '_simulatedSedEdit',
         'command',
         'dangerouslyDisableSandbox',
         'description',

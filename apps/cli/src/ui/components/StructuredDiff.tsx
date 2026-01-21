@@ -3,7 +3,7 @@ import * as React from 'react'
 import { Hunk } from 'diff'
 import { getTheme, ThemeNames } from '#core/utils/theme'
 import { useMemo } from 'react'
-import { wrapText } from '#core/utils/format'
+import { wrapLines } from '#ui-ink/primitives/text/wrapLines'
 
 type Props = {
   patch: Hunk
@@ -20,11 +20,26 @@ export function StructuredDiff({
   overrideTheme,
 }: Props): React.ReactNode {
   const diff = useMemo(
-    () => formatDiff(patch.lines, patch.oldStart, width, dim, overrideTheme),
+    () => structuredDiffLines({ patch, width, dim, overrideTheme }),
     [patch.lines, patch.oldStart, width, dim, overrideTheme],
   )
 
   return diff.map((_, i) => <Box key={i}>{_}</Box>)
+}
+
+export function structuredDiffLines(args: {
+  patch: Hunk
+  width: number
+  dim: boolean
+  overrideTheme?: ThemeNames
+}): React.ReactNode[] {
+  return formatDiff(
+    args.patch.lines,
+    args.patch.oldStart,
+    args.width,
+    args.dim,
+    args.overrideTheme,
+  )
 }
 
 function formatDiff(
@@ -61,7 +76,7 @@ function formatDiff(
   const maxWidth = maxLineNumber.toString().length
 
   return ls.flatMap(({ type, code, i }) => {
-    const wrappedLines = wrapText(code, width - maxWidth)
+    const wrappedLines = wrapLines([code], Math.max(1, width - maxWidth))
     return wrappedLines.map((line, lineIndex) => {
       const key = `${type}-${i}-${lineIndex}`
       switch (type) {

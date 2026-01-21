@@ -15,6 +15,10 @@ const DEFAULT_VERSION = '15.1.0'
 const version = process.env.KODE_RIPGREP_VERSION || DEFAULT_VERSION
 const vendorRoot = join(process.cwd(), 'vendor', 'ripgrep')
 const cacheRoot = join(process.cwd(), '.tmp', 'ripgrep-downloads')
+const baseUrl =
+  process.env.KODE_RIPGREP_BASE_URL ||
+  'https://github.com/BurntSushi/ripgrep/releases/download'
+const normalizedBaseUrl = String(baseUrl).replace(/\/+$/, '')
 
 const targets = [
   {
@@ -137,7 +141,7 @@ async function ensureTarget(target) {
   mkdirSync(cacheRoot, { recursive: true })
 
   const asset = `ripgrep-${version}-${target.assetSuffix}.${target.archiveExt}`
-  const url = `https://github.com/BurntSushi/ripgrep/releases/download/${version}/${asset}`
+  const url = `${normalizedBaseUrl}/${version}/${asset}`
   const archivePath = join(cacheRoot, asset)
 
   await downloadAndVerify(url, archivePath)

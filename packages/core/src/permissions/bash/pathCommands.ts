@@ -1,7 +1,7 @@
 import { homedir } from 'os'
 import type { BashPathOp } from './types'
 
-function extractPathArgsLikeClaude(
+function extractPathArgsForShellCommand(
   args: string[],
   flagsTakingValues: Set<string>,
   defaultIfEmpty: string[] = [],
@@ -121,7 +121,7 @@ export const PATH_COMMAND_ARG_EXTRACTORS: Record<
     return cleaned.slice(hasDelete ? 1 : 2)
   },
   grep: args =>
-    extractPathArgsLikeClaude(
+    extractPathArgsForShellCommand(
       args,
       new Set([
         '-e',
@@ -143,7 +143,7 @@ export const PATH_COMMAND_ARG_EXTRACTORS: Record<
       ]),
     ),
   rg: args =>
-    extractPathArgsLikeClaude(
+    extractPathArgsForShellCommand(
       args,
       new Set([
         '-e',

@@ -29,12 +29,35 @@ export function applyAgentPermissionMode(
   if (!base) return base
   if (!options.agentPermissionMode) return base
 
-  if (
-    options.agentPermissionMode === 'bypassPermissions' &&
-    (options.safeMode || base.isBypassPermissionsModeAvailable !== true)
-  ) {
-    return { ...base, mode: 'default' }
+  const rank = (mode: PermissionMode): number => {
+    switch (mode) {
+      case 'dontAsk':
+        return 0
+      case 'plan':
+        return 1
+      case 'default':
+        return 2
+      case 'acceptEdits':
+        return 3
+      case 'bypassPermissions':
+        return 4
+    }
   }
 
-  return { ...base, mode: options.agentPermissionMode }
+  let nextMode: PermissionMode = options.agentPermissionMode
+
+  if (
+    nextMode === 'bypassPermissions' &&
+    (options.safeMode || base.isBypassPermissionsModeAvailable !== true)
+  ) {
+    nextMode = 'default'
+  }
+
+  // Subagents must not auto-escalate permission mode beyond the parent context.
+  // They may narrow permissions (e.g. default -> plan), but must not loosen them
+  // (e.g. plan -> acceptEdits/bypassPermissions) without an explicit user flow.
+  if (rank(nextMode) > rank(base.mode)) return base
+
+  if (nextMode === base.mode) return base
+  return { ...base, mode: nextMode }
 }

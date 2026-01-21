@@ -5,7 +5,7 @@ import type {
 import { PROMPT_CACHING_ENABLED } from '#core/ai/llm/systemPromptUtils'
 
 /**
- * Manage cache control to ensure it doesn't exceed Claude's 4 cache block limit
+ * Manage cache control to ensure it doesn't exceed the provider's 4 cache block limit
  * Priority:
  * 1. System prompts (high priority)
  * 2. Long documents or reference materials (high priority)

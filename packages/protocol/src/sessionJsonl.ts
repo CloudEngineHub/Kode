@@ -1,6 +1,8 @@
 export type JsonlEnvelopeBase = {
   cwd: string
   sessionId: string
+  forkedFromSessionId?: string
+  forkRootSessionId?: string
   version: string
   gitBranch?: string
   userType: string

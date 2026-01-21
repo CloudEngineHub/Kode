@@ -31,6 +31,9 @@ const ModelProfileYamlSchema = z
       .enum([
         'auto',
         'kode',
+        'compat_headers',
+        'compat_headers_system',
+        'compat_full',
         'claude_code_headers',
         'claude_code_headers_system',
         'claude_code_full',

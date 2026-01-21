@@ -3,7 +3,7 @@ import { Box, Text } from 'ink'
 import TextInput from '#ui-ink/components/TextInput'
 import type { AgentConfig } from '#core/utils/agentLoader'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
-import { generateAgentWithClaude } from '../../../generation'
+import { generateAgentDraft } from '../../../generation'
 import { themeColor } from '../../colors'
 import { WizardPanel, type WizardContextValue } from '../Wizard'
 
@@ -26,7 +26,7 @@ export function StepGenerationPrompt(props: {
       abortRef.current = null
       setIsGenerating(false)
       setError('Generation cancelled')
-      return
+      return true
     }
     if (!isGenerating) {
       ctx.updateWizardData({
@@ -40,6 +40,7 @@ export function StepGenerationPrompt(props: {
       setCursorOffset(0)
       setError(null)
       ctx.goBack()
+      return true
     }
   })
 
@@ -58,8 +59,14 @@ export function StepGenerationPrompt(props: {
     abortRef.current = abort
 
     try {
-      const existing = props.existingAgents.map(a => a.agentType)
-      const generated = await generateAgentWithClaude(trimmed)
+      const existing = props.existingAgents
+        .filter(a => a.source !== 'built-in')
+        .map(a => a.agentType)
+
+      const generated = await generateAgentDraft(trimmed, {
+        existingIdentifiers: existing,
+        signal: abort.signal,
+      })
       if (existing.includes(generated.identifier)) {
         throw new Error(
           `Agent identifier already exists: ${generated.identifier}. Please try again.`,
@@ -77,6 +84,7 @@ export function StepGenerationPrompt(props: {
       abortRef.current = null
       ctx.goToStep(6)
     } catch (err) {
+      if (abort.signal.aborted) return
       const message = err instanceof Error ? err.message : String(err)
       setError(message || 'Failed to generate agent')
       setIsGenerating(false)

@@ -3,10 +3,7 @@ import React, { useCallback, useMemo } from 'react'
 import { Select } from '#ui-ink/components/CustomSelect/select'
 import { basename, dirname, extname } from 'path'
 import { getTheme } from '#core/utils/theme'
-import {
-  PermissionRequestTitle,
-  textColorForRiskScore,
-} from '#ui-ink/components/permissions/PermissionRequestTitle'
+import { textColorForRiskScore } from '#ui-ink/components/permissions/PermissionRequestTitle'
 import { logUnaryEvent } from '#core/utils/unaryLogging'
 import { env } from '#core/utils/env'
 import { type ToolUseConfirm } from '#ui-ink/components/permissions/PermissionRequest'
@@ -19,9 +16,13 @@ import {
 import { FileWriteToolDiff } from './FileWriteToolDiff'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import { getPermissionModeCycleShortcut } from '#ui-ink/utils/permissionModeCycleShortcut'
-import { usePermissionContext } from '#ui-ink/context/PermissionContext'
+import { usePermissionContext } from '#ui-ink/contexts/PermissionContext'
 import { isPathInWorkingDirectories } from '#core/utils/permissions/fileToolPermissionEngine'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
+import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
+import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
+import { PermissionRequestDetails } from '#ui-ink/components/permissions/PermissionRequestDetails'
+import { applyToolPermissionUpdatesToLiveToolUseContext } from '../liveToolPermissionContext'
 
 type Props = {
   toolUseConfirm: ToolUseConfirm
@@ -36,6 +37,7 @@ export function FileWritePermissionRequest({
 }: Props): React.ReactNode {
   const { applyToolPermissionUpdate, toolPermissionContext } =
     usePermissionContext()
+  const layout = useScreenLayout()
   const { file_path, content } = toolUseConfirm.input as {
     file_path: string
     content: string
@@ -53,8 +55,8 @@ export function FileWritePermissionRequest({
       `(${modeCycleShortcut.displayText})`,
     )
     return isInWorkingDir
-      ? `Yes, allow all edits during this session ${shortcutHint}`
-      : `Yes, allow all edits in ${chalk.bold(`${dirName}/`)} during this session ${shortcutHint}`
+      ? `Allow all edits during this session ${shortcutHint}`
+      : `Allow all edits in ${chalk.bold(`${dirName}/`)} during this session ${shortcutHint}`
   }, [file_path, isInWorkingDir, modeCycleShortcut.displayText])
   const fileExists = useMemo(() => existsSync(file_path), [file_path])
   const unaryEvent = useMemo<UnaryEvent>(
@@ -101,6 +103,10 @@ export function FileWritePermissionRequest({
             for (const update of toolUseConfirm.suggestions ?? []) {
               applyToolPermissionUpdate(update)
             }
+            applyToolPermissionUpdatesToLiveToolUseContext({
+              toolUseContext: toolUseConfirm.toolUseContext,
+              updates: toolUseConfirm.suggestions ?? [],
+            })
           }
           onDone()
           toolUseConfirm.onAllow(
@@ -141,54 +147,60 @@ export function FileWritePermissionRequest({
   })
 
   return (
-    <Box
-      flexDirection="column"
-      borderStyle="round"
-      borderColor={textColorForRiskScore(toolUseConfirm.riskScore)}
-      marginTop={1}
-      paddingLeft={1}
-      paddingRight={1}
-      paddingBottom={1}
-    >
-      <PermissionRequestTitle
-        title={`${fileExists ? 'Edit' : 'Create'} file`}
-        riskScore={toolUseConfirm.riskScore}
-      />
-      <Box flexDirection="column">
-        <FileWriteToolDiff
-          file_path={file_path}
-          content={content}
-          verbose={verbose}
-          width={columns - 12}
-        />
-      </Box>
-      <Box flexDirection="column">
-        <Text>
-          Do you want to {fileExists ? 'make this edit to' : 'create'}{' '}
-          <Text bold>{basename(file_path)}</Text>?
-        </Text>
-        <Select
-          options={[
-            {
-              label: 'Yes',
-              value: 'yes',
-            },
-            ...(hasSessionSuggestion
-              ? [
-                  {
-                    label: sessionLabel,
-                    value: 'yes-session',
-                  },
-                ]
-              : []),
-            {
-              label: `No, and provide instructions (${chalk.bold.hex(getTheme().warning)('esc')})`,
-              value: 'no',
-            },
-          ]}
-          onChange={handleChoice}
-        />
-      </Box>
+    <Box marginTop={1} width="100%">
+      <ScreenFrame
+        title={`${fileExists ? 'Edit' : 'Create'} file permission`}
+        titleColor={textColorForRiskScore(toolUseConfirm.riskScore)}
+        paddingX={layout.paddingX}
+        paddingY={layout.tightLayout ? 0 : layout.paddingY}
+        gap={layout.gap}
+      >
+        <Box flexDirection="column" gap={layout.gap}>
+          <PermissionRequestDetails toolUseConfirm={toolUseConfirm} />
+          <FileWriteToolDiff
+            file_path={file_path}
+            content={content}
+            verbose={verbose}
+            width={Math.max(10, columns - layout.paddingX * 2 - 2)}
+            enableScrolling={true}
+          />
+
+          <Box flexDirection="column">
+            <Text>
+              Allow {fileExists ? 'this edit to' : 'creating'}{' '}
+              <Text bold>{basename(file_path)}</Text>?
+            </Text>
+            <Select
+              options={[
+                {
+                  label: 'Allow once',
+                  value: 'yes',
+                },
+                ...(hasSessionSuggestion
+                  ? [
+                      {
+                        label: sessionLabel,
+                        value: 'yes-session',
+                      },
+                    ]
+                  : []),
+                {
+                  label: `Deny and provide instructions (${chalk.bold.hex(getTheme().warning)('esc')})`,
+                  value: 'no',
+                },
+              ]}
+              onChange={handleChoice}
+            />
+          </Box>
+
+          <Text dimColor wrap="truncate-end">
+            Enter to confirm · Esc to reject · PgUp/PgDn scroll preview
+            {hasSessionSuggestion
+              ? ` · ${modeCycleShortcut.displayText} allow session`
+              : ''}
+          </Text>
+        </Box>
+      </ScreenFrame>
     </Box>
   )
 }

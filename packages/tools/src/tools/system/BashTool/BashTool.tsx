@@ -3,6 +3,7 @@ import { isAbsolute, relative, resolve } from 'path'
 import * as React from 'react'
 import { z } from 'zod'
 import { PRODUCT_NAME } from '#core/constants/product'
+import { LEGACY_ENV } from '#core/compat/legacyEnv'
 import { Tool, ValidationResult, ToolUseContext } from '#core/tooling/Tool'
 import { splitCommand } from '#core/utils/commands'
 import { isInDirectory } from '#core/utils/file'
@@ -15,7 +16,7 @@ import { DEFAULT_TIMEOUT_MS, getBashToolPrompt } from './prompt'
 import { formatDuration } from './text'
 import { callBashTool } from './call'
 
-export const inputSchema = z.strictObject({
+export const inputSchema = z.object({
   command: z.string().describe('The command to execute'),
   timeout: z
     .number()
@@ -50,6 +51,13 @@ Output: Create directory 'foo'`,
     .describe(
       'Set this to true to dangerously override sandbox mode and run commands without sandboxing.',
     ),
+  _simulatedSedEdit: z
+    .object({
+      filePath: z.string(),
+      newContent: z.string(),
+    })
+    .optional()
+    .describe('Internal: pre-computed sed edit result from preview'),
 })
 
 type In = typeof inputSchema
@@ -92,7 +100,7 @@ export const BashTool = {
 
     const raw =
       process.env.KODE_BASH_SANDBOX_SHOW_INDICATOR ??
-      process.env.CLAUDE_CODE_BASH_SANDBOX_SHOW_INDICATOR
+      process.env[LEGACY_ENV.codeBashSandboxShowIndicator]
     // Compatibility: only explicit truthy values enable the indicator.
     const showIndicator = raw
       ? ['1', 'true', 'yes', 'on'].includes(raw.trim().toLowerCase())

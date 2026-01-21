@@ -1,6 +1,6 @@
-import fs from 'fs/promises'
 import { logError } from './log'
 import { Tool } from '#core/tooling/Tool'
+import { readJsonLog } from '#core/logging/log/jsonLog'
 
 /**
  * Load messages from a log file
@@ -13,8 +13,10 @@ export async function loadMessagesFromLog(
   tools: Tool[],
 ): Promise<any[]> {
   try {
-    const content = await fs.readFile(logPath, 'utf-8')
-    const messages = JSON.parse(content)
+    const messages = readJsonLog(logPath)
+    if (messages.length === 0) {
+      throw new Error('Log is empty or unreadable')
+    }
     return deserializeMessages(messages, tools)
   } catch (error) {
     logError(`Failed to load messages from ${logPath}: ${error}`)

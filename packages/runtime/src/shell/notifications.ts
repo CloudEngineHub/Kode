@@ -17,10 +17,11 @@ export function renderBackgroundShellStatusAttachment(
   return `Background bash ${attachment.taskId} has new output: ${parts.join(', ')}. Read ${attachment.outputFile} to see output.`
 }
 
-// Compatibility: bash-notification payload.
+// Transcript compatibility: `task-notification` payload for background task completion.
 export function renderBashNotification(notification: BashNotification): string {
   const status = notification.status
   const exitCode = notification.exitCode
+  const taskType = notification.taskType ?? 'local_bash'
 
   const summarySuffix =
     status === 'completed'
@@ -29,13 +30,17 @@ export function renderBashNotification(notification: BashNotification): string {
         ? `failed${exitCode !== undefined ? ` with exit code ${exitCode}` : ''}`
         : 'was killed'
 
+  const outputFile =
+    notification.outputFile || getTaskOutputFilePath(notification.taskId)
+
   return [
-    '<bash-notification>',
-    `<shell-id>${notification.taskId}</shell-id>`,
-    `<output-file>${notification.outputFile || getTaskOutputFilePath(notification.taskId)}</output-file>`,
+    '<task-notification>',
+    `<task-id>${notification.taskId}</task-id>`,
+    `<task-type>${taskType}</task-type>`,
+    `<output-file>${outputFile}</output-file>`,
     `<status>${status}</status>`,
-    `<summary>Background command "${notification.description}" ${summarySuffix}.</summary>`,
-    'Read the output file to retrieve the output.',
-    '</bash-notification>',
+    `<summary>Background command "${notification.description}" ${summarySuffix}</summary>`,
+    '</task-notification>',
+    `Read the output file to retrieve the result: ${outputFile}`,
   ].join('\n')
 }

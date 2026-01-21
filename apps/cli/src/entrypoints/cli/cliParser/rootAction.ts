@@ -7,7 +7,7 @@ import { clearOutputStyleCache } from '#cli-services/outputStyles'
 import { isDefaultSlowAndCapableModel } from '#core/utils/model'
 import { dateToFilename } from '#core/utils/log'
 import { assertMinVersion } from '#core/utils/autoUpdater'
-import { MACRO } from '#core/constants/macros'
+import { LEGACY_ENV } from '#core/compat/legacyEnv'
 import {
   clearAgentCache,
   setFlagAgentsFromCliJson,
@@ -23,7 +23,6 @@ import {
   renderResumeConversationSelector,
 } from '../interactive/renderers'
 
-import { fetchUpdateInfo } from './rootAction/updateInfo'
 import type { Message } from '#core/query'
 
 type RootCommandOptions = {
@@ -38,7 +37,9 @@ type RootCommandOptions = {
   mcpDebug?: boolean
   dangerouslySkipPermissions?: boolean
   allowDangerouslySkipPermissions?: boolean
-  maxBudgetUsd?: string
+  maxThinkingTokens?: number
+  maxTurns?: number
+  maxBudgetUsd?: number
   includePartialMessages?: boolean
   replayUserMessages?: boolean
   allowedTools?: unknown
@@ -46,7 +47,9 @@ type RootCommandOptions = {
   disallowedTools?: unknown
   mcpConfig?: unknown
   systemPrompt?: string
+  systemPromptFile?: string
   appendSystemPrompt?: string
+  appendSystemPromptFile?: string
   permissionMode?: string
   permissionPromptTool?: string
   safe?: boolean
@@ -86,6 +89,8 @@ export function createRootAction(args: {
       mcpDebug,
       dangerouslySkipPermissions,
       allowDangerouslySkipPermissions,
+      maxThinkingTokens,
+      maxTurns,
       maxBudgetUsd,
       includePartialMessages,
       replayUserMessages,
@@ -94,7 +99,9 @@ export function createRootAction(args: {
       disallowedTools,
       mcpConfig,
       systemPrompt: systemPromptOverride,
+      systemPromptFile,
       appendSystemPrompt,
+      appendSystemPromptFile,
       permissionMode,
       permissionPromptTool,
       safe,
@@ -116,13 +123,23 @@ export function createRootAction(args: {
     },
   ) => {
     const cwd = maybeCwd ?? process.cwd()
-    if (!process.env.CLAUDE_CODE_ENTRYPOINT) {
+    const resolvedEntrypoint =
+      process.env.KODE_ENTRYPOINT ??
+      process.env[LEGACY_ENV.codeEntryPoint]
+    if (!resolvedEntrypoint) {
       const isNonInteractive =
         print === true ||
         outputFormat === 'stream-json' ||
         inputFormat === 'stream-json' ||
         !process.stdout.isTTY
-      process.env.CLAUDE_CODE_ENTRYPOINT = isNonInteractive ? 'sdk-cli' : 'cli'
+      process.env.KODE_ENTRYPOINT = isNonInteractive ? 'sdk-cli' : 'cli'
+    }
+
+    if (
+      !process.env[LEGACY_ENV.codeEntryPoint] &&
+      process.env.KODE_ENTRYPOINT
+    ) {
+      process.env[LEGACY_ENV.codeEntryPoint] = process.env.KODE_ENTRYPOINT
     }
     const normalizedPermissionMode =
       typeof permissionMode === 'string' ? permissionMode.trim() : ''
@@ -137,7 +154,7 @@ export function createRootAction(args: {
         process.getuid() === 0
       const isSandboxed =
         process.env.IS_SANDBOX === '1' ||
-        process.env.CLAUDE_CODE_BUBBLEWRAP === '1'
+        process.env[LEGACY_ENV.codeBubblewrap] === '1'
       if (isRoot && !isSandboxed) {
         console.error(
           '--dangerously-skip-permissions cannot be used with root/sudo privileges for security reasons',
@@ -155,12 +172,87 @@ export function createRootAction(args: {
       process.exit(1)
     }
 
+    const normalizedSystemPromptFile =
+      typeof systemPromptFile === 'string' ? systemPromptFile.trim() : ''
+    const normalizedAppendSystemPromptFile =
+      typeof appendSystemPromptFile === 'string'
+        ? appendSystemPromptFile.trim()
+        : ''
+
+    if (normalizedSystemPromptFile || normalizedAppendSystemPromptFile) {
+      const [{ existsSync }, { readFile }, { resolve }] = await Promise.all([
+        import('fs'),
+        import('fs/promises'),
+        import('path'),
+      ])
+
+      if (normalizedSystemPromptFile) {
+        if (typeof systemPromptOverride === 'string' && systemPromptOverride) {
+          console.error(
+            'Error: Cannot use both --system-prompt and --system-prompt-file. Please use only one.',
+          )
+          process.exit(1)
+        }
+        const filePath = resolve(cwd, normalizedSystemPromptFile)
+        if (!existsSync(filePath)) {
+          console.error(`Error: System prompt file not found: ${filePath}`)
+          process.exit(1)
+        }
+        try {
+          systemPromptOverride = await readFile(filePath, 'utf8')
+        } catch (error) {
+          console.error(
+            `Error reading system prompt file: ${error instanceof Error ? error.message : String(error)}`,
+          )
+          process.exit(1)
+        }
+      }
+
+      if (normalizedAppendSystemPromptFile) {
+        if (typeof appendSystemPrompt === 'string' && appendSystemPrompt) {
+          console.error(
+            'Error: Cannot use both --append-system-prompt and --append-system-prompt-file. Please use only one.',
+          )
+          process.exit(1)
+        }
+        const filePath = resolve(cwd, normalizedAppendSystemPromptFile)
+        if (!existsSync(filePath)) {
+          console.error(
+            `Error: Append system prompt file not found: ${filePath}`,
+          )
+          process.exit(1)
+        }
+        try {
+          appendSystemPrompt = await readFile(filePath, 'utf8')
+        } catch (error) {
+          console.error(
+            `Error reading append system prompt file: ${error instanceof Error ? error.message : String(error)}`,
+          )
+          process.exit(1)
+        }
+      }
+    }
+
     setFlagAgentsFromCliJson(agents)
     clearAgentCache()
     clearOutputStyleCache()
 
     if (web && print) {
       console.error('Error: --web and --print cannot be used together.')
+      process.exit(1)
+    }
+
+    if (sessionPersistence === false && !print) {
+      console.error(
+        'Error: --no-session-persistence can only be used with --print mode.',
+      )
+      process.exit(1)
+    }
+
+    if (includePartialMessages && !print) {
+      console.error(
+        'Error: --include-partial-messages requires --print and --output-format=stream-json.',
+      )
       process.exit(1)
     }
 
@@ -171,7 +263,7 @@ export function createRootAction(args: {
       await runWebOnlyMode({ cwd, webHost, webPort })
       return
     }
-    await showSetupScreens(safe, print)
+    const { postSetupInitialPrompt } = await showSetupScreens(safe, print)
 
     assertMinVersion()
 
@@ -225,14 +317,23 @@ export function createRootAction(args: {
         ? allTools.filter(t => t.name !== 'SlashCommand')
         : allTools
     const inputPrompt = [prompt, args.stdinContent].filter(Boolean).join('\n')
+    const effectiveInitialPrompt =
+      inputPrompt.trim().length > 0
+        ? inputPrompt
+        : (postSetupInitialPrompt ?? inputPrompt)
 
-    const { loadKodeAgentSessionMessages, findMostRecentKodeAgentSessionId } =
-      await import('#protocol/utils/kodeAgentSessionLoad')
+    const {
+      loadKodeAgentSessionMessagesForResume,
+      findMostRecentKodeAgentSessionId,
+    } = await import('#protocol/utils/kodeAgentSessionLoad')
     const { listKodeAgentSessions, resolveResumeSessionIdentifier } =
       await import('#protocol/utils/kodeAgentSessionResume')
     const { isUuid } = await import('#core/utils/uuid')
-    const { setKodeAgentSessionId, getKodeAgentSessionId } =
+    const { setSessionId } = await import('#core/utils/sessionId')
+    const { getKodeAgentSessionId } =
       await import('#protocol/utils/kodeAgentSessionId')
+    const { setKodeAgentSessionForkInfo } =
+      await import('#protocol/utils/kodeAgentSessionForkInfo')
     const { randomUUID } = await import('crypto')
 
     const wantsContinue = Boolean(continueConversation)
@@ -254,6 +355,7 @@ export function createRootAction(args: {
     let initialMessages: Message[] | undefined
     let resumedFromSessionId: string | null = null
     let needsResumeSelector = false
+    let resumeSelectorInitialQuery: string | undefined
 
     if (wantsContinue) {
       const latest = findMostRecentKodeAgentSessionId(cwd)
@@ -261,7 +363,7 @@ export function createRootAction(args: {
         console.error('No conversation found to continue')
         process.exit(1)
       }
-      initialMessages = loadKodeAgentSessionMessages({
+      initialMessages = loadKodeAgentSessionMessagesForResume({
         cwd,
         sessionId: latest,
       })
@@ -269,11 +371,19 @@ export function createRootAction(args: {
     } else if (wantsResume) {
       if (resume === true) {
         needsResumeSelector = true
+        resumeSelectorInitialQuery = ''
       } else {
         const identifier = String(resume)
+        if (print && !isUuid(identifier.trim())) {
+          console.error(
+            'Error: --resume requires a valid session ID when used with --print. Usage: kode -p --resume <session-id>',
+          )
+          process.exit(1)
+        }
+
         const resolved = resolveResumeSessionIdentifier({ cwd, identifier })
         if (resolved.kind === 'ok') {
-          initialMessages = loadKodeAgentSessionMessages({
+          initialMessages = loadKodeAgentSessionMessagesForResume({
             cwd,
             sessionId: resolved.sessionId,
           })
@@ -286,17 +396,25 @@ export function createRootAction(args: {
           )
           process.exit(1)
         } else if (resolved.kind === 'ambiguous') {
-          console.error(
-            `Error: Multiple sessions match "${identifier}": ${resolved.matchingSessionIds.join(
-              ', ',
-            )}`,
-          )
-          process.exit(1)
+          if (print) {
+            console.error(
+              `Error: Multiple sessions match "${identifier}": ${resolved.matchingSessionIds.join(
+                ', ',
+              )}`,
+            )
+            process.exit(1)
+          }
+          needsResumeSelector = true
+          resumeSelectorInitialQuery = identifier.trim() || undefined
         } else {
-          console.error(
-            `No conversation found with session ID or name: ${identifier}`,
-          )
-          process.exit(1)
+          if (print) {
+            console.error(
+              `No conversation found with session ID: ${identifier.trim()}`,
+            )
+            process.exit(1)
+          }
+          needsResumeSelector = true
+          resumeSelectorInitialQuery = identifier.trim() || undefined
         }
       }
     }
@@ -318,7 +436,16 @@ export function createRootAction(args: {
         return getKodeAgentSessionId()
       })()
 
-      setKodeAgentSessionId(effectiveSessionId)
+      if (resumedFromSessionId && wantsFork) {
+        setKodeAgentSessionForkInfo({
+          forkedFromSessionId: resumedFromSessionId,
+          forkRootSessionId: resumedFromSessionId,
+        })
+      } else {
+        setKodeAgentSessionForkInfo(null)
+      }
+
+      setSessionId(effectiveSessionId)
     }
 
     if (print) {
@@ -333,6 +460,10 @@ export function createRootAction(args: {
         inputFormat,
         jsonSchema,
         permissionPromptTool,
+        maxThinkingTokens,
+        maxTurns,
+        maxBudgetUsd,
+        includePartialMessages,
         replayUserMessages,
         cliTools,
         tools,
@@ -342,6 +473,7 @@ export function createRootAction(args: {
         permissionMode,
         systemPromptOverride,
         appendSystemPrompt,
+        disableSlashCommands: disableSlashCommands === true,
         allowedTools,
         disallowedTools,
         dangerouslySkipPermissions,
@@ -354,7 +486,8 @@ export function createRootAction(args: {
       return
     }
 
-    const updateInfo = await fetchUpdateInfo(MACRO.VERSION)
+    // Update check can be slow (npm + network); do it after UI mounts so startup stays snappy.
+    const updateInfo = { version: null, commands: null }
 
     if (needsResumeSelector) {
       const sessions = listKodeAgentSessions({ cwd })
@@ -373,10 +506,13 @@ export function createRootAction(args: {
           safeMode: safe,
           debug: Boolean(debug),
           disableSlashCommands: disableSlashCommands === true,
+          systemPromptOverride,
+          appendSystemPrompt,
           mcpClients,
-          initialPrompt: inputPrompt,
+          initialPrompt: effectiveInitialPrompt,
           forkSession: wantsFork,
           forkSessionId: sessionId ? String(sessionId) : null,
+          initialQuery: resumeSelectorInitialQuery,
           initialUpdateVersion: updateInfo.version,
           initialUpdateCommands: updateInfo.commands,
         },
@@ -391,7 +527,9 @@ export function createRootAction(args: {
         commands,
         debug: Boolean(debug),
         disableSlashCommands: disableSlashCommands === true,
-        initialPrompt: inputPrompt,
+        systemPromptOverride,
+        appendSystemPrompt,
+        initialPrompt: effectiveInitialPrompt,
         messageLogName: dateToFilename(new Date()),
         shouldShowPromptInput: true,
         verbose,

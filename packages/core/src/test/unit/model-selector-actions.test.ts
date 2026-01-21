@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 
-import { runConnectionTestFlow } from '#ui-ink/ui/components/model-selector/actions/connectionTest'
-import { fetchModelsForProvider } from '#ui-ink/ui/components/model-selector/actions/fetchModels'
-import { handleProviderSelection } from '#ui-ink/ui/components/model-selector/actions/providerSelection'
-import { applyPointersForNewModel } from '#ui-ink/ui/components/model-selector/actions/saveConfiguration'
+import { runConnectionTestFlow } from '#ui-ink/components/ModelSelector/flow/actions/connectionTest'
+import { fetchModelsForProvider } from '#ui-ink/components/ModelSelector/flow/actions/fetchModels'
+import { handleProviderSelection } from '#ui-ink/components/ModelSelector/flow/actions/providerSelection'
+import { applyPointersForNewModel } from '#ui-ink/components/ModelSelector/flow/actions/saveConfiguration'
 
 describe('model selector actions', () => {
   test('provider -> apiKey -> model (anthropic happy path)', async () => {
@@ -11,7 +11,7 @@ describe('model selector actions', () => {
     let selectedProvider: any = null
     let providerBaseUrl: any = null
 
-    handleProviderSelection('anthropic', {
+    await handleProviderSelection('anthropic', {
       navigateTo: screen => {
         navigations.push(screen)
       },
@@ -23,7 +23,7 @@ describe('model selector actions', () => {
       setProviderBaseUrl: baseUrl => {
         providerBaseUrl = baseUrl
       },
-      saveConfiguration: () => {},
+      saveConfiguration: async () => null,
       onDone: () => {},
       selectedModel: '',
     })

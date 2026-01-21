@@ -1,9 +1,7 @@
 import * as React from 'react'
 import type { Command } from '../types'
-import { Onboarding } from '#ui-ink/components/Onboarding'
+import { OnboardingScreen } from '#ui-ink/screens/setup/OnboardingScreen'
 import { clearTerminal } from '#cli-utils/terminal'
-import { getGlobalConfig, saveGlobalConfig } from '#core/utils/config'
-import { clearConversation } from './clear'
 
 export default {
   type: 'local-jsx',
@@ -14,17 +12,17 @@ export default {
   ui: { displayMode: 'fullscreen' },
   async call(onDone, context) {
     await clearTerminal()
-    const config = getGlobalConfig()
-    saveGlobalConfig({
-      ...config,
-      theme: 'dark',
-    })
 
     return (
-      <Onboarding
-        onDone={async () => {
-          clearConversation(context)
-          onDone()
+      <OnboardingScreen
+        onDone={result => {
+          const status =
+            result?.skipped === true
+              ? 'Onboarding skipped.'
+              : 'Onboarding complete.'
+          onDone(
+            `${status} Recommended next step: run /capabilities to audit and auto-fix optional features.`,
+          )
         }}
       />
     )

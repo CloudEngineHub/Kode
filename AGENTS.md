@@ -1,10 +1,33 @@
 # AGENTS.md
 
-This file provides guidance to Kode automation agents (including those compatible with the `.claude` ecosystem) when working with code in this repository.
+This file guides automation/coding agents working in this repository.
+For longer-form background (product intent, repo hygiene, and deeper design notes), see `AGENT_CONTEXT/README.md`.
+For product-level UX intent and principles, see `docs/product/11_post_human_blueprint.md`.
+For repeatable repo workflows (debug/test/build/release/compat), prefer the skill at `./.claude/skills/kode-repo-maintain/`.
+
+## Product Intent (High Level)
+
+- **Post-human workflows**: optimize for “one operator → many parallel actions” across coding and non-coding tasks.
+- **Unit-agent CLI**: one consistent interface for human–computer work (tools, context, permissions, memory).
+- **Multi-model + collaboration**: model profiles, sub-agents, and tool-orchestrated execution.
+- **UX first**: fast feedback loops, low-friction defaults, and predictable guardrails.
+
+## Repository Map
+
+- `apps/cli/`: CLI entrypoints, command system, and Ink TUI (`apps/cli/src/entrypoints/cli.ts`).
+- `apps/server/`: local server/daemon utilities and Web UI serving (`apps/server/src/server/webui.ts`).
+- `apps/web/`: Web UI source; built into `dist/webui/**` during `bun run build`.
+- `packages/core/`: orchestration engine, agent loading, permissions, MCP integration, and model wiring.
+- `packages/tools/`: built-in tools (Task/Bash/WebFetch/WebSearch/Lsp/…) and their prompts/schemas.
+- `packages/runtime/`: shell execution primitives + background task output store.
+- `packages/config/`: config loading, data-root resolution, and schema.
+- `packages/protocol/`: session/log protocol helpers (import/export, stream-json, etc.).
+- `packages/builtin-skills/skills/`: bundled runtime skills shipped with the npm package.
 
 ## Development Commands
 
-### Essential Development Workflow
+### Essential Workflow
+
 ```bash
 # Install dependencies
 bun install
@@ -30,12 +53,14 @@ bun run format:check
 ```
 
 ### Build System Details
-- **Primary Build Tool**: Bun (required for development)
-- **Distribution**: Smart CLI wrapper (`cli.js`) that prefers cached native binary, then falls back to Node.js (`dist/index.js`)
-- **Entry Points**: `apps/kode/src/index.ts` (dispatch) + `apps/kode/src/entrypoints/cli.tsx` (TUI)
-- **Build Output**: `cli.js` (executable wrapper) and `.npmrc` (npm configuration)
+
+- **Primary build tool**: Bun (required for development)
+- **Distribution (npm)**: `cli.js` wrapper runs the bundled Node.js runtime entry (`dist/index.js`)
+- **Distribution (optional)**: standalone single-file binaries are built via `bun run build:binary` and published as GitHub Release assets
+- **Main entrypoints**: `apps/cli/src/dispatch.ts` (dispatch) + `apps/cli/src/entrypoints/cli.ts` (Ink TUI)
 
 ### Publishing
+
 ```bash
 # Publish to npm (requires build first)
 npm publish
@@ -43,206 +68,95 @@ npm publish
 SKIP_BUNDLED_CHECK=true npm publish
 ```
 
-## High-Level Architecture
+## System Architecture (Practical)
 
-### Core System Design
-Kode implements a **three-layer parallel architecture** refined for fast iteration across terminal workflows while remaining compatible with the `.claude` agent ecosystem:
+Kode is intentionally layered so UX, orchestration, and tool execution can evolve independently:
 
-1. **User Interaction Layer** (`ui/ink/src/screens/REPL.tsx`)
-   - Interactive terminal interface using Ink (React for CLI)
-   - Command parsing and user input handling
-   - Real-time UI updates and syntax highlighting
+1. **Interaction/UI**: `apps/cli/src/ui/**` (Ink screens, overlays, input, and renderers)
+2. **Orchestration**: `packages/core/src/engine/**` + `packages/tools/src/tools/ai/TaskTool/**`
+3. **Tools**: `packages/tools/src/tools/**` (permission-aware, schema-first tool implementations)
 
-2. **Orchestration Layer** (`packages/tools-builtin/src/tools/ai/TaskTool/`)
-   - Dynamic agent system for task delegation
-   - Multi-model collaboration and switching
-   - Context management and conversation continuity
+## UX Guardrails (Low-friction by default)
 
-3. **Tool Execution Layer** (`packages/tools-builtin/src/tools/`)
-   - Specialized tools for different capabilities (File I/O, Bash, Grep, etc.)
-   - Permission system for secure tool access
-   - MCP (Model Context Protocol) integration
+- Avoid rigid “menus” and hidden mechanisms as the primary user path (not just install/setup); prefer intent-driven commands/screens and agent-driven actions with verification.
+- Keep core flows resilient: avoid hidden coupling to unrelated third-party endpoints; prefer graceful fallbacks.
+- Keep terminal UX predictable: clear state, minimal questions, concise output.
 
-### Multi-Model Architecture
-**Key Innovation**: Unlike single-model systems, Kode supports unlimited AI models with intelligent collaboration:
+## Compatibility (Kode-first)
 
-- **ModelManager** (`packages/core/src/utils/model.ts`): Unified model configuration and switching
-- **Model Profiles**: Each model has independent API endpoints, authentication, and capabilities
-- **Model Pointers**: Default models for different purposes (main, task, reasoning, quick)
-- **Dynamic Switching**: Runtime model changes without session restart
+- `.kode/**` is the canonical write surface. Avoid implicit writes to legacy surfaces; treat `.claude/**` and `.claude-plugin/**` as read-compat + explicit import only (write there only when the user opts in).
+- Keep interoperability terminology scoped: legacy labels are interoperability nouns, not the product narrative (apply “legacy” framing consistently in user-facing strings, code identifiers, and comments).
+- Centralize all legacy aliases (env vars, headers, directory names, request-strategy labels) in the compat layer (`packages/core/src/compat/**`) and reference them via exported constants (e.g. `LEGACY_CLAUDE_ENV`) rather than hardcoded `CLAUDE_*` strings.
 
-### Agent System (`packages/core/src/utils/agentLoader.ts`)
-**Dynamic Agent Configuration Loading** with 5-tier priority system:
-1. Built-in (code-embedded)
-2. `~/.claude/agents/` (`.claude` user directory compatibility)
-3. `~/.kode/agents/` (Kode user)
-4. `./.claude/agents/` (`.claude` project directory compatibility)
-5. `./.kode/agents/` (Kode project)
+## Skills (Runtime Knowledge Packages)
 
-Agents are defined as markdown files with YAML frontmatter:
-```markdown
----
-name: agent-name
-description: "When to use this agent"
-tools: ["FileRead", "Bash"] # or "*" for all tools
-model: model-name # optional
----
+This repo supports filesystem-discovered skills (`SKILL.md` packages) as a first-class mechanism for shipping on-demand workflows to the _running_ agent.
 
-System prompt content here...
-```
+- **Packaging boundary**: content under `docs/` and `AGENT_CONTEXT/` is developer-facing only; runtime-required knowledge must live in shipped skill locations (bundled: `packages/builtin-skills/skills/**`, or user/project skill dirs).
+- **Discovery order (Kode-first)**: bundled (`packages/builtin-skills/skills/**`) → `~/.kode/skills/**` → `./.kode/skills/**` → legacy read-compat (`~/.claude/skills/**`, `./.claude/skills/**`).
+- **Progressive disclosure**: skill frontmatter is loaded at discovery; keep `description` keyword-rich and keep bodies short; push long references into `references/`/`scripts/` within the skill.
+- **No hard install menus**: prefer intent-driven actions (SlashCommand/Skill/Task) over long “run these commands” menu flows.
+- **Bundled skill pack**: keep bundled skills small, general-purpose, and platform-agnostic. Bundled skills live under `packages/builtin-skills/skills/**` and are discoverable via `/skills`; use `skill-judge` when auditing or improving skill design.
+- **Repo maintenance skill**: prefer `./.claude/skills/kode-repo-maintain/` when work touches any of:
+  - multi-file refactors or wide-reaching changes
+  - build/release/packaging behavior
+  - onboarding/capability UX changes (avoid “install menus”; keep flows intent-driven)
+  - permissions or network tools (WebFetch/WebSearch)
+  - compatibility/interop surfaces (`.kode/**`, `.claude/**`, env aliases)
+  - “tool didn’t run / task output missing / session weirdness” debugging
+  - If unsure, start by loading this skill and follow its scenario router + checklists; load only the relevant `references/**`.
 
-### Tool Architecture
-Each tool follows a consistent pattern in `packages/tools-builtin/src/tools/<domain>/<ToolName>/`:
-- `[ToolName].tsx`: Main tool implementation (UI presenters live under `ui/ink`)
-- `prompt.ts`: Tool-specific system prompts
-- Tool schema using Zod for validation
-- Permission-aware execution
+## Permissions + Subagents (Gotchas)
 
-### Service Layer
-- **LLM Service** (`packages/core/src/services/llm.ts`): Main LLM integration (Anthropic/OpenAI-compatible)
-- **OpenAI Service** (`packages/core/src/services/openai.ts`): OpenAI-compatible models
-- **Model Adapter Factory** (`packages/core/src/services/modelAdapterFactory.ts`): Unified model interface
-- **MCP Client** (`packages/core/src/services/mcpClient.ts`): Model Context Protocol for tool extensions
+- `allowedTools` constraints must be merged into the same permission engine as persisted rules; otherwise constraints silently won’t apply.
+- Subagents inherit the parent `toolPermissionContext` and the invoking command’s constraints; they must not implicitly “auto-escalate” permissions.
 
-### Configuration System (`packages/config/src/index.ts`)
-**Hierarchical Configuration** supporting:
-- Global config (`~/.kode.json`)
-- Project config (`./.kode.json`)
-- Environment variables
-- CLI parameter overrides
-- Multi-model profile management
+## Async Tool Descriptions
 
-### Context Management
-- **Project Context** (`packages/core/src/context/`): Codebase understanding and file relationships
-- **Session protocol** (`packages/core/src/utils/protocol/`): stream-json session persistence helpers
-- **Tool presenters** (`ui/ink/src/toolPresenters/`): TUI rendering for tool results
+Tool descriptions can be async functions and must be awaited:
 
-### Permission System (`packages/core/src/permissions/`)
-**Security-First Tool Access**:
-- Granular permission requests for each tool use
-- User approval required for file modifications and command execution
-- Tool capability filtering based on agent configuration
-- Secure file path validation and sandboxing
-
-## Important Implementation Details
-
-### Async Tool Descriptions
-**Critical**: Tool descriptions are async functions that must be awaited:
-```typescript
+```ts
 // INCORRECT
 const description = tool.description
 
 // CORRECT
-const description = typeof tool.description === 'function' 
-  ? await tool.description() 
-  : tool.description
+const description =
+  typeof tool.description === 'function'
+    ? await tool.description()
+    : tool.description
 ```
 
-### Agent Loading Performance
-- **Memoization**: LRU cache to avoid repeated file I/O
-- **Hot Reload**: File system watchers for real-time agent updates
-- **Parallel Loading**: All agent directories scanned concurrently
+## Debugging & Forensics (Session Storage)
 
-### UI Framework Integration
-- **Ink**: React-based terminal UI framework
-- **Component Structure**: Follows React patterns with hooks and context
-- **Terminal Handling**: Custom input handling for complex interactions
-
-### Error Handling Strategy
-- **Graceful Degradation**: System continues with built-in agents if loading fails
-- **User-Friendly Errors**: Clear error messages with suggested fixes
-- **Debug Logging**: Comprehensive logging system (`packages/core/src/utils/debugLogger.ts`)
-
-### TypeScript Integration
-- **Strict Types**: Full TypeScript coverage with strict mode
-- **Zod Schemas**: Runtime validation for all external data
-- **Tool Typing**: Consistent `Tool` interface for all tools
-
-## Key Files for Understanding the System
-
-### Core Entry Points
-- `apps/kode/src/index.ts`: Unified dispatch entry (help-lite/version early return)
-- `apps/kode/src/entrypoints/cli.tsx`: Main CLI application entry (Ink TUI)
-- `ui/ink/src/screens/REPL.tsx`: Interactive terminal interface
-
-### Tool System
-- `packages/tools-builtin/src/registry.ts`: Tool registry and exports
-- `packages/core/src/tooling/Tool.ts`: Base tool interface definition
-- `packages/tools-builtin/src/tools/ai/TaskTool/TaskTool.tsx`: Agent orchestration tool
-
-### Configuration & Model Management
-- `packages/config/src/index.ts`: Configuration management
-- `packages/core/src/utils/model.ts`: Model manager and switching logic
-- `packages/core/src/utils/agentLoader.ts`: Dynamic agent configuration loading
-
-### Services & Integrations
-- `packages/core/src/services/llm.ts`: Main AI service integration
-- `packages/core/src/services/mcpClient.ts`: MCP tool integration
-
-## Debugging & Forensics (Bash Tool / LLM Gate / Session Storage)
-
-When debugging “Bash tool didn’t run / background task didn’t start / LLM gate blocked unexpectedly”, inspect the persisted session artifacts under `~/.kode/`.
+When debugging “tool didn’t run / background task didn’t start / LLM gate blocked unexpectedly”, inspect the persisted artifacts under `~/.kode/`.
 
 ### Per-project data root
-Kode stores data in a per-project directory derived from the working directory:
+
 - `~/.kode/-Users-<you>-<path-to-project>/`
-- Example for this repo: `~/.kode/-Users-baicai-Desktop-MyT-Kode-pr-Kode-cli/`
 
 Useful subdirectories:
+
 - `messages/`: conversation transcripts (includes tool_use + tool_result)
 - `errors/`: error logs and structured dumps
 - `tasks/`: background shell output files (`<bashId>.output`)
 
-### Conversation transcripts (what actually happened)
-- `~/.kode/.../messages/*.json`
-- Each file contains the full turn history including `tool_use` blocks (e.g. `Bash`) and the corresponding `tool_result` content.
+### Bash LLM intent gate debug dumps
 
-How to confirm whether a background Bash command truly started:
-- Look for `Bash` tool_use with `run_in_background: true`.
-- Confirm the tool result contains `toolUseResult.data.backgroundTaskId` / `bashId`.
-- Then confirm `~/.kode/.../tasks/<bashId>.output` exists and is being appended.
+If the gate fails closed (timeout / invalid output / API error), Kode writes a dedicated dump:
 
-If the tool result contains “Blocked: LLM intent gate …”, the command did not execute (fail-closed gate).
-
-### Bash LLM intent gate debug dumps (why the gate failed)
-When the gate fails closed (timeout / invalid output / API error), Kode writes a dedicated dump:
 - `~/.kode/.../errors/bash-llm-gate/*.txt`
-
-These dumps include:
-- the gate input (USER_PROMPT / DESCRIPTION / COMMAND / CONTEXT)
-- the raw gate output (and retry outputs, if any)
-- the parse/timeout error that caused the fail-closed block
-
-This is the canonical artifact to diagnose “model responded with analysis/markdown and did not follow the required format”.
-
-### Quick triage recipe
-1. Open the latest `messages/*.json` for the failing turn and determine whether the `Bash` tool_use was blocked vs executed.
-2. If blocked by gate, open the newest `errors/bash-llm-gate/*.txt` and inspect gate I/O.
-3. If executed in background, inspect `tasks/<bashId>.output`, then verify TaskOutput/KillShell sequencing.
 
 ## Development Patterns
 
-### Adding New Tools
-1. Create directory in `packages/tools-builtin/src/tools/<domain>/<ToolName>/`
-2. Implement `[ToolName].tsx` following existing patterns
-3. Add `prompt.ts` for tool-specific prompts
-4. Register in `packages/tools-builtin/src/registry.ts`
-5. Update tool permissions in agent configurations
+### Adding a Tool
 
-### Adding New Commands
-1. Create command file in `packages/core/src/commands/[command].tsx`
-2. Implement command logic with Ink UI components
-3. Register in `packages/core/src/commands.ts`
-4. Add command to help system
+1. Create `packages/tools/src/tools/<domain>/<ToolName>/`
+2. Implement the tool + `prompt.ts` and Zod schema
+3. Register in `packages/tools/src/registry.ts`
+4. Add/update tests where there is existing coverage
 
-### Model Integration
-1. Add model profile to `packages/core/src/constants/models.ts`
-2. Implement adapter if needed in `packages/core/src/services/ai/adapters/`
-3. Update model capabilities in `packages/core/src/constants/modelCapabilities.ts`
-4. Test with existing tool suite
+### Adding a CLI Command
 
-### Agent Development
-1. Create `.md` file with proper YAML frontmatter
-2. Place in appropriate directory based on scope
-3. Test with `/agents` command
-4. Verify tool permissions work correctly
+1. Add a command under `apps/cli/src/commands/**`
+2. Register it in `apps/cli/src/commands/registry.ts`
+3. Ensure help text is coherent with onboarding and permission model

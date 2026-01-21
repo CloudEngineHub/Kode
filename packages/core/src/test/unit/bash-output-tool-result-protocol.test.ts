@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { TaskOutputTool } from '#tools/tools/system/TaskOutputTool/TaskOutputTool'
 
-test('TaskOutputTool resultForAssistant matches Claude tag protocol', () => {
+test('TaskOutputTool resultForAssistant matches legacy tag protocol', () => {
   const out: any = {
     retrieval_status: 'success',
     task: {

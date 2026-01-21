@@ -4,6 +4,8 @@ import {
   kodeMessageToSdkMessage,
 } from './kodeAgentStreamJson'
 import type { KodeAgentStructuredStdio } from './kodeAgentStructuredStdio'
+import { randomUUID } from 'node:crypto'
+import { MaxTurnsExceededError } from '#core/errors/maxTurns'
 
 type MessageWithUuid = { type: string; uuid: string }
 
@@ -66,6 +68,9 @@ export async function runKodeAgentStreamJsonSession<
   }
   replayUserMessages: boolean
   getTotalCostUsd: () => number
+  getTotalApiDurationMs?: () => number
+  maxBudgetUsd?: number
+  onProcessingStateChange?: (processing: boolean) => void
   onActiveTurnAbortControllerChanged?: (
     controller: AbortController | null,
   ) => void
@@ -113,22 +118,22 @@ export async function runKodeAgentStreamJsonSession<
 
     conversation.push(userMsg)
 
-    const costBefore = args.getTotalCostUsd()
     const startedAt = Date.now()
     const turnAbortController = new AbortController()
     args.onActiveTurnAbortControllerChanged?.(turnAbortController)
+    args.onProcessingStateChange?.(true)
 
     let lastAssistant: M | null = null
     let queryError: unknown = null
     const toAppend: M[] = []
 
-    try {
-      const inputForTurn = [...conversation]
-      const toolUseContext = {
-        ...args.toolUseContextBase,
-        abortController: turnAbortController,
-      } as C
+    const inputForTurn = [...conversation]
+    const toolUseContext = {
+      ...args.toolUseContextBase,
+      abortController: turnAbortController,
+    } as C
 
+    try {
       for await (const m of args.query(
         inputForTurn,
         args.systemPrompt,
@@ -151,6 +156,7 @@ export async function runKodeAgentStreamJsonSession<
       } catch {}
     } finally {
       args.onActiveTurnAbortControllerChanged?.(null)
+      args.onProcessingStateChange?.(false)
     }
 
     conversation.push(...toAppend)
@@ -165,8 +171,17 @@ export async function runKodeAgentStreamJsonSession<
             ? String(queryError)
             : ''
 
+    const totalCostUsd = args.getTotalCostUsd()
+    const budgetExceeded =
+      typeof args.maxBudgetUsd === 'number' &&
+      Number.isFinite(args.maxBudgetUsd) &&
+      args.maxBudgetUsd > 0 &&
+      totalCostUsd >= args.maxBudgetUsd
+
+    const maxTurnsExceeded = queryError instanceof MaxTurnsExceededError
+
     let structuredOutput: Record<string, unknown> | undefined
-    if (args.jsonSchema && !queryError) {
+    if (args.jsonSchema && !queryError && !budgetExceeded && !maxTurnsExceeded) {
       try {
         const fenced = String(resultText).trim()
         const unfenced = (() => {
@@ -199,21 +214,45 @@ export async function runKodeAgentStreamJsonSession<
 
     const usage = extractAssistantUsage(lastAssistant)
     const durationMs = Date.now() - startedAt
-    const totalCostUsd = Math.max(0, args.getTotalCostUsd() - costBefore)
-    const isError = Boolean(queryError) || turnAbortController.signal.aborted
+
+    const turnsFromContext = ((): number => {
+      const raw = (toolUseContext as unknown as { turnCount?: unknown }).turnCount
+      if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < 0) return 0
+      return Math.trunc(raw)
+    })()
+
+    const isError =
+      !budgetExceeded &&
+      !maxTurnsExceeded &&
+      (Boolean(queryError) || turnAbortController.signal.aborted)
 
     args.writeSdkLine(
       makeSdkResultMessage({
         sessionId: args.sessionId,
-        result: String(resultText),
-        structuredOutput,
-        numTurns: 1,
+        result:
+          budgetExceeded || maxTurnsExceeded ? undefined : String(resultText),
+        structuredOutput:
+          budgetExceeded || maxTurnsExceeded ? undefined : structuredOutput,
+        numTurns:
+          maxTurnsExceeded && queryError instanceof MaxTurnsExceededError
+            ? queryError.turnCount
+            : Math.max(turnsFromContext, 1),
         usage,
         totalCostUsd,
         durationMs,
-        durationApiMs: 0,
+        durationApiMs: args.getTotalApiDurationMs?.() ?? 0,
         isError,
+        subtype: maxTurnsExceeded
+          ? 'error_max_turns'
+          : budgetExceeded
+            ? 'error_max_budget_usd'
+            : undefined,
+        uuid: randomUUID(),
       }),
     )
+
+    if (budgetExceeded) {
+      return
+    }
   }
 }

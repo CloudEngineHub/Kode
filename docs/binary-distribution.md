@@ -1,32 +1,68 @@
-# Binary Distribution (Native First)
+# Standalone Binary Distribution (Bun --compile)
 
-Kode prefers a **native executable** (especially for Windows users) and falls back to the Node.js runtime when needed.
+Kode has **two** official distribution paths:
 
-## Runtime selection order
+1. **npm package (recommended)**: `@shareai-lab/kode` (ships a Node.js runtime entry, and optional per-platform native binaries).
+2. **Standalone single-file binaries (optional)**: attached to GitHub Releases, built with `bun build --compile`.
 
-The `kode`/`kwa`/`kd` entrypoint (`cli.js`) follows this order:
+The npm package does **not** download binaries from GitHub during install.
 
-1. **Cached native binary**: `${KODE_BIN_DIR:-~/.kode/bin}/<version>/<platform>-<arch>/kode(.exe)`
-2. **Node.js runtime fallback**: `node dist/index.js ...args` (no Bun required)
-3. **Error with guidance** (reinstall/build from source)
+## How the standalone binary works
 
-`--version` and `--help-lite` are handled directly by the wrapper and do not require the bundled runtime entrypoint.
+The GitHub Release asset is a **single executable file** built with Bun, but it embeds a zipped JS bundle and unpacks it on first run.
 
-## Install-time binary fetch
+- Default cache location: `~/.kode/bundled/kode/<version>-<sha>/<platform>-<arch>/...`
+- If that directory is not writable, it falls back to `os.tmpdir()`.
 
-On `postinstall`, Kode will best-effort download the native executable into the cache directory above:
+## npm distribution: native binary via optionalDependencies
 
-- Default source: GitHub Releases
-- Tag: `v<version>`
-- Asset name: `kode-<platform>-<arch>(.exe)`
+The `kode`/`kwa`/`kd` entry wrapper (`cli.js`) prefers, in order:
 
-### Overrides
+1. **Native binary** from npm `optionalDependencies`: `@shareai-lab/kode-bin-<platform>-<arch>`
+2. **Node.js runtime entry**: `node dist/index.js ...args`
 
-- **Mirror**: set `KODE_BINARY_BASE_URL` to a directory containing the assets (same asset names).
-- **Disable download**: set `KODE_SKIP_BINARY_DOWNLOAD=1` (wrapper skips native download and uses the Node.js runtime fallback).
+If you install with `--no-optional` / `--omit=optional`, Kode still runs via the Node.js entrypoint (you just won't have the optional native binary / bundled ripgrep).
 
-## Failure modes
+Windows ARM64 note: if the `win32-arm64` binary package is unavailable, Kode will attempt to use the `win32-x64` binary (x64 emulation).
 
-- **Offline / GitHub blocked**: download is skipped/failed; install still succeeds; wrapper uses the Node.js runtime fallback.
-- **No permission to write cache dir**: download is skipped; wrapper uses the Node.js runtime fallback.
-- **Unsupported platform/arch**: download will fail unless a matching asset exists; wrapper uses the Node.js runtime fallback.
+## GitHub Release binaries (for “portable” usage)
+
+Each release publishes assets named:
+
+- `kode-<platform>-<arch>` (macOS/Linux)
+- `kode-<platform>-<arch>.exe` (Windows)
+
+and a `checksums-sha256.txt` file.
+
+Example:
+
+```bash
+./kode-darwin-arm64 --version
+```
+
+## Building binaries locally (maintainers)
+
+You must build on the target OS/arch (GitHub Actions does this via a matrix build).
+
+```bash
+bun install
+# Optional but recommended: include WebUI + platform ripgrep in the binary payload
+bun run build
+bun run scripts/ensure-ripgrep.mjs --current-only
+bun run build:binary
+```
+
+Output location:
+
+- `dist/bin/<platform>-<arch>/kode(.exe)`
+
+To prepare the npm binary platform packages from the built artifacts:
+
+```bash
+node scripts/prepare-kode-bin-packages.mjs
+```
+
+## Automated release pipeline
+
+- Dev prereleases: `.github/workflows/dev-release.yml`
+- Stable releases: `.github/workflows/npm-publish.yml`

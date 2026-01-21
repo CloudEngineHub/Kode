@@ -7,7 +7,10 @@ import type {
   ToolResultBlockParam,
 } from '@anthropic-ai/sdk/resources/index.mjs'
 
-import { getSessionProjectDir } from './kodeAgentSessionLog'
+import {
+  getSessionStoreRoots,
+  getSessionStoreProjectNameCandidatesForRead,
+} from './kodeAgentSessionLog'
 
 type UUID = `${string}-${string}-${string}-${string}-${string}`
 
@@ -104,6 +107,57 @@ function isUuid(value: string): value is UUID {
   )
 }
 
+function resolveSessionLogFilePathForRead(args: {
+  cwd: string
+  sessionId: string
+}): string | null {
+  const projectNames = getSessionStoreProjectNameCandidatesForRead(args.cwd)
+  for (const root of getSessionStoreRoots()) {
+    for (const projectName of projectNames) {
+      const candidate = join(
+        root,
+        'projects',
+        projectName,
+        `${args.sessionId}.jsonl`,
+      )
+      if (existsSync(candidate)) return candidate
+    }
+  }
+
+  return null
+}
+
+function resolveAgentLogFilePathForRead(args: {
+  cwd: string
+  sessionId: string
+  agentId: string
+}): string | null {
+  const projectNames = getSessionStoreProjectNameCandidatesForRead(args.cwd)
+  for (const root of getSessionStoreRoots()) {
+    for (const projectName of projectNames) {
+      const nested = join(
+        root,
+        'projects',
+        projectName,
+        args.sessionId,
+        'subagents',
+        `agent-${args.agentId}.jsonl`,
+      )
+      if (existsSync(nested)) return nested
+
+      const legacy = join(
+        root,
+        'projects',
+        projectName,
+        `agent-${args.agentId}.jsonl`,
+      )
+      if (existsSync(legacy)) return legacy
+    }
+  }
+
+  return null
+}
+
 function isUserEntry(entry: JsonlEntry): entry is JsonlUserEntry {
   const record = asRecord(entry)
   return record?.type === 'user'
@@ -149,10 +203,50 @@ function normalizeToolUseResult(value: unknown): FullToolUseResult | undefined {
   return value as FullToolUseResult
 }
 
+function extractToolResultContent(
+  message: MessageParam,
+): ToolResultBlockParam['content'] | null {
+  const content = message.content
+  if (!Array.isArray(content)) return null
+
+  for (const block of content) {
+    const record = asRecord(block)
+    if (!record) continue
+    if (record.type !== 'tool_result') continue
+    if (!('content' in record)) continue
+    return (record as unknown as ToolResultBlockParam).content
+  }
+
+  return null
+}
+
+function normalizeToolUseResultFromLogEntry(args: {
+  toolUseResult: unknown
+  message: MessageParam
+}): FullToolUseResult | undefined {
+  const { toolUseResult, message } = args
+  if (toolUseResult === undefined) return undefined
+
+  const wrapped = normalizeToolUseResult(toolUseResult)
+  if (wrapped) return wrapped
+
+  const resultForAssistant =
+    extractToolResultContent(message) ??
+    (typeof message.content === 'string' ? message.content : '')
+
+  return {
+    data: toolUseResult,
+    resultForAssistant,
+  }
+}
+
 function normalizeLoadedUser(entry: JsonlUserEntry): Message | null {
   const uuid = normalizeUuid(entry.uuid)
   if (!uuid || !entry.message) return null
-  const toolUseResult = normalizeToolUseResult(entry.toolUseResult)
+  const toolUseResult = normalizeToolUseResultFromLogEntry({
+    toolUseResult: entry.toolUseResult,
+    message: entry.message,
+  })
   return {
     type: 'user',
     uuid,
@@ -180,6 +274,7 @@ function normalizeLoadedAssistant(entry: JsonlAssistantEntry): Message | null {
 export type KodeAgentSessionLogData = {
   messages: Message[]
   summaries: Map<string, string>
+  lastSummaryLeafUuid: string | null
   customTitles: Map<string, string>
   tags: Map<string, string>
   fileHistorySnapshots: Map<string, JsonlFileHistorySnapshotEntry>
@@ -190,15 +285,15 @@ export function loadKodeAgentSessionLogData(args: {
   sessionId: string
 }): KodeAgentSessionLogData {
   const { cwd, sessionId } = args
-  const projectDir = getSessionProjectDir(cwd)
-  const filePath = join(projectDir, `${sessionId}.jsonl`)
-  if (!existsSync(filePath)) {
+  const filePath = resolveSessionLogFilePathForRead({ cwd, sessionId })
+  if (!filePath || !existsSync(filePath)) {
     throw new Error(`No conversation found with session ID: ${sessionId}`)
   }
 
   const lines = readFileSync(filePath, 'utf8').split('\n')
   const messages: Message[] = []
   const summaries = new Map<string, string>()
+  let lastSummaryLeafUuid: string | null = null
   const customTitles = new Map<string, string>()
   const tags = new Map<string, string>()
   const fileHistorySnapshots = new Map<string, JsonlFileHistorySnapshotEntry>()
@@ -225,7 +320,10 @@ export function loadKodeAgentSessionLogData(args: {
     if (isSummaryEntry(entry)) {
       const leafUuid = typeof entry.leafUuid === 'string' ? entry.leafUuid : ''
       const summary = typeof entry.summary === 'string' ? entry.summary : ''
-      if (leafUuid && summary) summaries.set(leafUuid, summary)
+      if (leafUuid && summary) {
+        summaries.set(leafUuid, summary)
+        lastSummaryLeafUuid = leafUuid
+      }
       continue
     }
 
@@ -252,7 +350,14 @@ export function loadKodeAgentSessionLogData(args: {
     }
   }
 
-  return { messages, summaries, customTitles, tags, fileHistorySnapshots }
+  return {
+    messages,
+    summaries,
+    lastSummaryLeafUuid,
+    customTitles,
+    tags,
+    fileHistorySnapshots,
+  }
 }
 
 export function loadKodeAgentSessionMessages(args: {
@@ -262,17 +367,82 @@ export function loadKodeAgentSessionMessages(args: {
   return loadKodeAgentSessionLogData(args).messages
 }
 
-export function findMostRecentKodeAgentSessionId(cwd: string): string | null {
-  const projectDir = getSessionProjectDir(cwd)
-  if (!existsSync(projectDir)) return null
+export function loadKodeAgentSessionMessagesForResume(args: {
+  cwd: string
+  sessionId: string
+}): Message[] {
+  const data = loadKodeAgentSessionLogData(args)
+  const leafUuid = data.lastSummaryLeafUuid
+  if (!leafUuid) return data.messages
 
-  const candidates = readdirSync(projectDir)
-    .filter(name => name.endsWith('.jsonl'))
-    .filter(name => !name.startsWith('agent-'))
-    .map(name => ({
-      sessionId: basename(name, '.jsonl'),
-      path: join(projectDir, name),
-    }))
+  const index = data.messages.findIndex(m => m.uuid === leafUuid)
+  if (index === -1) return data.messages
+
+  let startIndex = index
+
+  // If the summary is preceded by one or more user messages (e.g. an auto-compact notice
+  // and/or the prompt that triggered the compaction), keep up to two of them so the resumed
+  // transcript remains coherent while still dropping the pre-compaction history.
+  if (startIndex > 0 && data.messages[startIndex - 1]?.type === 'user') {
+    startIndex -= 1
+  }
+  if (startIndex > 0 && data.messages[startIndex - 1]?.type === 'user') {
+    startIndex -= 1
+  }
+
+  return data.messages.slice(Math.max(0, startIndex))
+}
+
+export function loadKodeAgentSidechainMessagesForResume(args: {
+  cwd: string
+  sessionId: string
+  agentId: string
+}): Message[] {
+  const filePath = resolveAgentLogFilePathForRead(args)
+  if (!filePath || !existsSync(filePath)) {
+    throw new Error(`No transcript found for agent ID: ${args.agentId}`)
+  }
+
+  const lines = readFileSync(filePath, 'utf8').split('\n')
+  const messages: Message[] = []
+
+  for (const line of lines) {
+    const raw = safeParseJson(line.trim())
+    if (!raw || typeof raw !== 'object') continue
+    const entry = raw as JsonlEntry
+
+    if (isUserEntry(entry)) {
+      if (entry.sessionId && entry.sessionId !== args.sessionId) continue
+      const msg = normalizeLoadedUser(entry)
+      if (msg) messages.push(msg)
+      continue
+    }
+
+    if (isAssistantEntry(entry)) {
+      if (entry.sessionId && entry.sessionId !== args.sessionId) continue
+      const msg = normalizeLoadedAssistant(entry)
+      if (msg) messages.push(msg)
+      continue
+    }
+  }
+
+  return messages
+}
+
+export function findMostRecentKodeAgentSessionId(cwd: string): string | null {
+  const projectNames = getSessionStoreProjectNameCandidatesForRead(cwd)
+  const candidates = getSessionStoreRoots()
+    .flatMap(root => projectNames.map(name => join(root, 'projects', name)))
+    .filter(dir => existsSync(dir))
+    .flatMap(projectDir => {
+      return readdirSync(projectDir)
+        .filter(name => name.endsWith('.jsonl'))
+        .filter(name => !name.startsWith('agent-'))
+        .map(name => ({
+          sessionId: basename(name, '.jsonl'),
+          path: join(projectDir, name),
+        }))
+    })
     .filter(c => isUuid(c.sessionId))
 
   if (candidates.length === 0) return null

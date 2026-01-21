@@ -20,6 +20,7 @@ export type LocalCommand = {
         commands: Command[]
         tools: Tool[]
         slowAndCapableModel: string
+        openMessageSelector?: () => void
       }
       abortController: AbortController
       setForkConvoWithMessagesOnTheNextRender: (

@@ -38,12 +38,18 @@ export function stripOutputRedirections(
       const prevOp = getShellTokenOp(prev)
       const isStart =
         index === 0 ||
-        (prevOp !== null && ['&&', '||', ';', '|'].includes(prevOp))
+        (prevOp !== null && ['&&', '||', ';', '&', '|', '|&'].includes(prevOp))
       parenStack.push({ index, isStart })
     } else if (isOpToken(token, ')') && parenStack.length > 0) {
       const start = parenStack.pop()!
       const next = tokens[index + 1]
-      if (start.isStart && (isOpToken(next, '>') || isOpToken(next, '>>'))) {
+      const afterNext = tokens[index + 2]
+      const isRedirect =
+        isOpToken(next, '>') ||
+        isOpToken(next, '>>') ||
+        (isOpToken(next, '&') &&
+          (isOpToken(afterNext, '>') || isOpToken(afterNext, '>>')))
+      if (start.isStart && isRedirect) {
         parenToStrip.add(start.index).add(index)
       }
     }
@@ -110,6 +116,16 @@ function maybeConsumeRedirection(
   outputTokens: ParseEntry[],
 ): { skip: number } {
   const isFd = (v: unknown) => typeof v === 'string' && /^\d+$/.test(v.trim())
+
+  if (
+    isOpToken(token, '&') &&
+    (isOpToken(next, '>') || isOpToken(next, '>>')) &&
+    isSimplePathToken(afterNext)
+  ) {
+    const operator: '>' | '>>' = isOpToken(next, '>>') ? '>>' : '>'
+    redirections.push({ target: String(afterNext), operator })
+    return { skip: 2 }
+  }
 
   if (isOpToken(token, '>') || isOpToken(token, '>>')) {
     const operator: '>' | '>>' = isOpToken(token, '>>') ? '>>' : '>'

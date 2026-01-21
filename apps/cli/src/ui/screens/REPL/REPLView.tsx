@@ -1,7 +1,8 @@
-import { Box, Static, type DOMElement, measureElement, useStdout } from 'ink'
+import { Box, Static, Text, type DOMElement, measureElement } from 'ink'
 import * as React from 'react'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+
 import type { ToolUseConfirm } from '#ui-ink/components/permissions/PermissionRequest'
 import { PermissionRequest } from '#ui-ink/components/permissions/PermissionRequest'
 import PromptInput from '#ui-ink/components/PromptInput'
@@ -9,20 +10,16 @@ import { RequestStatusIndicator } from '#ui-ink/components/RequestStatusIndicato
 import { CostThresholdDialog } from '#ui-ink/components/CostThresholdDialog'
 import { BinaryFeedback } from '#ui-ink/components/binary-feedback/BinaryFeedback'
 import { MessageSelector } from '#ui-ink/components/MessageSelector'
-import { PermissionProvider } from '#ui-ink/context/PermissionContext'
+import { PermissionProvider } from '#ui-ink/contexts/PermissionContext'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import { useFlickerDetector } from '#ui-ink/hooks/useFlickerDetector'
-import {
-  normalizeMessagesForAPI,
-  type NormalizedMessage,
-} from '#core/utils/messages'
+import type { NormalizedMessage } from '#core/utils/messages'
 import type { Message as MessageType } from '#core/query'
 import type { Tool } from '#core/tooling/Tool'
 import type { TranscriptItem } from './useTranscriptItems'
 import type { BinaryFeedbackContext } from './types'
 import { TransientViewportProvider } from '#ui-ink/contexts/TransientViewportContext'
 
-const CLEAR_VIEWPORT = '\x1b[2J\x1b[H'
 const VIEWPORT_SAFE_MARGIN_ROWS = 1
 
 export function REPLView({
@@ -35,6 +32,7 @@ export function REPLView({
   toolJSX,
   toolUseConfirm,
   setToolUseConfirm,
+  toast,
   binaryFeedbackContext,
   setBinaryFeedbackContext,
   isLoading,
@@ -66,6 +64,7 @@ export function REPLView({
   } | null
   toolUseConfirm: ToolUseConfirm | null
   setToolUseConfirm: (confirm: ToolUseConfirm | null) => void
+  toast: string | null
   binaryFeedbackContext: BinaryFeedbackContext | null
   setBinaryFeedbackContext: (ctx: BinaryFeedbackContext | null) => void
   isLoading: boolean
@@ -86,37 +85,48 @@ export function REPLView({
 }): React.ReactNode {
   const rootUiRef = useRef<DOMElement | null>(null)
   const mainControlsRef = useRef<DOMElement | null>(null)
-  const transientItemsRef = useRef<DOMElement | null>(null)
   const messageSelectorRef = useRef<DOMElement | null>(null)
-  const { stdout } = useStdout()
+  const lastMeasureKeyRef = useRef('')
+  const lastMeasureAtRef = useRef(0)
   const { rows, columns } = useTerminalSize()
   useFlickerDetector(rootUiRef, rows, true)
 
   const isFullScreenToolView = toolJSX?.displayMode === 'fullscreen'
-
-  const lastTerminalWidthRef = useRef(columns)
-  const isInitialMountRef = useRef(true)
-  const lastVerboseRef = useRef(verbose)
-  const [staticRemountKey, setStaticRemountKey] = useState(0)
-  const [staticNeedsRefresh, setStaticNeedsRefresh] = useState(false)
-  const lastStaticRefreshAtRef = useRef(0)
+  const hasToolJSX = Boolean(toolJSX)
+  const hasToolUseConfirm = Boolean(toolUseConfirm)
+  const hasBinaryFeedback = Boolean(binaryFeedbackContext)
+  const hasToast = Boolean(toast)
 
   const [mainControlsHeight, setMainControlsHeight] = useState(0)
   const [messageSelectorHeight, setMessageSelectorHeight] = useState(0)
-  const lastOverflowMeasureAtRef = useRef(0)
 
-  // Mirror Gemini CLI: measure the "footer" (controls + prompt) height and use it to
-  // constrain transient (actively changing) transcript content to the remaining viewport.
-  //
-  // Use `useLayoutEffect` so height changes (e.g. opening/closing completion) are applied
-  // before Ink paints, avoiding one-frame overflows that can scroll the terminal and leave
-  // "ghost" prompt lines behind.
-  //
-  // Note: completion can become active via effects without changing `promptInputProps.input`
-  // (e.g. auto-triggered suggestions). Measure every render and only commit when the height
-  // actually changes so we never miss a footer growth event.
   useLayoutEffect(() => {
     if (rows <= 0 || columns <= 0) return
+    const measureKey = [
+      rows,
+      columns,
+      isMessageSelectorVisible ? 1 : 0,
+      isFullScreenToolView ? 1 : 0,
+      hasToolJSX ? 1 : 0,
+      hasToolUseConfirm ? 1 : 0,
+      hasBinaryFeedback ? 1 : 0,
+      showingCostDialog ? 1 : 0,
+      shouldShowPromptInput ? 1 : 0,
+      hasToast ? 1 : 0,
+      isLoading ? 1 : 0,
+      messageSelectorMessages.length,
+    ].join(':')
+
+    const now = Date.now()
+    if (
+      measureKey === lastMeasureKeyRef.current &&
+      now - lastMeasureAtRef.current < 200
+    ) {
+      return
+    }
+
+    lastMeasureKeyRef.current = measureKey
+    lastMeasureAtRef.current = now
 
     if (mainControlsRef.current) {
       const measured = measureElement(mainControlsRef.current).height
@@ -131,117 +141,20 @@ export function REPLView({
     } else {
       setMessageSelectorHeight(prev => (prev === 0 ? prev : 0))
     }
-  })
-
-  useEffect(() => {
-    if (!transientItemsRef.current) return
-    if (rows <= 0 || columns <= 0) return
-
-    const now = Date.now()
-    if (now - lastOverflowMeasureAtRef.current < 200) return
-    lastOverflowMeasureAtRef.current = now
-
-    const transientHeight = measureElement(transientItemsRef.current).height
-    const availableHeight = Math.max(
-      1,
-      rows -
-        mainControlsHeight -
-        messageSelectorHeight -
-        VIEWPORT_SAFE_MARGIN_ROWS,
-    )
-
-    if (transientHeight <= availableHeight) return
-    if (staticNeedsRefresh) return
-
-    const elapsed = now - lastStaticRefreshAtRef.current
-    if (elapsed < 500) return
-
-    setStaticNeedsRefresh(true)
   }, [
-    columns,
     rows,
-    mainControlsHeight,
-    messageSelectorHeight,
-    staticNeedsRefresh,
-    transientItems,
+    columns,
+    isMessageSelectorVisible,
+    isFullScreenToolView,
+    hasToolJSX,
+    hasToolUseConfirm,
+    hasBinaryFeedback,
+    showingCostDialog,
+    shouldShowPromptInput,
+    hasToast,
+    isLoading,
+    messageSelectorMessages.length,
   ])
-
-  useEffect(() => {
-    if (!staticNeedsRefresh) return
-
-    // Avoid clearing while the UI is actively streaming; wait until idle-ish
-    // so we don't introduce additional tearing.
-    if (isLoading) return
-
-    try {
-      const out = stdout ?? process.stdout
-      if (out?.isTTY) {
-        // Clear the viewport without wiping scrollback so users can still scroll up.
-        out.write(CLEAR_VIEWPORT)
-      }
-    } catch {
-      // best-effort only
-    }
-    lastStaticRefreshAtRef.current = Date.now()
-    setStaticRemountKey(prev => prev + 1)
-    setStaticNeedsRefresh(false)
-  }, [columns, isLoading, rows, staticNeedsRefresh, stdout])
-
-  useEffect(() => {
-    if (lastVerboseRef.current === verbose) return
-    lastVerboseRef.current = verbose
-    setStaticNeedsRefresh(true)
-  }, [verbose])
-
-  const lastFullScreenToolViewRef = useRef(isFullScreenToolView)
-  useEffect(() => {
-    if (lastFullScreenToolViewRef.current === isFullScreenToolView) return
-    lastFullScreenToolViewRef.current = isFullScreenToolView
-
-    try {
-      const out = stdout ?? process.stdout
-      if (out?.isTTY) {
-        out.write(CLEAR_VIEWPORT)
-      }
-    } catch {
-      // best-effort only
-    }
-
-    lastStaticRefreshAtRef.current = Date.now()
-    setStaticRemountKey(prev => prev + 1)
-    setStaticNeedsRefresh(false)
-  }, [isFullScreenToolView, stdout])
-
-  useEffect(() => {
-    if (isInitialMountRef.current) {
-      isInitialMountRef.current = false
-      lastTerminalWidthRef.current = columns
-      return
-    }
-
-    // When <Static> content was printed at a wider terminal width, shrinking the terminal can
-    // cause "tearing" where Ink's dynamic region ends up misaligned with scrollback rows.
-    // Gemini CLI fixes this by clearing and remounting <Static> when the width decreases.
-    const handler = setTimeout(() => {
-      const last = lastTerminalWidthRef.current
-      if (columns < last) {
-        try {
-          const out = stdout ?? process.stdout
-          if (out?.isTTY) {
-            out.write(CLEAR_VIEWPORT)
-          }
-        } catch {
-          // best-effort only
-        }
-        setStaticRemountKey(prev => prev + 1)
-      }
-      lastTerminalWidthRef.current = columns
-    }, 300)
-
-    return () => {
-      clearTimeout(handler)
-    }
-  }, [columns, stdout])
 
   const transientMaxHeight = Math.max(
     1,
@@ -261,91 +174,111 @@ export function REPLView({
         conversationKey={conversationKey}
         isBypassPermissionsModeAvailable={!safeMode}
       >
-        <Box ref={rootUiRef} flexDirection="column" width="100%">
-          {!isFullScreenToolView && (
-            <>
-              <React.Fragment
-                key={`static-messages-${forkNumber}-${staticRemountKey}`}
-              >
-                <Static
-                  items={staticItems}
-                  children={(item, index) => (
-                    <React.Fragment key={index}>{item.jsx}</React.Fragment>
-                  )}
-                />
-              </React.Fragment>
-              <Box ref={transientItemsRef} flexDirection="column" width="100%">
-                {transientItems.map(_ => _.jsx)}
-              </Box>
-            </>
-          )}
-          <Box
-            ref={mainControlsRef}
-            borderColor="red"
-            borderStyle={debug ? 'single' : undefined}
-            flexDirection="column"
-            width="100%"
-          >
-            {!toolJSX &&
-              !toolUseConfirm &&
-              !binaryFeedbackContext &&
-              isLoading && <RequestStatusIndicator />}
-            {toolJSX ? toolJSX.jsx : null}
-            {!toolJSX && binaryFeedbackContext && !isMessageSelectorVisible && (
-              <BinaryFeedback
-                m1={binaryFeedbackContext.m1}
-                m2={binaryFeedbackContext.m2}
-                resolve={result => {
-                  binaryFeedbackContext.resolve(result)
-                  setTimeout(() => setBinaryFeedbackContext(null), 0)
-                }}
-                verbose={verbose}
-                normalizedMessages={normalizedMessages}
-                tools={tools}
-                debug={debug}
-                erroredToolUseIDs={erroredToolUseIDs}
-                inProgressToolUseIDs={inProgressToolUseIDs}
-                unresolvedToolUseIDs={unresolvedToolUseIDs}
-              />
-            )}
-            {!toolJSX &&
-              toolUseConfirm &&
-              !isMessageSelectorVisible &&
-              !binaryFeedbackContext && (
-                <PermissionRequest
-                  toolUseConfirm={toolUseConfirm}
-                  onDone={() => setToolUseConfirm(null)}
-                  verbose={verbose}
-                />
-              )}
-            {!toolJSX &&
-              !toolUseConfirm &&
-              !isMessageSelectorVisible &&
-              !binaryFeedbackContext &&
-              showingCostDialog && (
-                <CostThresholdDialog onDone={onCostDialogDone} />
-              )}
-
-            {!toolUseConfirm &&
-              !toolJSX?.shouldHidePromptInput &&
-              shouldShowPromptInput &&
-              !isMessageSelectorVisible &&
-              !binaryFeedbackContext &&
-              !showingCostDialog && <PromptInput {...promptInputProps} />}
+        {isFullScreenToolView && toolJSX ? (
+          <Box ref={rootUiRef} flexDirection="column" width="100%">
+            {toolJSX.jsx}
           </Box>
-          {isMessageSelectorVisible && (
-            <Box ref={messageSelectorRef} flexDirection="column" width="100%">
-              <MessageSelector
-                erroredToolUseIDs={erroredToolUseIDs}
-                unresolvedToolUseIDs={unresolvedToolUseIDs}
-                messages={normalizeMessagesForAPI(messageSelectorMessages)}
-                onSelect={onMessageSelectorSelect}
-                onEscape={onMessageSelectorEscape}
-                tools={tools}
+        ) : (
+          <Box ref={rootUiRef} flexDirection="column" width="100%">
+            <React.Fragment key={`static-messages-${forkNumber}`}>
+              <Static
+                items={staticItems}
+                children={(item, index) => (
+                  <React.Fragment key={index}>{item.jsx}</React.Fragment>
+                )}
               />
+            </React.Fragment>
+
+            <Box flexDirection="column" width="100%">
+              {transientItems.map(_ => _.jsx)}
             </Box>
-          )}
-        </Box>
+
+            <Box
+              ref={mainControlsRef}
+              borderColor="red"
+              borderStyle={debug ? 'single' : undefined}
+              flexDirection="column"
+              width="100%"
+            >
+              {toast &&
+                !toolUseConfirm &&
+                !toolJSX &&
+                !binaryFeedbackContext && (
+                  <Box paddingX={1} marginTop={1}>
+                    <Text color="yellow" dimColor wrap="truncate-end">
+                      {toast}
+                    </Text>
+                  </Box>
+                )}
+
+              {!toolJSX &&
+                !toolUseConfirm &&
+                !binaryFeedbackContext &&
+                isLoading && <RequestStatusIndicator />}
+
+              {toolJSX ? toolJSX.jsx : null}
+
+              {!toolJSX &&
+                binaryFeedbackContext &&
+                !isMessageSelectorVisible && (
+                  <BinaryFeedback
+                    m1={binaryFeedbackContext.m1}
+                    m2={binaryFeedbackContext.m2}
+                    resolve={result => {
+                      binaryFeedbackContext.resolve(result)
+                      setTimeout(() => setBinaryFeedbackContext(null), 0)
+                    }}
+                    verbose={verbose}
+                    normalizedMessages={normalizedMessages}
+                    tools={tools}
+                    debug={debug}
+                    erroredToolUseIDs={erroredToolUseIDs}
+                    inProgressToolUseIDs={inProgressToolUseIDs}
+                    unresolvedToolUseIDs={unresolvedToolUseIDs}
+                  />
+                )}
+
+              {!toolJSX &&
+                toolUseConfirm &&
+                !isMessageSelectorVisible &&
+                !binaryFeedbackContext && (
+                  <PermissionRequest
+                    toolUseConfirm={toolUseConfirm}
+                    onDone={() => setToolUseConfirm(null)}
+                    verbose={verbose}
+                  />
+                )}
+
+              {!toolJSX &&
+                !toolUseConfirm &&
+                !isMessageSelectorVisible &&
+                !binaryFeedbackContext &&
+                showingCostDialog && (
+                  <CostThresholdDialog onDone={onCostDialogDone} />
+                )}
+
+              {!toolUseConfirm &&
+                !toolJSX?.shouldHidePromptInput &&
+                shouldShowPromptInput &&
+                !isMessageSelectorVisible &&
+                !binaryFeedbackContext &&
+                !showingCostDialog && <PromptInput {...promptInputProps} />}
+            </Box>
+
+            {isMessageSelectorVisible && (
+              <Box ref={messageSelectorRef} flexDirection="column" width="100%">
+                <MessageSelector
+                  erroredToolUseIDs={erroredToolUseIDs}
+                  unresolvedToolUseIDs={unresolvedToolUseIDs}
+                  messages={messageSelectorMessages}
+                  onSelect={onMessageSelectorSelect}
+                  onEscape={onMessageSelectorEscape}
+                  tools={tools}
+                />
+              </Box>
+            )}
+          </Box>
+        )}
       </PermissionProvider>
     </TransientViewportProvider>
   )

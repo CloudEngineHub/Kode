@@ -12,7 +12,7 @@ import { isDebugMode, isDebugVerboseMode, isVerboseMode } from './mode'
 import { terminalLog } from './terminal'
 import { DEBUG_PATHS, STARTUP_TIMESTAMP, writeToFile } from './transports'
 import type { LogEntry } from './types'
-import { SESSION_ID } from '#core/utils/log'
+import { getKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
 
 class RequestContext {
   public readonly id: string
@@ -224,7 +224,7 @@ export function initDebugLogger() {
 
   debug.info('DEBUG_LOGGER_INIT', {
     startupTimestamp: STARTUP_TIMESTAMP,
-    sessionId: SESSION_ID,
+    sessionId: getKodeAgentSessionId(),
     debugPaths: {
       detailed: DEBUG_PATHS.detailed(),
       flow: DEBUG_PATHS.flow(),
@@ -258,7 +258,7 @@ export function getDebugInfo() {
     isVerboseMode: isVerboseMode(),
     isDebugVerboseMode: isDebugVerboseMode(),
     startupTimestamp: STARTUP_TIMESTAMP,
-    sessionId: SESSION_ID,
+    sessionId: getKodeAgentSessionId(),
     currentRequest: currentRequest?.id,
     activeRequests: Array.from(activeRequests.keys()),
     terminalLogLevels: isDebugVerboseMode()

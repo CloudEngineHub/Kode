@@ -2,10 +2,7 @@ import { Box, Text } from 'ink'
 import React, { useCallback, useMemo } from 'react'
 import { Select } from '#ui-ink/components/CustomSelect/select'
 import { getTheme } from '#core/utils/theme'
-import {
-  PermissionRequestTitle,
-  textColorForRiskScore,
-} from '#ui-ink/components/permissions/PermissionRequestTitle'
+import { textColorForRiskScore } from '#ui-ink/components/permissions/PermissionRequestTitle'
 import { logUnaryEvent } from '#core/utils/unaryLogging'
 import { env } from '#core/utils/env'
 import {
@@ -29,9 +26,13 @@ import { getCwd } from '#core/utils/state'
 import { basename, dirname } from 'path'
 import { statSync } from 'fs'
 import { getPermissionModeCycleShortcut } from '#ui-ink/utils/permissionModeCycleShortcut'
-import { usePermissionContext } from '#ui-ink/context/PermissionContext'
+import { usePermissionContext } from '#ui-ink/contexts/PermissionContext'
 import { isPathInWorkingDirectories } from '#core/utils/permissions/fileToolPermissionEngine'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
+import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
+import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
+import { PermissionRequestDetails } from '#ui-ink/components/permissions/PermissionRequestDetails'
+import { applyToolPermissionUpdatesToLiveToolUseContext } from '../liveToolPermissionContext'
 
 function pathArgNameForToolUse(toolUseConfirm: ToolUseConfirm): string | null {
   switch (toolUseConfirm.tool) {
@@ -123,8 +124,8 @@ function getDontAskAgainOptions(
 
   if (toolUseConfirm.tool.isReadOnly(toolUseConfirm.input as never)) {
     const label = isInWorkingDir
-      ? 'Yes, during this session'
-      : `Yes, allow reading from ${chalk.bold(`${permissionDirName}/`)} during this session`
+      ? 'Allow during this session'
+      : `Allow reading from ${chalk.bold(`${permissionDirName}/`)} during this session`
     return [{ label, value: 'yes-session' }]
   }
 
@@ -133,8 +134,8 @@ function getDontAskAgainOptions(
     `(${modeCycleShortcut})`,
   )
   const label = isInWorkingDir
-    ? `Yes, allow all edits during this session ${shortcutHint}`
-    : `Yes, allow all edits in ${chalk.bold(`${permissionDirName}/`)} during this session ${shortcutHint}`
+    ? `Allow all edits during this session ${shortcutHint}`
+    : `Allow all edits in ${chalk.bold(`${permissionDirName}/`)} during this session ${shortcutHint}`
   return [{ label, value: 'yes-session' }]
 }
 
@@ -153,6 +154,7 @@ function FilesystemPermissionRequestImpl({
 }: Props): React.ReactNode {
   const { applyToolPermissionUpdate, toolPermissionContext } =
     usePermissionContext()
+  const layout = useScreenLayout()
   const modeCycleShortcut = useMemo(() => getPermissionModeCycleShortcut(), [])
   const userFacingName = toolUseConfirm.tool.userFacingName()
   const hasSessionSuggestion = (toolUseConfirm.suggestions?.length ?? 0) > 0
@@ -162,6 +164,9 @@ function FilesystemPermissionRequestImpl({
   )
     ? 'Read'
     : 'Edit'
+  const canQuickAllowSession =
+    hasSessionSuggestion &&
+    !toolUseConfirm.tool.isReadOnly(toolUseConfirm.input as never)
   const title = `${userFacingReadOrWrite} ${isMultiFile(toolUseConfirm) ? 'files' : 'file'}`
 
   const unaryEvent = useMemo<UnaryEvent>(
@@ -213,6 +218,10 @@ function FilesystemPermissionRequestImpl({
             for (const update of toolUseConfirm.suggestions ?? []) {
               applyToolPermissionUpdate(update)
             }
+            applyToolPermissionUpdatesToLiveToolUseContext({
+              toolUseContext: toolUseConfirm.toolUseContext,
+              updates: toolUseConfirm.suggestions ?? [],
+            })
           }
           onDone()
           toolUseConfirm.onAllow(
@@ -246,53 +255,59 @@ function FilesystemPermissionRequestImpl({
   })
 
   return (
-    <Box
-      flexDirection="column"
-      borderStyle="round"
-      borderColor={textColorForRiskScore(toolUseConfirm.riskScore)}
-      marginTop={1}
-      paddingLeft={1}
-      paddingRight={1}
-      paddingBottom={1}
-    >
-      <PermissionRequestTitle
-        title={title}
-        riskScore={toolUseConfirm.riskScore}
-      />
-      <Box flexDirection="column" paddingX={2} paddingY={1}>
-        <Text>
-          {userFacingName}(
-          {toolUseConfirm.tool.renderToolUseMessage(
-            toolUseConfirm.input as never,
-            { verbose },
-          )}
-          )
-        </Text>
-      </Box>
+    <Box marginTop={1} width="100%">
+      <ScreenFrame
+        title={`${title} permission`}
+        titleColor={textColorForRiskScore(toolUseConfirm.riskScore)}
+        paddingX={layout.paddingX}
+        paddingY={layout.tightLayout ? 0 : layout.paddingY}
+        gap={layout.gap}
+      >
+        <Box flexDirection="column" gap={layout.gap}>
+          <Box flexDirection="column">
+            <Text wrap="truncate-end">
+              {userFacingName}(
+              {toolUseConfirm.tool.renderToolUseMessage(
+                toolUseConfirm.input as never,
+                { verbose },
+              )}
+              )
+            </Text>
+            <PermissionRequestDetails toolUseConfirm={toolUseConfirm} />
+          </Box>
 
-      <Box flexDirection="column">
-        <Text>Do you want to proceed?</Text>
-        <Select
-          options={[
-            {
-              label: 'Yes',
-              value: 'yes',
-            },
-            ...getDontAskAgainOptions(
-              toolUseConfirm,
-              path,
-              modeCycleShortcut.displayText,
-              isInWorkingDir,
-              hasSessionSuggestion,
-            ),
-            {
-              label: `No, and provide instructions (${chalk.bold.hex(getTheme().warning)('esc')})`,
-              value: 'no',
-            },
-          ]}
-          onChange={handleChoice}
-        />
-      </Box>
+          <Box flexDirection="column">
+            <Text>Allow this action?</Text>
+            <Select
+              options={[
+                {
+                  label: 'Allow once',
+                  value: 'yes',
+                },
+                ...getDontAskAgainOptions(
+                  toolUseConfirm,
+                  path,
+                  modeCycleShortcut.displayText,
+                  isInWorkingDir,
+                  hasSessionSuggestion,
+                ),
+                {
+                  label: `Deny and provide instructions (${chalk.bold.hex(getTheme().warning)('esc')})`,
+                  value: 'no',
+                },
+              ]}
+              onChange={handleChoice}
+            />
+          </Box>
+
+          <Text dimColor wrap="truncate-end">
+            Enter to confirm · Esc to reject
+            {canQuickAllowSession
+              ? ` · ${modeCycleShortcut.displayText} allow this session`
+              : ''}
+          </Text>
+        </Box>
+      </ScreenFrame>
     </Box>
   )
 }

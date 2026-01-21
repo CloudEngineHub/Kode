@@ -16,6 +16,41 @@ import { getCwd } from '#core/utils/state'
 
 const EXIT_COMMANDS = new Set(['exit', 'quit', ':q', ':q!', ':wq', ':wq!'])
 
+function extractPasteId(placeholder: string): number | null {
+  const match = placeholder.match(
+    /\[(Pasted text|Image|\.\.\.Truncated text) #(\d+)(?: \+\d+ lines)?(\.)*\]/,
+  )
+  if (!match?.[2]) return null
+  if (match[1] !== 'Pasted text') return null
+  const id = Number(match[2])
+  if (!Number.isFinite(id) || id <= 0) return null
+  return id
+}
+
+function buildHistoryPastedContents(
+  pastedTexts: PastedTextSegment[],
+): Record<number, { id: number; type: 'text'; content: string }> {
+  const out: Record<number, { id: number; type: 'text'; content: string }> = {}
+  for (const pasted of pastedTexts) {
+    const id = extractPasteId(pasted.placeholder)
+    if (!id) continue
+    out[id] = { id, type: 'text', content: pasted.text }
+  }
+  return out
+}
+
+function addPromptToHistory(args: {
+  display: string
+  pastedTexts: PastedTextSegment[]
+}): void {
+  const pastedContents = buildHistoryPastedContents(args.pastedTexts)
+  if (Object.keys(pastedContents).length > 0) {
+    addToHistory({ display: args.display, pastedContents })
+    return
+  }
+  addToHistory(args.display)
+}
+
 function getKodingContext(): string {
   return [
     'The user is using Koding mode.',
@@ -57,6 +92,7 @@ export async function submitPrompt(args: {
   setForkConvoWithMessagesOnTheNextRender: (
     forkConvoWithMessages: Message[],
   ) => void
+  onShowMessageSelector?: () => void
   readFileTimestamps: { [filename: string]: number }
   pastedTexts: PastedTextSegment[]
   pastedImages: PastedImageAttachment[]
@@ -105,7 +141,10 @@ export async function submitPrompt(args: {
 
     args.onInputChange('')
     args.setCursorOffset(0)
-    addToHistory(args.mode === 'koding' ? `#${args.input}` : args.input)
+    addPromptToHistory({
+      display: args.mode === 'koding' ? `#${args.input}` : args.input,
+      pastedTexts: args.pastedTexts,
+    })
     args.resetHistory()
     args.onModeChange('prompt')
     return
@@ -129,7 +168,7 @@ export async function submitPrompt(args: {
   args.setCursorOffset(0)
   args.onSubmitCountChange(prev => prev + 1)
 
-  if (effectiveMode !== 'bash') {
+  if (effectiveMode !== 'bash' && effectiveMode !== 'background') {
     args.onModeChange('prompt')
   }
 
@@ -151,6 +190,7 @@ export async function submitPrompt(args: {
           commands: args.commands,
           forkNumber: args.forkNumber,
           messageLogName: args.messageLogName,
+          openMessageSelector: args.onShowMessageSelector,
           tools: args.tools,
           verbose: args.verbose,
           maxThinkingTokens: 0,
@@ -175,13 +215,28 @@ export async function submitPrompt(args: {
   }
 
   if (newMessages.length === 0) {
-    addToHistory(args.input)
+    addPromptToHistory({ display: args.input, pastedTexts: args.pastedTexts })
     args.resetHistory()
     args.setIsLoading(false)
     return
   }
 
-  const shouldUpdatePwdAfterBash = effectiveMode === 'bash'
+  const shouldUpdatePwdAfterBash =
+    effectiveMode === 'bash' || effectiveMode === 'background'
+
+  // Save prompt to history immediately after we successfully construct the user messages.
+  // This ensures history is preserved even if the query is aborted (e.g. Escape) or errors mid-flight.
+  const inputToAdd =
+    effectiveMode === 'bash'
+      ? `!${args.input}`
+      : effectiveMode === 'background'
+        ? `&${args.input}`
+        : args.input
+
+  if (newMessages.some(message => message.type === 'user')) {
+    addPromptToHistory({ display: inputToAdd, pastedTexts: args.pastedTexts })
+    args.resetHistory()
+  }
 
   try {
     await args.onQuery(newMessages, controller)
@@ -190,12 +245,5 @@ export async function submitPrompt(args: {
     }
   } catch (error) {
     logError(error)
-  }
-
-  for (const message of newMessages) {
-    if (message.type !== 'user') continue
-    const inputToAdd = effectiveMode === 'bash' ? `!${args.input}` : args.input
-    addToHistory(inputToAdd)
-    args.resetHistory()
   }
 }

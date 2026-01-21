@@ -60,14 +60,15 @@ export async function getMessagesForSlashCommand(
         <command-args>${args}</command-args>`)
 
         try {
+          const baseOptions = context.options ?? {}
           // Use the context's abortController for local commands
           const result = await command.call(args, {
             ...context,
             options: {
-              commands: context.options.commands || [],
-              tools: context.options.tools || [],
-              slowAndCapableModel:
-                context.options.slowAndCapableModel || 'main',
+              ...baseOptions,
+              commands: baseOptions.commands ?? [],
+              tools: baseOptions.tools ?? [],
+              slowAndCapableModel: baseOptions.slowAndCapableModel ?? 'main',
             },
           })
 

@@ -119,7 +119,7 @@ function toolNameFromSpec(spec: string): string {
   return toolName || trimmed
 }
 
-function mapClaudeModelToKode(model: string): string | 'inherit' {
+function mapLegacyModelToKodePointer(model: string): string | 'inherit' {
   if (model === 'inherit') return 'inherit'
   if (model === 'opus') return 'main'
   if (model === 'sonnet') return 'task'
@@ -232,7 +232,7 @@ function validateOneAgentFile(args: {
   }
 
   const normalizedModel =
-    model && model.length > 0 ? mapClaudeModelToKode(model) : undefined
+    model && model.length > 0 ? mapLegacyModelToKodePointer(model) : undefined
 
   if (normalizedModel && normalizedModel !== 'inherit') {
     const manager = getModelManager()

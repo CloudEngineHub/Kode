@@ -14,12 +14,14 @@ export async function maybeAttachSandboxNetworkPorts(args: {
   if (!sandboxOptions || sandboxOptions.enabled !== true) return sandboxOptions
 
   const platform = sandboxOptions.__platformOverride ?? process.platform
-  if (platform !== 'darwin') return sandboxOptions
+  if (platform !== 'darwin' && platform !== 'linux') return sandboxOptions
 
   const needsRestriction =
-    'needsNetworkRestriction' in sandboxOptions
+    sandboxOptions.needsNetworkRestriction !== undefined
       ? sandboxOptions.needsNetworkRestriction === true
-      : false
+      : sandboxOptions.allowNetwork === true
+        ? false
+        : true
   if (!needsRestriction) return sandboxOptions
 
   const { abortController } = context
@@ -34,6 +36,7 @@ export async function maybeAttachSandboxNetworkPorts(args: {
 
   const ports = await ensureSandboxNetworkInfrastructure({
     runtimeConfig: sandboxPlan.runtimeConfig,
+    platform,
     permissionCallback: async ({ host, port }) => {
       if (mode === 'acceptEdits' || mode === 'bypassPermissions') return true
       if (mode === 'dontAsk' || shouldAvoidPermissionPrompts) return false
@@ -59,6 +62,17 @@ export async function maybeAttachSandboxNetworkPorts(args: {
       return result.result === true
     },
   })
+
+  if (platform === 'linux') {
+    if (!ports.linuxBridge) return sandboxOptions
+    return {
+      ...sandboxOptions,
+      linuxBridge: ports.linuxBridge,
+      // Compatibility: inside a Linux net namespace we expose proxy bridges on fixed ports.
+      httpProxyPort: 3128,
+      socksProxyPort: 1080,
+    }
+  }
 
   return {
     ...sandboxOptions,

@@ -19,7 +19,6 @@ function writeFile(path: string, content: string, mode?: number) {
 
 function makeTempPackageRoot(options: { version: string }) {
   const root = mkdtempSync(join(tmpdir(), 'kode-cli-wrapper-'))
-  mkdirSync(join(root, 'scripts'), { recursive: true })
   mkdirSync(join(root, 'dist'), { recursive: true })
 
   writeFileSync(
@@ -41,12 +40,6 @@ function makeTempPackageRoot(options: { version: string }) {
   )
   chmodSync(join(root, 'cli.js'), 0o755)
 
-  writeFileSync(
-    join(root, 'scripts', 'binary-utils.cjs'),
-    readFileSync(join(repoRoot, 'scripts', 'binary-utils.cjs'), 'utf8'),
-    'utf8',
-  )
-
   return {
     root,
     cleanup() {
@@ -67,42 +60,7 @@ function runWrapper(
   })
 }
 
-function createFakeBunOnPath(dir: string) {
-  mkdirSync(dir, { recursive: true })
-  const bunPath = process.execPath
-  if (process.platform === 'win32') {
-    const cmdPath = join(dir, 'bun.cmd')
-    writeFileSync(
-      cmdPath,
-      [
-        '@echo off',
-        'if "%1"=="--version" (',
-        '  echo 1.0.0-test',
-        '  exit /b 0',
-        ')',
-        `"${bunPath}" %*`,
-        '',
-      ].join('\r\n'),
-      'utf8',
-    )
-    return
-  }
-
-  const shPath = join(dir, 'bun')
-  writeFile(
-    shPath,
-    `#!/bin/sh
-if [ "$1" = "--version" ]; then
-  echo "1.0.0-test"
-  exit 0
-fi
-exec "${bunPath}" "$@"
-`,
-    0o755,
-  )
-}
-
-describe('cli.js wrapper (binary-first + bun fallback)', () => {
+describe('cli.js wrapper (native binary optionalDependencies + Node fallback)', () => {
   test('--help-lite prints usage without requiring Bun', () => {
     const pkg = makeTempPackageRoot({ version: '9.9.9' })
     const emptyPath = mkdtempSync(join(tmpdir(), 'kode-empty-path-'))
@@ -134,9 +92,9 @@ describe('cli.js wrapper (binary-first + bun fallback)', () => {
     }
   })
 
-  test('falls back to Bun when native binary is missing and Bun is available on PATH', () => {
+  test('runs Node runtime entrypoint (dist/index.js) when present', () => {
     const pkg = makeTempPackageRoot({ version: '9.9.9' })
-    const stubDir = mkdtempSync(join(tmpdir(), 'kode-stub-bun-'))
+    const emptyPath = mkdtempSync(join(tmpdir(), 'kode-empty-path-'))
     try {
       writeFileSync(
         join(pkg.root, 'dist', 'index.js'),
@@ -144,54 +102,51 @@ describe('cli.js wrapper (binary-first + bun fallback)', () => {
         'utf8',
       )
 
-      createFakeBunOnPath(stubDir)
-
       const res = runWrapper(pkg.root, ['arg1', 'arg2'], {
-        PATH: stubDir,
+        PATH: emptyPath,
       })
 
       expect(res.status).toBe(0)
       expect(res.stdout).toContain('DIST_OK arg1 arg2')
     } finally {
-      rmSync(stubDir, { recursive: true, force: true })
+      rmSync(emptyPath, { recursive: true, force: true })
       pkg.cleanup()
     }
   })
 
-  test('prefers native cached binary when present (non-Windows)', () => {
-    if (process.platform === 'win32') return
-
+  test('prefers native binary from optionalDependencies when present', () => {
     const pkg = makeTempPackageRoot({ version: '9.9.9' })
-    const binDir = mkdtempSync(join(tmpdir(), 'kode-bin-cache-'))
+    const emptyPath = mkdtempSync(join(tmpdir(), 'kode-empty-path-'))
     try {
-      const platform = process.platform
-      const arch = process.arch
-      const cachedBinary = join(binDir, '9.9.9', `${platform}-${arch}`, 'kode')
-      writeFile(cachedBinary, `#!/bin/sh\necho "BINARY_OK"\n`, 0o755)
-
       writeFileSync(
         join(pkg.root, 'dist', 'index.js'),
-        `console.log("DIST_OK_SHOULD_NOT_RUN");`,
+        `console.log("DIST_OK");`,
         'utf8',
       )
 
-      const emptyPath = mkdtempSync(join(tmpdir(), 'kode-empty-path-'))
-      const res = runWrapper(pkg.root, [], {
-        KODE_BIN_DIR: binDir,
+      const platform = process.platform
+      const arch = process.arch
+      const pkgName = `kode-bin-${platform}-${arch}`
+      const modDir = join(pkg.root, 'node_modules', '@shareai-lab', pkgName)
+      writeFile(
+        join(modDir, 'index.js'),
+        `module.exports = { kodePath: process.execPath }\n`,
+      )
+
+      const res = runWrapper(pkg.root, ['-e', 'console.log("BINARY_OK")'], {
         PATH: emptyPath,
       })
-      rmSync(emptyPath, { recursive: true, force: true })
 
       expect(res.status).toBe(0)
       expect(res.stdout).toContain('BINARY_OK')
-      expect(res.stdout).not.toContain('DIST_OK_SHOULD_NOT_RUN')
+      expect(res.stdout).not.toContain('DIST_OK')
     } finally {
-      rmSync(binDir, { recursive: true, force: true })
+      rmSync(emptyPath, { recursive: true, force: true })
       pkg.cleanup()
     }
   })
 
-  test('prints guidance and exits 1 when neither binary nor Bun is available', () => {
+  test('prints guidance and exits 1 when dist/ is missing', () => {
     const pkg = makeTempPackageRoot({ version: '9.9.9' })
     const emptyPath = mkdtempSync(join(tmpdir(), 'kode-empty-path-'))
     try {
@@ -200,7 +155,8 @@ describe('cli.js wrapper (binary-first + bun fallback)', () => {
       })
       expect(res.status).toBe(1)
       expect(res.stderr).toContain('Kode is not runnable')
-      expect(res.stderr).toContain('KODE_BINARY_BASE_URL')
+      expect(res.stderr).toContain('dist/index.js')
+      expect(res.stderr).toContain('bun run dev')
     } finally {
       rmSync(emptyPath, { recursive: true, force: true })
       pkg.cleanup()

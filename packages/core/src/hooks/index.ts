@@ -21,6 +21,10 @@ export {
   runUserPromptSubmitHooks,
 } from './lifecycle'
 
+export { getDisableAllHooksState, setDisableAllHooks } from './disableAllHooks'
+export type { HookConfigEntry, HookConfigSource } from './registry'
+export { listHookConfigurations } from './registry'
+
 import { __resetHookRegistryCacheForTests } from './registry'
 import { __resetSessionStartCacheForTests } from './lifecycle'
 

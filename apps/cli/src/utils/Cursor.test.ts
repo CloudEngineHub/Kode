@@ -39,6 +39,15 @@ describe('Cursor.render', () => {
     expect(rendered).not.toContain('SECRET')
     expect(rendered).toContain('*')
   })
+
+  it('renders wide (CJK) characters without cursor splitting', () => {
+    const text = 'ab你cd'
+    const offset = text.indexOf('你')
+    const cursor = Cursor.fromText(text, 5, offset)
+
+    const rendered = cursor.render(' ', '', s => `<${s}>`)
+    expect(rendered).toContain('<你>')
+  })
 })
 
 describe('countWrappedLines', () => {
@@ -56,5 +65,10 @@ describe('countWrappedLines', () => {
 
     const text = Array.from({ length: 10 }, (_, i) => `line${i}`).join('\n')
     expect(countWrappedLines(text, 80, 3)).toBe(3)
+  })
+
+  it('counts wide characters by visual width', () => {
+    // columns=5 -> safeColumns=4 inside Cursor/MeasuredText; each CJK char is width 2.
+    expect(countWrappedLines('你你你', 5)).toBe(2)
   })
 })

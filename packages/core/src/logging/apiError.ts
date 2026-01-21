@@ -2,12 +2,12 @@ import { appendFileSync, existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
 import chalk from 'chalk'
 
-import { SESSION_ID } from '#core/utils/log'
+import { getKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
 
 import { debug, getCurrentRequest } from './logger'
 import { isDebugMode, isDebugVerboseMode, isVerboseMode } from './mode'
 import { terminalLog } from './terminal'
-import { KODE_DIR } from './transports'
+import { getKodeDir } from './transports'
 
 export function logAPIError(context: {
   model: string
@@ -18,7 +18,7 @@ export function logAPIError(context: {
   response?: any
   provider?: string
 }) {
-  const errorDir = join(KODE_DIR, 'logs', 'error', 'api')
+  const errorDir = join(getKodeDir(), 'logs', 'error', 'api')
 
   if (!existsSync(errorDir)) {
     try {
@@ -36,7 +36,7 @@ export function logAPIError(context: {
 
   const fullLogContent = {
     timestamp: new Date().toISOString(),
-    sessionId: SESSION_ID,
+    sessionId: getKodeAgentSessionId(),
     requestId: getCurrentRequest()?.id,
     model: context.model,
     provider: context.provider,

@@ -3,17 +3,18 @@ import React from 'react'
 import { z } from 'zod'
 import { Tool, ToolUseContext } from '#core/tooling/Tool'
 import { getModelManager } from '#core/utils/model'
-import { getClaudeCodeProviderType } from '#core/utils/claudeCode'
+import { getAnthropicProviderRuntime } from '#core/utils/anthropicProviderRuntime'
 import { getAnthropicClient } from '#core/ai/llm/anthropic/client'
 import { createAssistantMessage } from '#core/utils/messages'
 import {
-  buildClaudeCodeFallbackPlan,
+  buildRequestStrategyFallbackPlan,
   classifyRequestFailure,
-} from '#core/ai/llm/claudeCodeFallback'
+} from '#core/ai/llm/restrictedClientCompat'
 import { PROMPT, TOOL_NAME_FOR_PROMPT } from './prompt'
+import { searchProviders } from './searchProviders'
 
-const inputSchema = z.strictObject({
-  query: z.string().min(2).describe('The search query to use'),
+const inputSchema = z.object({
+  query: z.string().describe('The search query to use'),
   allowed_domains: z
     .array(z.string())
     .optional()
@@ -128,6 +129,97 @@ type WebSearchProgressEvent =
   | { type: 'query_update'; query: string }
   | { type: 'search_results_received'; query: string; resultCount: number }
 
+function hostnameMatchesDomain(hostname: string, domain: string): boolean {
+  const normalizedHost = hostname.trim().toLowerCase()
+  const normalizedDomain = domain.trim().toLowerCase()
+  if (!normalizedHost || !normalizedDomain) return false
+  if (normalizedHost === normalizedDomain) return true
+  return normalizedHost.endsWith(`.${normalizedDomain}`)
+}
+
+function shouldIncludeResult(options: {
+  url: string
+  allowed_domains?: string[]
+  blocked_domains?: string[]
+}): boolean {
+  let hostname = ''
+  try {
+    hostname = new URL(options.url).hostname
+  } catch {
+    return false
+  }
+
+  if (options.allowed_domains?.length) {
+    const allowed = options.allowed_domains.some(domain =>
+      hostnameMatchesDomain(hostname, domain),
+    )
+    if (!allowed) return false
+  }
+
+  if (options.blocked_domains?.length) {
+    const blocked = options.blocked_domains.some(domain =>
+      hostnameMatchesDomain(hostname, domain),
+    )
+    if (blocked) return false
+  }
+
+  return true
+}
+
+async function* streamDuckDuckGoWebSearch(args: {
+  query: string
+  allowed_domains?: string[]
+  blocked_domains?: string[]
+}): AsyncGenerator<
+  | { type: 'progress'; event: WebSearchProgressEvent }
+  | {
+      type: 'output'
+      output: Output
+    }
+> {
+  const startedAt = Date.now()
+  yield { type: 'progress', event: { type: 'query_update', query: args.query } }
+
+  const provider = searchProviders.duckduckgo
+  const results = await provider.search(args.query)
+  const hits: WebSearchHit[] = results
+    .filter(result =>
+      shouldIncludeResult({
+        url: result.link,
+        allowed_domains: args.allowed_domains,
+        blocked_domains: args.blocked_domains,
+      }),
+    )
+    .map(result => ({ title: result.title, url: result.link }))
+
+  yield {
+    type: 'progress',
+    event: {
+      type: 'search_results_received',
+      query: args.query,
+      resultCount: hits.length,
+    },
+  }
+
+  const durationSeconds = (Date.now() - startedAt) / 1000
+  yield {
+    type: 'output',
+    output: {
+      query: args.query,
+      results: [{ tool_use_id: 'duckduckgo', content: hits }],
+      durationSeconds,
+    },
+  }
+}
+
+function canUseAnthropicServerToolWebSearch(modelName: string): boolean {
+  const runtime = getAnthropicProviderRuntime()
+  const isClaude = modelName.toLowerCase().includes('claude')
+  if (!isClaude) return false
+  if (runtime === 'firstParty' || runtime === 'foundry') return true
+  return runtime === 'vertex'
+}
+
 async function* streamAnthropicServerToolWebSearch(args: {
   query: string
   allowed_domains?: string[]
@@ -180,7 +272,7 @@ async function* streamAnthropicServerToolWebSearch(args: {
   }
 
   const timeoutMs = 45_000
-  const fallbackPlan = buildClaudeCodeFallbackPlan(
+  const fallbackPlan = buildRequestStrategyFallbackPlan(
     modelProfile.requestStrategy,
     modelProfile.modelName,
   )
@@ -309,7 +401,7 @@ async function* streamAnthropicServerToolWebSearch(args: {
       return
     } catch (error) {
       lastError = error
-      if (classifyRequestFailure(error).kind === 'claude_code_only') {
+      if (classifyRequestFailure(error).kind === 'restricted_client_only') {
         continue
       }
       throw error
@@ -349,20 +441,7 @@ export const WebSearchTool = {
   isReadOnly: () => true,
   isConcurrencySafe: () => true,
   async isEnabled() {
-    // Compatibility note: WebSearch is only enabled for firstParty, vertex (Claude 4 models),
-    // or foundry environments.
-    const providerType = getClaudeCodeProviderType()
-    if (providerType === 'firstParty' || providerType === 'foundry') return true
-    if (providerType === 'vertex') {
-      const modelProfile = getModelManager().getModel('main')
-      const modelName = modelProfile?.modelName ?? ''
-      return (
-        modelName.includes('claude-opus-4') ||
-        modelName.includes('claude-sonnet-4') ||
-        modelName.includes('claude-haiku-4')
-      )
-    }
-    return false
+    return true
   },
   needsPermissions() {
     return true
@@ -441,33 +520,69 @@ export const WebSearchTool = {
     { query, allowed_domains, blocked_domains }: Input,
     context: ToolUseContext,
   ) {
-    for await (const item of streamAnthropicServerToolWebSearch({
-      query,
-      allowed_domains,
-      blocked_domains,
-      context,
-    })) {
-      if (item.type === 'progress') {
-        const message =
-          item.event.type === 'query_update'
-            ? `Searching: ${item.event.query}`
-            : `Found ${item.event.resultCount} results for "${item.event.query}"`
+    const modelProfile = getModelManager().getModel('main')
+    const provider = modelProfile?.provider || 'anthropic'
+    const modelName = modelProfile?.modelName ?? ''
+
+    const shouldUseAnthropicServerTool =
+      Boolean(modelProfile) &&
+      provider === 'anthropic' &&
+      canUseAnthropicServerToolWebSearch(modelName)
+
+    async function* emitToolEvents(
+      tool:
+        | ReturnType<typeof streamAnthropicServerToolWebSearch>
+        | ReturnType<typeof streamDuckDuckGoWebSearch>,
+    ) {
+      for await (const item of tool) {
+        if (item.type === 'progress') {
+          const message =
+            item.event.type === 'query_update'
+              ? `Searching: ${item.event.query}`
+              : `Found ${item.event.resultCount} results for "${item.event.query}"`
+          yield {
+            type: 'progress' as const,
+            content: createAssistantMessage(
+              `<tool-progress>${message}</tool-progress>`,
+            ),
+          }
+          continue
+        }
+
+        const output = item.output
+        yield {
+          type: 'result' as const,
+          resultForAssistant: WebSearchTool.renderResultForAssistant(output),
+          data: output,
+        }
+        return
+      }
+    }
+
+    if (shouldUseAnthropicServerTool) {
+      try {
+        yield* emitToolEvents(
+          streamAnthropicServerToolWebSearch({
+            query,
+            allowed_domains,
+            blocked_domains,
+            context,
+          }),
+        )
+        return
+      } catch (error) {
+        if (context.abortController.signal.aborted) throw error
         yield {
           type: 'progress' as const,
           content: createAssistantMessage(
-            `<tool-progress>${message}</tool-progress>`,
+            `<tool-progress>WebSearch server tool unavailable; falling back…</tool-progress>`,
           ),
         }
-        continue
       }
-
-      const output = item.output
-      yield {
-        type: 'result' as const,
-        resultForAssistant: this.renderResultForAssistant(output),
-        data: output,
-      }
-      return
     }
+
+    yield* emitToolEvents(
+      streamDuckDuckGoWebSearch({ query, allowed_domains, blocked_domains }),
+    )
   },
 } satisfies Tool<typeof inputSchema, Output>

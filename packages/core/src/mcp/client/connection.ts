@@ -10,6 +10,8 @@ import type { McpServerConfig } from '#core/utils/config'
 import { PRODUCT_COMMAND } from '#core/constants/product'
 import { logMCPError } from '#core/utils/log'
 
+import { notifyMcpListChanged } from './listChanged'
+
 type GlobalWithWebSocket = { WebSocket?: unknown }
 
 async function ensureWebSocketGlobal(): Promise<void> {
@@ -156,28 +158,71 @@ export async function connectToServer(
   for (const candidate of candidates) {
     const client = new Client(
       { name: PRODUCT_COMMAND, version: '0.1.0' },
-      { capabilities: {} },
+      {
+        capabilities: {},
+        listChanged: {
+          tools: {
+            onChanged: (error: Error | null) => {
+              if (error) {
+                logMCPError(
+                  name,
+                  `Failed to refresh tools after list change: ${error.message}`,
+                )
+                return
+              }
+              notifyMcpListChanged({ kind: 'tools', server: name })
+            },
+          },
+          prompts: {
+            onChanged: (error: Error | null) => {
+              if (error) {
+                logMCPError(
+                  name,
+                  `Failed to refresh prompts after list change: ${error.message}`,
+                )
+                return
+              }
+              notifyMcpListChanged({ kind: 'prompts', server: name })
+            },
+          },
+          resources: {
+            onChanged: (error: Error | null) => {
+              if (error) {
+                logMCPError(
+                  name,
+                  `Failed to refresh resources after list change: ${error.message}`,
+                )
+                return
+              }
+              notifyMcpListChanged({ kind: 'resources', server: name })
+            },
+          },
+        },
+      },
     )
 
     try {
       const connectPromise = client.connect(candidate.transport)
+      let timeoutId: ReturnType<typeof setTimeout> | null = null
 
-      if (connectionTimeoutMs > 0) {
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          const timeoutId = setTimeout(() => {
-            reject(
-              new Error(
-                `Connection to MCP server "${name}" timed out after ${connectionTimeoutMs}ms`,
-              ),
-            )
-          }, connectionTimeoutMs)
+      try {
+        if (connectionTimeoutMs > 0) {
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            timeoutId = setTimeout(() => {
+              reject(
+                new Error(
+                  `Connection to MCP server "${name}" timed out after ${connectionTimeoutMs}ms`,
+                ),
+              )
+            }, connectionTimeoutMs)
+          })
 
-          connectPromise.finally(() => clearTimeout(timeoutId))
-        })
-
-        await Promise.race([connectPromise, timeoutPromise])
-      } else {
-        await connectPromise
+          await Promise.race([connectPromise, timeoutPromise])
+        } else {
+          await connectPromise
+        }
+      } finally {
+        if (timeoutId) clearTimeout(timeoutId)
       }
 
       if (candidate.kind === 'stdio') {

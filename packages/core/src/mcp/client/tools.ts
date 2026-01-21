@@ -23,6 +23,7 @@ import { requestAll } from './request'
 import { createTimeoutSignal, mergeAbortSignals } from './timeouts'
 import type { ConnectedClient } from './types'
 import { isRecord } from './utils'
+import { getMcpListChangedVersion } from './listChanged'
 
 type AnthropicImageMediaType = Extract<
   ImageBlockParam['source'],
@@ -72,85 +73,88 @@ function renderResultForAssistant(content: unknown): string | unknown[] {
   }
 }
 
-export const getMCPTools = memoize(async (): Promise<Tool[]> => {
-  const toolsList = await requestAll<
-    ListToolsResult,
-    typeof ListToolsResultSchema
-  >({ method: 'tools/list' }, ListToolsResultSchema, 'tools')
+export const getMCPTools = memoize(
+  async (): Promise<Tool[]> => {
+    const toolsList = await requestAll<
+      ListToolsResult,
+      typeof ListToolsResultSchema
+    >({ method: 'tools/list' }, ListToolsResultSchema, 'tools')
 
-  const inputSchema = z.object({}).passthrough()
+    const inputSchema = z.object({}).passthrough()
 
-  return toolsList.flatMap(({ client, result: { tools } }) => {
-    const serverPart = sanitizeMcpIdentifierPart(client.name)
+    return toolsList.flatMap(({ client, result: { tools } }) => {
+      const serverPart = sanitizeMcpIdentifierPart(client.name)
 
-    return tools
-      .map((tool): Tool | null => {
-        const toolPart = sanitizeMcpIdentifierPart(tool.name)
-        const name = `mcp__${serverPart}__${toolPart}`
+      return tools
+        .map((tool): Tool | null => {
+          const toolPart = sanitizeMcpIdentifierPart(tool.name)
+          const name = `mcp__${serverPart}__${toolPart}`
 
-        if (
-          name.startsWith('mcp__ide__') &&
-          !IDE_MCP_TOOL_ALLOWLIST.has(name)
-        ) {
-          return null
-        }
-
-        return {
-          name,
-          isMcp: true,
-          cachedDescription: tool.description ?? '',
-          async isEnabled() {
-            return true
-          },
-          isConcurrencySafe() {
-            return tool.annotations?.readOnlyHint ?? false
-          },
-          isReadOnly() {
-            return tool.annotations?.readOnlyHint ?? false
-          },
-          async description() {
-            return tool.description ?? ''
-          },
-          async prompt() {
-            return tool.description ?? ''
-          },
-          inputSchema,
-          inputJSONSchema: tool.inputSchema as Tool['inputJSONSchema'],
-          needsPermissions() {
-            return true
-          },
-          async validateInput() {
-            return { result: true }
-          },
-          renderToolUseMessage,
-          renderToolUseRejectedMessage() {
+          if (
+            name.startsWith('mcp__ide__') &&
+            !IDE_MCP_TOOL_ALLOWLIST.has(name)
+          ) {
             return null
-          },
-          renderToolResultMessage,
-          renderResultForAssistant,
-          async *call(args: Record<string, unknown>, context) {
-            const data = await callMcpTool({
-              client,
-              tool: tool.name,
-              args,
-              toolUseId: context.toolUseId,
-              signal: context.abortController.signal,
-            })
-            yield {
-              type: 'result' as const,
-              data,
-              resultForAssistant: data,
-            }
-          },
-          userFacingName() {
-            const title = tool.annotations?.title || tool.name
-            return `${client.name} - ${title} (MCP)`
-          },
-        }
-      })
-      .filter((tool): tool is Tool => tool !== null)
-  })
-})
+          }
+
+          return {
+            name,
+            isMcp: true,
+            cachedDescription: tool.description ?? '',
+            async isEnabled() {
+              return true
+            },
+            isConcurrencySafe() {
+              return tool.annotations?.readOnlyHint ?? false
+            },
+            isReadOnly() {
+              return tool.annotations?.readOnlyHint ?? false
+            },
+            async description() {
+              return tool.description ?? ''
+            },
+            async prompt() {
+              return tool.description ?? ''
+            },
+            inputSchema,
+            inputJSONSchema: tool.inputSchema as Tool['inputJSONSchema'],
+            needsPermissions() {
+              return true
+            },
+            async validateInput() {
+              return { result: true }
+            },
+            renderToolUseMessage,
+            renderToolUseRejectedMessage() {
+              return null
+            },
+            renderToolResultMessage,
+            renderResultForAssistant,
+            async *call(args: Record<string, unknown>, context) {
+              const data = await callMcpTool({
+                client,
+                tool: tool.name,
+                args,
+                toolUseId: context.toolUseId,
+                signal: context.abortController.signal,
+              })
+              yield {
+                type: 'result' as const,
+                data,
+                resultForAssistant: data,
+              }
+            },
+            userFacingName() {
+              const title = tool.annotations?.title || tool.name
+              return `${client.name} - ${title} (MCP)`
+            },
+          }
+        })
+        .filter((tool): tool is Tool => tool !== null)
+    })
+  },
+  () => `tools@${getMcpListChangedVersion('tools')}`,
+)
 
 async function callMcpTool({
   client: { client, name },
@@ -171,7 +175,7 @@ async function callMcpTool({
 
   const meta =
     toolUseId && toolUseId.trim()
-      ? { 'claudecode/toolUseId': toolUseId }
+      ? { 'kode/toolUseId': toolUseId, 'claudecode/toolUseId': toolUseId }
       : undefined
 
   try {

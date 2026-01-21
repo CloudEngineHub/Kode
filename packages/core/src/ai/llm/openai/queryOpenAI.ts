@@ -34,7 +34,7 @@ import {
   getGPT5CompletionWithProfile,
 } from '#core/ai/openai'
 import type { UnifiedRequestParams } from '#core/types/modelCapabilities'
-import type { RequestHeadersProfile } from '#core/ai/llm/claudeCodeFallback'
+import type { RequestHeadersProfile } from '#core/ai/llm/restrictedClientCompat'
 
 import {
   convertAnthropicMessagesToOpenAIMessages,
@@ -187,7 +187,13 @@ export async function queryOpenAI(
       // Chat Completions models use legacy path for stability
       if (shouldUseResponses) {
         const adapter = ModelAdapterFactory.createAdapter(modelProfile)
-        const reasoningEffort = await getReasoningEffort(modelProfile, messages)
+        const reasoningEffort = await getReasoningEffort(
+          modelProfile,
+          messages,
+          {
+            thinkingTokens: maxThinkingTokens,
+          },
+        )
 
         // Determine verbosity based on model name
         // Most GPT-5 codex models only support 'medium', so default to that unless we detect 'high' in the name
@@ -310,7 +316,9 @@ export async function queryOpenAI(
           stream: config.stream,
           toolSchemas: toolSchemas,
           stopSequences: options?.stopSequences,
-          reasoningEffort: await getReasoningEffort(modelProfile, messages),
+          reasoningEffort: await getReasoningEffort(modelProfile, messages, {
+            thinkingTokens: maxThinkingTokens,
+          }),
         })
 
         const completionFunction = isGPT5Model(modelProfile?.modelName || '')

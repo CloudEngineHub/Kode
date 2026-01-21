@@ -5,8 +5,10 @@ import { join } from 'path'
 import { ExitPlanModeTool } from '#tools/tools/interaction/PlanModeTool/ExitPlanModeTool'
 import {
   __resetPlanModeForTests,
+  enterPlanMode,
   getPlanConversationKey,
   getPlanFilePath,
+  isPlanModeEnabled,
 } from '#core/utils/planMode'
 import { __getExitPlanModePlanTextForTests } from '#tools/tools/interaction/PlanModeTool/ExitPlanModeTool'
 import type { ToolUseContext } from '#core/tooling/Tool'
@@ -39,7 +41,7 @@ describe('ExitPlanModeTool', () => {
     rmSync(configDir, { recursive: true, force: true })
   })
 
-  test('throws when no plan file exists', async () => {
+  test('does not throw when no plan file exists (uses placeholder)', async () => {
     const ctx = makeContext()
     const conversationKey = getPlanConversationKey(ctx)
     const planFilePath = getPlanFilePath(undefined, conversationKey)
@@ -49,9 +51,15 @@ describe('ExitPlanModeTool', () => {
     }
 
     const gen = ExitPlanModeTool.call({}, ctx)
-    await expect(gen.next()).rejects.toThrow(
-      `No plan file found at ${planFilePath}. Please write your plan to this file before calling ExitPlanMode.`,
-    )
+    const first = await gen.next()
+
+    expect(first.done).toBe(false)
+    if (first.done || !first.value) {
+      throw new Error('Expected ExitPlanModeTool to yield a result')
+    }
+    expect(first.value.type).toBe('result')
+    expect(first.value.data.filePath).toBe(planFilePath)
+    expect(first.value.data.plan).toContain('No plan found')
   })
 
   test('approved output includes filePath and plan content', async () => {
@@ -72,6 +80,17 @@ describe('ExitPlanModeTool', () => {
     expect(first.value.data.filePath).toBe(planFilePath)
     expect(first.value.data.plan).toContain('Do the thing')
     expect(first.value.resultForAssistant).toContain(planFilePath)
+  })
+
+  test('exits plan mode when called', async () => {
+    const ctx = makeContext()
+    enterPlanMode(ctx)
+    expect(isPlanModeEnabled(ctx)).toBe(true)
+
+    const gen = ExitPlanModeTool.call({}, ctx)
+    await gen.next()
+
+    expect(isPlanModeEnabled(ctx)).toBe(false)
   })
 
   test('rejection display reads and includes the plan file content', () => {

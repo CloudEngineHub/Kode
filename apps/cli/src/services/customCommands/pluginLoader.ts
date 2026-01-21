@@ -3,6 +3,7 @@ import { dirname, join } from 'path'
 import type { MessageParam } from '@anthropic-ai/sdk/resources/index.mjs'
 
 import { debug as debugLogger } from '#core/utils/debugLogger'
+import { getKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
 
 import type { CustomCommandFrontmatter, CustomCommandWithScope } from './types'
 import {
@@ -49,6 +50,16 @@ function createPluginPromptCommandFromFile(record: {
     record.frontmatter.model === 'inherit'
       ? undefined
       : record.frontmatter.model
+  const context =
+    typeof record.frontmatter.context === 'string' &&
+    record.frontmatter.context.trim() === 'fork'
+      ? ('fork' as const)
+      : undefined
+  const agent =
+    typeof record.frontmatter.agent === 'string' &&
+    record.frontmatter.agent.trim()
+      ? record.frontmatter.agent.trim()
+      : undefined
 
   return {
     type: 'prompt',
@@ -65,6 +76,8 @@ function createPluginPromptCommandFromFile(record: {
     whenToUse,
     version,
     model,
+    context,
+    agent,
     isSkill: false,
     disableModelInvocation,
     hasUserSpecifiedDescription: !!record.frontmatter.description,
@@ -83,6 +96,10 @@ function createPluginPromptCommandFromFile(record: {
           prompt = `${prompt}\n\nARGUMENTS: ${trimmedArgs}`
         }
       }
+      prompt = prompt.replace(
+        /\$\{(?:CLAUDE|KODE)_SESSION_ID\}/g,
+        getKodeAgentSessionId(),
+      )
       return [{ role: 'user', content: prompt }]
     },
   }
@@ -209,6 +226,15 @@ export function loadPluginSkillDirectoryCommandsFromBaseDir(args: {
       )
       const model =
         frontmatter.model === 'inherit' ? undefined : frontmatter.model
+      const context =
+        typeof frontmatter.context === 'string' &&
+        frontmatter.context.trim() === 'fork'
+          ? ('fork' as const)
+          : undefined
+      const agent =
+        typeof frontmatter.agent === 'string' && frontmatter.agent.trim()
+          ? frontmatter.agent.trim()
+          : undefined
 
       out.push({
         type: 'prompt',
@@ -225,6 +251,8 @@ export function loadPluginSkillDirectoryCommandsFromBaseDir(args: {
         whenToUse,
         version,
         model,
+        context,
+        agent,
         isSkill: true,
         disableModelInvocation,
         hasUserSpecifiedDescription: !!frontmatter.description,
@@ -245,6 +273,10 @@ export function loadPluginSkillDirectoryCommandsFromBaseDir(args: {
               prompt = `${prompt}\n\nARGUMENTS: ${trimmedArgs}`
             }
           }
+          prompt = prompt.replace(
+            /\$\{(?:CLAUDE|KODE)_SESSION_ID\}/g,
+            getKodeAgentSessionId(),
+          )
           return [{ role: 'user', content: prompt }]
         },
       })

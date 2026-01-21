@@ -1,9 +1,10 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { join } from 'path'
-import { homedir } from 'os'
 import { randomUUID } from 'crypto'
 import { debug as debugLogger } from '#core/utils/debugLogger'
 import { logError } from '#core/utils/log'
+import { getKodeRoot } from '#config/dataRoots'
+import { getEffectiveSessionId } from './sessionId'
 
 /**
  * Agent Storage Utilities
@@ -15,28 +16,19 @@ import { logError } from '#core/utils/log'
  * Get the kode config directory
  */
 function getConfigDirectory(): string {
-  return (
-    process.env.KODE_CONFIG_DIR ??
-    process.env.ANYKODE_CONFIG_DIR ??
-    join(homedir(), '.kode')
-  )
+  return getKodeRoot()
 }
 
 /**
  * Get the current session ID
  */
-function getSessionId(): string {
-  // This should be set when the session starts
-  return process.env.ANYKODE_SESSION_ID ?? 'default-session'
-}
-
 /**
  * Generate agent-specific file path
  * Pattern: ${sessionId}-agent-${agentId}.json
  * Stored in ~/.kode/ directory
  */
 export function getAgentFilePath(agentId: string): string {
-  const sessionId = getSessionId()
+  const sessionId = getEffectiveSessionId()
   const filename = `${sessionId}-agent-${agentId}.json`
   const configDir = getConfigDirectory()
 

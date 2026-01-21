@@ -55,7 +55,7 @@ function formatAllowedDirs(dirs: string[], max = 5): string {
     .map(d => `'${d}'`)
     .join(', ')}, and ${count - max} more`
 }
-function resolveTildeLikeClaude(value: string): string {
+function resolveTildeLikeShell(value: string): string {
   if (value === '~' || value.startsWith('~/')) {
     return homedir() + value.slice(1)
   }
@@ -121,7 +121,7 @@ function checkPathArgAllowed(
   toolPermissionContext: ToolPermissionContext,
   op: BashPathOp,
 ): PathPermissionCheck {
-  const unquoted = resolveTildeLikeClaude(stripQuotes(rawPath))
+  const unquoted = resolveTildeLikeShell(stripQuotes(rawPath))
 
   if (unquoted.includes('$') || unquoted.includes('%')) {
     return {
@@ -242,7 +242,7 @@ function validatePathRestrictedCommand(
 
   if (baseCommand === 'rm' || baseCommand === 'rmdir') {
     for (const rawPath of extracted) {
-      const unquoted = resolveTildeLikeClaude(stripQuotes(rawPath))
+      const unquoted = resolveTildeLikeShell(stripQuotes(rawPath))
       const abs = path.isAbsolute(unquoted)
         ? unquoted
         : path.resolve(cwd, unquoted)

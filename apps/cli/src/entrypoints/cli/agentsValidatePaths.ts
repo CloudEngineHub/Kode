@@ -2,6 +2,11 @@ import { existsSync, readdirSync, statSync } from 'node:fs'
 import type { Dirent } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
+import { resolveDataRoots } from '#config/dataRoots'
+import {
+  LEGACY_CONFIG_DIRNAME,
+  LEGACY_CONFIG_SUBDIRS,
+} from '#core/compat/legacyPaths'
 
 function normalizeString(value: unknown): string | null {
   if (typeof value !== 'string') return null
@@ -9,7 +14,7 @@ function normalizeString(value: unknown): string | null {
   return trimmed ? trimmed : null
 }
 
-function getClaudePolicyBaseDir(): string {
+function getLegacyPolicyBaseDir(): string {
   switch (process.platform) {
     case 'darwin':
       return '/Library/Application Support/ClaudeCode'
@@ -22,23 +27,28 @@ function getClaudePolicyBaseDir(): string {
   }
 }
 
-function normalizeOverride(value: unknown): string | null {
-  const normalized = normalizeString(value)
-  return normalized ? resolve(normalized) : null
+function getSystemPolicyBaseDir(): string {
+  switch (process.platform) {
+    case 'darwin':
+      return '/Library/Application Support/Kode'
+    case 'win32':
+      return existsSync('C:\\Program Files\\Kode')
+        ? 'C:\\Program Files\\Kode'
+        : 'C:\\ProgramData\\Kode'
+    default:
+      return '/etc/kode'
+  }
+}
+
+function getPolicyBaseDirs(): string[] {
+  // Order matters: legacy is scanned first so Kode-first policy wins when both exist.
+  return Array.from(
+    new Set<string>([getLegacyPolicyBaseDir(), getSystemPolicyBaseDir()]),
+  )
 }
 
 export function getUserConfigRoots(): string[] {
-  const claudeOverride = normalizeOverride(process.env.CLAUDE_CONFIG_DIR)
-  const kodeOverride = normalizeOverride(process.env.KODE_CONFIG_DIR)
-  const overrides = [claudeOverride, kodeOverride].filter(
-    (value): value is string => typeof value === 'string' && value.length > 0,
-  )
-
-  if (overrides.length > 0) {
-    return Array.from(new Set(overrides))
-  }
-
-  return [join(homedir(), '.claude'), join(homedir(), '.kode')]
+  return resolveDataRoots().allRoots
 }
 
 export function findProjectAgentDirs(cwd: string): string[] {
@@ -47,11 +57,11 @@ export function findProjectAgentDirs(cwd: string): string[] {
   let current = resolve(cwd)
 
   while (current !== home) {
-    const claudeDir = join(current, '.claude', 'agents')
-    if (existsSync(claudeDir)) result.push(claudeDir)
-
     const kodeDir = join(current, '.kode', 'agents')
     if (existsSync(kodeDir)) result.push(kodeDir)
+
+    const claudeDir = join(current, LEGACY_CONFIG_DIRNAME, 'agents')
+    if (existsSync(claudeDir)) result.push(claudeDir)
 
     const parent = dirname(current)
     if (parent === current) break
@@ -122,8 +132,14 @@ export function listMarkdownFilesRecursively(rootDir: string): string[] {
 export function defaultValidationPaths(cwd: string): string[] {
   const out: string[] = []
 
-  const policyDir = join(getClaudePolicyBaseDir(), '.claude', 'agents')
-  if (existsSync(policyDir)) out.push(policyDir)
+  for (const baseDir of getPolicyBaseDirs()) {
+    for (const policyDir of [
+      join(baseDir, LEGACY_CONFIG_SUBDIRS.agents),
+      join(baseDir, '.kode', 'agents'),
+    ]) {
+      if (existsSync(policyDir)) out.push(policyDir)
+    }
+  }
 
   for (const root of getUserConfigRoots()) {
     const dirPath = join(root, 'agents')

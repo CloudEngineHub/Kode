@@ -66,10 +66,12 @@ npm run publish:release
 1. 🔢 读取当前基础版本
 2. 📊 查询npm上现有的dev版本，自动递增
 3. 📝 临时更新package.json版本号
-4. 🔨 构建项目
-5. 🔍 运行预发布检查
-6. 📤 发布到npm的`dev` tag
-7. 🔄 恢复package.json到原始版本
+4. 🧰 准备平台依赖包（ripgrep / Kode 原生二进制）
+5. 🔨 构建项目
+6. 🔍 运行预发布检查
+7. 📤 发布平台包（`@shareai-lab/kode-bin-*`、`@shareai-lab/kode-ripgrep-*`）
+8. 📤 发布主包到 npm 的 `dev` dist-tag
+9. 🔄 恢复 package.json 到原始版本
 
 **使用场景**:
 
@@ -97,10 +99,12 @@ npm run publish:release
 4. 🤔 确认发布信息
 5. 📝 更新package.json版本号（永久）
 6. 🧪 运行测试和类型检查
-7. 🔨 构建项目
-8. 🔍 运行预发布检查
-9. 📤 发布到npm (默认`latest` tag)
-10. 💡 提示后续git操作建议
+7. 🧰 准备平台依赖包（ripgrep / Kode 原生二进制）
+8. 🔨 构建项目
+9. 🔍 运行预发布检查
+10. 📤 发布平台包（`@shareai-lab/kode-bin-*`、`@shareai-lab/kode-ripgrep-*`）
+11. 📤 发布主包到 npm（默认 `latest` tag）
+12. 💡 提示后续 git 操作建议
 
 **安全特性**:
 
@@ -125,7 +129,7 @@ npm run publish:dev
 npm run publish:release
 
 # 4. 手动处理git操作（如需要）
-git add package.json
+git add package.json packages/kode-bin-*/package.json packages/kode-ripgrep-*/package.json
 git commit -m "chore: bump version to x.x.x"
 git tag vx.x.x
 git push origin main
@@ -221,7 +225,7 @@ kode --version
 
 ```bash
 # package.json已更新版本号，建议提交
-git add package.json
+git add package.json packages/kode-bin-*/package.json packages/kode-ripgrep-*/package.json
 git commit -m "chore: bump version to $(node -p "require('./package.json').version")"
 git tag "v$(node -p "require('./package.json').version")"
 git push origin main

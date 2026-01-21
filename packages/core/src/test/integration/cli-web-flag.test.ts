@@ -10,7 +10,7 @@ describe('CLI --web flag (opt-in)', () => {
     try {
       const res = spawnSync(
         process.execPath,
-        ['apps/kode/src/index.ts', '--web', '--print', 'hello'],
+        ['apps/cli/src/dispatch.ts', '--web', '--print', 'hello'],
         {
           cwd: process.cwd(),
           env: {
@@ -25,7 +25,7 @@ describe('CLI --web flag (opt-in)', () => {
 
       expect(res.status).toBe(1)
       expect(String(res.stderr) + String(res.stdout)).toContain(
-        'Error: --web only works in interactive mode (no --print).',
+        'Error: --web and --print cannot be used together.',
       )
     } finally {
       rmSync(configDir, { recursive: true, force: true })

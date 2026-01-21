@@ -29,10 +29,11 @@ type FilePermissionBehavior = ToolPermissionRuleBehavior
 const POSIX = path.posix
 const POSIX_SEP = POSIX.sep
 
-function operationToolName(
-  operation: FilePermissionOperation,
-): 'Read' | 'Edit' {
-  return operation === 'read' ? 'Read' : 'Edit'
+const READ_RULE_TOOL_NAMES = new Set(['Read', 'LS', 'Glob', 'Grep'])
+const EDIT_RULE_TOOL_NAMES = new Set(['Edit', 'Write', 'NotebookEdit'])
+
+function operationToolNames(operation: FilePermissionOperation): Set<string> {
+  return operation === 'read' ? READ_RULE_TOOL_NAMES : EDIT_RULE_TOOL_NAMES
 }
 
 function parseToolRule(ruleString: string): ToolRuleValue | null {
@@ -53,7 +54,7 @@ function collectRuleEntries(args: {
   operation: FilePermissionOperation
   behavior: FilePermissionBehavior
 }): ToolRuleEntry[] {
-  const toolName = operationToolName(args.operation)
+  const toolNames = operationToolNames(args.operation)
 
   const groups =
     args.behavior === 'allow'
@@ -71,7 +72,7 @@ function collectRuleEntries(args: {
       if (typeof ruleString !== 'string') continue
       const parsed = parseToolRule(ruleString)
       if (!parsed) continue
-      if (parsed.toolName !== toolName) continue
+      if (!toolNames.has(parsed.toolName)) continue
       if (!parsed.ruleContent) continue
       out.push({ source, ruleValue: parsed, ruleString })
     }

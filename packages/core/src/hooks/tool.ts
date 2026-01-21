@@ -5,6 +5,7 @@ import { logError } from '#core/utils/log'
 import { getCwd } from '#core/utils/state'
 import { getKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
 import type { PreToolUseHookOutcome } from './types'
+import { getDisableAllHooksState } from './disableAllHooks'
 import {
   asRecord,
   getHookAdditionalContext,
@@ -206,6 +207,10 @@ export async function runPreToolUseHooks(args: {
   signal?: AbortSignal
 }): Promise<PreToolUseHookOutcome> {
   const projectDir = args.cwd ?? getCwd()
+  if (getDisableAllHooksState({ projectDir }).disabled) {
+    return { kind: 'allow', warnings: [] }
+  }
+
   const matchers = [
     ...loadSettingsMatchers(projectDir, 'PreToolUse'),
     ...loadPluginMatchers(projectDir, 'PreToolUse'),
@@ -329,6 +334,10 @@ export async function runPostToolUseHooks(args: {
   additionalContexts: string[]
 }> {
   const projectDir = args.cwd ?? getCwd()
+  if (getDisableAllHooksState({ projectDir }).disabled) {
+    return { warnings: [], systemMessages: [], additionalContexts: [] }
+  }
+
   const matchers = [
     ...loadSettingsMatchers(projectDir, 'PostToolUse'),
     ...loadPluginMatchers(projectDir, 'PostToolUse'),

@@ -1,11 +1,8 @@
 import { spawn } from 'node:child_process'
 import type { BunShellExecOptions } from './types'
 import type { BunShellState } from './state'
-import {
-  buildSandboxCommand,
-  isSandboxInitFailure,
-  maybeAnnotateMacosSandboxStderr,
-} from './sandboxCommand'
+import { buildSandboxCommand, isSandboxInitFailure } from './sandboxCommand'
+import { annotateStderrWithSandboxViolations } from './sandboxViolations'
 import { createCancellableTextCollector } from './streamReaders'
 import { getShellCmdForPlatform } from './shellCmd'
 
@@ -68,9 +65,18 @@ export async function exec(
   ): Promise<ExecResult> => {
     state.currentProcess = spawn(cmd[0], cmd.slice(1), {
       cwd: cwdOverride ?? executionCwd,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: [options?.stdin !== undefined ? 'pipe' : 'ignore', 'pipe', 'pipe'],
     })
     const processRef = state.currentProcess
+
+    if (options?.stdin !== undefined && processRef.stdin) {
+      try {
+        processRef.stdin.write(options.stdin)
+      } catch {}
+      try {
+        processRef.stdin.end()
+      } catch {}
+    }
 
     const exitPromise = new Promise<
       { kind: 'exit'; code: number | null } | { kind: 'error'; error: Error }
@@ -183,18 +189,15 @@ export async function exec(
         const fallback = await runOnce(
           getShellCmdForPlatform(process.platform, command, process.env),
         )
-        return {
-          ...fallback,
-          stderr:
-            `[sandbox] unavailable, ran without isolation.\n${fallback.stderr}`.trim(),
-        }
+        return fallback
       }
 
       const sandboxed = await runOnce(sandboxCmd.cmd)
-      sandboxed.stderr = maybeAnnotateMacosSandboxStderr(
-        sandboxed.stderr,
+      sandboxed.stderr = annotateStderrWithSandboxViolations({
+        command,
+        stderr: sandboxed.stderr,
         sandbox,
-      )
+      })
       if (
         !sandboxed.interrupted &&
         sandboxed.code !== 0 &&
@@ -204,11 +207,7 @@ export async function exec(
         const fallback = await runOnce(
           getShellCmdForPlatform(process.platform, command, process.env),
         )
-        return {
-          ...fallback,
-          stderr:
-            `[sandbox] failed to start, ran without isolation.\n${fallback.stderr}`.trim(),
-        }
+        return fallback
       }
 
       return sandboxed

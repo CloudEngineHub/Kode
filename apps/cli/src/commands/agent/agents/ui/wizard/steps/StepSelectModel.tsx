@@ -8,7 +8,10 @@ import { WizardPanel, type WizardContextValue } from '../Wizard'
 
 export function StepSelectModel({ ctx }: { ctx: WizardContextValue }) {
   useKeypress((_input, key) => {
-    if (key.escape) ctx.goBack()
+    if (key.escape) {
+      ctx.goBack()
+      return true
+    }
   })
 
   const options = modelOptions()

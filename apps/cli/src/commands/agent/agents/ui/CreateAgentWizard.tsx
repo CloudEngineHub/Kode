@@ -30,9 +30,7 @@ export function CreateAgentWizard(props: {
       (ctx: WizardContextValue) => (
         <StepGenerationPrompt ctx={ctx} existingAgents={props.existingAgents} />
       ),
-      (ctx: WizardContextValue) => (
-        <StepAgentType ctx={ctx} existingAgents={props.existingAgents} />
-      ),
+      (ctx: WizardContextValue) => <StepAgentType ctx={ctx} />,
       (ctx: WizardContextValue) => <StepSystemPrompt ctx={ctx} />,
       (ctx: WizardContextValue) => <StepDescription ctx={ctx} />,
       (ctx: WizardContextValue) => (

@@ -9,6 +9,7 @@ const bug = {
   description: `Submit feedback about ${PRODUCT_NAME}`,
   isEnabled: true,
   isHidden: false,
+  aliases: ['feedback'],
   ui: { displayMode: 'fullscreen' },
   async call(onDone) {
     return <Bug onDone={onDone} />

@@ -24,12 +24,14 @@ export function checkSlashCommandPermission(args: {
       result: false,
       message: `Permission to use ${args.tool.name}(${command}) has been denied.`,
       shouldPromptUser: false,
+      decisionReason: exactKey,
     }
   }
   if (args.effectiveAskedTools.includes(exactKey)) {
     return {
       result: false,
       message: `${PRODUCT_NAME} requested permissions to use ${args.tool.name}, but you haven't granted it yet.`,
+      decisionReason: exactKey,
     }
   }
   if (args.effectiveAllowedTools.includes(exactKey)) {
@@ -44,12 +46,14 @@ export function checkSlashCommandPermission(args: {
         result: false,
         message: `Permission to use ${args.tool.name}(${firstWord}:*) has been denied.`,
         shouldPromptUser: false,
+        decisionReason: prefixKey,
       }
     }
     if (args.effectiveAskedTools.includes(prefixKey)) {
       return {
         result: false,
         message: `${PRODUCT_NAME} requested permissions to use ${args.tool.name}, but you haven't granted it yet.`,
+        decisionReason: prefixKey,
       }
     }
     if (args.effectiveAllowedTools.includes(prefixKey)) {
@@ -60,5 +64,6 @@ export function checkSlashCommandPermission(args: {
   return {
     result: false,
     message: `${PRODUCT_NAME} requested permissions to use ${args.tool.name}, but you haven't granted it yet.`,
+    decisionReason: 'No allow rule matched',
   }
 }

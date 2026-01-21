@@ -19,10 +19,15 @@ import {
   kodeMessageToSdkMessage,
   makeSdkResultMessage,
 } from '#protocol/utils/kodeAgentStreamJson'
-import { setKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
+import { setSessionId } from '@kode/core/utils/sessionId'
+import { setKodeAgentSessionForkInfo } from '#protocol/utils/kodeAgentSessionForkInfo'
 import { setCwd, setOriginalCwd } from '@kode/core/utils/state'
 import { grantReadPermissionForOriginalDir } from '@kode/core/utils/permissions/filesystem'
-import type { Tool, ToolUseContext } from '@kode/core/tooling/Tool'
+import {
+  resolveToolDescription,
+  type Tool,
+  type ToolUseContext,
+} from '@kode/core/tooling/Tool'
 import type { InflightPermissionDecision } from '../ws/types'
 import type { DaemonSession } from '../ws/types'
 
@@ -45,17 +50,6 @@ function extractFirstAssistantText(message: ApiMessage): string | null {
     }
   }
   return null
-}
-
-async function getToolDescription(
-  tool: Tool,
-  input: Record<string, unknown>,
-): Promise<string> {
-  if (typeof tool.description === 'function') {
-    return await tool.description(input as never)
-  }
-  if (typeof tool.description === 'string') return tool.description
-  return `Tool: ${tool.name}`
 }
 
 export async function handleChatPrompt(args: {
@@ -83,7 +77,8 @@ export async function handleChatPrompt(args: {
   await setCwd(session.cwd)
   grantReadPermissionForOriginalDir()
 
-  setKodeAgentSessionId(session.sessionId)
+  setKodeAgentSessionForkInfo(null)
+  setSessionId(session.sessionId)
 
   const abortController = new AbortController()
   session.activeAbortController = abortController
@@ -162,7 +157,10 @@ export async function handleChatPrompt(args: {
         ? params.toolUseContext.toolUseId
         : crypto.randomUUID()
 
-    const toolDescription = await getToolDescription(params.tool, params.input)
+    const toolDescription = await resolveToolDescription(
+      params.tool,
+      params.input as never,
+    )
 
     const request: PermissionRequest = {
       type: 'permission_request',

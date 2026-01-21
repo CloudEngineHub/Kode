@@ -2,6 +2,10 @@ import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import {
+  LEGACY_PLUGIN_DIRNAME,
+  legacyPluginPathInProject,
+} from '#core/compat/legacyPaths'
+import {
   KnownMarketplacesSchema,
   MarketplaceManifestSchema,
   type KnownMarketplacesConfig,
@@ -37,9 +41,8 @@ export function readMarketplaceFromDirectory(
     '.kode-plugin',
     'marketplace.json',
   )
-  const legacyMarketplaceFile = resolve(
+  const legacyMarketplaceFile = legacyPluginPathInProject(
     rootDir,
-    '.claude-plugin',
     'marketplace.json',
   )
   const marketplaceFile = existsSync(primaryMarketplaceFile)
@@ -47,7 +50,7 @@ export function readMarketplaceFromDirectory(
     : legacyMarketplaceFile
   if (!existsSync(marketplaceFile)) {
     throw new Error(
-      'Marketplace file not found (expected .kode-plugin/marketplace.json or .claude-plugin/marketplace.json)',
+      `Marketplace file not found (expected .kode-plugin/marketplace.json or ${LEGACY_PLUGIN_DIRNAME}/marketplace.json)`,
     )
   }
   const raw = readFileSync(marketplaceFile, 'utf8')

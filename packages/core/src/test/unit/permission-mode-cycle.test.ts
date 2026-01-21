@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { getNextPermissionMode } from '#core/types/PermissionMode'
-import { __applyPermissionModeSideEffectsForTests } from '#ui-ink/context/PermissionContext'
+import { __applyPermissionModeSideEffectsForTests } from '#ui-ink/contexts/PermissionContext'
 import {
   __resetPermissionModeStateForTests,
   getPermissionModeForConversationKey,
@@ -24,7 +24,7 @@ function makeContext(
   }
 }
 
-describe('permission mode cycle parity (Reference CLI aB9 + side effects)', () => {
+describe('permission mode cycle parity (cycle order + side effects)', () => {
   beforeEach(() => {
     __resetPermissionModeStateForTests()
   })
@@ -32,7 +32,7 @@ describe('permission mode cycle parity (Reference CLI aB9 + side effects)', () =
   test('getNextPermissionMode matches expected ordering', () => {
     expect(getNextPermissionMode('default', true)).toBe('acceptEdits')
     expect(getNextPermissionMode('acceptEdits', true)).toBe('plan')
-    expect(getNextPermissionMode('plan', true)).toBe('bypassPermissions')
+    expect(getNextPermissionMode('plan', true)).toBe('default')
     expect(getNextPermissionMode('plan', false)).toBe('default')
     expect(getNextPermissionMode('bypassPermissions', true)).toBe('default')
     expect(getNextPermissionMode('dontAsk', true)).toBe('default')

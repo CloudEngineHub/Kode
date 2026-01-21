@@ -1,4 +1,11 @@
-import { existsSync, readFileSync, readdirSync } from 'fs'
+import {
+  closeSync,
+  existsSync,
+  openSync,
+  readFileSync,
+  readSync,
+  readdirSync,
+} from 'fs'
 import { dirname, join } from 'path'
 import type { MessageParam } from '@anthropic-ai/sdk/resources/index.mjs'
 
@@ -17,6 +24,41 @@ import {
 import { isSkillMarkdownFile, nameForCommandFile, sourceLabel } from './naming'
 import { parseFrontmatter } from './frontmatter'
 import { debug as debugLogger } from '#core/utils/debugLogger'
+import { getEffectiveSessionId } from '#core/utils/sessionId'
+
+const MAX_SKILL_FRONTMATTER_BYTES = 64 * 1024
+
+function readFrontmatterOnlyFromFile(
+  filePath: string,
+): CustomCommandFrontmatter | null {
+  let fd: number
+  try {
+    fd = openSync(filePath, 'r')
+  } catch {
+    return null
+  }
+
+  try {
+    const buffer = Buffer.alloc(MAX_SKILL_FRONTMATTER_BYTES)
+    const bytesRead = readSync(fd, buffer, 0, buffer.byteLength, 0)
+    const head = buffer.subarray(0, Math.max(0, bytesRead)).toString('utf8')
+    const normalized = head.replace(/^\uFEFF/, '')
+
+    const match = /^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/.exec(normalized)
+    if (!match) return null
+
+    const { frontmatter } = parseFrontmatter(match[0])
+    return frontmatter
+  } catch {
+    return null
+  } finally {
+    try {
+      closeSync(fd)
+    } catch {
+      // ignore
+    }
+  }
+}
 
 export function listMarkdownFilesRecursively(
   baseDir: string,
@@ -119,6 +161,16 @@ export function createPromptCommandFromFile(
     record.frontmatter.model === 'inherit'
       ? undefined
       : record.frontmatter.model
+  const context =
+    typeof record.frontmatter.context === 'string' &&
+    record.frontmatter.context.trim() === 'fork'
+      ? ('fork' as const)
+      : undefined
+  const agent =
+    typeof record.frontmatter.agent === 'string' &&
+    record.frontmatter.agent.trim()
+      ? record.frontmatter.agent.trim()
+      : undefined
 
   const description = `${descriptionText} (${sourceLabel(record.source)})`
   const progressMessage = isSkill ? 'loading' : 'running'
@@ -139,6 +191,8 @@ export function createPromptCommandFromFile(
     whenToUse,
     version,
     model,
+    context,
+    agent,
     isSkill,
     disableModelInvocation,
     hasUserSpecifiedDescription: !!record.frontmatter.description,
@@ -160,6 +214,10 @@ export function createPromptCommandFromFile(
           prompt = `${prompt}\n\nARGUMENTS: ${trimmedArgs}`
         }
       }
+      prompt = prompt.replace(
+        /\$\{(?:CLAUDE|KODE)_SESSION_ID\}/g,
+        getEffectiveSessionId(),
+      )
       return [{ role: 'user', content: prompt }]
     },
   }
@@ -197,8 +255,8 @@ export function loadSkillDirectoryCommandsFromBaseDir(
     if (!skillFile) continue
 
     try {
-      const raw = readFileSync(skillFile, 'utf8')
-      const { frontmatter, content } = parseFrontmatter(raw)
+      const frontmatter = readFrontmatterOnlyFromFile(skillFile)
+      if (!frontmatter) continue
 
       const dirName = entry.name
       const declaredName =
@@ -223,14 +281,21 @@ export function loadSkillDirectoryCommandsFromBaseDir(
       }
 
       const descriptionText =
-        frontmatter.description ??
-        extractDescriptionFromMarkdown(content, 'Skill')
+        typeof frontmatter.description === 'string'
+          ? frontmatter.description.trim()
+          : ''
       if (strictMode) {
-        const d =
-          typeof frontmatter.description === 'string'
-            ? frontmatter.description.trim()
-            : ''
-        if (!d || d.length > 1024) continue
+        if (!descriptionText || descriptionText.length > 1024) continue
+      }
+      if (!descriptionText) {
+        // Progressive disclosure: do not read the body to synthesize a description.
+        // Skills must declare a description in frontmatter.
+        if (!strictMode) {
+          debugLogger.warn('CUSTOM_COMMAND_SKILL_DESCRIPTION_MISSING', {
+            skillFile,
+          })
+        }
+        continue
       }
 
       const allowedTools = parseAllowedTools(frontmatter['allowed-tools'])
@@ -243,6 +308,15 @@ export function loadSkillDirectoryCommandsFromBaseDir(
       )
       const model =
         frontmatter.model === 'inherit' ? undefined : frontmatter.model
+      const context =
+        typeof frontmatter.context === 'string' &&
+        frontmatter.context.trim() === 'fork'
+          ? ('fork' as const)
+          : undefined
+      const agent =
+        typeof frontmatter.agent === 'string' && frontmatter.agent.trim()
+          ? frontmatter.agent.trim()
+          : undefined
 
       out.push({
         type: 'prompt',
@@ -259,6 +333,8 @@ export function loadSkillDirectoryCommandsFromBaseDir(
         whenToUse,
         version,
         model,
+        context,
+        agent,
         isSkill: true,
         disableModelInvocation,
         hasUserSpecifiedDescription: !!frontmatter.description,
@@ -268,6 +344,14 @@ export function loadSkillDirectoryCommandsFromBaseDir(
           return effectiveDeclaredName || name
         },
         async getPromptForCommand(argsText: string): Promise<MessageParam[]> {
+          let raw: string
+          try {
+            raw = readFileSync(skillFile, 'utf8')
+          } catch {
+            throw new Error(`Skill file not found: ${skillFile}`)
+          }
+
+          const { content } = parseFrontmatter(raw)
           let prompt = `Base directory for this skill: ${skillDir}\n\n${content}`
           const trimmedArgs = argsText.trim()
           if (trimmedArgs) {
@@ -277,6 +361,10 @@ export function loadSkillDirectoryCommandsFromBaseDir(
               prompt = `${prompt}\n\nARGUMENTS: ${trimmedArgs}`
             }
           }
+          prompt = prompt.replace(
+            /\$\{(?:CLAUDE|KODE)_SESSION_ID\}/g,
+            getEffectiveSessionId(),
+          )
           return [{ role: 'user', content: prompt }]
         },
       })

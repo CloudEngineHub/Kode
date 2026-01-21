@@ -1,6 +1,13 @@
 import type { Command } from '#cli-commands'
 import type { UnifiedSuggestion } from './types'
 
+function buildCommandDescription(cmd: Command): string {
+  const parts: string[] = []
+  if (cmd.description) parts.push(cmd.description)
+  if (cmd.argumentHint) parts.push(`Args: ${cmd.argumentHint}`)
+  return parts.join('\n')
+}
+
 export function generateSlashCommandSuggestions(args: {
   commands: Command[]
   prefix: string
@@ -12,6 +19,7 @@ export function generateSlashCommandSuggestions(args: {
     return filteredCommands.map(cmd => ({
       value: cmd.userFacingName(),
       displayValue: `/${cmd.userFacingName()}`,
+      description: buildCommandDescription(cmd),
       type: 'command' as const,
       score: 100,
     }))
@@ -27,6 +35,7 @@ export function generateSlashCommandSuggestions(args: {
     .map(cmd => ({
       value: cmd.userFacingName(),
       displayValue: `/${cmd.userFacingName()}`,
+      description: buildCommandDescription(cmd),
       type: 'command' as const,
       score:
         100 -

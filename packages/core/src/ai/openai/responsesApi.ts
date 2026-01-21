@@ -3,9 +3,9 @@ import { ProxyAgent as ProxyAgentCtor, fetch } from 'undici'
 
 import { getGlobalConfig } from '#core/utils/config'
 import {
-  buildClaudeCodeHeaders,
+  buildCompatHeaders,
   type RequestHeadersProfile,
-} from '#core/ai/llm/claudeCodeFallback'
+} from '#core/ai/llm/restrictedClientCompat'
 
 /**
  * Call GPT-5 Responses API with proper parameter handling.
@@ -28,9 +28,7 @@ export async function callGPT5ResponsesAPI(
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(requestHeadersProfile === 'claude_code'
-      ? buildClaudeCodeHeaders()
-      : {}),
+    ...(requestHeadersProfile === 'compat' ? buildCompatHeaders() : {}),
     ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
   }
 

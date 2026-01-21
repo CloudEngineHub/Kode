@@ -1,11 +1,9 @@
 import { Box, Text } from 'ink'
 import React from 'react'
-import { Select } from '#ui-ink/components/CustomSelect/select'
-import { PermissionRequestTitle } from '#ui-ink/components/permissions/PermissionRequestTitle'
-import type { ToolUseConfirm } from '#ui-ink/components/permissions/PermissionRequest'
+import figures from 'figures'
 import { getTheme } from '#core/utils/theme'
-import { usePermissionContext } from '#ui-ink/context/PermissionContext'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
+import type { ToolUseConfirm } from '#ui-ink/components/permissions/PermissionRequest'
 
 type Props = {
   toolUseConfirm: ToolUseConfirm
@@ -17,67 +15,29 @@ export function EnterPlanModePermissionRequest({
   onDone,
 }: Props): React.ReactNode {
   const theme = getTheme()
-  const { setMode } = usePermissionContext()
 
-  useKeypress((_input, key) => {
+  useKeypress((_, key) => {
     if (key.escape) {
       toolUseConfirm.onReject()
       onDone()
+      return true
+    }
+
+    if (key.return) {
+      toolUseConfirm.onAllow('temporary')
+      onDone()
+      return true
     }
   })
 
   return (
-    <Box
-      flexDirection="column"
-      borderStyle="round"
-      borderColor={theme.permission}
-      marginTop={1}
-      paddingLeft={1}
-      paddingRight={1}
-      paddingBottom={1}
-    >
-      <PermissionRequestTitle title="Enter plan mode?" riskScore={null} />
-
-      <Box flexDirection="column" paddingX={2} paddingY={1}>
-        <Text>
-          The assistant wants to enter plan mode to explore and design an
-          implementation approach.
-        </Text>
+    <Box flexDirection="column" marginTop={1}>
+      <Box flexDirection="row">
+        <Text color={theme.planMode}>{figures.pointerSmall}</Text>
+        <Text> Enter plan mode?</Text>
       </Box>
-
-      <Box flexDirection="column" paddingX={2}>
-        <Text dimColor>In plan mode, the assistant will:</Text>
-        <Text dimColor> · Explore the codebase thoroughly</Text>
-        <Text dimColor> · Identify existing patterns</Text>
-        <Text dimColor> · Design an implementation strategy</Text>
-        <Text dimColor> · Present a plan for your approval</Text>
-      </Box>
-
-      <Box flexDirection="column" paddingX={2} marginTop={1}>
-        <Text dimColor>
-          No code changes will be made until you approve the plan.
-        </Text>
-      </Box>
-
-      <Box flexDirection="column">
-        <Text>Would you like to proceed?</Text>
-        <Select
-          options={[
-            { label: 'Yes, enter plan mode', value: 'yes' },
-            { label: 'No, start implementing now', value: 'no' },
-          ]}
-          onChange={value => {
-            if (value === 'yes') {
-              setMode('plan')
-              toolUseConfirm.onAllow('temporary')
-              onDone()
-              return
-            }
-
-            toolUseConfirm.onReject()
-            onDone()
-          }}
-        />
+      <Box paddingLeft={2}>
+        <Text dimColor>Enter to confirm · Esc to exit</Text>
       </Box>
     </Box>
   )

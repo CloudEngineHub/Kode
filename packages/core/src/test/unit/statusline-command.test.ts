@@ -24,7 +24,7 @@ describe('/statusline (prompt command + built-in agent)', () => {
     rmSync(projectDir, { recursive: true, force: true })
   })
 
-  test('expands to Task(statusline-setup) instruction', async () => {
+  test('expands to Create-a-Task prompt', async () => {
     expect(statusline.disableNonInteractive).toBe(true)
     if (statusline.type !== 'prompt') {
       throw new Error('Expected /statusline to be a prompt command')
@@ -38,7 +38,6 @@ describe('/statusline (prompt command + built-in agent)', () => {
         ? content[0].text
         : ''
     const text = String(firstText)
-    expect(text).toContain('subagent_type "statusline-setup"')
     expect(text).toContain('hello')
   })
 

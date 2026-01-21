@@ -1,4 +1,4 @@
-name: Version Bump
+name: Version Bump (no tag)
 
 on:
   workflow_dispatch:
@@ -50,13 +50,11 @@ jobs:
           echo "New version: $NEW_VERSION"
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
+      - name: Sync workspace versions
+        run: node scripts/set-version.mjs "${{ steps.bump_version.outputs.new_version }}"
+
       - name: Commit and push changes
         run: |
-          git add package.json
-          git commit -m "Bump version to ${{ steps.bump_version.outputs.new_version }}"
+          git add package.json packages/kode-bin-*/package.json packages/kode-ripgrep-*/package.json
+          git commit -m "chore: bump version to ${{ steps.bump_version.outputs.new_version }}"
           git push origin HEAD:main
-
-      - name: Create and push tag
-        run: |
-          git tag -a v${{ steps.bump_version.outputs.new_version }} -m "Release v${{ steps.bump_version.outputs.new_version }}"
-          git push origin --tags 

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, readFileSync, rmSync } from 'fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { createAssistantMessage, createUserMessage } from '#core/utils/messages'
@@ -11,6 +11,7 @@ import {
 } from '#protocol/utils/kodeAgentSessionId'
 import {
   appendSessionJsonlFromMessage,
+  getAgentLogFilePath,
   getSessionLogFilePath,
   resetSessionJsonlStateForTests,
   sanitizeProjectNameForSessionStore,
@@ -141,5 +142,32 @@ describe('JSONL session persistence (projects/*.jsonl)', () => {
     )
     expect(userLine).toBeTruthy()
     expect(userLine.toolUseResult).toEqual({ filenames: ['a.ts'], numFiles: 1 })
+  })
+
+  test('writes sidechain transcripts under <sessionId>/subagents (official layout)', () => {
+    const user = createUserMessage('hello')
+
+    appendSessionJsonlFromMessage({
+      cwd: projectDir,
+      message: user,
+      toolUseContext: { agentId: 'agent-123' },
+    })
+
+    const agentLogPath = getAgentLogFilePath({
+      cwd: projectDir,
+      sessionId: getKodeAgentSessionId(),
+      agentId: 'agent-123',
+    })
+
+    expect(existsSync(agentLogPath)).toBe(true)
+    const lines = readFileSync(agentLogPath, 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map(l => JSON.parse(l))
+
+    expect(lines.length).toBe(1)
+    expect(lines[0].type).toBe('user')
+    expect(lines[0].agentId).toBe('agent-123')
+    expect(lines[0].isSidechain).toBe(true)
   })
 })

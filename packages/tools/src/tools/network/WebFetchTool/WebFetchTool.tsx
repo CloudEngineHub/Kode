@@ -5,6 +5,7 @@ import { Tool, ToolUseContext } from '#core/tooling/Tool'
 import type { AssistantMessage, UserMessage } from '#core/query'
 import { queryLLM } from '#core/ai/llmLazy'
 import { randomUUID } from 'crypto'
+import { isIP } from 'node:net'
 import { PROMPT, TOOL_NAME_FOR_PROMPT } from './prompt'
 import { convertHtmlToMarkdown } from './htmlToMarkdown'
 import { urlCache } from './cache'
@@ -20,8 +21,8 @@ import {
   truncateFetchedContent,
 } from './utils'
 
-const inputSchema = z.strictObject({
-  url: z.string().url().describe('The URL to fetch content from'),
+const inputSchema = z.object({
+  url: z.string().describe('The URL to fetch content from'),
   prompt: z.string().describe('The prompt to run on the fetched content'),
 })
 
@@ -39,65 +40,22 @@ const FETCH_TIMEOUT_MS = 30_000
 const MAX_URL_LENGTH = 2000
 const MAX_RESPONSE_BYTES = 10 * 1024 * 1024 // 10485760
 
-function isTruthyEnvVar(value: string | undefined): boolean {
-  if (!value) return false
-  return ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase())
-}
-
-function shouldSkipWebFetchPreflight(): boolean {
-  return isTruthyEnvVar(process.env.KODE_SKIP_WEBFETCH_PREFLIGHT)
-}
-
-class DomainBlockedError extends Error {
-  override name = 'DomainBlockedError'
-
-  constructor(domain: string) {
-    super(`Unable to fetch from ${domain}`)
+function isPrivateIpv4(hostname: string): boolean {
+  if (isIP(hostname) !== 4) return false
+  const parts = hostname.split('.').map(Number)
+  if (parts.length !== 4) return false
+  if (parts.some(part => !Number.isInteger(part) || part < 0 || part > 255)) {
+    return false
   }
-}
-
-class DomainCheckFailedError extends Error {
-  override name = 'DomainCheckFailedError'
-
-  constructor(domain: string) {
-    super(
-      `Unable to verify if domain ${domain} is safe to fetch. This may be due to network restrictions or enterprise security policies blocking the required preflight endpoint.`,
-    )
-  }
-}
-
-async function webFetchDomainPreflight(
-  domain: string,
-  signal: AbortSignal,
-): Promise<{
-  status: 'allowed' | 'blocked' | 'check_failed'
-  error?: unknown
-}> {
-  try {
-    const response = await fetch(
-      `https://claude.ai/api/web/domain_info?domain=${encodeURIComponent(domain)}`,
-      { method: 'GET', signal },
-    )
-
-    if (response.status !== 200) {
-      return {
-        status: 'check_failed',
-        error: new Error(`Domain check returned status ${response.status}`),
-      }
-    }
-
-    const json = (await response.json().catch(() => null)) as unknown
-    const record =
-      json && typeof json === 'object' && !Array.isArray(json)
-        ? (json as Record<string, unknown>)
-        : null
-
-    return record?.can_fetch === true
-      ? { status: 'allowed' }
-      : { status: 'blocked' }
-  } catch (error) {
-    return { status: 'check_failed', error }
-  }
+  const [a, b] = parts
+  if (a === 0) return true
+  if (a === 10) return true
+  if (a === 127) return true
+  if (a === 169 && b === 254) return true
+  if (a === 172 && b >= 16 && b <= 31) return true
+  if (a === 192 && b === 168) return true
+  if (a === 100 && b >= 64 && b <= 127) return true
+  return false
 }
 
 function isValidWebFetchUrl(url: string): boolean {
@@ -108,7 +66,9 @@ function isValidWebFetchUrl(url: string): boolean {
   } catch {
     return false
   }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false
   if (parsed.username || parsed.password) return false
+  if (isPrivateIpv4(parsed.hostname)) return false
   if (parsed.hostname.split('.').length < 2) return false
   return true
 }
@@ -187,20 +147,6 @@ export const WebFetchTool = {
       }
 
       const cached = urlCache.get(normalizedUrl)
-
-      if (!cached && !shouldSkipWebFetchPreflight()) {
-        const hostname = new URL(normalizedUrl).hostname
-        const preflight = await webFetchDomainPreflight(
-          hostname,
-          timeoutSignal.signal,
-        )
-        if (preflight.status === 'blocked') {
-          throw new DomainBlockedError(hostname)
-        }
-        if (preflight.status === 'check_failed') {
-          throw new DomainCheckFailedError(hostname)
-        }
-      }
 
       const fetched = cached
         ? null

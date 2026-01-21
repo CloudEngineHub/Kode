@@ -8,11 +8,12 @@ import {
   getGlobalConfig,
   validateAndRepairAllGPT5Profiles,
 } from '#config'
-import { showInvalidConfigDialog } from '#ui-ink/components/InvalidConfigDialog'
+import { showInvalidConfigDialog } from '#ui-ink/screens/setup/InvalidConfigScreen'
 import { ensurePackagedRuntimeEnv, ensureYogaWasmPath } from './bootstrapEnv'
 import { parseArgs } from '#host-cli'
 import { terminalCapabilityManager } from '#ui-ink/utils/terminalCapabilityManager'
 import {
+  enableLineWrapping,
   enterAlternateScreen,
   exitAlternateScreen,
   shouldEnterAlternateScreen,
@@ -138,6 +139,9 @@ process.on('exit', () => {
   try {
     restoreTuiStdioPatch()
   } catch {}
+  try {
+    enableLineWrapping()
+  } catch {}
   resetCursor()
   if (didEnterAlternateScreen) {
     exitAlternateScreen()
@@ -189,6 +193,9 @@ async function gracefulExit(code = 0) {
 
   try {
     resetCursor()
+  } catch {}
+  try {
+    enableLineWrapping()
   } catch {}
   if (didEnterAlternateScreen) {
     try {

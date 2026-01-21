@@ -2,8 +2,13 @@ import { z } from 'zod'
 import { Tool } from '#core/tooling/Tool'
 import type { Message } from '#core/query'
 import { createUserMessage } from '#core/utils/messages'
+import { callTaskTool } from '#tools/tools/ai/TaskTool/call'
+import type {
+  TaskModel,
+  Output as TaskToolOutput,
+} from '#tools/tools/ai/TaskTool/schema'
 import { TOOL_NAME_FOR_PROMPT } from './prompt'
-const inputSchema = z.strictObject({
+const inputSchema = z.object({
   skill: z
     .string()
     .describe(
@@ -16,12 +21,23 @@ const inputSchema = z.strictObject({
 })
 
 type Input = z.infer<typeof inputSchema>
-type Output = {
+type InlineOutput = {
   success: boolean
   commandName: string
   allowedTools?: string[]
   model?: string
+  status?: 'inline'
 }
+
+type ForkedOutput = {
+  success: boolean
+  commandName: string
+  status: 'forked'
+  agentId: string
+  result: string
+}
+
+type Output = InlineOutput | ForkedOutput
 
 type PromptLikeCommand = {
   type: 'prompt'
@@ -29,6 +45,8 @@ type PromptLikeCommand = {
   userFacingName?: () => string
   aliases?: string[]
   getPromptForCommand: (args: string) => Promise<Array<{ content: unknown }>>
+  context?: string
+  agent?: string
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -78,9 +96,27 @@ function getAllowedTools(cmd: unknown): string[] {
   return isStringArray(record?.allowedTools) ? record.allowedTools : []
 }
 
+function getCommandContext(cmd: unknown): 'fork' | undefined {
+  const record = asRecord(cmd)
+  return record?.context === 'fork' ? 'fork' : undefined
+}
+
+function getCommandAgent(cmd: unknown): string | undefined {
+  const record = asRecord(cmd)
+  const raw = record?.agent
+  if (typeof raw !== 'string') return undefined
+  const trimmed = raw.trim()
+  return trimmed ? trimmed : undefined
+}
+
 function getModelSetting(cmd: unknown): string | undefined {
   const record = asRecord(cmd)
   return normalizeCommandModelName(record?.model)
+}
+
+function getRawModelSetting(cmd: unknown): string | undefined {
+  const record = asRecord(cmd)
+  return typeof record?.model === 'string' ? record.model : undefined
 }
 
 function getMaxThinkingTokens(cmd: unknown): number | undefined {
@@ -100,10 +136,26 @@ function normalizeCommandModelName(model: unknown): string | undefined {
   return trimmed
 }
 
+function toTaskToolModel(rawModel: string | undefined): TaskModel | undefined {
+  if (!rawModel) return undefined
+  const trimmed = rawModel.trim()
+  if (!trimmed || trimmed === 'inherit') return undefined
+  if (trimmed === 'haiku' || trimmed === 'quick') return 'haiku'
+  if (trimmed === 'sonnet' || trimmed === 'task') return 'sonnet'
+  if (trimmed === 'opus' || trimmed === 'main') return 'opus'
+  return undefined
+}
+
+function mergeUniqueStrings(a: unknown, b: string[]): string[] {
+  const left = Array.isArray(a) ? a.filter(x => typeof x === 'string') : []
+  return [...new Set([...left, ...b])]
+}
+
 export const SkillTool = {
   name: TOOL_NAME_FOR_PROMPT,
-  async description({ skill }: Input) {
-    return `Execute skill: ${skill}`
+  async description(input?: Input) {
+    const skill = input?.skill
+    return skill ? `Execute skill: ${skill}` : 'Execute a skill'
   },
   userFacingName() {
     return 'Skill'
@@ -257,6 +309,11 @@ ${availableSkills}
     return skill || ''
   },
   renderResultForAssistant(output: Output) {
+    if ('status' in output && output.status === 'forked') {
+      const result = (output.result || '').trim()
+      const resultBlock = result ? `\n\nResult:\n${result}` : ''
+      return `Skill "${output.commandName}" completed (forked execution).${resultBlock}\n\nAgent ID: ${output.agentId}`
+    }
     return `Launching skill: ${output.commandName}`
   },
   async validateInput({ skill }: Input, context) {
@@ -320,6 +377,81 @@ ${availableSkills}
       throw new Error(`Skill ${skillName} is not a prompt-based skill`)
     }
 
+    const allowedTools = getAllowedTools(cmd)
+    const model = getModelSetting(cmd)
+    const maxThinkingTokens = getMaxThinkingTokens(cmd)
+
+    if (getCommandContext(cmd) === 'fork') {
+      const promptMessages = await cmd.getPromptForCommand(args ?? '')
+      const skillPrompt = promptMessages
+        .map(msg => contentToText(msg.content))
+        .join('\n')
+        .trim()
+
+      const agentType = getCommandAgent(cmd) ?? 'general-purpose'
+      const taskModel = toTaskToolModel(getRawModelSetting(cmd))
+
+      const taskInput = {
+        description: getCommandName(cmd),
+        prompt: skillPrompt,
+        subagent_type: agentType,
+        ...(taskModel ? { model: taskModel } : null),
+      }
+
+      let taskResult: TaskToolOutput | null = null
+      const taskContext = {
+        ...context,
+        options: {
+          ...(context.options ?? {}),
+          forceForkContext: true,
+          commandAllowedTools: mergeUniqueStrings(
+            context.options?.commandAllowedTools,
+            allowedTools,
+          ),
+        },
+      } as any
+
+      for await (const evt of callTaskTool(taskInput as any, taskContext)) {
+        if (evt.type === 'progress') {
+          yield { type: 'progress' as const, content: evt.content }
+          continue
+        }
+        if (evt.type === 'result') {
+          taskResult = evt.data as TaskToolOutput
+        }
+      }
+
+      if (!taskResult) {
+        throw new Error(
+          `Forked skill execution produced no result: ${skillName}`,
+        )
+      }
+
+      const agentId = taskResult.agentId
+      const resultText =
+        taskResult.status === 'completed'
+          ? taskResult.content
+              .map(b => b.text)
+              .join('\n')
+              .trim()
+          : ''
+
+      const output: ForkedOutput = {
+        success: true,
+        commandName: skillName,
+        status: 'forked',
+        agentId,
+        result: resultText,
+      }
+
+      yield {
+        type: 'result' as const,
+        data: output,
+        resultForAssistant: this.renderResultForAssistant(output),
+      }
+      return
+    }
+
     const prompt = await cmd.getPromptForCommand(args ?? '')
     const expandedMessages: Message[] = prompt.map(msg => {
       const userMessage = createUserMessage(contentToText(msg.content))
@@ -332,13 +464,10 @@ ${availableSkills}
       return userMessage
     })
 
-    const allowedTools = getAllowedTools(cmd)
-    const model = getModelSetting(cmd)
-    const maxThinkingTokens = getMaxThinkingTokens(cmd)
-
-    const output: Output = {
+    const output: InlineOutput = {
       success: true,
       commandName: skillName,
+      status: 'inline',
       allowedTools: allowedTools.length > 0 ? allowedTools : undefined,
       model,
     }

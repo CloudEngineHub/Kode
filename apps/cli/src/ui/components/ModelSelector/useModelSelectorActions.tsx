@@ -1,11 +1,12 @@
 import type { ProviderType } from '#core/utils/config'
-import { runConnectionTestFlow } from '#ui-ink/ui/components/model-selector/actions/connectionTest'
-import { handleProviderSelection as handleProviderSelectionAction } from '#ui-ink/ui/components/model-selector/actions/providerSelection'
+import { logError } from '#core/utils/log'
+import { runConnectionTestFlow } from './flow/actions/connectionTest'
+import { handleProviderSelection as handleProviderSelectionAction } from './flow/actions/providerSelection'
 import {
   applyPointersForNewModel,
   saveModelConfiguration,
-} from '#ui-ink/ui/components/model-selector/actions/saveConfiguration'
-import { handleBackNavigation } from '#ui-ink/ui/components/model-selector/state'
+} from './flow/actions/saveConfiguration'
+import { handleBackNavigation } from './flow/state'
 import type { ModelSelectorProps } from './types'
 import type { ModelSelectorState } from './useModelSelectorState'
 import { useModelSelectorModelFlow } from './useModelSelectorModelFlow'
@@ -54,11 +55,20 @@ export function useModelSelectorActions({ props, state, onDone }: Args) {
     )
     if (!modelId) return
 
-    applyPointersForNewModel({
-      modelId,
-      isOnboarding: Boolean(props.isOnboarding),
-      targetPointer: props.targetPointer,
-    })
+    try {
+      applyPointersForNewModel({
+        modelId,
+        isOnboarding: Boolean(props.isOnboarding),
+        targetPointer: props.targetPointer,
+      })
+    } catch (error) {
+      state.setValidationError(
+        error instanceof Error
+          ? error.message
+          : 'Failed to update model pointers',
+      )
+      return
+    }
 
     onDone()
   }
@@ -81,7 +91,7 @@ export function useModelSelectorActions({ props, state, onDone }: Args) {
     }
   }
 
-  function handleProviderSelection(provider: string) {
+  async function handleProviderSelection(provider: string) {
     const isProviderMenu =
       provider === 'partnerProviders' || provider === 'partnerCodingPlans'
 
@@ -96,16 +106,23 @@ export function useModelSelectorActions({ props, state, onDone }: Args) {
       state.setValidationError(null)
     }
 
-    handleProviderSelectionAction(provider, {
-      navigateTo: state.navigateTo,
-      setPartnerProviderFocusIndex: state.setPartnerProviderFocusIndex,
-      setCodingPlanFocusIndex: state.setCodingPlanFocusIndex,
-      setSelectedProvider: state.setSelectedProvider,
-      setProviderBaseUrl: state.setProviderBaseUrl,
-      saveConfiguration,
-      onDone,
-      selectedModel: state.selectedModel,
-    })
+    try {
+      await handleProviderSelectionAction(provider, {
+        navigateTo: state.navigateTo,
+        setPartnerProviderFocusIndex: state.setPartnerProviderFocusIndex,
+        setCodingPlanFocusIndex: state.setCodingPlanFocusIndex,
+        setSelectedProvider: state.setSelectedProvider,
+        setProviderBaseUrl: state.setProviderBaseUrl,
+        saveConfiguration,
+        onDone,
+        selectedModel: state.selectedModel,
+      })
+    } catch (error) {
+      logError(error)
+      state.setValidationError(
+        error instanceof Error ? error.message : 'Failed to select provider',
+      )
+    }
   }
 
   async function handleConnectionTest() {

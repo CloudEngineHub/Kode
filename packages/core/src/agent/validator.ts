@@ -1,4 +1,5 @@
 import { readFileSync } from 'fs'
+import { readFile } from 'fs/promises'
 import { basename } from 'path'
 
 import matter from 'gray-matter'
@@ -28,6 +29,34 @@ function readMarkdownFile(
 ): { frontmatter: Record<string, unknown>; content: string } | null {
   try {
     const raw = readFileSync(filePath, 'utf8')
+    const parsed = matter(raw, {
+      engines: {
+        yaml: {
+          parse: (input: string) => {
+            const loaded = yaml.load(
+              input,
+              yamlSchema ? { schema: yamlSchema as never } : undefined,
+            )
+            return asRecord(loaded) ?? {}
+          },
+        },
+      },
+    })
+
+    return {
+      frontmatter: asRecord(parsed.data) ?? {},
+      content: String(parsed.content ?? ''),
+    }
+  } catch {
+    return null
+  }
+}
+
+async function readMarkdownFileAsync(
+  filePath: string,
+): Promise<{ frontmatter: Record<string, unknown>; content: string } | null> {
+  try {
+    const raw = await readFile(filePath, 'utf8')
     const parsed = matter(raw, {
       engines: {
         yaml: {
@@ -153,14 +182,14 @@ function sourceToLocation(source: AgentSource): AgentLocation {
   }
 }
 
-export function parseAgentFromFile(options: {
-  filePath: string
-  baseDir: string
-  source: Exclude<AgentSource, 'flagSettings' | 'built-in'>
-}): AgentConfig | null {
-  const parsed = readMarkdownFile(options.filePath)
-  if (!parsed) return null
-
+function parseAgentFromLoadedMarkdown(
+  parsed: { frontmatter: Record<string, unknown>; content: string },
+  options: {
+    filePath: string
+    baseDir: string
+    source: Exclude<AgentSource, 'flagSettings' | 'built-in'>
+  },
+): AgentConfig | null {
   try {
     const fm = parsed.frontmatter ?? {}
     const name = fm.name
@@ -261,6 +290,27 @@ export function parseAgentFromFile(options: {
   } catch {
     return null
   }
+}
+
+export function parseAgentFromFile(options: {
+  filePath: string
+  baseDir: string
+  source: Exclude<AgentSource, 'flagSettings' | 'built-in'>
+}): AgentConfig | null {
+  const parsed = readMarkdownFile(options.filePath)
+  if (!parsed) return null
+
+  return parseAgentFromLoadedMarkdown(parsed, options)
+}
+
+export async function parseAgentFromFileAsync(options: {
+  filePath: string
+  baseDir: string
+  source: Exclude<AgentSource, 'flagSettings' | 'built-in'>
+}): Promise<AgentConfig | null> {
+  const parsed = await readMarkdownFileAsync(options.filePath)
+  if (!parsed) return null
+  return parseAgentFromLoadedMarkdown(parsed, options)
 }
 
 const agentJsonSchema = z.object({

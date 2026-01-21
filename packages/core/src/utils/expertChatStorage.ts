@@ -1,9 +1,9 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { join } from 'path'
-import { homedir } from 'os'
 import { randomUUID } from 'crypto'
 import { debug as debugLogger } from '#core/utils/debugLogger'
 import { logError } from '#core/utils/log'
+import { getKodeRoot } from '#config/dataRoots'
 
 /**
  * Expert Chat Session Storage - 极简版
@@ -27,10 +27,7 @@ export interface ExpertChatSession {
  * 获取专家聊天存储目录
  */
 function getExpertChatDirectory(): string {
-  const configDir =
-    process.env.KODE_CONFIG_DIR ??
-    process.env.ANYKODE_CONFIG_DIR ??
-    join(homedir(), '.kode')
+  const configDir = getKodeRoot()
   const expertChatDir = join(configDir, 'expert-chats')
 
   if (!existsSync(expertChatDir)) {

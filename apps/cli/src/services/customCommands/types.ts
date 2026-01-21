@@ -7,6 +7,8 @@ export interface CustomCommandFrontmatter {
   when_to_use?: string
   version?: string
   model?: string
+  context?: string
+  agent?: string
   maxThinkingTokens?: number | string
   max_thinking_tokens?: number | string
   'max-thinking-tokens'?: number | string
@@ -30,6 +32,8 @@ export interface CustomCommandWithScope {
   whenToUse?: string
   version?: string
   model?: string
+  context?: 'fork'
+  agent?: string
   isSkill?: boolean
   disableModelInvocation?: boolean
   hasUserSpecifiedDescription?: boolean

@@ -1,48 +1,130 @@
-import { useState } from 'react'
-import { getHistory } from '#core/history'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { getHistoryWithPastes } from '#core/history'
+import type { PromptMode } from '#ui-ink/components/PromptInput/types'
 
-export function useArrowKeyHistory(
-  onSetInput: (value: string, mode: 'bash' | 'prompt') => void,
-  currentInput: string,
-) {
+export type ArrowKeyHistorySnapshot<Extra> = {
+  text: string
+  mode: PromptMode
+  cursorOffset: number
+  extra: Extra
+}
+
+export function useArrowKeyHistory<Extra>(args: {
+  current: ArrowKeyHistorySnapshot<Extra>
+  emptyExtra: Extra
+  onRestore: (snapshot: ArrowKeyHistorySnapshot<Extra>) => void
+  buildExtraFromHistoryEntry?: (entry: {
+    display: string
+    pastedTexts: Array<{ placeholder: string; text: string }>
+  }) => Extra
+}) {
+  const { current, emptyExtra, onRestore, buildExtraFromHistoryEntry } = args
+
   const [historyIndex, setHistoryIndex] = useState(0)
-  const [lastTypedInput, setLastTypedInput] = useState('')
+  const historyIndexRef = useRef(0)
+  useEffect(() => {
+    historyIndexRef.current = historyIndex
+  }, [historyIndex])
 
-  const updateInput = (input: string | undefined) => {
-    if (input !== undefined) {
-      const mode = input.startsWith('!') ? 'bash' : 'prompt'
-      const value = mode === 'bash' ? input.slice(1) : input
-      onSetInput(value, mode)
+  const draftSnapshotRef = useRef<ArrowKeyHistorySnapshot<Extra> | null>(null)
+  const historySnapshotRef = useRef<
+    | Array<{
+        display: string
+        pastedTexts: Array<{ placeholder: string; text: string }>
+      }>
+    | null
+  >(null)
+
+  const currentRef = useRef(current)
+  useEffect(() => {
+    currentRef.current = current
+  }, [current])
+
+  const getHistorySnapshot = () => {
+    if (!historySnapshotRef.current) {
+      historySnapshotRef.current = getHistoryWithPastes()
     }
+    return historySnapshotRef.current
+  }
+
+  const updateFromHistoryEntry = (
+    entry:
+      | {
+          display: string
+          pastedTexts: Array<{ placeholder: string; text: string }>
+        }
+      | undefined,
+    cursor: 'start' | 'end',
+  ) => {
+    if (entry === undefined) return
+    let mode: PromptMode = 'prompt'
+    let text = entry.display
+    if (entry.display.startsWith('!')) {
+      mode = 'bash'
+      text = entry.display.slice(1)
+    } else if (entry.display.startsWith('&')) {
+      mode = 'background'
+      text = entry.display.slice(1)
+    } else if (entry.display.startsWith('#')) {
+      mode = 'koding'
+      text = entry.display.slice(1)
+    }
+    onRestore({
+      text,
+      mode,
+      cursorOffset: cursor === 'start' ? 0 : text.length,
+      extra: buildExtraFromHistoryEntry
+        ? buildExtraFromHistoryEntry(entry)
+        : emptyExtra,
+    })
   }
 
   function onHistoryUp() {
-    const latestHistory = getHistory()
-    if (historyIndex < latestHistory.length) {
-      if (historyIndex === 0 && currentInput.trim() !== '') {
-        setLastTypedInput(currentInput)
-      }
-      const newIndex = historyIndex + 1
-      setHistoryIndex(newIndex)
-      updateInput(latestHistory[historyIndex])
-    }
+    const latestHistory = getHistorySnapshot()
+    const prev = historyIndexRef.current
+    if (prev >= latestHistory.length) return
+
+    if (prev === 0) draftSnapshotRef.current = currentRef.current
+    updateFromHistoryEntry(latestHistory[prev], 'start')
+
+    const next = prev + 1
+    historyIndexRef.current = next
+    setHistoryIndex(next)
   }
 
   function onHistoryDown() {
-    const latestHistory = getHistory()
-    if (historyIndex > 1) {
-      const newIndex = historyIndex - 1
-      setHistoryIndex(newIndex)
-      updateInput(latestHistory[newIndex - 1])
-    } else if (historyIndex === 1) {
+    const latestHistory = getHistorySnapshot()
+    const prev = historyIndexRef.current
+    if (prev > 1) {
+      const next = prev - 1
+      updateFromHistoryEntry(latestHistory[next - 1], 'end')
+      historyIndexRef.current = next
+      setHistoryIndex(next)
+      return
+    }
+
+    if (prev === 1) {
+      onRestore(draftSnapshotRef.current ?? currentRef.current)
+      draftSnapshotRef.current = null
+      historyIndexRef.current = 0
       setHistoryIndex(0)
-      updateInput(lastTypedInput)
+      return
     }
   }
 
-  function resetHistory() {
-    setLastTypedInput('')
+  const onUserInput = useCallback(() => {
+    if (historyIndexRef.current === 0) return
+    historyIndexRef.current = 0
+    draftSnapshotRef.current = null
+    historySnapshotRef.current = null
     setHistoryIndex(0)
+  }, [])
+
+  function resetHistory() {
+    historyIndexRef.current = 0
+    setHistoryIndex(0)
+    draftSnapshotRef.current = null
+    historySnapshotRef.current = null
   }
 
   return {
@@ -50,6 +132,7 @@ export function useArrowKeyHistory(
     setHistoryIndex,
     onHistoryUp,
     onHistoryDown,
+    onUserInput,
     resetHistory,
   }
 }

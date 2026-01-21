@@ -26,13 +26,16 @@ describe('bash-notification parity (Reference CLI Rt1)', () => {
     expect(notification!.status).toBe('completed')
 
     const text = renderBashNotification(notification!)
-    expect(text).toContain('<bash-notification>')
-    expect(text).toContain(`<shell-id>${bashId}</shell-id>`)
+    expect(text).toContain('<task-notification>')
+    expect(text).toContain(`<task-id>${bashId}</task-id>`)
+    expect(text).toContain('<task-type>local_bash</task-type>')
     expect(text).toContain(
       `<output-file>${notification!.outputFile}</output-file>`,
     )
     expect(text).toContain('<status>completed</status>')
-    expect(text).toContain('Read the output file to retrieve the output.')
+    expect(text).toContain(
+      `Read the output file to retrieve the result: ${notification!.outputFile}`,
+    )
 
     const none = shell.flushBashNotifications()
     expect(none.length).toBe(0)

@@ -2,7 +2,11 @@ import { spawn, spawnSync } from 'child_process'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { withEphemeralAlternateScreen } from '#cli-utils/terminal'
+import {
+  disableLineWrapping,
+  enableLineWrapping,
+  withEphemeralAlternateScreen,
+} from '#cli-utils/terminal'
 import { writeToStdout } from '#cli-utils/stdio'
 import { getInkInstanceForStdout } from '#ui-ink/utils/inkInstanceStore'
 import { terminalCapabilityManager } from '#ui-ink/utils/terminalCapabilityManager'
@@ -31,16 +35,22 @@ async function withSuspendedInk<T>(fn: () => Promise<T> | T): Promise<T> {
   const stdout = process.stdout as NodeJS.WriteStream
   const instance = getInkInstanceForStdout(stdout)
   const hasInk = Boolean(instance)
+  const screenReaderEnv =
+    process.env.KODE_SCREEN_READER ?? process.env.SCREENREADER
 
   try {
     instance?.pause?.()
     instance?.suspendStdin?.()
     terminalCapabilityManager.disableAllModes()
+    enableLineWrapping()
     showTerminalCursor()
     return await withEphemeralAlternateScreen(fn)
   } finally {
     if (hasInk) {
       hideTerminalCursor()
+      if (!screenReaderEnv) {
+        disableLineWrapping()
+      }
     }
     terminalCapabilityManager.enableSupportedModes()
     instance?.resumeStdin?.()

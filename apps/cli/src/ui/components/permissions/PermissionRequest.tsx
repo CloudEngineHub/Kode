@@ -23,9 +23,7 @@ import { SlashCommandPermissionRequest } from './SlashCommandPermissionRequest/S
 import { SkillPermissionRequest } from './SkillPermissionRequest/SkillPermissionRequest'
 import { WebFetchTool } from '#tools/tools/network/WebFetchTool/WebFetchTool'
 import { WebFetchPermissionRequest } from './WebFetchPermissionRequest/WebFetchPermissionRequest'
-import { EnterPlanModeTool } from '#tools/tools/interaction/PlanModeTool/EnterPlanModeTool'
 import { ExitPlanModeTool } from '#tools/tools/interaction/PlanModeTool/ExitPlanModeTool'
-import { EnterPlanModePermissionRequest } from './PlanModePermissionRequest/EnterPlanModePermissionRequest'
 import { ExitPlanModePermissionRequest } from './PlanModePermissionRequest/ExitPlanModePermissionRequest'
 import { AskUserQuestionTool } from '#tools/tools/interaction/AskUserQuestionTool/AskUserQuestionTool'
 import { AskUserQuestionPermissionRequest } from './AskUserQuestionPermissionRequest/AskUserQuestionPermissionRequest'
@@ -51,8 +49,6 @@ function permissionComponentForTool(tool: Tool) {
       return SkillPermissionRequest
     case WebFetchTool:
       return WebFetchPermissionRequest
-    case EnterPlanModeTool:
-      return EnterPlanModePermissionRequest
     case ExitPlanModeTool:
       return ExitPlanModePermissionRequest
     case AskUserQuestionTool:
@@ -86,6 +82,8 @@ export type ToolUseConfirm = {
   commandPrefix: CommandSubcommandPrefixResult | null
   toolUseContext: ToolUseContext
   suggestions?: ToolPermissionContextUpdate[]
+  blockedPath?: string
+  decisionReason?: string
   // NOTE: riskScore is carried through to support current permission UX.
   riskScore: number | null
   onAbort(): void
@@ -99,13 +97,24 @@ export function PermissionRequest({
   onDone,
   verbose,
 }: PermissionRequestProps): React.ReactNode {
-  // Handle Ctrl+C
-  useKeypress((input, key) => {
-    if (key.ctrl && input === 'c') {
-      onDone()
-      toolUseConfirm.onReject()
-    }
-  })
+  // Handle Ctrl+C and Esc (reject).
+  useKeypress(
+    (input, key) => {
+      if (key.ctrl && input === 'c') {
+        onDone()
+        toolUseConfirm.onReject()
+        return true
+      }
+
+      if (key.escape) {
+        onDone()
+        toolUseConfirm.onReject()
+        return true
+      }
+    },
+    // Let tool-specific permission UIs intercept Esc first (e.g. WebFetch logging).
+    { priority: -10 },
+  )
 
   const toolName =
     toolUseConfirm.tool.userFacingName?.() || toolUseConfirm.tool.name || 'Tool'

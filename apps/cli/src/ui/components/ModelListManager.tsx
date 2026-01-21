@@ -1,13 +1,15 @@
 import { Box, Text } from 'ink'
 import * as React from 'react'
-import { useState, useCallback } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import figures from 'figures'
 import { getTheme } from '#core/utils/theme'
 import { getGlobalConfig, ModelPointerType } from '#core/utils/config'
 import { getModelManager } from '#core/utils/model'
 import { useExitOnCtrlCD } from '#ui-ink/hooks/useExitOnCtrlCD'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
-import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
+import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
+import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
+import { getWindowedList } from '#ui-ink/primitives/list/windowedList'
 import { ModelSelector } from './ModelSelector'
 
 type Props = {
@@ -17,21 +19,19 @@ type Props = {
 export function ModelListManager({ onClose }: Props): React.ReactNode {
   const config = getGlobalConfig()
   const theme = getTheme()
-  const { rows: terminalRows } = useTerminalSize()
-  const tightLayout = terminalRows <= 18
-  const compactLayout = terminalRows <= 22
-  const containerPaddingY = tightLayout || compactLayout ? 0 : 1
+  const layout = useScreenLayout()
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [showModelSelector, setShowModelSelector] = useState(false)
-  const [isDeleteMode, setIsDeleteMode] = useState(false)
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [status, setStatus] = useState<string | null>(null)
   const exitState = useExitOnCtrlCD(onClose)
 
   const modelManager = getModelManager()
   const availableModels = modelManager.getAvailableModels()
 
   // Create menu items: existing models + "Add New Model"
-  const menuItems = React.useMemo(() => {
+  const menuItems = useMemo(() => {
     const modelItems = availableModels.map(model => ({
       id: model.modelName,
       name: model.name,
@@ -52,7 +52,7 @@ export function ModelListManager({ onClose }: Props): React.ReactNode {
     ]
   }, [availableModels, config.modelPointers, refreshKey])
 
-  React.useEffect(() => {
+  useEffect(() => {
     setSelectedIndex(prev => {
       if (menuItems.length === 0) return 0
       return Math.max(0, Math.min(prev, menuItems.length - 1))
@@ -80,7 +80,7 @@ export function ModelListManager({ onClose }: Props): React.ReactNode {
     // The removeModel function should already clear the pointers,
     // but let's ensure UI refreshes
     setRefreshKey(prev => prev + 1)
-    setIsDeleteMode(false)
+    setDeleteConfirmId(null)
   }
 
   const handleAddNewModel = () => {
@@ -92,83 +92,144 @@ export function ModelListManager({ onClose }: Props): React.ReactNode {
     setRefreshKey(prev => prev + 1)
   }
 
-  const maxVisibleItems = React.useMemo(() => {
-    // Keep one spare line to reduce the chance of Ink scrolling/tearing in short terminals.
-    const safeRows = Math.max(1, terminalRows)
-    const reserved =
-      2 + // border top/bottom
-      containerPaddingY * 2 +
-      2 + // header (title + hint)
-      (tightLayout ? 2 : 3) // footer (separator + instructions; a bit more breathing room)
+  const reservedLines =
+    (layout.tightLayout ? 9 : layout.compactLayout ? 11 : 13) +
+    layout.paddingY * 2 +
+    layout.gap * 4
+  const maxVisible = Math.max(
+    3,
+    layout.rows - reservedLines - 1, // keep a spare row
+  )
 
-    return Math.max(1, safeRows - reserved - 1)
-  }, [containerPaddingY, terminalRows, tightLayout])
+  const window = useMemo(
+    () =>
+      getWindowedList({
+        itemCount: menuItems.length,
+        focusIndex: selectedIndex,
+        maxVisible,
+        indicatorRows: 2,
+      }),
+    [maxVisible, menuItems.length, selectedIndex],
+  )
 
-  const windowedMenuItems = React.useMemo(() => {
-    if (menuItems.length <= maxVisibleItems) {
-      return { start: 0, end: menuItems.length, items: menuItems }
-    }
-
-    const visibleCount = Math.max(
-      1,
-      Math.min(maxVisibleItems, menuItems.length),
-    )
-    const half = Math.floor(visibleCount / 2)
-    const start = Math.max(
-      0,
-      Math.min(
-        selectedIndex - half,
-        Math.max(0, menuItems.length - visibleCount),
-      ),
-    )
-    const end = Math.min(menuItems.length, start + visibleCount)
-    return { start, end, items: menuItems.slice(start, end) }
-  }, [maxVisibleItems, menuItems, selectedIndex])
+  const visibleItems = useMemo(
+    () => menuItems.slice(window.start, window.end),
+    [menuItems, window.end, window.start],
+  )
 
   // Handle keyboard input
   const handleInput = useCallback(
     (input: string, key: any) => {
-      if (key.escape) {
-        if (isDeleteMode) {
-          setIsDeleteMode(false)
-        } else {
-          onClose()
-        }
-        return true
-      } else if (input === 'd' && !isDeleteMode && availableModels.length > 1) {
-        setIsDeleteMode(true)
-        return true
-      } else if (key.upArrow) {
-        setSelectedIndex(prev => Math.max(0, prev - 1))
-        return true
-      } else if (key.downArrow) {
-        setSelectedIndex(prev => Math.min(menuItems.length - 1, prev + 1))
-        return true
-      } else if (key.return || input === ' ') {
-        const item = menuItems[selectedIndex]
+      const inputChar = input.length === 1 ? input : ''
 
-        if (isDeleteMode && item.type === 'model') {
-          // Prevent deleting the last model
-          if (availableModels.length <= 1) {
-            setIsDeleteMode(false) // Exit delete mode
-            return true
-          }
-          // Prevent deleting model that is currently set as main
-          if (config.modelPointers?.main === item.id) {
-            setIsDeleteMode(false) // Exit delete mode
-            return true
-          }
-          handleDeleteModel(item.id)
+      if (key.escape) {
+        if (deleteConfirmId) {
+          setDeleteConfirmId(null)
+          setStatus('Cancelled delete')
           return true
-        } else if (item.type === 'action') {
+        }
+        onClose()
+        return true
+      }
+
+      const isUp = key.upArrow || inputChar === 'k'
+      const isDown = key.downArrow || inputChar === 'j'
+
+      if (isUp) {
+        setSelectedIndex(prev => Math.max(0, prev - 1))
+        setDeleteConfirmId(null)
+        return true
+      }
+
+      if (isDown) {
+        setSelectedIndex(prev => Math.min(menuItems.length - 1, prev + 1))
+        setDeleteConfirmId(null)
+        return true
+      }
+
+      if (key.pageUp) {
+        setSelectedIndex(prev => Math.max(0, prev - window.visibleCount))
+        setDeleteConfirmId(null)
+        return true
+      }
+
+      if (key.pageDown) {
+        setSelectedIndex(prev =>
+          Math.min(menuItems.length - 1, prev + window.visibleCount),
+        )
+        setDeleteConfirmId(null)
+        return true
+      }
+
+      if (key.home || inputChar === 'g') {
+        setSelectedIndex(0)
+        setDeleteConfirmId(null)
+        return true
+      }
+
+      if (key.end || inputChar === 'G') {
+        setSelectedIndex(Math.max(0, menuItems.length - 1))
+        setDeleteConfirmId(null)
+        return true
+      }
+
+      if (inputChar === 'd') {
+        const item = menuItems[selectedIndex]
+        if (!item || item.type !== 'model') {
+          setStatus('Select a model to delete')
+          return true
+        }
+
+        if (availableModels.length <= 1) {
+          setStatus('Cannot delete the last model')
+          return true
+        }
+
+        if (config.modelPointers?.main === item.id) {
+          setStatus('Cannot delete the active main model')
+          return true
+        }
+
+        setDeleteConfirmId(item.id)
+        setStatus(
+          `Delete "${item.name}"? Press Enter to confirm, Esc to cancel`,
+        )
+        return true
+      }
+
+      if (key.return || inputChar === ' ') {
+        const item = menuItems[selectedIndex]
+        if (!item) return true
+
+        if (
+          deleteConfirmId &&
+          item.type === 'model' &&
+          item.id === deleteConfirmId
+        ) {
+          handleDeleteModel(item.id)
+          setStatus('Deleted model')
+          return true
+        }
+
+        if (item.type === 'action') {
           handleAddNewModel()
           return true
         }
-        // Note: Remove any pointer switching functionality here
+
+        // No-op for model items (selection shows details below).
         return true
       }
     },
-    [selectedIndex, menuItems, onClose, isDeleteMode, availableModels.length],
+    [
+      availableModels.length,
+      config.modelPointers?.main,
+      deleteConfirmId,
+      handleDeleteModel,
+      menuItems,
+      onClose,
+      selectedIndex,
+      window.visibleCount,
+    ],
   )
 
   useKeypress(handleInput, { isActive: !showModelSelector })
@@ -186,124 +247,154 @@ export function ModelListManager({ onClose }: Props): React.ReactNode {
     )
   }
 
-  // Main model list screen
+  const selectedItem = menuItems[selectedIndex]
+  const selectedModel =
+    selectedItem?.type === 'model'
+      ? (availableModels.find(m => m.modelName === selectedItem.id) ?? null)
+      : null
+
+  const details = (() => {
+    if (!selectedItem) return null
+    if (selectedItem.type === 'action') {
+      return (
+        <Text dimColor wrap="truncate-end">
+          Add a new model profile (provider + credentials + model name).
+        </Text>
+      )
+    }
+
+    const usedBy =
+      selectedModel && selectedItem.usedBy.length > 0
+        ? `Pointers: ${selectedItem.usedBy.join(', ')}`
+        : 'Pointers: (not assigned)'
+
+    return (
+      <Box flexDirection="column">
+        <Text dimColor wrap="truncate-end">
+          Provider: {selectedItem.provider || '(unknown)'} · {usedBy}
+        </Text>
+        <Text dimColor wrap="truncate-end">
+          Model ID: {selectedItem.id}
+        </Text>
+      </Box>
+    )
+  })()
+
+  const topIndicator = window.showUpIndicator ? `${figures.arrowUp} More` : ' '
+  const bottomIndicator = window.showDownIndicator
+    ? `${figures.arrowDown} More`
+    : ' '
+
+  const statusLine =
+    status ??
+    (deleteConfirmId ? 'Delete pending…' : `Models: ${availableModels.length}`)
+
   return (
-    <Box
-      flexDirection="column"
-      borderStyle="round"
-      borderColor={isDeleteMode ? 'red' : theme.secondaryBorder}
-      width="100%"
-      paddingX={2}
-      paddingY={containerPaddingY}
+    <ScreenFrame
+      title="Model Library"
+      exitState={exitState}
+      paddingX={layout.paddingX}
+      paddingY={layout.paddingY}
+      gap={layout.gap}
     >
-      <Box
-        flexDirection="column"
-        minHeight={2}
-        marginBottom={tightLayout ? 0 : 1}
-      >
-        <Text bold color={isDeleteMode ? 'red' : undefined}>
-          Manage Model List{isDeleteMode ? ' - DELETE MODE' : ''}
-          {menuItems.length > windowedMenuItems.items.length
-            ? ` (${windowedMenuItems.start + 1}-${windowedMenuItems.end}/${menuItems.length})`
-            : ''}
-          {exitState.pending
-            ? ` (press ${exitState.keyName} again to exit)`
-            : ''}
+      <Box flexDirection="column" gap={layout.gap}>
+        <Text dimColor wrap="truncate-end">
+          Add, remove, and inspect model profiles. Use /model to set pointers
+          (main/task/compact/quick).
         </Text>
-        <Text dimColor>
-          {isDeleteMode ? (
-            availableModels.length <= 1 ? (
-              'Cannot delete the last model, Esc to cancel'
-            ) : (
-              'Press Enter/Space to DELETE selected model (cannot delete main), Esc to cancel'
-            )
-          ) : (
-            <>
-              Navigate: ↑↓ | Select: Enter |{' '}
-              <Text bold color="red">
-                Delete: d
-              </Text>{' '}
-              | Exit: Esc
-            </>
-          )}
+
+        <Text
+          color={deleteConfirmId ? theme.error : theme.secondaryText}
+          wrap="truncate-end"
+        >
+          {statusLine}
         </Text>
-      </Box>
 
-      {windowedMenuItems.items.map((item, windowIndex) => {
-        const i = windowedMenuItems.start + windowIndex
-        const isSelected = i === selectedIndex
+        <Box flexDirection="column" width="100%">
+          <Text dimColor wrap="truncate-end">
+            {topIndicator}
+          </Text>
+          {visibleItems.map((item, idx) => {
+            const absoluteIndex = window.start + idx
+            const isSelected = absoluteIndex === selectedIndex
+            const isDeleteConfirm =
+              deleteConfirmId &&
+              item.type === 'model' &&
+              item.id === deleteConfirmId
 
-        return (
-          <Box key={item.id} flexDirection="column">
-            <Box flexDirection="row">
-              <Box width={50}>
-                <Text
-                  color={
-                    isSelected ? (isDeleteMode ? 'red' : 'blue') : undefined
-                  }
-                >
-                  {isSelected ? figures.pointer : ' '} {item.name}
+            const pointerColor = isDeleteConfirm
+              ? theme.error
+              : isSelected
+                ? theme.kode
+                : theme.secondaryText
+
+            const labelColor = isDeleteConfirm
+              ? theme.error
+              : isSelected
+                ? theme.text
+                : theme.secondaryText
+
+            const availability =
+              item.type === 'model'
+                ? item.usedBy.length > 0
+                  ? `Active: ${item.usedBy.join(', ')}`
+                  : 'Available'
+                : ''
+
+            return (
+              <Box key={item.id} flexDirection="row" gap={1}>
+                <Text color={pointerColor}>
+                  {isSelected ? figures.pointer : ' '}
                 </Text>
-              </Box>
-              <Box>
-                {item.type === 'model' && (
-                  <>
-                    <Text color={theme.secondaryText}>({item.provider})</Text>
-                    {item.usedBy.length > 0 && (
-                      <Box marginLeft={1}>
-                        <Text color={theme.success}>
-                          [Active: {item.usedBy.join(', ')}]
-                        </Text>
-                      </Box>
-                    )}
-                    {item.usedBy.length === 0 && (
-                      <Box marginLeft={1}>
-                        <Text color={theme.secondaryText}>[Available]</Text>
-                      </Box>
-                    )}
-                  </>
-                )}
-                {item.type === 'action' && (
-                  <Text color={theme.suggestion}>
-                    {isSelected ? '[Press Enter to add new model]' : ''}
+                <Box flexGrow={1}>
+                  <Text
+                    color={labelColor}
+                    bold={isSelected}
+                    wrap="truncate-end"
+                  >
+                    {item.name}
                   </Text>
-                )}
+                </Box>
+                {item.type === 'model' ? (
+                  <Box flexDirection="row" gap={1} flexShrink={0}>
+                    {item.provider ? (
+                      <Text
+                        color={theme.secondaryText}
+                        wrap="truncate-end"
+                      >{`(${item.provider})`}</Text>
+                    ) : null}
+                    <Text
+                      color={
+                        item.usedBy.length > 0
+                          ? theme.success
+                          : theme.secondaryText
+                      }
+                      wrap="truncate-end"
+                    >
+                      {availability}
+                    </Text>
+                  </Box>
+                ) : isSelected ? (
+                  <Text color={theme.suggestion} wrap="truncate-end">
+                    Enter to add
+                  </Text>
+                ) : null}
               </Box>
-            </Box>
-          </Box>
-        )
-      })}
-
-      <Box
-        marginTop={tightLayout ? 0 : 1}
-        paddingTop={tightLayout ? 0 : 1}
-        borderTopColor={theme.secondaryBorder}
-        borderStyle="single"
-        borderTop
-        borderLeft={false}
-        borderRight={false}
-        borderBottom={false}
-      >
-        <Text dimColor>
-          {isDeleteMode ? (
-            availableModels.length <= 1 ? (
-              'Cannot delete the last model - press Esc to cancel'
-            ) : (
-              'DELETE MODE: Press Enter/Space to delete (cannot delete main model), Esc to cancel'
             )
-          ) : availableModels.length <= 1 ? (
-            'Use ↑/↓ to navigate, Enter to add new, Esc to exit (cannot delete last model)'
-          ) : (
-            <>
-              Use ↑/↓ to navigate,{' '}
-              <Text bold color="red">
-                d to delete model
-              </Text>
-              , Enter to add new, Esc to exit
-            </>
-          )}
-        </Text>
+          })}
+          <Text dimColor wrap="truncate-end">
+            {bottomIndicator}
+          </Text>
+        </Box>
+
+        {details ? <Box paddingLeft={2}>{details}</Box> : null}
+
+        <Box marginTop={layout.tightLayout ? 0 : 1}>
+          <Text dimColor wrap="truncate-end">
+            ↑/↓ or j/k · PgUp/PgDn · Home/End · Enter add · d delete · Esc close
+          </Text>
+        </Box>
       </Box>
-    </Box>
+    </ScreenFrame>
   )
 }

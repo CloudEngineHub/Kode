@@ -6,10 +6,11 @@ import { getSessionPlugins } from '#core/utils/sessionPlugins'
 import { readLocalSettings, updateLocalSettings } from '#config'
 import { getCwd } from '#core/utils/state'
 import { isSettingSourceEnabled } from '#config'
+import { LEGACY_CONFIG_SUBDIRS } from '#core/compat/legacyPaths'
 import {
   findProjectSubdirs,
-  getClaudePolicyBaseDir,
-  getUserConfigBaseDirs,
+  getPolicyBaseDirs,
+  getUserConfigRoots,
   inodeKeyForPath,
   listMarkdownFilesRecursively,
   markdownFirstLineOrHeading,
@@ -51,8 +52,7 @@ function getBuiltInOutputStyles(): OutputStyleMap {
     Explanatory: {
       name: 'Explanatory',
       source: 'built-in',
-      description:
-        'Claude explains its implementation choices and codebase patterns',
+      description: 'Explains implementation choices and codebase patterns',
       keepCodingInstructions: true,
       prompt: `You are an interactive CLI tool that helps users with software engineering tasks. In addition to software engineering tasks, you should provide educational insights about the codebase along the way.
 
@@ -65,7 +65,7 @@ ${INSIGHTS_SECTION}`,
       name: 'Learning',
       source: 'built-in',
       description:
-        'Claude pauses and asks you to write small pieces of code for hands-on practice',
+        'Pauses and asks for small hands-on contributions for practice',
       keepCodingInstructions: true,
       prompt: `You are an interactive CLI tool that helps users with software engineering tasks. In addition to software engineering tasks, you should help users learn more about the codebase through hands-on practice and educational insights.
 
@@ -253,35 +253,39 @@ function loadCustomOutputStyles(options: {
   const out: OutputStyleDefinition[] = []
   const seen = new Set<string>()
 
-  const policyDir = join(getClaudePolicyBaseDir(), '.claude', 'output-styles')
-  for (const filePath of listMarkdownFilesRecursively(policyDir)) {
-    const inodeKey = inodeKeyForPath(filePath)
-    const dedupeKey = inodeKey ? `inode:${inodeKey}` : `path:${filePath}`
-    if (seen.has(dedupeKey)) continue
-    seen.add(dedupeKey)
-    const style = parseCustomOutputStyleFile({
-      filePath,
-      source: 'policySettings',
-    })
-    if (style) out.push(style)
+  for (const baseDir of getPolicyBaseDirs()) {
+    for (const policyDir of [
+      // Legacy format scanned first so Kode wins at the same level.
+      join(baseDir, LEGACY_CONFIG_SUBDIRS.outputStyles),
+      join(baseDir, '.kode', 'output-styles'),
+    ]) {
+      for (const filePath of listMarkdownFilesRecursively(policyDir)) {
+        const inodeKey = inodeKeyForPath(filePath)
+        const dedupeKey = inodeKey ? `inode:${inodeKey}` : `path:${filePath}`
+        if (seen.has(dedupeKey)) continue
+        seen.add(dedupeKey)
+        const style = parseCustomOutputStyleFile({
+          filePath,
+          source: 'policySettings',
+        })
+        if (style) out.push(style)
+      }
+    }
   }
 
   if (isSettingSourceEnabled('userSettings')) {
-    const userBases = getUserConfigBaseDirs()
-    for (const base of userBases) {
-      for (const userBaseDir of new Set([base.claude, base.kode])) {
-        const dirPath = join(userBaseDir, 'output-styles')
-        for (const filePath of listMarkdownFilesRecursively(dirPath)) {
-          const inodeKey = inodeKeyForPath(filePath)
-          const dedupeKey = inodeKey ? `inode:${inodeKey}` : `path:${filePath}`
-          if (seen.has(dedupeKey)) continue
-          seen.add(dedupeKey)
-          const style = parseCustomOutputStyleFile({
-            filePath,
-            source: 'userSettings',
-          })
-          if (style) out.push(style)
-        }
+    for (const userBaseDir of getUserConfigRoots()) {
+      const dirPath = join(userBaseDir, 'output-styles')
+      for (const filePath of listMarkdownFilesRecursively(dirPath)) {
+        const inodeKey = inodeKeyForPath(filePath)
+        const dedupeKey = inodeKey ? `inode:${inodeKey}` : `path:${filePath}`
+        if (seen.has(dedupeKey)) continue
+        seen.add(dedupeKey)
+        const style = parseCustomOutputStyleFile({
+          filePath,
+          source: 'userSettings',
+        })
+        if (style) out.push(style)
       }
     }
   }

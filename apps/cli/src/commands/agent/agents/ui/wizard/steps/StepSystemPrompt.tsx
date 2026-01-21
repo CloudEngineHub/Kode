@@ -12,7 +12,10 @@ export function StepSystemPrompt({ ctx }: { ctx: WizardContextValue }) {
   const columns = Math.min(80, process.stdout.columns ?? 80)
 
   useKeypress((_input, key) => {
-    if (key.escape) ctx.goBack()
+    if (key.escape) {
+      ctx.goBack()
+      return true
+    }
   })
 
   const onSubmit = (next: string) => {

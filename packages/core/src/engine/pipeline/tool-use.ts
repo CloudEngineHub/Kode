@@ -56,10 +56,14 @@ export async function* runToolUse(
       requestId: currentRequest?.id,
     })
 
+    const notFoundMessage = aliasResolution.wasAliased
+      ? `Error: No such tool available: ${aliasResolution.originalName} (resolved to ${toolName})`
+      : `Error: No such tool available: ${toolName}`
+
     yield createUserMessage([
       {
         type: 'tool_result',
-        content: `Error: No such tool available: ${toolName}`,
+        content: notFoundMessage,
         is_error: true,
         tool_use_id: toolUse.id,
       },

@@ -7,15 +7,25 @@ import type { WizardMethod } from '../types'
 
 export function StepChooseMethod({ ctx }: { ctx: WizardContextValue }) {
   useKeypress((_input, key) => {
-    if (key.escape) ctx.goBack()
+    if (key.escape) {
+      ctx.goBack()
+      return true
+    }
   })
 
   return (
-    <WizardPanel subtitle="Creation method">
+    <WizardPanel
+      subtitle="Creation method"
+      footerText="Press ↑↓ to navigate · Enter to select · Esc to go back"
+    >
       <Box marginTop={1}>
         <Select
+          key="method-select"
           options={[
-            { label: 'Generate with Claude (recommended)', value: 'generate' },
+            {
+              label: 'Generate with the current model (recommended)',
+              value: 'generate',
+            },
             { label: 'Manual configuration', value: 'manual' },
           ]}
           onChange={value => {

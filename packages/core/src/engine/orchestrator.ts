@@ -31,6 +31,17 @@ export async function* query(
     process.env.NODE_ENV !== 'test'
   const cwd = shouldPersistSession ? getCwd() : null
 
+  if (shouldPersistSession) {
+    const last = messages[messages.length - 1]
+    if (last?.type === 'user') {
+      appendSessionJsonlFromMessage({
+        cwd: cwd ?? getCwd(),
+        message: last,
+        toolUseContext,
+      })
+    }
+  }
+
   for await (const message of messagePipeline(
     messages,
     systemPrompt,

@@ -124,7 +124,9 @@ export const MODE_CONFIGS: Record<PermissionMode, ModeConfig> = {
 // Mode cycling function preserved from the existing workflow
 export function getNextPermissionMode(
   currentMode: PermissionMode,
-  isBypassAvailable: boolean = true,
+  // Compatibility: legacy callers may pass bypass availability.
+  // Parity: Shift+Tab cycles only default -> acceptEdits -> plan -> default.
+  _isBypassAvailable: boolean = true,
 ): PermissionMode {
   switch (currentMode) {
     case 'default':
@@ -132,7 +134,7 @@ export function getNextPermissionMode(
     case 'acceptEdits':
       return 'plan'
     case 'plan':
-      return isBypassAvailable ? 'bypassPermissions' : 'default'
+      return 'default'
     case 'bypassPermissions':
       return 'default'
     case 'dontAsk':

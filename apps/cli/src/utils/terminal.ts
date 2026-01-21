@@ -69,7 +69,7 @@ export function clearViewport(): Promise<void> {
 export function clearScrollback(): Promise<void> {
   if (!process.stdout?.isTTY) return Promise.resolve()
   return new Promise(resolve => {
-    // Clear the viewport AND wipe scrollback (Claude Code uses CSI 3J in some flows).
+    // Clear the viewport AND wipe scrollback (useful for sensitive dialogs).
     // - CSI 2J: clear screen
     // - CSI 3J: clear scrollback
     // - CSI H : move cursor to home

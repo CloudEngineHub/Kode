@@ -1,12 +1,13 @@
 import type { Theme } from '#core/utils/theme'
 import type { ProviderType } from '#core/utils/config'
-import type { ConnectionTestResult } from '#ui-ink/ui/components/model-selector/actions/connectionTest'
+import type { ConnectionTestResult } from './flow/actions/connectionTest'
+import type { ScreenExitState } from '#ui-ink/primitives/layout/ScreenFrame'
 import type {
   ReasoningEffortOption,
   RequestStrategyOption,
-} from '#ui-ink/ui/components/model-selector/options'
-import type { ModelSelectorScreen } from '#ui-ink/ui/components/model-selector/state'
-import type { ModelInfo } from '#ui-ink/ui/components/model-selector/types'
+} from './flow/options'
+import type { ModelSelectorScreen } from './flow/state'
+import type { ModelInfo } from './flow/types'
 
 export type Option = { value: string; label: string }
 
@@ -21,7 +22,7 @@ export type ModelParamsField = {
 
 export type ModelSelectorViewProps = {
   theme: Theme
-  exitState: { pending: boolean; keyName: string }
+  exitState: ScreenExitState
   terminalRows: number
   terminalColumns: number
   compactLayout: boolean

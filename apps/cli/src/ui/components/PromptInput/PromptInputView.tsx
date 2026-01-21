@@ -47,6 +47,7 @@ export function PromptInputView({
   isDisabled,
   isLoading,
   completionActive,
+  historyIndex,
   suggestions,
   selectedIndex,
   emptyDirMessage,
@@ -63,10 +64,12 @@ export function PromptInputView({
   onSpecialKey,
   exitMessage,
   message,
-  rewindMessagePending,
+  clearInputPending,
+  rewindPending,
   modelSwitchMessage,
   toastMessage,
   statusLine,
+  statusLinePadding,
   currentMode,
   modeCycleShortcutText,
   showQuickModelSwitchShortcut,
@@ -88,6 +91,7 @@ export function PromptInputView({
   isDisabled: boolean
   isLoading: boolean
   completionActive: boolean
+  historyIndex: number
   suggestions: Suggestion[]
   selectedIndex: number
   emptyDirMessage: string
@@ -104,10 +108,12 @@ export function PromptInputView({
   onSpecialKey: (input: string, key: Key) => boolean
   exitMessage: ExitMessageState
   message: InlineMessageState
-  rewindMessagePending: boolean
+  clearInputPending: boolean
+  rewindPending: boolean
   modelSwitchMessage: InlineMessageState
   toastMessage: ToastMessageState
   statusLine: string | null
+  statusLinePadding: number
   currentMode: PermissionMode
   modeCycleShortcutText: string
   showQuickModelSwitchShortcut: boolean
@@ -142,7 +148,7 @@ export function PromptInputView({
         borderLeft={false}
         borderRight={false}
         borderColor={
-          mode === 'bash'
+          mode === 'bash' || mode === 'background'
             ? theme.bashBorder
             : mode === 'koding'
               ? theme.notingBorder
@@ -161,6 +167,8 @@ export function PromptInputView({
         >
           {mode === 'bash' ? (
             <Text color={theme.bashBorder}>&nbsp;!&nbsp;</Text>
+          ) : mode === 'background' ? (
+            <Text color={theme.bashBorder}>&nbsp;&amp;&nbsp;</Text>
           ) : mode === 'koding' ? (
             <Text color={theme.noting}>&nbsp;#&nbsp;</Text>
           ) : (
@@ -187,7 +195,9 @@ export function PromptInputView({
             columns={textInputColumns}
             maxHeight={textInputMaxHeight}
             isDimmed={isDisabled || isLoading || isEditingExternally}
-            disableCursorMovementForUpDownKeys={completionActive}
+            disableCursorMovementForUpDownKeys={
+              completionActive || historyIndex > 0 || !input.includes('\n')
+            }
             cursorOffset={cursorOffset}
             onChangeCursorOffset={setCursorOffset}
             onPaste={onTextPaste}
@@ -208,7 +218,11 @@ export function PromptInputView({
       {/* Status line - below PWD */}
       {!completionActive && suggestions.length === 0 && showStatusLine && (
         <Box flexDirection="column">
-          <Box flexDirection="row" justifyContent="space-between" paddingX={1}>
+          <Box
+            flexDirection="row"
+            justifyContent="space-between"
+            paddingX={1 + Math.max(0, statusLinePadding)}
+          >
             <Box justifyContent="flex-start" gap={1}>
               {exitMessage.show ? (
                 <Text dimColor wrap="truncate-end">
@@ -218,9 +232,13 @@ export function PromptInputView({
                 <Text dimColor wrap="truncate-end">
                   {message.text}
                 </Text>
-              ) : rewindMessagePending ? (
+              ) : rewindPending ? (
                 <Text dimColor wrap="truncate-end">
-                  Press Escape again to undo
+                  Press Escape again to rewind
+                </Text>
+              ) : clearInputPending ? (
+                <Text dimColor wrap="truncate-end">
+                  Press Escape again to clear input
                 </Text>
               ) : modelSwitchMessage.show ? (
                 <Text color={theme.success} wrap="truncate-end">

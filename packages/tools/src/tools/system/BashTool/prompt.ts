@@ -102,10 +102,9 @@ function getBashSandboxPrompt(): string {
   return `- Commands run in a sandbox by default with the following restrictions:
 ${sections.join('\n')}
 ${overridePolicy}
-  - IMPORTANT: For temporary files, use \`/tmp/kode/\` as your temporary directory
-    - The TMPDIR environment variable is automatically set to \`/tmp/kode\` when running in sandbox mode
-    - Do NOT use \`/tmp\` directly - use \`/tmp/kode/\` or rely on TMPDIR instead
-    - Most programs that respect TMPDIR will automatically use \`/tmp/kode/\``
+  - IMPORTANT: For temporary files, use \`$TMPDIR\` (the sandbox sets TMPDIR automatically)
+    - Do NOT write to \`/tmp\` directly; prefer \`$TMPDIR\` or a subpath under it
+    - Most programs that respect TMPDIR will automatically use it`
 }
 
 function getBashGitPrompt(): string {

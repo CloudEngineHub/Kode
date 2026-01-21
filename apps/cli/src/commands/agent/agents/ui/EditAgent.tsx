@@ -86,18 +86,25 @@ export function EditAgent(props: {
       setError(null)
       if (mode === 'menu') props.onBack()
       else setMode('menu')
+      return true
     }
 
     if (mode !== 'menu') return
 
-    if (key.upArrow) setSelectedIndex(i => Math.max(0, i - 1))
-    else if (key.downArrow)
+    if (key.upArrow) {
+      setSelectedIndex(i => Math.max(0, i - 1))
+      return true
+    }
+    if (key.downArrow) {
       setSelectedIndex(i => Math.min(menuItems.length - 1, i + 1))
-    else if (key.return) {
+      return true
+    }
+    if (key.return) {
       const item = menuItems[selectedIndex]
       if (!item) return
       if (item.action === 'open') void doOpen()
       else setMode(item.action)
+      return true
     }
   })
 
@@ -128,7 +135,10 @@ export function EditAgent(props: {
 
   if (mode === 'edit-model') {
     useKeypress((_input, key) => {
-      if (key.escape) setMode('menu')
+      if (key.escape) {
+        setMode('menu')
+        return true
+      }
     })
 
     return (

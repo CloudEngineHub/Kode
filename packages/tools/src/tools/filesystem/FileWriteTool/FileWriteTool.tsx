@@ -17,6 +17,7 @@ import { hasWritePermission } from '#core/utils/permissions/filesystem'
 import { getPatch } from '#core/utils/diff'
 import { emitReminderEvent } from '#core/services/systemReminder'
 import { recordFileEdit } from '#core/services/fileFreshness'
+import { sha256File } from '#core/utils/sha256'
 
 const MAX_LINES_TO_RENDER_FOR_ASSISTANT = 16000
 const TRUNCATED_MESSAGE =
@@ -56,7 +57,7 @@ export const FileWriteTool = {
   renderToolUseMessage(input, { verbose }) {
     return `file_path: ${verbose ? input.file_path : relative(getCwd(), input.file_path)}`
   },
-  async validateInput({ file_path }, { readFileTimestamps }) {
+  async validateInput({ file_path }, { readFileTimestamps, readFileHashes }) {
     const fullFilePath = isAbsolute(file_path)
       ? file_path
       : resolve(getCwd(), file_path)
@@ -85,16 +86,40 @@ export const FileWriteTool = {
     const stats = statSync(fullFilePath)
     const lastWriteTime = stats.mtimeMs
     if (lastWriteTime > readTimestamp) {
-      return {
-        result: false,
-        message:
-          'File has been modified since read, either by the user or by a linter. Read it again before attempting to write it.',
+      const lastReadHash = readFileHashes?.[fullFilePath]
+      if (!lastReadHash) {
+        return {
+          result: false,
+          message:
+            'File has been modified since read, either by the user or by a linter. Read it again before attempting to write it.',
+        }
       }
+
+      let currentHash: string
+      try {
+        currentHash = await sha256File(fullFilePath)
+      } catch {
+        return {
+          result: false,
+          message:
+            'File has been modified since read, either by the user or by a linter. Read it again before attempting to write it.',
+        }
+      }
+      if (currentHash !== lastReadHash) {
+        return {
+          result: false,
+          message:
+            'File has been modified since read, either by the user or by a linter. Read it again before attempting to write it.',
+        }
+      }
+
+      // The file was touched (mtime changed) without content changes. Treat as fresh.
+      readFileTimestamps[fullFilePath] = lastWriteTime
     }
 
     return { result: true }
   },
-  async *call({ file_path, content }, { readFileTimestamps }) {
+  async *call({ file_path, content }, { readFileTimestamps, readFileHashes }) {
     const fullFilePath = isAbsolute(file_path)
       ? file_path
       : resolve(getCwd(), file_path)
@@ -104,10 +129,34 @@ export const FileWriteTool = {
     if (oldFileExists) {
       const readTimestamp = readFileTimestamps[fullFilePath]
       const lastWriteTime = statSync(fullFilePath).mtimeMs
-      if (!readTimestamp || lastWriteTime > readTimestamp) {
+      if (!readTimestamp) {
         throw new Error(
           'File has been unexpectedly modified. Read it again before attempting to write it.',
         )
+      }
+      if (lastWriteTime > readTimestamp) {
+        const lastReadHash = readFileHashes?.[fullFilePath]
+        if (lastReadHash) {
+          let currentHash: string
+          try {
+            currentHash = await sha256File(fullFilePath)
+          } catch {
+            throw new Error(
+              'File has been unexpectedly modified. Read it again before attempting to write it.',
+            )
+          }
+          if (currentHash === lastReadHash) {
+            readFileTimestamps[fullFilePath] = lastWriteTime
+          } else {
+            throw new Error(
+              'File has been unexpectedly modified. Read it again before attempting to write it.',
+            )
+          }
+        } else {
+          throw new Error(
+            'File has been unexpectedly modified. Read it again before attempting to write it.',
+          )
+        }
       }
     }
 
@@ -126,6 +175,14 @@ export const FileWriteTool = {
 
     // Update read timestamp, to invalidate stale writes
     readFileTimestamps[fullFilePath] = statSync(fullFilePath).mtimeMs
+
+    if (readFileHashes) {
+      try {
+        readFileHashes[fullFilePath] = await sha256File(fullFilePath)
+      } catch {
+        // ignore
+      }
+    }
 
     // Emit file edited event for system reminders
     emitReminderEvent('file:edited', {

@@ -7,6 +7,7 @@ export function buildPromptInputProps(args: {
   commands: PromptInputProps['commands']
   forkNumber: PromptInputProps['forkNumber']
   messageLogName: PromptInputProps['messageLogName']
+  initialPrompt?: PromptInputProps['initialPrompt']
   tools: PromptInputProps['tools']
   disableSlashCommands: boolean
   isDisabled: boolean
@@ -29,11 +30,17 @@ export function buildPromptInputProps(args: {
   setForkConvoWithMessagesOnTheNextRender: PromptInputProps['setForkConvoWithMessagesOnTheNextRender']
   readFileTimestamps: PromptInputProps['readFileTimestamps']
   abortController: PromptInputProps['abortController']
+  onManageTasks?: PromptInputProps['onManageTasks']
+  restorePastes?: PromptInputProps['restorePastes']
+  onRestorePastesApplied?: PromptInputProps['onRestorePastesApplied']
+  draftPastes?: PromptInputProps['draftPastes']
+  onDraftPastesChange?: PromptInputProps['onDraftPastesChange']
 }): PromptInputProps {
   return {
     commands: args.commands,
     forkNumber: args.forkNumber,
     messageLogName: args.messageLogName,
+    initialPrompt: args.initialPrompt,
     tools: args.tools,
     disableSlashCommands: args.disableSlashCommands,
     isDisabled: args.isDisabled,
@@ -57,5 +64,10 @@ export function buildPromptInputProps(args: {
       args.setForkConvoWithMessagesOnTheNextRender,
     readFileTimestamps: args.readFileTimestamps,
     abortController: args.abortController,
+    onManageTasks: args.onManageTasks,
+    restorePastes: args.restorePastes,
+    onRestorePastesApplied: args.onRestorePastesApplied,
+    draftPastes: args.draftPastes,
+    onDraftPastesChange: args.onDraftPastesChange,
   }
 }

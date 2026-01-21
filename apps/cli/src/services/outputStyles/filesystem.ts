@@ -3,6 +3,8 @@ import type { Dirent } from 'fs'
 import { dirname, join, resolve } from 'path'
 import { homedir } from 'os'
 import matter from 'gray-matter'
+import { resolveDataRoots } from '#config/dataRoots'
+import { LEGACY_CONFIG_DIRNAME } from '#core/compat/legacyPaths'
 
 export function normalizeString(value: unknown): string | null {
   if (typeof value !== 'string') return null
@@ -10,7 +12,7 @@ export function normalizeString(value: unknown): string | null {
   return trimmed ? trimmed : null
 }
 
-export function getClaudePolicyBaseDir(): string {
+export function getLegacyPolicyBaseDir(): string {
   switch (process.platform) {
     case 'darwin':
       return '/Library/Application Support/ClaudeCode'
@@ -23,60 +25,66 @@ export function getClaudePolicyBaseDir(): string {
   }
 }
 
-export function getUserConfigBaseDirs(): { claude: string; kode: string }[] {
-  const out: { claude: string; kode: string }[] = []
-
-  const hasAnyOverride =
-    typeof process.env.CLAUDE_CONFIG_DIR === 'string' ||
-    typeof process.env.KODE_CONFIG_DIR === 'string'
-
-  const claudeBase = normalizeString(process.env.CLAUDE_CONFIG_DIR)
-  const kodeBase = normalizeString(process.env.KODE_CONFIG_DIR)
-
-  if (claudeBase)
-    out.push({ claude: resolve(claudeBase), kode: resolve(claudeBase) })
-  if (kodeBase) out.push({ claude: resolve(kodeBase), kode: resolve(kodeBase) })
-
-  if (hasAnyOverride) {
-    // Respect test/host overrides: do not read from real home dirs when an override is set.
-    return dedupeConfigBases(out)
+export function getSystemPolicyBaseDir(): string {
+  switch (process.platform) {
+    case 'darwin':
+      return '/Library/Application Support/Kode'
+    case 'win32':
+      return existsSync('C:\\Program Files\\Kode')
+        ? 'C:\\Program Files\\Kode'
+        : 'C:\\ProgramData\\Kode'
+    default:
+      return '/etc/kode'
   }
+}
 
-  return dedupeConfigBases([
-    { claude: join(homedir(), '.claude'), kode: join(homedir(), '.claude') },
-    { claude: join(homedir(), '.kode'), kode: join(homedir(), '.kode') },
+export function getUserConfigRoots(): string[] {
+  const roots = resolveDataRoots()
+  // Scan legacy roots first so Kode settings take precedence when names collide.
+  return dedupeStrings([
+    ...[...roots.claudeCompatRoots].reverse(),
+    roots.kodeRoot,
   ])
 }
 
-function dedupeConfigBases(
-  bases: Array<{ claude: string; kode: string }>,
-): Array<{ claude: string; kode: string }> {
+function dedupeStrings(values: string[]): string[] {
+  const out: string[] = []
   const seen = new Set<string>()
-  const out: Array<{ claude: string; kode: string }> = []
-  for (const base of bases) {
-    const key = `${base.claude}::${base.kode}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    out.push(base)
+  for (const value of values) {
+    if (!value) continue
+    if (seen.has(value)) continue
+    seen.add(value)
+    out.push(value)
   }
   return out
+}
+
+export function getPolicyBaseDirs(): string[] {
+  // Order matters: legacy is scanned first so Kode-first policy wins when both exist.
+  return dedupeStrings([getLegacyPolicyBaseDir(), getSystemPolicyBaseDir()])
 }
 
 export function findProjectSubdirs(subdir: string, cwd: string): string[] {
   const result: string[] = []
   const home = resolve(homedir())
   let current = resolve(cwd)
+  const chain: string[] = []
 
   while (current !== home) {
-    const claudeDir = join(current, '.claude', subdir)
-    if (existsSync(claudeDir)) result.push(claudeDir)
-
-    const kodeDir = join(current, '.kode', subdir)
-    if (existsSync(kodeDir)) result.push(kodeDir)
+    chain.push(current)
 
     const parent = dirname(current)
     if (parent === current) break
     current = parent
+  }
+
+  // Traverse from least-specific → most-specific so later entries override earlier ones.
+  for (const dir of chain.reverse()) {
+    const legacyDir = join(dir, LEGACY_CONFIG_DIRNAME, subdir)
+    if (existsSync(legacyDir)) result.push(legacyDir)
+
+    const kodeDir = join(dir, '.kode', subdir)
+    if (existsSync(kodeDir)) result.push(kodeDir)
   }
 
   return result

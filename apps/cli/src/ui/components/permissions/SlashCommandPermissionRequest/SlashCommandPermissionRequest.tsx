@@ -13,9 +13,11 @@ import {
   UnaryEvent,
   usePermissionRequestLogging,
 } from '#ui-ink/hooks/usePermissionRequestLogging'
-import { PermissionRequestTitle } from '#ui-ink/components/permissions/PermissionRequestTitle'
 import { logUnaryEvent } from '#core/utils/unaryLogging'
 import { env } from '#core/utils/env'
+import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
+import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
+import { PermissionRequestDetails } from '#ui-ink/components/permissions/PermissionRequestDetails'
 
 function parsePrefix(command: string): string | null {
   const trimmed = command.trim()
@@ -34,6 +36,7 @@ export function SlashCommandPermissionRequest({
   verbose,
 }: PermissionRequestProps): React.ReactNode {
   const theme = getTheme()
+  const layout = useScreenLayout()
   const unaryEvent = useMemo<UnaryEvent>(
     () => ({ completion_type: 'tool_use_single', language_name: 'none' }),
     [],
@@ -49,126 +52,134 @@ export function SlashCommandPermissionRequest({
   const showPrefixOption = !!prefix && hasArgs(command)
 
   return (
-    <Box
-      flexDirection="column"
-      borderStyle="round"
-      borderColor={theme.permission}
-      marginTop={1}
-      paddingLeft={1}
-      paddingRight={1}
-      paddingBottom={1}
-    >
-      <PermissionRequestTitle title="Slash command" riskScore={null} />
-      <Box flexDirection="column" paddingX={2} paddingY={1}>
-        <Text>
-          {toolUseConfirm.tool.userFacingName?.() || 'SlashCommand'}(
-          {toolUseConfirm.tool.renderToolUseMessage(toolUseConfirm.input, {
-            verbose,
-          })}
-          )
-        </Text>
-        <Text color={theme.secondaryText}>{toolUseConfirm.description}</Text>
-      </Box>
+    <Box marginTop={1} width="100%">
+      <ScreenFrame
+        title="Slash command permission"
+        titleColor={theme.permission}
+        paddingX={layout.paddingX}
+        paddingY={layout.tightLayout ? 0 : layout.paddingY}
+        gap={layout.gap}
+      >
+        <Box flexDirection="column" gap={layout.gap}>
+          <Box flexDirection="column">
+            <Text wrap="truncate-end">
+              {toolUseConfirm.tool.userFacingName?.() || 'SlashCommand'}(
+              {toolUseConfirm.tool.renderToolUseMessage(toolUseConfirm.input, {
+                verbose,
+              })}
+              )
+            </Text>
+            <Text dimColor wrap="truncate-end">
+              {toolUseConfirm.description}
+            </Text>
+            <PermissionRequestDetails toolUseConfirm={toolUseConfirm} />
+          </Box>
 
-      <Box flexDirection="column">
-        <Text>Do you want to proceed?</Text>
-        <Select
-          options={[
-            { label: 'Yes', value: 'yes' },
-            {
-              label: `Yes, and don't ask again for ${chalk.bold(command)} in ${chalk.bold(getCwd())}`,
-              value: 'yes-exact',
-            },
-            ...(showPrefixOption
-              ? [
-                  {
-                    label: `Yes, and don't ask again for ${chalk.bold(prefix + ':*')} commands in ${chalk.bold(getCwd())}`,
-                    value: 'yes-prefix',
-                  },
-                ]
-              : []),
-            {
-              label: `No, and provide instructions (${chalk.bold.hex(getTheme().warning)('esc')})`,
-              value: 'no',
-            },
-          ]}
-          onChange={newValue => {
-            switch (newValue) {
-              case 'yes':
-                logUnaryEvent({
-                  completion_type: 'tool_use_single',
-                  event: 'accept',
-                  metadata: {
-                    language_name: 'none',
-                    message_id: toolUseConfirm.assistantMessage.message.id,
-                    platform: env.platform,
-                  },
-                })
-                toolUseConfirm.onAllow('temporary')
-                onDone()
-                break
-              case 'yes-exact':
-                logUnaryEvent({
-                  completion_type: 'tool_use_single',
-                  event: 'accept',
-                  metadata: {
-                    language_name: 'none',
-                    message_id: toolUseConfirm.assistantMessage.message.id,
-                    platform: env.platform,
-                  },
-                })
-                savePermission(
-                  toolUseConfirm.tool,
-                  toolUseConfirm.input,
-                  null,
-                  toolUseConfirm.toolUseContext,
-                ).then(() => {
-                  toolUseConfirm.onAllow('permanent')
-                  onDone()
-                })
-                break
-              case 'yes-prefix':
-                if (!prefix) {
-                  toolUseConfirm.onAllow('temporary')
-                  onDone()
-                  break
+          <Box flexDirection="column">
+            <Text>Allow this command?</Text>
+            <Select
+              options={[
+                { label: 'Allow once', value: 'yes' },
+                {
+                  label: `Always allow ${chalk.bold(command)} in ${chalk.bold(getCwd())}`,
+                  value: 'yes-exact',
+                },
+                ...(showPrefixOption
+                  ? [
+                      {
+                        label: `Always allow ${chalk.bold(prefix + ':*')} in ${chalk.bold(getCwd())}`,
+                        value: 'yes-prefix',
+                      },
+                    ]
+                  : []),
+                {
+                  label: `Deny and provide instructions (${chalk.bold.hex(getTheme().warning)('esc')})`,
+                  value: 'no',
+                },
+              ]}
+              onChange={newValue => {
+                switch (newValue) {
+                  case 'yes':
+                    logUnaryEvent({
+                      completion_type: 'tool_use_single',
+                      event: 'accept',
+                      metadata: {
+                        language_name: 'none',
+                        message_id: toolUseConfirm.assistantMessage.message.id,
+                        platform: env.platform,
+                      },
+                    })
+                    toolUseConfirm.onAllow('temporary')
+                    onDone()
+                    break
+                  case 'yes-exact':
+                    logUnaryEvent({
+                      completion_type: 'tool_use_single',
+                      event: 'accept',
+                      metadata: {
+                        language_name: 'none',
+                        message_id: toolUseConfirm.assistantMessage.message.id,
+                        platform: env.platform,
+                      },
+                    })
+                    savePermission(
+                      toolUseConfirm.tool,
+                      toolUseConfirm.input,
+                      null,
+                      toolUseConfirm.toolUseContext,
+                    ).then(() => {
+                      toolUseConfirm.onAllow('permanent')
+                      onDone()
+                    })
+                    break
+                  case 'yes-prefix':
+                    if (!prefix) {
+                      toolUseConfirm.onAllow('temporary')
+                      onDone()
+                      break
+                    }
+                    logUnaryEvent({
+                      completion_type: 'tool_use_single',
+                      event: 'accept',
+                      metadata: {
+                        language_name: 'none',
+                        message_id: toolUseConfirm.assistantMessage.message.id,
+                        platform: env.platform,
+                      },
+                    })
+                    savePermission(
+                      toolUseConfirm.tool,
+                      toolUseConfirm.input,
+                      prefix,
+                      toolUseConfirm.toolUseContext,
+                    ).then(() => {
+                      toolUseConfirm.onAllow('permanent')
+                      onDone()
+                    })
+                    break
+                  case 'no':
+                    logUnaryEvent({
+                      completion_type: 'tool_use_single',
+                      event: 'reject',
+                      metadata: {
+                        language_name: 'none',
+                        message_id: toolUseConfirm.assistantMessage.message.id,
+                        platform: env.platform,
+                      },
+                    })
+                    toolUseConfirm.onReject()
+                    onDone()
+                    break
                 }
-                logUnaryEvent({
-                  completion_type: 'tool_use_single',
-                  event: 'accept',
-                  metadata: {
-                    language_name: 'none',
-                    message_id: toolUseConfirm.assistantMessage.message.id,
-                    platform: env.platform,
-                  },
-                })
-                savePermission(
-                  toolUseConfirm.tool,
-                  toolUseConfirm.input,
-                  prefix,
-                  toolUseConfirm.toolUseContext,
-                ).then(() => {
-                  toolUseConfirm.onAllow('permanent')
-                  onDone()
-                })
-                break
-              case 'no':
-                logUnaryEvent({
-                  completion_type: 'tool_use_single',
-                  event: 'reject',
-                  metadata: {
-                    language_name: 'none',
-                    message_id: toolUseConfirm.assistantMessage.message.id,
-                    platform: env.platform,
-                  },
-                })
-                toolUseConfirm.onReject()
-                onDone()
-                break
-            }
-          }}
-        />
-      </Box>
+              }}
+            />
+          </Box>
+
+          <Text dimColor wrap="truncate-end">
+            Enter to confirm · Esc to reject
+          </Text>
+        </Box>
+      </ScreenFrame>
     </Box>
   )
 }

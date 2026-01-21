@@ -1,18 +1,20 @@
 import { Box } from 'ink'
 import type { Message, UserMessage } from '#core/query'
-import { hasCommand } from '#cli-commands'
+import { getCommand, hasCommand } from '#cli-commands'
 import { logError } from '#core/utils/log'
 import { resolve } from 'path'
 import type { ContentBlockParam } from '@anthropic-ai/sdk/resources/index.mjs'
-import { setCwd, getCwd } from '#core/utils/state'
+import { getCwd } from '#core/utils/state'
 import chalk from 'chalk'
 import * as React from 'react'
 import { UserBashInputMessage } from '#ui-ink/components/messages/UserBashInputMessage'
+import { UserBackgroundTaskInputMessage } from '#ui-ink/components/messages/UserBackgroundTaskInputMessage'
 import { Spinner } from '#ui-ink/components/Spinner'
 import { BashTool } from '#tools/tools/system/BashTool/BashTool'
 import { lastX } from '#core/utils/generators'
 import type { SetToolJSXFn, ToolUseContext } from '#core/tooling/Tool'
 import { createAssistantMessage, createUserMessage } from '#core/utils/messages'
+import { switchCwdForResume } from '#cli-utils/switchCwdForResume'
 import { getMessagesForSlashCommand } from './slashCommands'
 import {
   coerceImageMediaType,
@@ -21,7 +23,7 @@ import {
 
 export async function processUserInput(
   input: string,
-  mode: 'bash' | 'prompt' | 'koding',
+  mode: 'bash' | 'background' | 'prompt' | 'koding',
   setToolJSX: SetToolJSXFn<React.ReactNode>,
   context: ToolUseContext & {
     setForkConvoWithMessagesOnTheNextRender: (
@@ -38,16 +40,19 @@ export async function processUserInput(
     mediaType: string
   }> | null,
 ): Promise<Message[]> {
+  const inputTrimmedStart = input.trimStart()
+
   // Bash commands
-  if (mode === 'bash') {
-    const userMessage = createUserMessage(`<bash-input>${input}</bash-input>`)
+  if (mode === 'bash' || mode === 'background') {
+    const tagName =
+      mode === 'background' ? 'background-task-input' : 'bash-input'
+    const userMessage = createUserMessage(`<${tagName}>${input}</${tagName}>`)
 
     // Special case: cd
-    if (input.startsWith('cd ')) {
-      const oldCwd = getCwd()
+    if (mode === 'bash' && input.startsWith('cd ')) {
       const newCwd = resolve(getCwd(), input.slice(3).trim())
       try {
-        await setCwd(newCwd)
+        await switchCwdForResume(newCwd)
         return [
           userMessage,
           createAssistantMessage(
@@ -69,10 +74,23 @@ export async function processUserInput(
     setToolJSX({
       jsx: (
         <Box flexDirection="column" marginTop={1}>
-          <UserBashInputMessage
-            addMargin={false}
-            param={{ text: `<bash-input>${input}</bash-input>`, type: 'text' }}
-          />
+          {mode === 'background' ? (
+            <UserBackgroundTaskInputMessage
+              addMargin={false}
+              param={{
+                text: `<background-task-input>${input}</background-task-input>`,
+                type: 'text',
+              }}
+            />
+          ) : (
+            <UserBashInputMessage
+              addMargin={false}
+              param={{
+                text: `<bash-input>${input}</bash-input>`,
+                type: 'text',
+              }}
+            />
+          )}
           <Spinner />
         </Box>
       ),
@@ -92,7 +110,12 @@ export async function processUserInput(
         return [userMessage, createAssistantMessage(validationResult.message)]
       }
       const lastChunk = await lastX(
-        BashTool.call({ command: input }, bashContext),
+        BashTool.call(
+          mode === 'background'
+            ? { command: input, run_in_background: true }
+            : { command: input },
+          bashContext,
+        ),
       )
       if (lastChunk.type !== 'result') {
         return [
@@ -102,7 +125,18 @@ export async function processUserInput(
           ),
         ]
       }
-      const { data } = lastChunk
+      const { data, resultForAssistant } = lastChunk
+
+      if (mode === 'background') {
+        const content = resultForAssistant || 'Background task started.'
+        return [
+          userMessage,
+          createAssistantMessage(
+            `<background-task-output>${content}</background-task-output>`,
+          ),
+        ]
+      }
+
       return [
         userMessage,
         createAssistantMessage(
@@ -136,8 +170,11 @@ export async function processUserInput(
   }
 
   // Slash commands
-  if (context.options?.disableSlashCommands !== true && input.startsWith('/')) {
-    const words = input.slice(1).split(' ')
+  if (
+    context.options?.disableSlashCommands !== true &&
+    inputTrimmedStart.startsWith('/')
+  ) {
+    const words = inputTrimmedStart.slice(1).split(' ')
     let commandName = words[0]
     if (words.length > 1 && words[1] === '(MCP)') {
       commandName = commandName + ' (MCP)'
@@ -155,7 +192,28 @@ export async function processUserInput(
       return [createUserMessage(input)]
     }
 
-    const args = input.slice(commandName.length + 2)
+    // Slash commands can carry per-command `allowedTools` constraints. These must be
+    // merged into the same permission engine as persisted rules, and inherited by
+    // any forked sub-agent context spawned by the command.
+    try {
+      const cmd = getCommand(commandName, context.options.commands)
+      const allowedTools = Array.isArray(cmd.allowedTools)
+        ? cmd.allowedTools
+        : []
+      if (allowedTools.length > 0) {
+        const prev = Array.isArray(context.options?.commandAllowedTools)
+          ? context.options.commandAllowedTools
+          : []
+        context.options = {
+          ...(context.options ?? {}),
+          commandAllowedTools: [...new Set([...prev, ...allowedTools])],
+        }
+      }
+    } catch (error) {
+      logError(error)
+    }
+
+    const args = inputTrimmedStart.slice(commandName.length + 2)
     const newMessages = await getMessagesForSlashCommand(
       commandName,
       args,

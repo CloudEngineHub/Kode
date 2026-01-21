@@ -152,5 +152,6 @@ export function useUnifiedCompletion({
     selectedIndex: state.selectedIndex,
     isActive: state.isActive && isEnabled,
     emptyDirMessage: state.emptyDirMessage,
+    resetCompletion,
   }
 }

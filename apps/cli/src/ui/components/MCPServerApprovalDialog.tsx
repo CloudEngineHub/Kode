@@ -9,6 +9,8 @@ import {
 import { MCPServerDialogCopy } from './MCPServerDialogCopy'
 import { useExitOnCtrlCD } from '#ui-ink/hooks/useExitOnCtrlCD'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
+import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
+import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 
 type Props = {
   serverName: string
@@ -20,6 +22,13 @@ export function MCPServerApprovalDialog({
   onDone,
 }: Props): React.ReactNode {
   const theme = getTheme()
+  const { rows, columns } = useTerminalSize()
+  const tightLayout = rows <= 18 || columns <= 72
+  const compactLayout = tightLayout || rows <= 22
+  const paddingY = tightLayout ? 0 : 1
+  const gap = tightLayout ? 0 : 1
+  const paddingX = tightLayout || compactLayout ? 1 : 2
+
   function onChange(value: 'yes' | 'no') {
     const config = getCurrentProjectConfig()
     switch (value) {
@@ -52,32 +61,32 @@ export function MCPServerApprovalDialog({
 
   useKeypress((_input, key) => {
     if (key.escape) {
-      onDone()
+      onChange('no')
       return
     }
   })
 
   return (
-    <>
-      <Box
-        flexDirection="column"
-        gap={1}
-        padding={1}
-        borderStyle="round"
-        borderColor={theme.warning}
-      >
-        <Text bold color={theme.warning}>
-          New MCP Server Detected
-        </Text>
-        <Text>
+    <ScreenFrame
+      title="New MCP Server Detected"
+      exitState={exitState}
+      paddingX={paddingX}
+      paddingY={paddingY}
+      gap={gap}
+    >
+      <Box flexDirection="column" gap={gap}>
+        <Text color={theme.warning} wrap="truncate-end">
           This project contains an MCP config file (.mcp.json or .mcprc) with an
           MCP server that requires your approval:
         </Text>
-        <Text bold>{serverName}</Text>
+
+        <Text bold wrap="truncate-end">
+          {serverName}
+        </Text>
 
         <MCPServerDialogCopy />
 
-        <Text>Do you want to approve this MCP server?</Text>
+        <Text wrap="truncate-end">Do you want to approve this MCP server?</Text>
 
         <Select
           options={[
@@ -86,16 +95,15 @@ export function MCPServerApprovalDialog({
           ]}
           onChange={value => onChange(value as 'yes' | 'no')}
         />
+
+        <Box marginTop={tightLayout ? 0 : 1}>
+          <Text dimColor wrap="truncate-end">
+            {exitState.pending
+              ? `Press ${exitState.keyName} again to exit`
+              : 'Enter confirm · Esc reject'}
+          </Text>
+        </Box>
       </Box>
-      <Box marginLeft={3}>
-        <Text dimColor>
-          {exitState.pending ? (
-            <>Press {exitState.keyName} again to exit</>
-          ) : (
-            <>Enter to confirm · Esc to reject</>
-          )}
-        </Text>
-      </Box>
-    </>
+    </ScreenFrame>
   )
 }

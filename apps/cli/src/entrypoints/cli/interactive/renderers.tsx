@@ -1,8 +1,7 @@
 import React from 'react'
 import type { RenderOptions } from 'ink'
 import { KeypressProvider } from '#ui-ink/contexts/KeypressContext'
-import { setInkInstanceForStdout } from '#ui-ink/utils/inkInstanceStore'
-import { ensureTuiStdioPatched } from '#cli-utils/stdio'
+import { renderWithTuiStdio } from '#ui-ink/utils/inkRender'
 
 type RenderInstance = {
   unmount: () => void
@@ -24,22 +23,13 @@ export async function renderRepl(
 ): Promise<void> {
   const render = deps?.render ?? (await import('ink')).render
   const REPL = deps?.REPL ?? (await import('#ui-ink/screens/REPL')).REPL
-  const stdio = ensureTuiStdioPatched()
-  const effectiveContext = renderContext
-    ? { ...renderContext, ...stdio }
-    : { ...stdio }
-  const instance = render(
+  renderWithTuiStdio(
+    render,
     <KeypressProvider>
       <REPL {...props} />
     </KeypressProvider>,
-    effectiveContext,
+    renderContext,
   )
-  const stdout = (effectiveContext?.stdout ??
-    process.stdout) as NodeJS.WriteStream
-  setInkInstanceForStdout(stdout, instance)
-  if (stdout !== process.stdout) {
-    setInkInstanceForStdout(process.stdout as NodeJS.WriteStream, instance)
-  }
 }
 
 export function renderResumeConversationSelector(
@@ -51,25 +41,13 @@ export function renderResumeConversationSelector(
     const { render } = await import('ink')
     const { ResumeConversation } =
       await import('#ui-ink/screens/ResumeConversation')
-    const stdio = ensureTuiStdioPatched()
-    const effectiveContext = renderContext
-      ? { ...renderContext, ...stdio }
-      : { ...stdio }
-    const instance = render(
+    const instance = renderWithTuiStdio(
+      render,
       <KeypressProvider>
         <ResumeConversation {...props} context={context} />
       </KeypressProvider>,
-      effectiveContext,
+      renderContext,
     )
-    const stdout = (effectiveContext?.stdout ??
-      process.stdout) as NodeJS.WriteStream
-    setInkInstanceForStdout(stdout, instance as RenderInstance)
-    if (stdout !== process.stdout) {
-      setInkInstanceForStdout(
-        process.stdout as NodeJS.WriteStream,
-        instance as RenderInstance,
-      )
-    }
     context.unmount = instance.unmount
   })()
 }
@@ -79,8 +57,8 @@ export async function renderDoctorScreen(): Promise<void> {
     ;(async () => {
       const { render } = await import('ink')
       const { Doctor } = await import('#ui-ink/screens/Doctor')
-      const stdio = ensureTuiStdioPatched()
-      const instance = render(
+      const instance = renderWithTuiStdio(
+        render,
         <KeypressProvider>
           <Doctor
             onDone={() => {
@@ -90,11 +68,7 @@ export async function renderDoctorScreen(): Promise<void> {
             doctorMode={true}
           />
         </KeypressProvider>,
-        { ...stdio, exitOnCtrlC: false },
-      )
-      setInkInstanceForStdout(
-        process.stdout as NodeJS.WriteStream,
-        instance as RenderInstance,
+        { exitOnCtrlC: false },
       )
     })()
   })
@@ -108,11 +82,8 @@ export function renderLogListScreen(
   ;(async () => {
     const { render } = await import('ink')
     const { LogList } = await import('#ui-ink/screens/LogList')
-    const stdio = ensureTuiStdioPatched()
-    const effectiveContext = renderContext
-      ? { ...renderContext, ...stdio }
-      : { ...stdio }
-    const instance = render(
+    const instance = renderWithTuiStdio(
+      render,
       <KeypressProvider>
         <LogList
           context={context}
@@ -120,17 +91,8 @@ export function renderLogListScreen(
           logNumber={props.logNumber}
         />
       </KeypressProvider>,
-      effectiveContext,
+      renderContext,
     )
-    const stdout = (effectiveContext?.stdout ??
-      process.stdout) as NodeJS.WriteStream
-    setInkInstanceForStdout(stdout, instance as RenderInstance)
-    if (stdout !== process.stdout) {
-      setInkInstanceForStdout(
-        process.stdout as NodeJS.WriteStream,
-        instance as RenderInstance,
-      )
-    }
     context.unmount = instance.unmount
   })()
 }

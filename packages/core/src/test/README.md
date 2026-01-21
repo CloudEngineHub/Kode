@@ -86,7 +86,7 @@ TEST_MODEL=claude-3-5-sonnet-20241022 bun test
 **Purpose**: End-to-end testing through the actual CLI workflow
 
 - **Real API calls** when credentials are available
-- **Complete user journeys** through claude.ts service
+- **Complete user journeys** through the CLI LLM pipeline
 - **Tool calling and multi-turn conversations**
 
 #### Key Features:

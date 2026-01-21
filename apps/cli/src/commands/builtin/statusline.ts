@@ -21,9 +21,7 @@ export default {
         content: [
           {
             type: 'text',
-            text: `Create a Task with subagent_type "statusline-setup" and the prompt ${JSON.stringify(
-              prompt,
-            )}`,
+            text: `Create a Task with subagent_type "statusline-setup" and the prompt ${JSON.stringify(prompt)}`,
           },
         ],
       },

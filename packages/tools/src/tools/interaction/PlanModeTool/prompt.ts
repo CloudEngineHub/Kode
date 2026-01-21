@@ -2,7 +2,7 @@ export const ENTER_TOOL_NAME = 'EnterPlanMode'
 export const EXIT_TOOL_NAME = 'ExitPlanMode'
 
 export const ENTER_DESCRIPTION =
-  'Requests permission to enter plan mode for complex tasks requiring exploration and design'
+  'Enters plan mode for complex tasks requiring exploration and design'
 
 export const ENTER_PROMPT = `Use this tool proactively when you're about to start a non-trivial implementation task. Getting user sign-off on your approach before writing code prevents wasted effort and ensures alignment. This tool transitions you into plan mode where you can explore the codebase and design an implementation approach for user approval.
 
@@ -86,7 +86,7 @@ User: "What files handle routing?"
 
 ## Important Notes
 
-- This tool REQUIRES user approval - they must consent to entering plan mode
+- Entering plan mode is a safe, local state transition (no code changes)
 - If unsure whether to use it, err on the side of planning - it's better to get alignment upfront than to redo work
 - Users appreciate being consulted before significant changes are made to their codebase`
 

@@ -34,12 +34,14 @@ export function checkSkillPermission(args: {
       result: false,
       message: `Permission to use ${args.tool.name}(${skillName}) has been denied.`,
       shouldPromptUser: false,
+      decisionReason: exactKey,
     }
   }
   if (args.effectiveAskedTools.includes(exactKey)) {
     return {
       result: false,
       message: `${PRODUCT_NAME} requested permissions to use ${args.tool.name}, but you haven't granted it yet.`,
+      decisionReason: exactKey,
     }
   }
   if (args.effectiveAllowedTools.includes(exactKey)) {
@@ -54,6 +56,7 @@ export function checkSkillPermission(args: {
         result: false,
         message: `Permission to use ${args.tool.name}(${prefix}:*) has been denied.`,
         shouldPromptUser: false,
+        decisionReason: prefixKey,
       }
     }
   }
@@ -64,6 +67,7 @@ export function checkSkillPermission(args: {
       return {
         result: false,
         message: `${PRODUCT_NAME} requested permissions to use ${args.tool.name}, but you haven't granted it yet.`,
+        decisionReason: prefixKey,
       }
     }
   }
@@ -78,5 +82,6 @@ export function checkSkillPermission(args: {
   return {
     result: false,
     message: `${PRODUCT_NAME} requested permissions to use ${args.tool.name}, but you haven't granted it yet.`,
+    decisionReason: 'No allow rule matched',
   }
 }

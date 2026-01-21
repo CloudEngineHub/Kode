@@ -1,5 +1,8 @@
 import type { CanUseToolFn } from '#core/permissions/canUseTool'
 import { queryLLM } from '#core/ai/llmLazy'
+import { getTotalCost } from '#core/cost-tracker'
+import { MaxBudgetUsdExceededError } from '#core/errors/maxBudgetUsd'
+import { MaxTurnsExceededError } from '#core/errors/maxTurns'
 import { formatSystemPromptWithContext } from '#core/services/systemPrompt'
 import { emitReminderEvent } from '#core/services/systemReminder'
 import { addNotification } from '#core/services/notificationCenter'
@@ -95,6 +98,40 @@ async function* messagePipelineCore(
     const stopHookActive = hookState?.stopHookActive === true
     const stopHookAttempts = hookState?.stopHookAttempts ?? 0
 
+    const maxTurns = toolUseContext.options.maxTurns
+    const normalizedMaxTurns =
+      typeof maxTurns === 'number' && Number.isFinite(maxTurns) && maxTurns > 0
+        ? Math.trunc(maxTurns)
+        : undefined
+
+    const turnsUsed = (() => {
+      const raw = toolUseContext.turnCount
+      if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < 0) {
+        return 0
+      }
+      return Math.trunc(raw)
+    })()
+    toolUseContext.turnCount = turnsUsed
+
+    if (normalizedMaxTurns !== undefined && turnsUsed >= normalizedMaxTurns) {
+      throw new MaxTurnsExceededError({
+        maxTurns: normalizedMaxTurns,
+        turnCount: turnsUsed,
+      })
+    }
+
+    const maxBudgetUsd = toolUseContext.options.maxBudgetUsd
+    if (
+      typeof maxBudgetUsd === 'number' &&
+      Number.isFinite(maxBudgetUsd) &&
+      maxBudgetUsd > 0
+    ) {
+      const totalCostUsd = getTotalCost()
+      if (totalCostUsd >= maxBudgetUsd) {
+        throw new MaxBudgetUsdExceededError({ maxBudgetUsd, totalCostUsd })
+      }
+    }
+
     // Auto-compact check
     const { messages: processedMessages, wasCompacted } =
       await checkAutoCompact(messages, toolUseContext)
@@ -102,7 +139,7 @@ async function* messagePipelineCore(
       messages = processedMessages
     }
 
-    // Compatibility: bash-notification + background_shell_status attachments.
+    // Compatibility: task-notification + background_shell_status attachments.
     // We inject these as synthetic assistant messages so the model can decide when to call TaskOutput.
     if (toolUseContext.agentId === 'main') {
       const shell = BunShell.getInstance()
@@ -302,6 +339,7 @@ async function* messagePipelineCore(
     }
 
     const assistantMessage = result.message
+    toolUseContext.turnCount = turnsUsed + 1
     const shouldSkipPermissionCheck = result.shouldSkipPermissionCheck
 
     // @see https://docs.anthropic.com/en/docs/build-with-claude/tool-use

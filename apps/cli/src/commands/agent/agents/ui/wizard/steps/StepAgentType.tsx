@@ -2,28 +2,26 @@ import React, { useState } from 'react'
 import { Box, Text } from 'ink'
 import TextInput from '#ui-ink/components/TextInput'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
-import type { AgentConfig } from '#core/utils/agentLoader'
 import { validateAgentType } from '../../../generation'
 import { themeColor } from '../../colors'
 import { WizardPanel, type WizardContextValue } from '../Wizard'
 
-export function StepAgentType(props: {
-  ctx: WizardContextValue
-  existingAgents: AgentConfig[]
-}) {
-  const { ctx } = props
+export function StepAgentType({ ctx }: { ctx: WizardContextValue }) {
   const [value, setValue] = useState(ctx.wizardData.agentType ?? '')
   const [cursorOffset, setCursorOffset] = useState(value.length)
   const [error, setError] = useState<string | null>(null)
   const columns = 60
 
   useKeypress((_input, key) => {
-    if (key.escape) ctx.goBack()
+    if (key.escape) {
+      ctx.goBack()
+      return true
+    }
   })
 
   const onSubmit = (next: string) => {
     const trimmed = next.trim()
-    const validation = validateAgentType(trimmed, props.existingAgents)
+    const validation = validateAgentType(trimmed)
     if (!validation.isValid) {
       setError(validation.errors[0] ?? 'Invalid agent type')
       return

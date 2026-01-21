@@ -1,10 +1,15 @@
 {
   "name": "@shareai-lab/kode",
   "version": "2.0.3",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "bin": {
     "kode": "cli.js",
     "kwa": "cli.js",
     "kd": "cli.js",
+    "mcp-cli": "mcp-cli.js",
     "kode-acp": "cli-acp.js"
   },
   "engines": {
@@ -59,19 +64,22 @@
   "files": [
     "cli.js",
     "cli-acp.js",
+    "mcp-cli.js",
     "yoga.wasm",
     "dist/**/*",
-    "scripts/binary-utils.cjs",
+    "!dist/bin/**",
+    "!dist/binary/**",
+    "packages/builtin-skills/THIRD_PARTY_NOTICES.md",
+    "packages/builtin-skills/skills/**/*",
+    "packages/builtin-skills/third_party/shareai-skills/LICENSE",
     "scripts/cli-wrapper.cjs",
-    "scripts/cli-acp-wrapper.cjs",
-    "scripts/postinstall.js",
-    ".npmrc"
+    "scripts/cli-acp-wrapper.cjs"
   ],
   "scripts": {
-    "dev": "pnpm --filter @kode/cli dev",
-    "dev:cli": "pnpm --filter @kode/cli dev",
-    "dev:server": "pnpm --filter @kode/server dev",
-    "dev:web": "pnpm --filter @kode/web dev",
+    "dev": "bun run ./apps/cli/src/dispatch.ts --verbose",
+    "dev:cli": "bun run ./apps/cli/src/dispatch.ts --verbose",
+    "dev:server": "bun run --filter @kode/server dev",
+    "dev:web": "bun run --filter @kode/web dev",
     "dev:bun": "bun run ./apps/cli/src/dispatch.ts --verbose",
     "build:cli": "node scripts/build-cli.mjs",
     "build:server": "node scripts/build-server.mjs",
@@ -80,14 +88,14 @@
     "build:binary": "bun run scripts/build-binary.mjs",
     "clean": "bun run scripts/clean.mjs",
     "prepublishOnly": "bun run scripts/build.mjs && bun run scripts/prepublish-check.js",
-    "postinstall": "node scripts/postinstall.js || true",
     "format": "prettier --write \"apps/**/*.{ts,tsx,js,jsx,json,md,css,html}\" \"packages/**/*.{ts,tsx,js,jsx,json,md}\" \"scripts/**/*.{ts,tsx,js,jsx,mjs,cjs,json}\" \"docs/**/*.{md,json}\"",
     "format:check": "prettier --check \"apps/**/*.{ts,tsx,js,jsx,json,md,css,html}\" \"packages/**/*.{ts,tsx,js,jsx,json,md}\" \"scripts/**/*.{ts,tsx,js,jsx,mjs,cjs,json}\" \"docs/**/*.{md,json}\"",
     "lint": "eslint . --ext .ts,.tsx,.js --max-warnings 0",
     "lint:fix": "eslint . --ext .ts,.tsx,.js --fix",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "prepare": "bun run scripts/install-hooks.mjs",
+    "check": "bun run format:check && bun run typecheck && bun test && bun run build",
+    "prepare": "node scripts/install-hooks.mjs",
     "publish:dev": "bun run scripts/publish-dev.js",
     "publish:release": "bun run scripts/publish-release.js",
     "bench:startup": "bun run scripts/bench-startup.mjs"
@@ -97,7 +105,6 @@
     "@anthropic-ai/bedrock-sdk": "^0.12.6",
     "@anthropic-ai/sdk": "^0.39.0",
     "@anthropic-ai/vertex-sdk": "^0.7.0",
-    "@vscode/ripgrep": "^1.15.11",
     "@aws-sdk/client-bedrock-runtime": "3.797.0",
     "@commander-js/extra-typings": "^13.1.0",
     "@inkjs/ui": "^2.0.0",
@@ -146,6 +153,20 @@
     "ws": "^8.18.3",
     "zod": "^3.25.76",
     "zod-to-json-schema": "^3.24.6"
+  },
+  "optionalDependencies": {
+    "@shareai-lab/kode-bin-darwin-arm64": "2.0.3",
+    "@shareai-lab/kode-bin-darwin-x64": "2.0.3",
+    "@shareai-lab/kode-bin-linux-arm64": "2.0.3",
+    "@shareai-lab/kode-bin-linux-x64": "2.0.3",
+    "@shareai-lab/kode-bin-win32-arm64": "2.0.3",
+    "@shareai-lab/kode-bin-win32-x64": "2.0.3",
+    "@shareai-lab/kode-ripgrep-darwin-arm64": "2.0.3",
+    "@shareai-lab/kode-ripgrep-darwin-x64": "2.0.3",
+    "@shareai-lab/kode-ripgrep-linux-arm64": "2.0.3",
+    "@shareai-lab/kode-ripgrep-linux-x64": "2.0.3",
+    "@shareai-lab/kode-ripgrep-win32-arm64": "2.0.3",
+    "@shareai-lab/kode-ripgrep-win32-x64": "2.0.3"
   },
   "devDependencies": {
     "@radix-ui/react-accordion": "^1.2.12",

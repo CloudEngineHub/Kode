@@ -4,18 +4,24 @@ import { existsSync } from 'node:fs'
 import which from 'which'
 import type { ToolUseContext } from '#core/tooling/Tool'
 import type { BunShellSandboxOptions } from '#runtime/shell'
+import { debug } from '#core/logging'
+import { LEGACY_ENV } from '#config/compat/legacyEnv'
 import {
   loadMergedSettings,
   normalizeSandboxRuntimeConfigFromSettings,
   type SandboxRuntimeConfig,
 } from './sandboxConfig'
 import { getCwd } from '#core/utils/state'
+import { resolveLinuxSeccompAssets } from './linuxSeccomp'
 
 type SandboxIoOverrides = {
   projectDir?: string
   homeDir?: string
   platform?: NodeJS.Platform
   bwrapPath?: string | null
+  socatPath?: string | null
+  applySeccompPath?: string | null
+  seccompBpfPath?: string | null
 }
 
 function getSandboxIoOverridesFromContext(
@@ -39,6 +45,18 @@ function getSandboxIoOverridesFromContext(
       opts.__sandboxBwrapPath === undefined
         ? undefined
         : (opts.__sandboxBwrapPath as string | null),
+    socatPath:
+      opts.__sandboxSocatPath === undefined
+        ? undefined
+        : (opts.__sandboxSocatPath as string | null),
+    applySeccompPath:
+      opts.__sandboxApplySeccompPath === undefined
+        ? undefined
+        : (opts.__sandboxApplySeccompPath as string | null),
+    seccompBpfPath:
+      opts.__sandboxSeccompBpfPath === undefined
+        ? undefined
+        : (opts.__sandboxSeccompBpfPath as string | null),
   }
 }
 
@@ -74,7 +92,7 @@ function uniqueStringsUnion(...lists: string[][]): string[] {
 
 // Compatibility: allow-write paths for the sandbox runtime.
 function getSandboxDefaultWriteAllowPaths(homeDir: string): string[] {
-  return [
+  const out: string[] = [
     '/dev/stdout',
     '/dev/stderr',
     '/dev/null',
@@ -83,9 +101,31 @@ function getSandboxDefaultWriteAllowPaths(homeDir: string): string[] {
     '/dev/autofs_nowait',
     '/tmp/kode',
     '/private/tmp/kode',
-    join(homeDir, '.npm', '_logs'),
-    join(homeDir, '.kode', 'debug'),
   ]
+
+  const addTmpAliasPaths = (tmpDir: string) => {
+    out.push(tmpDir)
+    if (tmpDir.startsWith('/tmp/')) out.push('/private' + tmpDir)
+    else if (tmpDir.startsWith('/var/')) out.push('/private' + tmpDir)
+    else if (tmpDir.startsWith('/private/tmp/'))
+      out.push(tmpDir.replace('/private', ''))
+    else if (tmpDir.startsWith('/private/var/'))
+      out.push(tmpDir.replace('/private', ''))
+  }
+
+  const explicitTmpDir = process.env.KODE_TMPDIR
+  if (typeof explicitTmpDir === 'string' && explicitTmpDir.trim()) {
+    addTmpAliasPaths(explicitTmpDir.trim())
+  }
+
+  const legacyTmpBase = process.env[LEGACY_ENV.codeTmpDir]
+  if (typeof legacyTmpBase === 'string' && legacyTmpBase.trim()) {
+    addTmpAliasPaths(join(legacyTmpBase.trim(), 'claude'))
+  }
+
+  out.push(join(homeDir, '.npm', '_logs'))
+  out.push(join(homeDir, '.kode', 'debug'))
+  return out
 }
 
 export type BunShellSandboxSettings = {
@@ -136,7 +176,16 @@ function isSandboxAvailable(context?: ToolUseContext): boolean {
         ? overrides.bwrapPath
         : (which.sync('bwrap', { nothrow: true }) ??
           which.sync('bubblewrap', { nothrow: true }))
-    return typeof bwrapPath === 'string' && bwrapPath.length > 0
+    const socatPath =
+      overrides.socatPath !== undefined
+        ? overrides.socatPath
+        : which.sync('socat', { nothrow: true })
+    return (
+      typeof bwrapPath === 'string' &&
+      bwrapPath.length > 0 &&
+      typeof socatPath === 'string' &&
+      socatPath.length > 0
+    )
   }
 
   if (platform === 'darwin') {
@@ -182,6 +231,8 @@ export function getBunShellSandboxPlan(args: {
   toolUseContext?: ToolUseContext
 }): BunShellSandboxPlan {
   const { projectDir, homeDir } = getSandboxDirs(args.toolUseContext)
+  const ioOverrides = getSandboxIoOverridesFromContext(args.toolUseContext)
+  const platform = ioOverrides.platform ?? process.platform
 
   const merged = loadMergedSettings({ projectDir, homeDir })
   const runtimeConfig = normalizeSandboxRuntimeConfigFromSettings(merged, {
@@ -220,16 +271,41 @@ export function getBunShellSandboxPlan(args: {
   // Compatibility: sandboxed commands run with network restrictions enabled by default.
   const needsNetworkRestriction = sandboxEnabled
 
+  const wantsUnixSocketBlocking =
+    platform === 'linux' &&
+    willSandbox &&
+    runtimeConfig.network.allowAllUnixSockets !== true
+
+  const linuxSeccomp = wantsUnixSocketBlocking
+    ? resolveLinuxSeccompAssets({
+        applySeccompPathOverride: ioOverrides.applySeccompPath,
+        bpfPathOverride: ioOverrides.seccompBpfPath,
+      })
+    : null
+
+  const effectiveAllowAllUnixSockets =
+    runtimeConfig.network.allowAllUnixSockets === true ||
+    (wantsUnixSocketBlocking && !linuxSeccomp)
+
+  if (wantsUnixSocketBlocking && !linuxSeccomp && sandboxAvailable) {
+    debug.warn('SANDBOX_LINUX_SECCOMP_UNAVAILABLE', {
+      arch: process.arch,
+      message:
+        'Seccomp filtering not available. Sandbox will run without Unix socket blocking (allowAllUnixSockets effective).',
+    })
+  }
+
   const bunShellSandboxOptions: BunShellSandboxOptions | undefined = willSandbox
     ? {
         enabled: true,
         require: !settings.allowUnsandboxedCommands,
         needsNetworkRestriction,
         allowUnixSockets: runtimeConfig.network.allowUnixSockets,
-        allowAllUnixSockets: runtimeConfig.network.allowAllUnixSockets,
+        allowAllUnixSockets: effectiveAllowAllUnixSockets,
         allowLocalBinding: runtimeConfig.network.allowLocalBinding,
         httpProxyPort: runtimeConfig.network.httpProxyPort,
         socksProxyPort: runtimeConfig.network.socksProxyPort,
+        ...(platform === 'linux' && linuxSeccomp ? { linuxSeccomp } : {}),
         readConfig: { denyOnly: runtimeConfig.filesystem.denyRead },
         writeConfig: {
           allowOnly: uniqueStringsUnion(

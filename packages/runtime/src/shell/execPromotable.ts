@@ -7,10 +7,8 @@ import type {
 } from './types'
 import type { BunShellState } from './state'
 import { appendTaskOutput, touchTaskOutputFile } from '../taskOutputStore'
-import {
-  buildSandboxCommand,
-  maybeAnnotateMacosSandboxStderr,
-} from './sandboxCommand'
+import { buildSandboxCommand } from './sandboxCommand'
+import { annotateStderrWithSandboxViolations } from './sandboxViolations'
 import { createCancellableTextCollector } from './streamReaders'
 import { getShellCmdForPlatform } from './shellCmd'
 import { makeBackgroundTaskId } from './ids'
@@ -295,8 +293,24 @@ export function execPromotable(
         ? [`Command timed out`, stderr].filter(Boolean).join('\n')
         : stderr
       const stderrAnnotated = sandboxCmd
-        ? maybeAnnotateMacosSandboxStderr(stderrWithTimeout, sandbox)
+        ? annotateStderrWithSandboxViolations({
+            command,
+            stderr: stderrWithTimeout,
+            sandbox,
+          })
         : stderrWithTimeout
+
+      if (backgroundProcess && stderrAnnotated !== backgroundProcess.stderr) {
+        const previousStderr = backgroundProcess.stderr
+        backgroundProcess.stderr = stderrAnnotated
+        if (stderrAnnotated.startsWith(previousStderr)) {
+          const delta = stderrAnnotated.slice(previousStderr.length)
+          if (delta) {
+            appendTaskOutput(backgroundProcess.id, delta)
+            backgroundProcess.stderrLineCount += countNonEmptyLines(delta)
+          }
+        }
+      }
 
       return {
         stdout,

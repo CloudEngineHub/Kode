@@ -11,10 +11,8 @@ import {
   getTaskOutputFilePath,
   touchTaskOutputFile,
 } from '../taskOutputStore'
-import {
-  buildSandboxCommand,
-  maybeAnnotateMacosSandboxStderr,
-} from './sandboxCommand'
+import { buildSandboxCommand } from './sandboxCommand'
+import { annotateStderrWithSandboxViolations } from './sandboxViolations'
 import { startStreamReader } from './streamReaders'
 import { getShellCmdForPlatform } from './shellCmd'
 import { makeBackgroundTaskId } from './ids'
@@ -110,20 +108,39 @@ export function execInBackground(
     backgroundProcess.code =
       exitOutcome.kind === 'exit' ? (exitOutcome.code ?? 0) : 2
     if (exitOutcome.kind === 'error') {
+      const previousStderr = backgroundProcess.stderr
       backgroundProcess.stderr = [
         backgroundProcess.stderr,
         exitOutcome.error.message,
       ]
         .filter(Boolean)
         .join('\n')
+      if (exitOutcome.error.message) {
+        const delta = previousStderr
+          ? `\n${exitOutcome.error.message}`
+          : exitOutcome.error.message
+        appendTaskOutput(bashId, delta)
+        backgroundProcess.stderrLineCount += countNonEmptyLines(delta)
+      }
     }
     backgroundProcess.interrupted =
       backgroundProcess.interrupted || abortController.signal.aborted
     if (sandbox?.enabled === true) {
-      backgroundProcess.stderr = maybeAnnotateMacosSandboxStderr(
-        backgroundProcess.stderr,
+      const annotated = annotateStderrWithSandboxViolations({
+        command,
+        stderr: backgroundProcess.stderr,
         sandbox,
-      )
+      })
+      if (annotated !== backgroundProcess.stderr) {
+        const delta = annotated.startsWith(backgroundProcess.stderr)
+          ? annotated.slice(backgroundProcess.stderr.length)
+          : ''
+        if (delta) {
+          appendTaskOutput(bashId, delta)
+          backgroundProcess.stderrLineCount += countNonEmptyLines(delta)
+        }
+        backgroundProcess.stderr = annotated
+      }
     }
     if (backgroundProcess.timeoutHandle) {
       clearTimeout(backgroundProcess.timeoutHandle)
@@ -295,6 +312,7 @@ export function flushBashNotifications(
     notifications.push({
       type: 'bash_notification',
       taskId: proc.id,
+      taskType: 'local_bash',
       description: proc.command,
       outputFile: proc.outputFile || getTaskOutputFilePath(proc.id),
       status,

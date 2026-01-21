@@ -34,7 +34,10 @@ export function useCompletionActions(args: {
           completion = `@${suggestion.value} `
         } else {
           const isDirectory = suggestion.value.endsWith('/')
-          completion = suggestion.value + (isDirectory ? '' : ' ')
+          const atPrefix = context.trigger === '@'
+          completion = `${atPrefix ? '@' : ''}${suggestion.value}${
+            isDirectory ? '' : ' '
+          }`
         }
       }
 
@@ -80,7 +83,9 @@ export function useCompletionActions(args: {
           ? `/${prefix}`
           : context.type === 'agent'
             ? `@${prefix}`
-            : prefix
+            : context.trigger === '@'
+              ? `@${prefix}`
+              : prefix
 
       const newInput =
         args.input.slice(0, context.startPos) +

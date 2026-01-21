@@ -1,6 +1,9 @@
 import type { Tool } from '#core/tooling/Tool'
 import { getAvailableAgentTypes } from '#core/utils/agentLoader'
 import { getAgentTranscript } from '#core/utils/agentTranscripts'
+import { getCwd } from '#core/utils/state'
+import { getKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
+import { loadKodeAgentSidechainMessagesForResume } from '#protocol/utils/kodeAgentSessionLoad'
 
 import { TOOL_NAME } from './constants'
 import { getPrompt } from './prompt'
@@ -65,10 +68,25 @@ export const TaskTool = {
     if (input.resume) {
       const transcript = getAgentTranscript(input.resume)
       if (!transcript) {
-        return {
-          result: false,
-          message: `No transcript found for agent ID: ${input.resume}`,
-          meta: { resume: input.resume },
+        try {
+          const disk = loadKodeAgentSidechainMessagesForResume({
+            cwd: getCwd(),
+            sessionId: getKodeAgentSessionId(),
+            agentId: input.resume,
+          })
+          if (disk.length === 0) {
+            return {
+              result: false,
+              message: `No transcript found for agent ID: ${input.resume}`,
+              meta: { resume: input.resume },
+            }
+          }
+        } catch {
+          return {
+            result: false,
+            message: `No transcript found for agent ID: ${input.resume}`,
+            meta: { resume: input.resume },
+          }
         }
       }
     }

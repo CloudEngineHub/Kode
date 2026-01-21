@@ -5,9 +5,11 @@ import { join } from 'path'
 import { getCwd } from '#core/utils/state'
 import { getSessionPlugins } from '#core/utils/sessionPlugins'
 import { getKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
+import { buildHookExecEnv } from '#core/compat/hookEnv'
 
 import type { CommandHook } from '../types'
 import { asRecord } from '../types'
+import { getDisableAllHooksState } from '../disableAllHooks'
 import {
   coerceHookPermissionMode,
   extractFirstJsonObject,
@@ -101,6 +103,11 @@ export async function getSessionStartAdditionalContext(args?: {
   if (cached) return cached.additionalContext
 
   const projectDir = args?.cwd ?? getCwd()
+  if (getDisableAllHooksState({ projectDir }).disabled) {
+    sessionStartCache.set(sessionId, { additionalContext: '' })
+    return ''
+  }
+
   const plugins = getSessionPlugins()
   if (plugins.length === 0) {
     sessionStartCache.set(sessionId, { additionalContext: '' })
@@ -154,11 +161,11 @@ export async function getSessionStartAdditionalContext(args?: {
             stdinJson: payload,
             cwd: projectDir,
             env: {
-              CLAUDE_PROJECT_DIR: projectDir,
-              ...(hook.pluginRoot
-                ? { CLAUDE_PLUGIN_ROOT: hook.pluginRoot }
-                : {}),
-              CLAUDE_ENV_FILE: envFilePath,
+              ...buildHookExecEnv({
+                projectDir,
+                pluginRoot: hook.pluginRoot,
+                envFilePath,
+              }),
             },
             signal: args?.signal,
           })
@@ -205,11 +212,11 @@ export async function getSessionStartAdditionalContext(args?: {
             stdinJson: payload,
             cwd: projectDir,
             env: {
-              CLAUDE_PROJECT_DIR: projectDir,
-              ...(hook.pluginRoot
-                ? { CLAUDE_PLUGIN_ROOT: hook.pluginRoot }
-                : {}),
-              CLAUDE_ENV_FILE: envFilePath,
+              ...buildHookExecEnv({
+                projectDir,
+                pluginRoot: hook.pluginRoot,
+                envFilePath,
+              }),
             },
             signal: args?.signal,
           })

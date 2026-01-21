@@ -6,7 +6,7 @@ import {
   handleBackNavigation,
   pushScreen,
   type ModelSelectorScreenStack,
-} from '#ui-ink/ui/components/model-selector/state'
+} from '#ui-ink/components/ModelSelector/flow/state'
 
 describe('model selector navigation state machine', () => {
   test('initial stack starts on provider (skipModelType does not change)', () => {

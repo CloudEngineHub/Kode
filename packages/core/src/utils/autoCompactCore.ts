@@ -1,6 +1,6 @@
 import { Message } from '#core/query'
 import { countTokens } from './tokens'
-import { getMessagesGetter, getMessagesSetter } from '#core/messages'
+import { getMessagesSetter } from '#core/messages'
 import { getContext } from '#core/context'
 import { getCodeStyle } from '#core/utils/style'
 import { resetFileFreshnessSession } from '#core/services/fileFreshness'
@@ -18,6 +18,11 @@ import {
   AUTO_COMPACT_THRESHOLD_RATIO,
   calculateAutoCompactThresholds,
 } from './autoCompactThreshold'
+import {
+  appendSessionJsonlFromMessage,
+  appendSessionSummaryRecord,
+} from '#protocol/utils/kodeAgentSessionLog'
+import { getCwd } from '#core/utils/state'
 
 /**
  * Retrieves the context length for the current main conversation model.
@@ -117,7 +122,20 @@ export async function checkAutoCompact(
   }
 
   try {
-    const compactedMessages = await executeAutoCompact(messages, toolUseContext)
+    const pendingUserMessage =
+      messages.length > 0 && messages[messages.length - 1]?.type === 'user'
+        ? (messages[messages.length - 1] ?? null)
+        : null
+    const history = pendingUserMessage ? messages.slice(0, -1) : messages
+
+    const compactedHistory = await executeAutoCompact(history, toolUseContext)
+    const compactedMessages = pendingUserMessage
+      ? [...compactedHistory, pendingUserMessage]
+      : compactedHistory
+
+    // Replace the visible transcript in interactive mode so the user sees the
+    // new compressed context (and we keep the pending prompt intact).
+    getMessagesSetter()?.(compactedMessages)
 
     return {
       messages: compactedMessages,
@@ -245,9 +263,29 @@ async function executeAutoCompact(
     }
   }
 
+  // Persist the compaction boundary (best-effort) so resume screens can show a stable summary
+  // and long sessions don't require loading the entire pre-compaction transcript.
+  if (
+    process.env.NODE_ENV !== 'test' &&
+    toolUseContext?.options?.persistSession !== false
+  ) {
+    try {
+      const cwd = getCwd()
+      for (const msg of compactedMessages) {
+        appendSessionJsonlFromMessage({ cwd, message: msg, toolUseContext })
+      }
+      appendSessionSummaryRecord({
+        cwd,
+        summary,
+        leafUuid: summaryResponse.uuid,
+      })
+    } catch {
+      // best-effort only
+    }
+  }
+
   // State cleanup to ensure fresh context after compression
   // Mirrors the cleanup sequence from manual /compact command
-  getMessagesSetter()([])
   getContext.cache.clear?.()
   getCodeStyle.cache.clear?.()
   resetFileFreshnessSession()

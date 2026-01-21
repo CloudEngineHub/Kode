@@ -1,26 +1,104 @@
-import { existsSync, statSync, watch, type FSWatcher } from 'fs'
+import { existsSync, watch, type FSWatcher } from 'fs'
+import { stat } from 'fs/promises'
 import { join } from 'path'
 
+import { LRUCache } from 'lru-cache'
 import { memoize } from 'lodash-es'
 
 import { getCwd } from '#core/utils/state'
 import { getSessionPlugins } from '#core/utils/sessionPlugins'
-import { isSettingSourceEnabled } from '#config'
+import { isSettingSourceEnabled, resolveDataRoots } from '#config'
 import { debug as debugLogger } from '#core/utils/debugLogger'
 import { logError } from '#core/utils/log'
+import { LEGACY_CONFIG_SUBDIRS } from '#core/compat/legacyPaths'
 
 import { BUILTIN_AGENTS } from './builtin'
 import type { AgentConfig, AgentSource } from './types'
 import {
   dedupeStrings,
   findProjectAgentDirs,
-  getClaudePolicyBaseDir,
-  getUserConfigRoots,
+  getPolicyBaseDirs,
   listMarkdownFilesRecursively,
 } from './storage'
-import { parseAgentFromFile, parseFlagAgentsFromCliJson } from './validator'
+import {
+  parseAgentFromFileAsync,
+  parseFlagAgentsFromCliJson,
+} from './validator'
+import { emitAgentReloaded } from './events'
 
 let FLAG_AGENTS: AgentConfig[] = []
+
+type AgentFileCacheEntry = {
+  mtimeMs: number
+  size: number
+  agent: AgentConfig | null
+}
+
+const AGENT_FILE_CACHE = new LRUCache<string, AgentFileCacheEntry>({ max: 512 })
+let agentFileCacheHits = 0
+let agentFileCacheMisses = 0
+
+function getAgentFileCacheKey(options: {
+  filePath: string
+  baseDir: string
+  source: Exclude<AgentSource, 'built-in' | 'flagSettings'>
+}): string {
+  return `${options.filePath}::${options.baseDir}::${options.source}`
+}
+
+async function parseAgentFromFileCached(options: {
+  filePath: string
+  baseDir: string
+  source: Exclude<AgentSource, 'built-in' | 'flagSettings'>
+}): Promise<AgentConfig | null> {
+  let st: Awaited<ReturnType<typeof stat>>
+  try {
+    st = await stat(options.filePath)
+  } catch {
+    return null
+  }
+
+  if (!st.isFile()) return null
+
+  const key = getAgentFileCacheKey(options)
+  const cached = AGENT_FILE_CACHE.get(key)
+  if (cached && cached.mtimeMs === st.mtimeMs && cached.size === st.size) {
+    agentFileCacheHits += 1
+    return cached.agent
+  }
+
+  agentFileCacheMisses += 1
+  const agent = await parseAgentFromFileAsync(options)
+  AGENT_FILE_CACHE.set(key, { mtimeMs: st.mtimeMs, size: st.size, agent })
+  return agent
+}
+
+function invalidateAgentFileCacheForPath(filePath: string): void {
+  const prefix = `${filePath}::`
+  for (const key of [...AGENT_FILE_CACHE.keys()]) {
+    if (key.startsWith(prefix)) {
+      AGENT_FILE_CACHE.delete(key)
+    }
+  }
+}
+
+export function __getAgentFileCacheStatsForTests(): {
+  hits: number
+  misses: number
+  size: number
+} {
+  return {
+    hits: agentFileCacheHits,
+    misses: agentFileCacheMisses,
+    size: AGENT_FILE_CACHE.size,
+  }
+}
+
+export function __resetAgentFileCacheStatsForTests(): void {
+  agentFileCacheHits = 0
+  agentFileCacheMisses = 0
+  AGENT_FILE_CACHE.clear()
+}
 
 export function setFlagAgentsFromCliJson(json: string | undefined): void {
   if (!json) {
@@ -48,37 +126,25 @@ function mergeAgents(allAgents: AgentConfig[]): AgentConfig[] {
       map.set(agent.agentType, agent)
     }
   }
-  return Array.from(map.values())
+
+  const active = Array.from(map.values())
+  active.sort((a, b) =>
+    a.agentType.localeCompare(b.agentType, undefined, { sensitivity: 'base' }),
+  )
+  return active
 }
 
-function inodeKeyForPath(filePath: string): string | null {
-  try {
-    const st = statSync(filePath)
-    return `${st.dev}:${st.ino}`
-  } catch {
-    return null
-  }
-}
-
-function scanAgentPaths(options: {
+async function scanAgentPaths(options: {
   dirPathOrFile: string
   baseDir: string
   source: Exclude<AgentSource, 'built-in' | 'flagSettings'>
-  seenInodes: Map<string, AgentSource>
-}): AgentConfig[] {
+}): Promise<AgentConfig[]> {
   const out: AgentConfig[] = []
 
-  const addFile = (filePath: string) => {
+  const addFile = async (filePath: string) => {
     if (!filePath.endsWith('.md')) return
 
-    const inodeKey = inodeKeyForPath(filePath)
-    if (inodeKey) {
-      const existing = options.seenInodes.get(inodeKey)
-      if (existing) return
-      options.seenInodes.set(inodeKey, options.source)
-    }
-
-    const agent = parseAgentFromFile({
+    const agent = await parseAgentFromFileCached({
       filePath,
       baseDir: options.baseDir,
       source: options.source,
@@ -86,22 +152,23 @@ function scanAgentPaths(options: {
     if (agent) out.push(agent)
   }
 
-  let st: ReturnType<typeof statSync>
+  let st: Awaited<ReturnType<typeof stat>>
   try {
-    st = statSync(options.dirPathOrFile)
+    st = await stat(options.dirPathOrFile)
   } catch {
     return []
   }
 
   if (st.isFile()) {
-    addFile(options.dirPathOrFile)
+    await addFile(options.dirPathOrFile)
     return out
   }
 
   if (!st.isDirectory()) return []
 
-  for (const filePath of listMarkdownFilesRecursively(options.dirPathOrFile)) {
-    addFile(filePath)
+  const files = await listMarkdownFilesRecursively(options.dirPathOrFile)
+  for (const filePath of files) {
+    await addFile(filePath)
   }
 
   return out
@@ -111,59 +178,77 @@ async function loadAllAgents(): Promise<{
   activeAgents: AgentConfig[]
   allAgents: AgentConfig[]
 }> {
-  const seenInodes = new Map<string, AgentSource>()
-
-  // Plugins
+  // Plugins (session-scoped)
   const sessionPlugins = getSessionPlugins()
-  const pluginAgentDirs = sessionPlugins.flatMap(p => p.agentsDirs ?? [])
-  const pluginAgents = pluginAgentDirs.flatMap(dir =>
-    scanAgentPaths({
-      dirPathOrFile: dir,
-      baseDir: dir,
-      source: 'plugin',
-      seenInodes,
-    }),
+  const pluginAgentDirs = dedupeStrings(
+    sessionPlugins.flatMap(p => p.agentsDirs ?? []),
   )
+  const pluginAgents = (
+    await Promise.all(
+      pluginAgentDirs.map(dir =>
+        scanAgentPaths({
+          dirPathOrFile: dir,
+          baseDir: dir,
+          source: 'plugin',
+        }),
+      ),
+    )
+  ).flat()
 
   // Policy
-  const policyAgentsDir = join(getClaudePolicyBaseDir(), '.claude', 'agents')
-  const policyAgents = scanAgentPaths({
-    dirPathOrFile: policyAgentsDir,
-    baseDir: policyAgentsDir,
-    source: 'policySettings',
-    seenInodes,
-  })
+  const policyAgentDirs = getPolicyBaseDirs().flatMap(baseDir => [
+    // Legacy format scanned first so Kode wins when both define the same agentType.
+    join(baseDir, LEGACY_CONFIG_SUBDIRS.agents),
+    join(baseDir, '.kode', 'agents'),
+  ])
+  const policyAgents = (
+    await Promise.all(
+      policyAgentDirs.map(dir =>
+        scanAgentPaths({
+          dirPathOrFile: dir,
+          baseDir: dir,
+          source: 'policySettings',
+        }),
+      ),
+    )
+  ).flat()
 
   // User
   const userAgents: AgentConfig[] = []
   if (isSettingSourceEnabled('userSettings')) {
-    for (const root of getUserConfigRoots()) {
-      const dir = join(root, 'agents')
-      userAgents.push(
-        ...scanAgentPaths({
+    const roots = resolveDataRoots()
+    const legacyRoots = [...roots.claudeCompatRoots].reverse()
+    const userAgentDirs = [
+      ...legacyRoots.map(root => join(root, 'agents')),
+      join(roots.kodeRoot, 'agents'),
+    ]
+
+    const scanned = await Promise.all(
+      userAgentDirs.map(dir =>
+        scanAgentPaths({
           dirPathOrFile: dir,
           baseDir: dir,
           source: 'userSettings',
-          seenInodes,
         }),
-      )
-    }
+      ),
+    )
+    for (const agents of scanned) userAgents.push(...agents)
   }
 
   // Project
   const projectAgents: AgentConfig[] = []
   if (isSettingSourceEnabled('projectSettings')) {
     const dirs = findProjectAgentDirs(getCwd())
-    for (const dir of dirs) {
-      projectAgents.push(
-        ...scanAgentPaths({
+    const scanned = await Promise.all(
+      dirs.map(dir =>
+        scanAgentPaths({
           dirPathOrFile: dir,
           baseDir: dir,
           source: 'projectSettings',
-          seenInodes,
         }),
-      )
-    }
+      ),
+    )
+    for (const agents of scanned) projectAgents.push(...agents)
   }
 
   const allAgents: AgentConfig[] = [
@@ -209,18 +294,30 @@ export function clearAgentCache(): void {
 }
 
 let watchers: FSWatcher[] = []
+const AGENT_WATCH_DEBOUNCE_MS = 200
+let pendingWatchReloadTimer: ReturnType<typeof setTimeout> | null = null
+let pendingWatchReloadPaths = new Set<string>()
+let pendingWatchReloadOnChange: (() => void) | undefined
 
 export async function startAgentWatcher(onChange?: () => void): Promise<void> {
   await stopAgentWatcher()
+  pendingWatchReloadOnChange = onChange
 
   const watchDirs: string[] = []
 
   // Policy
-  watchDirs.push(join(getClaudePolicyBaseDir(), '.claude', 'agents'))
+  {
+    for (const baseDir of getPolicyBaseDirs()) {
+      watchDirs.push(join(baseDir, '.kode', 'agents'))
+      watchDirs.push(join(baseDir, LEGACY_CONFIG_SUBDIRS.agents))
+    }
+  }
 
   // User
   if (isSettingSourceEnabled('userSettings')) {
-    for (const root of getUserConfigRoots()) {
+    const roots = resolveDataRoots()
+    watchDirs.push(join(roots.kodeRoot, 'agents'))
+    for (const root of roots.claudeCompatRoots) {
       watchDirs.push(join(root, 'agents'))
     }
   }
@@ -244,10 +341,37 @@ export async function startAgentWatcher(onChange?: () => void): Promise<void> {
         dirPath,
         { recursive: false },
         (_eventType, filename) => {
-          if (filename && filename.endsWith('.md')) {
-            clearAgentCache()
-            onChange?.()
+          const scheduleReload = () => {
+            if (pendingWatchReloadTimer) {
+              clearTimeout(pendingWatchReloadTimer)
+            }
+            pendingWatchReloadTimer = setTimeout(() => {
+              pendingWatchReloadTimer = null
+              const changedPaths = Array.from(pendingWatchReloadPaths)
+              pendingWatchReloadPaths.clear()
+              clearAgentCache()
+              pendingWatchReloadOnChange?.()
+              emitAgentReloaded({ changedPaths })
+            }, AGENT_WATCH_DEBOUNCE_MS)
           }
+
+          // Some platforms may not provide a filename. Fail open and reload agents anyway.
+          if (!filename) {
+            scheduleReload()
+            return
+          }
+
+          if (!filename.endsWith('.md')) return
+
+          try {
+            const fullPath = join(dirPath, filename)
+            invalidateAgentFileCacheForPath(fullPath)
+            pendingWatchReloadPaths.add(fullPath)
+          } catch {
+            // ignore best-effort invalidation
+          }
+
+          scheduleReload()
         },
       )
       watchers.push(watcher)
@@ -272,5 +396,11 @@ export async function stopAgentWatcher(): Promise<void> {
     }
   } finally {
     watchers = []
+    if (pendingWatchReloadTimer) {
+      clearTimeout(pendingWatchReloadTimer)
+      pendingWatchReloadTimer = null
+    }
+    pendingWatchReloadPaths.clear()
+    pendingWatchReloadOnChange = undefined
   }
 }

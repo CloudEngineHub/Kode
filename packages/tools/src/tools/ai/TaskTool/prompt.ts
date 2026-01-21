@@ -25,7 +25,7 @@ export async function getTaskTools(safeMode: boolean): Promise<Tool[]> {
 }
 
 export async function getPrompt(safeMode: boolean): Promise<string> {
-  // Maintain compatibility with `.claude` agent descriptions
+  // Maintain compatibility with legacy agent packs and their tool lists.
   const agents = await getActiveAgents()
 
   // Format exactly as in original: (Tools: tool1, tool2)
@@ -41,7 +41,7 @@ export async function getPrompt(safeMode: boolean): Promise<string> {
     })
     .join('\n')
 
-  // Keep the wording aligned so shared `.claude` agent packs behave identically
+  // Keep wording stable so shared legacy agent packs behave consistently.
   return `Launch a new agent to handle complex, multi-step tasks autonomously. 
 
 The ${TASK_TOOL_NAME} tool launches specialized agents (subprocesses) that autonomously handle complex tasks. Each agent type has specific capabilities and tools available to it.

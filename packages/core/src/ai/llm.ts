@@ -10,7 +10,11 @@ import 'dotenv/config'
 import { addToTotalCost } from '#core/cost-tracker'
 import models from '#core/constants/models'
 import type { AssistantMessage, UserMessage } from '#core/query'
-import { Tool, getToolDescription } from '#core/tooling/Tool'
+import {
+  Tool,
+  getToolDescription,
+  resolveToolDescription,
+} from '#core/tooling/Tool'
 import { queryOpenAI } from '#core/ai/llm/openai'
 import { queryAnthropicNative } from '#core/ai/llm/anthropic'
 import {
@@ -54,14 +58,14 @@ import type {
 import { USE_BEDROCK, USE_VERTEX } from '#core/utils/model'
 import {
   getCLISyspromptPrefix,
-  getClaudeCodeSyspromptPrefix,
-  getClaudeCodeSystemPrompt,
+  getCompatSyspromptPrefix,
+  getCompatSystemPrompt,
 } from '#core/constants/prompts'
 import {
-  buildClaudeCodeFallbackPlan,
-  filterToolsForClaudeCode,
-  shouldAttemptClaudeCodeFallback,
-} from '#core/ai/llm/claudeCodeFallback'
+  buildRequestStrategyFallbackPlan,
+  filterToolsForCompatProfile,
+  shouldAttemptRestrictedClientFallback,
+} from '#core/ai/llm/restrictedClientCompat'
 import { getVertexRegionForModel } from '#core/utils/model'
 import { ContentBlock } from '@anthropic-ai/sdk/resources/messages/messages'
 import { nanoid } from 'nanoid'
@@ -214,6 +218,10 @@ export async function queryLLM(
     }
   }
 
+  // Resolve and cache tool descriptions before building any provider tool schemas.
+  // Some adapters build JSON schemas synchronously and rely on `cachedDescription`.
+  await Promise.all(tools.map(tool => resolveToolDescription(tool)))
+
   debugLogger.api('MODEL_RESOLVED', {
     inputParam: options.model,
     resolvedModelName: resolvedModel,
@@ -334,7 +342,7 @@ async function queryLLMWithPromptCaching(
     provider = config.primaryProvider || 'anthropic'
   }
 
-  const fallbackPlan = buildClaudeCodeFallbackPlan(
+  const fallbackPlan = buildRequestStrategyFallbackPlan(
     modelProfile?.requestStrategy,
     options.model,
   )
@@ -353,10 +361,10 @@ async function queryLLMWithPromptCaching(
 
   for (const step of fallbackPlan) {
     const effectiveTools =
-      step.tools === 'claude_code' ? filterToolsForClaudeCode(tools) : tools
+      step.tools === 'compat' ? filterToolsForCompatProfile(tools) : tools
     const effectiveSystemPrompt =
-      step.systemPrompt === 'claude_code'
-        ? await getClaudeCodeSystemPrompt({
+      step.systemPrompt === 'compat'
+        ? await getCompatSystemPrompt({
             model: options.model,
             toolNames: effectiveTools.map(t => t.name),
             toolUseContext: compatibilityToolUseContext,
@@ -364,8 +372,8 @@ async function queryLLMWithPromptCaching(
           })
         : systemPrompt
     const cliSyspromptPrefix =
-      step.systemPrompt === 'claude_code'
-        ? getClaudeCodeSyspromptPrefix()
+      step.systemPrompt === 'compat'
+        ? getCompatSyspromptPrefix()
         : getCLISyspromptPrefix()
 
     try {
@@ -409,7 +417,7 @@ async function queryLLMWithPromptCaching(
       )
     } catch (error) {
       lastError = error
-      if (!shouldAttemptClaudeCodeFallback(error, options.model)) {
+      if (!shouldAttemptRestrictedClientFallback(error, options.model)) {
         throw error
       }
     }

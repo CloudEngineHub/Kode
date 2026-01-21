@@ -27,6 +27,12 @@ export const inputSchema = z.object({
     .describe(
       'Set to true to run this agent in the background. Use TaskOutput to read the output later.',
     ),
+  max_turns: z
+    .number()
+    .optional()
+    .describe(
+      'Maximum number of agentic turns (API round-trips) before stopping. Used internally for warmup.',
+    ),
 })
 
 export type Input = z.infer<typeof inputSchema>

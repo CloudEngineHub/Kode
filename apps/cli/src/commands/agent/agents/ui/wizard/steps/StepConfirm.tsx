@@ -6,7 +6,7 @@ import type { Tool } from '../../../tooling'
 import { validateAgentConfig, validateAgentType } from '../../../generation'
 import { getPrimaryAgentFilePath } from '../../../storage'
 import { themeColor } from '../../colors'
-import { formatModelLong } from '../../utils'
+import { formatModelLong, titleForSource } from '../../utils'
 import { WizardPanel, type WizardContextValue } from '../Wizard'
 import type { WizardFinalAgent } from '../types'
 
@@ -18,18 +18,27 @@ function validateFinalAgent(args: {
   const errors: string[] = []
   const warnings: string[] = []
 
-  const typeValidation = validateAgentType(
-    args.finalAgent.agentType,
-    args.existingAgents,
-  )
+  const typeValidation = validateAgentType(args.finalAgent.agentType)
   errors.push(...typeValidation.errors)
   warnings.push(...typeValidation.warnings)
+
+  const duplicate = args.existingAgents.find(
+    agent =>
+      agent.agentType === args.finalAgent.agentType &&
+      agent.source !== 'built-in' &&
+      agent.source !== args.finalAgent.source,
+  )
+  if (duplicate) {
+    errors.push(
+      `Agent type "${args.finalAgent.agentType}" already exists in ${titleForSource(duplicate.source as any)}`,
+    )
+  }
 
   const configValidation = validateAgentConfig({
     agentType: args.finalAgent.agentType,
     whenToUse: args.finalAgent.whenToUse,
     systemPrompt: args.finalAgent.systemPrompt,
-    selectedTools: args.finalAgent.tools ?? ['*'],
+    selectedTools: args.finalAgent.tools,
   })
   errors.push(...configValidation.errors)
   warnings.push(...configValidation.warnings)
@@ -56,9 +65,18 @@ export function StepConfirm(props: {
   const [error, setError] = useState<string | null>(null)
 
   useKeypress((input, key) => {
-    if (key.escape) ctx.goBack()
-    else if (input === 'e') void doSave(true)
-    else if (input === 's' || key.return) void doSave(false)
+    if (key.escape) {
+      ctx.goBack()
+      return true
+    }
+    if (input === 'e') {
+      void doSave(true)
+      return true
+    }
+    if (input === 's' || key.return) {
+      void doSave(false)
+      return true
+    }
   })
 
   const toolSummary = (tools: string[] | undefined): string => {
@@ -124,7 +142,8 @@ export function StepConfirm(props: {
 
         <Box marginTop={1} flexDirection="column">
           <Text>
-            <Text bold>Description</Text> (tells Claude when to use this agent):
+            <Text bold>Description</Text> (tells the agent when to use this
+            agent):
           </Text>
           <Box marginLeft={2} marginTop={1}>
             <Text>{truncate(finalAgent.whenToUse)}</Text>

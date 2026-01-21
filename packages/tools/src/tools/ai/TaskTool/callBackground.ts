@@ -13,6 +13,7 @@ import {
 } from '#core/utils/backgroundTasks'
 import { saveAgentTranscript } from '#core/utils/agentTranscripts'
 import { hasPermissionsToUseTool } from '#core/permissions'
+import { appendTaskOutput, touchTaskOutputFile } from '#runtime/taskOutputStore'
 
 import type { PreparedTaskToolRun } from './callTypes'
 import type { Input, Output } from './schema'
@@ -30,16 +31,27 @@ function isTextBlock(block: unknown): block is TextBlock {
 export async function* callTaskToolBackground(
   input: Input,
   prepared: PreparedTaskToolRun,
+  metadata?: {
+    parentAgentId?: string
+    parentToolUseId?: string
+    subagentType?: string
+    model?: string
+  },
 ): AsyncGenerator<{
   type: 'result'
   data: Output
   resultForAssistant: string
 }> {
   const bgAbortController = new AbortController()
+  touchTaskOutputFile(prepared.agentId)
 
   const taskRecord: BackgroundAgentTaskRuntime = {
     type: 'async_agent',
     agentId: prepared.agentId,
+    parentAgentId: metadata?.parentAgentId,
+    parentToolUseId: metadata?.parentToolUseId,
+    subagentType: metadata?.subagentType,
+    model: metadata?.model,
     description: input.description,
     prompt: prepared.effectivePrompt,
     status: 'running',
@@ -72,6 +84,21 @@ export async function* callTaskToolBackground(
       )) {
         bgMessages.push(msg)
         bgTranscriptMessages.push(msg)
+
+        if (msg.type === 'assistant') {
+          const content = msg.message.content
+          const text =
+            typeof content === 'string'
+              ? content
+              : Array.isArray(content)
+                ? content
+                    .filter(isTextBlock)
+                    .map(b => b.text)
+                    .join('\n')
+                : ''
+          if (text) appendTaskOutput(prepared.agentId, text.trimEnd() + '\n')
+        }
+
         taskRecord.messages = [...bgTranscriptMessages]
         upsertBackgroundAgentTask(taskRecord)
       }
@@ -84,16 +111,43 @@ export async function* callTaskToolBackground(
           ? lastAssistant.message.content.filter(isTextBlock)
           : []
 
-      taskRecord.status = 'completed'
-      taskRecord.completedAt = Date.now()
-      taskRecord.resultText = content.map(b => b.text).join('\n')
+      const resultText = content.map(b => b.text).join('\n')
+
+      if (taskRecord.status !== 'killed') {
+        taskRecord.status = 'completed'
+        taskRecord.completedAt = Date.now()
+        taskRecord.resultText = resultText
+      } else {
+        taskRecord.completedAt = taskRecord.completedAt ?? Date.now()
+        if (resultText) taskRecord.resultText = resultText
+        appendTaskOutput(
+          prepared.agentId,
+          '\n[task killed]\n'.replace(/^\n+/, ''),
+        )
+      }
       taskRecord.messages = [...bgTranscriptMessages]
       upsertBackgroundAgentTask(taskRecord)
       saveAgentTranscript(prepared.agentId, bgTranscriptMessages)
     } catch (e) {
-      taskRecord.status = 'failed'
-      taskRecord.completedAt = Date.now()
-      taskRecord.error = e instanceof Error ? e.message : String(e)
+      const message = e instanceof Error ? e.message : String(e)
+
+      if (taskRecord.status === 'killed' || bgAbortController.signal.aborted) {
+        taskRecord.status = 'killed'
+        taskRecord.completedAt = taskRecord.completedAt ?? Date.now()
+        taskRecord.error = taskRecord.error ?? (message || 'Killed by user')
+        appendTaskOutput(
+          prepared.agentId,
+          '\n[task killed]\n'.replace(/^\n+/, ''),
+        )
+      } else {
+        taskRecord.status = 'failed'
+        taskRecord.completedAt = Date.now()
+        taskRecord.error = message
+        appendTaskOutput(
+          prepared.agentId,
+          `\n[error] ${message}\n`.replace(/^\n+/, ''),
+        )
+      }
       upsertBackgroundAgentTask(taskRecord)
     }
   })()

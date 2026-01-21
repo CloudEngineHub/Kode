@@ -26,19 +26,32 @@ export function useModelSelectorMenus(args: {
     return `${provider}`
   }
 
-  const mainMenuOptions: Option[] = useMemo(
-    () => [
-      { value: 'custom-openai', label: 'Custom OpenAI-Compatible API' },
-      { value: 'custom-anthropic', label: 'Custom Messages API (v1/messages)' },
-      { value: 'partnerProviders', label: 'Partner Providers →' },
-      { value: 'partnerCodingPlans', label: 'Partner Coding Plans →' },
+  const mainMenuOptions: Option[] = useMemo(() => {
+    // Make the common path fast: surface the most-used providers directly.
+    // Keep advanced/custom flows available but not first.
+    const getModelCount = (providerName: string): number => {
+      const record = models as unknown as Record<string, unknown[] | undefined>
+      return record[providerName]?.length ?? 0
+    }
+    const provider = (value: string): Option => ({
+      value,
+      label: getProviderLabel(value, getModelCount(value)),
+    })
+
+    return [
+      provider('anthropic'),
+      provider('openai'),
+      provider('gemini'),
+      provider('ollama'),
+      { value: 'partnerProviders', label: 'All Partner Providers →' },
+      { value: 'partnerCodingPlans', label: 'Coding Plans →' },
       {
-        value: 'ollama',
-        label: getProviderLabel('ollama', models.ollama?.length || 0),
+        value: 'custom-openai',
+        label: 'Custom OpenAI-Compatible API (advanced)',
       },
-    ],
-    [],
-  )
+      { value: 'custom-anthropic', label: 'Custom Messages API (advanced)' },
+    ]
+  }, [])
 
   const rankedProviders = useMemo(
     () => [
@@ -104,10 +117,12 @@ export function useModelSelectorMenus(args: {
     [codingPlanProviders],
   )
 
+  // Reserve non-list UI rows conservatively to avoid Ink terminal-scroll tearing when
+  // the wizard is close to full height (border + title + description + footer).
   const providerReservedLines =
-    8 + args.containerPaddingY * 2 + args.containerGap * 2
+    10 + args.containerPaddingY * 2 + args.containerGap * 4
   const partnerReservedLines =
-    10 + args.containerPaddingY * 2 + args.containerGap * 3
+    12 + args.containerPaddingY * 2 + args.containerGap * 4
   const codingReservedLines = partnerReservedLines
 
   const clampIndex = (index: number, length: number) =>

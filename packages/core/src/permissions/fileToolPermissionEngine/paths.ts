@@ -6,6 +6,7 @@ import type { SettingsDestination } from '#config'
 import { getSettingsFileCandidates } from '#config'
 import type { ToolPermissionContext } from '#core/types/toolPermissionContext'
 import { getCwd, getOriginalCwd } from '#core/utils/state'
+import { LEGACY_CONFIG_DIRNAME } from '#core/compat/legacyPaths'
 
 const POSIX = path.posix
 const POSIX_SEP = POSIX.sep
@@ -14,7 +15,7 @@ const SENSITIVE_DIR_NAMES = new Set([
   '.git',
   '.vscode',
   '.idea',
-  '.claude',
+  LEGACY_CONFIG_DIRNAME,
   '.kode',
   '.ssh',
 ])
@@ -225,8 +226,9 @@ export function isWriteProtectedPath(
     ),
   )
 
-  if (normalized.endsWith('/.claude/settings.json')) return true
-  if (normalized.endsWith('/.claude/settings.local.json')) return true
+  if (normalized.endsWith(`/${LEGACY_CONFIG_DIRNAME}/settings.json`)) return true
+  if (normalized.endsWith(`/${LEGACY_CONFIG_DIRNAME}/settings.local.json`))
+    return true
   if (normalized.endsWith('/.kode/settings.json')) return true
   if (normalized.endsWith('/.kode/settings.local.json')) return true
   if (settingsPaths.has(normalized)) return true
@@ -234,9 +236,9 @@ export function isWriteProtectedPath(
   const projectRoot = options?.projectDir ?? getOriginalCwd()
   const projectRootPosix = toPosixPath(resolveLikeCliPath(projectRoot))
   const protectedDirs = [
-    POSIX.join(projectRootPosix, '.claude', 'commands'),
-    POSIX.join(projectRootPosix, '.claude', 'agents'),
-    POSIX.join(projectRootPosix, '.claude', 'skills'),
+    POSIX.join(projectRootPosix, LEGACY_CONFIG_DIRNAME, 'commands'),
+    POSIX.join(projectRootPosix, LEGACY_CONFIG_DIRNAME, 'agents'),
+    POSIX.join(projectRootPosix, LEGACY_CONFIG_DIRNAME, 'skills'),
     POSIX.join(projectRootPosix, '.kode', 'commands'),
     POSIX.join(projectRootPosix, '.kode', 'agents'),
     POSIX.join(projectRootPosix, '.kode', 'skills'),

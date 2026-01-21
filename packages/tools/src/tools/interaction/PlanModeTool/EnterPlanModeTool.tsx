@@ -2,11 +2,12 @@ import { Box, Text } from 'ink'
 import React from 'react'
 import { z } from 'zod'
 import { Tool } from '#core/tooling/Tool'
-import { enterPlanMode } from '#core/utils/planMode'
+import { enterPlanMode, getPlanConversationKey } from '#core/utils/planMode'
 import { ENTER_DESCRIPTION, ENTER_PROMPT, ENTER_TOOL_NAME } from './prompt'
 import { getTheme } from '#core/utils/theme'
 import { BLACK_CIRCLE } from '#core/constants/figures'
 import { setPermissionMode } from '#core/utils/permissionModeState'
+import { applyToolPermissionContextUpdateForConversationKey } from '#core/utils/toolPermissionContextState'
 
 const inputSchema = z.strictObject({})
 
@@ -33,10 +34,12 @@ export const EnterPlanModeTool = {
     return true
   },
   needsPermissions() {
-    return true
+    // Entering plan mode is a safe, local state transition (no side effects).
+    // Official behavior: entering plan mode does not require a permission prompt.
+    return false
   },
   requiresUserInteraction() {
-    return true
+    return false
   },
   async prompt() {
     return ENTER_PROMPT
@@ -86,6 +89,20 @@ Remember: DO NOT write or edit any files yet. This is a read-only exploration an
   async *call(_input: z.infer<typeof inputSchema>, context: any) {
     if (context?.agentId) {
       throw new Error('EnterPlanMode tool cannot be used in agent contexts')
+    }
+
+    const safeMode = Boolean(context?.options?.safeMode ?? context?.safeMode)
+    const conversationKey = getPlanConversationKey(context)
+    const updatedToolPermissionContext =
+      applyToolPermissionContextUpdateForConversationKey({
+        conversationKey,
+        isBypassPermissionsModeAvailable: !safeMode,
+        update: { type: 'setMode', mode: 'plan', destination: 'session' },
+      })
+
+    if (context) {
+      context.options ??= {}
+      context.options.toolPermissionContext = updatedToolPermissionContext
     }
 
     setPermissionMode(context, 'plan')

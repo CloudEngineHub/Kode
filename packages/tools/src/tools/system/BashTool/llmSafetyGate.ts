@@ -257,6 +257,7 @@ export async function runBashLlmSafetyGate(params: {
       input,
       ...(output ? { output } : {}),
       error: errorStr,
+      errorType,
     })
     return {
       decision: 'error',

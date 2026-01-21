@@ -13,10 +13,11 @@ const doctor: Command = {
     return 'doctor'
   },
   type: 'local-jsx',
-  call(onDone) {
+  call(onDone, context) {
     const element = React.createElement(Doctor, {
       onDone,
       doctorMode: true,
+      toolPermissionContext: context.options?.toolPermissionContext,
     })
     return Promise.resolve(element)
   },

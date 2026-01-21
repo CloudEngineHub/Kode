@@ -18,7 +18,7 @@
 
 ## 📢 Update Log
 
-**2025-12-22**: Native-first distribution (Windows OOTB). Kode prefers a cached native binary and falls back to the Node.js runtime when needed. See `docs/binary-distribution.md`.
+**2025-12-22**: npm + optionalDependencies distribution (all platforms). Kode prefers the per-platform native binary package (`@shareai-lab/kode-bin-*`) with Node.js as a fallback; standalone binaries are also published on GitHub Releases. See `docs/binary-distribution.md`.
 
 
 ## 🤝 AGENTS.md Standard Support
@@ -113,6 +113,12 @@ npm install -g @shareai-lab/kode
 > ```bash
 > npm install -g @shareai-lab/kode --registry=https://registry.npmmirror.com
 > ```
+>
+> Kode uses ripgrep (`rg`) for fast search. By default it is installed via per-platform `optionalDependencies` (`@shareai-lab/kode-ripgrep-<platform>-<arch>`). If you install with `--no-optional`, install system `rg` or set `KODE_RIPGREP_PATH`.
+>
+> Kode also ships an optional per-platform native CLI binary via `optionalDependencies` (`@shareai-lab/kode-bin-<platform>-<arch>`). If you install with `--no-optional` / `--omit=optional`, it runs via the Node.js entry (`dist/index.js`).
+>
+> Kode does **not** download anything from GitHub during install. (The optional standalone binaries live on GitHub Releases, separate from npm.)
 
 Dev channel (latest features):
 
@@ -125,18 +131,13 @@ After installation, you can use any of these commands:
 - `kwa` - Kode With Agent (alternative)
 - `kd` - Ultra-short alias
 
-### Native binaries (Windows OOTB)
+### Standalone single-file binaries (optional)
 
-- No WSL/Git Bash required.
-- On `postinstall`, Kode will best-effort download a native binary from GitHub Releases into `${KODE_BIN_DIR:-~/.kode/bin}/<version>/<platform>-<arch>/kode(.exe)`.
-- The wrapper (`cli.js`) prefers the native binary and falls back to the Node.js runtime (`node dist/index.js`) when needed.
+For users who prefer a “portable” executable (no npm install), download the Bun-compiled asset from GitHub Releases:
 
-Overrides:
-- Mirror downloads: `KODE_BINARY_BASE_URL`
-- Disable download: `KODE_SKIP_BINARY_DOWNLOAD=1`
-- Cache directory: `KODE_BIN_DIR`
+- https://github.com/shareAI-lab/kode/releases
 
-See `docs/binary-distribution.md`.
+See `docs/binary-distribution.md` for details (asset names, local build).
 
 ### Configuration / API keys
 
@@ -256,7 +257,7 @@ Example `.mcprc`:
 ### Troubleshooting
 
 - Models: use `/model`, or `kode models import kode-models.yaml`, and ensure required API key env vars exist.
-- Windows: if the native binary download is blocked/offline, set `KODE_BINARY_BASE_URL` (mirror) or `KODE_SKIP_BINARY_DOWNLOAD=1` (skip download); the wrapper will fall back to the Node.js runtime (`dist/index.js`).
+- Windows: install via npm as usual; if you want a single-file executable, use the GitHub Release asset for your platform.
 - MCP: use `kode mcp list` to check server status; tune `MCP_CONNECTION_TIMEOUT_MS`, `MCP_SERVER_CONNECTION_BATCH_SIZE`, and `MCP_TOOL_TIMEOUT` if servers are slow.
 - Sandbox: install `bwrap` (bubblewrap) on Linux, or set `KODE_SYSTEM_SANDBOX=0` to disable.
 

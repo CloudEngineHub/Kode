@@ -22,7 +22,10 @@ export function AgentMenu(props: {
   onCancel: () => void
 }) {
   useKeypress((_input, key) => {
-    if (key.escape) props.onCancel()
+    if (key.escape) {
+      props.onCancel()
+      return true
+    }
   })
 
   const isBuiltIn = props.agent.source === 'built-in'

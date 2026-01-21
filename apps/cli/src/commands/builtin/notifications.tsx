@@ -1,6 +1,6 @@
 import type { Command } from '../types'
 import * as React from 'react'
-import { TuiNotificationsDialog } from '#ui-ink/components/TuiNotificationsDialog'
+import { NotificationsScreen } from '#ui-ink/screens/overlays/NotificationsScreen'
 
 const notifications = {
   type: 'local-jsx',
@@ -10,7 +10,7 @@ const notifications = {
   isHidden: false,
   ui: { displayMode: 'fullscreen' },
   async call(onDone) {
-    return <TuiNotificationsDialog onDone={onDone} />
+    return <NotificationsScreen onDone={onDone} />
   },
   userFacingName() {
     return 'notifications'

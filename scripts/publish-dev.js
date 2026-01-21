@@ -42,25 +42,69 @@ async function publishDev() {
 
     console.log(`📦 Publishing version: ${devVersion} with tag 'dev'`)
 
-    // 3. 临时更新 package.json 版本号
-    const originalPackageJson = { ...packageJson }
-    packageJson.version = devVersion
-    writeFileSync(packagePath, JSON.stringify(packageJson, null, 2))
+    // 3. 临时更新版本号（同步 workspace 里的平台包版本 + 主包 optionalDependencies）
+    const originalVersion = baseVersion
+    execSync(`node scripts/set-version.mjs ${devVersion}`, { stdio: 'inherit' })
 
-    // 4. 构建项目
+    // 4. 准备 ripgrep 平台包（发布时生成二进制）
+    console.log('🧰 Preparing ripgrep platform packages...')
+    execSync('bun run scripts/ensure-ripgrep.mjs', { stdio: 'inherit' })
+    execSync('node scripts/prepare-ripgrep-packages.mjs', { stdio: 'inherit' })
+
+    // 5. 准备 Kode 原生二进制平台包（需要已构建/下载各平台二进制到 dist/bin 或 artifacts/）
+    console.log('🧰 Preparing Kode binary platform packages...')
+    execSync('node scripts/prepare-kode-bin-packages.mjs', { stdio: 'inherit' })
+
+    // 6. 构建项目
     console.log('🔨 Building project...')
     execSync('npm run build', { stdio: 'inherit' })
 
-    // 5. 运行预发布检查
+    // 7. 运行预发布检查
     console.log('🔍 Running pre-publish checks...')
     execSync('bun run scripts/prepublish-check.js', { stdio: 'inherit' })
 
-    // 6. 发布到 npm 的 dev tag
-    console.log('📤 Publishing to npm...')
-    execSync(`npm publish --tag dev --access public`, { stdio: 'inherit' })
+    // 8. 发布到 npm 的 dev tag（先发布二进制/rg 平台包，再发布主包）
+    console.log('📤 Publishing Kode binary platform packages...')
+    const kodeBinDirs = [
+      'packages/kode-bin-darwin-arm64',
+      'packages/kode-bin-darwin-x64',
+      'packages/kode-bin-linux-arm64',
+      'packages/kode-bin-linux-x64',
+      'packages/kode-bin-win32-arm64',
+      'packages/kode-bin-win32-x64',
+    ]
+    for (const dir of kodeBinDirs) {
+      execSync(`npm publish --tag dev --access public --ignore-scripts`, {
+        stdio: 'inherit',
+        cwd: path.join(process.cwd(), dir),
+      })
+    }
 
-    // 7. 恢复原始 package.json
-    writeFileSync(packagePath, JSON.stringify(originalPackageJson, null, 2))
+    console.log('📤 Publishing ripgrep platform packages...')
+    const ripgrepDirs = [
+      'packages/kode-ripgrep-darwin-arm64',
+      'packages/kode-ripgrep-darwin-x64',
+      'packages/kode-ripgrep-linux-arm64',
+      'packages/kode-ripgrep-linux-x64',
+      'packages/kode-ripgrep-win32-arm64',
+      'packages/kode-ripgrep-win32-x64',
+    ]
+    for (const dir of ripgrepDirs) {
+      execSync(`npm publish --tag dev --access public --ignore-scripts`, {
+        stdio: 'inherit',
+        cwd: path.join(process.cwd(), dir),
+      })
+    }
+
+    console.log('📤 Publishing main package...')
+    execSync(`npm publish --tag dev --access public --ignore-scripts`, {
+      stdio: 'inherit',
+    })
+
+    // 9. 恢复原始版本号（避免工作区长期处于 dev 版本）
+    execSync(`node scripts/set-version.mjs ${originalVersion}`, {
+      stdio: 'inherit',
+    })
 
     console.log('\n✅ Dev version published successfully!')
     console.log(`📦 Version: ${devVersion}`)
@@ -72,18 +116,7 @@ async function publishDev() {
   } catch (error) {
     console.error('❌ Dev publish failed:', error.message)
 
-    // 尝试恢复 package.json
-    try {
-      const packagePath = path.join(process.cwd(), 'package.json')
-      const packageJson = JSON.parse(readFileSync(packagePath, 'utf8'))
-      if (packageJson.version.includes('-dev.')) {
-        // 恢复到基础版本
-        const baseVersion = packageJson.version.split('-dev.')[0]
-        packageJson.version = baseVersion
-        writeFileSync(packagePath, JSON.stringify(packageJson, null, 2))
-        console.log('🔄 Restored package.json version')
-      }
-    } catch {}
+    console.log('🔄 Please manually restore versions if needed (git checkout).')
 
     process.exit(1)
   }

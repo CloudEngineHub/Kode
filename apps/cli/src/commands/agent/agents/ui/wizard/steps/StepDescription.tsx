@@ -12,7 +12,10 @@ export function StepDescription({ ctx }: { ctx: WizardContextValue }) {
   const columns = Math.min(80, process.stdout.columns ?? 80)
 
   useKeypress((_input, key) => {
-    if (key.escape) ctx.goBack()
+    if (key.escape) {
+      ctx.goBack()
+      return true
+    }
   })
 
   const onSubmit = (next: string) => {
@@ -28,11 +31,11 @@ export function StepDescription({ ctx }: { ctx: WizardContextValue }) {
 
   return (
     <WizardPanel
-      subtitle="Description (tell Claude when to use this agent)"
+      subtitle="Description (tell the agent when to use this agent)"
       footerText="Press Enter to continue · Esc to go back"
     >
       <Box flexDirection="column" marginTop={1} gap={1}>
-        <Text>When should Claude use this agent?</Text>
+        <Text>When should this agent be used?</Text>
         <TextInput
           value={value}
           onChange={setValue}

@@ -88,10 +88,34 @@ export function createCliProgram(
       'Enable bypassing all permission checks as an option, without it being enabled by default. Recommended only for sandboxes with no internet access.',
       () => true,
     )
+    .addOption(
+      new Option(
+        '--max-thinking-tokens <tokens>',
+        'Maximum number of thinking tokens.  (only works with --print)',
+      )
+        .argParser(Number)
+        .hideHelp(),
+    )
+    .addOption(
+      new Option(
+        '--max-turns <turns>',
+        'Maximum number of agentic turns in non-interactive mode. This will early exit the conversation after the specified number of turns. (only works with --print)',
+      )
+        .argParser(Number)
+        .hideHelp(),
+    )
     .option(
       '--max-budget-usd <amount>',
       'Maximum dollar amount to spend on API calls (only works with --print)',
-      String,
+      value => {
+        const n = Number(value)
+        if (!Number.isFinite(n) || n <= 0) {
+          throw new Error(
+            '--max-budget-usd must be a positive number greater than 0',
+          )
+        }
+        return n
+      },
     )
     .option(
       '--include-partial-messages',
@@ -120,9 +144,25 @@ export function createCliProgram(
       'Load MCP servers from JSON files or strings (space-separated)',
     )
     .option('--system-prompt <prompt>', 'System prompt to use for the session')
+    .addOption(
+      new Option(
+        '--system-prompt-file <file>',
+        'Read system prompt from a file',
+      )
+        .argParser(String)
+        .hideHelp(),
+    )
     .option(
       '--append-system-prompt <prompt>',
       'Append a system prompt to the default system prompt',
+    )
+    .addOption(
+      new Option(
+        '--append-system-prompt-file <file>',
+        'Read system prompt from a file and append to the default system prompt',
+      )
+        .argParser(String)
+        .hideHelp(),
     )
     .option(
       '--permission-mode <mode>',
@@ -222,7 +262,7 @@ export function createCliProgram(
     )
     .option(
       '-r, --resume [value]',
-      'Resume a conversation by session ID or session name (omit value to open selector)',
+      'Resume a conversation by session ID/name, or open interactive picker with optional search term',
     )
     .option(
       '-c, --continue',

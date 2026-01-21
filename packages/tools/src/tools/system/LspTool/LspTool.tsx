@@ -10,8 +10,7 @@ import { z } from 'zod'
 import { OPERATIONS } from './constants'
 import { extractSymbolAtPosition, toProjectRelativeIfPossible } from './format'
 import { summarizeToolResult } from './summary'
-import { tryLoadTypeScriptModule } from './tsProject'
-import { callLspTool } from './call'
+import { callLspTool, ensureLspManagerInitialized } from './call'
 import { DESCRIPTION, PROMPT, TOOL_NAME_FOR_PROMPT } from './prompt'
 
 export const inputSchema = z.strictObject({
@@ -65,7 +64,11 @@ export const LspTool = {
     return 'LSP'
   },
   async isEnabled() {
-    return tryLoadTypeScriptModule(getCwd()) !== null
+    const manager = await ensureLspManagerInitialized()
+    if (!manager) return false
+    const servers = manager.getAllServers()
+    if (servers.size === 0) return false
+    return Array.from(servers.values()).some(s => s.state !== 'error')
   },
   isReadOnly() {
     return true

@@ -1,6 +1,6 @@
 import React from 'react'
 import { Box, Text } from 'ink'
-import { usePermissionContext } from '#ui-ink/context/PermissionContext'
+import { usePermissionContext } from '#ui-ink/contexts/PermissionContext'
 import { getTheme, type Theme } from '#core/utils/theme'
 import { getPermissionModeCycleShortcut } from '#ui-ink/utils/permissionModeCycleShortcut'
 import type { PermissionMode } from '#core/types/PermissionMode'

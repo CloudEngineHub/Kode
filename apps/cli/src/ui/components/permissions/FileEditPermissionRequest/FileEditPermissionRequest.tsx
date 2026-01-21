@@ -11,16 +11,17 @@ import { env } from '#core/utils/env'
 import { getTheme } from '#core/utils/theme'
 import { logUnaryEvent } from '#core/utils/unaryLogging'
 import { type ToolUseConfirm } from '#ui-ink/components/permissions/PermissionRequest'
-import {
-  PermissionRequestTitle,
-  textColorForRiskScore,
-} from '#ui-ink/components/permissions/PermissionRequestTitle'
+import { textColorForRiskScore } from '#ui-ink/components/permissions/PermissionRequestTitle'
 import { FileEditToolDiff } from './FileEditToolDiff'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import { getPermissionModeCycleShortcut } from '#ui-ink/utils/permissionModeCycleShortcut'
-import { usePermissionContext } from '#ui-ink/context/PermissionContext'
+import { usePermissionContext } from '#ui-ink/contexts/PermissionContext'
 import { isPathInWorkingDirectories } from '#core/utils/permissions/fileToolPermissionEngine'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
+import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
+import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
+import { PermissionRequestDetails } from '#ui-ink/components/permissions/PermissionRequestDetails'
+import { applyToolPermissionUpdatesToLiveToolUseContext } from '../liveToolPermissionContext'
 
 function getOptions(args: {
   path: string
@@ -33,11 +34,11 @@ function getOptions(args: {
 
   const options = [
     {
-      label: 'Yes',
+      label: 'Allow once',
       value: 'yes',
     },
     {
-      label: `No, and provide instructions (${chalk.bold.hex(getTheme().warning)('esc')})`,
+      label: `Deny and provide instructions (${chalk.bold.hex(getTheme().warning)('esc')})`,
       value: 'no',
     },
   ]
@@ -47,8 +48,8 @@ function getOptions(args: {
       `(${args.modeCycleShortcut})`,
     )
     const sessionLabel = args.isInWorkingDir
-      ? `Yes, allow all edits during this session ${shortcutHint}`
-      : `Yes, allow all edits in ${chalk.bold(`${dirName}/`)} during this session ${shortcutHint}`
+      ? `Allow all edits during this session ${shortcutHint}`
+      : `Allow all edits in ${chalk.bold(`${dirName}/`)} during this session ${shortcutHint}`
     options.splice(1, 0, { label: sessionLabel, value: 'yes-session' })
   }
 
@@ -67,6 +68,7 @@ export function FileEditPermissionRequest({
   verbose,
 }: Props): React.ReactNode {
   const { columns } = useTerminalSize()
+  const layout = useScreenLayout()
   const { applyToolPermissionUpdate, toolPermissionContext } =
     usePermissionContext()
   const { file_path, new_string, old_string } = toolUseConfirm.input as {
@@ -127,6 +129,10 @@ export function FileEditPermissionRequest({
             for (const update of toolUseConfirm.suggestions ?? []) {
               applyToolPermissionUpdate(update)
             }
+            applyToolPermissionUpdatesToLiveToolUseContext({
+              toolUseContext: toolUseConfirm.toolUseContext,
+              updates: toolUseConfirm.suggestions ?? [],
+            })
           }
           onDone()
           toolUseConfirm.onAllow(
@@ -169,41 +175,48 @@ export function FileEditPermissionRequest({
   })
 
   return (
-    <Box
-      flexDirection="column"
-      borderStyle="round"
-      borderColor={textColorForRiskScore(toolUseConfirm.riskScore)}
-      marginTop={1}
-      paddingLeft={1}
-      paddingRight={1}
-      paddingBottom={1}
-    >
-      <PermissionRequestTitle
-        title="Edit file"
-        riskScore={toolUseConfirm.riskScore}
-      />
-      <FileEditToolDiff
-        file_path={file_path}
-        new_string={new_string}
-        old_string={old_string}
-        verbose={verbose}
-        width={columns - 12}
-      />
-      <Box flexDirection="column">
-        <Text>
-          Do you want to make this edit to{' '}
-          <Text bold>{basename(file_path)}</Text>?
-        </Text>
-        <Select
-          options={getOptions({
-            path: file_path,
-            modeCycleShortcut: modeCycleShortcut.displayText,
-            isInWorkingDir,
-            hasSessionSuggestion,
-          })}
-          onChange={handleChoice}
-        />
-      </Box>
+    <Box marginTop={1} width="100%">
+      <ScreenFrame
+        title="Edit file permission"
+        titleColor={textColorForRiskScore(toolUseConfirm.riskScore)}
+        paddingX={layout.paddingX}
+        paddingY={layout.tightLayout ? 0 : layout.paddingY}
+        gap={layout.gap}
+      >
+        <Box flexDirection="column" gap={layout.gap}>
+          <PermissionRequestDetails toolUseConfirm={toolUseConfirm} />
+          <FileEditToolDiff
+            file_path={file_path}
+            new_string={new_string}
+            old_string={old_string}
+            verbose={verbose}
+            width={Math.max(10, columns - layout.paddingX * 2 - 2)}
+            enableScrolling={true}
+          />
+
+          <Box flexDirection="column">
+            <Text>
+              Allow this edit to <Text bold>{basename(file_path)}</Text>?
+            </Text>
+            <Select
+              options={getOptions({
+                path: file_path,
+                modeCycleShortcut: modeCycleShortcut.displayText,
+                isInWorkingDir,
+                hasSessionSuggestion,
+              })}
+              onChange={handleChoice}
+            />
+          </Box>
+
+          <Text dimColor wrap="truncate-end">
+            Enter to confirm · Esc to reject · PgUp/PgDn scroll diff
+            {hasSessionSuggestion
+              ? ` · ${modeCycleShortcut.displayText} allow session`
+              : ''}
+          </Text>
+        </Box>
+      </ScreenFrame>
     </Box>
   )
 }

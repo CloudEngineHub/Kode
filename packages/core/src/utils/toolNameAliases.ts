@@ -4,6 +4,51 @@ export type ToolNameAliasResolution = {
   wasAliased: boolean
 }
 
+type ToolNameAliasGroups = Record<string, readonly string[]>
+
+function buildToolNameAliasMap(
+  groups: ToolNameAliasGroups,
+): Record<string, string> {
+  const aliasToCanonical: Record<string, string> = {}
+
+  for (const [canonicalName, aliases] of Object.entries(groups)) {
+    for (const alias of aliases) {
+      const existing = aliasToCanonical[alias]
+      if (existing && existing !== canonicalName) {
+        throw new Error(
+          `Tool name alias conflict for "${alias}": "${existing}" vs "${canonicalName}"`,
+        )
+      }
+      aliasToCanonical[alias] = canonicalName
+    }
+  }
+
+  return aliasToCanonical
+}
+
+const CANONICAL_TOOL_ALIASES: ToolNameAliasGroups = {
+  // Some upstream clients unify AgentOutputTool and BashOutputTool into TaskOutput (with aliases).
+  TaskOutput: [
+    'AgentOutputTool',
+    'BashOutputTool',
+    'BashOutput',
+    'TaskOutputTool',
+  ],
+
+  // Legacy client tool surfaces use lowerCamelCase for these MCP helpers.
+  // Kode keeps canonical ids but accepts legacy names as aliases.
+  ListMcpResourcesTool: ['listMcpResources'],
+  ReadMcpResourceTool: ['readMcpResource'],
+}
+
+const TOOL_NAME_ALIAS_MAP = buildToolNameAliasMap(CANONICAL_TOOL_ALIASES)
+
+export function __buildToolNameAliasMapForTests(
+  groups: ToolNameAliasGroups,
+): Record<string, string> {
+  return buildToolNameAliasMap(groups)
+}
+
 /**
  * Resolve legacy tool aliases to their canonical tool names.
  *
@@ -12,17 +57,7 @@ export type ToolNameAliasResolution = {
  */
 export function resolveToolNameAlias(name: string): ToolNameAliasResolution {
   const originalName = name
-
-  const resolvedName =
-    name === 'AgentOutputTool'
-      ? 'TaskOutput'
-      : name === 'BashOutputTool'
-        ? 'TaskOutput'
-        : name === 'BashOutput'
-          ? 'TaskOutput'
-          : name === 'TaskOutputTool'
-            ? 'TaskOutput'
-            : name
+  const resolvedName = TOOL_NAME_ALIAS_MAP[name] ?? name
 
   return {
     originalName,

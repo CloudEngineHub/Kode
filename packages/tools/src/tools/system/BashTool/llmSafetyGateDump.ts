@@ -12,6 +12,7 @@ export function writeGateFailureDump(args: {
   input: string
   output?: string
   error: string
+  errorType?: string
 }): void {
   try {
     const dir = join(CACHE_PATHS.errors(), 'bash-llm-gate')
@@ -22,6 +23,7 @@ export function writeGateFailureDump(args: {
       '=== Bash LLM gate failure ===',
       '',
       `error: ${args.error}`,
+      args.errorType ? `errorType: ${args.errorType}` : '',
       '',
       '--- command ---',
       args.command,

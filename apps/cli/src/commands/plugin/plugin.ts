@@ -1,5 +1,5 @@
 import type { Command } from '../types'
-import { reloadCustomCommands } from '#cli-services/customCommands'
+import { reloadCustomCommandsForSession } from '#cli-services/customCommands'
 import {
   addMarketplace,
   disableSkillPlugin,
@@ -69,9 +69,7 @@ function parseCommonFlags(tokens: string[]): {
 }
 
 async function refreshCommandsCache(): Promise<void> {
-  reloadCustomCommands()
-  const { getCommands } = await import('../registry')
-  getCommands.cache.clear?.()
+  await reloadCustomCommandsForSession()
 }
 
 async function refreshPluginRuntimeFromInstalls(): Promise<string[]> {

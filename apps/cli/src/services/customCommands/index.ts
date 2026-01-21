@@ -6,6 +6,16 @@ export {
   loadCustomCommands,
   reloadCustomCommands,
 } from './loader'
+export {
+  emitCustomCommandReloaded,
+  subscribeCustomCommandReloads,
+} from './events'
+export { reloadCustomCommandsForSession } from './reload'
+export {
+  refreshCustomCommandWatcher,
+  startCustomCommandWatcher,
+  stopCustomCommandWatcher,
+} from './watcher'
 export type {
   CustomCommandFile,
   CustomCommandFrontmatter,

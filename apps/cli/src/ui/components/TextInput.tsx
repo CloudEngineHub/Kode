@@ -158,12 +158,12 @@ export default function TextInput({
     // Some terminals (e.g. kitty/wezterm with CSI-u keyboard protocol) encode Enter with modifiers as CSI u sequences.
     // Example: ESC[13;3u (Alt/Option+Enter). Ink may strip the leading ESC.
     if (/^(?:\x1b)?\[13;2(?:u|~)$/.test(input)) {
-      // Treat modified Enter as plain Enter to avoid leaking raw CSI sequences into the input.
+      // Shift+Enter -> newline in multiline chat inputs.
       const nextKey = {
         ...key,
         return: true,
         meta: false,
-        shift: false,
+        shift: true,
       } as Key
       if (shouldBlockEnter(nextKey)) return
       onInput('\r', nextKey)

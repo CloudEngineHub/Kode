@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { chmodSync, cpSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, cpSync, mkdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import * as esbuild from 'esbuild'
 
@@ -41,14 +41,6 @@ cpSync(join('scripts', 'cli-acp-wrapper.cjs'), 'cli-acp.js')
 try {
   chmodSync('cli-acp.js', 0o755)
 } catch {}
-
-writeFileSync(
-  '.npmrc',
-  `# Kode npm configuration
-package-lock=false
-save-exact=true
-`,
-)
 
 console.log('✅ CLI built')
 console.log('  - dist/index.js')

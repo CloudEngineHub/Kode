@@ -15,6 +15,7 @@ import { BinaryFeedbackChoice } from './utils'
 import { PRODUCT_NAME } from '#core/constants/product'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
+import { Divider } from '#ui-ink/primitives/components/Divider'
 
 const HELP_URL = 'https://go/cli-feedback'
 
@@ -72,7 +73,7 @@ export function BinaryFeedbackView({
   verbose,
 }: Props) {
   const theme = getTheme()
-  const { rows } = useTerminalSize()
+  const { rows, columns } = useTerminalSize()
   const [focused, setFocus] = useState('no-preference')
   const [focusValue, setFocusValue] = useState<string | undefined>(undefined)
   const exitState = useExitOnCtrlCD(() => process.exit(1))
@@ -97,10 +98,9 @@ export function BinaryFeedbackView({
         flexDirection="column"
         height={panelHeight}
         width="100%"
-        borderStyle="round"
-        borderColor={theme.permission}
+        paddingX={1}
       >
-        <Box width="100%" justifyContent="space-between" paddingX={1}>
+        <Box width="100%" justifyContent="space-between">
           <Text bold color={theme.permission}>
             [ANT-ONLY] Help train {PRODUCT_NAME}
           </Text>
@@ -108,6 +108,7 @@ export function BinaryFeedbackView({
             <Link url={HELP_URL}>[?]</Link>
           </Text>
         </Box>
+        <Divider width={Math.max(1, columns - 2)} />
         <Box flexDirection="row" width="100%" flexGrow={1} paddingTop={1}>
           <Box
             flexDirection="column"
@@ -156,7 +157,7 @@ export function BinaryFeedbackView({
             />
           </Box>
         </Box>
-        <Box flexDirection="column" paddingTop={1} paddingX={1}>
+        <Box flexDirection="column" paddingTop={1}>
           <Text>How do you want to proceed?</Text>
           <Select
             options={getOptions()}

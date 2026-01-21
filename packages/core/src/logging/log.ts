@@ -1,7 +1,6 @@
 export {
   CACHE_PATHS,
   LEGACY_CACHE_PATHS,
-  SESSION_ID,
   dateToFilename,
   getForkNumberFromFilename,
   getMessagesPath,

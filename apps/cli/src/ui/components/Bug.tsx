@@ -8,9 +8,10 @@ import { getGlobalConfig } from '#core/utils/config'
 import { env } from '#core/utils/env'
 import { openBrowser } from '#core/utils/browser'
 import { getTheme } from '#core/utils/theme'
-import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import { useExitOnCtrlCD } from '#ui-ink/hooks/useExitOnCtrlCD'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
+import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
+import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 
 import TextInput from './TextInput'
 
@@ -21,10 +22,15 @@ type Props = {
 type Step = 'userInput' | 'consent'
 
 export function Bug({ onDone }: Props): React.ReactNode {
+  const theme = getTheme()
+  const layout = useScreenLayout()
   const [step, setStep] = useState<Step>('userInput')
   const [cursorOffset, setCursorOffset] = useState(0)
   const [description, setDescription] = useState('')
-  const textInputColumns = useTerminalSize().columns - 4
+  const textInputColumns = Math.max(
+    10,
+    layout.columns - layout.paddingX * 2 - 10,
+  )
 
   const exitState = useExitOnCtrlCD(() => process.exit(0))
 
@@ -46,25 +52,18 @@ export function Bug({ onDone }: Props): React.ReactNode {
     }
   })
 
-  const theme = getTheme()
-
   return (
-    <>
-      <Box
-        flexDirection="column"
-        borderStyle="round"
-        borderColor={theme.permission}
-        paddingX={1}
-        paddingBottom={1}
-        gap={1}
-      >
-        <Text bold color={theme.permission}>
-          Submit Bug Report
-        </Text>
-
+    <ScreenFrame
+      title="Submit Bug Report"
+      exitState={exitState}
+      paddingX={layout.paddingX}
+      paddingY={layout.paddingY}
+      gap={layout.gap}
+    >
+      <Box flexDirection="column" gap={layout.gap}>
         {step === 'userInput' ? (
-          <Box flexDirection="column" gap={1}>
-            <Text>
+          <Box flexDirection="column" gap={layout.gap}>
+            <Text wrap="truncate-end">
               Describe the issue below and include any errors you see:
             </Text>
             <TextInput
@@ -81,42 +80,42 @@ export function Bug({ onDone }: Props): React.ReactNode {
               onChangeCursorOffset={setCursorOffset}
             />
             {!canContinue ? (
-              <Text dimColor>Enter a description to continue</Text>
+              <Text dimColor wrap="truncate-end">
+                Enter a description to continue
+              </Text>
             ) : null}
           </Box>
         ) : (
-          <Box flexDirection="column" gap={1}>
-            <Text>This report will include:</Text>
-            <Box marginLeft={2} flexDirection="column">
-              <Text>
+          <Box flexDirection="column" gap={layout.gap}>
+            <Text wrap="truncate-end">This report will include:</Text>
+            <Box paddingLeft={2} flexDirection="column">
+              <Text wrap="truncate-end">
                 - Your description: <Text dimColor>{description}</Text>
               </Text>
-              <Text>
+              <Text wrap="truncate-end">
                 - Environment: <Text dimColor>{env.platform}</Text>,{' '}
                 <Text dimColor>{env.terminal}</Text>,{' '}
                 <Text dimColor>v{MACRO.VERSION || 'unknown'}</Text>
               </Text>
-              <Text>- Model settings (no API keys)</Text>
+              <Text wrap="truncate-end">- Model settings (no API keys)</Text>
             </Box>
-            <Text>
+            <Text wrap="truncate-end">
               Press <Text bold>Enter</Text> to open GitHub and create an issue.
             </Text>
           </Box>
         )}
-      </Box>
 
-      <Box marginLeft={3}>
-        <Text dimColor>
-          {exitState.pending ? (
-            <>Press {exitState.keyName} again to exit</>
-          ) : step === 'userInput' ? (
-            <>Enter to continue · Esc to cancel</>
-          ) : (
-            <>Enter to open browser · Esc to cancel</>
-          )}
-        </Text>
+        <Box marginTop={layout.tightLayout ? 0 : 1}>
+          <Text dimColor wrap="truncate-end">
+            {exitState.pending
+              ? `Press ${exitState.keyName} again to exit`
+              : step === 'userInput'
+                ? 'Enter to continue · Esc to cancel'
+                : 'Enter to open browser · Esc to cancel'}
+          </Text>
+        </Box>
       </Box>
-    </>
+    </ScreenFrame>
   )
 }
 

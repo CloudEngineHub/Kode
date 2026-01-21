@@ -18,10 +18,14 @@ import {
 import type { FileReadToolData } from './types'
 import { renderResultForAssistant } from './renderResultForAssistant'
 import { createAssistantMessage } from '#core/utils/messages'
+import { sha256File } from '#core/utils/sha256'
 
 export async function* callFileReadTool(
   args: { file_path: string; offset?: number; limit?: number },
-  ctx: { readFileTimestamps: Record<string, number> },
+  ctx: {
+    readFileTimestamps: Record<string, number>
+    readFileHashes?: Record<string, string>
+  },
 ): AsyncGenerator<
   {
     type: 'result'
@@ -161,6 +165,12 @@ export async function* callFileReadTool(
       startLine,
       totalLines,
     },
+  }
+
+  try {
+    ;(ctx.readFileHashes ??= {})[fullFilePath] = await sha256File(fullFilePath)
+  } catch {
+    // Hashing is best-effort; freshness guards will fall back to mtime-only behavior.
   }
 
   yield {

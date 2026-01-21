@@ -6,7 +6,10 @@ import { WizardPanel, type WizardContextValue } from '../Wizard'
 
 export function StepChooseLocation({ ctx }: { ctx: WizardContextValue }) {
   useKeypress((_input, key) => {
-    if (key.escape) ctx.cancel()
+    if (key.escape) {
+      ctx.cancel()
+      return true
+    }
   })
 
   return (
@@ -16,9 +19,10 @@ export function StepChooseLocation({ ctx }: { ctx: WizardContextValue }) {
     >
       <Box marginTop={1}>
         <Select
+          key="location-select"
           options={[
-            { label: 'Project (.claude/agents/)', value: 'projectSettings' },
-            { label: 'Personal (~/.claude/agents/)', value: 'userSettings' },
+            { label: 'Project (.kode/agents/)', value: 'projectSettings' },
+            { label: 'Personal (~/.kode/agents/)', value: 'userSettings' },
           ]}
           onChange={value => {
             const location =

@@ -1,8 +1,8 @@
 import React from 'react'
 
 import { MACRO } from '#core/constants/macros'
-import { Onboarding } from '#ui-ink/components/Onboarding'
-import { TrustDialog } from '#ui-ink/components/TrustDialog'
+import { OnboardingScreen } from '#ui-ink/screens/setup/OnboardingScreen'
+import { TrustScreen } from '#ui-ink/screens/setup/TrustScreen'
 import { KeypressProvider } from '#ui-ink/contexts/KeypressContext'
 import {
   checkHasTrustDialogAccepted,
@@ -16,6 +16,7 @@ import {
   type InkRenderInstance,
 } from '#ui-ink/utils/inkRender'
 import { handleMcprcServerApprovals } from './mcpServerApproval'
+import { computeOnboardingPlan } from './onboarding/plan'
 
 export function completeOnboarding(): void {
   const config = getGlobalConfig()
@@ -29,16 +30,31 @@ export function completeOnboarding(): void {
 export async function showSetupScreens(
   safeMode?: boolean,
   print?: boolean,
-): Promise<void> {
+): Promise<{ postSetupInitialPrompt?: string }> {
   if (process.env.NODE_ENV === 'test') {
-    return
+    return {}
   }
 
   // Never show interactive setup screens in print mode.
-  if (print) return
+  if (print) return {}
+
+  const isInteractive = Boolean(process.stdin.isTTY && process.stdout.isTTY)
 
   const config = getGlobalConfig()
-  if (!config.theme || !config.hasCompletedOnboarding) {
+  const hasConfiguredModels = Boolean(
+    (config.modelProfiles ?? []).some(profile => profile.isActive),
+  )
+
+  const onboardingPlan = computeOnboardingPlan({
+    config,
+    isInteractive,
+    hasConfiguredModels,
+  })
+
+  let postSetupInitialPrompt: string | undefined
+
+  if (onboardingPlan.shouldShowOnboarding) {
+    let skipped = false
     const { render } = await import('ink')
     await withEphemeralAlternateScreen(async () => {
       await new Promise<void>(resolve => {
@@ -46,8 +62,9 @@ export async function showSetupScreens(
         instance = renderWithTuiStdio(
           render,
           <KeypressProvider>
-            <Onboarding
-              onDone={() => {
+            <OnboardingScreen
+              onDone={result => {
+                skipped = result?.skipped === true
                 completeOnboarding()
                 instance?.unmount?.()
                 resolve()
@@ -58,6 +75,10 @@ export async function showSetupScreens(
         )
       })
     })
+
+    if (onboardingPlan.shouldAutoRunCapabilities && !skipped) {
+      postSetupInitialPrompt = '/capabilities'
+    }
   }
 
   if (safeMode && !checkHasTrustDialogAccepted()) {
@@ -73,7 +94,7 @@ export async function showSetupScreens(
         instance = renderWithTuiStdio(
           render,
           <KeypressProvider>
-            <TrustDialog onDone={onDone} />
+            <TrustScreen onDone={onDone} />
           </KeypressProvider>,
           { exitOnCtrlC: false },
         )
@@ -82,4 +103,5 @@ export async function showSetupScreens(
   }
 
   await handleMcprcServerApprovals()
+  return { postSetupInitialPrompt }
 }

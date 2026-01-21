@@ -20,14 +20,17 @@ export const useSelect = ({ isDisabled = false, state }: UseSelectProps) => {
     (_input, key) => {
       if (key.downArrow) {
         state.focusNextOption()
+        return true
       }
 
       if (key.upArrow) {
         state.focusPreviousOption()
+        return true
       }
 
       if (key.return) {
         state.selectFocusedOption()
+        return true
       }
     },
     { isActive: !isDisabled },

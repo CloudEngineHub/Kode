@@ -7,10 +7,10 @@ import chalk from 'chalk'
 import { getAnthropicApiKey, getGlobalConfig } from '#core/utils/config'
 import { USER_AGENT } from '#core/utils/http'
 import {
-  buildClaudeCodeHeaders,
-  CLAUDE_CODE_DEFAULT_TIMEOUT_MS,
+  buildCompatHeaders,
+  COMPAT_DEFAULT_TIMEOUT_MS,
   type RequestHeadersProfile,
-} from '#core/ai/llm/claudeCodeFallback'
+} from '#core/ai/llm/restrictedClientCompat'
 import {
   getModelManager,
   getVertexRegionForModel,
@@ -48,8 +48,8 @@ export function getAnthropicClient(
   const modelProfile = modelManager.getModel('main')
 
   const defaultHeaders: { [key: string]: string } =
-    requestHeadersProfile === 'claude_code'
-      ? buildClaudeCodeHeaders()
+    requestHeadersProfile === 'compat'
+      ? buildCompatHeaders()
       : {
           'x-app': 'cli',
           'User-Agent': USER_AGENT,
@@ -61,8 +61,8 @@ export function getAnthropicClient(
     timeout: parseInt(
       process.env.API_TIMEOUT_MS ||
         String(
-          requestHeadersProfile === 'claude_code'
-            ? CLAUDE_CODE_DEFAULT_TIMEOUT_MS
+          requestHeadersProfile === 'compat'
+            ? COMPAT_DEFAULT_TIMEOUT_MS
             : 60 * 1000,
         ),
       10,

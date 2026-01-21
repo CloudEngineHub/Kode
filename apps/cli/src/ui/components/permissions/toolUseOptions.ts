@@ -54,14 +54,14 @@ export function toolUseOptions({
     // Prefix option takes precedence over full command option
     dontShowAgainOptions = [
       {
-        label: `Yes, and don't ask again for commands starting with ${chalk.bold(prefix)} in ${chalk.bold(getCwd())}`,
+        label: `Always allow commands starting with ${chalk.bold(prefix)} in ${chalk.bold(getCwd())}`,
         value: 'yes-dont-ask-again-prefix',
       },
     ]
   } else if (showDontAskAgainOption) {
     dontShowAgainOptions = [
       {
-        label: `Yes, and don't ask again for this exact command in ${chalk.bold(getCwd())}`,
+        label: `Always allow this exact command in ${chalk.bold(getCwd())}`,
         value: 'yes-dont-ask-again-full',
       },
     ]
@@ -69,12 +69,12 @@ export function toolUseOptions({
 
   return [
     {
-      label: 'Yes',
+      label: 'Allow once',
       value: 'yes',
     },
     ...dontShowAgainOptions,
     {
-      label: `No, and provide instructions (${chalk.bold.hex(getTheme().warning)('esc')})`,
+      label: `Deny and provide instructions (${chalk.bold.hex(getTheme().warning)('esc')})`,
       value: 'no',
     },
   ]

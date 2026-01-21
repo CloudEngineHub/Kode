@@ -1,72 +1,11 @@
 import { existsSync } from 'fs'
 import { dirname } from 'path'
 import { hasGlobPattern, normalizeLinuxSandboxPath } from './linuxSandbox'
+import { buildSandboxEnvAssignments } from './sandboxEnv'
 import type {
   BunShellSandboxReadConfig,
   BunShellSandboxWriteConfig,
 } from './types'
-
-function buildSandboxEnvAssignments(options?: {
-  httpProxyPort?: number
-  socksProxyPort?: number
-  platform?: NodeJS.Platform
-}): string[] {
-  const httpProxyPort = options?.httpProxyPort
-  const socksProxyPort = options?.socksProxyPort
-  const platform = options?.platform ?? process.platform
-
-  const env: string[] = ['SANDBOX_RUNTIME=1', 'TMPDIR=/tmp/kode']
-  if (!httpProxyPort && !socksProxyPort) return env
-
-  const noProxy = [
-    'localhost',
-    '127.0.0.1',
-    '::1',
-    '*.local',
-    '.local',
-    '169.254.0.0/16',
-    '10.0.0.0/8',
-    '172.16.0.0/12',
-    '192.168.0.0/16',
-  ].join(',')
-  env.push(`NO_PROXY=${noProxy}`)
-  env.push(`no_proxy=${noProxy}`)
-
-  if (httpProxyPort) {
-    env.push(`HTTP_PROXY=http://localhost:${httpProxyPort}`)
-    env.push(`HTTPS_PROXY=http://localhost:${httpProxyPort}`)
-    env.push(`http_proxy=http://localhost:${httpProxyPort}`)
-    env.push(`https_proxy=http://localhost:${httpProxyPort}`)
-  }
-
-  if (socksProxyPort) {
-    env.push(`ALL_PROXY=socks5h://localhost:${socksProxyPort}`)
-    env.push(`all_proxy=socks5h://localhost:${socksProxyPort}`)
-    if (platform === 'darwin') {
-      env.push(
-        `GIT_SSH_COMMAND="ssh -o ProxyCommand='nc -X 5 -x localhost:${socksProxyPort} %h %p'"`,
-      )
-    }
-    env.push(`FTP_PROXY=socks5h://localhost:${socksProxyPort}`)
-    env.push(`ftp_proxy=socks5h://localhost:${socksProxyPort}`)
-    env.push(`RSYNC_PROXY=localhost:${socksProxyPort}`)
-    env.push(
-      `DOCKER_HTTP_PROXY=http://localhost:${httpProxyPort || socksProxyPort}`,
-    )
-    env.push(
-      `DOCKER_HTTPS_PROXY=http://localhost:${httpProxyPort || socksProxyPort}`,
-    )
-    if (httpProxyPort) {
-      env.push('CLOUDSDK_PROXY_TYPE=https')
-      env.push('CLOUDSDK_PROXY_ADDRESS=localhost')
-      env.push(`CLOUDSDK_PROXY_PORT=${httpProxyPort}`)
-    }
-    env.push(`GRPC_PROXY=socks5h://localhost:${socksProxyPort}`)
-    env.push(`grpc_proxy=socks5h://localhost:${socksProxyPort}`)
-  }
-
-  return env
-}
 
 function escapeRegexForSandboxGlobPattern(pattern: string): string {
   return (

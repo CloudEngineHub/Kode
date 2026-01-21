@@ -1,6 +1,10 @@
 import { existsSync, lstatSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
+import {
+  LEGACY_PLUGIN_DIRNAME,
+  legacyPluginPathInProject,
+} from '#core/compat/legacyPaths'
 import type { ValidationResult } from './types'
 import { resolveFromAgentCwd } from './utils'
 import { validateMarketplaceJson } from './marketplace'
@@ -40,8 +44,8 @@ export function validatePluginOrMarketplacePath(
   if (stat.isDirectory()) {
     const marketplace = join(abs, '.kode-plugin', 'marketplace.json')
     const plugin = join(abs, '.kode-plugin', 'plugin.json')
-    const legacyMarketplace = join(abs, '.claude-plugin', 'marketplace.json')
-    const legacyPlugin = join(abs, '.claude-plugin', 'plugin.json')
+    const legacyMarketplace = legacyPluginPathInProject(abs, 'marketplace.json')
+    const legacyPlugin = legacyPluginPathInProject(abs, 'plugin.json')
     if (existsSync(marketplace)) filePath = marketplace
     else if (existsSync(plugin)) filePath = plugin
     else if (existsSync(legacyMarketplace)) filePath = legacyMarketplace
@@ -54,8 +58,7 @@ export function validatePluginOrMarketplacePath(
         errors: [
           {
             path: 'directory',
-            message:
-              'No manifest found in directory. Expected .kode-plugin/marketplace.json or .kode-plugin/plugin.json (legacy .claude-plugin/* is also supported)',
+            message: `No manifest found in directory. Expected .kode-plugin/marketplace.json or .kode-plugin/plugin.json (legacy ${LEGACY_PLUGIN_DIRNAME}/* is also supported)`,
           },
         ],
         warnings: [],

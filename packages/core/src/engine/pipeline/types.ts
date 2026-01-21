@@ -12,6 +12,11 @@ import type { FullToolUseResult, NormalizedMessage } from '#core/utils/messages'
 // Extended ToolUseContext for query functions.
 export interface ExtendedToolUseContext extends ToolUseContext {
   abortController: AbortController
+  /**
+   * Internal counter for the number of model calls ("turns") executed in the current run.
+   * Used for non-interactive `--max-turns` enforcement and SDK `num_turns` reporting.
+   */
+  turnCount?: number
   options: {
     commands: any[]
     forkNumber: number
@@ -20,8 +25,13 @@ export interface ExtendedToolUseContext extends ToolUseContext {
     mcpClients?: any[]
     verbose: boolean
     safeMode: boolean
+    onStreamEvent?: (event: unknown) => void
+    maxBudgetUsd?: number
+    maxTurns?: number
     maxThinkingTokens: number
+    thinkingMode?: 'auto' | 'enabled' | 'disabled'
     isKodingRequest?: boolean
+    commandAllowedTools?: string[]
     lastUserPrompt?: string
     model?: string | import('#config').ModelPointerType
     toolPermissionContext?: ToolPermissionContext

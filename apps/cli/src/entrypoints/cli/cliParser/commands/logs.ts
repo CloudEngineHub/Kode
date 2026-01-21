@@ -121,8 +121,9 @@ export function registerLogCommands(
             await import('#protocol/utils/kodeAgentSessionLoad')
           const { resolveResumeSessionIdentifier } =
             await import('#protocol/utils/kodeAgentSessionResume')
-          const { setKodeAgentSessionId } =
-            await import('#protocol/utils/kodeAgentSessionId')
+          const { setSessionId } = await import('#core/utils/sessionId')
+          const { setKodeAgentSessionForkInfo } =
+            await import('#protocol/utils/kodeAgentSessionForkInfo')
 
           const rawIdentifier = String(identifier).trim()
           const isLegacyNumber = /^-?\\d+$/.test(rawIdentifier)
@@ -168,7 +169,8 @@ export function registerLogCommands(
                 identifier: rawIdentifier,
               })
               if (resolved.kind === 'ok') {
-                setKodeAgentSessionId(resolved.sessionId)
+                setKodeAgentSessionForkInfo(null)
+                setSessionId(resolved.sessionId)
                 messages = loadKodeAgentSessionMessages({
                   cwd,
                   sessionId: resolved.sessionId,

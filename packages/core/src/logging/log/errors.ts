@@ -1,8 +1,15 @@
 import { mkdirSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 
+import { getKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
+
 import { appendToJsonLog, readJsonLog } from './jsonLog'
-import { CACHE_PATHS, DATE, getErrorsPath, SESSION_ID } from './paths'
+import {
+  CACHE_PATHS,
+  DATE,
+  getErrorsPath,
+  getLegacyErrorsPath,
+} from './paths'
 
 const IN_MEMORY_ERROR_LOG: Array<{ error: string; timestamp: string }> = []
 const MAX_IN_MEMORY_ERRORS = 100 // Limit to prevent memory issues
@@ -35,7 +42,10 @@ export function logError(error: unknown): void {
 }
 
 export function getErrorsLog(): object[] {
-  return readJsonLog(getErrorsPath())
+  return [
+    ...readJsonLog(getErrorsPath()),
+    ...readJsonLog(getLegacyErrorsPath()),
+  ]
 }
 
 export function getInMemoryErrors(): object[] {
@@ -62,7 +72,7 @@ export function logMCPError(serverName: string, error: unknown): void {
     const errorInfo = {
       error: errorStr,
       timestamp,
-      sessionId: SESSION_ID,
+      sessionId: getKodeAgentSessionId(),
       cwd: process.cwd(),
     }
 
