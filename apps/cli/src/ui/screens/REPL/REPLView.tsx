@@ -21,6 +21,7 @@ import type { BinaryFeedbackContext } from './types'
 import { TransientViewportProvider } from '#ui-ink/contexts/TransientViewportContext'
 
 const VIEWPORT_SAFE_MARGIN_ROWS = 1
+const MEASURE_DEBOUNCE_MS = 400
 
 export function REPLView({
   conversationKey,
@@ -89,7 +90,11 @@ export function REPLView({
   const lastMeasureKeyRef = useRef('')
   const lastMeasureAtRef = useRef(0)
   const { rows, columns } = useTerminalSize()
-  useFlickerDetector(rootUiRef, rows, true)
+  useFlickerDetector(
+    rootUiRef,
+    rows,
+    debug || Boolean(process.env.KODE_DEBUG_FLICKER),
+  )
 
   const isFullScreenToolView = toolJSX?.displayMode === 'fullscreen'
   const hasToolJSX = Boolean(toolJSX)
@@ -175,7 +180,14 @@ export function REPLView({
         isBypassPermissionsModeAvailable={!safeMode}
       >
         {isFullScreenToolView && toolJSX ? (
-          <Box ref={rootUiRef} flexDirection="column" width="100%">
+          <Box
+            ref={rootUiRef}
+            flexDirection="column"
+            width="100%"
+            height={Math.max(1, rows - VIEWPORT_SAFE_MARGIN_ROWS)}
+            overflow="hidden"
+            flexShrink={0}
+          >
             {toolJSX.jsx}
           </Box>
         ) : (

@@ -18,7 +18,7 @@ import { getMessagesPath } from '#core/utils/log'
 import { getTotalAPIDuration, getTotalDuration } from '#core/cost-tracker'
 import {
   getCurrentProjectConfig,
-  getGlobalConfig,
+  getGlobalConfigCached,
   saveCurrentProjectConfig,
 } from '#core/utils/config'
 import { usePermissionContext } from '#ui-ink/contexts/PermissionContext'
@@ -29,6 +29,7 @@ import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import { useUnifiedCompletion } from '#ui-ink/hooks/useUnifiedCompletion'
 import { useKeypress, type Key } from '#ui-ink/hooks/useKeypress'
 import { useUndoBuffer } from '#ui-ink/hooks/useUndoBuffer'
+import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { getPermissionModeCycleShortcut } from '#ui-ink/utils/permissionModeCycleShortcut'
 import { getPromptInputSpecialKeyAction } from '#ui-ink/utils/promptInputSpecialKey'
 import { setTerminalTitle } from '#cli-utils/terminal'
@@ -147,7 +148,7 @@ export function PromptInput({
   const [queuedPrompts, setQueuedPrompts] = useState<QueuedPrompt[]>([])
   const [promptStash, setPromptStash] = useState<PromptStash | null>(null)
   const onHistoryUserInputRef = useRef<() => void>(() => {})
-  const editorMode = getGlobalConfig().editorMode ?? 'normal'
+  const editorMode = getGlobalConfigCached().editorMode ?? 'normal'
   const [vimMode, setVimMode] = useState<'INSERT' | 'NORMAL'>('INSERT')
 
   useEffect(() => {
@@ -1090,7 +1091,7 @@ export function PromptInput({
         return true
       }
     },
-    { priority: 10 },
+    { priority: KEYPRESS_PRIORITY.INPUT },
   )
 
   return (

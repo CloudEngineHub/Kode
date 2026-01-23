@@ -48,13 +48,94 @@ export function writeToStderr(
   return (originalStderrWrite as unknown as any)(chunk, encodingOrCb, cb)
 }
 
+const CSI = '\x1b['
+const SYNC_OUTPUT_START = `${CSI}?2026h`
+const SYNC_OUTPUT_END = `${CSI}?2026l`
+
+let syncOutputActive = false
+let syncOutputFlushHandle: ReturnType<typeof setImmediate> | null = null
+let syncOutputExitHooked = false
+
+function shouldUseSynchronizedOutput(): boolean {
+  if (process.env.NODE_ENV === 'test') return false
+  if (!process.stdout?.isTTY) return false
+  const screenReaderEnv =
+    process.env.KODE_SCREEN_READER ?? process.env.SCREENREADER
+  if (screenReaderEnv) return false
+
+  const env = process.env.KODE_SYNC_OUTPUT
+  if (env === '0' || env === 'false') return false
+
+  // Default to enabled on TTY unless explicitly disabled.
+  return true
+}
+
+function ensureSyncOutputExitHooked(): void {
+  if (syncOutputExitHooked) return
+  syncOutputExitHooked = true
+  process.once('exit', () => {
+    if (!syncOutputActive) return
+    try {
+      originalStdoutWrite(SYNC_OUTPUT_END)
+    } catch {
+      // best-effort only
+    }
+  })
+}
+
+function beginSynchronizedOutput(): void {
+  if (syncOutputActive) return
+  syncOutputActive = true
+  ensureSyncOutputExitHooked()
+  originalStdoutWrite(SYNC_OUTPUT_START)
+}
+
+function scheduleEndSynchronizedOutput(): void {
+  if (!syncOutputActive) return
+
+  if (syncOutputFlushHandle) {
+    clearImmediate(syncOutputFlushHandle)
+  }
+
+  syncOutputFlushHandle = setImmediate(() => {
+    syncOutputFlushHandle = null
+    if (!syncOutputActive) return
+    syncOutputActive = false
+    originalStdoutWrite(SYNC_OUTPUT_END)
+  })
+}
+
+function writeToInkStdout(
+  chunk: Uint8Array | string,
+  cb?: WriteCallback,
+): boolean
+function writeToInkStdout(
+  chunk: Uint8Array | string,
+  encoding?: BufferEncoding,
+  cb?: WriteCallback,
+): boolean
+function writeToInkStdout(
+  chunk: Uint8Array | string,
+  encodingOrCb?: BufferEncoding | WriteCallback,
+  cb?: WriteCallback,
+): boolean {
+  if (!shouldUseSynchronizedOutput()) {
+    return (originalStdoutWrite as unknown as any)(chunk, encodingOrCb, cb)
+  }
+
+  beginSynchronizedOutput()
+  const result = (originalStdoutWrite as unknown as any)(chunk, encodingOrCb, cb)
+  scheduleEndSynchronizedOutput()
+  return result
+}
+
 export function createInkStdio(): {
   stdout: NodeJS.WriteStream
   stderr: NodeJS.WriteStream
 } {
   const stdout = new Proxy(process.stdout, {
     get(target, prop, receiver) {
-      if (prop === 'write') return writeToStdout
+      if (prop === 'write') return writeToInkStdout
       const value = Reflect.get(target, prop, receiver)
       return typeof value === 'function' ? value.bind(target) : value
     },

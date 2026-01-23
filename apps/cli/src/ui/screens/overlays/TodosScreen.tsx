@@ -6,6 +6,7 @@ import { getTodoRenderModel } from '#core/utils/todoRenderModel'
 import { getTodos } from '#core/utils/todoStorage'
 import { getTheme } from '#core/utils/theme'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
+import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import { getWindowedList } from '#ui-ink/primitives/list/windowedList'
@@ -32,7 +33,7 @@ function TodosEmptyView({
         return true
       }
     },
-    { priority: 10 },
+    { priority: KEYPRESS_PRIORITY.FULLSCREEN_OVERLAY },
   )
 
   return (
@@ -140,7 +141,7 @@ function TodosListView({
         return true
       }
     },
-    { priority: 10 },
+    { priority: KEYPRESS_PRIORITY.FULLSCREEN_OVERLAY },
   )
 
   return (

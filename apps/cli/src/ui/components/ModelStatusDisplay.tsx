@@ -6,6 +6,7 @@ import { getGlobalConfig } from '#core/utils/config'
 import { getTheme } from '#core/utils/theme'
 import { useExitOnCtrlCD } from '#ui-ink/hooks/useExitOnCtrlCD'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
+import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import { wrapLines } from '#ui-ink/primitives/text/wrapLines'
@@ -174,7 +175,7 @@ export function ModelStatusDisplay({ onClose }: Props): React.ReactNode {
         return true
       }
     },
-    { priority: 10 },
+    { priority: KEYPRESS_PRIORITY.FULLSCREEN_OVERLAY },
   )
 
   const clampedScrollTop = clamp(scrollTop, 0, maxScrollTop)

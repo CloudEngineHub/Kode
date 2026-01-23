@@ -163,6 +163,8 @@ const TEST_PROJECT_CONFIG_FOR_TESTING: ProjectConfig = {
   ...defaultConfigForProject(getCwd()),
 }
 
+let CACHED_GLOBAL_CONFIG: GlobalConfig | null = null
+
 export function enableConfigs(): void {
   getConfig(getGlobalConfigFilePath(), DEFAULT_GLOBAL_CONFIG, true)
 }
@@ -170,24 +172,40 @@ export function enableConfigs(): void {
 export function saveGlobalConfig(config: GlobalConfig): void {
   if (process.env.NODE_ENV === 'test') {
     Object.assign(TEST_GLOBAL_CONFIG_FOR_TESTING, config)
+    CACHED_GLOBAL_CONFIG = TEST_GLOBAL_CONFIG_FOR_TESTING
     return
+  }
+
+  const existingProjects =
+    CACHED_GLOBAL_CONFIG?.projects ??
+    getConfig(getGlobalConfigFilePath(), DEFAULT_GLOBAL_CONFIG).projects
+
+  const nextConfig = {
+    ...config,
+    projects: existingProjects,
   }
 
   saveConfig(
     getGlobalConfigFilePath(),
-    {
-      ...config,
-      projects: getConfig(getGlobalConfigFilePath(), DEFAULT_GLOBAL_CONFIG)
-        .projects,
-    },
+    nextConfig,
     DEFAULT_GLOBAL_CONFIG,
   )
+
+  CACHED_GLOBAL_CONFIG = migrateModelProfilesRemoveId(nextConfig)
 }
 
 export function getGlobalConfig(): GlobalConfig {
   if (process.env.NODE_ENV === 'test') return TEST_GLOBAL_CONFIG_FOR_TESTING
   const config = getConfig(getGlobalConfigFilePath(), DEFAULT_GLOBAL_CONFIG)
   return migrateModelProfilesRemoveId(config)
+}
+
+export function getGlobalConfigCached(): GlobalConfig {
+  if (process.env.NODE_ENV === 'test') return TEST_GLOBAL_CONFIG_FOR_TESTING
+  if (!CACHED_GLOBAL_CONFIG) {
+    CACHED_GLOBAL_CONFIG = getGlobalConfig()
+  }
+  return CACHED_GLOBAL_CONFIG
 }
 
 export function checkHasTrustDialogAccepted(): boolean {
@@ -224,18 +242,19 @@ export function saveCurrentProjectConfig(projectConfig: ProjectConfig): void {
     return
   }
 
+  const projectPath = resolve(getCwd())
   const config = getConfig(getGlobalConfigFilePath(), DEFAULT_GLOBAL_CONFIG)
-  saveConfig(
-    getGlobalConfigFilePath(),
-    {
-      ...config,
-      projects: {
-        ...config.projects,
-        [resolve(getCwd())]: projectConfig,
-      },
+  const nextConfig = {
+    ...config,
+    projects: {
+      ...config.projects,
+      [projectPath]: projectConfig,
     },
-    DEFAULT_GLOBAL_CONFIG,
-  )
+  }
+  saveConfig(getGlobalConfigFilePath(), nextConfig, DEFAULT_GLOBAL_CONFIG)
+
+  // Keep the cached global config in sync for UI reads.
+  CACHED_GLOBAL_CONFIG = migrateModelProfilesRemoveId(nextConfig)
 }
 
 export async function isAutoUpdaterDisabled(): Promise<boolean> {

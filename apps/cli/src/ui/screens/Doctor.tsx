@@ -9,6 +9,7 @@ import { findUnreachablePermissionRules } from '#core/permissions'
 import { describeToolPermissionRuleSource } from '#core/permissions/ruleString'
 
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
+import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { terminalCapabilityManager } from '#ui-ink/utils/terminalCapabilityManager'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
@@ -261,7 +262,7 @@ export function Doctor({
         return true
       }
     },
-    { priority: 10 },
+    { priority: KEYPRESS_PRIORITY.FULLSCREEN_OVERLAY },
   )
 
   return (

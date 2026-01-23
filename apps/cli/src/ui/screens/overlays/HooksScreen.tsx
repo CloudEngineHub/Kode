@@ -19,6 +19,7 @@ import { getTheme } from '#core/utils/theme'
 import { getCwd } from '#core/utils/state'
 import { useExitOnCtrlCD } from '#ui-ink/hooks/useExitOnCtrlCD'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
+import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import { getWindowedList } from '#ui-ink/primitives/list/windowedList'
@@ -648,7 +649,7 @@ export function HooksScreen({ onDone }: Props): React.ReactNode {
         }
       }
     },
-    { priority: 10 },
+    { priority: KEYPRESS_PRIORITY.FULLSCREEN_OVERLAY },
   )
 
   const title =

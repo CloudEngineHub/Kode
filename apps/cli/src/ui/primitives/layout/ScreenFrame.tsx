@@ -5,6 +5,8 @@ import { Divider } from '../components/Divider'
 
 export type ScreenExitState = { pending: boolean; keyName: string }
 
+const VIEWPORT_SAFE_MARGIN_ROWS = 1
+
 export function ScreenFrame({
   title,
   titleColor,
@@ -26,18 +28,20 @@ export function ScreenFrame({
 }): React.ReactNode {
   const { columns, rows } = useTerminalSize()
   const dividerWidth = Math.max(1, columns - paddingX * 2)
+  const frameHeight = Math.max(1, rows - VIEWPORT_SAFE_MARGIN_ROWS)
 
   return (
     <Box
       flexDirection="column"
       gap={gap}
       width={columns}
-      height={rows}
+      height={frameHeight}
       paddingX={paddingX}
       paddingY={paddingY}
       overflow="hidden"
+      flexShrink={0}
     >
-      <Box flexDirection="column">
+      <Box flexDirection="column" flexShrink={0}>
         <Text bold color={titleColor}>
           {title}
         </Text>
@@ -47,8 +51,12 @@ export function ScreenFrame({
           </Text>
         ) : null}
       </Box>
-      {showDivider ? <Divider width={dividerWidth} /> : null}
-      <Box flexDirection="column" flexGrow={1} overflow="hidden">
+      {showDivider ? (
+        <Box flexShrink={0}>
+          <Divider width={dividerWidth} />
+        </Box>
+      ) : null}
+      <Box flexDirection="column" flexGrow={1} flexShrink={1} overflow="hidden">
         {children}
       </Box>
     </Box>

@@ -4,7 +4,7 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import figures from 'figures'
 import { getTheme } from '#core/utils/theme'
 import {
-  getGlobalConfig,
+  getGlobalConfigCached,
   type ModelPointerType,
   setModelPointer,
 } from '#core/utils/config'
@@ -14,6 +14,7 @@ import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import TextInput from '#ui-ink/components/TextInput'
 import { Select } from '#ui-ink/components/CustomSelect/select'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
+import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { ModelListManager } from './ModelListManager'
 
 type Props = {
@@ -78,7 +79,7 @@ function formatModelLabel(model: {
 
 export function ModelConfig({ onClose }: Props): React.ReactNode {
   const theme = getTheme()
-  const config = getGlobalConfig()
+  const config = getGlobalConfigCached()
   const modelManager = getModelManager()
   const { rows, columns } = useTerminalSize()
   const tightLayout = rows <= 18 || columns <= 72
@@ -230,7 +231,7 @@ export function ModelConfig({ onClose }: Props): React.ReactNode {
         }
       }
     },
-    { isActive: true },
+    { isActive: true, priority: KEYPRESS_PRIORITY.FULLSCREEN_OVERLAY },
   )
 
   if (showModelListManager) {

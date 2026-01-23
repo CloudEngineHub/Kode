@@ -7,6 +7,7 @@ import { getTheme } from '#core/utils/theme'
 import TextInput from '#ui-ink/components/TextInput'
 import type { Key } from '#ui-ink/hooks/useKeypress'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
+import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 
@@ -139,7 +140,7 @@ export function HistorySearchScreen({
         return true
       }
     },
-    { priority: 20 },
+    { priority: KEYPRESS_PRIORITY.FULLSCREEN_OVERLAY },
   )
 
   const shortcutLine =

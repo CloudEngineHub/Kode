@@ -11,6 +11,7 @@ import { getCwd } from '#core/utils/state'
 import { getKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
 import { useExitOnCtrlCD } from '#ui-ink/hooks/useExitOnCtrlCD'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
+import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import { wrapLines } from '#ui-ink/primitives/text/wrapLines'
@@ -307,7 +308,7 @@ export function StatusScreen({ context, onDone }: Props): React.ReactNode {
         return true
       }
     },
-    { priority: 10 },
+    { priority: KEYPRESS_PRIORITY.FULLSCREEN_OVERLAY },
   )
 
   const clampedScrollTop = clamp(scrollTop, 0, maxScrollTop)

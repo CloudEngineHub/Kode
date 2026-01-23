@@ -17,6 +17,7 @@ import { launchExternalEditorForFilePath } from '#cli-utils/externalEditor'
 import { copyTextToClipboard } from '#cli-utils/clipboard'
 import { buildTranscriptLines } from '#cli-utils/transcriptText'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
+import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import { wrapLines } from '#ui-ink/primitives/text/wrapLines'
@@ -248,7 +249,7 @@ export function TranscriptScreen({
         return true
       }
     },
-    { priority: 10 },
+    { priority: KEYPRESS_PRIORITY.FULLSCREEN_OVERLAY },
   )
 
   const hiddenAbove = scrollTop

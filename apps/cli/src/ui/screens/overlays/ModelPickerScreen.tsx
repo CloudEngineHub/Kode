@@ -5,6 +5,7 @@ import figures from 'figures'
 import { getModelManager } from '#core/utils/model'
 import { getTheme } from '#core/utils/theme'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
+import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 
@@ -89,7 +90,7 @@ export function ModelPickerScreen({
 
       return
     },
-    { priority: 10 },
+    { priority: KEYPRESS_PRIORITY.FULLSCREEN_OVERLAY },
   )
 
   const shortcutLine = '↑/↓ select · Enter apply · Esc/Ctrl+C close'

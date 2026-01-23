@@ -1,6 +1,7 @@
 import { useStdin } from 'ink'
 import * as React from 'react'
 import { useCallback, useEffect, useRef } from 'react'
+import ReactReconciler from 'react-reconciler'
 import { debug as debugLogger } from '#core/utils/debugLogger'
 import { terminalCapabilityManager } from '#ui-ink/utils/terminalCapabilityManager'
 
@@ -10,6 +11,15 @@ export const PASTE_TIMEOUT = 30_000
 export const FAST_RETURN_TIMEOUT = 30
 
 const ESC = '\x1b'
+
+const batchedUpdates: ((fn: () => void) => void) | null =
+  typeof (ReactReconciler as any)?.batchedUpdates === 'function'
+    ? ((ReactReconciler as any).batchedUpdates as (fn: () => void) => void)
+    : typeof (ReactReconciler as any)?.default?.batchedUpdates === 'function'
+      ? ((ReactReconciler as any).default.batchedUpdates as (
+          fn: () => void,
+        ) => void)
+      : null
 
 // Some macOS terminals emit special characters for Option/Alt-modified keys instead of ESC-prefixed sequences.
 // Map a small set of common cases back into Meta+<key> so navigation shortcuts work consistently.
@@ -587,7 +597,7 @@ export function KeypressProvider({
   const rebuildOrderedSubscriptions = useCallback(() => {
     orderedSubscriptionsRef.current = [
       ...subscriptionsRef.current.values(),
-    ].sort((a, b) => b.priority - a.priority || a.order - b.order)
+    ].sort((a, b) => b.priority - a.priority || b.order - a.order)
   }, [])
 
   const subscribe = useCallback(
@@ -628,19 +638,46 @@ export function KeypressProvider({
     const key = buildKey(parsed)
     const input = keyToInput(parsed)
 
-    for (const subscription of orderedSubscriptionsRef.current) {
-      const handled = subscription.handler(input, key)
-      if (handled && typeof (handled as Promise<void>).catch === 'function') {
-        ;(handled as Promise<void>).catch(error => {
-          debugLogger.warn('KEYPRESS_HANDLER_PROMISE_REJECTED', {
-            error: error instanceof Error ? error.message : String(error),
+    // Batch all updates triggered by key handlers into a single Ink render pass.
+    // This matches Ink's `useInput` behavior and reduces intermediate-frame flicker.
+    if (!batchedUpdates) {
+      for (const subscription of orderedSubscriptionsRef.current) {
+        const handled = subscription.handler(input, key)
+        if (
+          handled &&
+          typeof (handled as Promise<void>).catch === 'function'
+        ) {
+          ;(handled as Promise<void>).catch(error => {
+            debugLogger.warn('KEYPRESS_HANDLER_PROMISE_REJECTED', {
+              error: error instanceof Error ? error.message : String(error),
+            })
           })
-        })
+        }
+        if (handled === true) {
+          break
+        }
       }
-      if (handled === true) {
-        break
-      }
+      return
     }
+
+    batchedUpdates(() => {
+      for (const subscription of orderedSubscriptionsRef.current) {
+        const handled = subscription.handler(input, key)
+        if (
+          handled &&
+          typeof (handled as Promise<void>).catch === 'function'
+        ) {
+          ;(handled as Promise<void>).catch(error => {
+            debugLogger.warn('KEYPRESS_HANDLER_PROMISE_REJECTED', {
+              error: error instanceof Error ? error.message : String(error),
+            })
+          })
+        }
+        if (handled === true) {
+          break
+        }
+      }
+    })
   }, [])
 
   useEffect(() => {

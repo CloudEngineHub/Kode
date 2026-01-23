@@ -12,6 +12,7 @@ import { getModelManager } from '#core/utils/model'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
+import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 
 type Props = {
   onClose: () => void
@@ -178,7 +179,8 @@ export function ConfigScreen({ onClose }: Props): React.ReactNode {
     onClose()
   }, [onClose])
 
-  useKeypress((input, key) => {
+  useKeypress(
+    (input, key) => {
     if (didCloseRef.current) return true
 
     const inputChar = input.length === 1 ? input : ''
@@ -273,7 +275,9 @@ export function ConfigScreen({ onClose }: Props): React.ReactNode {
 
       safeOnClose()
     }
-  })
+    },
+    { priority: KEYPRESS_PRIORITY.FULLSCREEN_OVERLAY },
+  )
 
   const modelSummary = (() => {
     if (activeProfiles.length === 0) {

@@ -29,6 +29,7 @@ import { buildTranscriptLines } from '#cli-utils/transcriptText'
 import { copyTextToClipboard } from '#cli-utils/clipboard'
 import { useExitOnCtrlCD } from '#ui-ink/hooks/useExitOnCtrlCD'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
+import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { SearchBox } from '#ui-ink/components/SearchBox'
 import TextInput from '#ui-ink/components/TextInput'
 import { SimpleSpinner } from '#ui-ink/components/Spinner'
@@ -1186,7 +1187,8 @@ export function ResumeSessionSelector(props: {
     [availableTags.length],
   )
 
-  useKeypress((inputChar, key) => {
+  useKeypress(
+    (inputChar, key) => {
     if (didSubmitRef.current) return true
 
     if (agenticSearch.status === 'searching') {
@@ -1450,7 +1452,9 @@ export function ResumeSessionSelector(props: {
       setSubmitError(null)
       return true
     }
-  })
+    },
+    { priority: KEYPRESS_PRIORITY.FULLSCREEN_OVERLAY },
+  )
 
   if (sessionList.length === 0) {
     return (

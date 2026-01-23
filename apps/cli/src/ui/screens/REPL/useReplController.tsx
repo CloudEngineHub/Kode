@@ -22,7 +22,7 @@ import {
   setModelConfigChangeHandler,
 } from '#core/messages'
 import type { Message as MessageType } from '#core/query'
-import { getGlobalConfig, saveGlobalConfig } from '#core/utils/config'
+import { getGlobalConfigCached, saveGlobalConfig } from '#core/utils/config'
 import { getNextAvailableLogForkNumber, logError } from '#core/utils/log'
 import { getOriginalCwd } from '#core/utils/state'
 import { MACRO } from '#core/constants/macros'
@@ -56,13 +56,13 @@ import { ensureLspManagerInitialized } from '#tools/tools/system/LspTool/call'
 import { describeToolPermissionRuleSource } from '#core/permissions/ruleString'
 import { triggerModelConfigChange } from '#core/messages'
 import {
-  clearViewport,
   enterAlternateScreen,
   exitAlternateScreen,
 } from '#cli-utils/terminal'
 import { getModelManager } from '#core/utils/model'
 import { getToolPermissionContextForConversationKey } from '#core/utils/toolPermissionContextState'
 import type { PromptMode } from '#ui-ink/components/PromptInput/types'
+import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 
 export function useReplController(props: REPLProps) {
   const debug = props.debug ?? false
@@ -78,7 +78,7 @@ export function useReplController(props: REPLProps) {
   )
 
   const [verbose, setVerbose] = useState(() => {
-    return props.verbose ?? getGlobalConfig().verbose
+    return props.verbose ?? getGlobalConfigCached().verbose
   })
 
   const [commands, setCommands] = useState(() => props.commands)
@@ -176,7 +176,12 @@ export function useReplController(props: REPLProps) {
         process.stdin.isTTY && process.stdout.isTTY && !screenReaderEnv
 
       const useEphemeralAltScreen =
-        canUseAltScreen && getGlobalConfig().useAlternateBuffer !== true
+        canUseAltScreen && getGlobalConfigCached().useAlternateBuffer !== true
+
+      const doSetState = () => {
+        toolJSXRef.current = next
+        setToolJSX(next)
+      }
 
       // When running in the main buffer (scrollback enabled), opening a fullscreen
       // TUI view leaves the entire screen in scrollback. To preserve scrollback
@@ -185,8 +190,9 @@ export function useReplController(props: REPLProps) {
       if (useEphemeralAltScreen) {
         if (!prevFull && nextFull) {
           enterAlternateScreen()
-          void clearViewport()
+          doSetState()
           ephemeralFullscreenAltScreenRef.current = true
+          return
         } else if (prevFull && !nextFull) {
           if (ephemeralFullscreenAltScreenRef.current) {
             ephemeralFullscreenAltScreenRef.current = false
@@ -198,18 +204,19 @@ export function useReplController(props: REPLProps) {
           ephemeralFullscreenAltScreenRef.current
         ) {
           // Ensure clean transitions between fullscreen tool screens.
-          void clearViewport()
+          doSetState()
+          return
         }
       } else {
         if (prevFull !== nextFull) {
-          // Clear immediately before the first paint to avoid "sometimes starts high/sometimes low"
-          // artifacts caused by Ink's dynamic region reconciliation.
-          void clearViewport()
+          // Avoid explicit terminal clears here; the UI should remain within the viewport
+          // and rely on Ink's reconciliation to keep transitions stable.
+          doSetState()
+          return
         }
       }
 
-      toolJSXRef.current = next
-      setToolJSX(next)
+      doSetState()
     },
     [setToolJSX],
   )
@@ -249,7 +256,7 @@ export function useReplController(props: REPLProps) {
     useState(false)
   const [showCostDialog, setShowCostDialog] = useState(false)
   const [haveShownCostDialog, setHaveShownCostDialog] = useState(
-    getGlobalConfig().hasAcknowledgedCostThreshold,
+    getGlobalConfigCached().hasAcknowledgedCostThreshold,
   )
   const [binaryFeedbackContext, setBinaryFeedbackContext] =
     useState<BinaryFeedbackContext | null>(null)
@@ -456,7 +463,7 @@ export function useReplController(props: REPLProps) {
 
       if (key.meta && inputChar === 't') {
         const effectiveThinkingMode =
-          sessionThinkingMode ?? getGlobalConfig().thinkingMode ?? 'auto'
+          sessionThinkingMode ?? getGlobalConfigCached().thinkingMode ?? 'auto'
         const currentValue = effectiveThinkingMode === 'enabled'
         const isMidConversation =
           messages.some(m => m.type === 'assistant') ||
@@ -690,7 +697,7 @@ export function useReplController(props: REPLProps) {
         return true
       }
     },
-    { priority: 50 },
+    { priority: KEYPRESS_PRIORITY.REPL_CONTROLLER },
   )
 
   const getBinaryFeedbackResponse = useCallback(
@@ -767,7 +774,7 @@ export function useReplController(props: REPLProps) {
 
     const hasUltrathink = /\bultrathink\b/i.test(inputValue)
     const effectiveThinkingMode =
-      sessionThinkingMode ?? getGlobalConfig().thinkingMode ?? 'auto'
+      sessionThinkingMode ?? getGlobalConfigCached().thinkingMode ?? 'auto'
 
     if (
       hasUltrathink &&
@@ -857,7 +864,7 @@ export function useReplController(props: REPLProps) {
     forkNumber,
     messageLogName: props.messageLogName,
     thinkingMode:
-      sessionThinkingMode ?? getGlobalConfig().thinkingMode ?? 'auto',
+      sessionThinkingMode ?? getGlobalConfigCached().thinkingMode ?? 'auto',
     tools: props.tools,
     mcpClients,
     verbose,
@@ -963,7 +970,7 @@ export function useReplController(props: REPLProps) {
   const onCostDialogDone = useCallback(() => {
     setShowCostDialog(false)
     setHaveShownCostDialog(true)
-    const projectConfig = getGlobalConfig()
+    const projectConfig = getGlobalConfigCached()
     saveGlobalConfig({ ...projectConfig, hasAcknowledgedCostThreshold: true })
   }, [])
 

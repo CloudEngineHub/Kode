@@ -8,6 +8,7 @@ import { getCwd } from '#core/utils/state'
 import TextInput from '#ui-ink/components/TextInput'
 import { Select } from '#ui-ink/components/CustomSelect/select'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
+import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import { launchExternalEditorForFilePath } from '#cli-utils/externalEditor'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
@@ -304,7 +305,7 @@ export function OpenFileScreen({
         return true
       }
     },
-    { priority: 10 },
+    { priority: KEYPRESS_PRIORITY.FULLSCREEN_OVERLAY },
   )
 
   const textInputColumns = Math.max(10, Math.min(80, columns - 10))

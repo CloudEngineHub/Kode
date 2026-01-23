@@ -1,4 +1,5 @@
 import { useKeypress, type Key } from '#ui-ink/hooks/useKeypress'
+import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 
 import type {
   CompletionContext,
@@ -134,6 +135,6 @@ export function useUnifiedCompletionTabKey(args: {
 
       return true
     },
-    { priority: 20 },
+    { priority: KEYPRESS_PRIORITY.COMPLETION },
   )
 }

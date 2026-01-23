@@ -3,13 +3,14 @@ import * as React from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import figures from 'figures'
 import { getTheme } from '#core/utils/theme'
-import { getGlobalConfig, ModelPointerType } from '#core/utils/config'
+import { getGlobalConfigCached, ModelPointerType } from '#core/utils/config'
 import { getModelManager } from '#core/utils/model'
 import { useExitOnCtrlCD } from '#ui-ink/hooks/useExitOnCtrlCD'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import { getWindowedList } from '#ui-ink/primitives/list/windowedList'
+import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { ModelSelector } from './ModelSelector'
 
 type Props = {
@@ -17,7 +18,7 @@ type Props = {
 }
 
 export function ModelListManager({ onClose }: Props): React.ReactNode {
-  const config = getGlobalConfig()
+  const config = getGlobalConfigCached()
   const theme = getTheme()
   const layout = useScreenLayout()
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -232,7 +233,10 @@ export function ModelListManager({ onClose }: Props): React.ReactNode {
     ],
   )
 
-  useKeypress(handleInput, { isActive: !showModelSelector })
+  useKeypress(handleInput, {
+    isActive: !showModelSelector,
+    priority: KEYPRESS_PRIORITY.FULLSCREEN_OVERLAY,
+  })
 
   // If showing ModelSelector, render it directly
   if (showModelSelector) {

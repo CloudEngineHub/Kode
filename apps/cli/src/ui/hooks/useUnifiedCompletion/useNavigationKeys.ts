@@ -1,4 +1,5 @@
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
+import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 
 import type {
   CompletionContext,
@@ -199,7 +200,7 @@ export function useUnifiedCompletionNavigationKeys(args: {
 
       return false
     },
-    { priority: 20 },
+    { priority: KEYPRESS_PRIORITY.COMPLETION },
   )
 
   useKeypress(
@@ -218,6 +219,6 @@ export function useUnifiedCompletionNavigationKeys(args: {
       }
       return false
     },
-    { priority: 20 },
+    { priority: KEYPRESS_PRIORITY.COMPLETION },
   )
 }
