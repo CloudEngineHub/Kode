@@ -162,6 +162,8 @@ export function useTextInput({
           return getCursor().backspace()
         },
       ],
+      // Cross-terminal multiline fallback (Ctrl+J is LF on many systems).
+      ['j', () => (multiline ? getCursor().insert('\n') : undefined)],
       ['k', () => getCursor().deleteToLineEnd()],
       ['l', () => clear()],
       ['n', () => downOrHistoryDown()],
@@ -194,7 +196,19 @@ export function useTextInput({
       const optionValue = (key as unknown as Record<string, unknown>).option
       return optionValue === true
     })()
-    if (key.shift || key.meta || optionPressed) {
+    const sequence = typeof key.sequence === 'string' ? key.sequence : ''
+    const modifierEnterSequence =
+      // kitty/CSI-u: ESC[13;2u (shift) / ESC[13;3u (alt) / ESC[13;4u (shift+alt)
+      /^\x1b\[13;[234](?:u|~)$/.test(sequence) ||
+      // modifyOtherKeys: CSI 27 ; modifier ; 13 ~
+      /^\x1b\[27;[234];13~$/.test(sequence) ||
+      // Some terminals encode Shift+Enter as CSI 13 $
+      /^\x1b\[13\$$/.test(sequence) ||
+      // Alt/Option+Enter may arrive as ESC-prefixed CR/LF
+      sequence === '\x1b\r' ||
+      sequence === '\x1b\n'
+
+    if (key.shift || key.meta || optionPressed || modifierEnterSequence) {
       return getCursor().insert('\n')
     }
 
@@ -212,30 +226,48 @@ export function useTextInput({
     onSubmit?.(originalValue)
   }
 
-  function upOrHistoryUp() {
-    if (disableCursorMovementForUpDownKeys) {
-      onHistoryUp?.()
-      return getCursor()
+  function shouldDisableCursorMovement(): boolean {
+    if (typeof disableCursorMovementForUpDownKeys === 'function') {
+      return disableCursorMovementForUpDownKeys()
     }
-    const currentCursor = getCursor()
-    const cursorUp = currentCursor.up()
-    if (cursorUp.equals(currentCursor)) {
-      // already at beginning
-      onHistoryUp?.()
-    }
-    return cursorUp
+    return disableCursorMovementForUpDownKeys ?? false
   }
+
+  function upOrHistoryUp() {
+    if (shouldDisableCursorMovement()) {
+      onHistoryUp?.()
+      return getCursor()
+    }
+    const currentCursor = getCursor()
+    const { line } = currentCursor.measuredText.getPositionFromOffset(currentCursor.offset)
+
+    // If on first line, navigate history instead of moving cursor
+    if (line === 0) {
+      onHistoryUp?.()
+      return currentCursor
+    }
+
+    // Move cursor up within text
+    return currentCursor.up()
+  }
+
   function downOrHistoryDown() {
-    if (disableCursorMovementForUpDownKeys) {
+    if (shouldDisableCursorMovement()) {
       onHistoryDown?.()
       return getCursor()
     }
     const currentCursor = getCursor()
-    const cursorDown = currentCursor.down()
-    if (cursorDown.equals(currentCursor)) {
+    const { line } = currentCursor.measuredText.getPositionFromOffset(currentCursor.offset)
+    const lastLine = currentCursor.measuredText.lineCount - 1
+
+    // If on last line, navigate history instead of moving cursor
+    if (line >= lastLine) {
       onHistoryDown?.()
+      return currentCursor
     }
-    return cursorDown
+
+    // Move cursor down within text
+    return currentCursor.down()
   }
 
   function onInput(input: string, key: Key): void {

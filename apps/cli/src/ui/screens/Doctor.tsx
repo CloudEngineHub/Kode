@@ -141,6 +141,37 @@ export function Doctor({
     lines.push(
       `- wipeScrollbackOnClear: ${yesNo(Boolean(config.wipeScrollbackOnClear))} (recommended: no)`,
     )
+    const incrementalEnv = process.env.KODE_TUI_INCREMENTAL_RENDERING
+    const incrementalConfigured = config.incrementalRendering
+    const incrementalEffective = (() => {
+      if (isScreenReader) return false
+      if (!process.stdout.isTTY) return false
+      if (incrementalEnv === '0' || incrementalEnv === 'false') return false
+      if (incrementalEnv === '1' || incrementalEnv === 'true') return true
+      if (typeof incrementalConfigured === 'boolean') return incrementalConfigured
+      return true
+    })()
+    lines.push(
+      `- incrementalRendering: ${enabledDisabled(incrementalEffective)} (config: ${
+        typeof incrementalConfigured === 'boolean'
+          ? enabledDisabled(incrementalConfigured)
+          : 'default'
+      } · env: ${incrementalEnv ?? 'default'})`,
+    )
+
+    const syncEnv = process.env.KODE_SYNC_OUTPUT
+    const syncEffective = (() => {
+      if (isScreenReader) return false
+      if (!process.stdout.isTTY) return false
+      if (syncEnv === '0' || syncEnv === 'false') return false
+      return true
+    })()
+    lines.push(
+      `- syncOutput: ${enabledDisabled(syncEffective)} (env: ${syncEnv ?? 'default'})`,
+    )
+    if (process.env.KODE_TUI_MAX_FPS) {
+      lines.push(`- maxFps: ${process.env.KODE_TUI_MAX_FPS} (env override)`)
+    }
 
     if (unreachableRules.length > 0) {
       lines.push('')

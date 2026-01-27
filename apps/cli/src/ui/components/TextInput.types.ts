@@ -112,9 +112,10 @@ export type Props = {
   readonly isDimmed?: boolean
 
   /**
-   * Whether to disable cursor movement for up/down arrow keys
+   * Whether to disable cursor movement for up/down arrow keys.
+   * Can be a boolean or a function that returns boolean (evaluated at keypress time).
    */
-  readonly disableCursorMovementForUpDownKeys?: boolean
+  readonly disableCursorMovementForUpDownKeys?: boolean | (() => boolean)
 
   /**
    * Optional callback to handle special key combinations before input processing

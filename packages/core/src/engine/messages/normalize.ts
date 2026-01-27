@@ -73,43 +73,57 @@ export function normalizeMessages(messages: Message[]): NormalizedMessage[] {
     if (typeof message.message.content === 'string') {
       return [message] as NormalizedMessage[]
     }
-    const contentBlocks = message.message.content.filter(
-      block =>
-        !(
-          block.type === 'thinking' &&
+
+    // User messages should not be split by content blocks - return as single message
+    if (message.type === 'user') {
+      return [message] as NormalizedMessage[]
+    }
+
+    // Only assistant messages need to be split by content blocks
+    // Sort blocks so thinking/text appear before tool_use (for better UX)
+    const contentBlocks = message.message.content
+      .filter(
+        block =>
           !(
-            typeof (block as { thinking?: unknown }).thinking === 'string' &&
-            (block as { thinking: string }).thinking.trim().length > 0
-          )
-        ),
-    )
+            block.type === 'thinking' &&
+            !(
+              typeof (block as { thinking?: unknown }).thinking === 'string' &&
+              (block as { thinking: string }).thinking.trim().length > 0
+            )
+          ),
+      )
+      .sort((a, b) => {
+        const order: Record<string, number> = {
+          thinking: 0,
+          redacted_thinking: 1,
+          text: 2,
+          tool_use: 3,
+          server_tool_use: 3,
+          mcp_tool_use: 3,
+        }
+        return (order[a.type] ?? 2) - (order[b.type] ?? 2)
+      })
 
     return contentBlocks.map((block, blockIndex) => {
-      switch (message.type) {
-        case 'assistant': {
-          const msgRecord = message as {
-            uuid?: unknown
-            message?: { id?: unknown }
-          }
-          const baseSeed =
-            typeof msgRecord.uuid === 'string'
-              ? msgRecord.uuid
-              : String(msgRecord.message?.id ?? randomUUID())
-          return {
-            type: 'assistant',
-            uuid: stableUuidFromSeed(`${baseSeed}:${blockIndex}`),
-            message: {
-              ...message.message,
-              content: [block],
-            },
-            costUSD:
-              (message as AssistantMessage).costUSD / contentBlocks.length,
-            durationMs: (message as AssistantMessage).durationMs,
-          } as NormalizedMessage
-        }
-        case 'user':
-          return message as NormalizedUserMessage
+      const msgRecord = message as {
+        uuid?: unknown
+        message?: { id?: unknown }
       }
+      const baseSeed =
+        typeof msgRecord.uuid === 'string'
+          ? msgRecord.uuid
+          : String(msgRecord.message?.id ?? randomUUID())
+      return {
+        type: 'assistant',
+        uuid: stableUuidFromSeed(`${baseSeed}:${blockIndex}`),
+        message: {
+          ...message.message,
+          content: [block],
+        },
+        costUSD:
+          (message as AssistantMessage).costUSD / contentBlocks.length,
+        durationMs: (message as AssistantMessage).durationMs,
+      } as NormalizedMessage
     })
   })
 }

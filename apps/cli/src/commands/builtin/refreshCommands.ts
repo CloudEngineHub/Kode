@@ -43,7 +43,7 @@ const refreshCommands = {
       const customCommandsCount = projectCommands + userCommands
 
       // Provide detailed feedback about the refresh operation
-      return `✅ Commands refreshed successfully!
+      return `Commands refreshed.
 
 Custom commands reloaded: ${customCommandsCount}
 - Project commands: ${projectCommands}
@@ -55,7 +55,7 @@ Use /help to see updated command list.`
       debugLogger.warn('REFRESH_COMMANDS_FAILED', {
         error: error instanceof Error ? error.message : String(error),
       })
-      return '❌ Failed to refresh commands. Check debug logs for details.'
+      return 'Failed to refresh commands. Check debug logs for details.'
     }
   },
   userFacingName() {

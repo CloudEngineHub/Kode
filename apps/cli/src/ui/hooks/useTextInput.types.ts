@@ -20,7 +20,7 @@ export type UseTextInputProps = {
   columns: number
   maxHeight?: number
   onImagePaste?: (base64Image: string) => string | void
-  disableCursorMovementForUpDownKeys?: boolean
+  disableCursorMovementForUpDownKeys?: boolean | (() => boolean)
   externalOffset: number
   onOffsetChange: (offset: number) => void
 }

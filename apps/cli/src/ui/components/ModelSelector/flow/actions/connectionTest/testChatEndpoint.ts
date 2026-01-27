@@ -309,7 +309,7 @@ Do NOT include any other text. Do NOT call any other tool.`
 
         const result: ConnectionTestResult = {
           success: false,
-          message: `❌ ${endpointName} failed (${response.status})`,
+          message: `${endpointName} failed (${response.status})`,
           endpoint: endpointPath,
           details: `Error: ${errorMessage}`,
           errorCategory,
@@ -345,7 +345,7 @@ Do NOT include any other text. Do NOT call any other tool.`
         const responseContent = extractOpenAITextContent(data).trim()
         return {
           success: false,
-          message: `⚠️ ${endpointName} connected but tool-use verification failed`,
+          message: `${endpointName} connected but tool-use verification failed`,
           endpoint: endpointPath,
           errorCategory: 'tool_use_unsupported',
           fallbackStep: fallbackStepName,
@@ -359,7 +359,7 @@ Do NOT include any other text. Do NOT call any other tool.`
       if (toolCall.toolName !== 'Write') {
         return {
           success: false,
-          message: `⚠️ ${endpointName} returned unexpected tool call`,
+          message: `${endpointName} returned unexpected tool call`,
           endpoint: endpointPath,
           errorCategory: 'unexpected_tool_call',
           fallbackStep: fallbackStepName,
@@ -372,7 +372,7 @@ Do NOT include any other text. Do NOT call any other tool.`
       if (typeof filePath !== 'string' || typeof content !== 'string') {
         return {
           success: false,
-          message: `⚠️ ${endpointName} tool call arguments invalid`,
+          message: `${endpointName} tool call arguments invalid`,
           endpoint: endpointPath,
           errorCategory: 'invalid_tool_args',
           fallbackStep: fallbackStepName,
@@ -383,7 +383,7 @@ Do NOT include any other text. Do NOT call any other tool.`
       if (filePath !== expectedFilePath || content !== expectedContent) {
         return {
           success: false,
-          message: `⚠️ ${endpointName} tool call arguments mismatch`,
+          message: `${endpointName} tool call arguments mismatch`,
           endpoint: endpointPath,
           errorCategory: 'invalid_tool_args',
           fallbackStep: fallbackStepName,
@@ -410,7 +410,7 @@ Do NOT include any other text. Do NOT call any other tool.`
       if (actual !== expectedContent) {
         return {
           success: false,
-          message: `⚠️ ${endpointName} local file verification failed`,
+          message: `${endpointName} local file verification failed`,
           endpoint: endpointPath,
           errorCategory: 'local_verification_failed',
           fallbackStep: fallbackStepName,
@@ -420,7 +420,7 @@ Do NOT include any other text. Do NOT call any other tool.`
 
       return {
         success: true,
-        message: `✅ Tool-use connection test passed with ${endpointName}`,
+        message: `Tool-use connection test passed with ${endpointName}`,
         endpoint: endpointPath,
         fallbackStep: fallbackStepName,
         details: `Model successfully called Write and the file was verified: ${expectedFilePath}`,
@@ -436,7 +436,7 @@ Do NOT include any other text. Do NOT call any other tool.`
 
       const result: ConnectionTestResult = {
         success: false,
-        message: `❌ ${endpointName} connection failed`,
+        message: `${endpointName} connection failed`,
         endpoint: endpointPath,
         details: message,
         errorCategory,
@@ -473,7 +473,7 @@ Do NOT include any other text. Do NOT call any other tool.`
 
   return {
     success: false,
-    message: `❌ ${endpointName} connection failed`,
+    message: `${endpointName} connection failed`,
     endpoint: endpointPath,
     details: 'Exhausted retries',
     errorCategory: 'network',

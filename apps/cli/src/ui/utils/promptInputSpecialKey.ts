@@ -7,6 +7,7 @@ export type PromptInputSpecialKeyAction =
   | 'modeCycle'
   | 'modelSwitch'
   | 'externalEditor'
+  | 'bashModeToggle'
   | null
 
 export function getPromptInputSpecialKeyAction(args: {
@@ -22,6 +23,7 @@ export function getPromptInputSpecialKeyAction(args: {
 
   if (
     args.inputChar === 'µ' ||
+    args.inputChar === 'μ' ||
     (optionOrMeta && (args.inputChar === 'm' || args.inputChar === 'M'))
   ) {
     return 'modelSwitch'
@@ -36,6 +38,14 @@ export function getPromptInputSpecialKeyAction(args: {
     (optionOrMeta && (args.inputChar === 'g' || args.inputChar === 'G'))
   ) {
     return 'externalEditor'
+  }
+
+  if (
+    args.inputChar === '\u00F7' ||
+    (optionOrMeta && args.inputChar === '/') ||
+    (args.key.tab && optionOrMeta && !args.key.shift)
+  ) {
+    return 'bashModeToggle'
   }
 
   return null

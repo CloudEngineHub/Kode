@@ -1,5 +1,5 @@
 import { useStdout } from 'ink'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Writable } from 'node:stream'
 
 type TerminalSize = { columns: number; rows: number }
@@ -39,6 +39,8 @@ function getStreamState(stream: Writable): StreamState {
   return state
 }
 
+const RESIZE_DEBOUNCE_MS = 150
+
 export function useTerminalSize(): TerminalSize {
   const { stdout } = useStdout()
   const stream = useMemo(
@@ -48,21 +50,29 @@ export function useTerminalSize(): TerminalSize {
   const state = getStreamState(stream)
 
   const [size, setSize] = useState<TerminalSize>(() => state.size)
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     const streamState = getStreamState(stream)
     const listener = (next: TerminalSize) => {
-      setSize(previous => {
-        if (previous.columns === next.columns && previous.rows === next.rows) {
-          return previous
-        }
-        return next
-      })
+      // Debounce rapid resize events
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+      }
+      debounceTimerRef.current = setTimeout(() => {
+        debounceTimerRef.current = null
+        setSize(previous => {
+          if (previous.columns === next.columns && previous.rows === next.rows) {
+            return previous
+          }
+          return next
+        })
+      }, RESIZE_DEBOUNCE_MS)
     }
 
     streamState.listeners.add(listener)
     // Force-sync in case size changed between render and effect.
-    listener(streamState.size)
+    setSize(streamState.size)
 
     if (!streamState.attached) {
       streamState.attached = true
@@ -71,6 +81,9 @@ export function useTerminalSize(): TerminalSize {
     }
 
     return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+      }
       streamState.listeners.delete(listener)
       if (streamState.listeners.size === 0 && streamState.attached) {
         streamState.attached = false

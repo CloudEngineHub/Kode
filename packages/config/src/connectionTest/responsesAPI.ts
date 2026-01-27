@@ -75,7 +75,7 @@ export async function testResponsesAPI(
       if (containsYes) {
         return {
           success: true,
-          message: '✅ GPT-5 Responses API connection successful',
+          message: 'GPT-5 Responses API connection successful',
           endpoint: '/responses',
           details: `Model responded correctly: \"${responseContent.trim()}\"`,
           apiUsed: 'responses',
@@ -85,7 +85,7 @@ export async function testResponsesAPI(
 
       return {
         success: false,
-        message: '⚠️ Responses API connected but unexpected response',
+        message: 'Responses API connected but returned an unexpected response',
         endpoint: '/responses',
         details: `Expected \"YES\" but got: \"${responseContent.trim() || '(empty response)'}\"`,
         apiUsed: 'responses',
@@ -105,7 +105,7 @@ export async function testResponsesAPI(
 
     return {
       success: false,
-      message: `❌ Responses API failed (${response.status})`,
+      message: `Responses API failed (${response.status})`,
       endpoint: '/responses',
       details: `Error: ${errorMessage}`,
       apiUsed: 'responses',
@@ -119,7 +119,7 @@ export async function testResponsesAPI(
 
     return {
       success: false,
-      message: '❌ Responses API connection failed',
+      message: 'Responses API connection failed',
       endpoint: '/responses',
       details: error instanceof Error ? error.message : String(error),
       apiUsed: 'responses',

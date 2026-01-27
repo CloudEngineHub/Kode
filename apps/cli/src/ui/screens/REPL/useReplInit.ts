@@ -8,6 +8,7 @@ import type { Message as MessageType } from '#core/query'
 import type { WrappedClient } from '#core/mcp/client'
 import type { ToolUseContext, Tool } from '#core/tooling/Tool'
 import { getToolPermissionContextForConversationKey } from '#core/utils/toolPermissionContextState'
+import type { SetForkConvoWithMessagesOnTheNextRender } from '#ui-ink/types/conversationReset'
 
 export function useReplInit(args: {
   initialPrompt: string | undefined
@@ -21,7 +22,7 @@ export function useReplInit(args: {
   messages: MessageType[]
   setToolJSX: (jsx: any) => void
   readFileTimestamps: { [filename: string]: number }
-  setForkConvoWithMessagesOnTheNextRender: (messages: MessageType[]) => void
+  setForkConvoWithMessagesOnTheNextRender: SetForkConvoWithMessagesOnTheNextRender
   reverify: () => void
   setIsLoading: (isLoading: boolean) => void
   setAbortController: (abortController: AbortController | null) => void
@@ -65,9 +66,7 @@ export function useReplInit(args: {
             args.setForkConvoWithMessagesOnTheNextRender,
           readFileTimestamps: args.readFileTimestamps,
         } satisfies ToolUseContext & {
-          setForkConvoWithMessagesOnTheNextRender: (
-            forkConvoWithMessages: MessageType[],
-          ) => void
+          setForkConvoWithMessagesOnTheNextRender: SetForkConvoWithMessagesOnTheNextRender
         },
         null,
       )

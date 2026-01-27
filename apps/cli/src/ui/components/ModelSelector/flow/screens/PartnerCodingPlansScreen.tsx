@@ -49,7 +49,7 @@ export function PartnerCodingPlansScreen({
   const footerMarginTop = tightLayout ? 0 : 1
   return (
     <ScreenFrame
-      title="Partner Coding Plans"
+      title="Some Coding Plans"
       exitState={exitState}
       paddingX={tightLayout || compactLayout ? 1 : 2}
       paddingY={containerPaddingY}

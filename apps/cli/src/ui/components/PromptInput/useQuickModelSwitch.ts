@@ -22,8 +22,7 @@ export function useQuickModelSwitch(args: {
       args.onSubmitCountChange(prev => prev + 1)
       args.setModelSwitchMessage({
         show: true,
-        text:
-          switchResult.message || `✅ Switched to ${switchResult.modelName}`,
+        text: switchResult.message || `Switched to ${switchResult.modelName}`,
       })
       setTimeout(() => args.setModelSwitchMessage({ show: false }), 3000)
       return
@@ -32,16 +31,16 @@ export function useQuickModelSwitch(args: {
     let errorMessage = switchResult.message
     if (!errorMessage) {
       if (debugInfo.totalModels === 0) {
-        errorMessage = '❌ No models configured. Use /model to add models.'
+        errorMessage = 'No models configured. Use /model to add models.'
       } else if (debugInfo.activeModels === 0) {
-        errorMessage = `❌ No active models (${debugInfo.totalModels} total, all inactive). Use /model to activate models.`
+        errorMessage = `No active models (${debugInfo.totalModels} total, all inactive). Use /model to activate models.`
       } else if (debugInfo.activeModels === 1) {
         const allModelNames = debugInfo.availableModels
           .map(m => `${m.name}${m.isActive ? '' : ' (inactive)'}`)
           .join(', ')
-        errorMessage = `⚠️ Only 1 active model out of ${debugInfo.totalModels} total models: ${allModelNames}. ALL configured models will be activated for switching.`
+        errorMessage = `Only 1 active model out of ${debugInfo.totalModels} total models: ${allModelNames}. All configured models will be activated for switching.`
       } else {
-        errorMessage = `❌ Model switching failed (${debugInfo.activeModels} active, ${debugInfo.totalModels} total models available)`
+        errorMessage = `Model switching failed (${debugInfo.activeModels} active, ${debugInfo.totalModels} total models available)`
       }
     }
 

@@ -24,10 +24,12 @@ export function UserPromptMessage({
   return (
     <Box flexDirection="row" marginTop={addMargin ? 1 : 0} width="100%">
       <Box minWidth={2} width={2}>
-        <Text color={theme.kode}>&gt;</Text>
+        <Text color={theme.kode} bold>
+          {'\u276F'}
+        </Text>
       </Box>
       <Box flexDirection="column" width={columns - 4}>
-        <Text color={theme.kode} wrap="wrap">
+        <Text color={theme.kode} bold wrap="wrap">
           {text}
         </Text>
       </Box>

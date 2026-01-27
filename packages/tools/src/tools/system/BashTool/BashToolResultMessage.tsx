@@ -39,13 +39,14 @@ function BashToolResultMessage({
       ? Math.max(1, Math.floor(availableHeight / outputSections))
       : undefined
 
+  const theme = getTheme()
+
   return (
     <Box flexDirection="column">
       {bashId ? (
-        <Box flexDirection="row">
-          <Text>&nbsp;&nbsp;⎿ &nbsp;</Text>
-          <Text color={getTheme().secondaryText}>
-            Background bash_id: {bashId}
+        <Box paddingLeft={2}>
+          <Text color={theme.secondaryText}>
+            (background task: {bashId})
           </Text>
         </Box>
       ) : null}
@@ -69,9 +70,8 @@ function BashToolResultMessage({
         />
       ) : null}
       {stdout === '' && stderr === '' ? (
-        <Box flexDirection="row">
-          <Text>&nbsp;&nbsp;⎿ &nbsp;</Text>
-          <Text color={getTheme().secondaryText}>(No content)</Text>
+        <Box paddingLeft={2}>
+          <Text color={theme.secondaryText}>[no output /]</Text>
         </Box>
       ) : null}
     </Box>

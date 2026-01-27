@@ -1,7 +1,7 @@
 import type React from 'react'
 import { useCallback } from 'react'
-import { clearTerminal } from '#cli-utils/terminal'
 import type { Message as MessageType } from '#core/query'
+import type { SetForkConvoWithMessagesOnTheNextRender } from '#ui-ink/types/conversationReset'
 
 function getMessageUuid(message: MessageType): string | undefined {
   const record = message as unknown as { uuid?: unknown }
@@ -26,15 +26,12 @@ function extractMessageText(content: unknown): string {
 export function useMessageSelectorSelect(args: {
   messages: MessageType[]
   setIsMessageSelectorVisible: React.Dispatch<React.SetStateAction<boolean>>
-  setMessages: React.Dispatch<React.SetStateAction<MessageType[]>>
-  setForkConvoWithMessagesOnTheNextRender: React.Dispatch<
-    React.SetStateAction<MessageType[] | null>
-  >
+  setForkConvoWithMessagesOnTheNextRender: SetForkConvoWithMessagesOnTheNextRender
   setInputValue: React.Dispatch<React.SetStateAction<string>>
   onCancel: () => void
 }) {
   return useCallback(
-    async (message: MessageType) => {
+    (message: MessageType) => {
       args.setIsMessageSelectorVisible(false)
 
       const selectedUuid = getMessageUuid(message)
@@ -46,13 +43,21 @@ export function useMessageSelectorSelect(args: {
 
       args.onCancel()
 
-      setImmediate(async () => {
-        await clearTerminal()
-        args.setMessages([])
+      // Use setImmediate to ensure the "Interrupted by user" message renders
+      // before we clear and reset the conversation
+      setImmediate(() => {
         const forkMessages = args.messages
           .slice(0, selectedIndex)
           .filter(m => m.type !== 'progress')
-        args.setForkConvoWithMessagesOnTheNextRender(forkMessages)
+
+        // Use clearViewport option - the fork effect will clear terminal and
+        // atomically update forkNumber + messages in a single batched update.
+        // This prevents intermediate renders that cause content duplication.
+        args.setForkConvoWithMessagesOnTheNextRender(forkMessages, {
+          clearViewport: true,
+        })
+
+        // Set input value to selected message content if it's a user message
         if (message.type === 'user') {
           args.setInputValue(extractMessageText(message.message.content))
         }

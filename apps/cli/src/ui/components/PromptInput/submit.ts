@@ -13,6 +13,7 @@ import type { PastedImageAttachment, PastedTextSegment } from './pastes'
 import { expandPastedTextPlaceholders } from './pastes'
 import { interpretHashCommand } from './hashCommand'
 import { getCwd } from '#core/utils/state'
+import type { SetForkConvoWithMessagesOnTheNextRender } from '#ui-ink/types/conversationReset'
 
 const EXIT_COMMANDS = new Set(['exit', 'quit', ':q', ':q!', ':wq', ':wq!'])
 
@@ -89,9 +90,7 @@ export async function submitPrompt(args: {
   disableSlashCommands?: boolean
   permissionMode: PermissionMode
   toolPermissionContext: ToolPermissionContext
-  setForkConvoWithMessagesOnTheNextRender: (
-    forkConvoWithMessages: Message[],
-  ) => void
+  setForkConvoWithMessagesOnTheNextRender: SetForkConvoWithMessagesOnTheNextRender
   onShowMessageSelector?: () => void
   readFileTimestamps: { [filename: string]: number }
   pastedTexts: PastedTextSegment[]

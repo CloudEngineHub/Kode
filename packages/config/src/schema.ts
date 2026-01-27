@@ -212,6 +212,7 @@ export type GlobalConfig = {
   preferredNotifChannel: NotificationChannel
   verbose: boolean
   useAlternateBuffer?: boolean
+  incrementalRendering?: boolean
   wipeScrollbackOnClear?: boolean
   customApiKeyResponses?: {
     approved?: string[]
@@ -238,6 +239,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfig = {
   preferredNotifChannel: 'iterm2',
   verbose: false,
   useAlternateBuffer: false,
+  incrementalRendering: true,
   wipeScrollbackOnClear: false,
   primaryProvider: 'anthropic',
   customApiKeyResponses: {
@@ -265,6 +267,7 @@ export const GLOBAL_CONFIG_KEYS = [
   'lastReleaseNotesSeen',
   'verbose',
   'useAlternateBuffer',
+  'incrementalRendering',
   'wipeScrollbackOnClear',
   'customApiKeyResponses',
   'primaryProvider',

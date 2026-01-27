@@ -10,6 +10,8 @@ import type { PermissionMode } from '#core/types/PermissionMode'
 import type { Theme } from '#core/utils/theme'
 import type { PromptMode } from './types'
 import { PromptInputCompletionPanel } from './PromptInputCompletionPanel'
+import { PendingPrompts } from './PendingPrompts'
+import { QueuedPrompts } from './QueuedPrompts'
 
 type ModelInfo = {
   name: string
@@ -46,6 +48,8 @@ export function PromptInputView({
   isEditingExternally,
   isDisabled,
   isLoading,
+  pendingPrompts,
+  queuedPrompts,
   completionActive,
   historyIndex,
   suggestions,
@@ -77,6 +81,7 @@ export function PromptInputView({
   textInputColumns,
   textInputMaxHeight,
   completionReservedRows,
+  isInFastBrowseMode,
 }: {
   mode: PromptMode
   theme: Theme
@@ -90,6 +95,8 @@ export function PromptInputView({
   isEditingExternally: boolean
   isDisabled: boolean
   isLoading: boolean
+  pendingPrompts: string[]
+  queuedPrompts: string[]
   completionActive: boolean
   historyIndex: number
   suggestions: Suggestion[]
@@ -121,8 +128,9 @@ export function PromptInputView({
   textInputColumns: number
   textInputMaxHeight: number
   completionReservedRows: number
+  isInFastBrowseMode: () => boolean
 }): React.ReactNode {
-  const { rows } = useTerminalSize()
+  const { rows, columns } = useTerminalSize()
   const compact = rows < 16
   const showStatusLine = rows > 8
 
@@ -137,6 +145,14 @@ export function PromptInputView({
             {Math.round(modelInfo.contextLength / 1000)}k
           </Text>
         </Box>
+      )}
+
+      {pendingPrompts.length > 0 && (
+        <PendingPrompts pendingPrompts={pendingPrompts} width={columns} />
+      )}
+
+      {queuedPrompts.length > 0 && (
+        <QueuedPrompts queuedPrompts={queuedPrompts} width={columns} />
       )}
 
       {/* Input box */}
@@ -155,7 +171,7 @@ export function PromptInputView({
               : theme.inputBorder
         }
         borderDimColor={false}
-        borderStyle="classic"
+        borderStyle="single"
         width="100%"
       >
         <Box
@@ -163,17 +179,17 @@ export function PromptInputView({
           alignSelf="flex-start"
           flexWrap="nowrap"
           justifyContent="flex-start"
-          width={3}
+          width={2}
         >
           {mode === 'bash' ? (
-            <Text color={theme.bashBorder}>&nbsp;!&nbsp;</Text>
+            <Text color={theme.bashBorder}>$&nbsp;</Text>
           ) : mode === 'background' ? (
-            <Text color={theme.bashBorder}>&nbsp;&amp;&nbsp;</Text>
+            <Text color={theme.bashBorder}>&amp;&nbsp;</Text>
           ) : mode === 'koding' ? (
-            <Text color={theme.noting}>&nbsp;#&nbsp;</Text>
+            <Text color={theme.noting}>#&nbsp;</Text>
           ) : (
             <Text color={isLoading ? theme.secondaryText : undefined}>
-              K&gt;&nbsp;
+              {'\u276F'}&nbsp;
             </Text>
           )}
         </Box>
@@ -195,8 +211,11 @@ export function PromptInputView({
             columns={textInputColumns}
             maxHeight={textInputMaxHeight}
             isDimmed={isDisabled || isLoading || isEditingExternally}
-            disableCursorMovementForUpDownKeys={
-              completionActive || historyIndex > 0 || !input.includes('\n')
+            disableCursorMovementForUpDownKeys={() =>
+              completionActive ||
+              historyIndex > 0 ||
+              !input.includes('\n') ||
+              isInFastBrowseMode()
             }
             cursorOffset={cursorOffset}
             onChangeCursorOffset={setCursorOffset}

@@ -9,7 +9,7 @@ import chalk from 'chalk'
 import * as React from 'react'
 import { UserBashInputMessage } from '#ui-ink/components/messages/UserBashInputMessage'
 import { UserBackgroundTaskInputMessage } from '#ui-ink/components/messages/UserBackgroundTaskInputMessage'
-import { Spinner } from '#ui-ink/components/Spinner'
+import { BashSpinner } from '#ui-ink/components/Spinner'
 import { BashTool } from '#tools/tools/system/BashTool/BashTool'
 import { lastX } from '#core/utils/generators'
 import type { SetToolJSXFn, ToolUseContext } from '#core/tooling/Tool'
@@ -20,15 +20,14 @@ import {
   coerceImageMediaType,
   extractAssistantText,
 } from './processUserInputHelpers'
+import type { SetForkConvoWithMessagesOnTheNextRender } from '#ui-ink/types/conversationReset'
 
 export async function processUserInput(
   input: string,
   mode: 'bash' | 'background' | 'prompt' | 'koding',
   setToolJSX: SetToolJSXFn<React.ReactNode>,
   context: ToolUseContext & {
-    setForkConvoWithMessagesOnTheNextRender: (
-      forkConvoWithMessages: Message[],
-    ) => void
+    setForkConvoWithMessagesOnTheNextRender: SetForkConvoWithMessagesOnTheNextRender
     options?: {
       isKodingRequest?: boolean
       kodingContext?: string
@@ -91,7 +90,7 @@ export async function processUserInput(
               }}
             />
           )}
-          <Spinner />
+          <BashSpinner />
         </Box>
       ),
       shouldHidePromptInput: false,

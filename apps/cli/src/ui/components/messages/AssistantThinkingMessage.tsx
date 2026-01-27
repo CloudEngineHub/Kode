@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { Box, Text } from 'ink'
 import { getTheme } from '#core/utils/theme'
 import { applyMarkdown } from '#core/utils/markdown'
@@ -6,6 +6,8 @@ import {
   ThinkingBlock,
   ThinkingBlockParam,
 } from '@anthropic-ai/sdk/resources/index.mjs'
+
+const PROGRESS_FRAMES = ['/', '-', '\\', '|']
 
 type Props = {
   param: ThinkingBlock | ThinkingBlockParam
@@ -16,6 +18,16 @@ export function AssistantThinkingMessage({
   param: { thinking },
   addMargin = false,
 }: Props): React.ReactNode {
+  const [progressFrame, setProgressFrame] = useState(0)
+  const theme = getTheme()
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setProgressFrame(f => (f + 1) % PROGRESS_FRAMES.length)
+    }, 150)
+    return () => clearInterval(timer)
+  }, [])
+
   if (!thinking || thinking.trim().length === 0) {
     return null
   }
@@ -27,11 +39,11 @@ export function AssistantThinkingMessage({
       marginTop={addMargin ? 1 : 0}
       width="100%"
     >
-      <Text color={getTheme().secondaryText} italic>
-        ✻ Thinking…
+      <Text color={theme.kode} bold>
+        {'◆'} [Thinking {PROGRESS_FRAMES[progressFrame]}]
       </Text>
       <Box paddingLeft={2}>
-        <Text color={getTheme().secondaryText} italic>
+        <Text color={theme.secondaryText} italic>
           {applyMarkdown(thinking)}
         </Text>
       </Box>

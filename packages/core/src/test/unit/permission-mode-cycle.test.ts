@@ -32,7 +32,7 @@ describe('permission mode cycle parity (cycle order + side effects)', () => {
   test('getNextPermissionMode matches expected ordering', () => {
     expect(getNextPermissionMode('default', true)).toBe('acceptEdits')
     expect(getNextPermissionMode('acceptEdits', true)).toBe('plan')
-    expect(getNextPermissionMode('plan', true)).toBe('default')
+    expect(getNextPermissionMode('plan', true)).toBe('bypassPermissions')
     expect(getNextPermissionMode('plan', false)).toBe('default')
     expect(getNextPermissionMode('bypassPermissions', true)).toBe('default')
     expect(getNextPermissionMode('dontAsk', true)).toBe('default')

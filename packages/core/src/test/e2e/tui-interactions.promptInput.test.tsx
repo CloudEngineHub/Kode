@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
@@ -155,6 +155,86 @@ function PromptInputCancelHarnessInner({
   )
 }
 
+function PromptInputCtrlCCancelHarness({
+  conversationKey,
+  initialIsLoading,
+}: {
+  conversationKey: string
+  initialIsLoading: boolean
+}): React.ReactNode {
+  return (
+    <KeypressProvider>
+      <PermissionProvider
+        conversationKey={conversationKey}
+        isBypassPermissionsModeAvailable={true}
+      >
+        <PromptInputCtrlCCancelHarnessInner initialIsLoading={initialIsLoading} />
+      </PermissionProvider>
+    </KeypressProvider>
+  )
+}
+
+function PromptInputCtrlCCancelHarnessInner({
+  initialIsLoading,
+}: {
+  initialIsLoading: boolean
+}): React.ReactNode {
+  const [input, setInput] = useState('')
+  const [mode, setMode] = useState<PromptMode>('prompt')
+  const [submitCount, setSubmitCount] = useState(0)
+  const [abortController] = useState<AbortController | null>(
+    () => new AbortController(),
+  )
+  const [isLoading, setIsLoading] = useState(initialIsLoading)
+  const [cancelled, setCancelled] = useState(false)
+
+  useKeypress(
+    (inputChar, key) => {
+      if (key.ctrl && inputChar === 'c' && isLoading) {
+        abortController?.abort()
+        setCancelled(true)
+        setIsLoading(false)
+        return true
+      }
+    },
+    { priority: 50 },
+  )
+
+  return (
+    <Box flexDirection="column">
+      <Text>RAW:{JSON.stringify(input)}</Text>
+      <Text>LOADING:{String(isLoading)}</Text>
+      <Text>ABORTED:{String(abortController?.signal.aborted ?? false)}</Text>
+      <Text>CANCELLED:{String(cancelled)}</Text>
+      <PromptInput
+        commands={[]}
+        forkNumber={0}
+        messageLogName="tui"
+        isDisabled={false}
+        isLoading={isLoading}
+        onQuery={async () => {}}
+        debug={false}
+        verbose={false}
+        messages={[]}
+        setToolJSX={() => {}}
+        tools={[]}
+        input={input}
+        onInputChange={setInput}
+        mode={mode}
+        onModeChange={setMode}
+        submitCount={submitCount}
+        onSubmitCountChange={updater => setSubmitCount(prev => updater(prev))}
+        setIsLoading={setIsLoading}
+        setAbortController={() => {}}
+        onShowMessageSelector={() => {}}
+        setForkConvoWithMessagesOnTheNextRender={() => {}}
+        readFileTimestamps={{}}
+        abortController={abortController}
+      />
+    </Box>
+  )
+}
+
 function DraftPastePersistenceHarness({
   conversationKey,
 }: {
@@ -265,6 +345,89 @@ function DraftPastePersistenceHarnessInner(): React.ReactNode {
   )
 }
 
+function PromptQueueAutoDrainHarness({
+  conversationKey,
+}: {
+  conversationKey: string
+}): React.ReactNode {
+  const [input, setInput] = useState('')
+  const [mode, setMode] = useState<PromptMode>('prompt')
+  const [submitCount, setSubmitCount] = useState(0)
+  const [abortController, setAbortController] =
+    useState<AbortController | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [processed, setProcessed] = useState<string[]>([])
+
+  useEffect(() => {
+    const timeout = setTimeout(() => setIsLoading(false), 600)
+    return () => clearTimeout(timeout)
+  }, [])
+
+  return (
+    <KeypressProvider>
+      <PermissionProvider
+        conversationKey={conversationKey}
+        isBypassPermissionsModeAvailable={true}
+      >
+        <Box flexDirection="column">
+          <Text>PROCESSED:{JSON.stringify(processed)}</Text>
+          <Text>LOADING:{String(isLoading)}</Text>
+          <PromptInput
+            commands={[]}
+            forkNumber={0}
+            messageLogName="tui"
+            isDisabled={false}
+            isLoading={isLoading}
+            onQuery={async newMessages => {
+              const lastUser = [...newMessages]
+                .reverse()
+                .find(m => m.type === 'user') as any
+              const content = lastUser?.message?.content
+              const text =
+                typeof content === 'string'
+                  ? content
+                  : Array.isArray(content)
+                    ? content
+                        .map(block =>
+                          typeof block === 'string'
+                            ? block
+                            : typeof (block as any)?.text === 'string'
+                              ? (block as any).text
+                              : '',
+                        )
+                        .join('')
+                    : ''
+
+              setProcessed(prev => [...prev, text])
+              setIsLoading(false)
+              setAbortController(null)
+            }}
+            debug={false}
+            verbose={false}
+            messages={[]}
+            setToolJSX={() => {}}
+            tools={[]}
+            input={input}
+            onInputChange={setInput}
+            mode={mode}
+            onModeChange={setMode}
+            submitCount={submitCount}
+            onSubmitCountChange={updater =>
+              setSubmitCount(prev => updater(prev))
+            }
+            setIsLoading={setIsLoading}
+            setAbortController={setAbortController}
+            onShowMessageSelector={() => {}}
+            setForkConvoWithMessagesOnTheNextRender={() => {}}
+            readFileTimestamps={{}}
+            abortController={abortController}
+          />
+        </Box>
+      </PermissionProvider>
+    </KeypressProvider>
+  )
+}
+
 const harnessManager = createInkHarnessManager()
 
 afterEach(async () => {
@@ -296,6 +459,27 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
     expect(out).toContain('RAW:\"./d \"')
     expect(out).not.toContain('RAW:\"./dist/')
     expect(out).not.toContain('RAW:\"loading...')
+  })
+
+  test('submit clears the input value', async () => {
+    const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
+    const h = createInkTestHarness(
+      <PromptInputHarness conversationKey={conversationKey} showRaw={true} />,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    h.clearOutput()
+
+    h.stdin.write('hello')
+    await h.wait(75)
+    expect(h.getOutput()).toContain('RAW:\"hello\"')
+
+    h.clearOutput()
+    h.stdin.write('\r')
+    await h.wait(200)
+
+    expect(h.getOutput()).toContain('RAW:\"\"')
   })
 
   test('shift+tab cycles permission mode and renders CompactModeIndicator', async () => {
@@ -363,6 +547,99 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
     expect(h.getOutput()).toContain('RAW:\"hello\\nworld\"')
   })
 
+  test('CSI-u printable keys insert as text', async () => {
+    const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
+    const h = createInkTestHarness(
+      <PromptInputHarness conversationKey={conversationKey} showRaw={true} />,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    h.clearOutput()
+
+    // kitty/CSI-u can encode unmodified printable keys as codepoints, e.g. `k` -> ESC[107u
+    h.stdin.write('\u001b[107u')
+    await h.wait(75)
+
+    expect(h.getOutput()).toContain('RAW:\"k\"')
+  })
+
+  test('alt+enter inserts newline (CSI-u)', async () => {
+    const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
+    const h = createInkTestHarness(
+      <PromptInputHarness conversationKey={conversationKey} showRaw={true} />,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    h.clearOutput()
+
+    h.stdin.write('hello')
+    await h.wait(75)
+    expect(h.getOutput()).toContain('RAW:\"hello\"')
+
+    h.clearOutput()
+    h.stdin.write('\u001b[13;3u')
+    await h.wait(75)
+
+    h.stdin.write('world')
+    await h.wait(75)
+
+    expect(h.getOutput()).toContain('RAW:\"hello\\nworld\"')
+  })
+
+  test('alt+enter inserts newline (ESC+CR)', async () => {
+    const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
+    const h = createInkTestHarness(
+      <PromptInputHarness conversationKey={conversationKey} showRaw={true} />,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    h.clearOutput()
+
+    h.stdin.write('hello')
+    await h.wait(75)
+    expect(h.getOutput()).toContain('RAW:\"hello\"')
+
+    h.clearOutput()
+    h.stdin.write('\u001b\r')
+    await h.wait(75)
+
+    h.stdin.write('world')
+    await h.wait(75)
+
+    expect(h.getOutput()).toContain('RAW:\"hello\\nworld\"')
+  })
+
+  test('queued prompts auto-drain after a turn completes', async () => {
+    const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
+    const h = createInkTestHarness(
+      <PromptQueueAutoDrainHarness conversationKey={conversationKey} />,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    h.clearOutput()
+
+    // While "busy", Tab queues to the back.
+    h.stdin.write('first')
+    await h.wait(75)
+    h.stdin.write('\t')
+    await h.wait(75)
+
+    // Enter queues to the front (next-up).
+    h.stdin.write('urgent')
+    await h.wait(75)
+    h.stdin.write('\r')
+    await h.wait(75)
+
+    // Initial "busy" period elapses, then the queue should drain automatically.
+    await h.wait(900)
+
+    expect(h.getOutput()).toContain('PROCESSED:[\"urgent\",\"first\"]')
+  })
+
   test('statusline renders when configured', async () => {
     const originalHome = process.env.HOME
     const originalUserProfile = process.env.USERPROFILE
@@ -412,7 +689,65 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
     }
   })
 
-  test('Esc with queued prompt moves queued prompt to input (does not cancel)', async () => {
+  test('Ctrl+C cancels running task', async () => {
+    const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
+    const h = createInkTestHarness(
+      <PromptInputCtrlCCancelHarness
+        conversationKey={conversationKey}
+        initialIsLoading={true}
+      />,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    h.clearOutput()
+
+    h.stdin.write('\u0003')
+    await h.wait(100)
+
+    const out = h.getOutput()
+    expect(out).toContain('LOADING:false')
+    expect(out).toContain('ABORTED:true')
+    expect(out).toContain('CANCELLED:true')
+  })
+
+  test('alt+up recalls queued/pending prompt for editing', async () => {
+    const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
+    const h = createInkTestHarness(
+      <PromptInputCancelHarness
+        conversationKey={conversationKey}
+        initialIsLoading={true}
+      />,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    h.clearOutput()
+
+    // Enter while busy -> pending prompt.
+    h.stdin.write('hello')
+    await h.wait(75)
+    h.stdin.write('\r')
+    await h.wait(75)
+
+    // Tab while busy -> queued prompt.
+    h.stdin.write('first')
+    await h.wait(75)
+    h.stdin.write('\t')
+    await h.wait(75)
+
+    // Alt+Up recalls the most recent queued/pending item for editing.
+    h.stdin.write('\u001b[1;3A')
+    await h.wait(75)
+
+    const out = h.getOutput()
+    expect(out).toContain('RAW:\"first\"')
+    expect(out).toContain('LOADING:true')
+    expect(out).toContain('ABORTED:false')
+    expect(out).toContain('CANCELLED:false')
+  })
+
+  test('Esc cancels running task even when prompts are queued', async () => {
     const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
     const h = createInkTestHarness(
       <PromptInputCancelHarness
@@ -435,10 +770,10 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
     await h.wait(100)
 
     const out = h.getOutput()
-    expect(out).toContain('RAW:\"hello\"')
-    expect(out).toContain('LOADING:true')
-    expect(out).toContain('ABORTED:false')
-    expect(out).toContain('CANCELLED:false')
+    expect(out).toContain('RAW:\"\"')
+    expect(out).toContain('LOADING:false')
+    expect(out).toContain('ABORTED:true')
+    expect(out).toContain('CANCELLED:true')
   })
 
   test('Esc cancels running task when no queued prompt exists', async () => {
@@ -491,5 +826,44 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
     const out = h.getOutput()
     expect(out).toContain('SUB:\"hello PASTE world\"')
     expect(out).not.toContain('SUB:\"hello [Pasted text #1] world\"')
+  })
+
+  test('up arrow on middle line moves cursor up (not history)', async () => {
+    await setCwd(process.cwd())
+
+    const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
+    const h = createInkTestHarness(
+      <PromptInputHarness conversationKey={conversationKey} showRaw={true} />,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    h.clearOutput()
+
+    // Type multi-line input: "ab\ncd"
+    h.stdin.write('ab')
+    await h.wait(75)
+    h.stdin.write('\u001b[13;2u') // Shift+Enter to insert newline (CSI-u)
+    await h.wait(75)
+    h.stdin.write('cd')
+    await h.wait(75)
+    expect(h.getOutput()).toContain('RAW:\"ab\\ncd\"')
+
+    h.clearOutput()
+
+    // Wait for fast browse mode to expire (1.5 seconds), then press Up
+    await h.wait(1600)
+
+    // Press Up arrow (should move cursor from line 1 to line 0)
+    h.stdin.write('\u001b[A')
+    await h.wait(75)
+
+    // Type 'X' - if cursor moved up, it should be inserted at end of line 0
+    h.stdin.write('X')
+    await h.wait(75)
+
+    // The input should be "abX\ncd" (X inserted on first line)
+    const out = h.getOutput()
+    expect(out).toContain('RAW:\"abX\\ncd\"')
   })
 })

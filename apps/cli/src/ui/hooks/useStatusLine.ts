@@ -133,10 +133,15 @@ export function useStatusLine(input?: unknown): {
 
     tick().catch(() => {})
 
+    const intervalId = setInterval(() => {
+      tickRef.current?.()
+    }, 1000)
+
     return () => {
       alive = false
       abortRef.current?.abort()
       tickRef.current = null
+      clearInterval(intervalId)
     }
   }, [])
 

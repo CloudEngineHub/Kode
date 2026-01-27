@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { getHistoryWithPastes } from '#core/history'
 import type { PromptMode } from '#ui-ink/components/PromptInput/types'
 
+const FAST_BROWSE_WINDOW_MS = 1500
+
 export type ArrowKeyHistorySnapshot<Extra> = {
   text: string
   mode: PromptMode
@@ -34,6 +36,7 @@ export function useArrowKeyHistory<Extra>(args: {
       }>
     | null
   >(null)
+  const lastHistoryNavTimeRef = useRef(0)
 
   const currentRef = useRef(current)
   useEffect(() => {
@@ -89,6 +92,7 @@ export function useArrowKeyHistory<Extra>(args: {
 
     const next = prev + 1
     historyIndexRef.current = next
+    lastHistoryNavTimeRef.current = Date.now()
     setHistoryIndex(next)
   }
 
@@ -99,6 +103,7 @@ export function useArrowKeyHistory<Extra>(args: {
       const next = prev - 1
       updateFromHistoryEntry(latestHistory[next - 1], 'end')
       historyIndexRef.current = next
+      lastHistoryNavTimeRef.current = Date.now()
       setHistoryIndex(next)
       return
     }
@@ -107,10 +112,15 @@ export function useArrowKeyHistory<Extra>(args: {
       onRestore(draftSnapshotRef.current ?? currentRef.current)
       draftSnapshotRef.current = null
       historyIndexRef.current = 0
+      lastHistoryNavTimeRef.current = Date.now()
       setHistoryIndex(0)
       return
     }
   }
+
+  const isInFastBrowseMode = useCallback(() => {
+    return Date.now() - lastHistoryNavTimeRef.current < FAST_BROWSE_WINDOW_MS
+  }, [])
 
   const onUserInput = useCallback(() => {
     if (historyIndexRef.current === 0) return
@@ -134,5 +144,6 @@ export function useArrowKeyHistory<Extra>(args: {
     onHistoryDown,
     onUserInput,
     resetHistory,
+    isInFastBrowseMode,
   }
 }

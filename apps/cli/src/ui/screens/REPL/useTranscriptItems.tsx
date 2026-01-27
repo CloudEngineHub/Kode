@@ -122,7 +122,7 @@ function splitTransientTextMessage(
   return { chunks: state.chunks, tail }
 }
 
-export type TranscriptItem = { jsx: ReactNode }
+export type TranscriptItem = { jsx: ReactNode; key: string }
 
 export function useTranscriptItems(args: {
   messages: MessageType[]
@@ -341,6 +341,7 @@ export function useTranscriptItems(args: {
 
         if (args.debug) {
           return {
+            key,
             jsx: (
               <Box
                 borderStyle="single"
@@ -355,6 +356,7 @@ export function useTranscriptItems(args: {
         }
 
         return {
+          key,
           jsx: (
             <Box key={key} width="100%">
               {rendered}

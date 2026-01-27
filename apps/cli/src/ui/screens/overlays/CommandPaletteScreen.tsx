@@ -159,8 +159,10 @@ export function CommandPaletteScreen({
       }
 
       const inputChar = _input.length === 1 ? _input : ''
-      const isUp = key.upArrow || inputChar === 'k'
-      const isDown = key.downArrow || inputChar === 'j'
+      const isUp =
+        key.upArrow || (key.ctrl && (inputChar === 'p' || inputChar === 'k'))
+      const isDown =
+        key.downArrow || (key.ctrl && (inputChar === 'n' || inputChar === 'j'))
 
       if (filtered.length === 0) {
         if (
@@ -196,11 +198,11 @@ export function CommandPaletteScreen({
         )
         return true
       }
-      if (key.home || inputChar === 'g') {
+      if (key.home || (key.ctrl && inputChar === 'a')) {
         setFocusedIndex(0)
         return true
       }
-      if (key.end || inputChar === 'G') {
+      if (key.end || (key.ctrl && inputChar === 'e')) {
         setFocusedIndex(filtered.length - 1)
         return true
       }
@@ -299,7 +301,7 @@ export function CommandPaletteScreen({
 
         <Box marginTop={layout.tightLayout ? 0 : 1}>
           <Text dimColor wrap="truncate-end">
-            ↑/↓ or j/k · PgUp/PgDn · Home/End · Enter run · Esc close
+            ↑/↓ · PgUp/PgDn · Home/End · Enter run · Esc close
           </Text>
         </Box>
       </Box>

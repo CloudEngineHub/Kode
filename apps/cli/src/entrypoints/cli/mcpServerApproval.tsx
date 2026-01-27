@@ -13,6 +13,7 @@ import {
   withEphemeralAlternateScreen,
 } from '#cli-utils/terminal'
 import { renderWithTuiStdio } from '#ui-ink/utils/inkRender'
+import { terminalCapabilityManager } from '#ui-ink/utils/terminalCapabilityManager'
 
 export async function handleMcprcServerApprovals(): Promise<void> {
   const { servers } = getProjectMcpServerDefinitions()
@@ -29,7 +30,9 @@ export async function handleMcprcServerApprovals(): Promise<void> {
       if (pendingServers.length === 1 && pendingServers[0] !== undefined) {
         const result = renderWithTuiStdio(
           render,
-          <KeypressProvider>
+          <KeypressProvider
+            debugKeystrokeLogging={Boolean(process.env.KODE_DEBUG_KEYSTROKES)}
+          >
             <MCPServerApprovalDialog
               serverName={pendingServers[0]}
               onDone={() => {
@@ -43,7 +46,9 @@ export async function handleMcprcServerApprovals(): Promise<void> {
       } else {
         const result = renderWithTuiStdio(
           render,
-          <KeypressProvider>
+          <KeypressProvider
+            debugKeystrokeLogging={Boolean(process.env.KODE_DEBUG_KEYSTROKES)}
+          >
             <MCPServerMultiselectDialog
               serverNames={pendingServers}
               onDone={() => {
@@ -57,6 +62,7 @@ export async function handleMcprcServerApprovals(): Promise<void> {
       }
     })
   })
+  terminalCapabilityManager.enableSupportedModes()
 
   // Keep Kode's default behavior (preserve scrollback) unless the user explicitly
   // opted into wiping it for sensitive dialogs.

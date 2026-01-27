@@ -37,11 +37,12 @@ const SuggestionItem = React.memo(
     return (
       <Box flexDirection="row">
         <Text
+          bold
           color={displayColor}
           dimColor={!isSelected && !displayColor}
           wrap="truncate-end"
         >
-          {isSelected ? '◆ ' : '  '}
+          {isSelected ? '> ' : '  '}
           {suggestion.displayValue}
         </Text>
       </Box>

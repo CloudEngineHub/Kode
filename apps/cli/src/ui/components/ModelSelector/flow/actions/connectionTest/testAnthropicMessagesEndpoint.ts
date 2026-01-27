@@ -231,7 +231,7 @@ Do NOT include any other text. Do NOT call any other tool.`
 
         const result: ConnectionTestResult = {
           success: false,
-          message: `❌ ${selectedProvider} failed (${response.status})`,
+          message: `${selectedProvider} failed (${response.status})`,
           endpoint: '/v1/messages',
           details: `Error: ${errorMessage}`,
           errorCategory,
@@ -267,7 +267,7 @@ Do NOT include any other text. Do NOT call any other tool.`
         const responseContent = extractAnthropicTextContent(data).trim()
         return {
           success: false,
-          message: `⚠️ ${selectedProvider} connected but tool-use verification failed`,
+          message: `${selectedProvider} connected but tool-use verification failed`,
           endpoint: '/v1/messages',
           errorCategory: 'tool_use_unsupported',
           fallbackStep: fallbackStepName,
@@ -281,7 +281,7 @@ Do NOT include any other text. Do NOT call any other tool.`
       if (toolCall.toolName !== 'Write') {
         return {
           success: false,
-          message: `⚠️ ${selectedProvider} returned unexpected tool call`,
+          message: `${selectedProvider} returned unexpected tool call`,
           endpoint: '/v1/messages',
           errorCategory: 'unexpected_tool_call',
           fallbackStep: fallbackStepName,
@@ -294,7 +294,7 @@ Do NOT include any other text. Do NOT call any other tool.`
       if (typeof filePath !== 'string' || typeof content !== 'string') {
         return {
           success: false,
-          message: `⚠️ ${selectedProvider} tool call arguments invalid`,
+          message: `${selectedProvider} tool call arguments invalid`,
           endpoint: '/v1/messages',
           errorCategory: 'invalid_tool_args',
           fallbackStep: fallbackStepName,
@@ -305,7 +305,7 @@ Do NOT include any other text. Do NOT call any other tool.`
       if (filePath !== expectedFilePath || content !== expectedContent) {
         return {
           success: false,
-          message: `⚠️ ${selectedProvider} tool call arguments mismatch`,
+          message: `${selectedProvider} tool call arguments mismatch`,
           endpoint: '/v1/messages',
           errorCategory: 'invalid_tool_args',
           fallbackStep: fallbackStepName,
@@ -331,7 +331,7 @@ Do NOT include any other text. Do NOT call any other tool.`
       if (actual !== expectedContent) {
         return {
           success: false,
-          message: `⚠️ ${selectedProvider} local file verification failed`,
+          message: `${selectedProvider} local file verification failed`,
           endpoint: '/v1/messages',
           errorCategory: 'local_verification_failed',
           fallbackStep: fallbackStepName,
@@ -341,7 +341,7 @@ Do NOT include any other text. Do NOT call any other tool.`
 
       return {
         success: true,
-        message: `✅ Tool-use connection test passed with ${selectedProvider}`,
+        message: `Tool-use connection test passed with ${selectedProvider}`,
         endpoint: '/v1/messages',
         fallbackStep: fallbackStepName,
         details: `Model successfully called Write and the file was verified: ${expectedFilePath}`,
@@ -357,7 +357,7 @@ Do NOT include any other text. Do NOT call any other tool.`
 
       const result: ConnectionTestResult = {
         success: false,
-        message: `❌ ${selectedProvider} connection failed`,
+        message: `${selectedProvider} connection failed`,
         endpoint: '/v1/messages',
         details: message,
         errorCategory,
@@ -393,7 +393,7 @@ Do NOT include any other text. Do NOT call any other tool.`
 
   return {
     success: false,
-    message: `❌ ${selectedProvider} connection failed`,
+    message: `${selectedProvider} connection failed`,
     endpoint: '/v1/messages',
     details: 'Exhausted retries',
     errorCategory: 'network',

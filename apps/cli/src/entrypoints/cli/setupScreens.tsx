@@ -15,6 +15,7 @@ import {
   renderWithTuiStdio,
   type InkRenderInstance,
 } from '#ui-ink/utils/inkRender'
+import { terminalCapabilityManager } from '#ui-ink/utils/terminalCapabilityManager'
 import { handleMcprcServerApprovals } from './mcpServerApproval'
 import { computeOnboardingPlan } from './onboarding/plan'
 
@@ -61,7 +62,9 @@ export async function showSetupScreens(
         let instance: InkRenderInstance | undefined
         instance = renderWithTuiStdio(
           render,
-          <KeypressProvider>
+          <KeypressProvider
+            debugKeystrokeLogging={Boolean(process.env.KODE_DEBUG_KEYSTROKES)}
+          >
             <OnboardingScreen
               onDone={result => {
                 skipped = result?.skipped === true
@@ -75,6 +78,7 @@ export async function showSetupScreens(
         )
       })
     })
+    terminalCapabilityManager.enableSupportedModes()
 
     if (onboardingPlan.shouldAutoRunCapabilities && !skipped) {
       postSetupInitialPrompt = '/capabilities'
@@ -93,13 +97,16 @@ export async function showSetupScreens(
         }
         instance = renderWithTuiStdio(
           render,
-          <KeypressProvider>
+          <KeypressProvider
+            debugKeystrokeLogging={Boolean(process.env.KODE_DEBUG_KEYSTROKES)}
+          >
             <TrustScreen onDone={onDone} />
           </KeypressProvider>,
           { exitOnCtrlC: false },
         )
       })
     })
+    terminalCapabilityManager.enableSupportedModes()
   }
 
   await handleMcprcServerApprovals()

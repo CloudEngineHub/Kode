@@ -156,7 +156,10 @@ function FilesystemPermissionRequestImpl({
     usePermissionContext()
   const layout = useScreenLayout()
   const modeCycleShortcut = useMemo(() => getPermissionModeCycleShortcut(), [])
-  const userFacingName = toolUseConfirm.tool.userFacingName()
+  const userFacingName =
+    toolUseConfirm.tool.userFacingName?.() ||
+    toolUseConfirm.tool.name ||
+    'Tool'
   const hasSessionSuggestion = (toolUseConfirm.suggestions?.length ?? 0) > 0
 
   const userFacingReadOrWrite = toolUseConfirm.tool.isReadOnly(

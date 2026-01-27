@@ -159,6 +159,17 @@ export function ConfigScreen({ onClose }: Props): React.ReactNode {
       type: 'boolean',
     },
     {
+      id: 'incrementalRendering',
+      label: 'Incremental rendering (restart required; reduces flicker)',
+      value: globalConfig.incrementalRendering ?? true,
+      onChange(incrementalRendering: boolean) {
+        const config = { ...getGlobalConfig(), incrementalRendering }
+        saveGlobalConfig(config)
+        setGlobalConfig(config)
+      },
+      type: 'boolean',
+    },
+    {
       id: 'wipeScrollbackOnClear',
       label: 'Wipe scrollback on /clear',
       value: globalConfig.wipeScrollbackOnClear ?? false,

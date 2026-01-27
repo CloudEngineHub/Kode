@@ -102,13 +102,18 @@ export function HistorySearchScreen({
         return true
       }
 
-      if (key.escape || key.tab) {
+      if (key.ctrl && key.return) {
+        executeSelection()
+        return true
+      }
+
+      if (key.tab) {
         acceptSelection()
         return true
       }
 
       if (key.return) {
-        executeSelection()
+        acceptSelection()
         return true
       }
 
@@ -117,12 +122,24 @@ export function HistorySearchScreen({
         return true
       }
 
-      if (key.upArrow || inputChar === 'k') {
+      if (key.escape) {
+        if (query.trim()) {
+          setQuery('')
+          setCursorOffset(0)
+          setSelectedIndex(0)
+          setStatus(null)
+          return true
+        }
+        onDone({ action: 'cancel' })
+        return true
+      }
+
+      if (key.upArrow) {
         if (filtered.length === 0) return true
         setSelectedIndex(prev => clamp(prev - 1, 0, filtered.length - 1))
         return true
       }
-      if (key.downArrow || inputChar === 'j') {
+      if (key.downArrow) {
         if (filtered.length === 0) return true
         setSelectedIndex(prev => clamp(prev + 1, 0, filtered.length - 1))
         return true
@@ -130,7 +147,14 @@ export function HistorySearchScreen({
 
       return false
     },
-    [acceptSelection, cycleNext, executeSelection, filtered.length, onDone],
+    [
+      acceptSelection,
+      cycleNext,
+      executeSelection,
+      filtered.length,
+      onDone,
+      query,
+    ],
   )
 
   useKeypress(
@@ -144,7 +168,7 @@ export function HistorySearchScreen({
   )
 
   const shortcutLine =
-    'Type to filter · ↑/↓ select · Enter execute · Esc/Tab accept · Ctrl+R next · Ctrl+C cancel'
+    'Type to filter · ↑/↓ select · Enter accept · Ctrl+Enter execute · Esc clear/back · Ctrl+R next · Ctrl+C cancel'
 
   return (
     <ScreenFrame
@@ -170,7 +194,7 @@ export function HistorySearchScreen({
               setStatus(null)
               setSelectedIndex(0)
             }}
-            onSubmit={() => executeSelection()}
+            onSubmit={() => acceptSelection()}
             onExit={() => onDone({ action: 'cancel' })}
             columns={Math.max(10, layout.columns - layout.paddingX * 2 - 4)}
             cursorOffset={cursorOffset}

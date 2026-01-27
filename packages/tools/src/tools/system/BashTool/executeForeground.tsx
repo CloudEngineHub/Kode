@@ -31,6 +31,7 @@ export async function* executeForegroundBash(options: {
   setToolJSX?: SetToolJSX
   renderResultForAssistant: (output: Out) => string
   conversationKey: string
+  skipSummary?: boolean
 }): AsyncGenerator<
   | { type: 'progress'; content: unknown }
   | { type: 'result'; resultForAssistant: string; data: Out }
@@ -208,7 +209,7 @@ export async function* executeForegroundBash(options: {
           .filter(Boolean)
           .join('\n')
 
-        if (!data.isImage) {
+        if (!data.isImage && !options.skipSummary) {
           const summary = await maybeSummarizeBashOutput({
             command,
             stdout: stdout.trimEnd(),

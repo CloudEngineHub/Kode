@@ -117,7 +117,7 @@ export const createDefaultState = ({
     focusedValue,
     visibleFromIndex,
     visibleToIndex,
-    previousValue: defaultValue,
-    value: defaultValue,
+    previousValue: undefined,
+    value: undefined,
   }
 }

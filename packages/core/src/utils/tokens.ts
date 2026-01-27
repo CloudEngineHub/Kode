@@ -14,12 +14,14 @@ export function countTokens(messages: Message[]): number {
       )
     ) {
       const { usage } = message.message
-      return (
+      const total =
         usage.input_tokens +
         (usage.cache_creation_input_tokens ?? 0) +
         (usage.cache_read_input_tokens ?? 0) +
         usage.output_tokens
-      )
+      if (total > 0) {
+        return total
+      }
     }
     i--
   }

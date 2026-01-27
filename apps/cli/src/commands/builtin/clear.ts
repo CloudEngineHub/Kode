@@ -5,19 +5,20 @@ import { getCodeStyle } from '#core/utils/style'
 import { clearScrollback, clearTerminal } from '#cli-utils/terminal'
 import { getGlobalConfig } from '#core/utils/config'
 import { getOriginalCwd, setCwd } from '#core/utils/state'
-import { Message } from '#core/query'
 import { resetReminderSession } from '#core/services/systemReminder'
 import { resetFileFreshnessSession } from '#core/services/fileFreshness'
+import type { SetForkConvoWithMessagesOnTheNextRender } from '#ui-ink/types/conversationReset'
 
 export async function clearConversation(context: {
-  setForkConvoWithMessagesOnTheNextRender: (
-    forkConvoWithMessages: Message[],
-  ) => void
+  setForkConvoWithMessagesOnTheNextRender: SetForkConvoWithMessagesOnTheNextRender
 }) {
   const config = getGlobalConfig()
   await (config.wipeScrollbackOnClear ? clearScrollback() : clearTerminal())
   getMessagesSetter()([])
-  context.setForkConvoWithMessagesOnTheNextRender([])
+  context.setForkConvoWithMessagesOnTheNextRender([], {
+    clearViewport: false,
+    resetInput: true,
+  })
   getContext.cache.clear?.()
   getCodeStyle.cache.clear?.()
   await setCwd(getOriginalCwd())

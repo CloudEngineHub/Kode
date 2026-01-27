@@ -17,11 +17,12 @@ export function UserBashInputMessage({
   if (!input) {
     return null
   }
+  const theme = getTheme()
   return (
     <Box flexDirection="column" marginTop={addMargin ? 1 : 0} width="100%">
       <Box>
-        <Text color={getTheme().bashBorder}>!</Text>
-        <Text color={getTheme().secondaryText}> {input}</Text>
+        <Text color={theme.bashBorder} bold>$</Text>
+        <Text bold> {input}</Text>
       </Box>
     </Box>
   )

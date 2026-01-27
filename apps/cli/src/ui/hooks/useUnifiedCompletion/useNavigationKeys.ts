@@ -42,13 +42,18 @@ export function useUnifiedCompletionNavigationKeys(args: {
     (inputChar, key) => {
       if (!args.isEnabled) return false
 
+      // When completion is active, don't let history navigation take over
       const preferHistoryNavigation =
-        !args.input.includes('\n') && !key.ctrl && !key.meta
+        !args.state.isActive &&
+        !args.input.includes('\n') &&
+        !key.ctrl &&
+        !key.meta
 
       if (preferHistoryNavigation && (key.upArrow || key.downArrow)) {
         return false
       }
 
+      // Enter key: close completion panel without filling, let normal submit handle it
       if (
         key.return &&
         !key.shift &&
@@ -56,29 +61,16 @@ export function useUnifiedCompletionNavigationKeys(args: {
         args.state.isActive &&
         args.state.suggestions.length > 0
       ) {
-        const selectedSuggestion =
-          args.state.suggestions[args.state.selectedIndex]
-        if (selectedSuggestion && args.state.context) {
-          const preview = getPreviewText(selectedSuggestion, args.state.context)
-          const isDirectory = selectedSuggestion.value.endsWith('/')
-          const completion = `${preview}${isDirectory ? '' : ' '}`
-
-          const currentWord = args.input.slice(args.state.context.startPos)
-          const nextSpaceIndex = currentWord.indexOf(' ')
-          const actualEndPos =
-            nextSpaceIndex === -1
-              ? args.input.length
-              : args.state.context.startPos + nextSpaceIndex
-
-          const newInput =
-            args.input.slice(0, args.state.context.startPos) +
-            completion +
-            args.input.slice(actualEndPos)
-          args.onInputChange(newInput)
-          args.setCursorOffset(args.state.context.startPos + completion.length)
+        // Restore original input if preview was active
+        if (args.state.preview?.isActive && args.state.context) {
+          args.onInputChange(args.state.preview.originalInput)
+          args.setCursorOffset(
+            args.state.context.startPos + args.state.context.prefix.length,
+          )
         }
         args.resetCompletion()
-        return true
+        // Return false to let normal Enter/submit behavior take over
+        return false
       }
 
       if (!args.state.isActive || args.state.suggestions.length === 0)

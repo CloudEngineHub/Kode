@@ -2,7 +2,14 @@ import { Box, Text } from 'ink'
 import React from 'react'
 import { useInterval } from '#ui-ink/hooks/useInterval'
 import { getTheme } from '#core/utils/theme'
-import { BLACK_CIRCLE } from '#core/constants/figures'
+import {
+  CHECKMARK,
+  CROSS,
+  DIAMOND_HOLLOW,
+  DIAMOND_FILLED,
+} from '#core/constants/figures'
+
+const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
 
 type Props = {
   isError: boolean
@@ -15,26 +22,44 @@ export function ToolUseLoader({
   isUnresolved,
   shouldAnimate,
 }: Props): React.ReactNode {
-  const [isVisible, setIsVisible] = React.useState(true)
+  const [frameIndex, setFrameIndex] = React.useState(0)
 
   useInterval(() => {
     if (!shouldAnimate) {
       return
     }
-    // To avoid flickering when the tool use confirm is visible, we set the loader to be visible
-    // when the tool use confirm is visible.
-    setIsVisible(_ => !_)
-  }, 600)
+    setFrameIndex(i => (i + 1) % SPINNER_FRAMES.length)
+  }, 80)
 
-  const color = isUnresolved
-    ? getTheme().secondaryText
-    : isError
-      ? getTheme().error
-      : getTheme().success
+  const theme = getTheme()
+
+  if (shouldAnimate) {
+    return (
+      <Box minWidth={2}>
+        <Text color={theme.kode}>{SPINNER_FRAMES[frameIndex]} </Text>
+      </Box>
+    )
+  }
+
+  if (isError) {
+    return (
+      <Box minWidth={2}>
+        <Text color={theme.error}>{CROSS} </Text>
+      </Box>
+    )
+  }
+
+  if (isUnresolved) {
+    return (
+      <Box minWidth={2}>
+        <Text color={theme.secondaryText}>{DIAMOND_HOLLOW} </Text>
+      </Box>
+    )
+  }
 
   return (
     <Box minWidth={2}>
-      <Text color={color}>{isVisible ? BLACK_CIRCLE : '  '}</Text>
+      <Text color="green">{CHECKMARK} </Text>
     </Box>
   )
 }

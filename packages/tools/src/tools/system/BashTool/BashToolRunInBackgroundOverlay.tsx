@@ -1,5 +1,5 @@
 import { Box, Text, useInput } from 'ink'
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { getTheme } from '#core/utils/theme'
 import {
   getRequestStatus,
@@ -7,29 +7,37 @@ import {
   type RequestStatus,
 } from '#core/utils/requestStatus'
 
-const CHARACTERS =
-  process.platform === 'darwin'
-    ? ['·', '✢', '✳', '∗', '✻', '✽']
-    : ['·', '✢', '*', '∗', '✻', '✽']
+const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
 
 function getLabel(status: RequestStatus): string {
   switch (status.kind) {
     case 'thinking':
-      return 'Thinking'
+      return 'Prefilling'
     case 'streaming':
-      return 'Streaming'
-    case 'tool':
-      return status.detail ? `Running tool: ${status.detail}` : 'Running tool'
-    case 'idle':
-      return 'Working'
+      return 'Decoding'
+    default:
+      return ''
   }
 }
 
+function formatTokens(tokens: number): string {
+  if (tokens >= 1000) {
+    return `${(tokens / 1000).toFixed(1)}k`
+  }
+  return tokens.toString()
+}
+
+function getTokenDisplay(status: RequestStatus): string {
+  if (status.kind === 'thinking' && status.inputTokens) {
+    return ` · ↑ ${formatTokens(status.inputTokens)}`
+  }
+  if (status.kind === 'streaming' && status.outputTokens !== undefined) {
+    return ` · ↓ ${formatTokens(status.outputTokens)}`
+  }
+  return ''
+}
+
 function RequestStatusIndicator(): React.ReactNode {
-  const frames = useMemo(
-    () => [...CHARACTERS, ...[...CHARACTERS].reverse()],
-    [],
-  )
   const theme = getTheme()
 
   const [frame, setFrame] = useState(0)
@@ -53,10 +61,10 @@ function RequestStatusIndicator(): React.ReactNode {
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setFrame(f => (f + 1) % frames.length)
-    }, 120)
+      setFrame(f => (f + 1) % SPINNER_FRAMES.length)
+    }, 80)
     return () => clearInterval(timer)
-  }, [frames.length])
+  }, [])
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -65,18 +73,22 @@ function RequestStatusIndicator(): React.ReactNode {
         return
       }
       setElapsedTime(Math.floor((Date.now() - requestStartTime.current) / 1000))
-    }, 250)
+    }, 1000)
     return () => clearInterval(timer)
   }, [])
 
+  if (status.kind === 'tool' || status.kind === 'idle') {
+    return null
+  }
+
   return (
     <Box flexDirection="row" marginTop={1}>
-      <Box flexWrap="nowrap" height={1} width={2}>
-        <Text color={theme.kode}>{frames[frame]}</Text>
-      </Box>
-      <Text color={theme.kode}>{getLabel(status)}… </Text>
+      <Text color={theme.kode} bold>
+        {SPINNER_FRAMES[frame]} {getLabel(status)}
+      </Text>
       <Text color={theme.secondaryText}>
-        ({elapsedTime}s · <Text bold>esc</Text> to interrupt)
+        {' '}:: {elapsedTime}s (Esc to interrupt)
+        {getTokenDisplay(status)}
       </Text>
     </Box>
   )

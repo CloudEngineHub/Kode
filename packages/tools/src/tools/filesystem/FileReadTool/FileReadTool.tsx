@@ -146,19 +146,17 @@ export const FileReadTool = {
       case 'image':
         return (
           <Box justifyContent="space-between" overflowX="hidden" width="100%">
-            <Box flexDirection="row">
-              <Text>&nbsp;&nbsp;⎿ &nbsp;</Text>
-              <Text>Read image</Text>
+            <Box flexDirection="row" paddingLeft={2}>
+              <Text color={getTheme().secondaryText}>(image content)</Text>
             </Box>
           </Box>
         )
       case 'text': {
         const { filePath, content, numLines } = output.file
-        const contentWithFallback = content || '(No content)'
+        const contentWithFallback = content || '(empty file)'
         return (
           <Box justifyContent="space-between" overflowX="hidden" width="100%">
-            <Box flexDirection="row">
-              <Text>&nbsp;&nbsp;⎿ &nbsp;</Text>
+            <Box flexDirection="row" paddingLeft={2}>
               <Box flexDirection="column">
                 <Text>
                   {highlightCode(

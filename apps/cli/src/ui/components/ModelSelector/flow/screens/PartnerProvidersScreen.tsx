@@ -49,7 +49,7 @@ export function PartnerProvidersScreen({
   const footerMarginTop = tightLayout ? 0 : 1
   return (
     <ScreenFrame
-      title="Partner Providers"
+      title="Other Providers"
       exitState={exitState}
       paddingX={tightLayout || compactLayout ? 1 : 2}
       paddingY={containerPaddingY}

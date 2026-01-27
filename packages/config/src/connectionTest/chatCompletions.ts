@@ -77,7 +77,7 @@ export async function testChatCompletionsAPI(
       if (containsYes) {
         return {
           success: true,
-          message: `✅ ${isGPT5 ? 'GPT-5' : 'Model'} Chat Completions connection successful`,
+          message: `${isGPT5 ? 'GPT-5' : 'Model'} Chat Completions connection successful`,
           endpoint: '/chat/completions',
           details: `Model responded correctly: \"${responseContent.trim()}\"`,
           apiUsed: 'chat_completions',
@@ -87,7 +87,7 @@ export async function testChatCompletionsAPI(
 
       return {
         success: false,
-        message: '⚠️ Chat Completions connected but unexpected response',
+        message: 'Chat Completions connected but returned an unexpected response',
         endpoint: '/chat/completions',
         details: `Expected \"YES\" but got: \"${responseContent.trim() || '(empty response)'}\"`,
         apiUsed: 'chat_completions',
@@ -113,12 +113,12 @@ export async function testChatCompletionsAPI(
       isGPT5
     ) {
       details +=
-        '\n\n🔧 GPT-5 Fix Applied: This error suggests a parameter compatibility issue. Please check if the provider supports GPT-5 with max_completion_tokens.'
+        '\n\nGPT-5 note: This error suggests a parameter compatibility issue. Check whether the provider supports GPT-5 with max_completion_tokens.'
     }
 
     return {
       success: false,
-      message: `❌ Chat Completions failed (${response.status})`,
+      message: `Chat Completions failed (${response.status})`,
       endpoint: '/chat/completions',
       details: details,
       apiUsed: 'chat_completions',
@@ -132,7 +132,7 @@ export async function testChatCompletionsAPI(
 
     return {
       success: false,
-      message: '❌ Chat Completions connection failed',
+      message: 'Chat Completions connection failed',
       endpoint: '/chat/completions',
       details: error instanceof Error ? error.message : String(error),
       apiUsed: 'chat_completions',

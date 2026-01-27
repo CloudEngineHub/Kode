@@ -80,7 +80,10 @@ export default {
           cwd,
           sessionId: resolved.sessionId,
         })
-        context.setForkConvoWithMessagesOnTheNextRender(messages)
+        context.setForkConvoWithMessagesOnTheNextRender(messages, {
+          clearViewport: true,
+          resetInput: true,
+        })
         onDone()
         return null
       }
@@ -106,7 +109,10 @@ export default {
               cwd: otherCwd,
               sessionId: resolved.sessionId,
             })
-            context.setForkConvoWithMessagesOnTheNextRender(messages)
+            context.setForkConvoWithMessagesOnTheNextRender(messages, {
+              clearViewport: true,
+              resetInput: true,
+            })
             onDone()
             return null
           }
@@ -151,7 +157,10 @@ export default {
             cwd: effectiveCwd,
             sessionId: session.sessionId,
           })
-          context.setForkConvoWithMessagesOnTheNextRender(messages)
+          context.setForkConvoWithMessagesOnTheNextRender(messages, {
+            clearViewport: true,
+            resetInput: true,
+          })
           onDone()
         }}
       />

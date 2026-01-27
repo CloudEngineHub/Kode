@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 
 import type { Message } from '#core/query'
 import type { Tool, ToolUseContext } from '#core/tooling/Tool'
+import type { SetForkConvoWithMessagesOnTheNextRender } from '#ui-ink/types/conversationReset'
 
 export type PromptCommand = {
   type: 'prompt'
@@ -23,9 +24,7 @@ export type LocalCommand = {
         openMessageSelector?: () => void
       }
       abortController: AbortController
-      setForkConvoWithMessagesOnTheNextRender: (
-        forkConvoWithMessages: Message[],
-      ) => void
+      setForkConvoWithMessagesOnTheNextRender: SetForkConvoWithMessagesOnTheNextRender
     },
   ): Promise<string>
 }
@@ -35,9 +34,7 @@ export type LocalJSXCommand = {
   call(
     onDone: (result?: string) => void,
     context: ToolUseContext & {
-      setForkConvoWithMessagesOnTheNextRender: (
-        forkConvoWithMessages: Message[],
-      ) => void
+      setForkConvoWithMessagesOnTheNextRender: SetForkConvoWithMessagesOnTheNextRender
     },
     args?: string,
   ): Promise<ReactNode>

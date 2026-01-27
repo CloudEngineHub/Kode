@@ -3,7 +3,7 @@ import * as React from 'react'
 import { getTheme } from '#core/utils/theme'
 import { ASCII_LOGO } from '#core/constants/product'
 
-export const MIN_LOGO_WIDTH = 60
+export const MIN_LOGO_WIDTH = 70
 
 export function Logo({
   mcpClients,

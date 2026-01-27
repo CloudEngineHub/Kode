@@ -1,4 +1,5 @@
-import { randomUUID } from 'crypto'
+import { createHash, randomUUID } from 'crypto'
+import type { UUID } from 'crypto'
 
 import type {
   ContentBlock,
@@ -17,6 +18,11 @@ import type {
 
 import { CANCEL_MESSAGE } from './constants'
 import type { NormalizedMessage } from './normalize'
+
+function stableUuidFromSeed(seed: string): UUID {
+  const hex = createHash('sha256').update(seed).digest('hex').slice(0, 32)
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}` as UUID
+}
 
 function baseCreateAssistantMessage(
   content: ContentBlock[],
@@ -108,7 +114,7 @@ export function createProgressMessage(
     siblingToolUseIDs,
     tools,
     toolUseID,
-    uuid: randomUUID(),
+    uuid: stableUuidFromSeed(`progress:${toolUseID}`),
   }
 }
 

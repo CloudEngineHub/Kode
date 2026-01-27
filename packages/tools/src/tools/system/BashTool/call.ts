@@ -272,6 +272,7 @@ export async function* callBashTool(
       setToolJSX,
       renderResultForAssistant,
       conversationKey: getPlanConversationKey(context),
+      skipSummary: commandSource === 'user_bash_mode',
     })
   } catch (error) {
     const isAborted = abortController.signal.aborted

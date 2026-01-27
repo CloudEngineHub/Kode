@@ -18,7 +18,7 @@ function renderTruncatedContent(
   // Show last N lines of output by default
   const lastLines = allLines.slice(-maxLines)
   return [
-    chalk.grey(`Showing last ${maxLines} lines of ${totalLines} total lines`),
+    chalk.grey(`... ${totalLines - maxLines} lines hidden, showing last ${maxLines} lines`),
     ...lastLines,
   ].join('\n')
 }
@@ -40,36 +40,28 @@ export function OutputLine({
   key?: React.Key
 }) {
   const trimmed = content.trim()
+  const theme = getTheme()
+
   if (maxHeight && maxWidth) {
-    const coloredText = isError ? chalk.hex(getTheme().error)(trimmed) : trimmed
+    const coloredText = isError ? chalk.hex(theme.error)(trimmed) : chalk.dim(trimmed)
     return (
-      <Box justifyContent="space-between" width="100%">
-        <Box flexDirection="row">
-          <Text>&nbsp;&nbsp;⎿ &nbsp;</Text>
-          <Box flexDirection="column">
-            <MaxSizedText
-              text={coloredText}
-              maxHeight={maxHeight}
-              maxWidth={maxWidth}
-              overflowDirection="bottom"
-            />
-          </Box>
-        </Box>
+      <Box width="100%" paddingLeft={2}>
+        <MaxSizedText
+          text={coloredText}
+          maxHeight={maxHeight}
+          maxWidth={maxWidth}
+          overflowDirection="bottom"
+        />
       </Box>
     )
   }
 
   const displayText = verbose ? trimmed : renderTruncatedContent(trimmed, lines)
   return (
-    <Box justifyContent="space-between" width="100%">
-      <Box flexDirection="row">
-        <Text>&nbsp;&nbsp;⎿ &nbsp;</Text>
-        <Box flexDirection="column">
-          <Text color={isError ? getTheme().error : undefined}>
-            {displayText}
-          </Text>
-        </Box>
-      </Box>
+    <Box width="100%" paddingLeft={2}>
+      <Text color={isError ? theme.error : theme.secondaryText}>
+        {displayText}
+      </Text>
     </Box>
   )
 }

@@ -1,6 +1,7 @@
 import { Box } from 'ink'
 import * as React from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import ReactReconciler from 'react-reconciler'
 import { Logo } from '#ui-ink/components/Logo'
 import ProjectOnboarding from '#ui-ink/components/ProjectOnboarding'
 import type { ToolUseConfirm } from '#ui-ink/components/permissions/PermissionRequest'
@@ -45,7 +46,7 @@ import { ModelConfig } from '#ui-ink/components/ModelConfig'
 import { Doctor } from '#ui-ink/screens/Doctor'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { submitPrompt } from '#ui-ink/components/PromptInput/submit'
-import { useTranscriptItems } from './useTranscriptItems'
+import { useTranscriptItems, type TranscriptItem } from './useTranscriptItems'
 import { useRequestToolUsePermission } from './useRequestToolUsePermission'
 import { useReplQuery } from './useReplQuery'
 import { useReplInit } from './useReplInit'
@@ -56,6 +57,7 @@ import { ensureLspManagerInitialized } from '#tools/tools/system/LspTool/call'
 import { describeToolPermissionRuleSource } from '#core/permissions/ruleString'
 import { triggerModelConfigChange } from '#core/messages'
 import {
+  clearViewport,
   enterAlternateScreen,
   exitAlternateScreen,
 } from '#cli-utils/terminal'
@@ -63,6 +65,20 @@ import { getModelManager } from '#core/utils/model'
 import { getToolPermissionContextForConversationKey } from '#core/utils/toolPermissionContextState'
 import type { PromptMode } from '#ui-ink/components/PromptInput/types'
 import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
+import { terminalCapabilityManager } from '#ui-ink/utils/terminalCapabilityManager'
+import type {
+  ForkConvoWithMessagesOptions,
+  SetForkConvoWithMessagesOnTheNextRender,
+} from '#ui-ink/types/conversationReset'
+
+const batchedUpdates: ((fn: () => void) => void) | null =
+  typeof (ReactReconciler as any)?.batchedUpdates === 'function'
+    ? ((ReactReconciler as any).batchedUpdates as (fn: () => void) => void)
+    : typeof (ReactReconciler as any)?.default?.batchedUpdates === 'function'
+      ? ((ReactReconciler as any).default.batchedUpdates as (
+          fn: () => void,
+        ) => void)
+      : null
 
 export function useReplController(props: REPLProps) {
   const debug = props.debug ?? false
@@ -131,21 +147,62 @@ export function useReplController(props: REPLProps) {
       0,
     ),
   )
+  const initialForkNumberRef = useRef(forkNumber)
   const [uiRefreshCounter, setUiRefreshCounter] = useState(0)
 
   const [
-    forkConvoWithMessagesOnTheNextRender,
-    setForkConvoWithMessagesOnTheNextRender,
-  ] = useState<MessageType[] | null>(null)
+    pendingForkConvoWithMessages,
+    setPendingForkConvoWithMessages,
+  ] = useState<{
+    messages: MessageType[]
+    options?: ForkConvoWithMessagesOptions
+  } | null>(null)
+  const pendingForkConvoWithMessagesRef = useRef<{
+    messages: MessageType[]
+    options?: ForkConvoWithMessagesOptions
+  } | null>(null)
+
+  const setForkConvoWithMessagesOnTheNextRender =
+    useCallback<SetForkConvoWithMessagesOnTheNextRender>((messages, options) => {
+      const request = { messages, options }
+      pendingForkConvoWithMessagesRef.current = request
+      setPendingForkConvoWithMessages(request)
+    }, [])
+
+  // Returns true if a pending fork/reset request should suppress appending new messages.
+  // Side effect: clears pendingForkConvoWithMessagesRef when returning true.
+  const checkPendingForkAndSuppressAppend = useCallback(
+    (newMessages: MessageType[]): boolean => {
+      const pending = pendingForkConvoWithMessagesRef.current
+      if (!pending) return false
+      if (newMessages.length === 0) return false
+      const last = newMessages[newMessages.length - 1]
+      if (!last || last.type !== 'assistant') return false
+      // A fork/reset was requested during this command; don't append the
+      // command metadata messages to the soon-to-be-replaced transcript.
+      pendingForkConvoWithMessagesRef.current = null
+      return true
+    },
+    [],
+  )
 
   const [abortController, setAbortController] =
     useState<AbortController | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [toolJSX, setToolJSX] = useState<{
+  type ToolView = {
     jsx: React.ReactNode | null
     shouldHidePromptInput: boolean
     displayMode?: 'inline' | 'fullscreen'
-  } | null>(null)
+  }
+
+  const [toolViewStack, setToolViewStack] = useState<ToolView[]>([])
+  const toolViewStackRef = useRef<ToolView[]>(toolViewStack)
+  useEffect(() => {
+    toolViewStackRef.current = toolViewStack
+  }, [toolViewStack])
+
+  const toolJSX: ToolView | null =
+    toolViewStack.length > 0 ? toolViewStack[toolViewStack.length - 1] : null
 
   const toolJSXRef = useRef<typeof toolJSX>(toolJSX)
   useEffect(() => {
@@ -162,13 +219,48 @@ export function useReplController(props: REPLProps) {
     }
   }, [])
 
-  const setToolJSXWithClear = useCallback(
-    (next: typeof toolJSX) => {
+  const setToolViewStackWithClear = useCallback(
+    (nextStack: ToolView[]) => {
       const prevMode = toolJSXRef.current?.displayMode
-      const nextMode = next?.displayMode
+      const nextTop = nextStack.length
+        ? nextStack[nextStack.length - 1]
+        : null
+      const nextMode = nextTop?.displayMode
 
       const prevFull = prevMode === 'fullscreen'
       const nextFull = nextMode === 'fullscreen'
+
+      const maybeApplyPendingForkConvoWithMessages = (): void => {
+        const request = pendingForkConvoWithMessagesRef.current
+        if (!request) return
+
+        pendingForkConvoWithMessagesRef.current = null
+
+        if (request.options?.clearViewport) {
+          // Don't await; ordering of writes on stdout is preserved and this keeps
+          // the transition to the restored main buffer from flashing.
+          void clearViewport()
+        }
+
+        const applyStateUpdates = () => {
+          setPendingForkConvoWithMessages(null)
+          setForkNumber(prev => prev + 1)
+          setMessages(request.messages)
+
+          if (request.options?.resetInput) {
+            setInputMode('prompt')
+            setInputValue('')
+            setRestorePastes(undefined)
+            setDraftPastes({ pastedTexts: [], pastedImages: [] })
+          }
+        }
+
+        if (batchedUpdates) {
+          batchedUpdates(applyStateUpdates)
+          return
+        }
+        applyStateUpdates()
+      }
 
       const screenReaderEnv =
         process.env.KODE_SCREEN_READER ?? process.env.SCREENREADER
@@ -179,8 +271,9 @@ export function useReplController(props: REPLProps) {
         canUseAltScreen && getGlobalConfigCached().useAlternateBuffer !== true
 
       const doSetState = () => {
-        toolJSXRef.current = next
-        setToolJSX(next)
+        toolViewStackRef.current = nextStack
+        toolJSXRef.current = nextTop
+        setToolViewStack(nextStack)
       }
 
       // When running in the main buffer (scrollback enabled), opening a fullscreen
@@ -190,6 +283,10 @@ export function useReplController(props: REPLProps) {
       if (useEphemeralAltScreen) {
         if (!prevFull && nextFull) {
           enterAlternateScreen()
+          // Switching buffers can reset terminal modes (kitty/modifyOtherKeys/bracketed paste)
+          // in some terminals; re-assert what we detected at startup so keybindings keep working.
+          terminalCapabilityManager.enableSupportedModes()
+          void clearViewport()
           doSetState()
           ephemeralFullscreenAltScreenRef.current = true
           return
@@ -197,7 +294,13 @@ export function useReplController(props: REPLProps) {
           if (ephemeralFullscreenAltScreenRef.current) {
             ephemeralFullscreenAltScreenRef.current = false
             exitAlternateScreen()
+            terminalCapabilityManager.enableSupportedModes()
           }
+
+          // Apply any pending transcript fork/reset immediately when leaving a
+          // fullscreen tool view so the restored main buffer doesn't flash the
+          // pre-overlay frame (e.g. `/resume`).
+          maybeApplyPendingForkConvoWithMessages()
         } else if (
           prevFull &&
           nextFull &&
@@ -211,6 +314,9 @@ export function useReplController(props: REPLProps) {
         if (prevFull !== nextFull) {
           // Avoid explicit terminal clears here; the UI should remain within the viewport
           // and rely on Ink's reconciliation to keep transitions stable.
+          if (prevFull && !nextFull) {
+            maybeApplyPendingForkConvoWithMessages()
+          }
           doSetState()
           return
         }
@@ -218,7 +324,13 @@ export function useReplController(props: REPLProps) {
 
       doSetState()
     },
-    [setToolJSX],
+    [setToolViewStack],
+  )
+  const setToolJSXWithClear = useCallback(
+    (next: ToolView | null) => {
+      setToolViewStackWithClear(next ? [next] : [])
+    },
+    [setToolViewStackWithClear],
   )
   const [toolUseConfirm, setToolUseConfirm] = useState<ToolUseConfirm | null>(
     null,
@@ -264,14 +376,16 @@ export function useReplController(props: REPLProps) {
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const dismissToolView = useCallback(() => {
-    setToolJSXWithClear(null)
-  }, [setToolJSXWithClear])
+    const current = toolViewStackRef.current
+    if (current.length === 0) return
+    setToolViewStackWithClear(current.slice(0, -1))
+  }, [setToolViewStackWithClear])
 
   const openToolView = useCallback(
     (view: NonNullable<typeof toolJSX>) => {
-      setToolJSXWithClear(view)
+      setToolViewStackWithClear([...toolViewStackRef.current, view])
     },
-    [setToolJSXWithClear],
+    [setToolViewStackWithClear],
   )
 
   const openTasksScreen = useCallback(() => {
@@ -744,11 +858,43 @@ export function useReplController(props: REPLProps) {
   )
 
   useEffect(() => {
-    if (!forkConvoWithMessagesOnTheNextRender) return
-    setForkNumber(prev => prev + 1)
-    setForkConvoWithMessagesOnTheNextRender(null)
-    setMessages(forkConvoWithMessagesOnTheNextRender)
-  }, [forkConvoWithMessagesOnTheNextRender])
+    if (!pendingForkConvoWithMessages) return
+
+    // If a fullscreen tool view is still mounted, we may still be on the
+    // alternate screen buffer (ephemeral fullscreen mode). Wait until the view
+    // is dismissed so clears apply to the active REPL buffer.
+    if (toolJSX?.displayMode === 'fullscreen') return
+
+    const request = pendingForkConvoWithMessages
+    setPendingForkConvoWithMessages(null)
+    pendingForkConvoWithMessagesRef.current = null
+
+    // For non-fullscreen forks, handle clearViewport synchronously then update state
+    // This matches the old pattern where clearTerminal was called before state updates
+    const applyStateUpdates = () => {
+      setForkNumber(prev => prev + 1)
+      setMessages(request.messages)
+
+      if (request.options?.resetInput) {
+        setInputMode('prompt')
+        setInputValue('')
+        setRestorePastes(undefined)
+        setDraftPastes({ pastedTexts: [], pastedImages: [] })
+      }
+    }
+
+    // clearViewport is async but we don't need to await it - the terminal
+    // writes are ordered on stdout, so the clear happens before React renders
+    if (request.options?.clearViewport) {
+      void clearViewport()
+    }
+
+    if (batchedUpdates) {
+      batchedUpdates(applyStateUpdates)
+    } else {
+      applyStateUpdates()
+    }
+  }, [pendingForkConvoWithMessages, toolJSX?.displayMode])
 
   useEffect(() => {
     const totalCost = getTotalCost()
@@ -869,6 +1015,7 @@ export function useReplController(props: REPLProps) {
     mcpClients,
     verbose,
     safeMode,
+    checkPendingForkAndSuppressAppend,
     requestToolUsePermission,
     canUseTool,
     readFileTimestamps: readFileTimestampsRef.current,
@@ -931,33 +1078,63 @@ export function useReplController(props: REPLProps) {
     forkNumber,
   })
 
-  const staticItems = useMemo(
-    () => [
-      {
-        jsx: (
-          <Box flexDirection="column" key={`logo${forkNumber}`}>
-            <Logo
-              mcpClients={mcpClients}
-              isDefaultModel={isDefaultModel}
-              updateBannerVersion={updateAvailableVersion}
-              updateBannerCommands={updateCommands}
-            />
-            <ProjectOnboarding workspaceDir={getOriginalCwd()} />
-          </Box>
-        ),
-      },
-      ...transcript.items.slice(0, transcript.replStaticPrefixLength),
-    ],
-    [
-      forkNumber,
-      transcript.items,
-      transcript.replStaticPrefixLength,
-      mcpClients,
-      isDefaultModel,
-      updateAvailableVersion,
-      updateCommands,
-    ],
-  )
+  const staticItemsRef = useRef<TranscriptItem[]>([])
+  const printedKeysRef = useRef<Set<string>>(new Set())
+  const lastForkNumberRef = useRef<number>(forkNumber)
+
+  const staticItems = useMemo(() => {
+    // Reset when forkNumber changes (conversation fork)
+    if (lastForkNumberRef.current !== forkNumber) {
+      lastForkNumberRef.current = forkNumber
+      staticItemsRef.current = []
+      printedKeysRef.current = new Set()
+    }
+
+    const items: TranscriptItem[] = []
+
+    // Always include logo as first item
+    const logoKey = `logo-${forkNumber}`
+    items.push({
+      key: logoKey,
+      jsx: (
+        <Box flexDirection="column" key={logoKey}>
+          <Logo
+            mcpClients={mcpClients}
+            isDefaultModel={isDefaultModel}
+            updateBannerVersion={updateAvailableVersion}
+            updateBannerCommands={updateCommands}
+          />
+          <ProjectOnboarding workspaceDir={getOriginalCwd()} />
+        </Box>
+      ),
+    })
+
+    items.push(...transcript.items.slice(0, transcript.replStaticPrefixLength))
+
+    // Only add items that haven't been printed yet
+    const newItems: TranscriptItem[] = []
+    for (const item of items) {
+      if (!printedKeysRef.current.has(item.key)) {
+        printedKeysRef.current.add(item.key)
+        newItems.push(item)
+      }
+    }
+
+    // Append new items to the stable array
+    if (newItems.length > 0) {
+      staticItemsRef.current = [...staticItemsRef.current, ...newItems]
+    }
+
+    return staticItemsRef.current
+  }, [
+    forkNumber,
+    isDefaultModel,
+    mcpClients,
+    transcript.items,
+    transcript.replStaticPrefixLength,
+    updateAvailableVersion,
+    updateCommands,
+  ])
 
   const transientItems = useMemo(
     () => transcript.items.slice(transcript.replStaticPrefixLength),
@@ -1017,7 +1194,6 @@ export function useReplController(props: REPLProps) {
   const handleMessageSelectorSelect = useMessageSelectorSelect({
     messages,
     setIsMessageSelectorVisible,
-    setMessages,
     setForkConvoWithMessagesOnTheNextRender,
     setInputValue,
     onCancel,

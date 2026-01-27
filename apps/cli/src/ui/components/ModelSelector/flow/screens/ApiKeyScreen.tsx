@@ -277,7 +277,7 @@ export function ApiKeyScreen({
         {modelLoadError && !isLoadingModels && (
           <Box marginTop={tightLayout ? 0 : 1} flexDirection="column">
             <Text color="red">
-              ❌ Validation failed{tightLayout ? `: ${modelLoadError}` : ''}
+              Validation failed{tightLayout ? `: ${modelLoadError}` : ''}
             </Text>
             {!tightLayout ? (
               <>

@@ -1,7 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import type { AnthropicBedrock } from '@anthropic-ai/bedrock-sdk'
 import type { AnthropicVertex } from '@anthropic-ai/vertex-sdk'
-import { setRequestStatus } from '#core/utils/requestStatus'
+import { setRequestStatus, setRequestInputTokens, updateRequestTokens } from '#core/utils/requestStatus'
 import { debug as debugLogger } from '#core/utils/debugLogger'
 import { parseToolUsePartialJsonOrThrow } from '#core/utils/toolUsePartialJson'
 
@@ -25,7 +25,7 @@ export async function createAnthropicStreamingMessage(
       stream: true,
     },
     {
-      signal: signal, // ← CRITICAL: Connect the AbortSignal to API call
+      signal: signal, // CRITICAL: Connect the AbortSignal to API call
     },
   )
 
@@ -37,6 +37,7 @@ export async function createAnthropicStreamingMessage(
   let stopReason: string | null = null
   let stopSequence: string | null = null
   let hasMarkedStreaming = false
+  let outputTokenCount = 0
 
   for await (const event of stream) {
     try {
@@ -57,6 +58,9 @@ export async function createAnthropicStreamingMessage(
         finalResponse = {
           ...event.message,
           content: [], // Will be populated from content blocks
+        }
+        if (event.message?.usage?.input_tokens) {
+          setRequestInputTokens(event.message.usage.input_tokens)
         }
         break
 
@@ -103,6 +107,8 @@ export async function createAnthropicStreamingMessage(
             hasMarkedStreaming = true
           }
           contentBlocks[blockIndex].text += event.delta.text
+          outputTokenCount++
+          updateRequestTokens(outputTokenCount)
         } else if (event.delta.type === 'input_json_delta') {
           const currentBuffer = inputJSONBuffers.get(blockIndex) || ''
           const nextBuffer = currentBuffer + event.delta.partial_json
@@ -122,7 +128,12 @@ export async function createAnthropicStreamingMessage(
       case 'message_delta':
         if (event.delta.stop_reason) stopReason = event.delta.stop_reason
         if (event.delta.stop_sequence) stopSequence = event.delta.stop_sequence
-        if (event.usage) usage = { ...usage, ...event.usage }
+        if (event.usage) {
+          usage = { ...usage, ...event.usage }
+          if (event.usage.output_tokens) {
+            updateRequestTokens(event.usage.output_tokens)
+          }
+        }
         break
 
       case 'content_block_stop':

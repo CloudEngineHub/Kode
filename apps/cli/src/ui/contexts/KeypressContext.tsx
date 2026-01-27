@@ -27,6 +27,7 @@ const MAC_ALT_KEY_CHARACTER_MAP: Record<string, string> = {
   '\u222B': 'b', // ∫  -> Meta+b (prev word)
   '\u0192': 'f', // ƒ  -> Meta+f (next word)
   '\u00B5': 'm', // µ  -> Meta+m (toggle model / misc)
+  '\u03BC': 'm', // μ  -> Meta+m (some terminals emit Greek mu)
 }
 
 const KEY_INFO_MAP: Record<
@@ -396,11 +397,25 @@ function* emitKeys(
         let match: RegExpExecArray | null
 
         if ((match = /^(\d+)(?:;(\d+))?(?:;(\d+))?([~^$u])$/.exec(cmd))) {
+          if (
+            // kitty keyboard protocol can include an event type as the 3rd param: 1=press, 2=repeat, 3=release.
+            // Ignore release events to avoid double-triggering shortcuts.
+            match[4] === 'u' &&
+            match[3] === '3' &&
+            match[1] !== '27'
+          ) {
+            continue
+          }
           if (match[1] === '27' && match[3] && match[4] === '~') {
             // modifyOtherKeys format: CSI 27 ; modifier ; key ~
             // Treat as CSI u: key + 'u'
             code += match[3] + 'u'
             modifier = Number.parseInt(match[2] ?? '1', 10) - 1
+          } else if (match[1] === '13' && match[2] && match[4] === '~') {
+            // Some terminals encode modified Enter as CSI 13 ; <modifier> ~.
+            // Normalize to CSI-u so downstream handlers see it as a Return key.
+            code += match[1] + 'u'
+            modifier = Number.parseInt(match[2], 10) - 1
           } else {
             code += match[1] + match[4]
             modifier = Number.parseInt(match[2] ?? '1', 10) - 1
@@ -424,21 +439,54 @@ function* emitKeys(
         if (keyInfo.ctrl) ctrl = true
       } else {
         name = 'undefined'
-        if ((ctrl || meta) && (code.endsWith('u') || code.endsWith('~'))) {
+        if (
+          code.startsWith('[') &&
+          (code.endsWith('u') || code.endsWith('~')) &&
+          /^\[\d+(?:u|~)$/.test(code)
+        ) {
           const codeNumber = Number.parseInt(code.slice(1, -1), 10)
-          if (
-            codeNumber >= 'a'.charCodeAt(0) &&
-            codeNumber <= 'z'.charCodeAt(0)
-          ) {
-            name = String.fromCharCode(codeNumber)
+          if (Number.isFinite(codeNumber) && codeNumber > 0) {
+            try {
+              // CSI-u (kitty/modifyOtherKeys) can report printable keys as numeric codepoints.
+              // Map codepoints back to characters so normal typing works when a terminal chooses
+              // to encode unmodified keys using CSI-u.
+              const ch = String.fromCodePoint(codeNumber)
+              const isControl =
+                // eslint-disable-next-line no-control-regex
+                /[\x00-\x1f\x7f]/.test(ch)
+
+              if (!isControl) {
+                // Match the behavior of the non-escape path: letters/digits set name, others
+                // are insertable with an empty name.
+                if (/^[A-Z]$/.test(ch)) {
+                  name = ch.toLowerCase()
+                  shift = true
+                } else if (/^[a-z0-9]$/.test(ch)) {
+                  name = ch
+                } else {
+                  name = ''
+                }
+
+                // If there are no modifiers, treat it as normal insertable input.
+                // For Ctrl/Meta-modified codepoints, downstream handlers use `name`.
+                if (!ctrl && !meta) {
+                  insertable = true
+                  sequence = ch
+                }
+              }
+            } catch {
+              // ignore
+            }
           }
         }
       }
     } else if (ch === '\r') {
       name = 'return'
       meta = escaped
-    } else if (ch === '\n') {
-      name = 'enter'
+    } else if (escaped && ch === '\n') {
+      // Some terminals encode Alt/Option+Enter as ESC + LF.
+      // Treat it like Alt+Enter (Meta+Return) rather than Ctrl+J.
+      name = 'return'
       meta = escaped
     } else if (ch === '\t') {
       name = 'tab'
@@ -681,8 +729,10 @@ export function KeypressProvider({
   }, [])
 
   useEffect(() => {
-    const wasRaw = stdin.isRaw
-    if (wasRaw === false) {
+    const wasRaw = (stdin as unknown as { isRaw?: boolean } | null)?.isRaw
+    const shouldEnableRaw =
+      stdin.isTTY === true && (wasRaw === false || wasRaw === undefined)
+    if (shouldEnableRaw) {
       try {
         setRawMode(true)
       } catch (error) {
@@ -693,7 +743,9 @@ export function KeypressProvider({
     }
 
     try {
-      process.stdin.setEncoding('utf8')
+      ;(stdin as unknown as { setEncoding?: (encoding: string) => void }).setEncoding?.(
+        'utf8',
+      )
     } catch (error) {
       debugLogger.warn('KEYPRESS_SET_ENCODING_FAILED', {
         error: error instanceof Error ? error.message : String(error),
@@ -722,7 +774,7 @@ export function KeypressProvider({
     stdin.on('data', dataListener)
     return () => {
       stdin.removeListener('data', dataListener)
-      if (wasRaw === false) {
+      if (shouldEnableRaw) {
         try {
           setRawMode(false)
         } catch {

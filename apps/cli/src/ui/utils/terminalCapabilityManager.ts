@@ -186,17 +186,35 @@ export class TerminalCapabilityManager {
       const allowModifyOtherKeys = options?.enableModifyOtherKeys !== false
       const allowBracketedPaste = options?.enableBracketedPaste !== false
 
-      if (this.kittySupported && allowKitty) {
+      const shouldEnableKitty = allowKitty && this.kittySupported
+      const shouldEnableModifyOtherKeys =
+        !shouldEnableKitty &&
+        allowModifyOtherKeys &&
+        this.modifyOtherKeysSupported
+
+      // Enable enhanced keyboard reporting. Prefer kitty when supported, otherwise fall back
+      // to modifyOtherKeys. Enabling unsupported modes can break key decoding on some terminals.
+      if (shouldEnableKitty) {
         enableKittyKeyboardProtocol()
         this.kittyEnabled = true
-      } else if (this.modifyOtherKeysSupported && allowModifyOtherKeys) {
-        enableModifyOtherKeys()
-        this.modifyOtherKeysEnabled = true
+      } else {
+        this.kittyEnabled = false
       }
 
-      if (this.bracketedPasteSupported && allowBracketedPaste) {
+      if (shouldEnableModifyOtherKeys) {
+        enableModifyOtherKeys()
+        this.modifyOtherKeysEnabled = true
+      } else {
+        this.modifyOtherKeysEnabled = false
+      }
+
+      // Always *attempt* to enable bracketed paste: unsupported terminals will ignore it.
+      // Track "enabled" as "supported+requested" so other heuristics can fall back safely.
+      if (allowBracketedPaste) {
         enableBracketedPasteMode()
-        this.bracketedPasteEnabled = true
+        this.bracketedPasteEnabled = this.bracketedPasteSupported
+      } else {
+        this.bracketedPasteEnabled = false
       }
     } catch (error) {
       debugLogger.warn('TERMINAL_CAPABILITY_ENABLE_FAILED', { error })

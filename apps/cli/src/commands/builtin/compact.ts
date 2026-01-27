@@ -132,7 +132,10 @@ const compact = {
 
     await clearTerminal()
     getMessagesSetter()([])
-    setForkConvoWithMessagesOnTheNextRender([compactedIntro, summaryResponse])
+    setForkConvoWithMessagesOnTheNextRender([compactedIntro, summaryResponse], {
+      clearViewport: false,
+      resetInput: true,
+    })
     getContext.cache.clear?.()
     getCodeStyle.cache.clear?.()
     resetFileFreshnessSession()

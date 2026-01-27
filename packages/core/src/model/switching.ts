@@ -155,7 +155,7 @@ export function formatSwitchResult(args: {
       success: false,
       modelName: null,
       blocked: false,
-      message: '❌ No models configured. Use /model to add models.',
+      message: 'No models configured. Use /model to add models.',
     }
   }
 
@@ -164,7 +164,7 @@ export function formatSwitchResult(args: {
       success: false,
       modelName: null,
       blocked: false,
-      message: `⚠️ Only one model configured (${allModels[0].modelName}). Use /model to add more models for switching.`,
+      message: `Only one model configured (${allModels[0].modelName}). Use /model to add more models for switching.`,
     }
   }
 
@@ -191,7 +191,7 @@ export function formatSwitchResult(args: {
       success: true,
       modelName: result.modelName,
       blocked: false,
-      message: `✅ Switched to ${result.modelName} (${currentIndex + 1}/${totalModels})${currentModel?.provider ? ` [${currentModel.provider}]` : ''}${skippedSuffix}${contextSuffix}`,
+      message: `Switched to ${result.modelName} (${currentIndex + 1}/${totalModels})${currentModel?.provider ? ` [${currentModel.provider}]` : ''}${skippedSuffix}${contextSuffix}`,
     }
   }
 
@@ -210,7 +210,7 @@ export function formatSwitchResult(args: {
       success: false,
       modelName: null,
       blocked: true,
-      message: `⚠️ ${attemptedText} Keeping ${currentLabel}.`,
+      message: `${attemptedText} Keeping ${currentLabel}.`,
     }
   }
 
@@ -218,6 +218,6 @@ export function formatSwitchResult(args: {
     success: false,
     modelName: null,
     blocked: false,
-    message: '❌ Failed to switch models',
+    message: 'Failed to switch models',
   }
 }

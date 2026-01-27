@@ -1,6 +1,11 @@
 import { Box, Static, Text, type DOMElement, measureElement } from 'ink'
 import * as React from 'react'
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import type { ReactNode } from 'react'
 
 import type { ToolUseConfirm } from '#ui-ink/components/permissions/PermissionRequest'
@@ -180,29 +185,22 @@ export function REPLView({
         isBypassPermissionsModeAvailable={!safeMode}
       >
         {isFullScreenToolView && toolJSX ? (
-          <Box
-            ref={rootUiRef}
-            flexDirection="column"
-            width="100%"
-            height={Math.max(1, rows - VIEWPORT_SAFE_MARGIN_ROWS)}
-            overflow="hidden"
-            flexShrink={0}
-          >
+          <Box ref={rootUiRef} flexDirection="column" width="100%">
             {toolJSX.jsx}
           </Box>
         ) : (
           <Box ref={rootUiRef} flexDirection="column" width="100%">
-            <React.Fragment key={`static-messages-${forkNumber}`}>
-              <Static
-                items={staticItems}
-                children={(item, index) => (
-                  <React.Fragment key={index}>{item.jsx}</React.Fragment>
-                )}
-              />
-            </React.Fragment>
+            <Static key={`static-${forkNumber}`} items={staticItems}>
+              {(item: TranscriptItem) => item.jsx}
+            </Static>
 
             <Box flexDirection="column" width="100%">
-              {transientItems.map(_ => _.jsx)}
+              {transientItems.map(item => item.jsx)}
+              {/* Status indicator at bottom of messages, above controls */}
+              {!toolJSX &&
+                !toolUseConfirm &&
+                !binaryFeedbackContext &&
+                isLoading && <RequestStatusIndicator />}
             </Box>
 
             <Box
@@ -222,11 +220,6 @@ export function REPLView({
                     </Text>
                   </Box>
                 )}
-
-              {!toolJSX &&
-                !toolUseConfirm &&
-                !binaryFeedbackContext &&
-                isLoading && <RequestStatusIndicator />}
 
               {toolJSX ? toolJSX.jsx : null}
 
@@ -274,7 +267,12 @@ export function REPLView({
                 shouldShowPromptInput &&
                 !isMessageSelectorVisible &&
                 !binaryFeedbackContext &&
-                !showingCostDialog && <PromptInput {...promptInputProps} />}
+                !showingCostDialog && (
+                  <PromptInput
+                    key={`prompt-${conversationKey}`}
+                    {...promptInputProps}
+                  />
+                )}
             </Box>
 
             {isMessageSelectorVisible && (

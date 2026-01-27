@@ -1,6 +1,7 @@
 import type { ChatCompletionStream } from 'openai/lib/ChatCompletionStream'
 import type OpenAI from 'openai'
 import { debug as debugLogger } from '#core/utils/debugLogger'
+import { setRequestStatus, setRequestInputTokens, updateRequestTokens } from '#core/utils/requestStatus'
 
 function messageReducer(
   previous: OpenAI.ChatCompletionMessage,
@@ -55,6 +56,8 @@ export async function handleMessageStream(
   let ttftMs: number | undefined
   let chunkCount = 0
   let errorCount = 0
+  let hasMarkedStreaming = false
+  let outputTokenCount = 0
 
   debugLogger.api('OPENAI_STREAM_START', {
     streamStartTime: String(streamStartTime),
@@ -98,11 +101,20 @@ export async function handleMessageStream(
         }
         if (!usage) {
           usage = chunk.usage
+          if (chunk.usage?.prompt_tokens) {
+            setRequestInputTokens(chunk.usage.prompt_tokens)
+          }
         }
 
         message = messageReducer(message, chunk)
 
         if (chunk?.choices?.[0]?.delta?.content) {
+          if (!hasMarkedStreaming) {
+            setRequestStatus({ kind: 'streaming' })
+            hasMarkedStreaming = true
+          }
+          outputTokenCount++
+          updateRequestTokens(outputTokenCount)
           if (!ttftMs) {
             ttftMs = Date.now() - streamStartTime
             debugLogger.api('OPENAI_STREAM_FIRST_TOKEN', {
@@ -110,6 +122,10 @@ export async function handleMessageStream(
               chunkNumber: String(chunkCount),
             })
           }
+        }
+
+        if (chunk?.usage?.completion_tokens) {
+          updateRequestTokens(chunk.usage.completion_tokens)
         }
       } catch (chunkError) {
         errorCount++

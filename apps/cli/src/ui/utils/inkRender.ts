@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react'
 import type { RenderOptions } from 'ink'
+import { getGlobalConfigCached } from '#core/utils/config'
 import { ensureTuiStdioPatched } from '#cli-utils/stdio'
 import { disableLineWrapping } from '#cli-utils/terminal'
 import { setInkInstanceForStdout } from '#ui-ink/utils/inkInstanceStore'
@@ -58,7 +59,9 @@ export function renderWithTuiStdio(
 ): InkRenderInstance {
   const screenReaderEnv =
     process.env.KODE_SCREEN_READER ?? process.env.SCREENREADER
-  if (!screenReaderEnv) {
+  const isScreenReaderEnabled = Boolean(screenReaderEnv)
+
+  if (!isScreenReaderEnabled) {
     disableLineWrapping()
   }
 
@@ -66,9 +69,54 @@ export function renderWithTuiStdio(
   const stdin = ensureInkStdinSupportsRef(
     (renderContext?.stdin ?? process.stdin) as NodeJS.ReadStream,
   )
-  const effectiveContext = renderContext
-    ? { ...renderContext, ...stdio, stdin }
-    : { ...stdio, stdin }
+
+  const incrementalEnv = process.env.KODE_TUI_INCREMENTAL_RENDERING
+  let configIncrementalRendering: boolean | undefined
+  try {
+    configIncrementalRendering = getGlobalConfigCached().incrementalRendering
+  } catch {
+    // If the config is invalid or not yet loaded, fall back to env/defaults.
+  }
+
+  const incrementalRenderingDefault = (() => {
+    if (isScreenReaderEnabled) return false
+    if (!stdio.stdout.isTTY) return false
+
+    if (incrementalEnv === '0' || incrementalEnv === 'false') return false
+    if (incrementalEnv === '1' || incrementalEnv === 'true') return true
+
+    if (typeof configIncrementalRendering === 'boolean') {
+      return configIncrementalRendering
+    }
+
+    return true
+  })()
+
+  const maxFpsEnv = process.env.KODE_TUI_MAX_FPS
+  const maxFpsDefault = (() => {
+    if (maxFpsEnv) {
+      const parsed = Number.parseInt(maxFpsEnv, 10)
+      if (!Number.isFinite(parsed)) return undefined
+      return Math.max(1, Math.min(240, parsed))
+    }
+
+    // Prefer a smoother default when incremental rendering is enabled.
+    // Ink's upstream default is 30fps.
+    return incrementalRenderingDefault ? 60 : undefined
+  })()
+
+  const effectiveContext = {
+    // Defaults (can be overridden by renderContext)
+    patchConsole: false,
+    exitOnCtrlC: false,
+    isScreenReaderEnabled,
+    incrementalRendering: incrementalRenderingDefault,
+    ...(maxFpsDefault ? { maxFps: maxFpsDefault } : null),
+    // Caller options and stdio
+    ...(renderContext ?? null),
+    ...stdio,
+    stdin,
+  } satisfies RenderOptions
   const instance = render(element, effectiveContext)
 
   const stdout = (effectiveContext?.stdout ??

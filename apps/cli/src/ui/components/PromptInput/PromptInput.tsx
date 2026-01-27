@@ -44,7 +44,7 @@ import {
   type PastedImageAttachment,
   type PastedTextSegment,
 } from './pastes'
-import type { PromptInputProps, PromptMode } from './types'
+import { toggleBashMode, type PromptInputProps, type PromptMode } from './types'
 import { PromptInputView } from './PromptInputView'
 import { useExternalEdit } from './useExternalEdit'
 import { useQuickModelSwitch } from './useQuickModelSwitch'
@@ -55,24 +55,6 @@ const PROMPT_DRAFT_KEY = 'repl'
 function exit(): never {
   setTerminalTitle('')
   process.exit(0)
-}
-
-function toPromptMode(value: string): { mode: PromptMode; text: string } {
-  if (value.startsWith('!')) return { mode: 'bash', text: value.slice(1) }
-  if (value.startsWith('&')) return { mode: 'background', text: value.slice(1) }
-  if (value.startsWith('#')) return { mode: 'koding', text: value.slice(1) }
-  return { mode: 'prompt', text: value }
-}
-
-export function __adjustCursorOffsetForPromptPrefixForTests(args: {
-  value: string
-  nextText: string
-  previousOffset: number
-}): number {
-  if (args.nextText === args.value) return args.previousOffset
-  const removedChars = Math.max(0, args.value.length - args.nextText.length)
-  if (removedChars === 0) return args.previousOffset
-  return Math.max(0, args.previousOffset - removedChars)
 }
 
 export function PromptInput({
@@ -109,6 +91,7 @@ export function PromptInput({
   onDraftPastesChange,
 }: PromptInputProps): React.ReactNode {
   type QueuedPrompt = {
+    seq: number
     input: string
     mode: PromptMode
     pastedTexts: PastedTextSegment[]
@@ -146,6 +129,8 @@ export function PromptInput({
   const [cursorOffset, setCursorOffset] = useState<number>(input.length)
   const [currentPwd, setCurrentPwd] = useState<string>(() => getCwd())
   const [queuedPrompts, setQueuedPrompts] = useState<QueuedPrompt[]>([])
+  const [pendingPrompts, setPendingPrompts] = useState<QueuedPrompt[]>([])
+  const nextQueuedPromptSeqRef = useRef(0)
   const [promptStash, setPromptStash] = useState<PromptStash | null>(null)
   const onHistoryUserInputRef = useRef<() => void>(() => {})
   const editorMode = getGlobalConfigCached().editorMode ?? 'normal'
@@ -211,19 +196,25 @@ export function PromptInput({
   const onChange = useCallback(
     (value: string) => {
       onHistoryUserInputRef.current()
-      const next = toPromptMode(value)
-      if (next.mode !== mode) onModeChange(next.mode)
-      onInputChange(next.text)
 
-      if (next.text !== value) {
-        setCursorOffset(prev =>
-          __adjustCursorOffsetForPromptPrefixForTests({
-            value,
-            nextText: next.text,
-            previousOffset: prev,
-          }),
-        )
+      // Only check for mode prefix when in 'prompt' mode
+      // In other modes (bash/koding/background), just update the input directly
+      if (mode === 'prompt') {
+        if (value.startsWith('!') || value.startsWith('$')) {
+          onModeChange('bash')
+          return
+        }
+        if (value.startsWith('&')) {
+          onModeChange('background')
+          return
+        }
+        if (value.startsWith('#')) {
+          onModeChange('koding')
+          return
+        }
       }
+
+      onInputChange(value)
     },
     [mode, onInputChange, onModeChange],
   )
@@ -380,11 +371,32 @@ export function PromptInput({
     useStatusLine(statusLineInput)
 
   const defaultStatusLine = useMemo(() => {
-    if (editorMode === 'vim' && vimMode === 'INSERT') return '-- INSERT --'
-    if (mode === 'bash') return '! for bash mode'
-    if (mode === 'background') return '& to background'
-    return '? for shortcuts'
-  }, [editorMode, mode, vimMode])
+    const parts: string[] = []
+    if (editorMode === 'vim' && vimMode === 'INSERT') {
+      parts.push('-- INSERT --')
+    } else if (mode === 'bash') {
+      parts.push('$ bash')
+    } else if (mode === 'background') {
+      parts.push('& background')
+    } else if (mode === 'koding') {
+      parts.push('# koding')
+    } else {
+      parts.push('? shortcuts')
+    }
+
+    parts.push(isLoading ? 'Enter send · Tab queue' : 'Enter send')
+
+    if (pendingPrompts.length > 0) {
+      parts.push(`pending ${pendingPrompts.length}`)
+    }
+
+    if (queuedPrompts.length > 0) {
+      parts.push(`queued ${queuedPrompts.length}`)
+      parts.push('Alt+↑ edit')
+    }
+
+    return parts.join(' · ')
+  }, [editorMode, isLoading, mode, pendingPrompts.length, queuedPrompts.length, vimMode])
 
   const effectiveStatusLine = statusLineText ?? defaultStatusLine
 
@@ -431,6 +443,84 @@ export function PromptInput({
     onModeChange,
     terminalRows: rows,
   })
+
+  // Codex-style prompt queue shortcuts:
+  // - Tab queues while a turn is running (and does not send immediately)
+  // - Alt+Up pops the most recent queued/pending message for editing
+  useKeypress(
+    (_inputChar, key) => {
+      if (isEditingExternally) return
+      if (isDisabled) return
+
+      if (
+        key.meta &&
+        key.upArrow &&
+        !key.shift &&
+        !key.ctrl
+      ) {
+        const draftForQueue: QueuedPrompt | null =
+          input.trim().length > 0 || pastedTexts.length > 0 || pastedImages.length > 0
+            ? {
+                seq: nextQueuedPromptSeqRef.current++,
+                input,
+                mode,
+                pastedTexts: [...pastedTexts],
+                pastedImages: [...pastedImages],
+              }
+            : null
+
+        const latest =
+          queuedPrompts.length > 0
+            ? queuedPrompts.reduce((best, item) =>
+                item.seq > best.seq ? item : best,
+              )
+            : null
+        if (!latest) return
+
+        if (completionActive) resetCompletion()
+        clearSavedPromptDraftBestEffort()
+        if (draftForQueue) {
+          setQueuedPrompts(prev => [...prev, draftForQueue])
+        }
+        setQueuedPrompts(prev => prev.filter(item => item !== latest))
+        clearPastes()
+        onModeChange(latest.mode)
+        onInputChange(latest.input)
+        setPastedTexts(latest.pastedTexts)
+        setPastedImages(latest.pastedImages)
+        setCursorOffset(latest.input.length)
+        return true
+      }
+
+      if (
+        isLoading &&
+        key.tab &&
+        !key.shift &&
+        (input.trim().length > 0 ||
+          pastedTexts.length > 0 ||
+          pastedImages.length > 0)
+      ) {
+        if (completionActive) resetCompletion()
+        clearSavedPromptDraftBestEffort()
+        clearUndoBuffer()
+        setQueuedPrompts(prev => [
+          ...prev,
+          {
+            seq: nextQueuedPromptSeqRef.current++,
+            input,
+            mode,
+            pastedTexts: [...pastedTexts],
+            pastedImages: [...pastedImages],
+          },
+        ])
+        clearPastes()
+        onInputChange('')
+        setCursorOffset(0)
+        return true
+      }
+    },
+    { priority: KEYPRESS_PRIORITY.REPL_CONTROLLER },
+  )
 
   const lastRestorePastesIdRef = useRef<number | null>(null)
   useLayoutEffect(() => {
@@ -495,6 +585,10 @@ export function PromptInput({
   const didRestoreDraftRef = useRef(false)
   useEffect(() => {
     if (didRestoreDraftRef.current) return
+    // Only attempt to restore a saved draft once per PromptInput mount.
+    // Otherwise, clearing the input (e.g. after submit) can cause the last saved
+    // draft to "pop back" into the input.
+    didRestoreDraftRef.current = true
     if (initialPrompt && initialPrompt.trim()) return
 
     const hasPendingInput =
@@ -535,6 +629,9 @@ export function PromptInput({
     mode: PromptMode
     cursorOffset: number
   } | null>(null)
+  const draftPersistTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  )
   useEffect(() => {
     if (initialPrompt && initialPrompt.trim()) return
 
@@ -556,7 +653,12 @@ export function PromptInput({
     if (shouldClearDraft && !prev) return
     if (!shouldClearDraft && unchanged) return
 
-    const timer = setTimeout(() => {
+    if (draftPersistTimeoutRef.current) {
+      clearTimeout(draftPersistTimeoutRef.current)
+      draftPersistTimeoutRef.current = null
+    }
+
+    draftPersistTimeoutRef.current = setTimeout(() => {
       try {
         const projectConfig = getCurrentProjectConfig()
         const promptDrafts = { ...(projectConfig.promptDrafts ?? {}) }
@@ -578,12 +680,18 @@ export function PromptInput({
       } catch {
         // best-effort
       }
+      draftPersistTimeoutRef.current = null
     }, 400)
 
-    return () => clearTimeout(timer)
+    return () => {
+      if (draftPersistTimeoutRef.current) {
+        clearTimeout(draftPersistTimeoutRef.current)
+        draftPersistTimeoutRef.current = null
+      }
+    }
   }, [cursorOffset, initialPrompt, input, mode])
 
-  const { resetHistory, onHistoryUp, onHistoryDown, onUserInput, historyIndex } =
+  const { resetHistory, onHistoryUp, onHistoryDown, onUserInput, historyIndex, isInFastBrowseMode } =
     useArrowKeyHistory({
       current: {
         text: input,
@@ -606,24 +714,40 @@ export function PromptInput({
     })
   onHistoryUserInputRef.current = onUserInput
 
-  const hasShownHistorySearchHintRef = useRef(false)
+  const historyHintTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastHistoryHintTimeRef = useRef<number>(0)
   useEffect(() => {
-    if (hasShownHistorySearchHintRef.current) return
     if (historyIndex < 2) return
 
-    hasShownHistorySearchHintRef.current = true
+    const now = Date.now()
+    // Don't show again within 10 seconds of last hint
+    if (now - lastHistoryHintTimeRef.current < 10000) return
+    // Clear existing timeout if any
+    if (historyHintTimeoutRef.current) {
+      clearTimeout(historyHintTimeoutRef.current)
+      historyHintTimeoutRef.current = null
+    }
+
+    lastHistoryHintTimeRef.current = now
     handleInlineMessage(true, 'Tip: Ctrl+R to search history')
 
-    const timeoutId = setTimeout(() => {
+    historyHintTimeoutRef.current = setTimeout(() => {
       setMessage(prev => {
         if (!prev.show) return prev
         if (prev.text !== 'Tip: Ctrl+R to search history') return prev
         return { show: false }
       })
-    }, 3000)
-
-    return () => clearTimeout(timeoutId)
+      historyHintTimeoutRef.current = null
+    }, 5000)
   }, [handleInlineMessage, historyIndex])
+
+  useEffect(() => {
+    return () => {
+      if (historyHintTimeoutRef.current) {
+        clearTimeout(historyHintTimeoutRef.current)
+      }
+    }
+  }, [])
 
   const handleHistoryUp = () => {
     if (completionActive) resetCompletion()
@@ -680,8 +804,15 @@ export function PromptInput({
         return true
       }
 
+      if (action === 'bashModeToggle') {
+        onModeChange(toggleBashMode(mode))
+        return true
+      }
+
       if (action === 'modelSwitch') {
-        if (!isLoading) handleQuickModelSwitch()
+        // Allow model switching while a turn is running. The change will apply to
+        // subsequent model requests / the next turn, depending on the engine.
+        handleQuickModelSwitch()
         return true
       }
 
@@ -766,8 +897,10 @@ export function PromptInput({
       handleQuickModelSwitch,
       isEditingExternally,
       isLoading,
+      mode,
       modeCycleShortcut,
       onInputChange,
+      onModeChange,
       input,
       textInputColumns,
       vimMode,
@@ -794,6 +927,29 @@ export function PromptInput({
     })
   }, [input, mode, pastedImages, pastedTexts, pushUndoSnapshot])
 
+  const clearSavedPromptDraftBestEffort = useCallback(() => {
+    try {
+      if (draftPersistTimeoutRef.current) {
+        clearTimeout(draftPersistTimeoutRef.current)
+        draftPersistTimeoutRef.current = null
+      }
+
+      const projectConfig = getCurrentProjectConfig()
+      const existing = projectConfig.promptDrafts?.[PROMPT_DRAFT_KEY]
+      if (!existing) {
+        lastPersistedDraftRef.current = null
+        return
+      }
+
+      const promptDrafts = { ...(projectConfig.promptDrafts ?? {}) }
+      delete promptDrafts[PROMPT_DRAFT_KEY]
+      saveCurrentProjectConfig({ ...projectConfig, promptDrafts })
+      lastPersistedDraftRef.current = null
+    } catch {
+      // best-effort
+    }
+  }, [])
+
   async function onSubmit(value: string, isSubmittingSlashCommand = false) {
     if (isEditingExternally) return
 
@@ -810,22 +966,28 @@ export function PromptInput({
     if (!value.trim()) return
 
     if (isLoading) {
-      setQueuedPrompts(prev => [
+      // Enter always "sends". While a turn is running, treat it as a pending submission
+      // (distinct from Tab-queued tasks) and auto-run it when the current turn completes.
+      if (completionActive) resetCompletion()
+      clearSavedPromptDraftBestEffort()
+      clearUndoBuffer()
+      setPendingPrompts(prev => [
         ...prev,
         {
+          seq: nextQueuedPromptSeqRef.current++,
           input: value,
           mode,
           pastedTexts: [...pastedTexts],
           pastedImages: [...pastedImages],
         },
       ])
-
       clearPastes()
       onInputChange('')
       setCursorOffset(0)
       return
     }
 
+    clearSavedPromptDraftBestEffort()
     clearUndoBuffer()
 
     await submitPrompt({
@@ -866,19 +1028,22 @@ export function PromptInput({
     })
   }
 
-  const autoSubmitQueuedPromptInFlightRef = useRef(false)
+  const [isQueueDrainInFlight, setIsQueueDrainInFlight] = useState(false)
   useEffect(() => {
-    if (autoSubmitQueuedPromptInFlightRef.current) return
+    if (isQueueDrainInFlight) return
     if (isLoading) return
     if (isDisabled) return
     if (isEditingExternally) return
-    if (input.length > 0) return
 
-    const next = queuedPrompts[0]
+    const next = pendingPrompts[0] ?? queuedPrompts[0]
     if (!next) return
 
-    autoSubmitQueuedPromptInFlightRef.current = true
-    setQueuedPrompts(prev => prev.slice(1))
+    setIsQueueDrainInFlight(true)
+    if (pendingPrompts.length > 0) {
+      setPendingPrompts(prev => prev.slice(1))
+    } else {
+      setQueuedPrompts(prev => prev.slice(1))
+    }
 
     void (async () => {
       try {
@@ -894,9 +1059,10 @@ export function PromptInput({
           abortController,
           setIsLoading,
           setAbortController,
-          onInputChange,
-          onModeChange,
-          setCursorOffset,
+          // Do not clobber the user's current draft while draining the queue.
+          onInputChange: () => {},
+          onModeChange: () => {},
+          setCursorOffset: () => {},
           onSubmitCountChange,
           onQuery,
           setToolJSX,
@@ -913,18 +1079,17 @@ export function PromptInput({
           readFileTimestamps,
           pastedTexts: next.pastedTexts,
           pastedImages: next.pastedImages,
-          clearPastes,
-          resetHistory,
+          clearPastes: () => {},
+          resetHistory: () => {},
           setCurrentPwd,
           exit,
         })
       } finally {
-        autoSubmitQueuedPromptInFlightRef.current = false
+        setIsQueueDrainInFlight(false)
       }
     })()
   }, [
     abortController,
-    clearPastes,
     commands,
     currentMode,
     disableSlashCommands,
@@ -934,15 +1099,13 @@ export function PromptInput({
     isEditingExternally,
     isLoading,
     messageLogName,
-    onInputChange,
-    onModeChange,
     onQuery,
     onSubmitCountChange,
+    pendingPrompts,
     queuedPrompts,
     readFileTimestamps,
-    resetHistory,
+    isQueueDrainInFlight,
     setAbortController,
-    setCursorOffset,
     setCurrentPwd,
     setForkConvoWithMessagesOnTheNextRender,
     setIsLoading,
@@ -959,36 +1122,6 @@ export function PromptInput({
       }
       if (rewindPending && !key.escape) {
         setRewindPending(false)
-      }
-
-      if (key.escape && queuedPrompts.length > 0) {
-        const queuedText = queuedPrompts.map(item => item.input).join('\n')
-        const separator = queuedText && input ? '\n' : ''
-        const combined = queuedText + separator + input
-        const insertionLength = queuedText.length + (separator ? 1 : 0)
-
-        const queuedTextPastes = queuedPrompts.flatMap(item => item.pastedTexts)
-        const queuedImagePastes = queuedPrompts.flatMap(
-          item => item.pastedImages,
-        )
-
-        const uniqueModes = new Set(queuedPrompts.map(item => item.mode))
-        const nextMode =
-          uniqueModes.size === 1 && !input
-            ? queuedPrompts[0]!.mode
-            : uniqueModes.size === 1 && uniqueModes.has(mode)
-              ? mode
-              : 'prompt'
-
-        setQueuedPrompts([])
-        onModeChange(nextMode)
-        onInputChange(combined)
-        setPastedTexts(prev => [...queuedTextPastes, ...prev])
-        setPastedImages(prev => [...queuedImagePastes, ...prev])
-        setCursorOffset(
-          Math.min(combined.length, insertionLength + cursorOffset),
-        )
-        return true
       }
 
       if (key.escape && editorMode === 'vim' && vimMode === 'INSERT') {
@@ -1050,21 +1183,14 @@ export function PromptInput({
         return true
       }
 
+      // Handle mode exit when input is empty and user presses backspace/delete/escape
       if (
-        (mode === 'bash' || mode === 'background') &&
-        (key.backspace || key.delete)
+        (mode === 'bash' || mode === 'background' || mode === 'koding') &&
+        input === '' &&
+        (key.backspace || key.delete || key.escape)
       ) {
-        if (input === '') onModeChange('prompt')
-        return
-      }
-
-      if (mode === 'koding' && (key.backspace || key.delete)) {
-        if (input === '') onModeChange('prompt')
-        return
-      }
-
-      if (inputChar === '' && (key.escape || key.backspace || key.delete)) {
         onModeChange('prompt')
+        return true
       }
 
       if (
@@ -1108,6 +1234,8 @@ export function PromptInput({
       isEditingExternally={isEditingExternally}
       isDisabled={isDisabled}
       isLoading={isLoading}
+      pendingPrompts={pendingPrompts.map(item => item.input)}
+      queuedPrompts={queuedPrompts.map(item => item.input)}
       completionActive={completionVisible}
       historyIndex={historyIndex}
       suggestions={visibleSuggestions}
@@ -1139,6 +1267,7 @@ export function PromptInput({
       textInputColumns={textInputColumns}
       textInputMaxHeight={textInputMaxHeight}
       completionReservedRows={completionReservedRows}
+      isInFastBrowseMode={isInFastBrowseMode}
     />
   )
 }

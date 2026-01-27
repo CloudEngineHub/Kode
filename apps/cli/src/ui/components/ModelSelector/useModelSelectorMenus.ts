@@ -27,29 +27,12 @@ export function useModelSelectorMenus(args: {
   }
 
   const mainMenuOptions: Option[] = useMemo(() => {
-    // Make the common path fast: surface the most-used providers directly.
-    // Keep advanced/custom flows available but not first.
-    const getModelCount = (providerName: string): number => {
-      const record = models as unknown as Record<string, unknown[] | undefined>
-      return record[providerName]?.length ?? 0
-    }
-    const provider = (value: string): Option => ({
-      value,
-      label: getProviderLabel(value, getModelCount(value)),
-    })
-
     return [
-      provider('anthropic'),
-      provider('openai'),
-      provider('gemini'),
-      provider('ollama'),
-      { value: 'partnerProviders', label: 'All Partner Providers →' },
-      { value: 'partnerCodingPlans', label: 'Coding Plans →' },
-      {
-        value: 'custom-openai',
-        label: 'Custom OpenAI-Compatible API (advanced)',
-      },
-      { value: 'custom-anthropic', label: 'Custom Messages API (advanced)' },
+      { value: 'partnerProviders', label: 'Other Providers \u2192' },
+      { value: 'partnerCodingPlans', label: 'Some Coding Plans \u2192' },
+      { value: 'custom-openai', label: 'Custom OpenAI API' },
+      { value: 'custom-anthropic', label: 'Custom Anthropic API' },
+      { value: 'ollama', label: 'Ollama' },
     ]
   }, [])
 

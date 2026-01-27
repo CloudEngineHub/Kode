@@ -36,6 +36,7 @@ export function useReplQuery(args: {
   mcpClients: WrappedClient[]
   verbose: boolean
   safeMode: boolean
+  checkPendingForkAndSuppressAppend?: (newMessages: MessageType[]) => boolean
   requestToolUsePermission: NonNullable<
     ToolUseContext['options']
   >['requestToolUsePermission']
@@ -62,101 +63,121 @@ export function useReplQuery(args: {
         args.setAbortController(controllerToUse)
       }
 
-      const isKodingRequest =
-        newMessages.length > 0 &&
-        newMessages[0].type === 'user' &&
-        newMessages[0].options?.isKodingRequest === true
+      try {
+        const shouldSuppressAppend =
+          args.checkPendingForkAndSuppressAppend?.(newMessages) ?? false
+        if (shouldSuppressAppend) {
+          args.setAbortController(null)
+          args.setIsLoading(false)
+          return
+        }
 
-      args.setMessages(oldMessages => [...oldMessages, ...newMessages])
+        const isKodingRequest =
+          newMessages.length > 0 &&
+          newMessages[0].type === 'user' &&
+          newMessages[0].options?.isKodingRequest === true
 
-      markProjectOnboardingComplete()
+        args.setMessages(oldMessages => [...oldMessages, ...newMessages])
 
-      const lastMessage = newMessages[newMessages.length - 1]!
-      if (lastMessage.type === 'assistant') {
-        args.setAbortController(null)
-        args.setIsLoading(false)
-        return
-      }
+        markProjectOnboardingComplete()
 
-      const outputStyle = getCurrentOutputStyleDefinition()
-      const [systemPrompt, context, maxThinkingTokens] = await Promise.all([
-        buildSystemPromptForSession({
-          disableSlashCommands: args.disableSlashCommands,
-          systemPromptOverride: args.systemPromptOverride,
-          appendSystemPrompt: args.appendSystemPrompt,
-          outputStyleActive: outputStyle !== null,
-          keepCodingInstructions: outputStyle?.keepCodingInstructions,
-        }),
-        getContext(),
-        getMaxThinkingTokens([...args.messages, lastMessage], {
-          thinkingMode: args.thinkingMode,
-        }),
-      ])
+        const lastMessage = newMessages[newMessages.length - 1]!
+        if (lastMessage.type === 'assistant') {
+          args.setAbortController(null)
+          args.setIsLoading(false)
+          return
+        }
 
-      let lastAssistantMessage: MessageType | null = null
-
-      for await (const message of runTurn({
-        messages: [...args.messages, lastMessage],
-        systemPrompt,
-        context,
-        canUseTool: args.canUseTool,
-        toolUseContext: {
-          agentId: 'main',
-          options: {
-            commands: args.commands,
-            forkNumber: args.forkNumber,
-            messageLogName: args.messageLogName,
-            tools: args.tools,
-            mcpClients: args.mcpClients,
-            verbose: args.verbose,
-            safeMode: args.safeMode,
-            maxThinkingTokens,
+        const outputStyle = getCurrentOutputStyleDefinition()
+        const [systemPrompt, context, maxThinkingTokens] = await Promise.all([
+          buildSystemPromptForSession({
+            disableSlashCommands: args.disableSlashCommands,
+            systemPromptOverride: args.systemPromptOverride,
+            appendSystemPrompt: args.appendSystemPrompt,
+            outputStyleActive: outputStyle !== null,
+            keepCodingInstructions: outputStyle?.keepCodingInstructions,
+          }),
+          getContext(),
+          getMaxThinkingTokens([...args.messages, lastMessage], {
             thinkingMode: args.thinkingMode,
-            requestToolUsePermission: args.requestToolUsePermission,
-            isKodingRequest: isKodingRequest || undefined,
-            toolPermissionContext: getToolPermissionContextForConversationKey({
-              conversationKey: `${args.messageLogName}:${args.forkNumber}`,
-              isBypassPermissionsModeAvailable: !args.safeMode,
-            }),
-            getCustomSystemPromptAdditions: getOutputStyleSystemPromptAdditions,
+          }),
+        ])
+
+        let lastAssistantMessage: MessageType | null = null
+
+        for await (const message of runTurn({
+          messages: [...args.messages, lastMessage],
+          systemPrompt,
+          context,
+          canUseTool: args.canUseTool,
+          toolUseContext: {
+            agentId: 'main',
+            options: {
+              commands: args.commands,
+              forkNumber: args.forkNumber,
+              messageLogName: args.messageLogName,
+              tools: args.tools,
+              mcpClients: args.mcpClients,
+              verbose: args.verbose,
+              safeMode: args.safeMode,
+              maxThinkingTokens,
+              thinkingMode: args.thinkingMode,
+              requestToolUsePermission: args.requestToolUsePermission,
+              isKodingRequest: isKodingRequest || undefined,
+              toolPermissionContext: getToolPermissionContextForConversationKey({
+                conversationKey: `${args.messageLogName}:${args.forkNumber}`,
+                isBypassPermissionsModeAvailable: !args.safeMode,
+              }),
+              getCustomSystemPromptAdditions:
+                getOutputStyleSystemPromptAdditions,
+            },
+            messageId: getLastAssistantMessageId([
+              ...args.messages,
+              lastMessage,
+            ]),
+            readFileTimestamps: args.readFileTimestamps,
+            abortController: controllerToUse,
+            setToolJSX: args.setToolJSX,
           },
-          messageId: getLastAssistantMessageId([...args.messages, lastMessage]),
-          readFileTimestamps: args.readFileTimestamps,
-          abortController: controllerToUse,
-          setToolJSX: args.setToolJSX,
-        },
-        getBinaryFeedbackResponse: args.getBinaryFeedbackResponse,
-      })) {
-        args.setMessages(oldMessages => [...oldMessages, message])
-        if (message.type === 'assistant') {
-          lastAssistantMessage = message
-        }
-      }
-
-      if (
-        isKodingRequest &&
-        lastAssistantMessage &&
-        lastAssistantMessage.type === 'assistant'
-      ) {
-        try {
-          const content =
-            typeof lastAssistantMessage.message.content === 'string'
-              ? lastAssistantMessage.message.content
-              : lastAssistantMessage.message.content
-                  .filter(block => block.type === 'text')
-                  .map(block => (block.type === 'text' ? block.text : ''))
-                  .join('\n')
-
-          if (content && content.trim().length > 0) {
-            handleHashCommand(content)
+          getBinaryFeedbackResponse: args.getBinaryFeedbackResponse,
+        })) {
+          args.setMessages(oldMessages => [...oldMessages, message])
+          if (message.type === 'assistant') {
+            lastAssistantMessage = message
           }
-        } catch (error) {
-          logError(error)
-          debugLogger.error('REPL_KODING_SAVE_PROJECT_DOCS_ERROR', { error })
         }
-      }
 
-      args.setIsLoading(false)
+        if (
+          isKodingRequest &&
+          lastAssistantMessage &&
+          lastAssistantMessage.type === 'assistant'
+        ) {
+          try {
+            const content =
+              typeof lastAssistantMessage.message.content === 'string'
+                ? lastAssistantMessage.message.content
+                : lastAssistantMessage.message.content
+                    .filter(block => block.type === 'text')
+                    .map(block => (block.type === 'text' ? block.text : ''))
+                    .join('\n')
+
+            if (content && content.trim().length > 0) {
+              handleHashCommand(content)
+            }
+          } catch (error) {
+            logError(error)
+            debugLogger.error('REPL_KODING_SAVE_PROJECT_DOCS_ERROR', { error })
+          }
+        }
+
+        args.setIsLoading(false)
+      } catch (error) {
+        logError(error)
+        debugLogger.error('REPL_QUERY_ERROR', { error })
+      } finally {
+        // Ensure the UI never gets stuck in a "loading" state when a turn fails early.
+        args.setIsLoading(false)
+      }
     },
     [args],
   )

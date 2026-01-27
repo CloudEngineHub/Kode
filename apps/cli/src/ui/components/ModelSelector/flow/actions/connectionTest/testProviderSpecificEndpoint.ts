@@ -49,7 +49,7 @@ export async function testProviderSpecificEndpoint({
 
   return {
     success: false,
-    message: `⚠️ ${selectedProvider} connection test not implemented`,
+    message: `${selectedProvider} connection test not implemented`,
     details:
       'This provider does not have a dedicated connection test yet. Choose an OpenAI-compatible provider (or a custom OpenAI base URL), or use an Anthropic-compatible provider/base URL.',
   }

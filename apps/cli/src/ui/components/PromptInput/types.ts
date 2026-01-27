@@ -3,8 +3,13 @@ import type { Command } from '#cli-commands'
 import type { Message } from '#core/query'
 import type { SetToolJSXFn } from '#core/tooling/Tool'
 import type { Tool } from '#core/tooling/Tool'
+import type { SetForkConvoWithMessagesOnTheNextRender } from '#ui-ink/types/conversationReset'
 
 export type PromptMode = 'bash' | 'background' | 'prompt' | 'koding'
+
+export function toggleBashMode(current: PromptMode): PromptMode {
+  return current === 'bash' ? 'prompt' : 'bash'
+}
 
 export type PromptInputProps = {
   commands: Command[]
@@ -32,9 +37,7 @@ export type PromptInputProps = {
   setIsLoading: (isLoading: boolean) => void
   setAbortController: (abortController: AbortController | null) => void
   onShowMessageSelector: () => void
-  setForkConvoWithMessagesOnTheNextRender: (
-    forkConvoWithMessages: Message[],
-  ) => void
+  setForkConvoWithMessagesOnTheNextRender: SetForkConvoWithMessagesOnTheNextRender
   readFileTimestamps: { [filename: string]: number }
   abortController: AbortController | null
   onModelChange?: () => void

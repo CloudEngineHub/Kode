@@ -6,7 +6,6 @@ import { Tool } from '#core/tooling/Tool'
 import { Cost } from '#ui-ink/components/Cost'
 import { ToolUseLoader } from '#ui-ink/components/ToolUseLoader'
 import { getTheme } from '#core/utils/theme'
-import { BLACK_CIRCLE } from '#core/constants/figures'
 import { ThinkTool } from '#tools/tools/ai/ThinkTool/ThinkTool'
 import { AssistantThinkingMessage } from './AssistantThinkingMessage'
 import { TaskToolMessage } from './TaskToolMessage'
@@ -53,6 +52,7 @@ export function AssistantToolUseMessage({
   shouldAnimate,
   shouldShowDot,
 }: Props): React.ReactNode {
+  const theme = getTheme()
   const resolvedName = resolveToolNameAlias(param.name).resolvedName
   const tool = tools.find(_ => _.name === resolvedName)
   if (!tool) {
@@ -61,8 +61,8 @@ export function AssistantToolUseMessage({
   }
   const isQueued =
     !inProgressToolUseIDs.has(param.id) && unresolvedToolUseIDs.has(param.id)
-  // Keeping color undefined makes the OS use the default color regardless of appearance
-  const color = isQueued ? getTheme().secondaryText : undefined
+  const isError = erroredToolUseIDs.has(param.id)
+  const isInProgress = inProgressToolUseIDs.has(param.id)
 
   // Handle thinking tool with specialized rendering
   if (tool === ThinkTool) {
@@ -97,6 +97,15 @@ export function AssistantToolUseMessage({
   if (!hasToolName && !hasToolMessage) {
     return null
   }
+
+  // Determine colors based on state
+  const toolNameColor = isQueued
+    ? theme.secondaryText
+    : isError
+      ? theme.error
+      : theme.kode
+  const paramColor = theme.secondaryText
+
   return (
     <Box
       flexDirection="row"
@@ -105,22 +114,14 @@ export function AssistantToolUseMessage({
       width="100%"
     >
       <Box>
-        <Box
-          flexWrap="nowrap"
-          minWidth={userFacingToolName.length + (shouldShowDot ? 2 : 0)}
-        >
-          {shouldShowDot &&
-            (isQueued ? (
-              <Box minWidth={2}>
-                <Text color={color}>{BLACK_CIRCLE}</Text>
-              </Box>
-            ) : (
-              <ToolUseLoader
-                shouldAnimate={shouldAnimate}
-                isUnresolved={unresolvedToolUseIDs.has(param.id)}
-                isError={erroredToolUseIDs.has(param.id)}
-              />
-            ))}
+        <Box flexWrap="nowrap">
+          {shouldShowDot && (
+            <ToolUseLoader
+              shouldAnimate={shouldAnimate}
+              isUnresolved={unresolvedToolUseIDs.has(param.id)}
+              isError={isError}
+            />
+          )}
           {tool.name === 'Task' && param.input ? (
             <TaskToolMessage
               agentType={
@@ -128,12 +129,12 @@ export function AssistantToolUseMessage({
                   ? (getSubagentType(parsedInput.data) ?? 'general-purpose')
                   : 'general-purpose'
               }
-              bold={Boolean(!isQueued)}
+              bold={!isQueued}
               children={String(userFacingToolName || '')}
             />
           ) : (
             hasToolName && (
-              <Text color={color} bold={!isQueued} wrap="truncate-end">
+              <Text color={toolNameColor} bold={!isQueued} wrap="truncate-end">
                 {userFacingToolName}
               </Text>
             )
@@ -147,9 +148,9 @@ export function AssistantToolUseMessage({
                 if (!hasToolName) return toolMessage
                 return (
                   <Box flexDirection="row">
-                    <Text color={color}>(</Text>
+                    <Text color={paramColor}>(</Text>
                     {toolMessage}
-                    <Text color={color}>)</Text>
+                    <Text color={paramColor}>)</Text>
                   </Box>
                 )
               }
@@ -158,22 +159,24 @@ export function AssistantToolUseMessage({
 
               if (!hasToolName) {
                 return (
-                  <Text color={color} wrap="truncate-end">
+                  <Text color={paramColor} wrap="truncate-end">
                     {toolMessage}
                   </Text>
                 )
               }
 
-              // If it's a string, wrap it in Text
+              // If it's a string, wrap it in Text with dimmed parameters
               return (
-                <Text color={color} wrap="truncate-end">
+                <Text color={paramColor} wrap="truncate-end">
                   ({toolMessage})
                 </Text>
               )
             })()}
-          <Text color={color} wrap="truncate-end">
-            …
-          </Text>
+          {isInProgress && (
+            <Text color={paramColor} wrap="truncate-end">
+              ...
+            </Text>
+          )}
         </Box>
       </Box>
       <Cost costUSD={costUSD} durationMs={durationMs} debug={debug} />

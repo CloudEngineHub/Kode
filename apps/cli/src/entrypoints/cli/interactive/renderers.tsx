@@ -23,9 +23,10 @@ export async function renderRepl(
 ): Promise<void> {
   const render = deps?.render ?? (await import('ink')).render
   const REPL = deps?.REPL ?? (await import('#ui-ink/screens/REPL')).REPL
+  const debugKeystrokeLogging = Boolean(process.env.KODE_DEBUG_KEYSTROKES)
   renderWithTuiStdio(
     render,
-    <KeypressProvider>
+    <KeypressProvider debugKeystrokeLogging={debugKeystrokeLogging}>
       <REPL {...props} />
     </KeypressProvider>,
     renderContext,
@@ -41,9 +42,10 @@ export function renderResumeConversationSelector(
     const { render } = await import('ink')
     const { ResumeConversation } =
       await import('#ui-ink/screens/ResumeConversation')
+    const debugKeystrokeLogging = Boolean(process.env.KODE_DEBUG_KEYSTROKES)
     const instance = renderWithTuiStdio(
       render,
-      <KeypressProvider>
+      <KeypressProvider debugKeystrokeLogging={debugKeystrokeLogging}>
         <ResumeConversation {...props} context={context} />
       </KeypressProvider>,
       renderContext,
@@ -57,9 +59,10 @@ export async function renderDoctorScreen(): Promise<void> {
     ;(async () => {
       const { render } = await import('ink')
       const { Doctor } = await import('#ui-ink/screens/Doctor')
+      const debugKeystrokeLogging = Boolean(process.env.KODE_DEBUG_KEYSTROKES)
       const instance = renderWithTuiStdio(
         render,
-        <KeypressProvider>
+        <KeypressProvider debugKeystrokeLogging={debugKeystrokeLogging}>
           <Doctor
             onDone={() => {
               instance.unmount?.()
@@ -82,9 +85,10 @@ export function renderLogListScreen(
   ;(async () => {
     const { render } = await import('ink')
     const { LogList } = await import('#ui-ink/screens/LogList')
+    const debugKeystrokeLogging = Boolean(process.env.KODE_DEBUG_KEYSTROKES)
     const instance = renderWithTuiStdio(
       render,
-      <KeypressProvider>
+      <KeypressProvider debugKeystrokeLogging={debugKeystrokeLogging}>
         <LogList
           context={context}
           type={props.type}

@@ -9,15 +9,14 @@ import {
   createUserMessage,
   NO_RESPONSE_REQUESTED,
 } from '#core/utils/messages'
+import type { SetForkConvoWithMessagesOnTheNextRender } from '#ui-ink/types/conversationReset'
 
 export async function getMessagesForSlashCommand(
   commandName: string,
   args: string,
   setToolJSX: SetToolJSXFn<React.ReactNode>,
   context: ToolUseContext & {
-    setForkConvoWithMessagesOnTheNextRender: (
-      forkConvoWithMessages: Message[],
-    ) => void
+    setForkConvoWithMessagesOnTheNextRender: SetForkConvoWithMessagesOnTheNextRender
   },
 ): Promise<Message[]> {
   try {
@@ -26,10 +25,24 @@ export async function getMessagesForSlashCommand(
     switch (command.type) {
       case 'local-jsx': {
         return new Promise(resolveMessages => {
+          let didMountJsx = false
           command
             .call(
               r => {
                 setToolJSX(null)
+
+                // Interactive local JSX commands (fullscreen overlays, selectors, etc.)
+                // should not pollute the transcript with command meta messages unless
+                // they explicitly return output.
+                if (didMountJsx) {
+                  if (!r || r === NO_RESPONSE_REQUESTED) {
+                    resolveMessages([])
+                    return
+                  }
+                  resolveMessages([createAssistantMessage(r)])
+                  return
+                }
+
                 resolveMessages([
                   createUserMessage(`<command-name>${command.userFacingName()}</command-name>
           <command-message>${command.userFacingName()}</command-message>
@@ -44,6 +57,7 @@ export async function getMessagesForSlashCommand(
             )
             .then(jsx => {
               if (!jsx) return
+              didMountJsx = true
               setToolJSX({
                 jsx,
                 shouldHidePromptInput: true,

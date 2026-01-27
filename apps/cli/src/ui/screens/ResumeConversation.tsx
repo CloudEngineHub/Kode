@@ -17,6 +17,7 @@ import { dateToFilename } from '#core/utils/log'
 import { renderWithTuiStdio } from '#ui-ink/utils/inkRender'
 import { ResumeSessionSelector } from '#ui-ink/components/ResumeSessionSelector'
 import { switchCwdForResume } from '#cli-utils/switchCwdForResume'
+import { clearViewport } from '#cli-utils/terminal'
 
 type Props = {
   cwd: string
@@ -62,6 +63,7 @@ export function ResumeConversation({
   async function onSelect(session: KodeAgentSessionListItem) {
     try {
       context.unmount?.()
+      await clearViewport()
 
       const resumedFromSessionId = session.sessionId
       const effectiveCwd = session.cwd ?? cwd
@@ -94,7 +96,9 @@ export function ResumeConversation({
 
       renderWithTuiStdio(
         render,
-        <KeypressProvider>
+        <KeypressProvider
+          debugKeystrokeLogging={Boolean(process.env.KODE_DEBUG_KEYSTROKES)}
+        >
           <REPL
             commands={nextCommands}
             debug={debug}
