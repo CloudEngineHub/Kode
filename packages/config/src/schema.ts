@@ -1,10 +1,22 @@
 import { homedir } from 'node:os'
 
 export type ThemeNames =
-  | 'dark'
+  // Light themes
   | 'light'
   | 'light-daltonized'
+  | 'solarized-light'
+  | 'github-light'
+  // Dark themes
+  | 'dark'
   | 'dark-daltonized'
+  | 'dracula'
+  | 'nord'
+  | 'monokai'
+  | 'tokyo-night'
+  | 'catppuccin'
+  | 'gruvbox'
+  | 'one-dark'
+  | 'solarized-dark'
 
 export type McpStdioServerConfig = {
   type?: 'stdio'
