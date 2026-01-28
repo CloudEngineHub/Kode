@@ -42,7 +42,8 @@ export function getPromptInputSpecialKeyAction(args: {
 
   if (
     args.inputChar === '∫' ||
-    (optionOrMeta && (args.inputChar === 'b' || args.inputChar === 'B'))
+    (optionOrMeta && (args.inputChar === 'b' || args.inputChar === 'B')) ||
+    (args.key.ctrl && (args.inputChar === 'b' || args.inputChar === 'B'))
   ) {
     return 'bashModeToggle'
   }
