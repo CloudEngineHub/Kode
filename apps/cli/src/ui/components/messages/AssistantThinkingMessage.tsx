@@ -6,7 +6,7 @@ import {
   ThinkingBlock,
   ThinkingBlockParam,
 } from '@anthropic-ai/sdk/resources/index.mjs'
-import { DIAMOND_HOLLOW } from '#core/constants/figures'
+import { BULLET } from '#core/constants/figures'
 
 const PROGRESS_FRAMES = ['/', '-', '\\', '|']
 
@@ -40,8 +40,9 @@ export function AssistantThinkingMessage({
       marginTop={addMargin ? 1 : 0}
       width="100%"
     >
-      <Text color={theme.kode} bold>
-        {DIAMOND_HOLLOW} [Thinking {PROGRESS_FRAMES[progressFrame]}]
+      <Text>
+        <Text color={theme.kode}>{BULLET}</Text>
+        <Text color={theme.text}> [Thinking {PROGRESS_FRAMES[progressFrame]}]</Text>
       </Text>
       <Box paddingLeft={2}>
         <Text color={theme.secondaryText} italic>
