@@ -1,6 +1,6 @@
 {
   "name": "@shareai-lab/kode",
-  "version": "2.1.4-dev.0",
+  "version": "2.1.5",
   "workspaces": [
     "apps/*",
     "packages/*"
