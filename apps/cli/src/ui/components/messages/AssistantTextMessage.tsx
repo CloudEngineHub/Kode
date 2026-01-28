@@ -21,7 +21,7 @@ import {
   NO_RESPONSE_REQUESTED,
   extractTag,
 } from '#core/utils/messages'
-import { BULLET } from '#core/constants/figures'
+import { CIRCLE } from '#core/constants/figures'
 import { applyMarkdown } from '#core/utils/markdown'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import { useTransientViewport } from '#ui-ink/contexts/TransientViewportContext'
@@ -245,7 +245,7 @@ export function AssistantTextMessage({
           <Box flexDirection="row">
             {shouldShowDot && (
               <Box minWidth={2}>
-                <Text color={getTheme().kode}>{BULLET}</Text>
+                <Text color={getTheme().kode}>{CIRCLE}</Text>
               </Box>
             )}
             <Box flexDirection="column" width={contentWidth}>
