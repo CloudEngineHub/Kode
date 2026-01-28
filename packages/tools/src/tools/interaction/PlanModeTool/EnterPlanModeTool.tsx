@@ -5,7 +5,7 @@ import { Tool } from '#core/tooling/Tool'
 import { enterPlanMode, getPlanConversationKey } from '#core/utils/planMode'
 import { ENTER_DESCRIPTION, ENTER_PROMPT, ENTER_TOOL_NAME } from './prompt'
 import { getTheme } from '#core/utils/theme'
-import { BLACK_CIRCLE } from '#core/constants/figures'
+import { BULLET } from '#core/constants/figures'
 import { setPermissionMode } from '#core/utils/permissionModeState'
 import { applyToolPermissionContextUpdateForConversationKey } from '#core/utils/toolPermissionContextState'
 
@@ -51,7 +51,7 @@ export const EnterPlanModeTool = {
     const theme = getTheme()
     return (
       <Box flexDirection="row" marginTop={1}>
-        <Text color={theme.text}>{BLACK_CIRCLE}</Text>
+        <Text color={theme.text}>{BULLET}</Text>
         <Text> User declined to enter plan mode</Text>
       </Box>
     )
@@ -61,7 +61,7 @@ export const EnterPlanModeTool = {
     return (
       <Box flexDirection="column" marginTop={1}>
         <Box flexDirection="row">
-          <Text color={theme.planMode}>{BLACK_CIRCLE}</Text>
+          <Text color={theme.planMode}>{BULLET}</Text>
           <Text> Entered plan mode</Text>
         </Box>
         <Box paddingLeft={2}>

@@ -10,7 +10,7 @@ import {
 } from '#core/utils/planMode'
 import { EXIT_DESCRIPTION, EXIT_PROMPT, EXIT_TOOL_NAME } from './prompt'
 import { getTheme } from '#core/utils/theme'
-import { BLACK_CIRCLE } from '#core/constants/figures'
+import { BULLET } from '#core/constants/figures'
 import {
   getPermissionMode,
   setPermissionMode,
@@ -125,7 +125,7 @@ export const ExitPlanModeTool = {
     return (
       <Box flexDirection="column" marginTop={1} width="100%">
         <Box flexDirection="row">
-          <Text color={theme.planMode}>{BLACK_CIRCLE}</Text>
+          <Text color={theme.planMode}>{BULLET}</Text>
           <Text> User approved the plan</Text>
         </Box>
         <Box flexDirection="row">

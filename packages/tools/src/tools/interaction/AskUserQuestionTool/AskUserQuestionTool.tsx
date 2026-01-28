@@ -1,7 +1,7 @@
 import { Box, Text } from 'ink'
 import React from 'react'
 import { z } from 'zod'
-import { BLACK_CIRCLE } from '#core/constants/figures'
+import { BULLET } from '#core/constants/figures'
 import { PRODUCT_NAME } from '#core/constants/product'
 import { Tool, ToolUseContext } from '#core/tooling/Tool'
 import { getTheme } from '#core/utils/theme'
@@ -93,7 +93,7 @@ export const AskUserQuestionTool = {
     const theme = getTheme()
     return (
       <Box flexDirection="row" marginTop={1}>
-        <Text color={theme.text}>{BLACK_CIRCLE}&nbsp;</Text>
+        <Text color={theme.text}>{BULLET}&nbsp;</Text>
         <Text>User declined to answer questions</Text>
       </Box>
     )
@@ -103,7 +103,7 @@ export const AskUserQuestionTool = {
     return (
       <Box flexDirection="column" marginTop={1}>
         <Box flexDirection="row">
-          <Text color={theme.text}>{BLACK_CIRCLE}&nbsp;</Text>
+          <Text color={theme.text}>{BULLET}&nbsp;</Text>
           <Text>User answered {PRODUCT_NAME} Agent&apos;s questions:</Text>
         </Box>
         <Box flexDirection="column" paddingLeft={2}>
