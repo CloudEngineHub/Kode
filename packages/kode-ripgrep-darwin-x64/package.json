@@ -1,6 +1,6 @@
 {
   "name": "@shareai-lab/kode-ripgrep-darwin-x64",
-  "version": "2.1.0",
+  "version": "2.1.12",
   "description": "Bundled ripgrep (rg) binary for Kode (darwin-x64).",
   "license": "Apache-2.0",
   "author": "ShareAI-lab <ai-lab@foxmail.com>",

@@ -1,6 +1,6 @@
 {
   "name": "@shareai-lab/kode-ripgrep-linux-arm64",
-  "version": "2.1.0",
+  "version": "2.1.12",
   "description": "Bundled ripgrep (rg) binary for Kode (linux-arm64).",
   "license": "Apache-2.0",
   "author": "ShareAI-lab <ai-lab@foxmail.com>",
