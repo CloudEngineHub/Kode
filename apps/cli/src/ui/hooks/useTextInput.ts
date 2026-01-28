@@ -12,10 +12,21 @@ import { tryImagePaste } from './useTextInputTryImagePaste'
 
 type MaybeCursor = void | Cursor
 
+// Character codes - use numeric comparison to survive minification
+const BACKSPACE_CODE = 8 // \x08
+const DEL_CODE = 127 // \x7f
+
 // IME (especially CJK) can emit cursor-navigation-like sequences around commits.
 // A slightly longer guard helps prevent cursor jumps / wrong insertion points.
 const IME_NAVIGATION_GUARD_MS = 150
 const IME_ENTER_GUARD_MS = 150
+
+// Helper to check if input is a backspace character
+function isBackspaceChar(input: string): boolean {
+  if (input.length !== 1) return false
+  const code = input.charCodeAt(0)
+  return code === BACKSPACE_CODE || code === DEL_CODE
+}
 
 export function useTextInput({
   value: originalValue,
@@ -286,8 +297,7 @@ export function useTextInput({
       key.backspace ||
       key.delete ||
       input === '\b' ||
-      input === '\x7f' ||
-      input === '\x08'
+      isBackspaceChar(input)
     ) {
       applyCursor(getCursor().backspace())
       return
@@ -387,7 +397,7 @@ export function useTextInput({
         case input == '\x1b[F' || input == '\x1b[4~':
           return getCursor().endOfLine()
         // Handle backspace character explicitly - this is the key fix
-        case input === '\b' || input === '\x7f' || input === '\x08':
+        case input === '\b' || isBackspaceChar(input):
           maybeClearImagePasteErrorTimeout()
           return getCursor().backspace()
         default:

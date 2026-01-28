@@ -10,6 +10,17 @@ import { useBracketedPasteSequences } from './TextInputBracketedPaste'
 import type { Props } from './TextInput.types'
 export type { Props } from './TextInput.types'
 
+// Character codes - use numeric comparison to survive minification
+const BACKSPACE_CODE = 8 // \x08
+const DEL_CODE = 127 // \x7f
+
+// Helper to check if input is a backspace character
+function isBackspaceChar(input: string): boolean {
+  if (input.length !== 1) return false
+  const code = input.charCodeAt(0)
+  return code === BACKSPACE_CODE || code === DEL_CODE
+}
+
 export default function TextInput({
   value: originalValue,
   placeholder = '',
@@ -216,8 +227,7 @@ export default function TextInput({
       key.backspace ||
       key.delete ||
       input === '\b' ||
-      input === '\x7f' ||
-      input === '\x08'
+      isBackspaceChar(input)
     ) {
       // Ensure backspace is handled directly
       onInput(input, {

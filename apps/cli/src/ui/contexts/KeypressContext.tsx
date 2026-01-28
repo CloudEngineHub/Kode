@@ -12,6 +12,12 @@ export const FAST_RETURN_TIMEOUT = 30
 
 const ESC = '\x1b'
 
+// Character codes - use numeric comparison to survive minification
+const BACKSPACE_CODE = 8 // \x08 / \b
+const DEL_CODE = 127 // \x7f
+const UNIT_SEPARATOR_CODE = 31 // \x1f (Ctrl+_)
+const CTRL_Z_CODE = 26 // \x1a (highest control char for Ctrl+letter)
+
 const batchedUpdates: ((fn: () => void) => void) | null =
   typeof (ReactReconciler as any)?.batchedUpdates === 'function'
     ? ((ReactReconciler as any).batchedUpdates as (fn: () => void) => void)
@@ -491,10 +497,10 @@ function* emitKeys(
     } else if (ch === '\t') {
       name = 'tab'
       meta = escaped
-    } else if (ch === '\b' || ch === '\x7f') {
+    } else if (ch === '\b' || ch.charCodeAt(0) === DEL_CODE) {
       name = 'backspace'
       meta = escaped
-    } else if (!escaped && ch === '\x1f') {
+    } else if (!escaped && ch.charCodeAt(0) === UNIT_SEPARATOR_CODE) {
       // Ctrl+_ (unit separator) is commonly used as an "undo" shortcut.
       // Treat it like other Ctrl+<key> combos so downstream handlers can bind it.
       name = '_'
@@ -506,7 +512,7 @@ function* emitKeys(
       name = 'space'
       meta = escaped
       insertable = true
-    } else if (!escaped && ch <= '\x1a') {
+    } else if (!escaped && ch.length === 1 && ch.charCodeAt(0) <= CTRL_Z_CODE) {
       name = String.fromCharCode(ch.charCodeAt(0) + 'a'.charCodeAt(0) - 1)
       ctrl = true
     } else if (/^[0-9A-Za-z]$/.exec(ch) !== null) {
