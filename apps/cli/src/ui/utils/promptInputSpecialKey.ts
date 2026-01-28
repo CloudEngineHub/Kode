@@ -24,7 +24,8 @@ export function getPromptInputSpecialKeyAction(args: {
   if (
     args.inputChar === 'µ' ||
     args.inputChar === 'μ' ||
-    (optionOrMeta && (args.inputChar === 'm' || args.inputChar === 'M'))
+    (optionOrMeta && (args.inputChar === 'm' || args.inputChar === 'M')) ||
+    (args.key.ctrl && (args.inputChar === 'm' || args.inputChar === 'M'))
   ) {
     return 'modelSwitch'
   }
