@@ -60,7 +60,7 @@ export function ShortcutsScreen({ onDone }: Props): React.ReactNode {
           </Text>
           <Text dimColor>ctrl + o for transcript output</Text>
           <Text dimColor>ctrl + t to show todos</Text>
-          <Text dimColor>shift + enter for newline</Text>
+          <Text dimColor>shift/ctrl + enter newline</Text>
         </Box>
 
         <Box flexDirection="column">

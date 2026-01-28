@@ -82,6 +82,7 @@ function resolveEditorCommand(): EditorCommand | null {
       command: 'code',
       args: ['-w'],
       displayName: 'code -w',
+      shell: isWindows, // Windows needs shell for code.cmd
     })
   }
 

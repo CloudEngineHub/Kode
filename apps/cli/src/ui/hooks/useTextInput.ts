@@ -206,9 +206,15 @@ export function useTextInput({
       /^\x1b\[13\$$/.test(sequence) ||
       // Alt/Option+Enter may arrive as ESC-prefixed CR/LF
       sequence === '\x1b\r' ||
-      sequence === '\x1b\n'
+      sequence === '\x1b\n' ||
+      // Windows Terminal: Ctrl+Enter (CSI 13;5u)
+      /^\x1b\[13;5u$/.test(sequence) ||
+      // Windows ConPTY variations
+      sequence === '\x1bOM' ||
+      sequence === '\x1b[13;2~'
 
-    if (key.shift || key.meta || optionPressed || modifierEnterSequence) {
+    // Also support Ctrl+Enter on Windows (key.ctrl with return)
+    if (key.shift || key.meta || key.ctrl || optionPressed || modifierEnterSequence) {
       return getCursor().insert('\n')
     }
 
