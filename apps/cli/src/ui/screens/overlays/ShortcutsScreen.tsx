@@ -49,7 +49,7 @@ export function ShortcutsScreen({ onDone }: Props): React.ReactNode {
           <Text dimColor>/ for commands</Text>
           <Text dimColor>@ for file paths</Text>
           <Text dimColor>&amp; for background</Text>
-          <Text dimColor>ctrl + / toggle bash</Text>
+          <Text dimColor>opt + b toggle bash</Text>
         </Box>
 
         <Box flexDirection="column" width={middleWidth}>
