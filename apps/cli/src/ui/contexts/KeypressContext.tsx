@@ -14,6 +14,7 @@ const ESC = '\x1b'
 
 // Character codes - use numeric comparison to survive minification
 const BACKSPACE_CODE = 8 // \x08 / \b
+const BEL_CODE = 7 // \x07 / \u0007 (BEL)
 const DEL_CODE = 127 // \x7f
 const UNIT_SEPARATOR_CODE = 31 // \x1f (Ctrl+_)
 const CTRL_Z_CODE = 26 // \x1a (highest control char for Ctrl+letter)
@@ -347,7 +348,7 @@ function* emitKeys(
         let buffer = ''
         while (true) {
           const next = yield
-          if (next === '' || next === '\u0007') {
+          if (next === '' || (next.length === 1 && next.charCodeAt(0) === BEL_CODE)) {
             break
           } else if (next === ESC) {
             const afterEsc = yield
