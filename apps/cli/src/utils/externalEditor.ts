@@ -108,11 +108,18 @@ function resolveEditorCommand(): EditorCommand | null {
       })
     }
   } else {
-    candidates.push({
-      command: 'notepad',
+    // Windows: check for VS Code first, then fallback to notepad
+    if (candidates.length > 0) {
+      const found = candidates.find(c => isCommandAvailable(c.command))
+      if (found) return found
+    }
+    // notepad is always available on Windows
+    return {
+      command: 'notepad.exe',
       args: [],
       displayName: 'notepad',
-    })
+      shell: true,
+    }
   }
 
   return (

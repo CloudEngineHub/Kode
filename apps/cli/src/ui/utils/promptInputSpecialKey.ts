@@ -30,21 +30,20 @@ export function getPromptInputSpecialKeyAction(args: {
     return 'modelSwitch'
   }
 
-  if (args.key.ctrl && (args.inputChar === 'g' || args.inputChar === 'G')) {
-    return 'externalEditor'
-  }
-
   if (
+    args.inputChar === '\x07' ||
     args.inputChar === '©' ||
+    (args.key.ctrl && (args.inputChar === 'g' || args.inputChar === 'G')) ||
     (optionOrMeta && (args.inputChar === 'g' || args.inputChar === 'G'))
   ) {
     return 'externalEditor'
   }
 
   if (
+    args.inputChar === '\x02' ||
     args.inputChar === '∫' ||
-    (optionOrMeta && (args.inputChar === 'b' || args.inputChar === 'B')) ||
-    (args.key.ctrl && (args.inputChar === 'b' || args.inputChar === 'B'))
+    (args.key.ctrl && (args.inputChar === 'b' || args.inputChar === 'B')) ||
+    (optionOrMeta && (args.inputChar === 'b' || args.inputChar === 'B'))
   ) {
     return 'bashModeToggle'
   }

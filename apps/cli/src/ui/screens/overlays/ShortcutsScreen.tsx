@@ -66,8 +66,8 @@ export function ShortcutsScreen({ onDone }: Props): React.ReactNode {
         <Box flexDirection="column">
           <Text dimColor>ctrl + _ to undo</Text>
           <Text dimColor>ctrl + v to paste images</Text>
-          <Text dimColor>ctrl/alt + m switch model</Text>
-          <Text dimColor>ctrl + s to stash prompt</Text>
+          <Text dimColor>ctrl/opt + m switch model</Text>
+          <Text dimColor>ctrl/opt + g ext editor</Text>
           <Text dimColor>
             <Text color={theme.secondaryText}>Esc</Text> to close
           </Text>
