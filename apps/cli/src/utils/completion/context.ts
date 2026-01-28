@@ -74,7 +74,7 @@ export function getCompletionContext(args: {
     const content = word.slice(1)
     if (word.includes('@', 1)) return null
     return {
-      type: 'file',
+      type: 'agent',
       prefix: content,
       startPos: start,
       endPos: cursorOffset,

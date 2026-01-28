@@ -53,24 +53,35 @@ export function useUnifiedCompletionNavigationKeys(args: {
         return false
       }
 
-      // Enter key: close completion panel without filling, let normal submit handle it
+      // Enter key behavior depends on completion type
       if (
         key.return &&
         !key.shift &&
         !key.meta &&
         args.state.isActive &&
-        args.state.suggestions.length > 0
+        args.state.suggestions.length > 0 &&
+        args.state.context
       ) {
-        // Restore original input if preview was active
-        if (args.state.preview?.isActive && args.state.context) {
-          args.onInputChange(args.state.preview.originalInput)
-          args.setCursorOffset(
-            args.state.context.startPos + args.state.context.prefix.length,
-          )
+        const context = args.state.context
+        const isFileCompletion = context.type === 'file'
+
+        if (isFileCompletion) {
+          // File completion: close panel without filling, let normal submit handle it
+          if (args.state.preview?.isActive) {
+            args.onInputChange(args.state.preview.originalInput)
+            args.setCursorOffset(context.startPos + context.prefix.length)
+          }
+          args.resetCompletion()
+          // Return false to let normal Enter/submit behavior take over
+          return false
+        } else {
+          // Command/agent/other completion: fill the selected suggestion
+          const selectedSuggestion =
+            args.state.suggestions[args.state.selectedIndex]
+          args.completeWith(selectedSuggestion, context)
+          args.resetCompletion()
+          return true
         }
-        args.resetCompletion()
-        // Return false to let normal Enter/submit behavior take over
-        return false
       }
 
       if (!args.state.isActive || args.state.suggestions.length === 0)
