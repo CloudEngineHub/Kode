@@ -1,6 +1,6 @@
 {
   "name": "@shareai-lab/kode",
-  "version": "2.1.12",
+  "version": "2.1.13",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -155,18 +155,18 @@
     "zod-to-json-schema": "^3.24.6"
   },
   "optionalDependencies": {
-    "@shareai-lab/kode-bin-darwin-arm64": "2.1.12",
-    "@shareai-lab/kode-bin-darwin-x64": "2.1.12",
-    "@shareai-lab/kode-bin-linux-arm64": "2.1.12",
-    "@shareai-lab/kode-bin-linux-x64": "2.1.12",
-    "@shareai-lab/kode-bin-win32-arm64": "2.1.12",
-    "@shareai-lab/kode-bin-win32-x64": "2.1.12",
-    "@shareai-lab/kode-ripgrep-darwin-arm64": "2.1.12",
-    "@shareai-lab/kode-ripgrep-darwin-x64": "2.1.12",
-    "@shareai-lab/kode-ripgrep-linux-arm64": "2.1.12",
-    "@shareai-lab/kode-ripgrep-linux-x64": "2.1.12",
-    "@shareai-lab/kode-ripgrep-win32-arm64": "2.1.12",
-    "@shareai-lab/kode-ripgrep-win32-x64": "2.1.12"
+    "@shareai-lab/kode-bin-darwin-arm64": "2.1.13",
+    "@shareai-lab/kode-bin-darwin-x64": "2.1.13",
+    "@shareai-lab/kode-bin-linux-arm64": "2.1.13",
+    "@shareai-lab/kode-bin-linux-x64": "2.1.13",
+    "@shareai-lab/kode-bin-win32-arm64": "2.1.13",
+    "@shareai-lab/kode-bin-win32-x64": "2.1.13",
+    "@shareai-lab/kode-ripgrep-darwin-arm64": "2.1.13",
+    "@shareai-lab/kode-ripgrep-darwin-x64": "2.1.13",
+    "@shareai-lab/kode-ripgrep-linux-arm64": "2.1.13",
+    "@shareai-lab/kode-ripgrep-linux-x64": "2.1.13",
+    "@shareai-lab/kode-ripgrep-win32-arm64": "2.1.13",
+    "@shareai-lab/kode-ripgrep-win32-x64": "2.1.13"
   },
   "devDependencies": {
     "@codemirror/lang-css": "^6.3.1",
