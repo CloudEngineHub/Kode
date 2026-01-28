@@ -7,7 +7,7 @@ import { PRODUCT_NAME, PRODUCT_URL } from '#core/constants/product'
 export const DEFAULT_TIMEOUT_MS = 120000
 export const MAX_TIMEOUT_MS = 600000
 export const MAX_OUTPUT_LENGTH = 30000
-export const MAX_RENDERED_LINES = 5
+export const MAX_RENDERED_LINES = 20
 
 const TOOL_NAME_BASH = 'Bash'
 const TOOL_NAME_GLOB = 'Glob'
