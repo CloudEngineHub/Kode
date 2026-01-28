@@ -2,7 +2,7 @@ import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { Box, Text } from 'ink'
 import figures from 'figures'
 import type { ThemeNames } from '#core/utils/theme'
-import { getTheme } from '#core/utils/theme'
+import { getTheme, getAvailableThemes } from '#core/utils/theme'
 import { getGlobalConfig, saveGlobalConfig } from '#core/utils/config'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
@@ -12,11 +12,44 @@ type Props = {
   onDone: (result?: string) => void
 }
 
+// Theme display names for better UX
+const THEME_LABELS: Record<ThemeNames, string> = {
+  // Light themes
+  light: 'Light',
+  'light-daltonized': 'Light (Colorblind)',
+  'solarized-light': 'Solarized Light',
+  'github-light': 'GitHub Light',
+  // Dark themes
+  dark: 'Dark',
+  'dark-daltonized': 'Dark (Colorblind)',
+  dracula: 'Dracula',
+  nord: 'Nord',
+  monokai: 'Monokai',
+  'tokyo-night': 'Tokyo Night',
+  catppuccin: 'Catppuccin',
+  gruvbox: 'Gruvbox',
+  'one-dark': 'One Dark',
+  'solarized-dark': 'Solarized Dark',
+}
+
+// Organized theme list: light themes first, then dark themes
 const THEME_OPTIONS: ThemeNames[] = [
-  'dark',
+  // Light
   'light',
-  'dark-daltonized',
   'light-daltonized',
+  'solarized-light',
+  'github-light',
+  // Dark
+  'dark',
+  'dark-daltonized',
+  'dracula',
+  'nord',
+  'monokai',
+  'tokyo-night',
+  'catppuccin',
+  'gruvbox',
+  'one-dark',
+  'solarized-dark',
 ]
 
 function clamp(value: number, min: number, max: number): number {
@@ -98,7 +131,7 @@ export function ThemePickerScreen({ onDone }: Props): React.ReactNode {
                 bold={isSelected}
                 wrap="truncate-end"
               >
-                {isSelected ? figures.pointer : ' '} {name}
+                {isSelected ? figures.pointer : ' '} {THEME_LABELS[name] ?? name}
               </Text>
             )
           })}

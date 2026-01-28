@@ -2,7 +2,7 @@ import { Box, Text } from 'ink'
 import * as React from 'react'
 import { useCallback, useRef, useState } from 'react'
 import figures from 'figures'
-import { getTheme } from '#core/utils/theme'
+import { getTheme, type ThemeNames } from '#core/utils/theme'
 import {
   GlobalConfig,
   saveGlobalConfig,
@@ -13,6 +13,24 @@ import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
+
+// All available themes
+const THEME_OPTIONS: ThemeNames[] = [
+  'light',
+  'light-daltonized',
+  'solarized-light',
+  'github-light',
+  'dark',
+  'dark-daltonized',
+  'dracula',
+  'nord',
+  'monokai',
+  'tokyo-night',
+  'catppuccin',
+  'gruvbox',
+  'one-dark',
+  'solarized-dark',
+]
 
 type Props = {
   onClose: () => void
@@ -78,15 +96,11 @@ export function ConfigScreen({ onClose }: Props): React.ReactNode {
       id: 'theme',
       label: 'Theme',
       value: globalConfig.theme ?? 'dark',
-      options: ['dark', 'light', 'dark-daltonized', 'light-daltonized'],
+      options: THEME_OPTIONS,
       onChange(theme: string) {
-        const themeName: GlobalConfig['theme'] =
-          theme === 'dark' ||
-          theme === 'light' ||
-          theme === 'light-daltonized' ||
-          theme === 'dark-daltonized'
-            ? theme
-            : 'dark'
+        const themeName: ThemeNames = THEME_OPTIONS.includes(theme as ThemeNames)
+          ? (theme as ThemeNames)
+          : 'dark'
         const config = { ...getGlobalConfig(), theme: themeName }
         saveGlobalConfig(config)
         setGlobalConfig(config)
