@@ -161,7 +161,7 @@ export function FileWriteToolDiff({
   return (
     <Box flexDirection="column">
       <Text bold wrap="truncate-end">
-        {verbose ? file_path : relative(getCwd(), file_path)}
+        {file_path}
       </Text>
       {enableScrolling ? (
         <Text dimColor wrap="truncate-end">

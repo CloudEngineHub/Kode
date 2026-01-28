@@ -81,8 +81,7 @@ export function FileEditToolUpdatedMessage({
   return (
     <Box flexDirection="column">
       <Text>
-        {'  '}⎿ Updated{' '}
-        <Text bold>{verbose ? filePath : relative(getCwd(), filePath)}</Text>
+        {'  '}⎿ Updated <Text bold>{filePath}</Text>
         {numAdditions > 0 || numRemovals > 0 ? ' with ' : ''}
         {numAdditions > 0 ? (
           <>

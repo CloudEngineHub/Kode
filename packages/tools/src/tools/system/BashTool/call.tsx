@@ -1,3 +1,4 @@
+import * as React from 'react'
 import type { ToolUseContext } from '#core/tooling/Tool'
 import { createAssistantMessage } from '#core/utils/messages'
 import { BunShell } from '#runtime/shell'
@@ -10,10 +11,12 @@ import {
   formatBashLlmGateBlockMessage,
   runBashLlmSafetyGate,
 } from './llmSafetyGate'
+import { getBashGateFindings, shouldReviewBashCommand } from './dataLossRules'
 import { getCommandSource } from './commandSource'
 import type { Out } from './BashTool'
 import { executeForegroundBash } from './executeForeground'
 import { maybeAttachSandboxNetworkPorts } from './sandboxNetwork'
+import { LlmGateProgress } from './LlmGateProgress'
 
 type SetToolJSX = (
   value: {
@@ -127,6 +130,26 @@ export async function* callBashTool(
 
   const bashLlmGateQuery = context.options?.bashLlmGateQuery
 
+  // Check if command is HIGH severity (triggers LLM Gate)
+  const findings = getBashGateFindings(input.command)
+  const needsLlmGate = shouldReviewBashCommand(findings)
+
+  // Show progress UI when LLM Gate is reviewing
+  if (needsLlmGate && setToolJSX) {
+    setToolJSX({
+      jsx: <LlmGateProgress command={input.command} findings={findings} />,
+      shouldHidePromptInput: false,
+    })
+
+    // Yield progress message
+    yield {
+      type: 'progress',
+      content: createAssistantMessage(
+        `<tool-progress>Reviewing: ${findings.map(f => f.title).join(', ')}</tool-progress>`,
+      ),
+    }
+  }
+
   const llmGateResult = await runBashLlmSafetyGate({
     command: input.command,
     userPrompt,
@@ -142,6 +165,11 @@ export async function* callBashTool(
     parentAbortSignal: abortController.signal,
     query: bashLlmGateQuery,
   })
+
+  // Clear LLM Gate progress UI
+  if (needsLlmGate && setToolJSX) {
+    setToolJSX(null)
+  }
 
   if (llmGateResult.decision === 'block') {
     const message = formatBashLlmGateBlockMessage(llmGateResult.verdict)

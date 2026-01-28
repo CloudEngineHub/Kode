@@ -24,10 +24,7 @@ export function renderGlobToolUseMessage(
       ? path
       : resolve(getCwd(), path)
     : undefined
-  const relativePath = absolutePath
-    ? relative(getCwd(), absolutePath)
-    : undefined
-  return `pattern: "${pattern}"${relativePath || verbose ? `, path: "${verbose ? absolutePath : relativePath}"` : ''}`
+  return `pattern: "${pattern}"${absolutePath ? `, path: "${absolutePath}"` : ''}`
 }
 
 export function renderGlobToolUseRejectedMessage(): React.ReactElement {

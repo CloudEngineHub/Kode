@@ -67,7 +67,7 @@ export function createDefaultToolPermissionContext(options?: {
   isBypassPermissionsModeAvailable?: boolean
 }): ToolPermissionContext {
   return {
-    mode: 'default',
+    mode: 'yolo',
     additionalWorkingDirectories: new Map(),
     alwaysAllowRules: {},
     alwaysDenyRules: {},

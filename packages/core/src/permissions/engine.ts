@@ -8,6 +8,7 @@ import { logError } from '#core/utils/log'
 import { getCwd } from '#core/utils/state'
 import { PRODUCT_NAME } from '#core/constants/product'
 import { getPermissionMode } from '#core/utils/permissionModeState'
+import { normalizePermissionMode } from '#core/types/PermissionMode'
 import { isAbsolute, resolve } from 'path'
 
 import {
@@ -72,8 +73,10 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
   context,
   assistantMessage,
 ): Promise<PermissionResult> => {
-  const permissionMode = getPermissionMode(context)
+  const rawPermissionMode = getPermissionMode(context)
+  const permissionMode = normalizePermissionMode(rawPermissionMode)
   const isDontAskMode = permissionMode === 'dontAsk'
+  const isYoloMode = permissionMode === 'yolo'
   const shouldAvoidPermissionPrompts =
     context.options?.shouldAvoidPermissionPrompts === true
   const safeMode = Boolean(context.options?.safeMode ?? context.safeMode)
@@ -90,6 +93,8 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
     message: `Permission to use ${tool.name} has been auto-denied (prompts unavailable).`,
     shouldPromptUser: false,
   }
+
+  // Note: YOLO mode auto-approve is applied at the end, after deny/ask rules are checked
 
   if (permissionMode === 'bypassPermissions' && !requiresUserInteraction) {
     const bypassSafetyFloor =
@@ -328,6 +333,17 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
     permissionResult.shouldPromptUser !== false
   ) {
     return promptsUnavailableDenied
+  }
+
+  // YOLO mode: if result would prompt user (not explicitly denied), auto-approve instead
+  // Explicit deny rules (shouldPromptUser: false) are still respected
+  if (
+    isYoloMode &&
+    !requiresUserInteraction &&
+    permissionResult.result === false &&
+    permissionResult.shouldPromptUser !== false
+  ) {
+    return { result: true }
   }
 
   return permissionResult

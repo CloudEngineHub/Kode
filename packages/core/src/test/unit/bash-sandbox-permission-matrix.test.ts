@@ -81,6 +81,7 @@ describe('Bash sandbox permission matrix (compatibility)', () => {
     })
 
     const toolPermissionContext = createDefaultToolPermissionContext()
+    toolPermissionContext.mode = 'cautious'
     toolPermissionContext.alwaysDenyRules.localSettings = ['Bash(echo hi)']
 
     const result = await hasPermissionsToUseTool(
@@ -104,6 +105,7 @@ describe('Bash sandbox permission matrix (compatibility)', () => {
     })
 
     const toolPermissionContext = createDefaultToolPermissionContext()
+    toolPermissionContext.mode = 'cautious'
     toolPermissionContext.alwaysAskRules.localSettings = ['Bash(echo:*)']
 
     const result = await hasPermissionsToUseTool(

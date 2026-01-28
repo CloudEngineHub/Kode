@@ -1,10 +1,23 @@
-// Permission mode types retained for compatibility with earlier agent implementations
+// Permission mode types
+// - yolo: Auto-execute non-destructive commands, prompt only for HIGH severity
+// - cautious: Requires confirmation for all tool uses (original default behavior)
+// - acceptEdits: Auto-approve edit operations
+// - plan: Research and planning - read-only tools only
+// - bypassPermissions: All permissions bypassed
+// - dontAsk: Auto-deny permission prompts
 export type PermissionMode =
-  | 'default'
+  | 'yolo'
+  | 'cautious'
+  | 'default' // Legacy alias for cautious
   | 'acceptEdits'
   | 'plan'
   | 'bypassPermissions'
   | 'dontAsk'
+
+// Normalize legacy 'default' to 'cautious'
+export function normalizePermissionMode(mode: PermissionMode): PermissionMode {
+  return mode === 'default' ? 'cautious' : mode
+}
 
 export interface PermissionContext {
   mode: PermissionMode
@@ -36,14 +49,40 @@ export interface ModeConfig {
   }
 }
 
-// Mode configuration preserved for compatibility
+// Mode configuration
 export const MODE_CONFIGS: Record<PermissionMode, ModeConfig> = {
+  yolo: {
+    name: 'yolo',
+    label: 'YOLO',
+    icon: '',
+    color: 'text',
+    description: 'Auto-execute non-destructive, prompt for HIGH severity only',
+    allowedTools: ['*'],
+    restrictions: {
+      readOnly: false,
+      requireConfirmation: false,
+      bypassValidation: false,
+    },
+  },
+  cautious: {
+    name: 'cautious',
+    label: 'Ask',
+    icon: '??',
+    color: 'blue',
+    description: 'Requires confirmation for all tool uses',
+    allowedTools: ['*'],
+    restrictions: {
+      readOnly: false,
+      requireConfirmation: true,
+      bypassValidation: false,
+    },
+  },
   default: {
     name: 'default',
-    label: 'Default',
-    icon: '',
+    label: 'Ask',
+    icon: '??',
     color: 'blue',
-    description: 'Standard permission checking',
+    description: 'Legacy alias for cautious',
     allowedTools: ['*'],
     restrictions: {
       readOnly: false,
@@ -53,8 +92,8 @@ export const MODE_CONFIGS: Record<PermissionMode, ModeConfig> = {
   },
   acceptEdits: {
     name: 'acceptEdits',
-    label: 'Accept edits',
-    icon: '⏵⏵',
+    label: 'Accept Edits',
+    icon: '>>',
     color: 'green',
     description: 'Auto-approve edit operations',
     allowedTools: ['*'],
@@ -66,8 +105,8 @@ export const MODE_CONFIGS: Record<PermissionMode, ModeConfig> = {
   },
   plan: {
     name: 'plan',
-    label: 'Plan Mode',
-    icon: '⏸',
+    label: 'Plan',
+    icon: '||',
     color: 'yellow',
     description: 'Research and planning - read-only tools only',
     allowedTools: [
@@ -95,8 +134,8 @@ export const MODE_CONFIGS: Record<PermissionMode, ModeConfig> = {
   },
   bypassPermissions: {
     name: 'bypassPermissions',
-    label: 'Bypass Permissions',
-    icon: '⏵⏵',
+    label: 'Bypass',
+    icon: '🚀',
     color: 'red',
     description: 'All permissions bypassed',
     allowedTools: ['*'],
@@ -109,7 +148,7 @@ export const MODE_CONFIGS: Record<PermissionMode, ModeConfig> = {
   dontAsk: {
     name: 'dontAsk',
     label: "Don't Ask",
-    icon: '⏵⏵',
+    icon: 'X',
     color: 'red',
     description: 'Auto-deny permission prompts',
     allowedTools: ['*'],
@@ -121,25 +160,26 @@ export const MODE_CONFIGS: Record<PermissionMode, ModeConfig> = {
   },
 }
 
-// Mode cycling function preserved from the existing workflow
+// Mode cycling function: yolo -> plan -> acceptEdits -> cautious -> [bypassPermissions] -> yolo
 export function getNextPermissionMode(
   currentMode: PermissionMode,
-  // Compatibility: legacy callers may pass bypass availability.
-  // When bypass is not available (safe mode), keep the cycle in non-bypass modes.
   isBypassAvailable: boolean = true,
 ): PermissionMode {
-  switch (currentMode) {
-    case 'default':
-      return 'acceptEdits'
-    case 'acceptEdits':
+  const normalized = normalizePermissionMode(currentMode)
+  switch (normalized) {
+    case 'yolo':
       return 'plan'
     case 'plan':
-      return isBypassAvailable ? 'bypassPermissions' : 'default'
+      return 'acceptEdits'
+    case 'acceptEdits':
+      return 'cautious'
+    case 'cautious':
+      return isBypassAvailable ? 'bypassPermissions' : 'yolo'
     case 'bypassPermissions':
-      return 'default'
+      return 'yolo'
     case 'dontAsk':
-      return 'default'
+      return 'yolo'
     default:
-      return 'default'
+      return 'yolo'
   }
 }

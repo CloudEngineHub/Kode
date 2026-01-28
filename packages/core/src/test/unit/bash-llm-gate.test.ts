@@ -4,12 +4,16 @@ import {
   runBashLlmSafetyGate,
 } from '#tools/tools/system/BashTool/llmSafetyGate'
 
+// Use data-loss commands that actually trigger LLM Gate
+const TRIGGER_COMMAND = 'git reset --hard'
+const TRIGGER_PROMPT = 'Reset git repository'
+
 describe('Bash LLM intent gate', () => {
   test('runs for user bash mode (no bypass)', async () => {
     let calls = 0
     const result = await runBashLlmSafetyGate({
-      command: 'sudo ls',
-      userPrompt: 'List files with sudo',
+      command: TRIGGER_COMMAND,
+      userPrompt: TRIGGER_PROMPT,
       description: '',
       platform: process.platform,
       commandSource: 'user_bash_mode',
@@ -28,10 +32,33 @@ describe('Bash LLM intent gate', () => {
     expect(calls).toBe(1)
   })
 
-  test('parses ALLOW verdict', async () => {
+  test('does not trigger for non-data-loss commands', async () => {
+    let calls = 0
     const result = await runBashLlmSafetyGate({
       command: 'sudo ls',
-      userPrompt: 'List files',
+      userPrompt: 'List files with sudo',
+      description: '',
+      platform: process.platform,
+      commandSource: 'agent_call',
+      safeMode: false,
+      runInBackground: false,
+      willSandbox: true,
+      sandboxRequired: false,
+      cwd: process.cwd(),
+      originalCwd: process.cwd(),
+      query: async () => {
+        calls++
+        return 'ALLOW'
+      },
+    })
+    expect(result.decision).toBe('allow')
+    expect(calls).toBe(0) // Gate not called for non-data-loss command
+  })
+
+  test('parses ALLOW verdict', async () => {
+    const result = await runBashLlmSafetyGate({
+      command: TRIGGER_COMMAND,
+      userPrompt: TRIGGER_PROMPT,
       description: '',
       platform: process.platform,
       commandSource: 'agent_call',
@@ -69,8 +96,8 @@ describe('Bash LLM intent gate', () => {
 
   test('parses XML verdict output', async () => {
     const result = await runBashLlmSafetyGate({
-      command: 'sudo ls',
-      userPrompt: 'List files',
+      command: TRIGGER_COMMAND,
+      userPrompt: TRIGGER_PROMPT,
       description: '',
       platform: process.platform,
       commandSource: 'agent_call',
@@ -89,8 +116,8 @@ describe('Bash LLM intent gate', () => {
   test('fails closed when model output is invalid', async () => {
     let calls = 0
     const result = await runBashLlmSafetyGate({
-      command: 'sudo ls',
-      userPrompt: 'List files',
+      command: TRIGGER_COMMAND,
+      userPrompt: TRIGGER_PROMPT,
       description: '',
       platform: process.platform,
       commandSource: 'agent_call',
@@ -113,8 +140,8 @@ describe('Bash LLM intent gate', () => {
 
   test('formats non-Zod errors in error path (Error instance)', async () => {
     const result = await runBashLlmSafetyGate({
-      command: 'sudo ls',
-      userPrompt: 'List files',
+      command: TRIGGER_COMMAND,
+      userPrompt: TRIGGER_PROMPT,
       description: '',
       platform: process.platform,
       commandSource: 'agent_call',
@@ -136,8 +163,8 @@ describe('Bash LLM intent gate', () => {
 
   test('formats non-Zod errors in error path (non-Error value)', async () => {
     const result = await runBashLlmSafetyGate({
-      command: 'sudo ls',
-      userPrompt: 'List files',
+      command: TRIGGER_COMMAND,
+      userPrompt: TRIGGER_PROMPT,
       description: '',
       platform: process.platform,
       commandSource: 'agent_call',
@@ -179,8 +206,8 @@ describe('Bash LLM intent gate', () => {
       })
 
       const result = await runBashLlmSafetyGate({
-        command: 'sudo ls',
-        userPrompt: 'List files',
+        command: TRIGGER_COMMAND,
+        userPrompt: TRIGGER_PROMPT,
         description: '',
         platform: process.platform,
         commandSource: 'agent_call',
@@ -214,8 +241,8 @@ describe('Bash LLM intent gate', () => {
       })
 
       const result = await runBashLlmSafetyGate({
-        command: 'sudo ls',
-        userPrompt: 'List files',
+        command: TRIGGER_COMMAND,
+        userPrompt: TRIGGER_PROMPT,
         description: '',
         platform: process.platform,
         commandSource: 'agent_call',

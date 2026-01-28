@@ -64,7 +64,7 @@ export function getToolPermissionContextForConversationKey(options: {
       !options.isBypassPermissionsModeAvailable &&
       next.mode === 'bypassPermissions'
     ) {
-      next = { ...next, mode: 'default' }
+      next = { ...next, mode: 'yolo' }
     }
 
     if (next !== existing) {

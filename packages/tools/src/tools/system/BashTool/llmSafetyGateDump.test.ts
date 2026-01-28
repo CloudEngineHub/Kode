@@ -26,8 +26,8 @@ describe('Bash LLM gate failure dump (forensics)', () => {
         findings: [
           {
             code: 'KODE_TEST',
-            severity: 'medium',
-            category: 'system',
+            severity: 'high',
+            category: 'data_loss',
             title: 'Test finding',
             evidence: 'example',
           },

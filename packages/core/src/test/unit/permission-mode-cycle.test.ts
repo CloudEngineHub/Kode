@@ -30,12 +30,16 @@ describe('permission mode cycle parity (cycle order + side effects)', () => {
   })
 
   test('getNextPermissionMode matches expected ordering', () => {
-    expect(getNextPermissionMode('default', true)).toBe('acceptEdits')
-    expect(getNextPermissionMode('acceptEdits', true)).toBe('plan')
-    expect(getNextPermissionMode('plan', true)).toBe('bypassPermissions')
-    expect(getNextPermissionMode('plan', false)).toBe('default')
-    expect(getNextPermissionMode('bypassPermissions', true)).toBe('default')
-    expect(getNextPermissionMode('dontAsk', true)).toBe('default')
+    // New cycle: yolo -> plan -> acceptEdits -> cautious -> bypassPermissions -> yolo
+    expect(getNextPermissionMode('yolo', true)).toBe('plan')
+    expect(getNextPermissionMode('plan', true)).toBe('acceptEdits')
+    expect(getNextPermissionMode('acceptEdits', true)).toBe('cautious')
+    expect(getNextPermissionMode('cautious', true)).toBe('bypassPermissions')
+    expect(getNextPermissionMode('cautious', false)).toBe('yolo')
+    expect(getNextPermissionMode('bypassPermissions', true)).toBe('yolo')
+    expect(getNextPermissionMode('dontAsk', true)).toBe('yolo')
+    // Legacy 'default' is normalized to 'cautious'
+    expect(getNextPermissionMode('default', true)).toBe('bypassPermissions')
   })
 
   test('cycle into plan records lastPlanModeUse + enables plan mode', () => {
@@ -104,7 +108,7 @@ describe('permission mode cycle parity (cycle order + side effects)', () => {
     __applyPermissionModeSideEffectsForTests({
       conversationKey,
       previousMode: 'plan',
-      nextMode: 'default',
+      nextMode: 'yolo',
       recordPlanModeUse: false,
     })
 

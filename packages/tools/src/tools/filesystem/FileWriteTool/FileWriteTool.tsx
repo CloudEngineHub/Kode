@@ -55,7 +55,10 @@ export const FileWriteTool = {
     return !hasWritePermission(file_path)
   },
   renderToolUseMessage(input, { verbose }) {
-    return `file_path: ${verbose ? input.file_path : relative(getCwd(), input.file_path)}`
+    const fullPath = isAbsolute(input.file_path)
+      ? input.file_path
+      : resolve(getCwd(), input.file_path)
+    return `file_path: ${fullPath}`
   },
   async validateInput({ file_path }, { readFileTimestamps, readFileHashes }) {
     const fullFilePath = isAbsolute(file_path)

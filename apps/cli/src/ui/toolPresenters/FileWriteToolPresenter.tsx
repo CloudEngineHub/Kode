@@ -39,9 +39,7 @@ export function renderFileWriteToolResultMessage(
         <Box flexDirection="column">
           <Text>
             {'  '}⎿ Wrote {numLines} lines to{' '}
-            <Text bold>
-              {verbose ? output.filePath : relative(getCwd(), output.filePath)}
-            </Text>
+            <Text bold>{output.filePath}</Text>
           </Text>
           <Box flexDirection="column" paddingLeft={5}>
             <HighlightedCode

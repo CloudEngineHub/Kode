@@ -4,6 +4,7 @@ import { usePermissionContext } from '#ui-ink/contexts/PermissionContext'
 import { getTheme, type Theme } from '#core/utils/theme'
 import { getPermissionModeCycleShortcut } from '#ui-ink/utils/permissionModeCycleShortcut'
 import type { PermissionMode } from '#core/types/PermissionMode'
+import { normalizePermissionMode } from '#core/types/PermissionMode'
 
 interface ModeIndicatorProps {
   showTransitionCount?: boolean
@@ -16,16 +17,17 @@ export function ModeIndicator({
   const theme = getTheme()
   const shortcut = getPermissionModeCycleShortcut()
 
-  // Don't show indicator for default mode unless explicitly requested
-  if (currentMode === 'default' && !showTransitionCount) {
-    return null
-  }
+  const normalized = normalizePermissionMode(currentMode)
 
   const indicator = __getModeIndicatorDisplayForTests({
-    mode: currentMode,
+    mode: normalized,
     shortcutDisplayText: shortcut.displayText,
     theme,
   })
+
+  if (!indicator.shouldRender && !showTransitionCount) {
+    return null
+  }
 
   return (
     <Box flexDirection="row" justifyContent="space-between" width="100%">
@@ -54,66 +56,73 @@ export function __getModeIndicatorDisplayForTests(args: {
   mainText: string
   shortcutHintText: string
 } {
-  if (args.mode === 'default') {
-    return {
-      shouldRender: false,
-      color: args.theme.text,
-      mainText: '',
-      shortcutHintText: '',
-    }
-  }
+  const normalized = normalizePermissionMode(args.mode)
 
-  const icon = getModeIndicatorIcon(args.mode)
-  const label = getModeIndicatorLabel(args.mode).toLowerCase()
-  const color = getModeIndicatorColor(args.theme, args.mode)
+  const icon = getModeIndicatorIcon(normalized)
+  const label = getModeIndicatorLabel(normalized).toLowerCase()
+  const color = getModeIndicatorColor(args.theme, normalized)
 
   return {
     shouldRender: true,
     color,
-    mainText: `${icon} ${label} on`,
+    mainText: icon ? `${icon} ${label} mode` : `${label} mode`,
     shortcutHintText: ` (${args.shortcutDisplayText} to cycle)`,
   }
 }
 
 function getModeIndicatorLabel(mode: PermissionMode): string {
-  switch (mode) {
-    case 'default':
-      return 'Default'
+  switch (normalizePermissionMode(mode)) {
+    case 'yolo':
+      return 'YOLO'
+    case 'cautious':
+      return 'Ask'
     case 'plan':
-      return 'Plan Mode'
+      return 'Plan'
     case 'acceptEdits':
-      return 'Accept edits'
+      return 'Accept Edits'
     case 'bypassPermissions':
-      return 'Bypass Permissions'
+      return 'Bypass'
     case 'dontAsk':
       return "Don't Ask"
+    default:
+      return 'Unknown'
   }
 }
 
 function getModeIndicatorIcon(mode: PermissionMode): string {
-  switch (mode) {
-    case 'default':
+  switch (normalizePermissionMode(mode)) {
+    case 'yolo':
       return ''
+    case 'cautious':
+      return '??'
     case 'plan':
-      return '⏸'
+      return '||'
     case 'acceptEdits':
+      return '>>'
     case 'bypassPermissions':
+      return '🚀'
     case 'dontAsk':
-      return '⏵⏵'
+      return 'X'
+    default:
+      return ''
   }
 }
 
 function getModeIndicatorColor(theme: Theme, mode: PermissionMode): string {
-  switch (mode) {
-    case 'default':
-      return theme.text
+  switch (normalizePermissionMode(mode)) {
+    case 'yolo':
+      return theme.secondaryText
+    case 'cautious':
+      return theme.warning
     case 'plan':
-      return theme.planMode
+      return theme.success
     case 'acceptEdits':
       return theme.autoAccept
     case 'bypassPermissions':
     case 'dontAsk':
       return theme.error
+    default:
+      return theme.secondaryText
   }
 }
 
@@ -123,12 +132,10 @@ export function CompactModeIndicator() {
   const theme = getTheme()
   const shortcut = getPermissionModeCycleShortcut()
 
-  if (currentMode === 'default') {
-    return null
-  }
+  const normalized = normalizePermissionMode(currentMode)
 
   const indicator = __getModeIndicatorDisplayForTests({
-    mode: currentMode,
+    mode: normalized,
     shortcutDisplayText: shortcut.displayText,
     theme,
   })

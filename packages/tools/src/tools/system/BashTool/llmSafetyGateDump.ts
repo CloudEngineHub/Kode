@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto'
 import { mkdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { CACHE_PATHS, dateToFilename } from '#core/utils/log'
-import type { BashGateFinding } from './bashGateRules'
+import type { BashGateFinding } from './dataLossRules'
 
 export function writeGateFailureDump(args: {
   command: string

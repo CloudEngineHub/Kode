@@ -98,9 +98,7 @@ export function renderFileEditToolUseRejectedMessage(
           <Text color={getTheme().error}>
             User rejected {old_string === '' ? 'write' : 'update'} to{' '}
           </Text>
-          <Text bold>
-            {verbose ? file_path : relative(getCwd(), file_path)}
-          </Text>
+          <Text bold>{fullFilePath}</Text>
         </Text>
         {intersperse(
           patch.map(patch => (
