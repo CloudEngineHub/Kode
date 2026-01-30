@@ -15,6 +15,8 @@ import { safeParseJSON } from '#core/utils/json'
 import { getSessionPlugins } from '#core/utils/sessionPlugins'
 import { getCwd } from '#core/utils/state'
 
+import { loadLegacyClaudeJsonConfig } from '#config/compat/legacyClaudeJson'
+
 import type { McpName } from './settings'
 import { expandTemplateDeep, isRecord, parseJsonOrJsonc } from './utils'
 
@@ -29,6 +31,103 @@ const EXTERNAL_SCOPES = [
 
 export type ScopedMcpServerConfig = McpServerConfig & {
   scope: ConfigScope
+  configLocation?: string
+}
+
+function parseStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  const out: string[] = []
+  for (const item of value) {
+    if (typeof item !== 'string') continue
+    const trimmed = item.trim()
+    if (!trimmed) continue
+    out.push(trimmed)
+  }
+  return out
+}
+
+function findLegacyClaudeProjectEntry(projectDir: string): {
+  projectPath: string
+  entry: Record<string, unknown>
+  configPath: string
+} | null {
+  const loaded = loadLegacyClaudeJsonConfig()
+  const configPath = loaded.usedPath
+  const config = loaded.config
+  if (!configPath || !config) return null
+
+  const projectsRaw = config['projects']
+  if (!isRecord(projectsRaw)) return null
+
+  let currentPath = resolve(projectDir)
+  while (true) {
+    const entry = projectsRaw[currentPath]
+    if (isRecord(entry)) {
+      return { projectPath: currentPath, entry, configPath }
+    }
+
+    const parentPath = resolve(currentPath, '..')
+    if (parentPath === currentPath) break
+    currentPath = parentPath
+  }
+
+  return null
+}
+
+function getLegacyClaudeUserMcpServers(): {
+  servers: Record<string, McpServerConfig>
+  configPath: string | null
+} {
+  const loaded = loadLegacyClaudeJsonConfig()
+  const configPath = loaded.usedPath
+  const config = loaded.config
+  if (!configPath || !config) return { servers: {}, configPath: null }
+
+  const rawServers = config['mcpServers']
+  if (!isRecord(rawServers)) return { servers: {}, configPath }
+  return { servers: rawServers as Record<string, McpServerConfig>, configPath }
+}
+
+function getLegacyClaudeLocalMcpServers(projectDir: string): {
+  servers: Record<string, McpServerConfig>
+  configPath: string | null
+  projectPath: string | null
+} {
+  const entry = findLegacyClaudeProjectEntry(projectDir)
+  if (!entry) return { servers: {}, configPath: null, projectPath: null }
+
+  const rawServers = entry.entry['mcpServers']
+  if (!isRecord(rawServers))
+    return {
+      servers: {},
+      configPath: entry.configPath,
+      projectPath: entry.projectPath,
+    }
+
+  return {
+    servers: rawServers as Record<string, McpServerConfig>,
+    configPath: entry.configPath,
+    projectPath: entry.projectPath,
+  }
+}
+
+function getLegacyClaudeProjectMcpjsonChoice(
+  projectDir: string,
+  serverName: string,
+): 'approved' | 'rejected' | 'pending' {
+  const entry = findLegacyClaudeProjectEntry(projectDir)
+  if (!entry) return 'pending'
+
+  const enableAll = Boolean(entry.entry['enableAllProjectMcpServers'])
+  if (enableAll) return 'approved'
+
+  const enabled = parseStringArray(entry.entry['enabledMcpjsonServers'])
+  if (enabled.includes(serverName)) return 'approved'
+
+  const disabled = parseStringArray(entry.entry['disabledMcpjsonServers'])
+  if (disabled.includes(serverName)) return 'rejected'
+
+  return 'pending'
 }
 
 export function parseEnvVars(
@@ -142,6 +241,12 @@ export function getMcprcServerStatus(
   if (config.rejectedMcprcServers?.includes(serverName)) {
     return 'rejected'
   }
+
+  const projectDefs = getProjectMcpServerDefinitions()
+  if (projectDefs.sources[serverName] === '.mcp.json') {
+    return getLegacyClaudeProjectMcpjsonChoice(getCwd(), serverName)
+  }
+
   return 'pending'
 }
 
@@ -296,11 +401,15 @@ export function removeMcpServer(
 
 export function listMCPServers(): Record<string, McpServerConfig> {
   const pluginServers = listPluginMCPServers()
-  const globalConfig = getGlobalConfig()
+  const legacyUser = getLegacyClaudeUserMcpServers().servers
   const projectFileConfig = getProjectMcpServerDefinitions().servers
+  const legacyLocal = getLegacyClaudeLocalMcpServers(getCwd()).servers
+  const globalConfig = getGlobalConfig()
   const projectConfig = getCurrentProjectConfig()
   return {
     ...(pluginServers ?? {}),
+    ...(legacyUser ?? {}),
+    ...(legacyLocal ?? {}),
     ...(globalConfig.mcpServers ?? {}),
     ...(projectFileConfig ?? {}),
     ...(projectConfig.mcpServers ?? {}),
@@ -312,6 +421,7 @@ export function getMcpServer(name: McpName): ScopedMcpServerConfig | undefined {
   const projectFileDefinitions = getProjectMcpServerDefinitions()
   const projectFileConfig = projectFileDefinitions.servers
   const globalConfig = getGlobalConfig()
+  const cwd = getCwd()
 
   if (projectConfig.mcpServers?.[name]) {
     return { ...projectConfig.mcpServers[name], scope: 'project' }
@@ -325,6 +435,26 @@ export function getMcpServer(name: McpName): ScopedMcpServerConfig | undefined {
 
   if (globalConfig.mcpServers?.[name]) {
     return { ...globalConfig.mcpServers[name], scope: 'global' }
+  }
+
+  const legacyLocal = getLegacyClaudeLocalMcpServers(cwd)
+  if (legacyLocal.servers?.[name] && legacyLocal.configPath) {
+    return {
+      ...legacyLocal.servers[name],
+      scope: 'project',
+      configLocation: `${legacyLocal.configPath} [project: ${legacyLocal.projectPath ?? cwd}]`,
+    }
+  }
+
+  const legacyUser = getLegacyClaudeUserMcpServers()
+  if (legacyUser.servers?.[name] && legacyUser.configPath) {
+    return {
+      ...legacyUser.servers[name],
+      scope: 'global',
+      configLocation: `${legacyUser.configPath}${
+        existsSync(legacyUser.configPath) ? '' : ' (file does not exist)'
+      }`,
+    }
   }
 
   return undefined

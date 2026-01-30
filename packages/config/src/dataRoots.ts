@@ -72,7 +72,10 @@ export function resolveDataRoots(options?: ResolveDataRootsOptions): DataRoots {
     : join(homeDir, '.kode')
 
   const claudeCompatRoots = respectEnvOverride
-    ? dedupeStrings([getClaudeOverride(homeDir), join(homeDir, LEGACY_CONFIG_DIRNAME)])
+    ? dedupeStrings([
+        getClaudeOverride(homeDir),
+        join(homeDir, LEGACY_CONFIG_DIRNAME),
+      ])
     : [join(homeDir, LEGACY_CONFIG_DIRNAME)]
 
   const allRoots = dedupeStrings([kodeRoot, ...claudeCompatRoots])

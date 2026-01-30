@@ -36,6 +36,25 @@ function parseBashRuleContent(ruleContent: string): ParsedBashRuleContent {
   return { type: 'exact', command: normalized }
 }
 
+type PromptRuleMatchType = 'exact' | 'prefix'
+
+type ParsedPromptRuleContent =
+  | { type: 'exact'; text: string }
+  | { type: 'prefix'; prefix: string }
+  | { type: 'wildcard'; pattern: string }
+
+function normalizePromptForRuleMatch(text: string): string {
+  return text.trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
+function parsePromptRuleContent(ruleContent: string): ParsedPromptRuleContent {
+  const normalized = normalizePromptForRuleMatch(ruleContent)
+  const match = normalized.match(/^(.+):\*$/)
+  if (match && match[1]) return { type: 'prefix', prefix: match[1] }
+  if (normalized.includes('*')) return { type: 'wildcard', pattern: normalized }
+  return { type: 'exact', text: normalized }
+}
+
 function normalizeBashCommandForRuleMatch(command: string): string {
   return command.trim().replace(/\s+/g, ' ')
 }
@@ -51,7 +70,31 @@ function wildcardPatternToRegExp(pattern: string): RegExp {
   return new RegExp(`^${parts.join('.*')}$`)
 }
 
+function wildcardPromptPatternToRegExp(pattern: string): RegExp {
+  const normalizedPattern = normalizePromptForRuleMatch(pattern)
+  const parts = normalizedPattern.split('*').map(escapeRegexLiteral)
+  return new RegExp(`^${parts.join('.*')}$`)
+}
+
 function collectBashRuleStrings(
+  context: ToolPermissionContext,
+  behavior: 'allow' | 'deny' | 'ask',
+): string[] {
+  const groups =
+    behavior === 'allow'
+      ? context.alwaysAllowRules
+      : behavior === 'deny'
+        ? context.alwaysDenyRules
+        : context.alwaysAskRules
+  const out: string[] = []
+  for (const rules of Object.values(groups)) {
+    if (!Array.isArray(rules)) continue
+    for (const rule of rules) if (typeof rule === 'string') out.push(rule)
+  }
+  return out
+}
+
+function collectBashPromptRuleStrings(
   context: ToolPermissionContext,
   behavior: 'allow' | 'deny' | 'ask',
 ): string[] {
@@ -124,6 +167,52 @@ function findMatchingBashRules(args: {
           return wildcardRe ? wildcardRe.test(candidate) : false
       }
     })
+
+    if (matched) matches.push(ruleString)
+  }
+
+  return matches
+}
+
+function findMatchingBashPromptRules(args: {
+  prompt: string
+  toolPermissionContext: ToolPermissionContext
+  behavior: 'allow' | 'deny' | 'ask'
+  matchType: PromptRuleMatchType
+}): string[] {
+  const normalizedPrompt = normalizePromptForRuleMatch(args.prompt)
+  if (!normalizedPrompt) return []
+
+  const rules = collectBashPromptRuleStrings(
+    args.toolPermissionContext,
+    args.behavior,
+  )
+  const matches: string[] = []
+
+  for (const ruleString of rules) {
+    const parsed = parseToolRuleString(ruleString)
+    if (!parsed || parsed.toolName !== 'BashPrompt' || !parsed.ruleContent) {
+      continue
+    }
+    const ruleContent = parsePromptRuleContent(parsed.ruleContent)
+    const wildcardRe =
+      ruleContent.type === 'wildcard'
+        ? wildcardPromptPatternToRegExp(ruleContent.pattern)
+        : null
+
+    const matched = (() => {
+      switch (ruleContent.type) {
+        case 'exact':
+          return ruleContent.text === normalizedPrompt
+        case 'prefix':
+          if (args.matchType === 'exact')
+            return ruleContent.prefix === normalizedPrompt
+          if (normalizedPrompt === ruleContent.prefix) return true
+          return normalizedPrompt.startsWith(`${ruleContent.prefix} `)
+        case 'wildcard':
+          return wildcardRe ? wildcardRe.test(normalizedPrompt) : false
+      }
+    })()
 
     if (matched) matches.push(ruleString)
   }
@@ -230,6 +319,38 @@ export function checkPrefixBashRules(
   })[0]
   const allow = findMatchingBashRules({
     command,
+    toolPermissionContext,
+    behavior: 'allow',
+    matchType: 'prefix',
+  })[0]
+  return { deny, ask, allow }
+}
+
+export function formatBashPromptRule(prompt: string): string {
+  return `BashPrompt(${normalizePromptForRuleMatch(prompt)})`
+}
+
+export function checkPromptBashRules(
+  prompt: string,
+  toolPermissionContext: ToolPermissionContext,
+): { deny?: string; ask?: string; allow?: string } {
+  const normalized = normalizePromptForRuleMatch(prompt)
+  if (!normalized) return {}
+
+  const deny = findMatchingBashPromptRules({
+    prompt: normalized,
+    toolPermissionContext,
+    behavior: 'deny',
+    matchType: 'prefix',
+  })[0]
+  const ask = findMatchingBashPromptRules({
+    prompt: normalized,
+    toolPermissionContext,
+    behavior: 'ask',
+    matchType: 'prefix',
+  })[0]
+  const allow = findMatchingBashPromptRules({
+    prompt: normalized,
     toolPermissionContext,
     behavior: 'allow',
     matchType: 'prefix',

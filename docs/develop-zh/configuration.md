@@ -12,12 +12,16 @@ Kode 使用两层互补的配置体系：
 ### 全局配置（primary）
 
 - 默认：`~/.kode.json`
-- 如果设置了 `KODE_CONFIG_DIR`（或 `CLAUDE_CONFIG_DIR`）：`<KODE_CONFIG_DIR>/config.json`
+- 如果设置了 `KODE_CONFIG_DIR`：`<KODE_CONFIG_DIR>/config.json`
 
 Kode 还会使用一个数据目录存放日志/任务/记忆等：
 
 - 默认：`~/.kode/`
-- 如果设置了 `KODE_CONFIG_DIR`（或 `CLAUDE_CONFIG_DIR`）：`<KODE_CONFIG_DIR>/`
+- 如果设置了 `KODE_CONFIG_DIR`：`<KODE_CONFIG_DIR>/`
+
+legacy 兼容：
+
+- `CLAUDE_CONFIG_DIR` 仅影响 legacy 读取兼容根目录（例如 `~/.claude`），不会改变 Kode 的 primary 配置/数据目录。
 
 ### 项目 / 本地 settings（每个仓库）
 

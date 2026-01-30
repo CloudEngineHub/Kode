@@ -163,14 +163,19 @@ export abstract class Tool {
   - 对用户输出隐藏
 - **实现**：特殊消息格式
 
-#### TodoWriteTool（待办事项工具）
+#### 任务清单工具（TaskCreate/TaskUpdate/TaskList/TaskGet）
 
-- **用途**：任务管理和跟踪
+- **用途**：持久化、Linear 风格的工作任务清单（跨 session / 跨 agent）
 - **主要功能**：
-  - 持久待办事项列表
-  - 状态跟踪（待处理、进行中、已完成）
-  - 进度可视化
-  - 自动任务分解
+  - 创建/更新/列出/获取任务（稳定 ID）
+  - 状态跟踪（pending / in_progress / completed）
+  - 通过工具校验保证同一时间只有一个 in_progress
+  - 可选依赖关系（blocks/blockedBy）
+
+#### TodoWriteTool（legacy）
+
+- **用途**：仅用于兼容旧版 todo 清单
+- **说明**：默认关闭；可通过 `KODE_ENABLE_LEGACY_TODO=1` 启用
 
 ### 5. 外部集成工具
 

@@ -90,18 +90,23 @@ export function execInBackground(
     outputFile,
   }
 
-  const countNonEmptyLines = (chunk: string): number =>
-    chunk.split('\n').filter(line => line.length > 0).length
+  const countNewlines = (chunk: string): number => {
+    let count = 0
+    for (let i = 0; i < chunk.length; i++) {
+      if (chunk.charCodeAt(i) === 10) count++
+    }
+    return count
+  }
 
   startStreamReader(childProcess.stdout, chunk => {
     backgroundProcess.stdout += chunk
     appendTaskOutput(bashId, chunk)
-    backgroundProcess.stdoutLineCount += countNonEmptyLines(chunk)
+    backgroundProcess.stdoutLineCount += countNewlines(chunk)
   })
   startStreamReader(childProcess.stderr, chunk => {
     backgroundProcess.stderr += chunk
     appendTaskOutput(bashId, chunk)
-    backgroundProcess.stderrLineCount += countNonEmptyLines(chunk)
+    backgroundProcess.stderrLineCount += countNewlines(chunk)
   })
 
   exitPromise.then(exitOutcome => {
@@ -120,7 +125,7 @@ export function execInBackground(
           ? `\n${exitOutcome.error.message}`
           : exitOutcome.error.message
         appendTaskOutput(bashId, delta)
-        backgroundProcess.stderrLineCount += countNonEmptyLines(delta)
+        backgroundProcess.stderrLineCount += countNewlines(delta)
       }
     }
     backgroundProcess.interrupted =
@@ -137,7 +142,7 @@ export function execInBackground(
           : ''
         if (delta) {
           appendTaskOutput(bashId, delta)
-          backgroundProcess.stderrLineCount += countNonEmptyLines(delta)
+          backgroundProcess.stderrLineCount += countNewlines(delta)
         }
         backgroundProcess.stderr = annotated
       }
@@ -146,6 +151,7 @@ export function execInBackground(
       clearTimeout(backgroundProcess.timeoutHandle)
       backgroundProcess.timeoutHandle = null
     }
+    backgroundProcess.completedAt = backgroundProcess.completedAt ?? Date.now()
   })
 
   state.backgroundProcesses.set(bashId, backgroundProcess)
@@ -268,6 +274,7 @@ export function killBackgroundShell(
   try {
     proc.interrupted = true
     proc.killed = true
+    proc.completedAt = proc.completedAt ?? Date.now()
     proc.abortController.abort()
     proc.process.kill()
     if (proc.timeoutHandle) {

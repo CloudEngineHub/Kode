@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 
 import {
   normalizePathInput,
@@ -39,6 +39,7 @@ export class SecureFileService {
     this.allowedBasePaths = new Set([
       process.cwd(),
       homedir(),
+      tmpdir(),
       '/tmp',
       '/var/tmp',
     ])

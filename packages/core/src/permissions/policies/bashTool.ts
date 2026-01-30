@@ -17,6 +17,7 @@ export async function checkBashToolPermission(args: {
   effectiveToolPermissionContext: ToolPermissionContext
 }): Promise<PermissionResult> {
   const command = getStringFromInput(args.input, 'command').trim()
+  const description = getStringFromInput(args.input, 'description').trim()
   const dangerouslyDisableSandbox = getBooleanFromInput(
     args.input,
     'dangerouslyDisableSandbox',
@@ -51,6 +52,7 @@ export async function checkBashToolPermission(args: {
 
   return await checkBashPermissions({
     command,
+    description: description.length > 0 ? description : undefined,
     toolPermissionContext: args.effectiveToolPermissionContext,
     toolUseContext: args.context,
   })

@@ -148,7 +148,8 @@ export function Doctor({
       if (!process.stdout.isTTY) return false
       if (incrementalEnv === '0' || incrementalEnv === 'false') return false
       if (incrementalEnv === '1' || incrementalEnv === 'true') return true
-      if (typeof incrementalConfigured === 'boolean') return incrementalConfigured
+      if (typeof incrementalConfigured === 'boolean')
+        return incrementalConfigured
       return true
     })()
     lines.push(

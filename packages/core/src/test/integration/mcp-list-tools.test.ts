@@ -15,10 +15,7 @@ describe('MCP server (stdio)', () => {
 
     const transport = new StdioClientTransport({
       command: process.execPath,
-      args: [
-        'apps/cli/src/dispatch.ts',
-        '--mcp-server',
-      ],
+      args: ['apps/cli/src/dispatch.ts', '--mcp-server'],
       cwd: repoRoot,
       env: {
         NODE_ENV: 'test',

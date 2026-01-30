@@ -124,10 +124,12 @@ export function useReplQuery(args: {
               thinkingMode: args.thinkingMode,
               requestToolUsePermission: args.requestToolUsePermission,
               isKodingRequest: isKodingRequest || undefined,
-              toolPermissionContext: getToolPermissionContextForConversationKey({
-                conversationKey: `${args.messageLogName}:${args.forkNumber}`,
-                isBypassPermissionsModeAvailable: !args.safeMode,
-              }),
+              toolPermissionContext: getToolPermissionContextForConversationKey(
+                {
+                  conversationKey: `${args.messageLogName}:${args.forkNumber}`,
+                  isBypassPermissionsModeAvailable: !args.safeMode,
+                },
+              ),
               getCustomSystemPromptAdditions:
                 getOutputStyleSystemPromptAdditions,
             },

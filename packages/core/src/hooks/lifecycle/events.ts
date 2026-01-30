@@ -294,6 +294,110 @@ export async function runUserPromptSubmitHooks(args: {
   }
 }
 
+export async function runPreCompactHooks(args: {
+  trigger: 'manual' | 'auto'
+  tokenCountBefore: number
+  contextLimit?: number
+  model?: string
+  permissionMode?: unknown
+  cwd?: string
+  transcriptPath?: string
+  safeMode?: boolean
+  signal?: AbortSignal
+}): Promise<
+  | { kind: 'allow'; warnings: string[]; compactInstructions: string }
+  | { kind: 'block'; warnings: string[]; message: string }
+> {
+  const projectDir = args.cwd ?? getCwd()
+  if (getDisableAllHooksState({ projectDir }).disabled) {
+    return { kind: 'allow', warnings: [], compactInstructions: '' }
+  }
+
+  const matchers = [
+    ...loadSettingsMatchers(projectDir, 'PreCompact'),
+    ...loadPluginMatchers(projectDir, 'PreCompact'),
+  ]
+  if (matchers.length === 0) {
+    return { kind: 'allow', warnings: [], compactInstructions: '' }
+  }
+
+  const applicable = matchers.filter(m =>
+    matcherMatchesTool(m.matcher, args.trigger),
+  )
+  if (applicable.length === 0) {
+    return { kind: 'allow', warnings: [], compactInstructions: '' }
+  }
+
+  const hookInput: Record<string, unknown> = {
+    session_id: getKodeAgentSessionId(),
+    transcript_path: args.transcriptPath,
+    cwd: projectDir,
+    hook_event_name: 'PreCompact',
+    permission_mode: coerceHookPermissionMode(args.permissionMode),
+    trigger: args.trigger,
+    token_count_before: args.tokenCountBefore,
+    ...(typeof args.contextLimit === 'number' &&
+    Number.isFinite(args.contextLimit)
+      ? { context_limit: args.contextLimit }
+      : {}),
+    ...(typeof args.model === 'string' && args.model.trim()
+      ? { model: args.model.trim() }
+      : {}),
+  }
+
+  const warnings: string[] = []
+  const compactInstructionBlocks: string[] = []
+
+  const settled = await executeHooksForMatchers({
+    matchers: applicable,
+    hookEvent: 'PreCompact',
+    hookInput,
+    cwd: projectDir,
+    safeMode: args.safeMode ?? false,
+    parentSignal: args.signal,
+    promptFallbackTimeoutMs: 30_000,
+    commandFallbackTimeoutMs: 600_000,
+  })
+
+  for (const item of settled) {
+    if (item.status === 'rejected') {
+      logError(item.reason)
+      warnings.push(`Hook failed to run: ${String(item.reason ?? '')}`)
+      continue
+    }
+
+    const { result } = item.value
+
+    if (result.exitCode === 2) {
+      return {
+        kind: 'block',
+        warnings,
+        message: coerceHookMessage(result.stdout, result.stderr),
+      }
+    }
+
+    if (result.exitCode !== 0) {
+      warnings.push(coerceHookMessage(result.stdout, result.stderr))
+      continue
+    }
+
+    const stdout = String(result.stdout ?? '').trim()
+    if (!stdout) continue
+
+    // Compatibility semantics: stdout is appended as custom compaction instructions.
+    // If the hook returned JSON, prefer hookSpecificOutput.additionalContext.
+    const json = tryParseHookJson(stdout)
+    const additional = json ? getHookAdditionalContext(json) : null
+    compactInstructionBlocks.push((additional ?? stdout).trim())
+  }
+
+  return {
+    kind: 'allow',
+    warnings,
+    compactInstructions: compactInstructionBlocks.filter(Boolean).join('\n\n'),
+  }
+}
+
 export async function runSessionEndHooks(args: {
   reason: string
   permissionMode?: unknown

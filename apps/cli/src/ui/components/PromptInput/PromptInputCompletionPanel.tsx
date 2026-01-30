@@ -227,6 +227,7 @@ export const PromptInputCompletionPanel = React.memo(
     selectedIndex,
     emptyDirMessage,
     tokenUsage,
+    contextLimit,
     reservedRows = 10,
   }: {
     theme: Theme
@@ -234,6 +235,7 @@ export const PromptInputCompletionPanel = React.memo(
     selectedIndex: number
     emptyDirMessage: string
     tokenUsage: number
+    contextLimit?: number
     reservedRows?: number
   }): React.ReactNode {
     const { rows, columns } = useTerminalSize()
@@ -285,7 +287,10 @@ export const PromptInputCompletionPanel = React.memo(
         <SentryErrorBoundary
           children={
             <Box justifyContent="flex-end" gap={1}>
-              <TokenWarning tokenUsage={tokenUsage} />
+              <TokenWarning
+                tokenUsage={tokenUsage}
+                contextLimit={contextLimit}
+              />
             </Box>
           }
         />
@@ -300,6 +305,7 @@ export const PromptInputCompletionPanel = React.memo(
       prevProps.suggestions === nextProps.suggestions &&
       prevProps.emptyDirMessage === nextProps.emptyDirMessage &&
       prevProps.tokenUsage === nextProps.tokenUsage &&
+      prevProps.contextLimit === nextProps.contextLimit &&
       prevProps.reservedRows === nextProps.reservedRows
     )
   },

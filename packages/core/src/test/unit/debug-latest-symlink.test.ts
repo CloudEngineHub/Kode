@@ -71,9 +71,8 @@ describe('debug/latest symlink parity (Claude-compatible)', () => {
   test('DEBUG_PATHS.detailed() defaults to debug/<sessionId>.txt', async () => {
     process.env.KODE_DEBUG = '1'
 
-    const { setKodeAgentSessionId } = await import(
-      '#protocol/utils/kodeAgentSessionId'
-    )
+    const { setKodeAgentSessionId } =
+      await import('#protocol/utils/kodeAgentSessionId')
     setKodeAgentSessionId('test-session-id')
 
     const { DEBUG_PATHS, ensureDebugDir } =

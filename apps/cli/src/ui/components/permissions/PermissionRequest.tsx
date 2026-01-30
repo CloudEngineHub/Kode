@@ -87,7 +87,10 @@ export type ToolUseConfirm = {
   // NOTE: riskScore is carried through to support current permission UX.
   riskScore: number | null
   onAbort(): void
-  onAllow(type: 'permanent' | 'temporary'): void
+  onAllow(
+    type: 'permanent' | 'temporary',
+    options?: { updatedInput?: { [key: string]: unknown } },
+  ): void
   onReject(rejectionMessage?: string): void
 }
 

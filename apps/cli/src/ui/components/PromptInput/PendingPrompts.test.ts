@@ -33,4 +33,3 @@ describe('__getPendingPromptLinesForTests', () => {
     expect(lines.join('\n')).not.toContain('› b')
   })
 })
-

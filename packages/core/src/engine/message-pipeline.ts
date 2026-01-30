@@ -6,6 +6,7 @@ import { MaxTurnsExceededError } from '#core/errors/maxTurns'
 import { formatSystemPromptWithContext } from '#core/services/systemPrompt'
 import { emitReminderEvent } from '#core/services/systemReminder'
 import { addNotification } from '#core/services/notificationCenter'
+import '#core/services/workspaceSafety'
 import { markPhase } from '#core/utils/debugLogger'
 import {
   createAssistantMessage,
@@ -24,7 +25,9 @@ import {
   renderBashNotification,
 } from '#runtime/shell'
 import { getCwd } from '#core/utils/state'
+import { getEffectiveSessionId } from '#core/utils/sessionId'
 import { checkAutoCompact } from '#core/utils/autoCompactCore'
+import { checkMicroCompact } from '#core/utils/microCompactCore'
 import { asRecord } from '#core/hooks/types'
 import {
   drainHookSystemPromptAdditions,
@@ -129,6 +132,18 @@ async function* messagePipelineCore(
       const totalCostUsd = getTotalCost()
       if (totalCostUsd >= maxBudgetUsd) {
         throw new MaxBudgetUsdExceededError({ maxBudgetUsd, totalCostUsd })
+      }
+    }
+
+    // Micro-compact check (tool-result offload before auto-compact)
+    {
+      const microOutcome = await checkMicroCompact(messages, toolUseContext)
+      if (microOutcome.boundaryMessage) {
+        messages = microOutcome.messages
+        yield microOutcome.boundaryMessage
+        messages = [...messages, microOutcome.boundaryMessage]
+      } else {
+        messages = microOutcome.messages
       }
     }
 
@@ -269,9 +284,10 @@ async function* messagePipelineCore(
       }
     }
 
-    // Emit session startup event
+    // Emit session startup event (idempotent within the reminder service)
     emitReminderEvent('session:startup', {
       agentId: toolUseContext.agentId,
+      sessionId: getEffectiveSessionId(),
       messages: messages.length,
       timestamp: Date.now(),
     })

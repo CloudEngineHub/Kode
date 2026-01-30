@@ -4,7 +4,7 @@ import { createAssistantMessage } from '#core/utils/messages'
 import { BunShell } from '#runtime/shell'
 import { BashTool } from '#tools/tools/system/BashTool/BashTool'
 import { TaskOutputTool } from '#tools/tools/system/TaskOutputTool/TaskOutputTool'
-import { KillShellTool } from '#tools/tools/system/KillShellTool/KillShellTool'
+import { TaskStopTool } from '#tools/tools/system/TaskStopTool/TaskStopTool'
 import type { ToolUseBlock } from '@anthropic-ai/sdk/resources/index.mjs'
 
 function sleep(ms: number): Promise<void> {
@@ -17,7 +17,7 @@ function makeToolUse(id: string, name: string, input: any) {
 }
 
 describe('Background shell tools integration (no sibling tool errors)', () => {
-  test('TaskOutput + KillShell succeed with valid task_id under scheduler', async () => {
+  test('TaskOutput + TaskStop succeed with valid task_id under scheduler', async () => {
     if (process.platform === 'win32') return
 
     BunShell.restart()
@@ -34,7 +34,7 @@ describe('Background shell tools integration (no sibling tool errors)', () => {
       readFileTimestamps: {},
       setToolJSX: () => {},
       options: {
-        tools: [BashTool, TaskOutputTool, KillShellTool],
+        tools: [BashTool, TaskOutputTool, TaskStopTool],
         commands: [],
         forkNumber: 0,
         messageLogName: 'background-shell-tools-test',
@@ -48,7 +48,7 @@ describe('Background shell tools integration (no sibling tool errors)', () => {
     }
 
     const queue: any = new __ToolUseQueueForTests({
-      toolDefinitions: [BashTool, TaskOutputTool, KillShellTool],
+      toolDefinitions: [BashTool, TaskOutputTool, TaskStopTool],
       canUseTool: async () => ({ result: true }),
       toolUseContext,
       siblingToolUseIDs: new Set(['sleep', 'out', 'kill']),

@@ -5,10 +5,11 @@ import type { ToolUseContext } from '#core/tooling/Tool'
 import { PRODUCT_NAME } from '#core/constants/product'
 import { getKodeBaseDir } from '#core/utils/env'
 import { getPlanConversationKey, getPlanFilePath } from '#core/utils/planMode'
-import { getCwd } from '#core/utils/state'
+import { getOriginalCwd } from '#core/utils/state'
 import { getKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
 import { getClaudeCompatRoots } from '#config/dataRoots'
 import { LEGACY_ENV } from '#config/compat/legacyEnv'
+import { resolveSandboxTmpDir } from '#runtime/shell/sandboxEnv'
 
 import {
   expandSymlinkPaths,
@@ -66,7 +67,7 @@ function isPathWithinAnyAllowedDir(args: {
 }
 
 function getProjectKeyFromCwd(): string {
-  return getCwd().replace(/[^a-zA-Z0-9]/g, '-')
+  return getOriginalCwd().replace(/[^a-zA-Z0-9]/g, '-')
 }
 
 function getLegacyTmpBaseDir(): string {
@@ -81,14 +82,21 @@ function getLegacyTmpBaseDir(): string {
   return '/tmp'
 }
 
+function getLegacyClaudeTmpDir(): string {
+  const override = process.env[LEGACY_ENV.tmpDir]
+  if (typeof override === 'string') {
+    const trimmed = override.trim().replace(/[\\/]+$/, '')
+    if (trimmed) return trimmed
+  }
+  return path.join(getLegacyTmpBaseDir(), 'claude')
+}
+
 function getScratchpadDirForCurrentSession(args: {
   projectKey: string
   sessionId: string
 }): string {
-  const tmpBase = getLegacyTmpBaseDir()
   return path.join(
-    tmpBase,
-    'claude',
+    resolveSandboxTmpDir(),
     args.projectKey,
     args.sessionId,
     'scratchpad',
@@ -285,8 +293,20 @@ export function getSpecialAllowedReadReason(args: {
     return 'Project temp directory files are allowed for reading'
   }
 
+  const kodeTmpTasksDir = resolveLikeCliPath(
+    path.join(resolveSandboxTmpDir(), projectDir, 'tasks'),
+  )
+  if (
+    isPathWithinAnyAllowedDir({
+      inputPath: absolute,
+      allowedDirs: [kodeTmpTasksDir],
+    })
+  ) {
+    return 'Project temp directory files are allowed for reading'
+  }
+
   const legacyTasksDir = resolveLikeCliPath(
-    path.join(getLegacyTmpBaseDir(), 'claude', projectDir, 'tasks'),
+    path.join(getLegacyClaudeTmpDir(), projectDir, 'tasks'),
   )
   if (
     isPathWithinAnyAllowedDir({

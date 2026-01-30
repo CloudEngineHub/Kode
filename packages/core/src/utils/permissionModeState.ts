@@ -1,6 +1,7 @@
 import type { ToolUseContext } from '#core/tooling/Tool'
 import type { PermissionMode } from '#core/types/PermissionMode'
 import { normalizePermissionMode } from '#core/types/PermissionMode'
+import { isPlanModeEnabled } from '#core/utils/planMode'
 
 const DEFAULT_CONVERSATION_KEY = 'default'
 const ACTUAL_DEFAULT_MODE: PermissionMode = 'yolo'
@@ -25,13 +26,19 @@ export function getPermissionModeForConversationKey(options: {
       normalized === 'bypassPermissions' &&
       !options.isBypassPermissionsModeAvailable
     ) {
-      permissionModeByConversationKey.set(options.conversationKey, ACTUAL_DEFAULT_MODE)
+      permissionModeByConversationKey.set(
+        options.conversationKey,
+        ACTUAL_DEFAULT_MODE,
+      )
       return ACTUAL_DEFAULT_MODE
     }
     return normalized
   }
 
-  permissionModeByConversationKey.set(options.conversationKey, ACTUAL_DEFAULT_MODE)
+  permissionModeByConversationKey.set(
+    options.conversationKey,
+    ACTUAL_DEFAULT_MODE,
+  )
   return ACTUAL_DEFAULT_MODE
 }
 
@@ -39,26 +46,31 @@ export function setPermissionModeForConversationKey(options: {
   conversationKey: string
   mode: PermissionMode
 }): void {
-  permissionModeByConversationKey.set(options.conversationKey, normalizePermissionMode(options.mode))
+  permissionModeByConversationKey.set(
+    options.conversationKey,
+    normalizePermissionMode(options.mode),
+  )
 }
 
 export function getPermissionMode(context?: ToolUseContext): PermissionMode {
   const conversationKey = getConversationKey(context)
   const safeMode = context?.options?.safeMode ?? false
 
-  const fromToolPermissionContext =
-    context?.options?.toolPermissionContext?.mode
-  if (fromToolPermissionContext) {
-    const normalized = normalizePermissionMode(fromToolPermissionContext)
+  if (context && isPlanModeEnabled(context)) return 'plan'
+
+  const override = context?.options?.permissionMode
+  if (override) {
+    const normalized = normalizePermissionMode(override)
     if (normalized === 'bypassPermissions' && safeMode) {
       return ACTUAL_DEFAULT_MODE
     }
     return normalized
   }
 
-  const override = context?.options?.permissionMode
-  if (override) {
-    const normalized = normalizePermissionMode(override)
+  const fromToolPermissionContext =
+    context?.options?.toolPermissionContext?.mode
+  if (fromToolPermissionContext) {
+    const normalized = normalizePermissionMode(fromToolPermissionContext)
     if (normalized === 'bypassPermissions' && safeMode) {
       return ACTUAL_DEFAULT_MODE
     }
@@ -76,7 +88,10 @@ export function setPermissionMode(
   mode: PermissionMode,
 ): void {
   const conversationKey = getConversationKey(context)
-  permissionModeByConversationKey.set(conversationKey, normalizePermissionMode(mode))
+  permissionModeByConversationKey.set(
+    conversationKey,
+    normalizePermissionMode(mode),
+  )
 }
 
 export function __resetPermissionModeStateForTests(): void {

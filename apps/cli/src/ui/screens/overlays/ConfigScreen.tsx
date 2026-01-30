@@ -98,7 +98,9 @@ export function ConfigScreen({ onClose }: Props): React.ReactNode {
       value: globalConfig.theme ?? 'dark',
       options: THEME_OPTIONS,
       onChange(theme: string) {
-        const themeName: ThemeNames = THEME_OPTIONS.includes(theme as ThemeNames)
+        const themeName: ThemeNames = THEME_OPTIONS.includes(
+          theme as ThemeNames,
+        )
           ? (theme as ThemeNames)
           : 'dark'
         const config = { ...getGlobalConfig(), theme: themeName }
@@ -206,33 +208,18 @@ export function ConfigScreen({ onClose }: Props): React.ReactNode {
 
   useKeypress(
     (input, key) => {
-    if (didCloseRef.current) return true
+      if (didCloseRef.current) return true
 
-    const inputChar = input.length === 1 ? input : ''
+      const inputChar = input.length === 1 ? input : ''
 
-    if (editingString) {
-      if (key.return) {
-        const currentSetting = settings[selectedIndex]
-        if (!currentSetting) return
+      if (editingString) {
+        if (key.return) {
+          const currentSetting = settings[selectedIndex]
+          if (!currentSetting) return
 
-        if (currentSetting.type === 'string') {
-          try {
-            currentSetting.onChange(currentInput)
-            setEditingString(false)
-            setCurrentInput('')
-            setInputError(null)
-          } catch (error) {
-            setInputError(
-              error instanceof Error ? error.message : 'Invalid input',
-            )
-          }
-        } else if (currentSetting.type === 'number') {
-          const numValue = parseFloat(currentInput)
-          if (isNaN(numValue)) {
-            setInputError('Please enter a valid number')
-          } else {
+          if (currentSetting.type === 'string') {
             try {
-              currentSetting.onChange(numValue)
+              currentSetting.onChange(currentInput)
               setEditingString(false)
               setCurrentInput('')
               setInputError(null)
@@ -241,65 +228,80 @@ export function ConfigScreen({ onClose }: Props): React.ReactNode {
                 error instanceof Error ? error.message : 'Invalid input',
               )
             }
+          } else if (currentSetting.type === 'number') {
+            const numValue = parseFloat(currentInput)
+            if (isNaN(numValue)) {
+              setInputError('Please enter a valid number')
+            } else {
+              try {
+                currentSetting.onChange(numValue)
+                setEditingString(false)
+                setCurrentInput('')
+                setInputError(null)
+              } catch (error) {
+                setInputError(
+                  error instanceof Error ? error.message : 'Invalid input',
+                )
+              }
+            }
           }
+        } else if (key.escape || (key.ctrl && inputChar === 'c')) {
+          setEditingString(false)
+          setCurrentInput('')
+          setInputError(null)
+        } else if (key.delete || key.backspace) {
+          setCurrentInput(prev => prev.slice(0, -1))
+        } else if (input) {
+          setCurrentInput(prev => prev + input)
+        }
+        return
+      }
+
+      if (key.upArrow) {
+        setSelectedIndex(prev => Math.max(0, prev - 1))
+      } else if (key.downArrow) {
+        setSelectedIndex(prev => Math.min(settings.length - 1, prev + 1))
+      } else if (inputChar === 'k' || inputChar === 'j') {
+        const delta = inputChar === 'k' ? -1 : 1
+        setSelectedIndex(prev =>
+          Math.max(0, Math.min(settings.length - 1, prev + delta)),
+        )
+      } else if (key.home || inputChar === 'g') {
+        setSelectedIndex(0)
+      } else if (key.end || inputChar === 'G') {
+        setSelectedIndex(Math.max(0, settings.length - 1))
+      } else if (key.return) {
+        const currentSetting = settings[selectedIndex]
+        if (currentSetting?.disabled) return
+
+        if (currentSetting?.type === 'boolean') {
+          currentSetting.onChange(!currentSetting.value)
+        } else if (currentSetting?.type === 'enum') {
+          const currentIndex = currentSetting.options.indexOf(
+            currentSetting.value,
+          )
+          const nextIndex = (currentIndex + 1) % currentSetting.options.length
+          currentSetting.onChange(currentSetting.options[nextIndex])
+        } else if (
+          currentSetting?.type === 'string' ||
+          currentSetting?.type === 'number'
+        ) {
+          setCurrentInput(String(currentSetting.value))
+          setEditingString(true)
+          setInputError(null)
         }
       } else if (key.escape || (key.ctrl && inputChar === 'c')) {
-        setEditingString(false)
-        setCurrentInput('')
-        setInputError(null)
-      } else if (key.delete || key.backspace) {
-        setCurrentInput(prev => prev.slice(0, -1))
-      } else if (input) {
-        setCurrentInput(prev => prev + input)
+        // Check if config has changed
+        const currentConfigString = JSON.stringify(getGlobalConfig())
+        const initialConfigString = JSON.stringify(initialConfig.current)
+
+        if (currentConfigString !== initialConfigString) {
+          // Config has changed, save it
+          saveGlobalConfig(getGlobalConfig())
+        }
+
+        safeOnClose()
       }
-      return
-    }
-
-    if (key.upArrow) {
-      setSelectedIndex(prev => Math.max(0, prev - 1))
-    } else if (key.downArrow) {
-      setSelectedIndex(prev => Math.min(settings.length - 1, prev + 1))
-    } else if (inputChar === 'k' || inputChar === 'j') {
-      const delta = inputChar === 'k' ? -1 : 1
-      setSelectedIndex(prev =>
-        Math.max(0, Math.min(settings.length - 1, prev + delta)),
-      )
-    } else if (key.home || inputChar === 'g') {
-      setSelectedIndex(0)
-    } else if (key.end || inputChar === 'G') {
-      setSelectedIndex(Math.max(0, settings.length - 1))
-    } else if (key.return) {
-      const currentSetting = settings[selectedIndex]
-      if (currentSetting?.disabled) return
-
-      if (currentSetting?.type === 'boolean') {
-        currentSetting.onChange(!currentSetting.value)
-      } else if (currentSetting?.type === 'enum') {
-        const currentIndex = currentSetting.options.indexOf(
-          currentSetting.value,
-        )
-        const nextIndex = (currentIndex + 1) % currentSetting.options.length
-        currentSetting.onChange(currentSetting.options[nextIndex])
-      } else if (
-        currentSetting?.type === 'string' ||
-        currentSetting?.type === 'number'
-      ) {
-        setCurrentInput(String(currentSetting.value))
-        setEditingString(true)
-        setInputError(null)
-      }
-    } else if (key.escape || (key.ctrl && inputChar === 'c')) {
-      // Check if config has changed
-      const currentConfigString = JSON.stringify(getGlobalConfig())
-      const initialConfigString = JSON.stringify(initialConfig.current)
-
-      if (currentConfigString !== initialConfigString) {
-        // Config has changed, save it
-        saveGlobalConfig(getGlobalConfig())
-      }
-
-      safeOnClose()
-    }
     },
     { priority: KEYPRESS_PRIORITY.FULLSCREEN_OVERLAY },
   )

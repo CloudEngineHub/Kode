@@ -30,10 +30,7 @@ type Item =
   | { kind: 'nav'; id: 'excluded' }
   | { kind: 'nav'; id: 'destination' }
 
-type Mode =
-  | { kind: 'main' }
-  | { kind: 'excluded' }
-  | { kind: 'excludedAdd' }
+type Mode = { kind: 'main' } | { kind: 'excluded' } | { kind: 'excludedAdd' }
 
 const DESTINATIONS: SettingsDestination[] = [
   'localSettings',
@@ -81,7 +78,12 @@ function getSandboxSettingsFromFile(settings: SettingsFile | null): {
       ? sandbox.allowUnsandboxedCommands
       : true
   const excludedCommands = normalizeStringArray(sandbox.excludedCommands)
-  return { enabled, autoAllowBashIfSandboxed, allowUnsandboxedCommands, excludedCommands }
+  return {
+    enabled,
+    autoAllowBashIfSandboxed,
+    allowUnsandboxedCommands,
+    excludedCommands,
+  }
 }
 
 function persistSandboxSettings(args: {
@@ -101,7 +103,9 @@ function buildNextSettings(args: {
   patch: (sandbox: Record<string, unknown>) => Record<string, unknown>
 }): SettingsFile {
   const base = (args.base ?? {}) as Record<string, unknown>
-  const currentSandbox = isRecord(base.sandbox) ? (base.sandbox as Record<string, unknown>) : {}
+  const currentSandbox = isRecord(base.sandbox)
+    ? (base.sandbox as Record<string, unknown>)
+    : {}
   return {
     ...base,
     sandbox: args.patch(currentSandbox),
@@ -160,7 +164,9 @@ export function SandboxScreen({ context, onDone }: Props): React.ReactNode {
     [],
   )
 
-  const reservedLines = (layout.tightLayout ? 9 : layout.compactLayout ? 11 : 13) + layout.paddingY * 2
+  const reservedLines =
+    (layout.tightLayout ? 9 : layout.compactLayout ? 11 : 13) +
+    layout.paddingY * 2
   const maxVisible = Math.max(3, layout.rows - reservedLines)
 
   const visibleItems = items
@@ -181,7 +187,9 @@ export function SandboxScreen({ context, onDone }: Props): React.ReactNode {
   )
   const selectedItem = visibleItems[clampedSelectedIndex] ?? null
 
-  const persistToggle = (toggle: 'enabled' | 'autoAllowBashIfSandboxed' | 'allowUnsandboxedCommands') => {
+  const persistToggle = (
+    toggle: 'enabled' | 'autoAllowBashIfSandboxed' | 'allowUnsandboxedCommands',
+  ) => {
     const next = buildNextSettings({
       base: settingsFile,
       patch: sandbox => ({
@@ -337,7 +345,8 @@ export function SandboxScreen({ context, onDone }: Props): React.ReactNode {
       if (key.return && selectedItem) {
         if (selectedItem.kind === 'toggle') {
           if (selectedItem.id === 'enabled') persistToggle('enabled')
-          else if (selectedItem.id === 'autoAllow') persistToggle('autoAllowBashIfSandboxed')
+          else if (selectedItem.id === 'autoAllow')
+            persistToggle('autoAllowBashIfSandboxed')
           else persistToggle('allowUnsandboxedCommands')
           return
         }
@@ -377,7 +386,9 @@ export function SandboxScreen({ context, onDone }: Props): React.ReactNode {
         </Text>
         <Text dimColor wrap="truncate-end">
           {`Platform: ${process.platform} · Runtime: ${
-            effectivePlan.sandboxAvailable ? 'available' : 'missing dependencies'
+            effectivePlan.sandboxAvailable
+              ? 'available'
+              : 'missing dependencies'
           } · Tab: cycle destination`}
         </Text>
       </Box>
@@ -387,12 +398,10 @@ export function SandboxScreen({ context, onDone }: Props): React.ReactNode {
           <Text bold>Add excluded command pattern</Text>
           <SearchBox
             query={draftExcluded}
-            placeholder='e.g. npm run test:*'
+            placeholder="e.g. npm run test:*"
             isFocused
           />
-          <Text dimColor>
-            {`Enter to add · Esc to cancel`}
-          </Text>
+          <Text dimColor>{`Enter to add · Esc to cancel`}</Text>
         </Box>
       ) : mode.kind === 'excluded' ? (
         <Box flexDirection="column" gap={1}>
@@ -412,7 +421,10 @@ export function SandboxScreen({ context, onDone }: Props): React.ReactNode {
               const selected = idx === excludedSelectedIndex
               const indicator = selected ? figures.pointer : ' '
               return (
-                <Text key={`${row.kind}-${idx}`} color={selected ? theme.suggestion : undefined}>
+                <Text
+                  key={`${row.kind}-${idx}`}
+                  color={selected ? theme.suggestion : undefined}
+                >
                   {indicator} {row.label}
                 </Text>
               )

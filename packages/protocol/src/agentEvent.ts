@@ -79,7 +79,12 @@ const AssistantEventSchema = z
 const ResultEventSchema = z
   .object({
     type: z.literal('result'),
-    subtype: z.enum(['success', 'error_during_execution', 'error_max_turns']),
+    subtype: z.enum([
+      'success',
+      'error_during_execution',
+      'error_max_turns',
+      'error_max_budget_usd',
+    ]),
     result: z.string().optional(),
     structured_output: z.record(z.unknown()).optional(),
     num_turns: z.number(),

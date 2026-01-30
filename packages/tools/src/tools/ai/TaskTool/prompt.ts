@@ -11,7 +11,7 @@ const TASK_OUTPUT_TOOL_NAME = 'TaskOutput'
 const SUBAGENT_DISALLOWED_TOOL_NAMES = new Set<string>([
   'Task',
   'TaskOutput',
-  'KillShell',
+  'TaskStop',
   'EnterPlanMode',
   'ExitPlanMode',
   'AskUserQuestion',

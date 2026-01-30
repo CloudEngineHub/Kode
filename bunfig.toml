@@ -1,0 +1,5 @@
+[test]
+# Limit test discovery to the Bun-workspace test aggregator under `./test`.
+# This avoids accidentally running non-workspace script-style files
+# (e.g. `kode-agent-sdk/tests/*.test.ts`) when running `bun test` from repo root.
+root = "./test"

@@ -13,4 +13,9 @@ export type FailedClient = {
   type: 'failed'
 }
 
-export type WrappedClient = ConnectedClient | FailedClient
+export type NeedsAuthClient = {
+  name: string
+  type: 'needs-auth'
+}
+
+export type WrappedClient = ConnectedClient | FailedClient | NeedsAuthClient

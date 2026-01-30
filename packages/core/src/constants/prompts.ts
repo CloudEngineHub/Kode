@@ -215,6 +215,12 @@ export async function getCompatSystemPrompt(options?: {
     !outputStyleActive || options?.keepCodingInstructions === true
 
   const hasTaskTool = toolNames.has('Task')
+  const hasTaskCreateTool = toolNames.has('TaskCreate')
+  const hasTaskUpdateTool = toolNames.has('TaskUpdate')
+  const hasTaskListTool = toolNames.has('TaskList')
+  const hasTaskGetTool = toolNames.has('TaskGet')
+  const hasTaskManagementTools =
+    hasTaskCreateTool && hasTaskUpdateTool && hasTaskListTool && hasTaskGetTool
   const hasTodoWriteTool = toolNames.has('TodoWrite')
   const hasAskUserQuestionTool = toolNames.has('AskUserQuestion')
   const hasWebFetchTool = toolNames.has('WebFetch')
@@ -265,54 +271,31 @@ Prioritize technical accuracy and truthfulness over validating the user's belief
 When planning tasks, provide concrete implementation steps without time estimates. Never suggest timelines like "this will take 2-3 weeks" or "we can do this later." Focus on what needs to be done, not when. Break work into actionable steps and let users decide scheduling.
 `
 
-  const taskManagement = hasTodoWriteTool
+  const taskManagement = hasTaskManagementTools
     ? `# Task Management
-You have access to the TodoWrite tools to help you manage and plan tasks. Use these tools VERY frequently to ensure that you are tracking your tasks and giving the user visibility into your progress.
-These tools are also EXTREMELY helpful for planning tasks, and for breaking down larger complex tasks into smaller steps. If you do not use this tool when planning, you may forget to do important tasks - and that is unacceptable.
+You have access to TaskCreate/TaskUpdate/TaskList/TaskGet tools to manage a small, linear task list. Use them frequently so the system can track progress across agents and session resumes.
 
-It is critical that you mark todos as completed as soon as you are done with a task. Do not batch up multiple tasks before marking them as completed.
-
-Examples:
+Rules:
+- Create tasks before starting non-trivial work.
+- Keep exactly ONE task in_progress at a time.
+- Update task status immediately when it changes (do not batch updates).
+- Use TaskList/TaskGet to re-orient when you resume or switch context.
 
 <example>
 user: Run the build and fix any type errors
-assistant: I'm going to use the TodoWrite tool to write the following items to the todo list:
-- Run the build
-- Fix any type errors
-
-I'm now going to run the build using ${BASH_TOOL}.
-
-Looks like I found 10 type errors. I'm going to use the TodoWrite tool to write 10 items to the todo list.
-
-marking the first todo as in_progress
-
-Let me start working on the first item...
-
-The first item has been fixed, let me mark the first todo as completed, and move on to the second item...
-..
-..
-</example>
-In the above example, the assistant completes all the tasks, including the 10 error fixes and running the build and fixing all errors.
-
-<example>
-user: Help me write a new feature that allows users to track their usage metrics and export them to various formats
-assistant: I'll help you implement a usage metrics tracking and export feature. Let me first use the TodoWrite tool to plan this task.
-Adding the following todos to the todo list:
-1. Research existing metrics tracking in the codebase
-2. Design the metrics collection system
-3. Implement core metrics tracking functionality
-4. Create export functionality for different formats
-
-Let me start by researching the existing codebase to understand what metrics we might already be tracking and how we can build on that.
-
-I'm going to search for any existing metrics or telemetry code in the project.
-
-I've found some existing telemetry code. Let me mark the first todo as in_progress and start designing our metrics tracking system based on what I've learned...
-
-[Assistant continues implementing the feature step by step, marking todos as in_progress and completed as they go]
+assistant: I'll create tasks and start the first one.
+[TaskCreate x2]
+[TaskUpdate #1 status → in_progress]
+[Run build]
+[TaskUpdate #1 status → completed]
+[TaskUpdate #2 status → in_progress]
 </example>
 `
-    : ''
+    : hasTodoWriteTool
+      ? `# Task Management (legacy)
+You have access to the TodoWrite tool to manage legacy todo lists. Prefer the Task* tools when available.
+`
+      : ''
 
   const askingQuestions = hasAskUserQuestionTool
     ? `
@@ -322,13 +305,21 @@ You have access to the AskUserQuestion tool to ask the user questions when you n
 `
     : ''
 
+  const taskPlanningLine = hasTaskManagementTools
+    ? '- Use TaskCreate/TaskUpdate to plan and track tasks as needed.'
+    : hasTodoWriteTool
+      ? '- Use the TodoWrite tool to plan the task if required'
+      : ''
+
+  const askingQuestionsLine = hasAskUserQuestionTool
+    ? '- Use the AskUserQuestion tool to ask questions, clarify and gather information as needed.'
+    : ''
+
   const doingTasks = includeCodingInstructions
     ? `# Doing tasks
 The user will primarily request you perform software engineering tasks. This includes solving bugs, adding new functionality, refactoring code, explaining code, and more. For these tasks the following steps are recommended:
 - NEVER propose changes to code you haven't read. If a user asks about or wants you to modify a file, read it first. Understand existing code before suggesting modifications.
-- ${hasTodoWriteTool ? 'Use the TodoWrite tool to plan the task if required' : ''}
-- ${hasAskUserQuestionTool ? 'Use the AskUserQuestion tool to ask questions, clarify and gather information as needed.' : ''}
-- Be careful not to introduce security vulnerabilities such as command injection, XSS, SQL injection, and other OWASP top 10 vulnerabilities. If you notice that you wrote insecure code, immediately fix it.
+${taskPlanningLine ? `${taskPlanningLine}\n` : ''}${askingQuestionsLine ? `${askingQuestionsLine}\n` : ''}- Be careful not to introduce security vulnerabilities such as command injection, XSS, SQL injection, and other OWASP top 10 vulnerabilities. If you notice that you wrote insecure code, immediately fix it.
 - Avoid over-engineering. Only make changes that are directly requested or clearly necessary. Keep solutions simple and focused.
   - Don't add features, refactor code, or make "improvements" beyond what was asked. A bug fix doesn't need surrounding code cleaned up. A simple feature doesn't need extra configurability. Don't add docstrings, comments, or type annotations to code you didn't change. Only add comments where the logic isn't self-evident.
   - Don't add error handling, fallbacks, or validation for scenarios that can't happen. Trust internal code and framework guarantees. Only validate at system boundaries (user input, external APIs). Don't use feature flags or backwards-compatibility shims when you can just change the code.
@@ -363,7 +354,7 @@ If the user asks for help or wants to give feedback inform them of the following
 - /help: Get help with using ${PRODUCT_NAME}
 - To give feedback, users should ${MACRO.ISSUES_EXPLAINER}.
 
-${toneAndStyle}${hasTodoWriteTool ? taskManagement : ''}${askingQuestions}
+${toneAndStyle}${taskManagement}${askingQuestions}
 Users may configure 'hooks', shell commands that execute in response to events like tool calls, in settings. Treat feedback from hooks, including <user-prompt-submit-hook>, as coming from the user. If you get blocked by a hook, determine if you can adjust your actions in response to the blocked message. If not, ask the user to check their hooks configuration.
 
 ${doingTasks}- Tool results and user messages may include <system-reminder> tags. <system-reminder> tags contain useful information and reminders. They are automatically added by the system, and bear no direct relation to the specific tool results or user messages in which they appear.
@@ -387,12 +378,17 @@ assistant: [Uses the ${TASK_TOOL} tool with subagent_type=${EXPLORE_AGENT_TYPE}]
 
   const promptBlocks: string[] = [
     basePrompt,
-    ...(hasTodoWriteTool
+    ...(hasTaskManagementTools
       ? [
           `
-IMPORTANT: Always use the TodoWrite tool to plan and track tasks throughout the conversation.`,
+IMPORTANT: Keep the task list up to date using TaskCreate/TaskUpdate. Only one task may be in_progress at a time.`,
         ]
-      : []),
+      : hasTodoWriteTool
+        ? [
+            `
+IMPORTANT: Always use the TodoWrite tool to plan and track tasks throughout the conversation.`,
+          ]
+        : []),
     `
 # Code References
 
@@ -446,10 +442,13 @@ There are additional slash commands and flags available to the user. If the user
 To give feedback, users should ${MACRO.ISSUES_EXPLAINER}.
 
 # Task Management
-You have access to the TodoWrite tools to help you manage and plan tasks. Use these tools VERY frequently to ensure that you are tracking your tasks and giving the user visibility into your progress.
-These tools are also EXTREMELY helpful for planning tasks, and for breaking down larger complex tasks into smaller steps. If you do not use this tool when planning, you may forget to do important tasks - and that is unacceptable.
+Use TaskCreate/TaskUpdate to maintain a small, linear task list that survives long sessions and agent switches.
 
-It is critical that you mark todos as completed as soon as you are done with a task. Do not batch up multiple tasks before marking them as completed.
+Rules:
+- Create tasks before starting non-trivial work.
+- Keep exactly ONE task in_progress at a time.
+- Update task status immediately when it changes (do not batch updates).
+- Use TaskList/TaskGet to re-orient after compaction or resume.
 
 # Memory
 If the current working directory contains a file called ${PROJECT_FILE}, it will be automatically added to your context. This file serves multiple purposes:
@@ -539,7 +538,7 @@ ${
   includeCodingInstructions
     ? `# Doing tasks
 The user will primarily request you perform software engineering tasks. This includes solving bugs, adding new functionality, refactoring code, explaining code, and more. For these tasks the following steps are recommended:
-- Use the TodoWrite tool to plan the task if required
+- Use TaskCreate/TaskUpdate to plan and track work when helpful
 - Use the available search tools to understand the codebase and the user's query. You are encouraged to use the search tools extensively both in parallel and sequentially.
 - Implement the solution using all tools available to you
 - Verify the solution if possible with tests. NEVER assume specific test framework or test script. Check the README or search codebase to determine the testing approach.

@@ -78,8 +78,9 @@ export async function runSingleTurnPrint(args: {
   }
 
   const totalCostUsd = args.getTotalCostUsd()
-  const turnsFromContext = (args.toolUseContext as unknown as { turnCount?: unknown })
-    .turnCount
+  const turnsFromContext = (
+    args.toolUseContext as unknown as { turnCount?: unknown }
+  ).turnCount
   const numTurns = (() => {
     if (typeof turnsFromContext !== 'number') return 0
     if (!Number.isFinite(turnsFromContext) || turnsFromContext < 0) return 0
@@ -169,7 +170,10 @@ export async function runSingleTurnPrint(args: {
     (budgetExceeded || queryError instanceof MaxBudgetUsdExceededError)
 
   const resultNumTurns = (() => {
-    if (shouldReturnMaxTurnsExceeded && queryError instanceof MaxTurnsExceededError) {
+    if (
+      shouldReturnMaxTurnsExceeded &&
+      queryError instanceof MaxTurnsExceededError
+    ) {
       return queryError.turnCount
     }
     return Math.max(numTurns, 1)

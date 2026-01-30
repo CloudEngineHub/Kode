@@ -71,7 +71,9 @@ export function RequestStatusIndicator(): React.ReactNode {
     return subscribeRequestStatus(next => {
       setStatus(next)
       if (next.kind !== 'idle') {
-        setElapsedTime(Math.floor((Date.now() - requestStartTime.current) / 1000))
+        setElapsedTime(
+          Math.floor((Date.now() - requestStartTime.current) / 1000),
+        )
       }
       if (next.kind === 'idle') {
         requestStartTime.current = Date.now()
@@ -104,7 +106,8 @@ export function RequestStatusIndicator(): React.ReactNode {
         {frames[frame]} {getLabel(status)}
       </Text>
       <Text color={theme.secondaryText}>
-        {' '}:: {formatDuration(elapsedTime)} (Esc to interrupt)
+        {' '}
+        :: {formatDuration(elapsedTime)} (Esc to interrupt)
         {getTokenDisplay(status)}
       </Text>
     </Box>

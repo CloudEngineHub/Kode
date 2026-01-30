@@ -208,6 +208,7 @@ export default function App() {
                 onInputChange={chat.setInput}
                 onSend={() => void chat.send()}
                 disabled={!client || chat.sending}
+                sending={chat.sending}
               />
             ) : (
               <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">

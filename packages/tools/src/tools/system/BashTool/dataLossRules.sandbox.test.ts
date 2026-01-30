@@ -48,7 +48,10 @@ describe('dataLossRules with sandbox isolation', () => {
 
   describe('batch validation: dangerous commands', () => {
     test('all dangerous commands should trigger LLM Gate', () => {
-      const { passed, failed } = assertAllTrigger(TEST_COMMANDS.dangerous, detectFn)
+      const { passed, failed } = assertAllTrigger(
+        TEST_COMMANDS.dangerous,
+        detectFn,
+      )
 
       if (failed.length > 0) {
         console.error('MISSED dangerous commands:', failed)
@@ -74,7 +77,10 @@ describe('dataLossRules with sandbox isolation', () => {
 
   describe('batch validation: false positive prevention', () => {
     test('all false positive cases should NOT trigger', () => {
-      const { passed, failed } = assertNoneTrigger(TEST_COMMANDS.falsePositives, detectFn)
+      const { passed, failed } = assertNoneTrigger(
+        TEST_COMMANDS.falsePositives,
+        detectFn,
+      )
 
       if (failed.length > 0) {
         console.error('FALSE POSITIVE cases:', failed)

@@ -39,9 +39,7 @@ export function FallbackPermissionRequest({
 
   // NOTE: normalize "(MCP)" suffix for consistent display in the fallback UI.
   const originalUserFacingName =
-    toolUseConfirm.tool.userFacingName?.() ||
-    toolUseConfirm.tool.name ||
-    'Tool'
+    toolUseConfirm.tool.userFacingName?.() || toolUseConfirm.tool.name || 'Tool'
   const userFacingName = originalUserFacingName.endsWith(' (MCP)')
     ? originalUserFacingName.slice(0, -6)
     : originalUserFacingName

@@ -47,7 +47,7 @@ import status from './builtin/status'
 import statusline from './builtin/statusline'
 import capabilities from './builtin/capabilities'
 import tag from './builtin/tag'
-import todos from './builtin/todos'
+import work from './builtin/work'
 import tasks from './builtin/tasks'
 import terminalSetup from './builtin/terminal-setup'
 import sandbox from './builtin/sandbox'
@@ -111,7 +111,7 @@ const COMMANDS = memoize((): Command[] => [
   releaseNotes,
   bug,
   review,
-  todos,
+  work,
   tasks,
   terminalSetup,
   sandbox,

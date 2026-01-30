@@ -226,7 +226,8 @@ export function isWriteProtectedPath(
     ),
   )
 
-  if (normalized.endsWith(`/${LEGACY_CONFIG_DIRNAME}/settings.json`)) return true
+  if (normalized.endsWith(`/${LEGACY_CONFIG_DIRNAME}/settings.json`))
+    return true
   if (normalized.endsWith(`/${LEGACY_CONFIG_DIRNAME}/settings.local.json`))
     return true
   if (normalized.endsWith('/.kode/settings.json')) return true

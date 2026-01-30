@@ -58,6 +58,82 @@ describe('Bash permission engine parity', () => {
     expect(result).toEqual({ result: true })
   })
 
+  test('allows when prompt rule matches Bash description', async () => {
+    const toolPermissionContext = createDefaultToolPermissionContext()
+    toolPermissionContext.alwaysAllowRules.localSettings = [
+      'BashPrompt(run tests)',
+    ]
+
+    const result = await checkBashPermissions({
+      command: 'bun test',
+      description: 'Run tests',
+      toolPermissionContext,
+      toolUseContext: makeToolUseContext(),
+    })
+
+    expect(result).toEqual({ result: true })
+  })
+
+  test('prompt rules do not auto-allow compound commands', async () => {
+    const toolPermissionContext = createDefaultToolPermissionContext()
+    toolPermissionContext.alwaysAllowRules.localSettings = [
+      'BashPrompt(run tests)',
+    ]
+
+    const result = await checkBashPermissions({
+      command: 'bun test && echo ok',
+      description: 'Run tests',
+      toolPermissionContext,
+      toolUseContext: makeToolUseContext(),
+    })
+
+    expect(result.result).toBe(false)
+  })
+
+  test('ask prompt rules override allow prompt rules', async () => {
+    const toolPermissionContext = createDefaultToolPermissionContext()
+    toolPermissionContext.alwaysAllowRules.localSettings = [
+      'BashPrompt(run tests)',
+    ]
+    toolPermissionContext.alwaysAskRules.localSettings = [
+      'BashPrompt(run tests)',
+    ]
+
+    const result = await checkBashPermissions({
+      command: 'bun test',
+      description: 'Run tests',
+      toolPermissionContext,
+      toolUseContext: makeToolUseContext(),
+    })
+
+    expect(result.result).toBe(false)
+    if (result.result !== false) throw new Error('Expected permission prompt')
+    expect(result.shouldPromptUser).not.toBe(false)
+  })
+
+  test('deny prompt rules override allow prompt rules', async () => {
+    const toolPermissionContext = createDefaultToolPermissionContext()
+    toolPermissionContext.alwaysAllowRules.localSettings = [
+      'BashPrompt(run tests)',
+    ]
+    toolPermissionContext.alwaysDenyRules.localSettings = [
+      'BashPrompt(run tests)',
+    ]
+
+    const result = await checkBashPermissions({
+      command: 'bun test',
+      description: 'Run tests',
+      toolPermissionContext,
+      toolUseContext: makeToolUseContext(),
+    })
+
+    expect(result).toMatchObject({
+      result: false,
+      shouldPromptUser: false,
+      decisionReason: 'BashPrompt(run tests)',
+    })
+  })
+
   test('prefix rules do not match command names without a space separator', async () => {
     const toolPermissionContext = createDefaultToolPermissionContext()
     toolPermissionContext.alwaysAllowRules.localSettings = ['Bash(git:*)']

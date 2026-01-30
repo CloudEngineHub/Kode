@@ -1,5 +1,5 @@
 import { Message } from '#core/query'
-import { countTokens } from './tokens'
+import { estimateTokens } from './tokens'
 import { getMessagesSetter } from '#core/messages'
 import { getContext } from '#core/context'
 import { getCodeStyle } from '#core/utils/style'
@@ -15,36 +15,57 @@ import { getModelManager } from './model'
 import { debug as debugLogger } from '#core/utils/debugLogger'
 import { logError } from '#core/utils/log'
 import {
-  AUTO_COMPACT_THRESHOLD_RATIO,
+  getHookTranscriptPath,
+  runPreCompactHooks,
+} from '#core/utils/kodeHooks'
+import {
+  formatCompactionMcpSnapshot,
+  formatCompactionSkillCommandSnapshot,
+  formatCompactionTaskListSnapshot,
+} from '#core/utils/compactionSnapshots'
+import {
   calculateAutoCompactThresholds,
+  getEffectiveConversationContextLimit,
 } from './autoCompactThreshold'
 import {
   appendSessionJsonlFromMessage,
   appendSessionSummaryRecord,
 } from '#protocol/utils/kodeAgentSessionLog'
-import { getCwd } from '#core/utils/state'
+import { getOriginalCwd } from '#core/utils/state'
+import { getPlanConversationKey, readPlanFile } from '#core/utils/planMode'
 
 /**
- * Retrieves the context length for the current main conversation model.
+ * Retrieves the context length for a model pointer (e.g. "main", "gpt-4.1", ...).
  */
-async function getMainConversationContextLimit(): Promise<number> {
+function getConversationContextLimit(modelPointer: string): number {
   try {
     const modelManager = getModelManager()
-    const resolution = modelManager.resolveModelWithInfo('main')
+    const resolution = modelManager.resolveModelWithInfo(modelPointer)
     const modelProfile = resolution.success ? resolution.profile : null
 
     if (modelProfile?.contextLength) {
       return modelProfile.contextLength
     }
 
-    // Fallback to a reasonable default
+    // Fallback to main (then to a reasonable default)
+    const main = modelManager.resolveModelWithInfo('main')
+    if (main.success && main.profile?.contextLength) {
+      return main.profile.contextLength
+    }
+
     return 200_000
   } catch (error) {
     return 200_000
   }
 }
 
-const COMPRESSION_PROMPT = `Please provide a comprehensive summary of our conversation structured as follows:
+function getActiveConversationModelPointer(toolUseContext: any): string {
+  const raw = toolUseContext?.options?.model
+  if (typeof raw === 'string' && raw.trim()) return raw.trim()
+  return 'main'
+}
+
+const COMPRESSION_PROMPT_BASE = `Please provide a comprehensive summary of our conversation structured as follows:
 
 ## Technical Context
 Development environment, tools, frameworks, and configurations in use. Programming languages, libraries, and technical constraints. File structure, directory organization, and project architecture.
@@ -73,27 +94,25 @@ Important technical decisions made and their rationale. Alternative approaches c
 Focus on information essential for continuing the conversation effectively, including specific details about code, files, errors, and plans.`
 
 /**
- * Calculates context usage thresholds based on the main model's capabilities
- * Uses the main model context length since compression tasks require a capable model
- */
-async function calculateThresholds(tokenCount: number) {
-  const contextLimit = await getMainConversationContextLimit()
-  return calculateAutoCompactThresholds(
-    tokenCount,
-    contextLimit,
-    AUTO_COMPACT_THRESHOLD_RATIO,
-  )
-}
-
-/**
  * Determines if auto-compact should trigger based on token usage
- * Uses the main model context limit since compression requires a capable model
+ * Uses the active conversation model pointer (what the user selected) so we compact
+ * before exceeding that model's context window.
  */
-async function shouldAutoCompact(messages: Message[]): Promise<boolean> {
+async function shouldAutoCompact(
+  messages: Message[],
+  toolUseContext: any,
+): Promise<boolean> {
   if (messages.length < 3) return false
 
-  const tokenCount = countTokens(messages)
-  const { isAboveAutoCompactThreshold } = await calculateThresholds(tokenCount)
+  const tokenCount = estimateTokens(messages)
+  const activeModelPointer = getActiveConversationModelPointer(toolUseContext)
+  const contextLimit = getConversationContextLimit(activeModelPointer)
+  const effectiveContextLimit =
+    getEffectiveConversationContextLimit(contextLimit)
+  const { isAboveAutoCompactThreshold } = calculateAutoCompactThresholds(
+    tokenCount,
+    effectiveContextLimit,
+  )
 
   return isAboveAutoCompactThreshold
 }
@@ -117,7 +136,7 @@ export async function checkAutoCompact(
   messages: Message[],
   toolUseContext: any,
 ): Promise<{ messages: Message[]; wasCompacted: boolean }> {
-  if (!(await shouldAutoCompact(messages))) {
+  if (!(await shouldAutoCompact(messages, toolUseContext))) {
     return { messages, wasCompacted: false }
   }
 
@@ -128,7 +147,40 @@ export async function checkAutoCompact(
         : null
     const history = pendingUserMessage ? messages.slice(0, -1) : messages
 
-    const compactedHistory = await executeAutoCompact(history, toolUseContext)
+    const tokenCountBefore = estimateTokens(history)
+    const activeModelPointer = getActiveConversationModelPointer(toolUseContext)
+    const contextLimit = getConversationContextLimit(activeModelPointer)
+    const effectiveContextLimit =
+      getEffectiveConversationContextLimit(contextLimit)
+
+    const preCompactOutcome = await runPreCompactHooks({
+      trigger: 'auto',
+      tokenCountBefore,
+      contextLimit: effectiveContextLimit,
+      model: activeModelPointer,
+      permissionMode: toolUseContext?.options?.toolPermissionContext?.mode,
+      cwd: getOriginalCwd(),
+      transcriptPath: getHookTranscriptPath(toolUseContext),
+      safeMode: toolUseContext?.options?.safeMode ?? false,
+      signal: toolUseContext?.abortController?.signal,
+    })
+
+    if (preCompactOutcome.kind === 'block') {
+      debugLogger.warn('AUTO_COMPACT_BLOCKED_BY_HOOK', {
+        message: preCompactOutcome.message,
+      })
+      return { messages, wasCompacted: false }
+    }
+
+    if (preCompactOutcome.warnings.length > 0) {
+      debugLogger.warn('AUTO_COMPACT_PRECOMPACT_HOOK_WARNINGS', {
+        warnings: preCompactOutcome.warnings,
+      })
+    }
+
+    const compactedHistory = await executeAutoCompact(history, toolUseContext, {
+      compactInstructions: preCompactOutcome.compactInstructions,
+    })
     const compactedMessages = pendingUserMessage
       ? [...compactedHistory, pendingUserMessage]
       : compactedHistory
@@ -162,10 +214,36 @@ export async function checkAutoCompact(
 async function executeAutoCompact(
   messages: Message[],
   toolUseContext: any,
+  options?: { compactInstructions?: string },
 ): Promise<Message[]> {
-  const summaryRequest = createUserMessage(COMPRESSION_PROMPT)
+  const activeModelPointer = getActiveConversationModelPointer(toolUseContext)
+  const taskSnapshot = formatCompactionTaskListSnapshot()
+  const skillSnapshot = formatCompactionSkillCommandSnapshot(messages)
+  const mcpSnapshot = formatCompactionMcpSnapshot({
+    messages,
+    mcpClients: toolUseContext?.options?.mcpClients,
+  })
+  const conversationKey = getPlanConversationKey(toolUseContext)
+  const planFile = readPlanFile(undefined, conversationKey)
+  const planContent = planFile.exists ? planFile.content.trim() : ''
+  const planSnapshot =
+    planContent.length > 0
+      ? `${planFile.planFilePath}\n\n${planContent.length > 8_000 ? `${planContent.slice(0, 8_000)}\n\n… (truncated)` : planContent}`
+      : 'No plan file content.'
+  const customCompactInstructions = options?.compactInstructions?.trim() ?? ''
+  const summaryRequest = createUserMessage(
+    `${COMPRESSION_PROMPT_BASE}\n\n` +
+      `## Task List Snapshot\n${taskSnapshot}\n\n` +
+      `## Skill & Command Snapshot\n${skillSnapshot}\n\n` +
+      `## MCP Snapshot\n${mcpSnapshot}\n\n` +
+      `## Plan Snapshot\n${planSnapshot}\n\n` +
+      (customCompactInstructions
+        ? `## Custom Compaction Instructions\n${customCompactInstructions}\n\n`
+        : '') +
+      `## Active Conversation Model\n${activeModelPointer}\n`,
+  )
 
-  const tokenCount = countTokens(messages)
+  const tokenCount = estimateTokens(messages)
   const modelManager = getModelManager()
   const compactResolution = modelManager.resolveModelWithInfo('compact')
   const mainResolution = modelManager.resolveModelWithInfo('main')
@@ -270,7 +348,7 @@ async function executeAutoCompact(
     toolUseContext?.options?.persistSession !== false
   ) {
     try {
-      const cwd = getCwd()
+      const cwd = getOriginalCwd()
       for (const msg of compactedMessages) {
         appendSessionJsonlFromMessage({ cwd, message: msg, toolUseContext })
       }

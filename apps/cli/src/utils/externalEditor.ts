@@ -128,6 +128,10 @@ function resolveEditorCommand(): EditorCommand | null {
   )
 }
 
+export function getExternalEditorLabel(): string | null {
+  return resolveEditorCommand()?.displayName ?? null
+}
+
 function restoreStdinState(previouslyRaw: boolean): void {
   if (!process.stdin.isTTY) return
   process.stdin.resume()

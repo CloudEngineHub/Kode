@@ -25,7 +25,12 @@ export function setRequestStatus(
 
 export function setRequestInputTokens(inputTokens: number): void {
   if (current.kind !== 'idle') {
-    current = { ...current, inputTokens, outputTokens: undefined, updatedAt: Date.now() }
+    current = {
+      ...current,
+      inputTokens,
+      outputTokens: undefined,
+      updatedAt: Date.now(),
+    }
     for (const listener of listeners) listener(current)
   }
 }

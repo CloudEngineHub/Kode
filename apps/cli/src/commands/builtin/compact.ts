@@ -12,11 +12,20 @@ import { getCodeStyle } from '#core/utils/style'
 import { clearTerminal } from '#cli-utils/terminal'
 import { resetReminderSession } from '#core/services/systemReminder'
 import { resetFileFreshnessSession } from '#core/services/fileFreshness'
+import { runPreCompactHooks } from '#core/utils/kodeHooks'
+import { estimateTokens } from '#core/utils/tokens'
+import { getModelManager } from '#core/utils/model'
+import { getEffectiveConversationContextLimit } from '#core/utils/autoCompactThreshold'
+import {
+  formatCompactionMcpSnapshot,
+  formatCompactionSkillCommandSnapshot,
+  formatCompactionTaskListSnapshot,
+} from '#core/utils/compactionSnapshots'
 import {
   appendSessionJsonlFromMessage,
   appendSessionSummaryRecord,
 } from '#protocol/utils/kodeAgentSessionLog'
-import { getCwd } from '#core/utils/state'
+import { getCwd, getOriginalCwd } from '#core/utils/state'
 
 const COMPRESSION_PROMPT = `Please provide a comprehensive summary of our conversation structured as follows:
 
@@ -61,8 +70,56 @@ const compact = {
     },
   ) {
     const messages = getMessagesGetter()()
+    const modelManager = getModelManager()
+    const mainResolution = modelManager.resolveModelWithInfo('main')
+    const mainContextLimit =
+      mainResolution.success && mainResolution.profile?.contextLength
+        ? mainResolution.profile.contextLength
+        : undefined
+    const effectiveMainContextLimit =
+      typeof mainContextLimit === 'number'
+        ? getEffectiveConversationContextLimit(mainContextLimit)
+        : undefined
+    const activeModelLabel = (() => {
+      if (!mainResolution.success || !mainResolution.profile) return 'main'
+      const profile = mainResolution.profile
+      const size =
+        typeof profile.contextLength === 'number'
+          ? `${Math.round(profile.contextLength / 1000)}k`
+          : '?'
+      return `main (${profile.name}, ${size})`
+    })()
 
-    const summaryRequest = createUserMessage(COMPRESSION_PROMPT)
+    const preCompactOutcome = await runPreCompactHooks({
+      trigger: 'manual',
+      tokenCountBefore: estimateTokens(messages),
+      contextLimit: effectiveMainContextLimit,
+      model: 'main',
+      cwd: getCwd(),
+      signal: abortController.signal,
+    })
+
+    if (preCompactOutcome.kind === 'block') {
+      return `Compaction blocked by hook:\n${preCompactOutcome.message}`
+    }
+
+    const taskSnapshot = formatCompactionTaskListSnapshot()
+    const skillSnapshot = formatCompactionSkillCommandSnapshot(messages)
+    const mcpSnapshot = formatCompactionMcpSnapshot({
+      messages,
+      mcpClients: null,
+    })
+    const customCompactInstructions =
+      preCompactOutcome.compactInstructions.trim()
+    const summaryRequest = createUserMessage(
+      `${COMPRESSION_PROMPT}\n\n## Task List Snapshot\n${taskSnapshot}\n` +
+        `\n## Skill & Command Snapshot\n${skillSnapshot}\n` +
+        `\n## MCP Snapshot\n${mcpSnapshot}\n` +
+        (customCompactInstructions
+          ? `\n## Custom Compaction Instructions\n${customCompactInstructions}\n`
+          : '') +
+        `\n## Active Conversation Model\n${activeModelLabel}\n`,
+    )
     const compactPointer = getGlobalConfig().modelPointers?.compact
 
     const summaryResponse = await queryLLM(
@@ -109,7 +166,7 @@ const compact = {
 
     if (process.env.NODE_ENV !== 'test') {
       try {
-        const cwd = getCwd()
+        const cwd = getOriginalCwd()
         appendSessionJsonlFromMessage({
           cwd,
           message: compactedIntro,

@@ -32,8 +32,14 @@ function main() {
   const destRoot = getFlagValue('--dest-root') ?? path.join('vendor', 'seccomp')
 
   const mappings = [
-    { arch: 'x64', srcDir: path.join(artifactsDir, 'seccomp-assets', 'linux-x64') },
-    { arch: 'arm64', srcDir: path.join(artifactsDir, 'seccomp-assets', 'linux-arm64') },
+    {
+      arch: 'x64',
+      srcDir: path.join(artifactsDir, 'seccomp-assets', 'linux-x64'),
+    },
+    {
+      arch: 'arm64',
+      srcDir: path.join(artifactsDir, 'seccomp-assets', 'linux-arm64'),
+    },
   ]
 
   const copied = []
@@ -57,4 +63,3 @@ function main() {
 }
 
 main()
-

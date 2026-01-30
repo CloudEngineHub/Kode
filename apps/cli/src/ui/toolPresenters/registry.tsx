@@ -4,7 +4,7 @@ import type { Tool } from '#core/tooling/Tool'
 import { FallbackToolUseRejectedMessage } from '#ui-ink/components/FallbackToolUseRejectedMessage'
 
 import { renderGlobToolResultMessage } from './GlobToolPresenter'
-import { renderKillShellToolResultMessage } from './KillShellToolPresenter'
+import { renderTaskStopToolResultMessage } from './TaskStopToolPresenter'
 import { renderTaskOutputToolResultMessage } from './TaskOutputToolPresenter'
 import {
   renderFileEditToolResultMessage,
@@ -40,10 +40,10 @@ const inkPresentersByToolName: Record<string, InkToolPresenter> = {
         output as Parameters<typeof renderGlobToolResultMessage>[0],
       ),
   },
-  KillShell: {
+  TaskStop: {
     renderToolResultMessage: output =>
-      renderKillShellToolResultMessage(
-        output as Parameters<typeof renderKillShellToolResultMessage>[0],
+      renderTaskStopToolResultMessage(
+        output as Parameters<typeof renderTaskStopToolResultMessage>[0],
       ),
   },
   TaskOutput: {

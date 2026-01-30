@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path'
 
 import { loadSettingsWithLegacyFallback } from '#config'
 import { getKodeBaseDir } from '#core/utils/env'
-import { getCwd } from '#core/utils/state'
+import { getOriginalCwd } from '#core/utils/state'
 
 import { logError } from './log'
 import { CACHE_PATHS, LEGACY_CACHE_PATHS } from './log'
@@ -292,7 +292,7 @@ async function cleanupConversationScopedDirs(
   }
 
   // Current-project background task outputs (Kode-specific layout).
-  const projectKey = getCwd().replace(/[^a-zA-Z0-9]/g, '-')
+  const projectKey = getOriginalCwd().replace(/[^a-zA-Z0-9]/g, '-')
   addCounts(
     out,
     await cleanupFilesInDir({

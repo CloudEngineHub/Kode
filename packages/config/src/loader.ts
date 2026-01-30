@@ -185,11 +185,7 @@ export function saveGlobalConfig(config: GlobalConfig): void {
     projects: existingProjects,
   }
 
-  saveConfig(
-    getGlobalConfigFilePath(),
-    nextConfig,
-    DEFAULT_GLOBAL_CONFIG,
-  )
+  saveConfig(getGlobalConfigFilePath(), nextConfig, DEFAULT_GLOBAL_CONFIG)
 
   CACHED_GLOBAL_CONFIG = migrateModelProfilesRemoveId(nextConfig)
 }

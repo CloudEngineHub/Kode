@@ -10,6 +10,7 @@ export type PlanModeFlags = {
 export type PlanModeAttachmentState = {
   hasInjected: boolean
   lastInjectedAssistantTurn: number
+  injectedCountSinceExit: number
 }
 
 const planModeEnabledByConversationKey = new Map<string, boolean>()
@@ -86,6 +87,19 @@ export function setPlanModeAttachmentState(
   state: PlanModeAttachmentState,
 ): void {
   planModeAttachmentStateByAgentKey.set(agentKey, state)
+}
+
+export function resetPlanModeAttachmentCountsForConversationKey(
+  conversationKey: string,
+): void {
+  const prefix = `${conversationKey}:`
+  for (const [agentKey, state] of planModeAttachmentStateByAgentKey.entries()) {
+    if (!agentKey.startsWith(prefix)) continue
+    planModeAttachmentStateByAgentKey.set(agentKey, {
+      ...state,
+      injectedCountSinceExit: 0,
+    })
+  }
 }
 
 export function __resetPlanModeStateForTests(): void {

@@ -38,7 +38,7 @@ import { NotificationsScreen } from '#ui-ink/screens/overlays/NotificationsScree
 import { TranscriptScreen } from '#ui-ink/screens/overlays/TranscriptScreen'
 import { CommandPaletteScreen } from '#ui-ink/screens/overlays/CommandPaletteScreen'
 import { TasksScreen } from '#ui-ink/screens/overlays/TasksScreen'
-import { TodosScreen } from '#ui-ink/screens/overlays/TodosScreen'
+import { WorkTasksScreen } from '#ui-ink/screens/overlays/WorkTasksScreen'
 import { HistorySearchScreen } from '#ui-ink/screens/overlays/HistorySearchScreen'
 import { ModelPickerScreen } from '#ui-ink/screens/overlays/ModelPickerScreen'
 import { ThinkingToggleScreen } from '#ui-ink/screens/overlays/ThinkingToggleScreen'
@@ -150,24 +150,25 @@ export function useReplController(props: REPLProps) {
   const initialForkNumberRef = useRef(forkNumber)
   const [uiRefreshCounter, setUiRefreshCounter] = useState(0)
 
-  const [
-    pendingForkConvoWithMessages,
-    setPendingForkConvoWithMessages,
-  ] = useState<{
-    messages: MessageType[]
-    options?: ForkConvoWithMessagesOptions
-  } | null>(null)
+  const [pendingForkConvoWithMessages, setPendingForkConvoWithMessages] =
+    useState<{
+      messages: MessageType[]
+      options?: ForkConvoWithMessagesOptions
+    } | null>(null)
   const pendingForkConvoWithMessagesRef = useRef<{
     messages: MessageType[]
     options?: ForkConvoWithMessagesOptions
   } | null>(null)
 
   const setForkConvoWithMessagesOnTheNextRender =
-    useCallback<SetForkConvoWithMessagesOnTheNextRender>((messages, options) => {
-      const request = { messages, options }
-      pendingForkConvoWithMessagesRef.current = request
-      setPendingForkConvoWithMessages(request)
-    }, [])
+    useCallback<SetForkConvoWithMessagesOnTheNextRender>(
+      (messages, options) => {
+        const request = { messages, options }
+        pendingForkConvoWithMessagesRef.current = request
+        setPendingForkConvoWithMessages(request)
+      },
+      [],
+    )
 
   // Returns true if a pending fork/reset request should suppress appending new messages.
   // Side effect: clears pendingForkConvoWithMessagesRef when returning true.
@@ -222,9 +223,7 @@ export function useReplController(props: REPLProps) {
   const setToolViewStackWithClear = useCallback(
     (nextStack: ToolView[]) => {
       const prevMode = toolJSXRef.current?.displayMode
-      const nextTop = nextStack.length
-        ? nextStack[nextStack.length - 1]
-        : null
+      const nextTop = nextStack.length ? nextStack[nextStack.length - 1] : null
       const nextMode = nextTop?.displayMode
 
       const prevFull = prevMode === 'fullscreen'
@@ -396,9 +395,9 @@ export function useReplController(props: REPLProps) {
     })
   }, [dismissToolView, openToolView])
 
-  const openTodosScreen = useCallback(() => {
+  const openWorkTasksScreen = useCallback(() => {
     openToolView({
-      jsx: <TodosScreen agentId="main" onDone={dismissToolView} />,
+      jsx: <WorkTasksScreen onDone={dismissToolView} />,
       shouldHidePromptInput: true,
       displayMode: 'fullscreen',
     })
@@ -551,7 +550,7 @@ export function useReplController(props: REPLProps) {
       if (hasModal) return
 
       if (key.ctrl && inputChar === 't') {
-        openTodosScreen()
+        openWorkTasksScreen()
         return true
       }
 

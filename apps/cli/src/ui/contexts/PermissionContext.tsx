@@ -35,6 +35,49 @@ import {
 } from '#core/utils/planMode'
 import { getGlobalConfig, saveGlobalConfig } from '#core/utils/config'
 import { __applyPermissionModeSideEffectsForTests } from './permissionModeSideEffects'
+import { LEGACY_ENV } from '#core/compat/legacyEnv'
+
+const PLAN_MODE_REQUIRED_VALUES = new Set([
+  '1',
+  'true',
+  'yes',
+  'y',
+  'on',
+  'enable',
+  'enabled',
+])
+
+const planModeRequiredAppliedByConversationKey = new Set<string>()
+
+function isPlanModeRequired(): boolean {
+  const raw =
+    process.env.KODE_PLAN_MODE_REQUIRED ??
+    process.env[LEGACY_ENV.codePlanModeRequired]
+  if (!raw) return false
+  return PLAN_MODE_REQUIRED_VALUES.has(raw.trim().toLowerCase())
+}
+
+function getToolPermissionContextWithPlanModeRequired(args: {
+  conversationKey: string
+  isBypassPermissionsModeAvailable: boolean
+}): IToolPermissionContext {
+  const toolCtx = getToolPermissionContextForConversationKey({
+    conversationKey: args.conversationKey,
+    isBypassPermissionsModeAvailable: args.isBypassPermissionsModeAvailable,
+  })
+
+  if (!isPlanModeRequired()) return toolCtx
+  if (planModeRequiredAppliedByConversationKey.has(args.conversationKey))
+    return toolCtx
+  planModeRequiredAppliedByConversationKey.add(args.conversationKey)
+
+  if (toolCtx.mode === 'plan') return toolCtx
+  return applyToolPermissionContextUpdateForConversationKey({
+    conversationKey: args.conversationKey,
+    isBypassPermissionsModeAvailable: args.isBypassPermissionsModeAvailable,
+    update: { type: 'setMode', mode: 'plan', destination: 'session' },
+  })
+}
 
 interface PermissionContextValue {
   permissionContext: IPermissionContext
@@ -67,14 +110,14 @@ export function PermissionProvider({
 }: PermissionProviderProps) {
   const [toolPermissionContext, setToolPermissionContext] =
     useState<IToolPermissionContext>(() =>
-      getToolPermissionContextForConversationKey({
+      getToolPermissionContextWithPlanModeRequired({
         conversationKey,
         isBypassPermissionsModeAvailable,
       }),
     )
   const [permissionContext, setPermissionContext] =
     useState<IPermissionContext>(() => {
-      const initialMode = getToolPermissionContextForConversationKey({
+      const initialMode = getToolPermissionContextWithPlanModeRequired({
         conversationKey,
         isBypassPermissionsModeAvailable,
       }).mode
@@ -101,7 +144,7 @@ export function PermissionProvider({
   }, [toolPermissionContext])
 
   useEffect(() => {
-    const toolCtx = getToolPermissionContextForConversationKey({
+    const toolCtx = getToolPermissionContextWithPlanModeRequired({
       conversationKey,
       isBypassPermissionsModeAvailable,
     })
@@ -144,10 +187,37 @@ export function PermissionProvider({
     })
   }, [conversationKey])
 
+  const planModeSyncRef = useRef<{
+    conversationKey: string
+    mode: PermissionMode
+  } | null>(null)
+
   useEffect(() => {
     setActivePlanConversationKey(conversationKey)
-    if (permissionContext.mode === 'plan') {
-    enterPlanModeForConversationKey(conversationKey)
+
+    const previous = planModeSyncRef.current
+    if (!previous || previous.conversationKey !== conversationKey) {
+      planModeSyncRef.current = {
+        conversationKey,
+        mode: permissionContext.mode,
+      }
+      if (permissionContext.mode === 'plan') {
+        enterPlanModeForConversationKey(conversationKey)
+      }
+      return
+    }
+
+    if (previous.mode === permissionContext.mode) return
+
+    if (previous.mode !== 'plan' && permissionContext.mode === 'plan') {
+      enterPlanModeForConversationKey(conversationKey)
+    } else if (previous.mode === 'plan' && permissionContext.mode !== 'plan') {
+      exitPlanModeForConversationKey(conversationKey)
+    }
+
+    planModeSyncRef.current = {
+      conversationKey,
+      mode: permissionContext.mode,
     }
   }, [conversationKey, permissionContext.mode])
 

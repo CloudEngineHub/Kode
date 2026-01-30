@@ -49,7 +49,7 @@ describe('Tool registry', () => {
       expect(toolNames).toContain('EnterPlanMode')
       expect(toolNames).toContain('ExitPlanMode')
       expect(toolNames).toContain('TaskOutput')
-      expect(toolNames).toContain('KillShell')
+      expect(toolNames).toContain('TaskStop')
     } finally {
       rmSync(configDir, { recursive: true, force: true })
     }

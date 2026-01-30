@@ -89,6 +89,7 @@ export type ProjectConfig = {
   enableArchitectTool?: boolean
   mcpContextUris: string[]
   mcpServers?: Record<string, McpServerConfig>
+  disabledMcpServers?: string[]
   approvedMcprcServers?: string[]
   rejectedMcprcServers?: string[]
   lastAPIDuration?: number
@@ -112,6 +113,7 @@ export const DEFAULT_PROJECT_CONFIG: ProjectConfig = {
   enableArchitectTool: false,
   mcpContextUris: [],
   mcpServers: {},
+  disabledMcpServers: [],
   approvedMcprcServers: [],
   rejectedMcprcServers: [],
   hasTrustDialogAccepted: false,
@@ -221,6 +223,7 @@ export type GlobalConfig = {
   lastOnboardingVersion?: string
   lastReleaseNotesSeen?: string
   mcpServers?: Record<string, McpServerConfig>
+  disabledMcpServers?: string[]
   preferredNotifChannel: NotificationChannel
   verbose: boolean
   useAlternateBuffer?: boolean
@@ -254,6 +257,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfig = {
   incrementalRendering: true,
   wipeScrollbackOnClear: false,
   primaryProvider: 'anthropic',
+  disabledMcpServers: [],
   customApiKeyResponses: {
     approved: [],
     rejected: [],

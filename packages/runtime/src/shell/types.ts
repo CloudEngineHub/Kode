@@ -130,6 +130,7 @@ export type BackgroundProcess = {
   completionStatusSentInAttachment: boolean
   notified: boolean
   startedAt: number
+  completedAt?: number
   timeoutAt: number
   process: ChildProcess
   abortController: AbortController

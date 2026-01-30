@@ -16,6 +16,7 @@ export {
 
 export {
   getSessionStartAdditionalContext,
+  runPreCompactHooks,
   runSessionEndHooks,
   runStopHooks,
   runUserPromptSubmitHooks,

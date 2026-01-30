@@ -11,9 +11,9 @@ export type Tool = {
 export const TOOL_CATEGORIES = {
   read: ['Read', 'LS', 'Glob', 'Grep'],
   edit: ['Edit', 'Write', 'NotebookEdit'],
-  execution: ['Bash', 'TaskOutput', 'KillShell'],
+  execution: ['Bash', 'TaskOutput', 'TaskStop'],
   web: ['WebFetch', 'WebSearch'],
-  other: ['TodoWrite', 'AskUserQuestion'],
+  other: ['TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet', 'AskUserQuestion'],
 } as const
 
 function getCoreTools(): Tool[] {
@@ -24,13 +24,16 @@ function getCoreTools(): Tool[] {
     { name: 'NotebookEdit', description: 'Edit Jupyter notebooks' },
     { name: 'Bash', description: 'Execute bash commands' },
     { name: 'TaskOutput', description: 'Read background task output' },
-    { name: 'KillShell', description: 'Stop a running background task' },
+    { name: 'TaskStop', description: 'Stop a running background task' },
     { name: 'Glob', description: 'Find files matching patterns' },
     { name: 'Grep', description: 'Search file contents' },
     { name: 'LS', description: 'List directory contents' },
     { name: 'WebFetch', description: 'Fetch web content' },
     { name: 'WebSearch', description: 'Search the web' },
-    { name: 'TodoWrite', description: 'Manage task lists' },
+    { name: 'TaskCreate', description: 'Create a task' },
+    { name: 'TaskUpdate', description: 'Update task status and fields' },
+    { name: 'TaskList', description: 'List tasks' },
+    { name: 'TaskGet', description: 'Get a task by ID' },
     { name: 'AskUserQuestion', description: 'Ask the user a question' },
   ]
 

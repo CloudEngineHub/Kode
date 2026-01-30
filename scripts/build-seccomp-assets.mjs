@@ -38,8 +38,7 @@ function detectArch() {
 }
 
 function main() {
-  const outRoot =
-    getFlagValue('--out-root') ?? path.join('vendor', 'seccomp')
+  const outRoot = getFlagValue('--out-root') ?? path.join('vendor', 'seccomp')
   const requireBuild = hasFlag('--require')
 
   if (process.platform !== 'linux') {
@@ -73,10 +72,24 @@ function main() {
   const outBpf = path.join(tmpDir, 'unix-block.bpf')
 
   try {
-    runOrThrow(cc, ['-O2', '-Wall', '-Werror', '-o', genBin, 'scripts/seccomp/gen-unix-block-bpf.c'])
+    runOrThrow(cc, [
+      '-O2',
+      '-Wall',
+      '-Werror',
+      '-o',
+      genBin,
+      'scripts/seccomp/gen-unix-block-bpf.c',
+    ])
     runOrThrow(genBin, [outBpf])
 
-    runOrThrow(cc, ['-O2', '-Wall', '-Werror', '-o', applyBin, 'scripts/seccomp/apply-seccomp.c'])
+    runOrThrow(cc, [
+      '-O2',
+      '-Wall',
+      '-Werror',
+      '-o',
+      applyBin,
+      'scripts/seccomp/apply-seccomp.c',
+    ])
 
     fs.copyFileSync(applyBin, path.join(outDir, 'apply-seccomp'))
     fs.copyFileSync(outBpf, path.join(outDir, 'unix-block.bpf'))
@@ -100,4 +113,3 @@ function main() {
 }
 
 main()
-

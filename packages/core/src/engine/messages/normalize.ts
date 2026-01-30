@@ -120,8 +120,7 @@ export function normalizeMessages(messages: Message[]): NormalizedMessage[] {
           ...message.message,
           content: [block],
         },
-        costUSD:
-          (message as AssistantMessage).costUSD / contentBlocks.length,
+        costUSD: (message as AssistantMessage).costUSD / contentBlocks.length,
         durationMs: (message as AssistantMessage).durationMs,
       } as NormalizedMessage
     })

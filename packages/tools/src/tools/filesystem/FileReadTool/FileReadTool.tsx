@@ -6,10 +6,15 @@ import * as React from 'react'
 import { z } from 'zod'
 import type { Tool } from '#core/tooling/Tool'
 import { getCwd } from '#core/utils/state'
+import { getOriginalCwd } from '#core/utils/state'
 import { findSimilarFile, normalizeFilePath } from '#core/utils/file'
 import { getTheme } from '#core/utils/theme'
 import { getKodeBaseDir } from '#core/utils/env'
 import { LEGACY_ENV } from '#config/compat/legacyEnv'
+import {
+  getTaskOutputsStoreDir,
+  getTaskOutputsUserFacingDir,
+} from '#runtime/taskOutputStore'
 import { DESCRIPTION, getPrompt } from './prompt'
 import { hasReadPermission } from '#core/utils/permissions/filesystem'
 import { secureFileService } from '#core/utils/secureFile'
@@ -34,7 +39,7 @@ function isPosixPathWithinDir(posixPath: string, dirPosix: string): boolean {
 }
 
 function getProjectKeyFromCwd(): string {
-  return getCwd().replace(/[^a-zA-Z0-9]/g, '-')
+  return getOriginalCwd().replace(/[^a-zA-Z0-9]/g, '-')
 }
 
 function getLegacyTmpBaseDir(): string {
@@ -49,15 +54,23 @@ function getLegacyTmpBaseDir(): string {
   return '/tmp'
 }
 
+function getLegacyClaudeTmpDir(): string {
+  const override = process.env[LEGACY_ENV.tmpDir]
+  if (typeof override === 'string') {
+    const trimmed = override.trim().replace(/[\\/]+$/, '')
+    if (trimmed) return trimmed
+  }
+  return path.join(getLegacyTmpBaseDir(), 'claude')
+}
+
 function extractTaskOutputIdFromPath(filePath: string): string | null {
   const posix = toPosixPath(normalizeFilePath(filePath))
   const projectKey = getProjectKeyFromCwd()
 
   const tasksDirs = [
-    toPosixPath(path.join(getKodeBaseDir(), projectKey, 'tasks')),
-    toPosixPath(
-      path.join(getLegacyTmpBaseDir(), 'claude', projectKey, 'tasks'),
-    ),
+    toPosixPath(getTaskOutputsStoreDir()),
+    toPosixPath(getTaskOutputsUserFacingDir()),
+    toPosixPath(path.join(getLegacyClaudeTmpDir(), projectKey, 'tasks')),
   ]
 
   for (const tasksDir of tasksDirs) {

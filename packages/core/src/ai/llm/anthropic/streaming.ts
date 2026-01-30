@@ -1,7 +1,11 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import type { AnthropicBedrock } from '@anthropic-ai/bedrock-sdk'
 import type { AnthropicVertex } from '@anthropic-ai/vertex-sdk'
-import { setRequestStatus, setRequestInputTokens, updateRequestTokens } from '#core/utils/requestStatus'
+import {
+  setRequestStatus,
+  setRequestInputTokens,
+  updateRequestTokens,
+} from '#core/utils/requestStatus'
 import { debug as debugLogger } from '#core/utils/debugLogger'
 import { parseToolUsePartialJsonOrThrow } from '#core/utils/toolUsePartialJson'
 

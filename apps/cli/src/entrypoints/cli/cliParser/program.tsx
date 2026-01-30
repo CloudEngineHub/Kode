@@ -169,6 +169,12 @@ export function createCliProgram(
       'Permission mode to use for the session (choices: "acceptEdits", "bypassPermissions", "default", "delegate", "dontAsk", "plan")',
       String,
     )
+    .addOption(
+      new Option(
+        '--plan-mode-required',
+        'Require plan mode before implementation',
+      ).hideHelp(),
+    )
     .option(
       '--permission-prompt-tool <tool>',
       'Permission prompt tool (only works with --print, --output-format=stream-json, and --input-format=stream-json): "stdio"',

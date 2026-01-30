@@ -81,6 +81,11 @@ export type AssistantMessage = {
   type: 'assistant'
   uuid: UUID
   isApiErrorMessage?: boolean
+  /**
+   * Synthetic/meta messages (not user/assistant conversational content).
+   * These should be excluded from API payloads.
+   */
+  isMeta?: boolean
   requestId?: string
   responseId?: string // For GPT-5 Responses API state management
 }

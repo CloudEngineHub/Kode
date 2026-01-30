@@ -1,18 +1,16 @@
-import { memoize, pickBy } from 'lodash-es'
+import { memoize } from 'lodash-es'
 import type { ServerCapabilities } from '@modelcontextprotocol/sdk/types.js'
+import { UnauthorizedError } from '@modelcontextprotocol/sdk/client/auth.js'
 
 import type { McpServerConfig } from '#core/utils/config'
-import {
-  getCurrentProjectConfig,
-  getGlobalConfig,
-  getProjectMcpServerDefinitions,
-} from '#core/utils/config'
+import { getCurrentProjectConfig, getGlobalConfig } from '#core/utils/config'
 import { getCwd } from '#core/utils/state'
 import { logMCPError } from '#core/utils/log'
 
 import {
   getMcprcServerStatus,
-  listPluginMCPServers,
+  getMcpServer,
+  listMCPServers,
   parseMcpServersFromCliConfigEntries,
 } from './config'
 import { connectToServer } from './connection'
@@ -30,22 +28,30 @@ export const getClients = memoize(async (): Promise<WrappedClient[]> => {
     return clientsOverrideForTests
   }
 
-  const pluginServers = listPluginMCPServers()
-  const globalServers = getGlobalConfig().mcpServers ?? {}
-  const projectFileServers = getProjectMcpServerDefinitions().servers
-  const projectServers = getCurrentProjectConfig().mcpServers ?? {}
-
-  const approvedProjectFileServers = pickBy(
-    projectFileServers,
-    (_, name) => getMcprcServerStatus(name) === 'approved',
-  )
-
-  const allServers: Record<string, McpServerConfig> = {
-    ...pluginServers,
-    ...globalServers,
-    ...approvedProjectFileServers,
-    ...projectServers,
+  const allServersRaw: Record<string, McpServerConfig> = {
+    ...(listMCPServers() ?? {}),
   }
+
+  const globalConfig = getGlobalConfig()
+  const projectConfig = getCurrentProjectConfig()
+
+  const disabledServers = new Set<string>([
+    ...(globalConfig.disabledMcpServers ?? []),
+    ...(projectConfig.disabledMcpServers ?? []),
+  ])
+
+  const allServers: Record<string, McpServerConfig> = Object.fromEntries(
+    Object.entries(allServersRaw).filter(([name]) => {
+      if (disabledServers.has(name)) return false
+      if (name.startsWith('plugin_')) return true
+
+      const scoped = getMcpServer(name)
+      if (scoped?.scope === 'mcpjson' || scoped?.scope === 'mcprc') {
+        return getMcprcServerStatus(name) === 'approved'
+      }
+      return true
+    }),
+  )
 
   const batchSize = getMcpServerConnectionBatchSize()
   const entries = Object.entries(allServers)
@@ -65,6 +71,10 @@ export const getClients = memoize(async (): Promise<WrappedClient[]> => {
           }
           return { name, client, capabilities, type: 'connected' as const }
         } catch (error) {
+          if (error instanceof UnauthorizedError) {
+            logMCPError(name, 'Connection failed: authentication required')
+            return { name, type: 'needs-auth' as const }
+          }
           logMCPError(
             name,
             `Connection failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -105,32 +115,39 @@ export async function getClientsForCliMcpConfig(options: {
     projectDir,
   })
 
-  const pluginServers = strict ? {} : listPluginMCPServers()
-  const globalServers = strict ? {} : (getGlobalConfig().mcpServers ?? {})
-  const projectFileServers = strict
-    ? {}
-    : getProjectMcpServerDefinitions().servers
-  const projectServers = strict
-    ? {}
-    : (getCurrentProjectConfig().mcpServers ?? {})
+  const cliServerNames = new Set(Object.keys(cliServers))
 
-  const approvedProjectFileServers = strict
+  const baseServers: Record<string, McpServerConfig> = strict
     ? {}
-    : pickBy(
-        projectFileServers,
-        (_, name) => getMcprcServerStatus(name) === 'approved',
-      )
+    : listMCPServers()
+
+  const globalConfig = strict ? null : getGlobalConfig()
+  const projectConfig = strict ? null : getCurrentProjectConfig()
+
+  const disabledServers = strict
+    ? new Set<string>()
+    : new Set<string>([
+        ...((globalConfig?.disabledMcpServers ?? []) as string[]),
+        ...((projectConfig?.disabledMcpServers ?? []) as string[]),
+      ])
 
   const allServers: Record<string, McpServerConfig> = {
-    ...(pluginServers ?? {}),
-    ...(globalServers ?? {}),
-    ...(approvedProjectFileServers ?? {}),
-    ...(projectServers ?? {}),
+    ...(baseServers ?? {}),
     ...(cliServers ?? {}),
   }
 
   const batchSize = getMcpServerConnectionBatchSize()
-  const entriesToConnect = Object.entries(allServers)
+  const entriesToConnect = Object.entries(allServers).filter(([name]) => {
+    if (disabledServers.has(name)) return false
+    if (cliServerNames.has(name)) return true
+    if (name.startsWith('plugin_')) return true
+
+    const scoped = getMcpServer(name)
+    if (scoped?.scope === 'mcpjson' || scoped?.scope === 'mcprc') {
+      return getMcprcServerStatus(name) === 'approved'
+    }
+    return true
+  })
   const results: WrappedClient[] = []
 
   for (let i = 0; i < entriesToConnect.length; i += batchSize) {
@@ -147,6 +164,10 @@ export async function getClientsForCliMcpConfig(options: {
           }
           return { name, client, capabilities, type: 'connected' as const }
         } catch (error) {
+          if (error instanceof UnauthorizedError) {
+            logMCPError(name, 'Connection failed: authentication required')
+            return { name, type: 'needs-auth' as const }
+          }
           logMCPError(
             name,
             `Connection failed: ${error instanceof Error ? error.message : String(error)}`,

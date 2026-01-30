@@ -225,7 +225,13 @@ export function useTextInput({
       sequence === '\x1b[13;2~'
 
     // Also support Ctrl+Enter on Windows (key.ctrl with return)
-    if (key.shift || key.meta || key.ctrl || optionPressed || modifierEnterSequence) {
+    if (
+      key.shift ||
+      key.meta ||
+      key.ctrl ||
+      optionPressed ||
+      modifierEnterSequence
+    ) {
       return getCursor().insert('\n')
     }
 
@@ -256,7 +262,9 @@ export function useTextInput({
       return getCursor()
     }
     const currentCursor = getCursor()
-    const { line } = currentCursor.measuredText.getPositionFromOffset(currentCursor.offset)
+    const { line } = currentCursor.measuredText.getPositionFromOffset(
+      currentCursor.offset,
+    )
 
     // If on first line, navigate history instead of moving cursor
     if (line === 0) {
@@ -274,7 +282,9 @@ export function useTextInput({
       return getCursor()
     }
     const currentCursor = getCursor()
-    const { line } = currentCursor.measuredText.getPositionFromOffset(currentCursor.offset)
+    const { line } = currentCursor.measuredText.getPositionFromOffset(
+      currentCursor.offset,
+    )
     const lastLine = currentCursor.measuredText.lineCount - 1
 
     // If on last line, navigate history instead of moving cursor

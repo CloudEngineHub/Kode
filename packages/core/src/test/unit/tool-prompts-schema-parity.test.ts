@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { BashTool } from '#tools/tools/system/BashTool/BashTool'
 import { TaskOutputTool } from '#tools/tools/system/TaskOutputTool/TaskOutputTool'
-import { KillShellTool } from '#tools/tools/system/KillShellTool/KillShellTool'
+import { TaskStopTool } from '#tools/tools/system/TaskStopTool/TaskStopTool'
 import { TodoWriteTool } from '#tools/tools/interaction/TodoWriteTool/TodoWriteTool'
 import { WebFetchTool } from '#tools/tools/network/WebFetchTool/WebFetchTool'
 
@@ -70,9 +70,9 @@ describe('Tool prompt/description/schema parity', () => {
     expect(prompt).toContain('Task IDs can be found using the /tasks command')
   })
 
-  test('KillShellTool prompt matches reference wording', async () => {
-    const prompt = await KillShellTool.prompt()
-    expect(prompt).toContain('Shell IDs can be found using the /tasks command')
+  test('TaskStopTool prompt matches reference wording', async () => {
+    const prompt = await TaskStopTool.prompt()
+    expect(prompt).toContain('Task IDs can be found using the /tasks command')
   })
 
   test('TodoWriteTool description matches reference wording', async () => {

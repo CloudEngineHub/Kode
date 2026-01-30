@@ -1,6 +1,20 @@
 import path from 'node:path'
 import { LEGACY_ENV } from '#config/compat/legacyEnv'
 
+function normalizeTmpDir(raw: string): string {
+  return raw.trim().replace(/[\\/]+$/, '')
+}
+
+function mapLegacyTmpDirToKodeDir(raw: string): string {
+  const normalized = normalizeTmpDir(raw)
+  if (!normalized) return normalized
+
+  const base = path.basename(normalized)
+  if (base === 'claude') return path.join(path.dirname(normalized), 'kode')
+  if (base === 'kode') return normalized
+  return path.join(normalized, 'kode')
+}
+
 export function resolveSandboxTmpDir(options?: {
   platform?: NodeJS.Platform
 }): string {
@@ -8,12 +22,17 @@ export function resolveSandboxTmpDir(options?: {
 
   const explicitKodeTmpDir = process.env.KODE_TMPDIR
   if (typeof explicitKodeTmpDir === 'string' && explicitKodeTmpDir.trim()) {
-    return explicitKodeTmpDir.trim()
+    return normalizeTmpDir(explicitKodeTmpDir)
+  }
+
+  const legacyTmpDir = process.env[LEGACY_ENV.tmpDir]
+  if (typeof legacyTmpDir === 'string' && legacyTmpDir.trim()) {
+    return mapLegacyTmpDirToKodeDir(legacyTmpDir)
   }
 
   const legacyTmpBase = process.env[LEGACY_ENV.codeTmpDir]
   if (typeof legacyTmpBase === 'string' && legacyTmpBase.trim()) {
-    return path.join(legacyTmpBase.trim(), 'claude')
+    return mapLegacyTmpDirToKodeDir(legacyTmpBase)
   }
 
   if (platform === 'win32') {

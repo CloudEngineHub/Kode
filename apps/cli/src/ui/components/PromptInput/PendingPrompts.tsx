@@ -21,7 +21,10 @@ export function __getPendingPromptLinesForTests(args: {
   if (safeWidth < 8) return []
   if (args.pendingPrompts.length === 0) return []
 
-  const hiddenEarlierCount = Math.max(0, args.pendingPrompts.length - maxMessages)
+  const hiddenEarlierCount = Math.max(
+    0,
+    args.pendingPrompts.length - maxMessages,
+  )
   const visiblePrompts =
     hiddenEarlierCount > 0
       ? args.pendingPrompts.slice(-maxMessages)
@@ -83,4 +86,3 @@ export function PendingPrompts({
     </Box>
   )
 }
-

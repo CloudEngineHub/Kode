@@ -45,7 +45,8 @@ const BASH_GATE_RULES: BashGateRule[] = [
     category: 'git',
     title: 'git clean -fd deletes untracked files permanently',
     tokens: ['git', 'clean'],
-    validate: ctx => ctx.flags.has('-f') || ctx.args.some(a => /^-[a-z]*f/i.test(a)),
+    validate: ctx =>
+      ctx.flags.has('-f') || ctx.args.some(a => /^-[a-z]*f/i.test(a)),
   },
   {
     id: 'GIT_PUSH_FORCE',
@@ -183,7 +184,8 @@ function isNonExecutableSubcommand(tokens: string[]): boolean {
   // Skip echo/printf (just printing strings)
   if (first === 'echo' || first === 'printf') return true
   // Skip grep/cat/head/tail (just reading)
-  if (['grep', 'cat', 'head', 'tail', 'less', 'more'].includes(first ?? '')) return true
+  if (['grep', 'cat', 'head', 'tail', 'less', 'more'].includes(first ?? ''))
+    return true
   return false
 }
 
@@ -266,16 +268,22 @@ function matchTokenSequence(actual: string[], required: string[]): boolean {
 // rm Critical Target Detection (special handling)
 // ============================================
 
-function isCriticalRmTarget(args: string[]): { isCritical: boolean; target?: string } {
+function isCriticalRmTarget(args: string[]): {
+  isCritical: boolean
+  target?: string
+} {
   const criticalPatterns = [
-    { pattern: /^\/$/,  label: '/' },
+    { pattern: /^\/$/, label: '/' },
     { pattern: /^~\/?$/, label: '~' },
     { pattern: /^\.\/?$/, label: '.' },
     { pattern: /^\.\.\/?$/, label: '..' },
     // Only match direct system directories, not subdirectories
     // /etc is critical, /etc/nginx is not as critical
     // /var is critical, /var/folders/... (macOS tmp) is safe
-    { pattern: /^\/(etc|bin|sbin|usr|lib|boot|root)\/?$/, label: 'system directory' },
+    {
+      pattern: /^\/(etc|bin|sbin|usr|lib|boot|root)\/?$/,
+      label: 'system directory',
+    },
   ]
 
   for (const arg of args) {

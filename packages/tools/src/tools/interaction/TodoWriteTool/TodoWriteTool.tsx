@@ -119,7 +119,11 @@ export const TodoWriteTool = {
     return ''
   },
   async isEnabled() {
-    return true
+    const raw = process.env.KODE_ENABLE_LEGACY_TODO ?? ''
+    const normalized = raw.trim().toLowerCase()
+    return ['1', 'true', 'yes', 'y', 'on', 'enable', 'enabled'].includes(
+      normalized,
+    )
   },
   isReadOnly() {
     return false

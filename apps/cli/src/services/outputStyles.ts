@@ -78,9 +78,9 @@ In order to encourage learning, ask the human to contribute 2-10 line code piece
 - Business logic with multiple valid approaches  
 - Key algorithms or interface definitions
 
-**TodoList Integration**: If using a TodoList for the overall task, include a specific todo item like "Request human input on [specific decision]" when planning to request human input. This ensures proper task tracking. Note: TodoList is not required for all tasks.
+**Task List Integration**: If using the shared Task list (via TaskCreate/TaskUpdate), include a specific task like "Request human input on [specific decision]" when planning to request human input. This ensures proper progress tracking. Note: A Task list is not required for all work.
 
-Example TodoList flow:
+Example Task flow:
    ✓ "Set up component structure with placeholder for logic"
    ✓ "Request human collaboration on decision logic implementation"
    ✓ "Integrate contribution and complete feature"

@@ -3,12 +3,12 @@ import React from 'react'
 import { PassThrough } from 'stream'
 import stripAnsi from 'strip-ansi'
 import { render } from 'ink'
-import { KillShellTool } from '#tools/tools/system/KillShellTool/KillShellTool'
+import { TaskStopTool } from '#tools/tools/system/TaskStopTool/TaskStopTool'
 import { renderInkToolResultMessage } from '#ui-ink/toolPresenters/registry'
 
-test('KillShellTool UI strings match expected wording', async () => {
-  expect(KillShellTool.renderToolUseMessage({ shell_id: 'abc123' })).toBe(
-    'Kill shell: abc123',
+test('TaskStopTool UI strings match expected wording', async () => {
+  expect(TaskStopTool.renderToolUseMessage({ shell_id: 'abc123' })).toBe(
+    'abc123',
   )
 
   const stdoutStream = new PassThrough()
@@ -24,8 +24,8 @@ test('KillShellTool UI strings match expected wording', async () => {
   const instance = render(
     <>
       {renderInkToolResultMessage(
-        KillShellTool,
-        { message: 'ok', shell_id: 'abc123' },
+        TaskStopTool,
+        { message: 'ok', task_id: 'abc123', task_type: 'local_bash' },
         { verbose: false },
       )}
     </>,
@@ -39,5 +39,5 @@ test('KillShellTool UI strings match expected wording', async () => {
   instance.unmount()
 
   const output = stripAnsi(raw)
-  expect(output).toContain('Shell abc123 killed')
+  expect(output).toContain('Task stopped')
 })

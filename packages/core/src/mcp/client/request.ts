@@ -29,7 +29,7 @@ export async function requestAll<
   const clients = await getClients()
   const results = await Promise.allSettled(
     clients.map(async client => {
-      if (client.type === 'failed') return null
+      if (client.type !== 'connected') return null
 
       let timeoutSignal: TimeoutSignal | null = null
       let mergedSignal: TimeoutSignal | null = null

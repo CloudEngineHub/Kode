@@ -35,6 +35,9 @@ const CANONICAL_TOOL_ALIASES: ToolNameAliasGroups = {
     'TaskOutputTool',
   ],
 
+  // Upstream uses TaskStop with KillShell as a legacy alias.
+  TaskStop: ['KillShell'],
+
   // Legacy client tool surfaces use lowerCamelCase for these MCP helpers.
   // Kode keeps canonical ids but accepts legacy names as aliases.
   ListMcpResourcesTool: ['listMcpResources'],

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
-import { setCwd } from '#core/utils/state'
+import { setCwd, setOriginalCwd } from '#core/utils/state'
 import { FileReadTool } from '#tools/tools/filesystem/FileReadTool/FileReadTool'
 
 function sanitizeProjectKey(cwd: string): string {
@@ -17,10 +17,12 @@ describe('FileReadTool userFacingName parity', () => {
   let projectDir: string
   let tmpClaude: string
   let previousKodeConfigDir: string | undefined
+  let previousClaudeTmpDir: string | undefined
   let previousClaudeTmp: string | undefined
 
   beforeEach(async () => {
     previousKodeConfigDir = process.env.KODE_CONFIG_DIR
+    previousClaudeTmpDir = process.env.CLAUDE_TMPDIR
     previousClaudeTmp = process.env.CLAUDE_CODE_TMPDIR
 
     configDir = mkdtempSync(join(tmpdir(), 'kode-read-name-config-'))
@@ -28,16 +30,24 @@ describe('FileReadTool userFacingName parity', () => {
     tmpClaude = mkdtempSync(join(tmpdir(), 'kode-read-name-tmp-'))
 
     process.env.KODE_CONFIG_DIR = configDir
+    delete process.env.CLAUDE_TMPDIR
     process.env.CLAUDE_CODE_TMPDIR = tmpClaude
+    setOriginalCwd(projectDir)
     await setCwd(projectDir)
   })
 
   afterEach(async () => {
     await setCwd(runnerCwd)
+    setOriginalCwd(runnerCwd)
     if (previousKodeConfigDir === undefined) {
       delete process.env.KODE_CONFIG_DIR
     } else {
       process.env.KODE_CONFIG_DIR = previousKodeConfigDir
+    }
+    if (previousClaudeTmpDir === undefined) {
+      delete process.env.CLAUDE_TMPDIR
+    } else {
+      process.env.CLAUDE_TMPDIR = previousClaudeTmpDir
     }
     if (previousClaudeTmp === undefined) {
       delete process.env.CLAUDE_CODE_TMPDIR

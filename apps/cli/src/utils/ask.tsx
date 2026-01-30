@@ -33,8 +33,12 @@ type Props = {
 }
 
 type AskDeps = Partial<{
-  getContext: (...args: Parameters<typeof getContext>) => ReturnType<typeof getContext>
-  getTotalCost: (...args: Parameters<typeof getTotalCost>) => ReturnType<typeof getTotalCost>
+  getContext: (
+    ...args: Parameters<typeof getContext>
+  ) => ReturnType<typeof getContext>
+  getTotalCost: (
+    ...args: Parameters<typeof getTotalCost>
+  ) => ReturnType<typeof getTotalCost>
   query: (...args: Parameters<typeof query>) => ReturnType<typeof query>
   buildSystemPromptForSession: (
     ...args: Parameters<typeof buildSystemPromptForSession>
@@ -43,7 +47,9 @@ type AskDeps = Partial<{
   getMessagesPath: (
     ...args: Parameters<typeof getMessagesPath>
   ) => ReturnType<typeof getMessagesPath>
-  overwriteLog: (...args: Parameters<typeof overwriteLog>) => ReturnType<typeof overwriteLog>
+  overwriteLog: (
+    ...args: Parameters<typeof overwriteLog>
+  ) => ReturnType<typeof overwriteLog>
   createUserMessage: (
     ...args: Parameters<typeof createUserMessage>
   ) => ReturnType<typeof createUserMessage>
@@ -58,24 +64,27 @@ type AskDeps = Partial<{
 // Sends a single prompt to the Anthropic Messages API and returns the response.
 // Assumes the CLI is being used non-interactively: it will not ask the user
 // for permissions or further input.
-export async function ask({
-  commands,
-  safeMode,
-  hasPermissionsToUseTool,
-  messageLogName,
-  prompt,
-  cwd,
-  tools,
-  verbose = false,
-  disableSlashCommands,
-  systemPromptOverride,
-  appendSystemPrompt,
-  maxThinkingTokens,
-  maxTurns,
-  maxBudgetUsd,
-  initialMessages,
-  persistSession = true,
-}: Props, deps?: AskDeps): Promise<{
+export async function ask(
+  {
+    commands,
+    safeMode,
+    hasPermissionsToUseTool,
+    messageLogName,
+    prompt,
+    cwd,
+    tools,
+    verbose = false,
+    disableSlashCommands,
+    systemPromptOverride,
+    appendSystemPrompt,
+    maxThinkingTokens,
+    maxTurns,
+    maxBudgetUsd,
+    initialMessages,
+    persistSession = true,
+  }: Props,
+  deps?: AskDeps,
+): Promise<{
   resultText: string
   totalCost: number
   messageHistoryFile: string

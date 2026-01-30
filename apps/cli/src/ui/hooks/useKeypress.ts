@@ -12,9 +12,7 @@ export function useKeypress(
   const active = isActive !== false
 
   const handlerRef = useRef(onKeypress)
-  useEffect(() => {
-    handlerRef.current = onKeypress
-  }, [onKeypress])
+  handlerRef.current = onKeypress
 
   const stableHandler = useCallback((input: string, key: Key) => {
     return handlerRef.current(input, key)

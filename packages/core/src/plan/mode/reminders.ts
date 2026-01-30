@@ -1,5 +1,12 @@
 import { LEGACY_ENV } from '#core/compat/legacyEnv'
 
+const TRUTHY_VALUES = new Set(['1', 'true', 'yes', 'on'])
+
+function isTruthyEnv(value: unknown): boolean {
+  if (typeof value !== 'string') return false
+  return TRUTHY_VALUES.has(value.trim().toLowerCase())
+}
+
 function getMaxParallelExploreAgents(): number {
   const raw =
     process.env.KODE_PLAN_V2_EXPLORE_AGENT_COUNT ??
@@ -20,6 +27,13 @@ function getMaxParallelPlanAgents(): number {
     if (Number.isFinite(parsed) && parsed > 0 && parsed <= 10) return parsed
   }
   return 1
+}
+
+export function isPlanModeInterviewPhaseEnabled(): boolean {
+  return isTruthyEnv(
+    process.env.KODE_PLAN_MODE_INTERVIEW_PHASE ??
+      process.env[LEGACY_ENV.codePlanModeInterviewPhase],
+  )
 }
 
 export function buildPlanModeMainReminder(args: {
@@ -55,7 +69,7 @@ Goal: Gain a comprehensive understanding of the user's request by reading throug
    - Use 1 agent when the task is isolated to known files, the user provided specific file paths, or you're making a small targeted change.
    - Use multiple agents when: the scope is uncertain, multiple areas of the codebase are involved, or you need to understand existing patterns before planning.
    - Quality over quantity - ${maxParallelExploreAgents} agents maximum, but you should try to use the minimum number of agents necessary (usually just 1)
-   - If using multiple agents: Provide each agent with a specific search focus or area to explore. Example: One agent searches for existing implementations, another explores related components, a third investigates testing patterns
+   - If using multiple agents: Provide each agent with a specific search focus or area to explore. Example: One agent searches for existing implementations, another explores related components, a third investigating testing patterns
 
 3. After exploring the code, use the ${askUserToolName} tool to clarify ambiguities in the user request up front.
 
@@ -102,12 +116,94 @@ Goal: Write your final plan to the plan file (the only file you can edit).
 - Include only your recommended approach, not all alternatives
 - Ensure that the plan file is concise enough to scan quickly, but detailed enough to execute effectively
 - Include the paths of critical files to be modified
+- Include a verification section describing how to test the changes end-to-end (run the code, use MCP tools, run tests)
 
 ### Phase 5: Call ${exitPlanModeToolName}
 At the very end of your turn, once you have asked the user questions and are happy with your final plan file - you should always call ${exitPlanModeToolName} to indicate to the user that you are done planning.
-This is critical - your turn should only end with either asking the user a question or calling ${exitPlanModeToolName}. Do not stop unless it's for these 2 reasons.
+This is critical - your turn should only end with either using the ${askUserToolName} tool OR calling ${exitPlanModeToolName}. Do not stop unless it's for these 2 reasons
 
-NOTE: At any point in time through this workflow you should feel free to ask the user questions or clarifications. Don't make large assumptions about user intent. The goal is to present a well researched plan to the user, and tie any loose ends before implementation begins.`
+**Important:** Use ${askUserToolName} ONLY to clarify requirements or choose between approaches. Use ${exitPlanModeToolName} to request plan approval. Do NOT ask about plan approval in any other way - no text questions, no AskUserQuestion. Phrases like "Is this plan okay?", "Should I proceed?", "How does this plan look?", "Any changes before we start?", or similar MUST use ${exitPlanModeToolName}.
+
+NOTE: At any point in time through this workflow you should feel free to ask the user questions or clarifications using the ${askUserToolName} tool. Don't make large assumptions about user intent. The goal is to present a well researched plan to the user, and tie any loose ends before implementation begins.`
+}
+
+export function buildPlanModeMainInterviewReminder(args: {
+  planExists: boolean
+  planFilePath: string
+}): string {
+  const { planExists, planFilePath } = args
+
+  const writeToolName = 'Write'
+  const editToolName = 'Edit'
+  const askUserToolName = 'AskUserQuestion'
+  const exploreAgentType = 'Explore'
+  const exitPlanModeToolName = 'ExitPlanMode'
+
+  return `Plan mode is active. The user indicated that they do not want you to execute yet -- you MUST NOT make any edits (with the exception of the plan file mentioned below), run any non-readonly tools (including changing configs or making commits), or otherwise make any changes to the system. This supercedes any other instructions you have received.
+
+## Plan File Info:
+${planExists ? `A plan file already exists at ${planFilePath}. You can read it and make incremental edits using the ${editToolName} tool.` : `No plan file exists yet. You should create your plan at ${planFilePath} using the ${writeToolName} tool.`}
+
+## Iterative Planning Workflow
+
+Your goal is to build a comprehensive plan through iterative refinement and interviewing the user. Read files, interview and ask questions, and build the plan incrementally.
+
+### How to Work
+
+0. Write your plan in the plan file specified above. This is the ONLY file you are allowed to edit.
+
+1. **Explore the codebase**: Use Read, Glob, and Grep tools to understand the codebase.
+You have access to the ${exploreAgentType} agent type if you want to delegate search.
+Use this generously for particularly complex searches or to parallelize exploration.
+
+2. **Interview the user**: Use ${askUserToolName} to interview the user and ask questions that:
+   - Clarify ambiguous requirements
+   - Get user input on technical decisions and tradeoffs
+   - Understand preferences for UI/UX, performance, edge cases
+   - Validate your understanding before committing to an approach
+   Make sure to:
+   - Not ask any questions that you could find out yourself by exploring the codebase.
+   - Batch questions together when possible so you ask multiple questions at once
+   - DO NOT ask any questions that are obvious or that you believe you know the answer to.
+
+3. **Write to the plan file iteratively**: As you learn more, update the plan file:
+   - Start with your initial understanding of the requirements, leave in space to fill it out.
+   - Add sections as you explore and learn about the codebase
+   - Refine based on user answers to your questions
+   - The plan file is your working document - edit it as your understanding evolves
+
+4. **Interleave exploration, questions, and writing**: Don't wait until the end to write. After each discovery or clarification, update the plan file to capture what you've learned.
+
+5. **Adjust the level of detail to the task**: For a highly unspecified task like a new project or feature, you might need to ask many rounds of questions. Whereas for a smaller task you may need only some or a few.
+
+### Plan File Structure
+Your plan file should be divided into clear sections using markdown headers, based on the request. Fill out these sections as you go.
+- Include only your recommended approach, not all alternatives
+- Ensure that the plan file is concise enough to scan quickly, but detailed enough to execute effectively
+- Include the paths of critical files to be modified
+- Include a verification section describing how to test the changes end-to-end (run the code, use MCP tools, run tests)
+
+### Ending Your Turn
+
+Your turn should only end by either:
+- Using ${askUserToolName} to gather more information
+- Calling ${exitPlanModeToolName} when the plan is ready for approval
+
+**Important:** Use ${exitPlanModeToolName} to request plan approval. Do NOT ask about plan approval via text or AskUserQuestion.`
+}
+
+export function buildPlanModeSparseReminder(args: {
+  planFilePath: string
+  interviewPhaseEnabled: boolean
+}): string {
+  const askUserToolName = 'AskUserQuestion'
+  const exitPlanModeToolName = 'ExitPlanMode'
+
+  const workflowHint = args.interviewPhaseEnabled
+    ? 'Follow iterative workflow: explore codebase, interview user, write to plan incrementally.'
+    : 'Follow 5-phase workflow.'
+
+  return `Plan mode still active (see full instructions earlier in the conversation). Read-only except plan file (${args.planFilePath}). ${workflowHint} End turns with ${askUserToolName} (for clarifications) or ${exitPlanModeToolName} (for plan approval). Never ask about plan approval via text or AskUserQuestion.`
 }
 
 export function buildPlanModeSubAgentReminder(args: {
@@ -146,10 +242,13 @@ You are returning to plan mode after having previously exited it. A plan file ex
 Treat this as a fresh planning session. Do not assume the existing plan is relevant without evaluating it first.`
 }
 
-export function buildPlanModeExitReminder(planFilePath: string): string {
+export function buildPlanModeExitReminder(args: {
+  planFilePath: string
+  planExists: boolean
+}): string {
   return `## Exited Plan Mode
 
-You have exited plan mode. You can now make edits, run tools, and take actions. The plan file is located at ${planFilePath} if you need to reference it.`
+You have exited plan mode. You can now make edits, run tools, and take actions.${args.planExists ? ` The plan file is located at ${args.planFilePath} if you need to reference it.` : ''}`
 }
 
 export function wrapSystemReminder(text: string): string {

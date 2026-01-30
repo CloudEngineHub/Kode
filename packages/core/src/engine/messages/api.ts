@@ -19,6 +19,14 @@ export function normalizeMessagesForAPI(
     )
   }
 
+  function isSyntheticMetaMessage(message: Message): boolean {
+    return (
+      message.type === 'assistant' &&
+      message.isMeta === true &&
+      message.message.model === '<synthetic>'
+    )
+  }
+
   function normalizeUserContent(
     content: UserMessage['message']['content'],
   ): ContentBlockParam[] {
@@ -66,6 +74,7 @@ export function normalizeMessagesForAPI(
   for (const message of messages) {
     if (message.type === 'progress') continue
     if (isSyntheticApiErrorMessage(message)) continue
+    if (isSyntheticMetaMessage(message)) continue
 
     switch (message.type) {
       case 'user': {

@@ -10,6 +10,7 @@ import { PRODUCT_NAME } from '#core/constants/product'
 import { getPermissionMode } from '#core/utils/permissionModeState'
 import { normalizePermissionMode } from '#core/types/PermissionMode'
 import { isAbsolute, resolve } from 'path'
+import { resolveToolNameAlias } from '#core/utils/toolNameAliases'
 
 import {
   createDefaultToolPermissionContext,
@@ -61,7 +62,7 @@ function flattenPermissionRuleGroups(
     if (!Array.isArray(rules)) continue
     for (const rule of rules) {
       if (typeof rule !== 'string') continue
-      out.push(rule)
+      out.push(resolveToolNameAlias(rule).resolvedName)
     }
   }
   return out
@@ -160,15 +161,17 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
 
   const projectConfig = getCurrentProjectConfig()
   const toolPermissionContext = context.options?.toolPermissionContext
+  const normalizeToolRule = (rule: string) =>
+    resolveToolNameAlias(rule).resolvedName
   const allowedTools = toolPermissionContext
     ? flattenPermissionRuleGroups(toolPermissionContext.alwaysAllowRules)
-    : (projectConfig.allowedTools ?? [])
+    : (projectConfig.allowedTools ?? []).map(normalizeToolRule)
   const deniedTools = toolPermissionContext
     ? flattenPermissionRuleGroups(toolPermissionContext.alwaysDenyRules)
-    : (projectConfig.deniedTools ?? [])
+    : (projectConfig.deniedTools ?? []).map(normalizeToolRule)
   const askedTools = toolPermissionContext
     ? flattenPermissionRuleGroups(toolPermissionContext.alwaysAskRules)
-    : (projectConfig.askedTools ?? [])
+    : (projectConfig.askedTools ?? []).map(normalizeToolRule)
   const commandAllowedTools = Array.isArray(
     context.options?.commandAllowedTools,
   )

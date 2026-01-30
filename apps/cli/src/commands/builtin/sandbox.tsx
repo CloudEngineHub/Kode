@@ -112,9 +112,7 @@ const sandbox = {
   disableNonInteractive: true,
   async call(onDone, context, args) {
     if (!isSupportedPlatform(process.platform)) {
-      onDone(
-        `Error: Sandboxing is currently only supported on macOS and Linux`,
-      )
+      onDone(`Error: Sandboxing is currently only supported on macOS and Linux`)
       return null
     }
 

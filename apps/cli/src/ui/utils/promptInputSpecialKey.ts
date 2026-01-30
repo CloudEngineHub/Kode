@@ -24,7 +24,8 @@ export function getPromptInputSpecialKeyAction(args: {
   }
 
   const optionOrMeta = Boolean(args.key.meta) || Boolean(args.key.option)
-  const charCode = args.inputChar.length === 1 ? args.inputChar.charCodeAt(0) : -1
+  const charCode =
+    args.inputChar.length === 1 ? args.inputChar.charCodeAt(0) : -1
 
   if (
     args.inputChar === 'µ' ||

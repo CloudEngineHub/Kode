@@ -5,7 +5,6 @@ import { PassThrough } from 'stream'
 import stripAnsi from 'strip-ansi'
 import { KeypressProvider } from '#ui-ink/contexts/KeypressContext'
 import { PermissionProvider } from '#ui-ink/contexts/PermissionContext'
-import { EnterPlanModePermissionRequest } from '#ui-ink/components/permissions/PlanModePermissionRequest/EnterPlanModePermissionRequest'
 import { ExitPlanModePermissionRequest } from '#ui-ink/components/permissions/PlanModePermissionRequest/ExitPlanModePermissionRequest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -49,30 +48,7 @@ async function renderToText(element: React.ReactElement): Promise<string> {
   return stripAnsi(rawOutput)
 }
 
-describe('Plan mode permission UI microcopy (Esc is exit)', () => {
-  test('EnterPlanModePermissionRequest uses "Enter to confirm · Esc to exit"', async () => {
-    const out = await renderToText(
-      <KeypressProvider>
-        <PermissionProvider
-          conversationKey="plan:0"
-          isBypassPermissionsModeAvailable
-        >
-          <EnterPlanModePermissionRequest
-            toolUseConfirm={
-              {
-                onReject: () => {},
-                onAllow: () => {},
-              } as any
-            }
-            onDone={() => {}}
-          />
-        </PermissionProvider>
-      </KeypressProvider>,
-    )
-
-    expect(out).toContain('Enter to confirm · Esc to exit')
-  })
-
+describe('Exit plan mode permission UI microcopy (Esc is exit)', () => {
   test('ExitPlanModePermissionRequest uses "Enter to confirm · Esc to exit" and shows the auto-accept shortcut hint', async () => {
     const previousConfigDir = process.env.KODE_CONFIG_DIR
     const configDir = mkdtempSync(join(tmpdir(), 'kode-plan-perm-'))

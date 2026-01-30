@@ -348,7 +348,10 @@ function* emitKeys(
         let buffer = ''
         while (true) {
           const next = yield
-          if (next === '' || (next.length === 1 && next.charCodeAt(0) === BEL_CODE)) {
+          if (
+            next === '' ||
+            (next.length === 1 && next.charCodeAt(0) === BEL_CODE)
+          ) {
             break
           } else if (next === ESC) {
             const afterEsc = yield
@@ -698,10 +701,7 @@ export function KeypressProvider({
     if (!batchedUpdates) {
       for (const subscription of orderedSubscriptionsRef.current) {
         const handled = subscription.handler(input, key)
-        if (
-          handled &&
-          typeof (handled as Promise<void>).catch === 'function'
-        ) {
+        if (handled && typeof (handled as Promise<void>).catch === 'function') {
           ;(handled as Promise<void>).catch(error => {
             debugLogger.warn('KEYPRESS_HANDLER_PROMISE_REJECTED', {
               error: error instanceof Error ? error.message : String(error),
@@ -718,10 +718,7 @@ export function KeypressProvider({
     batchedUpdates(() => {
       for (const subscription of orderedSubscriptionsRef.current) {
         const handled = subscription.handler(input, key)
-        if (
-          handled &&
-          typeof (handled as Promise<void>).catch === 'function'
-        ) {
+        if (handled && typeof (handled as Promise<void>).catch === 'function') {
           ;(handled as Promise<void>).catch(error => {
             debugLogger.warn('KEYPRESS_HANDLER_PROMISE_REJECTED', {
               error: error instanceof Error ? error.message : String(error),
@@ -750,9 +747,9 @@ export function KeypressProvider({
     }
 
     try {
-      ;(stdin as unknown as { setEncoding?: (encoding: string) => void }).setEncoding?.(
-        'utf8',
-      )
+      ;(
+        stdin as unknown as { setEncoding?: (encoding: string) => void }
+      ).setEncoding?.('utf8')
     } catch (error) {
       debugLogger.warn('KEYPRESS_SET_ENCODING_FAILED', {
         error: error instanceof Error ? error.message : String(error),

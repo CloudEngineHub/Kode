@@ -62,7 +62,10 @@ export function useTerminalSize(): TerminalSize {
       debounceTimerRef.current = setTimeout(() => {
         debounceTimerRef.current = null
         setSize(previous => {
-          if (previous.columns === next.columns && previous.rows === next.rows) {
+          if (
+            previous.columns === next.columns &&
+            previous.rows === next.rows
+          ) {
             return previous
           }
           return next

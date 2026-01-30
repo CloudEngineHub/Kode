@@ -1,5 +1,11 @@
-import { existsSync, mkdirSync, readFileSync, realpathSync } from 'fs'
-import { isAbsolute, join, relative, resolve, parse } from 'path'
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync,
+} from 'fs'
+import { basename, isAbsolute, join, relative, resolve, parse } from 'path'
 import {
   generateSlug,
   getPlanSlugForConversationKey,
@@ -7,13 +13,55 @@ import {
 } from './slug'
 import { getActivePlanConversationKey, DEFAULT_CONVERSATION_KEY } from './state'
 import { getKodeBaseDir } from '#core/utils/env'
+import { getOriginalCwd } from '#core/utils/state'
+import { getClaudeCompatRoots } from '#config/dataRoots'
+import { isSettingSourceEnabled, loadSettingsWithLegacyFallback } from '#config'
+import type { SettingsDestination } from '#config'
 
 const MAX_SLUG_ATTEMPTS = 10
+const MAIN_AGENT_ID = 'main'
+
+function normalizeAgentId(agentId: string | undefined): string | undefined {
+  const trimmed = typeof agentId === 'string' ? agentId.trim() : ''
+  if (!trimmed) return undefined
+  if (trimmed === MAIN_AGENT_ID) return undefined
+  return trimmed
+}
 
 export function getPlanDirectory(): string {
-  const dir = join(getKodeBaseDir(), 'plans')
+  const projectDir = getOriginalCwd()
+  const destinations: SettingsDestination[] = [
+    'userSettings',
+    'projectSettings',
+    'localSettings',
+  ]
+
+  let override: string | null = null
+  for (const destination of destinations) {
+    if (!isSettingSourceEnabled(destination)) continue
+    const loaded = loadSettingsWithLegacyFallback({
+      destination,
+      projectDir,
+      migrateToPrimary: true,
+    }).settings as Record<string, unknown> | null
+    const next =
+      typeof loaded?.plansDirectory === 'string' ? loaded.plansDirectory : ''
+    const trimmed = next.trim()
+    if (trimmed) override = trimmed
+  }
+
+  let dir = join(getKodeBaseDir(), 'plans')
+  if (override) {
+    dir = isAbsolute(override) ? override : join(projectDir, override)
+  }
+
   if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true })
+    try {
+      mkdirSync(dir, { recursive: true })
+    } catch {
+      dir = join(getKodeBaseDir(), 'plans')
+      if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+    }
   }
   return dir
 }
@@ -45,8 +93,9 @@ export function getPlanFilePath(
   const key = conversationKey ?? DEFAULT_CONVERSATION_KEY
   const slug = getOrCreatePlanSlug(key)
 
-  if (!agentId) return join(dir, `${slug}.md`)
-  return join(dir, `${slug}-agent-${agentId}.md`)
+  const normalizedAgentId = normalizeAgentId(agentId)
+  if (!normalizedAgentId) return join(dir, `${slug}.md`)
+  return join(dir, `${slug}-agent-${normalizedAgentId}.md`)
 }
 
 function resolveExistingPath(path: string): string {
@@ -102,6 +151,23 @@ export function readPlanFile(
 ): { content: string; exists: boolean; planFilePath: string } {
   const planFilePath = getPlanFilePath(agentId, conversationKey)
   if (!existsSync(planFilePath)) {
+    const legacyName = basename(planFilePath)
+    const legacyRoots = getClaudeCompatRoots()
+    for (const root of legacyRoots) {
+      const legacyPlanPath = join(root, 'plans', legacyName)
+      if (!existsSync(legacyPlanPath)) continue
+      try {
+        const content = readFileSync(legacyPlanPath, 'utf8')
+        try {
+          writeFileSync(planFilePath, content, 'utf8')
+        } catch {
+          // If we can't migrate, still return the legacy content so plan mode can proceed.
+        }
+        return { content, exists: true, planFilePath }
+      } catch {
+        continue
+      }
+    }
     return { content: '', exists: false, planFilePath }
   }
   return {

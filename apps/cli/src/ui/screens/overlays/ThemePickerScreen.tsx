@@ -131,7 +131,8 @@ export function ThemePickerScreen({ onDone }: Props): React.ReactNode {
                 bold={isSelected}
                 wrap="truncate-end"
               >
-                {isSelected ? figures.pointer : ' '} {THEME_LABELS[name] ?? name}
+                {isSelected ? figures.pointer : ' '}{' '}
+                {THEME_LABELS[name] ?? name}
               </Text>
             )
           })}

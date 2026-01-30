@@ -102,7 +102,9 @@ export const loadCustomCommands = memoize(
       cwd,
       LEGACY_CONFIG_SUBDIRS.commands,
     )
-    const userLegacyCommandsDirs = legacyRoots.map(root => join(root, 'commands'))
+    const userLegacyCommandsDirs = legacyRoots.map(root =>
+      join(root, 'commands'),
+    )
 
     const projectKodeSkillsDirs = discoverNestedProjectDirs(
       cwd,

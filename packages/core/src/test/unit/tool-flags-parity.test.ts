@@ -5,7 +5,7 @@ import { BashTool } from '#tools/tools/system/BashTool/BashTool'
 import { FileReadTool } from '#tools/tools/filesystem/FileReadTool/FileReadTool'
 import { FileWriteTool } from '#tools/tools/filesystem/FileWriteTool/FileWriteTool'
 import { GrepTool } from '#tools/tools/search/GrepTool/GrepTool'
-import { KillShellTool } from '#tools/tools/system/KillShellTool/KillShellTool'
+import { TaskStopTool } from '#tools/tools/system/TaskStopTool/TaskStopTool'
 import { EnterPlanModeTool } from '#tools/tools/interaction/PlanModeTool/EnterPlanModeTool'
 import { ExitPlanModeTool } from '#tools/tools/interaction/PlanModeTool/ExitPlanModeTool'
 import { TaskTool } from '#tools/tools/ai/TaskTool/TaskTool'
@@ -17,8 +17,8 @@ describe('Tool isReadOnly/isConcurrencySafe flags (compatibility)', () => {
     expect(TaskOutputTool.isReadOnly()).toBe(true)
     expect(TaskOutputTool.isConcurrencySafe()).toBe(true)
 
-    expect(KillShellTool.isReadOnly()).toBe(false)
-    expect(KillShellTool.isConcurrencySafe()).toBe(true)
+    expect(TaskStopTool.isReadOnly()).toBe(false)
+    expect(TaskStopTool.isConcurrencySafe()).toBe(true)
 
     expect(TodoWriteTool.isReadOnly()).toBe(false)
     expect(TodoWriteTool.isConcurrencySafe()).toBe(false)

@@ -1,40 +1,20 @@
 import React, { useCallback } from 'react'
 import { hasPermissionsToUseTool } from '#core/permissions'
+import type { CanUseToolFn } from '#core/permissions/canUseTool'
 import { BashTool, inputSchema } from '#tools/tools/system/BashTool/BashTool'
 import { getCommandSubcommandPrefix } from '#core/utils/commands'
 import {
   REJECT_MESSAGE,
   REJECT_MESSAGE_WITH_FEEDBACK_PREFIX,
 } from '#core/utils/messages'
-import { AssistantMessage } from '#core/query'
 import { ToolUseConfirm } from '#ui-ink/components/permissions/PermissionRequest'
 import { AbortError } from '#core/utils/errors'
 import { logError } from '#core/utils/log'
-import type { ToolPermissionContextUpdate } from '#core/types/toolPermissionContext'
 import type { UnreachablePermissionRuleWarning } from '#core/permissions'
 import { findUnreachablePermissionRules } from '#core/permissions'
-import {
-  resolveToolDescription,
-  type Tool as ToolType,
-  type ToolUseContext,
-} from '#core/tooling/Tool'
+import { resolveToolDescription } from '#core/tooling/Tool'
 
 type SetState<T> = React.Dispatch<React.SetStateAction<T>>
-
-export type CanUseToolFn = (
-  tool: ToolType,
-  input: { [key: string]: unknown },
-  toolUseContext: ToolUseContext,
-  assistantMessage: AssistantMessage,
-) => Promise<
-  | { result: true }
-  | {
-      result: false
-      message: string
-      shouldPromptUser?: boolean
-      suggestions?: ToolPermissionContextUpdate[]
-    }
->
 
 function useCanUseTool(
   setToolUseConfirm: SetState<ToolUseConfirm | null>,
@@ -132,7 +112,7 @@ function useCanUseTool(
                 logCancelledEvent()
                 resolveWithCancelledAndAbortAllToolCalls()
               },
-              onAllow(type) {
+              onAllow(type, allowOptions) {
                 if (type === 'permanent') {
                   const ctx = toolUseContext.options?.toolPermissionContext
                   if (ctx) {
@@ -142,6 +122,14 @@ function useCanUseTool(
                     }
                   }
                 }
+                if (allowOptions?.updatedInput) {
+                  resolve({
+                    result: true,
+                    updatedInput: allowOptions.updatedInput,
+                  })
+                  return
+                }
+
                 resolve({ result: true })
               },
               onReject(rejectionMessage) {

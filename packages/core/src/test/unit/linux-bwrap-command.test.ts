@@ -5,8 +5,10 @@ import { buildLinuxBwrapCommand } from '#runtime/shell'
 describe('Linux bwrap command construction', () => {
   test('includes /tmp/kode bind + TMPDIR env when write-restricted', () => {
     const previousKodeTmp = process.env.KODE_TMPDIR
+    const previousClaudeTmpDir = process.env.CLAUDE_TMPDIR
     const previousClaudeTmp = process.env.CLAUDE_CODE_TMPDIR
     delete process.env.KODE_TMPDIR
+    delete process.env.CLAUDE_TMPDIR
     delete process.env.CLAUDE_CODE_TMPDIR
 
     try {
@@ -37,6 +39,8 @@ describe('Linux bwrap command construction', () => {
     } finally {
       if (previousKodeTmp === undefined) delete process.env.KODE_TMPDIR
       else process.env.KODE_TMPDIR = previousKodeTmp
+      if (previousClaudeTmpDir === undefined) delete process.env.CLAUDE_TMPDIR
+      else process.env.CLAUDE_TMPDIR = previousClaudeTmpDir
       if (previousClaudeTmp === undefined) delete process.env.CLAUDE_CODE_TMPDIR
       else process.env.CLAUDE_CODE_TMPDIR = previousClaudeTmp
     }

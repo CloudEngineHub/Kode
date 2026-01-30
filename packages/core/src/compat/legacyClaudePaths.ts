@@ -6,4 +6,3 @@ export {
   legacyConfigPathInProject,
   legacyPluginPathInProject,
 } from '#config/compat/legacyClaudePaths'
-

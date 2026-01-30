@@ -12,7 +12,7 @@ const tasks = {
   isHidden: false,
   ui: { displayMode: 'fullscreen' },
   disableNonInteractive: true,
-  aliases: ['task'],
+  aliases: ['task', 'bashes'],
   async call(onDone) {
     return React.createElement(TasksScreen, { onDone })
   },

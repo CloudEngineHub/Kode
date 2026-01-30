@@ -7,7 +7,7 @@ import {
 } from '#core/utils/backgroundTasks'
 import { createAssistantMessage } from '#core/utils/messages'
 import { DESCRIPTION, PROMPT, TOOL_NAME_FOR_PROMPT } from './prompt'
-import { readTaskOutput } from '#runtime/taskOutputStore'
+import { getTaskOutputFilePath, readTaskOutput } from '#runtime/taskOutputStore'
 
 const inputSchema = z.strictObject({
   task_id: z.string().describe('The task ID to get output from'),
@@ -47,6 +47,46 @@ type Output = {
   task: TaskSummary | null
 }
 
+const DEFAULT_TASK_MAX_OUTPUT_LENGTH = 100_000
+const MIN_TASK_MAX_OUTPUT_LENGTH = 1_000
+const MAX_TASK_MAX_OUTPUT_LENGTH = 200_000
+
+function clampInt(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, Math.floor(value)))
+}
+
+function getTaskMaxOutputLength(): number {
+  const raw =
+    process.env.KODE_TASK_MAX_OUTPUT_LENGTH ??
+    process.env.TASK_MAX_OUTPUT_LENGTH
+  const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN
+  if (!Number.isFinite(parsed) || parsed <= 0)
+    return DEFAULT_TASK_MAX_OUTPUT_LENGTH
+  return clampInt(
+    parsed,
+    MIN_TASK_MAX_OUTPUT_LENGTH,
+    MAX_TASK_MAX_OUTPUT_LENGTH,
+  )
+}
+
+function truncateTaskOutput(args: { taskId: string; output: string }): {
+  output: string
+  wasTruncated: boolean
+} {
+  const limit = getTaskMaxOutputLength()
+  if (args.output.length <= limit)
+    return { output: args.output, wasTruncated: false }
+
+  const prefix = `[Truncated. Full output: ${getTaskOutputFilePath(args.taskId)}]\n`
+  const remaining = limit - prefix.length
+  if (remaining <= 0)
+    return { output: prefix.slice(0, limit), wasTruncated: true }
+  return {
+    output: prefix + args.output.slice(-remaining),
+    wasTruncated: true,
+  }
+}
+
 function normalizeTaskOutputInput(input: Input): Input {
   return input
 }
@@ -63,19 +103,22 @@ function taskStatusFromBash(
 function buildTaskSummary(taskId: string): TaskSummary | null {
   const bg = BunShell.getInstance().getBackgroundOutput(taskId)
   if (bg) {
+    const rawOutput = readTaskOutput(taskId)
+    const { output } = truncateTaskOutput({ taskId, output: rawOutput })
     return {
       task_id: taskId,
       task_type: 'local_bash',
       status: taskStatusFromBash(bg),
       description: bg.command,
-      output: readTaskOutput(taskId),
+      output,
       exitCode: bg.code,
     }
   }
 
   const agent = getBackgroundAgentTaskSnapshot(taskId)
   if (agent) {
-    const output = readTaskOutput(taskId) || agent.resultText || ''
+    const rawOutput = readTaskOutput(taskId) || agent.resultText || ''
+    const { output } = truncateTaskOutput({ taskId, output: rawOutput })
     return {
       task_id: taskId,
       task_type: 'local_agent',

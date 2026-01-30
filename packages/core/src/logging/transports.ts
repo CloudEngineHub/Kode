@@ -29,8 +29,7 @@ function getProjectDir(cwd: string): string {
 
 function getDebugLogFileOverride(): string | null {
   const override =
-    process.env.KODE_DEBUG_LOG_PATH ??
-    process.env[LEGACY_ENV.codeDebugLogsDir]
+    process.env.KODE_DEBUG_LOG_PATH ?? process.env[LEGACY_ENV.codeDebugLogsDir]
 
   if (!override) return null
   const trimmed = String(override).trim()

@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from 'react'
-import { countTokens } from '#core/utils/tokens'
+import { estimateTokens } from '#core/utils/tokens'
 import { getTheme } from '#core/utils/theme'
 import { getModelManager } from '#core/utils/model'
 import { logStartupProfile } from '#core/utils/startupProfile'
@@ -220,7 +220,7 @@ export function PromptInput({
   )
 
   const theme = getTheme()
-  const tokenUsage = useMemo(() => countTokens(messages), [messages])
+  const tokenUsage = useMemo(() => estimateTokens(messages), [messages])
   const totalCostUSD = useMemo(() => {
     let total = 0
     for (const message of messages) {
@@ -362,8 +362,10 @@ export function PromptInput({
     forkNumber,
     messageLogName,
     statusLineUsage,
+    submitCount,
     toolPermissionContext.mode,
     totalCostUSD,
+    uiRefreshCounter,
     vimMode,
   ])
 
@@ -396,7 +398,14 @@ export function PromptInput({
     }
 
     return parts.join(' · ')
-  }, [editorMode, isLoading, mode, pendingPrompts.length, queuedPrompts.length, vimMode])
+  }, [
+    editorMode,
+    isLoading,
+    mode,
+    pendingPrompts.length,
+    queuedPrompts.length,
+    vimMode,
+  ])
 
   const effectiveStatusLine = statusLineText ?? defaultStatusLine
 
@@ -452,14 +461,11 @@ export function PromptInput({
       if (isEditingExternally) return
       if (isDisabled) return
 
-      if (
-        key.meta &&
-        key.upArrow &&
-        !key.shift &&
-        !key.ctrl
-      ) {
+      if (key.meta && key.upArrow && !key.shift && !key.ctrl) {
         const draftForQueue: QueuedPrompt | null =
-          input.trim().length > 0 || pastedTexts.length > 0 || pastedImages.length > 0
+          input.trim().length > 0 ||
+          pastedTexts.length > 0 ||
+          pastedImages.length > 0
             ? {
                 seq: nextQueuedPromptSeqRef.current++,
                 input,
@@ -691,30 +697,38 @@ export function PromptInput({
     }
   }, [cursorOffset, initialPrompt, input, mode])
 
-  const { resetHistory, onHistoryUp, onHistoryDown, onUserInput, historyIndex, isInFastBrowseMode } =
-    useArrowKeyHistory({
-      current: {
-        text: input,
-        mode,
-        cursorOffset,
-        extra: { pastedTexts, pastedImages },
-      },
-      emptyExtra: { pastedTexts: [], pastedImages: [] },
-      onRestore: snapshot => {
-        setPastedTexts(snapshot.extra.pastedTexts)
-        setPastedImages(snapshot.extra.pastedImages)
-        onModeChange(snapshot.mode)
-        onInputChange(snapshot.text)
-        setCursorOffset(snapshot.cursorOffset)
-      },
-      buildExtraFromHistoryEntry: entry => ({
-        pastedTexts: entry.pastedTexts,
-        pastedImages: [],
-      }),
-    })
+  const {
+    resetHistory,
+    onHistoryUp,
+    onHistoryDown,
+    onUserInput,
+    historyIndex,
+    isInFastBrowseMode,
+  } = useArrowKeyHistory({
+    current: {
+      text: input,
+      mode,
+      cursorOffset,
+      extra: { pastedTexts, pastedImages },
+    },
+    emptyExtra: { pastedTexts: [], pastedImages: [] },
+    onRestore: snapshot => {
+      setPastedTexts(snapshot.extra.pastedTexts)
+      setPastedImages(snapshot.extra.pastedImages)
+      onModeChange(snapshot.mode)
+      onInputChange(snapshot.text)
+      setCursorOffset(snapshot.cursorOffset)
+    },
+    buildExtraFromHistoryEntry: entry => ({
+      pastedTexts: entry.pastedTexts,
+      pastedImages: [],
+    }),
+  })
   onHistoryUserInputRef.current = onUserInput
 
-  const historyHintTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const historyHintTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  )
   const lastHistoryHintTimeRef = useRef<number>(0)
   useEffect(() => {
     if (historyIndex < 2) return

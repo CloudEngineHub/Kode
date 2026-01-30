@@ -141,7 +141,7 @@ See `docs/binary-distribution.md` for details (asset names, local build).
 
 ### Configuration / API keys
 
-- Global config (models, pointers, theme, etc): `~/.kode.json` (or `<KODE_CONFIG_DIR>/config.json` when `KODE_CONFIG_DIR`/`CLAUDE_CONFIG_DIR` is set).
+- Global config (models, pointers, theme, etc): `~/.kode.json` (or `<KODE_CONFIG_DIR>/config.json` when `KODE_CONFIG_DIR` is set).
 - Project/local settings (output style, etc): `./.kode/settings.json` and `./.kode/settings.local.json` (legacy `.claude` is supported for some features).
 - Configure models via `/model` (UI) or `kode models import/export` (YAML). Details: `docs/develop/configuration.md`.
 
@@ -341,7 +341,7 @@ As long as you have an openai-like endpoint, it should work.
 Kode supports subagents (agent templates) for delegation and task orchestration.
 
 - Agents are loaded from `.kode/agents` and `.claude/agents` (user + project), plus plugins/policy and `--agents`.
-- Manage in the UI: `/agents` (creates new agents under `./.claude/agents` / `~/.claude/agents` by default).
+- Manage in the UI: `/agents` (creates new agents under `./.kode/agents` / `~/.kode/agents` by default; legacy `.claude/agents` is read-compat).
 - Run via mentions: `@run-agent-<agentType> ...`
 - Run via tooling: `Task(subagent_type: "<agentType>", ...)`
 - CLI flags: `--agents <json>` (inject agents for this run), `--setting-sources user,project,local` (control which sources are loaded)

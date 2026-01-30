@@ -2,7 +2,8 @@ import { resolve as resolvePath } from 'node:path'
 
 import { clearContextCache, getContext } from '#core/context'
 import { logError } from '#core/utils/log'
-import { getCwd, setCwd } from '#core/utils/state'
+import { getCwd, setCwd, setOriginalCwd } from '#core/utils/state'
+import { LEGACY_ENV } from '#config/compat/legacyEnv'
 import {
   refreshCustomCommandWatcher,
   reloadCustomCommandsForSession,
@@ -20,6 +21,10 @@ export async function switchCwdForResume(nextCwd: string): Promise<void> {
   } catch {
     // best-effort
   }
+
+  setOriginalCwd(trimmed)
+  process.env.KODE_PROJECT_DIR = trimmed
+  process.env[LEGACY_ENV.projectDir] = trimmed
 
   await setCwd(trimmed)
 

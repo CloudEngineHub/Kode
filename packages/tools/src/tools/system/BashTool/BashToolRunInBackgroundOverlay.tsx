@@ -87,7 +87,8 @@ function RequestStatusIndicator(): React.ReactNode {
         {SPINNER_FRAMES[frame]} {getLabel(status)}
       </Text>
       <Text color={theme.secondaryText}>
-        {' '}:: {elapsedTime}s (Esc to interrupt)
+        {' '}
+        :: {elapsedTime}s (Esc to interrupt)
         {getTokenDisplay(status)}
       </Text>
     </Box>

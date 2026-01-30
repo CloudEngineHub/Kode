@@ -13,6 +13,7 @@ export { validateBashCommandPaths } from './paths'
 export { checkSedCommandSafety } from './sed'
 export { xi } from './xi'
 export { checkBashCommandSyntax } from './validators'
+export { formatBashPromptRule } from './rules'
 export {
   checkBashPermissions,
   checkBashPermissionsAutoAllowedBySandbox,

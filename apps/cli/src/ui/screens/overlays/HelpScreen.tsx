@@ -72,7 +72,7 @@ function buildHelpLines(commands: Command[]): string[] {
   lines.push('- F7: Command palette')
   lines.push('- F8: Tasks (background tasks)')
   lines.push('- Ctrl+O: Toggle verbose transcript')
-  lines.push('- Ctrl+T: Todos')
+  lines.push('- Ctrl+T: Work tasks')
   lines.push('- Ctrl+R: History search')
   lines.push('- Alt+P: Model picker')
   lines.push('- Ctrl+G: External editor')

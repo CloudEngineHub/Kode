@@ -84,8 +84,7 @@ export async function* callTaskTool(
   const normalizedAgentModel = normalizeAgentModelName(agentConfig.model)
   const defaultSubagentModel = 'task'
   const envSubagentModel =
-    process.env.KODE_SUBAGENT_MODEL ??
-    process.env[LEGACY_ENV.codeSubagentModel]
+    process.env.KODE_SUBAGENT_MODEL ?? process.env[LEGACY_ENV.codeSubagentModel]
   const modelToUse: string =
     (typeof envSubagentModel === 'string' && envSubagentModel.trim()
       ? envSubagentModel.trim()

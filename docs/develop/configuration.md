@@ -12,12 +12,16 @@ This doc focuses on where the files live and how to configure **models** reliabl
 ### Global config (primary)
 
 - Default: `~/.kode.json`
-- If `KODE_CONFIG_DIR` (or `CLAUDE_CONFIG_DIR`) is set: `<KODE_CONFIG_DIR>/config.json`
+- If `KODE_CONFIG_DIR` is set: `<KODE_CONFIG_DIR>/config.json`
 
 Kode also uses a data directory for logs/tasks/memory:
 
 - Default: `~/.kode/`
-- If `KODE_CONFIG_DIR` (or `CLAUDE_CONFIG_DIR`) is set: `<KODE_CONFIG_DIR>/`
+- If `KODE_CONFIG_DIR` is set: `<KODE_CONFIG_DIR>/`
+
+Legacy compatibility:
+
+- `CLAUDE_CONFIG_DIR` affects only legacy read-compat roots (e.g. `~/.claude`), and never changes Kode’s primary config/data locations.
 
 ### Project/local settings (per-repo)
 

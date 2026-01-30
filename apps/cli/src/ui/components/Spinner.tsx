@@ -152,7 +152,8 @@ export function BashSpinner(): React.ReactNode {
         {frames[frame]} Running
       </Text>
       <Text color={theme.secondaryText}>
-        {' '}:: {elapsedTime}s (<Text bold>esc</Text>)
+        {' '}
+        :: {elapsedTime}s (<Text bold>esc</Text>)
       </Text>
     </Box>
   )

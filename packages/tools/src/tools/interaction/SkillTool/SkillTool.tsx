@@ -459,7 +459,7 @@ ${availableSkills}
         ...userMessage.options,
         isCustomCommand: true,
         commandName: getCommandName(cmd),
-        commandArgs: '',
+        commandArgs: args ?? '',
       }
       return userMessage
     })

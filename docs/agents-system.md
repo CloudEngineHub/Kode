@@ -21,10 +21,10 @@ kode
 
 Default write location (interactive `/agents`):
 
-- Project: `./.claude/agents/<agentType>.md`
-- User: `~/.claude/agents/<agentType>.md`
+- Project: `./.kode/agents/<agentType>.md`
+- User: `~/.kode/agents/<agentType>.md`
 
-Kode also loads `.kode/agents` (and will edit/delete there if that’s where the agent currently lives).
+Kode also loads legacy `.claude/agents` (and will edit/delete there if that’s where the agent currently lives).
 
 ### Create an agent (manual)
 
@@ -85,7 +85,7 @@ Model mapping notes (aliases → pointers):
 
 Notes:
 
-- In subagent context, orchestration tools are removed regardless of configuration (e.g. `Task`, `TaskOutput`, `KillShell`, `EnterPlanMode`, `ExitPlanMode`, `AskUserQuestion`).
+- In subagent context, orchestration tools are removed regardless of configuration (e.g. `Task`, `TaskOutput`, `TaskStop` (legacy alias: `KillShell`), `EnterPlanMode`, `ExitPlanMode`, `AskUserQuestion`).
 
 ## Loading & Priority Order
 

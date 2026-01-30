@@ -15,7 +15,7 @@ describe('public contracts (refactor safety net)', () => {
       'AskExpertModel',
       'Bash',
       'TaskOutput',
-      'KillShell',
+      'TaskStop',
       'LS',
       'Glob',
       'Grep',
@@ -24,6 +24,10 @@ describe('public contracts (refactor safety net)', () => {
       'Edit',
       'Write',
       'NotebookEdit',
+      'TaskCreate',
+      'TaskList',
+      'TaskGet',
+      'TaskUpdate',
       'TodoWrite',
       'WebSearch',
       'WebFetch',
@@ -42,8 +46,13 @@ describe('public contracts (refactor safety net)', () => {
 
   test('built-in command surface stays stable (names + aliases)', async () => {
     const tmpConfigDir = mkdtempSync(join(tmpdir(), 'kode-contract-commands-'))
+    const tmpHomeDir = mkdtempSync(join(tmpdir(), 'kode-contract-home-'))
     const previousConfigDir = process.env.KODE_CONFIG_DIR
+    const previousHome = process.env.HOME
+    const previousUserProfile = process.env.USERPROFILE
     process.env.KODE_CONFIG_DIR = tmpConfigDir
+    process.env.HOME = tmpHomeDir
+    process.env.USERPROFILE = tmpHomeDir
     try {
       const commands = await getCommands()
       const byName = new Map(commands.map(c => [c.userFacingName(), c]))
@@ -70,7 +79,7 @@ describe('public contracts (refactor safety net)', () => {
         'refresh-commands',
         'bug',
         'review',
-        'todos',
+        'work',
       ]
 
       for (const name of expected) {
@@ -89,7 +98,12 @@ describe('public contracts (refactor safety net)', () => {
     } finally {
       if (previousConfigDir === undefined) delete process.env.KODE_CONFIG_DIR
       else process.env.KODE_CONFIG_DIR = previousConfigDir
+      if (previousHome === undefined) delete process.env.HOME
+      else process.env.HOME = previousHome
+      if (previousUserProfile === undefined) delete process.env.USERPROFILE
+      else process.env.USERPROFILE = previousUserProfile
       rmSync(tmpConfigDir, { recursive: true, force: true })
+      rmSync(tmpHomeDir, { recursive: true, force: true })
     }
   })
 

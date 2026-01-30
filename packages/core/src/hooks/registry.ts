@@ -92,6 +92,7 @@ function parseHooksByEvent(
   return {
     PreToolUse: parseHookMatchers(hooks.PreToolUse),
     PostToolUse: parseHookMatchers(hooks.PostToolUse),
+    PreCompact: parseHookMatchers(hooks.PreCompact),
     Stop: parseHookMatchers(hooks.Stop),
     SubagentStop: parseHookMatchers(hooks.SubagentStop),
     UserPromptSubmit: parseHookMatchers(hooks.UserPromptSubmit),

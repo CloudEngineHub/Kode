@@ -4,8 +4,12 @@ import { cleanupOldMessageFilesInBackground } from '#core/utils/cleanup'
 import { grantReadPermissionForOriginalDir } from '#core/utils/permissions/filesystem'
 import { setCwd, setOriginalCwd } from '#core/utils/state'
 import { debug as debugLogger } from '#core/utils/debugLogger'
+import { LEGACY_ENV } from '#config/compat/legacyEnv'
 
 export async function setup(cwd: string, safeMode?: boolean): Promise<void> {
+  process.env.KODE_PROJECT_DIR = cwd
+  process.env[LEGACY_ENV.projectDir] = cwd
+
   // Set both current and original working directory if --cwd was provided
   if (cwd !== process.cwd()) {
     setOriginalCwd(cwd)

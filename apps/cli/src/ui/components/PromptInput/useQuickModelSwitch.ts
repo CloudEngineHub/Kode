@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { countTokens } from '#core/utils/tokens'
+import { estimateTokens } from '#core/utils/tokens'
 import { getModelManager } from '#core/utils/model'
 import type { Message } from '#core/query'
 
@@ -13,7 +13,7 @@ export function useQuickModelSwitch(args: {
 }) {
   return useCallback(() => {
     const modelManager = getModelManager()
-    const currentTokens = countTokens(args.messages)
+    const currentTokens = estimateTokens(args.messages)
     const debugInfo = modelManager.getModelSwitchingDebugInfo()
     const switchResult = modelManager.switchToNextModel(currentTokens)
 

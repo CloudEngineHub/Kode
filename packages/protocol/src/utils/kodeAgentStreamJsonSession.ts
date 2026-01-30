@@ -181,7 +181,12 @@ export async function runKodeAgentStreamJsonSession<
     const maxTurnsExceeded = queryError instanceof MaxTurnsExceededError
 
     let structuredOutput: Record<string, unknown> | undefined
-    if (args.jsonSchema && !queryError && !budgetExceeded && !maxTurnsExceeded) {
+    if (
+      args.jsonSchema &&
+      !queryError &&
+      !budgetExceeded &&
+      !maxTurnsExceeded
+    ) {
       try {
         const fenced = String(resultText).trim()
         const unfenced = (() => {
@@ -216,7 +221,8 @@ export async function runKodeAgentStreamJsonSession<
     const durationMs = Date.now() - startedAt
 
     const turnsFromContext = ((): number => {
-      const raw = (toolUseContext as unknown as { turnCount?: unknown }).turnCount
+      const raw = (toolUseContext as unknown as { turnCount?: unknown })
+        .turnCount
       if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < 0) return 0
       return Math.trunc(raw)
     })()

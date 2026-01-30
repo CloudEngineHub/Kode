@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 
 import { startKodeDaemon } from '#daemon/server'
+import { WebSocket as WsClient } from 'ws'
 import { existsSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,8 +9,26 @@ import { join } from 'node:path'
 type AnyEvent = any
 
 function getWsMessageData(ev: unknown): unknown {
-  if (!ev || typeof ev !== 'object' || Array.isArray(ev)) return undefined
-  return (ev as Record<string, unknown>).data
+  if (!ev) return undefined
+  if (typeof ev !== 'object' || Array.isArray(ev)) return ev
+  const record = ev as Record<string, unknown>
+  if ('data' in record) return record.data
+  return ev
+}
+
+function decodeWsMessage(ev: unknown): string {
+  const raw = getWsMessageData(ev)
+  if (typeof raw === 'string') return raw
+  if (raw instanceof ArrayBuffer) {
+    return new TextDecoder().decode(new Uint8Array(raw))
+  }
+  if (ArrayBuffer.isView(raw)) {
+    const view = raw as ArrayBufferView
+    return new TextDecoder().decode(
+      new Uint8Array(view.buffer, view.byteOffset, view.byteLength),
+    )
+  }
+  return String(raw ?? '')
 }
 
 function waitForEvent(
@@ -45,24 +64,28 @@ describe('daemon fs path security', () => {
     })
 
     try {
-      const ws = new WebSocket(
+      const ws = new WsClient(
         `ws://${daemon.host}:${daemon.port}/ws?token=${encodeURIComponent(
           daemon.token,
         )}`,
       )
 
       const events: AnyEvent[] = []
-      ws.addEventListener('message', ev => {
+      ws.on('message', data => {
         try {
-          events.push(JSON.parse(String(getWsMessageData(ev))))
+          events.push(JSON.parse(decodeWsMessage(data)))
         } catch {}
       })
 
       await new Promise<void>((resolve, reject) => {
-        ws.addEventListener('open', () => resolve(), { once: true })
-        ws.addEventListener('error', () => reject(new Error('ws error')), {
-          once: true,
-        })
+        ws.once('open', () => resolve())
+        ws.once('error', err =>
+          reject(
+            err instanceof Error
+              ? err
+              : new Error(err ? String(err) : 'ws error'),
+          ),
+        )
       })
 
       await waitForEvent(

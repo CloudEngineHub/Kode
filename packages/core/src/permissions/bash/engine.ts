@@ -18,6 +18,7 @@ import {
   buildBashRuleSuggestionExact,
   checkExactBashRules,
   checkPrefixBashRules,
+  checkPromptBashRules,
   modeSpecificBashDecision,
 } from './rules'
 import { xi } from './xi'
@@ -48,11 +49,25 @@ function parseBoolLikeEnv(value: string | undefined): boolean {
 
 function h02(args: {
   command: string
+  description?: string
   cwd: string
   toolPermissionContext: ToolPermissionContext
   hasCdInCompound: boolean
 }): BashPermissionDecision {
   const trimmed = args.command.trim()
+  const prompt =
+    typeof args.description === 'string' ? args.description.trim() : ''
+  const promptMatches = prompt
+    ? checkPromptBashRules(prompt, args.toolPermissionContext)
+    : {}
+
+  if (promptMatches.deny) {
+    return {
+      behavior: 'deny',
+      message: `Permission to use Bash with command ${trimmed} has been denied.`,
+      decisionReason: { type: 'rule', rule: promptMatches.deny },
+    }
+  }
 
   const exact = checkExactBashRules(trimmed, args.toolPermissionContext)
   if (exact.behavior === 'deny' || exact.behavior === 'ask') return exact
@@ -66,6 +81,14 @@ function h02(args: {
       behavior: 'deny',
       message: `Permission to use Bash with command ${trimmed} has been denied.`,
       decisionReason: { type: 'rule', rule: prefixMatches.deny },
+    }
+  }
+
+  if (promptMatches.ask) {
+    return {
+      behavior: 'ask',
+      message: `${PRODUCT_NAME} requested permissions to use Bash, but you haven't granted it yet.`,
+      decisionReason: { type: 'rule', rule: promptMatches.ask },
     }
   }
   if (prefixMatches.ask) {
@@ -84,6 +107,13 @@ function h02(args: {
   })
   if (pathDecision.behavior !== 'passthrough') return pathDecision
 
+  if (promptMatches.allow) {
+    return {
+      behavior: 'allow',
+      updatedInput: { command: trimmed },
+      decisionReason: { type: 'rule', rule: promptMatches.allow },
+    }
+  }
   if (exact.behavior === 'allow') return exact
 
   if (prefixMatches.allow) {
@@ -141,6 +171,7 @@ function h02(args: {
 
 export async function checkBashPermissions(args: {
   command: string
+  description?: string
   toolPermissionContext: ToolPermissionContext
   toolUseContext: ToolUseContext
   getCwdForPaths?: () => string
@@ -188,6 +219,7 @@ export async function checkBashPermissions(args: {
     cmd => cmd !== `cd ${cwd}`,
   )
   const isCompound = subcommands.length > 1
+  const promptForSingleCommand = !isCompound ? args.description : undefined
 
   // IMPORTANT (security + parity):
   // Avoid allowing/denying a compound command list via a single wildcard rule
@@ -221,6 +253,7 @@ export async function checkBashPermissions(args: {
   for (const sub of subcommands) {
     const decision = h02({
       command: sub,
+      description: promptForSingleCommand,
       cwd,
       toolPermissionContext: args.toolPermissionContext,
       hasCdInCompound,

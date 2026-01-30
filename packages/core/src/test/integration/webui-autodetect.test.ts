@@ -6,19 +6,14 @@ import { join } from 'node:path'
 import { startKodeDaemon } from '#daemon/server'
 
 function ensureWebuiBuilt(): void {
-  const index = join(process.cwd(), 'ui', 'web', 'dist', 'index.html')
+  const index = join(process.cwd(), 'dist', 'webui', 'index.html')
   if (existsSync(index)) return
 
-  const config = join(process.cwd(), 'ui', 'web', 'vite.config.ts')
-  const res = spawnSync(
-    process.execPath,
-    ['x', 'vite', 'build', '--config', config],
-    {
-      encoding: 'utf8',
-      timeout: 5 * 60 * 1000,
-      env: { ...process.env },
-    },
-  )
+  const res = spawnSync(process.execPath, ['run', 'build:web'], {
+    encoding: 'utf8',
+    timeout: 5 * 60 * 1000,
+    env: { ...process.env },
+  })
   if (res.status !== 0) {
     throw new Error(`vite build failed: ${res.stdout}\n${res.stderr}`)
   }

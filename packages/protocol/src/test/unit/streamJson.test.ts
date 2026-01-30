@@ -36,4 +36,3 @@ describe('stream-json protocol helpers', () => {
     expect((msg as any).result).toBe('ok')
   })
 })
-

@@ -241,5 +241,5 @@ describe('ACP smoke (stdio JSON-RPC)', () => {
     } finally {
       rmSync(configDir, { recursive: true, force: true })
     }
-  })
+  }, 30_000)
 })

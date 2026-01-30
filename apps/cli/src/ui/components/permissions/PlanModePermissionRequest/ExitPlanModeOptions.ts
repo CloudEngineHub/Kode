@@ -1,9 +1,11 @@
 export type ExitPlanModeOptionValue =
+  | 'yes-push-to-remote'
   | 'yes-bypass-permissions'
   | 'yes-accept-edits'
-  | 'yes-default'
   | 'yes-accept-edits-keep-context'
   | 'yes-default-keep-context'
+  | 'yes-launch-swarm-accept-edits'
+  | 'yes-launch-swarm-bypass'
   | 'no'
 
 export type ExitPlanModeOption =
@@ -21,6 +23,9 @@ export type ExitPlanModeOption =
 
 export function getExitPlanModeOptions(args: {
   bypassAvailable: boolean
+  pushToRemoteAvailable?: boolean
+  swarmAvailable?: boolean
+  teammateCount?: number
 }): ExitPlanModeOption[] {
   const options: ExitPlanModeOption[] = []
 
@@ -35,10 +40,28 @@ export function getExitPlanModeOptions(args: {
           value: 'yes-accept-edits',
         },
   )
-  options.push({
-    label: 'Yes, and manually approve edits',
-    value: 'yes-default',
-  })
+
+  if (args.pushToRemoteAvailable) {
+    options.push({
+      label: 'Yes, push to remote',
+      value: 'yes-push-to-remote',
+    })
+  }
+
+  if (args.swarmAvailable) {
+    const count = Math.max(1, Math.min(10, args.teammateCount ?? 3))
+    options.push({
+      label: `Yes, and launch swarm (${count} teammates [tab])`,
+      value: 'yes-launch-swarm-accept-edits',
+    })
+
+    if (args.bypassAvailable) {
+      options.push({
+        label: `Yes, and launch swarm (bypass, ${count} teammates [tab])`,
+        value: 'yes-launch-swarm-bypass',
+      })
+    }
+  }
 
   options.push({
     label: args.bypassAvailable
@@ -56,7 +79,7 @@ export function getExitPlanModeOptions(args: {
     type: 'input',
     label: 'No, keep planning',
     value: 'no',
-    placeholder: 'Type here to tell Kode Agent what to change',
+    placeholder: 'Type here to tell Kode what to change',
   })
 
   return options
@@ -64,6 +87,9 @@ export function getExitPlanModeOptions(args: {
 
 export function __getExitPlanModeOptionsForTests(args: {
   bypassAvailable: boolean
+  pushToRemoteAvailable?: boolean
+  swarmAvailable?: boolean
+  teammateCount?: number
 }): ExitPlanModeOption[] {
   return getExitPlanModeOptions(args)
 }

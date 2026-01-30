@@ -5,6 +5,7 @@ export {
 
 export {
   runSessionEndHooks,
+  runPreCompactHooks,
   runStopHooks,
   runUserPromptSubmitHooks,
 } from './lifecycle/events'

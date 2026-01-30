@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import type React from 'react'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 
@@ -29,27 +30,73 @@ export function useAskUserQuestionKeyboard(args: {
   onCancel: () => void
   onAllowWithAnswers: (answers: Record<string, string>) => void
 }): void {
-  const currentQuestion = args.questions[args.currentQuestionIndex]
-  const isSubmitTab = args.currentQuestionIndex === args.questions.length
+  const questionStatesRef = useRef(args.questionStates)
+  const answersRef = useRef(args.answers)
+  const currentQuestionIndexRef = useRef(args.currentQuestionIndex)
+  const focusedOptionIndexRef = useRef(args.focusedOptionIndex)
+  const isMultiSelectSubmitFocusedRef = useRef(args.isMultiSelectSubmitFocused)
+
+  useEffect(() => {
+    questionStatesRef.current = args.questionStates
+  }, [args.questionStates])
+
+  useEffect(() => {
+    answersRef.current = args.answers
+  }, [args.answers])
+
+  useEffect(() => {
+    currentQuestionIndexRef.current = args.currentQuestionIndex
+  }, [args.currentQuestionIndex])
+
+  useEffect(() => {
+    focusedOptionIndexRef.current = args.focusedOptionIndex
+  }, [args.focusedOptionIndex])
+
+  useEffect(() => {
+    isMultiSelectSubmitFocusedRef.current = args.isMultiSelectSubmitFocused
+  }, [args.isMultiSelectSubmitFocused])
+
+  const setCurrentQuestionIndex = (next: React.SetStateAction<number>) => {
+    const prev = currentQuestionIndexRef.current
+    const resolved = typeof next === 'function' ? next(prev) : next
+    currentQuestionIndexRef.current = resolved
+    args.setCurrentQuestionIndex(resolved)
+  }
+
+  const setFocusedOptionIndex = (next: React.SetStateAction<number>) => {
+    const prev = focusedOptionIndexRef.current
+    const resolved = typeof next === 'function' ? next(prev) : next
+    focusedOptionIndexRef.current = resolved
+    args.setFocusedOptionIndex(resolved)
+  }
+
+  const setIsMultiSelectSubmitFocused = (
+    next: React.SetStateAction<boolean>,
+  ) => {
+    const prev = isMultiSelectSubmitFocusedRef.current
+    const resolved = typeof next === 'function' ? next(prev) : next
+    isMultiSelectSubmitFocusedRef.current = resolved
+    args.setIsMultiSelectSubmitFocused(resolved)
+  }
 
   const setQuestionState = (
     questionText: string,
     next: Partial<QuestionState>,
     isMultiSelect: boolean,
   ) => {
-    args.setQuestionStates(prev => {
-      const existing = prev[questionText]
-      const selectedValue =
-        next.selectedValue ??
-        existing?.selectedValue ??
-        (isMultiSelect ? ([] as string[]) : '')
-      const textInputValue =
-        next.textInputValue ?? existing?.textInputValue ?? ''
-      return {
-        ...prev,
-        [questionText]: { selectedValue, textInputValue },
-      }
-    })
+    const prev = questionStatesRef.current
+    const existing = prev[questionText]
+    const selectedValue =
+      next.selectedValue ??
+      existing?.selectedValue ??
+      (isMultiSelect ? ([] as string[]) : '')
+    const textInputValue = next.textInputValue ?? existing?.textInputValue ?? ''
+    const updated = {
+      ...prev,
+      [questionText]: { selectedValue, textInputValue },
+    }
+    questionStatesRef.current = updated
+    args.setQuestionStates(updated)
   }
 
   const setAnswer = (
@@ -57,14 +104,23 @@ export function useAskUserQuestionKeyboard(args: {
     answer: string,
     shouldAdvance: boolean,
   ) => {
-    args.setAnswers(prev => ({ ...prev, [questionText]: answer }))
+    const updated = { ...answersRef.current, [questionText]: answer }
+    answersRef.current = updated
+    args.setAnswers(updated)
     if (shouldAdvance) {
-      args.setCurrentQuestionIndex(prev => prev + 1)
-      args.setFocusedOptionIndex(0)
+      setCurrentQuestionIndex(prev => prev + 1)
+      setFocusedOptionIndex(0)
     }
   }
 
   useKeypress((input, key) => {
+    const currentQuestionIndex = currentQuestionIndexRef.current
+    const focusedOptionIndex = focusedOptionIndexRef.current
+    const multiSelectSubmitFocused = isMultiSelectSubmitFocusedRef.current
+
+    const currentQuestion = args.questions[currentQuestionIndex]
+    const isSubmitTab = currentQuestionIndex === args.questions.length
+
     if (key.escape) {
       args.onCancel()
       return true
@@ -75,8 +131,8 @@ export function useAskUserQuestionKeyboard(args: {
     const isOtherFocused =
       !isSubmitTab &&
       currentQuestion &&
-      !args.isMultiSelectSubmitFocused &&
-      args.focusedOptionIndex === currentQuestion.options.length
+      !multiSelectSubmitFocused &&
+      focusedOptionIndex === currentQuestion.options.length
     const isInTextInput = isOtherFocused
     const allowQuestionTabNav = !(isInTextInput && !isSubmitTab)
 
@@ -86,19 +142,17 @@ export function useAskUserQuestionKeyboard(args: {
       const nextQuestion =
         key.rightArrow || (!isMultiSelectQuestion && key.tab && !key.shift)
 
-      if (prevQuestion && args.currentQuestionIndex > 0) {
-        args.setCurrentQuestionIndex(prev => Math.max(0, prev - 1))
-        args.setFocusedOptionIndex(0)
-        args.setIsMultiSelectSubmitFocused(false)
+      if (prevQuestion && currentQuestionIndex > 0) {
+        setCurrentQuestionIndex(prev => Math.max(0, prev - 1))
+        setFocusedOptionIndex(0)
+        setIsMultiSelectSubmitFocused(false)
         return
       }
 
-      if (nextQuestion && args.currentQuestionIndex < args.maxTabIndex) {
-        args.setCurrentQuestionIndex(prev =>
-          Math.min(args.maxTabIndex, prev + 1),
-        )
-        args.setFocusedOptionIndex(0)
-        args.setIsMultiSelectSubmitFocused(false)
+      if (nextQuestion && currentQuestionIndex < args.maxTabIndex) {
+        setCurrentQuestionIndex(prev => Math.min(args.maxTabIndex, prev + 1))
+        setFocusedOptionIndex(0)
+        setIsMultiSelectSubmitFocused(false)
         return
       }
     }
@@ -110,11 +164,73 @@ export function useAskUserQuestionKeyboard(args: {
     const questionText = currentQuestion.question
 
     if (currentQuestion.multiSelect) {
+      if (isOtherFocused) {
+        if (key.backspace || key.delete) {
+          const existing =
+            questionStatesRef.current[questionText]?.textInputValue ?? ''
+          const nextText = existing.slice(0, -1)
+          const existingSelected =
+            questionStatesRef.current[questionText]?.selectedValue
+          const selected = Array.isArray(existingSelected)
+            ? existingSelected
+            : []
+          const trimmed = nextText.trim()
+          const nextSelected = trimmed
+            ? selected.includes('__other__')
+              ? selected
+              : [...selected, '__other__']
+            : selected.filter(v => v !== '__other__')
+
+          setQuestionState(
+            questionText,
+            { textInputValue: nextText, selectedValue: nextSelected },
+            true,
+          )
+          const updated = {
+            ...answersRef.current,
+            [questionText]: formatMultiSelectAnswer(nextSelected, nextText),
+          }
+          answersRef.current = updated
+          args.setAnswers(updated)
+          return
+        }
+
+        if (isTextInputChar(input, key)) {
+          const existing =
+            questionStatesRef.current[questionText]?.textInputValue ?? ''
+          const nextText = existing + input
+          const existingSelected =
+            questionStatesRef.current[questionText]?.selectedValue
+          const selected = Array.isArray(existingSelected)
+            ? existingSelected
+            : []
+          const trimmed = nextText.trim()
+          const nextSelected = trimmed
+            ? selected.includes('__other__')
+              ? selected
+              : [...selected, '__other__']
+            : selected.filter(v => v !== '__other__')
+
+          setQuestionState(
+            questionText,
+            { textInputValue: nextText, selectedValue: nextSelected },
+            true,
+          )
+          const updated = {
+            ...answersRef.current,
+            [questionText]: formatMultiSelectAnswer(nextSelected, nextText),
+          }
+          answersRef.current = updated
+          args.setAnswers(updated)
+          return
+        }
+      }
+
       if (key.downArrow || key.upArrow || key.tab) {
         const next = applyMultiSelectNav({
           state: {
-            focusedOptionIndex: args.focusedOptionIndex,
-            isSubmitFocused: args.isMultiSelectSubmitFocused,
+            focusedOptionIndex,
+            isSubmitFocused: multiSelectSubmitFocused,
           },
           key: {
             downArrow: key.downArrow,
@@ -126,78 +242,20 @@ export function useAskUserQuestionKeyboard(args: {
         })
 
         if (
-          next.focusedOptionIndex !== args.focusedOptionIndex ||
-          next.isSubmitFocused !== args.isMultiSelectSubmitFocused
+          next.focusedOptionIndex !== focusedOptionIndex ||
+          next.isSubmitFocused !== multiSelectSubmitFocused
         ) {
-          args.setFocusedOptionIndex(next.focusedOptionIndex)
-          args.setIsMultiSelectSubmitFocused(next.isSubmitFocused)
+          setFocusedOptionIndex(next.focusedOptionIndex)
+          setIsMultiSelectSubmitFocused(next.isSubmitFocused)
         }
         return
       }
 
-      if (args.isMultiSelectSubmitFocused && (key.return || input === ' ')) {
-        args.setCurrentQuestionIndex(prev => prev + 1)
-        args.setFocusedOptionIndex(0)
-        args.setIsMultiSelectSubmitFocused(false)
+      if (multiSelectSubmitFocused && (key.return || input === ' ')) {
+        setCurrentQuestionIndex(prev => prev + 1)
+        setFocusedOptionIndex(0)
+        setIsMultiSelectSubmitFocused(false)
         return
-      }
-
-      if (isOtherFocused) {
-        if (key.backspace || key.delete) {
-          const existing =
-            args.questionStates[questionText]?.textInputValue ?? ''
-          const nextText = existing.slice(0, -1)
-          const existingSelected =
-            args.questionStates[questionText]?.selectedValue
-          const selected = Array.isArray(existingSelected)
-            ? existingSelected
-            : []
-          const trimmed = nextText.trim()
-          const nextSelected = trimmed
-            ? selected.includes('__other__')
-              ? selected
-              : [...selected, '__other__']
-            : selected.filter(v => v !== '__other__')
-
-          setQuestionState(
-            questionText,
-            { textInputValue: nextText, selectedValue: nextSelected },
-            true,
-          )
-          args.setAnswers(prev => ({
-            ...prev,
-            [questionText]: formatMultiSelectAnswer(nextSelected, nextText),
-          }))
-          return
-        }
-
-        if (isTextInputChar(input, key)) {
-          const existing =
-            args.questionStates[questionText]?.textInputValue ?? ''
-          const nextText = existing + input
-          const existingSelected =
-            args.questionStates[questionText]?.selectedValue
-          const selected = Array.isArray(existingSelected)
-            ? existingSelected
-            : []
-          const trimmed = nextText.trim()
-          const nextSelected = trimmed
-            ? selected.includes('__other__')
-              ? selected
-              : [...selected, '__other__']
-            : selected.filter(v => v !== '__other__')
-
-          setQuestionState(
-            questionText,
-            { textInputValue: nextText, selectedValue: nextSelected },
-            true,
-          )
-          args.setAnswers(prev => ({
-            ...prev,
-            [questionText]: formatMultiSelectAnswer(nextSelected, nextText),
-          }))
-          return
-        }
       }
 
       if (key.return || (input === ' ' && !isOtherFocused)) {
@@ -205,7 +263,7 @@ export function useAskUserQuestionKeyboard(args: {
         const selected = Array.isArray(existing) ? existing : []
         const value = isOtherFocused
           ? '__other__'
-          : currentQuestion.options[args.focusedOptionIndex]?.label
+          : currentQuestion.options[focusedOptionIndex]?.label
         if (!value) return
 
         const next = selected.includes(value)
@@ -215,29 +273,21 @@ export function useAskUserQuestionKeyboard(args: {
         setQuestionState(questionText, { selectedValue: next }, true)
 
         const otherText =
-          args.questionStates[questionText]?.textInputValue ?? ''
-        args.setAnswers(prev => ({
-          ...prev,
+          questionStatesRef.current[questionText]?.textInputValue ?? ''
+        const updated = {
+          ...answersRef.current,
           [questionText]: formatMultiSelectAnswer(next, otherText),
-        }))
+        }
+        answersRef.current = updated
+        args.setAnswers(updated)
       }
-      return
-    }
-
-    if (key.downArrow || key.upArrow) {
-      args.setFocusedOptionIndex(prev =>
-        applySingleSelectNav({
-          focusedOptionIndex: prev,
-          key: { downArrow: key.downArrow, upArrow: key.upArrow },
-          optionCount,
-        }),
-      )
       return
     }
 
     if (isOtherFocused) {
       if (key.backspace || key.delete) {
-        const existing = args.questionStates[questionText]?.textInputValue ?? ''
+        const existing =
+          questionStatesRef.current[questionText]?.textInputValue ?? ''
         setQuestionState(
           questionText,
           { textInputValue: existing.slice(0, -1) },
@@ -247,7 +297,8 @@ export function useAskUserQuestionKeyboard(args: {
       }
 
       if (isTextInputChar(input, key)) {
-        const existing = args.questionStates[questionText]?.textInputValue ?? ''
+        const existing =
+          questionStatesRef.current[questionText]?.textInputValue ?? ''
         setQuestionState(
           questionText,
           { textInputValue: existing + input },
@@ -257,13 +308,25 @@ export function useAskUserQuestionKeyboard(args: {
       }
     }
 
+    if (key.downArrow || key.upArrow) {
+      setFocusedOptionIndex(prev =>
+        applySingleSelectNav({
+          focusedOptionIndex: prev,
+          key: { downArrow: key.downArrow, upArrow: key.upArrow },
+          optionCount,
+        }),
+      )
+      return
+    }
+
     if (!key.return) return
 
     const isSelectingOther =
-      args.focusedOptionIndex === currentQuestion.options.length
+      focusedOptionIndex === currentQuestion.options.length
 
     if (isSelectingOther) {
-      const otherText = args.questionStates[questionText]?.textInputValue ?? ''
+      const otherText =
+        questionStatesRef.current[questionText]?.textInputValue ?? ''
       const trimmed = getTrimmedOtherAnswer(otherText)
       if (!trimmed) return
 
@@ -271,7 +334,10 @@ export function useAskUserQuestionKeyboard(args: {
       setQuestionState(questionText, { selectedValue }, false)
 
       if (args.hideSubmitTab) {
-        args.onAllowWithAnswers({ ...args.answers, [questionText]: trimmed })
+        args.onAllowWithAnswers({
+          ...answersRef.current,
+          [questionText]: trimmed,
+        })
         return
       }
 
@@ -279,15 +345,14 @@ export function useAskUserQuestionKeyboard(args: {
       return
     }
 
-    const selectedValue =
-      currentQuestion.options[args.focusedOptionIndex]?.label
+    const selectedValue = currentQuestion.options[focusedOptionIndex]?.label
     if (!selectedValue) return
 
     setQuestionState(questionText, { selectedValue }, false)
 
     if (args.hideSubmitTab) {
       args.onAllowWithAnswers({
-        ...args.answers,
+        ...answersRef.current,
         [questionText]: selectedValue,
       })
       return

@@ -42,7 +42,10 @@ export function AssistantThinkingMessage({
     >
       <Text>
         <Text color={theme.kode}>{BULLET}</Text>
-        <Text color={theme.text}> [Thinking {PROGRESS_FRAMES[progressFrame]}]</Text>
+        <Text color={theme.text}>
+          {' '}
+          [Thinking {PROGRESS_FRAMES[progressFrame]}]
+        </Text>
       </Text>
       <Box paddingLeft={2}>
         <Text color={theme.secondaryText} italic>

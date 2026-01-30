@@ -4,8 +4,8 @@ import { existsSync } from 'node:fs'
 import which from 'which'
 import type { ToolUseContext } from '#core/tooling/Tool'
 import type { BunShellSandboxOptions } from '#runtime/shell'
+import { resolveSandboxTmpDir } from '#runtime/shell/sandboxEnv'
 import { debug } from '#core/logging'
-import { LEGACY_ENV } from '#config/compat/legacyEnv'
 import {
   loadMergedSettings,
   normalizeSandboxRuntimeConfigFromSettings,
@@ -99,8 +99,6 @@ function getSandboxDefaultWriteAllowPaths(homeDir: string): string[] {
     '/dev/tty',
     '/dev/dtracehelper',
     '/dev/autofs_nowait',
-    '/tmp/kode',
-    '/private/tmp/kode',
   ]
 
   const addTmpAliasPaths = (tmpDir: string) => {
@@ -113,15 +111,8 @@ function getSandboxDefaultWriteAllowPaths(homeDir: string): string[] {
       out.push(tmpDir.replace('/private', ''))
   }
 
-  const explicitTmpDir = process.env.KODE_TMPDIR
-  if (typeof explicitTmpDir === 'string' && explicitTmpDir.trim()) {
-    addTmpAliasPaths(explicitTmpDir.trim())
-  }
-
-  const legacyTmpBase = process.env[LEGACY_ENV.codeTmpDir]
-  if (typeof legacyTmpBase === 'string' && legacyTmpBase.trim()) {
-    addTmpAliasPaths(join(legacyTmpBase.trim(), 'claude'))
-  }
+  const tmpDir = resolveSandboxTmpDir()
+  if (tmpDir) addTmpAliasPaths(tmpDir)
 
   out.push(join(homeDir, '.npm', '_logs'))
   out.push(join(homeDir, '.kode', 'debug'))

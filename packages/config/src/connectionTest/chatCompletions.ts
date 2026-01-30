@@ -87,7 +87,8 @@ export async function testChatCompletionsAPI(
 
       return {
         success: false,
-        message: 'Chat Completions connected but returned an unexpected response',
+        message:
+          'Chat Completions connected but returned an unexpected response',
         endpoint: '/chat/completions',
         details: `Expected \"YES\" but got: \"${responseContent.trim() || '(empty response)'}\"`,
         apiUsed: 'chat_completions',

@@ -71,7 +71,7 @@ export function ToolPicker(props: {
   const categorized = useMemo(() => {
     const readOnly = new Set(['Read', 'LS', 'Glob', 'Grep'])
     const edit = new Set(['Edit', 'Write', 'NotebookEdit'])
-    const execution = new Set(['Bash', 'TaskOutput', 'KillShell'])
+    const execution = new Set(['Bash', 'TaskOutput', 'TaskStop'])
 
     const buckets: Record<
       'readOnly' | 'edit' | 'execution' | 'mcp' | 'other',

@@ -29,13 +29,10 @@ export function useArrowKeyHistory<Extra>(args: {
   }, [historyIndex])
 
   const draftSnapshotRef = useRef<ArrowKeyHistorySnapshot<Extra> | null>(null)
-  const historySnapshotRef = useRef<
-    | Array<{
-        display: string
-        pastedTexts: Array<{ placeholder: string; text: string }>
-      }>
-    | null
-  >(null)
+  const historySnapshotRef = useRef<Array<{
+    display: string
+    pastedTexts: Array<{ placeholder: string; text: string }>
+  }> | null>(null)
   const lastHistoryNavTimeRef = useRef(0)
 
   const currentRef = useRef(current)

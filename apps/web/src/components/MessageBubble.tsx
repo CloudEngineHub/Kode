@@ -7,6 +7,7 @@ import type { AgentEvent, SdkContentBlock } from '@kode/protocol'
 import { cn } from '../lib/utils'
 import { Badge } from './ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
+import { Skeleton } from './ui/skeleton'
 import {
   Accordion,
   AccordionContent,
@@ -22,8 +23,14 @@ type BubbleMessage = {
   blocks?: SdkContentBlock[]
 }
 
+function isSdkContentBlock(value: unknown): value is SdkContentBlock {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const record = value as Record<string, unknown>
+  return typeof record.type === 'string' && record.type.trim().length > 0
+}
+
 function isSdkBlockArray(value: unknown): value is SdkContentBlock[] {
-  return Array.isArray(value) && value.every(v => typeof v === 'object' && v)
+  return Array.isArray(value) && value.every(isSdkContentBlock)
 }
 
 function extractTextFromBlocks(blocks: SdkContentBlock[]): string {
@@ -35,6 +42,29 @@ function extractTextFromBlocks(blocks: SdkContentBlock[]): string {
 }
 
 function toBubbleMessage(event: AgentEvent): BubbleMessage | null {
+  if (event.type === 'log') {
+    const level = event.log.level
+    const message = event.log.message
+    return { role: 'assistant', text: `\`[${level}]\` ${message}` }
+  }
+
+  if (event.type === 'result') {
+    const header = `**Run result**: ${event.subtype}`
+    const details = [
+      `- turns: ${event.num_turns}`,
+      `- duration: ${Math.round(event.duration_ms / 100) / 10}s`,
+      `- cost: $${event.total_cost_usd.toFixed(4)}`,
+      `- error: ${event.is_error ? 'yes' : 'no'}`,
+    ].join('\n')
+
+    const resultText =
+      typeof event.result === 'string' && event.result.trim().length > 0
+        ? `\n\n${event.result.trim()}`
+        : ''
+
+    return { role: 'assistant', text: `${header}\n${details}${resultText}` }
+  }
+
   if (event.type === 'user') {
     const content = event.message.content
     if (typeof content === 'string') return { role: 'user', text: content }
@@ -50,6 +80,10 @@ function toBubbleMessage(event: AgentEvent): BubbleMessage | null {
 
   if (event.type === 'assistant') {
     const content = event.message.content
+    if (typeof content === 'string') return { role: 'assistant', text: content }
+    if (!isSdkBlockArray(content)) {
+      return { role: 'assistant', text: '' }
+    }
     return {
       role: 'assistant',
       text: extractTextFromBlocks(content),
@@ -151,7 +185,16 @@ export function MessageBubble(props: { event: AgentEvent }) {
               {msg.text}
             </ReactMarkdown>
           ) : (
-            <span className="text-muted-foreground">…</span>
+            <div className="flex flex-col gap-2">
+              {isUser ? (
+                <span className="text-muted-foreground">…</span>
+              ) : (
+                <>
+                  <Skeleton className="h-4 w-40 bg-muted/60" />
+                  <Skeleton className="h-4 w-56 bg-muted/60" />
+                </>
+              )}
+            </div>
           )}
         </div>
         {renderBlocks(msg.blocks)}

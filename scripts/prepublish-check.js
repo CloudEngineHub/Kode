@@ -77,7 +77,9 @@ function runOrExit(cmd, args, options) {
   if (result.status !== 0) {
     if (result.stdout) process.stderr.write(result.stdout)
     if (result.stderr) process.stderr.write(result.stderr)
-    console.error(`❌ Command failed (${result.status}): ${cmd} ${args.join(' ')}`)
+    console.error(
+      `❌ Command failed (${result.status}): ${cmd} ${args.join(' ')}`,
+    )
     process.exit(typeof result.status === 'number' ? result.status : 1)
   }
   return result.stdout || ''
@@ -119,16 +121,23 @@ function assertPackContainsExactPaths(pack, requiredPaths) {
 }
 
 function assertPackContainsSomeUnderPrefix(pack, prefix, humanName) {
-  const hasAny = pack.files.some(f => typeof f?.path === 'string' && f.path.startsWith(prefix))
+  const hasAny = pack.files.some(
+    f => typeof f?.path === 'string' && f.path.startsWith(prefix),
+  )
   if (hasAny) return
-  console.error(`❌ npm pack is missing ${humanName} (expected files under ${prefix})`)
+  console.error(
+    `❌ npm pack is missing ${humanName} (expected files under ${prefix})`,
+  )
   process.exit(1)
 }
 
 function assertPackExcludesPrefixes(pack, prefixes) {
   const offenders = pack.files
     .map(f => f?.path)
-    .filter(p => typeof p === 'string' && prefixes.some(prefix => p.startsWith(prefix)))
+    .filter(
+      p =>
+        typeof p === 'string' && prefixes.some(prefix => p.startsWith(prefix)),
+    )
 
   if (offenders.length === 0) return
   console.error('❌ npm pack includes forbidden paths:')

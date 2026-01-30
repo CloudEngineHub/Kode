@@ -194,9 +194,7 @@ export function ConnectionTestScreen({
 
             {connectionTestResult.success ? (
               !tightLayout && (
-                <Text color={theme.success}>
-                  Automatically proceeding...
-                </Text>
+                <Text color={theme.success}>Automatically proceeding...</Text>
               )
             ) : (
               <Text>

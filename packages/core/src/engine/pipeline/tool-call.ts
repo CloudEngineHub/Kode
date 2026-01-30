@@ -16,6 +16,7 @@ import {
   runPostToolUseHooks,
   runPreToolUseHooks,
 } from '#core/utils/kodeHooks'
+import { runBuiltinPreToolUseGuards } from '#core/hooks/builtin/preToolUse'
 
 import type { AssistantMessage, Message } from './types'
 import { normalizeToolInput, preprocessToolInput } from './tool-input'
@@ -73,6 +74,23 @@ export async function* checkPermissionsAndCallTool(
   }
 
   let normalizedInput = normalizeToolInput(tool, isValidInput.data)
+
+  const builtinOutcome = runBuiltinPreToolUseGuards({
+    toolName: tool.name,
+    toolInput: normalizedInput,
+    cwd: getCwd(),
+  })
+  if (builtinOutcome?.kind === 'block') {
+    yield createUserMessage([
+      {
+        type: 'tool_result',
+        content: builtinOutcome.message,
+        is_error: true,
+        tool_use_id: toolUseID,
+      },
+    ])
+    return
+  }
 
   const isValidCall = await tool.validateInput?.(
     normalizedInput as never,
@@ -209,6 +227,42 @@ export async function* checkPermissionsAndCallTool(
       },
     ])
     return
+  }
+
+  const updatedInput =
+    'updatedInput' in permissionResult
+      ? permissionResult.updatedInput
+      : undefined
+
+  if (updatedInput) {
+    const parsed = tool.inputSchema.safeParse(updatedInput)
+    if (!parsed.success) {
+      yield createUserMessage([
+        {
+          type: 'tool_result',
+          content: `Permission updatedInput failed validation: ${parsed.error.message}`,
+          is_error: true,
+          tool_use_id: toolUseID,
+        },
+      ])
+      return
+    }
+    normalizedInput = normalizeToolInput(tool, parsed.data)
+    const isValidUpdate = await tool.validateInput?.(
+      normalizedInput as never,
+      context,
+    )
+    if (isValidUpdate?.result === false) {
+      yield createUserMessage([
+        {
+          type: 'tool_result',
+          content: isValidUpdate.message,
+          is_error: true,
+          tool_use_id: toolUseID,
+        },
+      ])
+      return
+    }
   }
 
   try {

@@ -18,6 +18,12 @@ export { __setMcpClientsForTests } from './clients'
 
 export { getMCPTools } from './tools'
 export { getMCPCommands, runCommand } from './commands'
+export {
+  authenticateMcpServer,
+  clearMcpAuth,
+  getMcpAuthSnapshot,
+} from './oauth'
+export { resetMcpConnections } from './reset'
 
 export {
   __resetMcpListChangedForTests,

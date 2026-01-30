@@ -1,6 +1,7 @@
 export type HookEventName =
   | 'PreToolUse'
   | 'PostToolUse'
+  | 'PreCompact'
   | 'Stop'
   | 'SubagentStop'
   | 'UserPromptSubmit'

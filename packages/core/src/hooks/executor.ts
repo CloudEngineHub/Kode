@@ -367,7 +367,10 @@ export async function executeHooksForMatchers(args: {
       })
 
       const env: Record<string, string> = {
-        ...buildHookExecEnv({ projectDir: args.cwd, pluginRoot: hook.pluginRoot }),
+        ...buildHookExecEnv({
+          projectDir: args.cwd,
+          pluginRoot: hook.pluginRoot,
+        }),
         ...(args.baseEnv ?? {}),
       }
 

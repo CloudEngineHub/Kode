@@ -101,7 +101,7 @@ npm install -g @shareai-lab/kode@dev
 
 ### 配置 / API Key
 
-- 全局配置（模型 profiles / 指针、主题等）：默认在 `~/.kode.json`（如设置 `KODE_CONFIG_DIR`/`CLAUDE_CONFIG_DIR` 则为 `<KODE_CONFIG_DIR>/config.json`）。
+- 全局配置（模型 profiles / 指针、主题等）：默认在 `~/.kode.json`（如设置 `KODE_CONFIG_DIR` 则为 `<KODE_CONFIG_DIR>/config.json`）。
 - 项目/本地 settings（如输出风格）：`./.kode/settings.json` 与 `./.kode/settings.local.json`（部分功能兼容 legacy `.claude`）。
 - 模型推荐用 `/model`（交互 UI）或 `kode models import/export`（YAML）。详见 `docs/develop/configuration.md`。
 
@@ -207,7 +207,7 @@ Kode 同时使用 `~/.kode` 目录（存放额外数据，如内存文件）和 
 Kode 支持 subagents（agent 模版），用于任务委派与编排。
 
 - Agents 会从 `.kode/agents` 与 `.claude/agents`（用户 + 项目）加载，并叠加 plugins/policy/`--agents`。
-- 用 `/agents` 打开管理 UI（默认新建写入 `./.claude/agents` / `~/.claude/agents`）
+- 用 `/agents` 打开管理 UI（默认新建写入 `./.kode/agents` / `~/.kode/agents`；legacy `.claude/agents` 仅作为读取兼容）
 - 用提及运行：`@run-agent-<agentType> ...`
 - 用工具运行：`Task(subagent_type: "<agentType>", ...)`
 - CLI flags：`--agents <json>`（本次运行注入 agents）、`--setting-sources user,project,local`（控制加载来源）
@@ -309,7 +309,7 @@ allowed-tools: Read Bash(git:*) Bash(jq:*)
 - 选择：`/output-style`（菜单）或 `/output-style <style>`
 - 内置：`default`、`Explanatory`、`Learning`
 - 按项目存储在 `./.kode/settings.local.json` 的 `outputStyle`（legacy `.claude/settings.local.json` 兼容）
-- 自定义风格：放在 `.claude/.kode` 的 `output-styles/` 下的 Markdown 文件
+- 自定义风格：放在 `./.kode/output-styles/` 或 `~/.kode/output-styles/`（legacy `.claude/output-styles/` 兼容）
 - 插件也可提供风格（`output-styles/` 或 manifest `outputStyles`）；插件风格命名为 `<plugin>:<style>`
 
 详见 `docs/output-styles.md`。

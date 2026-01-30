@@ -11,6 +11,7 @@ export interface ReminderMessage {
 }
 
 export interface ReminderConfig {
+  taskEmptyReminder: boolean
   todoEmptyReminder: boolean
   securityReminder: boolean
   performanceReminder: boolean
@@ -18,6 +19,8 @@ export interface ReminderConfig {
 }
 
 export interface SessionReminderState {
+  sessionId?: string
+  lastTaskUpdate: number
   lastTodoUpdate: number
   lastFileAccess: number
   sessionStartTime: number

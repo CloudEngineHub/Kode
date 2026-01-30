@@ -1,6 +1,7 @@
 import { existsSync, statSync } from 'node:fs'
 import { basename, resolve } from 'node:path'
 import { getModelManager } from '#core/utils/model'
+import { resolveToolNameAlias } from '#core/utils/toolNameAliases'
 import {
   defaultValidationPaths,
   listMarkdownFilesRecursively,
@@ -32,7 +33,7 @@ const VALID_PERMISSION_MODES = new Set([
 const SUBAGENT_HARD_BLOCKED_TOOLS = new Set<string>([
   'Task',
   'TaskOutput',
-  'KillShell',
+  'TaskStop',
   'EnterPlanMode',
   'ExitPlanMode',
   'AskUserQuestion',
@@ -178,7 +179,10 @@ function validateOneAgentFile(args: {
   if (Array.isArray(tools)) {
     for (const spec of tools) {
       const toolName = toolNameFromSpec(spec)
-      if (SUBAGENT_HARD_BLOCKED_TOOLS.has(toolName)) {
+      const resolution = resolveToolNameAlias(toolName)
+      const effectiveName = resolution.resolvedName
+
+      if (SUBAGENT_HARD_BLOCKED_TOOLS.has(effectiveName)) {
         issues.push({
           level: 'warning',
           message: `Tool '${toolName}' is not available to subagents and will be ignored`,
@@ -186,12 +190,14 @@ function validateOneAgentFile(args: {
       }
       if (
         args.knownToolNames &&
-        toolName &&
-        !args.knownToolNames.has(toolName)
+        effectiveName &&
+        !args.knownToolNames.has(effectiveName)
       ) {
         issues.push({
           level: 'warning',
-          message: `Unknown tool '${toolName}' (from '${spec}')`,
+          message: resolution.wasAliased
+            ? `Unknown tool '${toolName}' (alias of '${effectiveName}', from '${spec}')`
+            : `Unknown tool '${toolName}' (from '${spec}')`,
         })
       }
     }

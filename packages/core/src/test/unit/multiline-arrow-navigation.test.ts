@@ -3,7 +3,7 @@ import { Cursor, MeasuredText } from '#cli-utils/Cursor'
 
 describe('Multi-line arrow navigation', () => {
   test('MeasuredText correctly identifies line positions', () => {
-    const text = "line1\nline2\nline3"
+    const text = 'line1\nline2\nline3'
     const mt = new MeasuredText(text, 80)
 
     expect(mt.lineCount).toBe(3)
@@ -28,7 +28,7 @@ describe('Multi-line arrow navigation', () => {
   })
 
   test('Cursor.up() moves cursor to previous line', () => {
-    const text = "line1\nline2\nline3"
+    const text = 'line1\nline2\nline3'
     // Cursor at end of line2 (offset 11)
     const cursor = Cursor.fromText(text, 80, 11)
 
@@ -41,7 +41,7 @@ describe('Multi-line arrow navigation', () => {
   })
 
   test('Cursor.up() on first line returns cursor at offset 0', () => {
-    const text = "line1\nline2\nline3"
+    const text = 'line1\nline2\nline3'
     // Cursor in middle of line1 (offset 3)
     const cursor = Cursor.fromText(text, 80, 3)
 
@@ -53,7 +53,7 @@ describe('Multi-line arrow navigation', () => {
   })
 
   test('Cursor.down() moves cursor to next line', () => {
-    const text = "line1\nline2\nline3"
+    const text = 'line1\nline2\nline3'
     // Cursor at end of line1 (offset 5)
     const cursor = Cursor.fromText(text, 80, 5)
 
@@ -61,12 +61,14 @@ describe('Multi-line arrow navigation', () => {
     expect(pos.line).toBe(0)
 
     const downCursor = cursor.down()
-    const downPos = downCursor.measuredText.getPositionFromOffset(downCursor.offset)
+    const downPos = downCursor.measuredText.getPositionFromOffset(
+      downCursor.offset,
+    )
     expect(downPos.line).toBe(1)
   })
 
   test('Cursor.down() on last line returns cursor at end', () => {
-    const text = "line1\nline2\nline3"
+    const text = 'line1\nline2\nline3'
     // Cursor in middle of line3 (offset 14)
     const cursor = Cursor.fromText(text, 80, 14)
 
@@ -80,7 +82,7 @@ describe('Multi-line arrow navigation', () => {
 
   test('Line detection works with wrapped lines', () => {
     // Test with narrow column width causing wrapping
-    const text = "hello world this is a long line"
+    const text = 'hello world this is a long line'
     const mt = new MeasuredText(text, 10) // 10 columns
 
     // Should wrap into multiple lines
@@ -88,7 +90,7 @@ describe('Multi-line arrow navigation', () => {
   })
 
   test('Line detection works with explicit newlines and wrapping', () => {
-    const text = "short\nvery long line that will wrap"
+    const text = 'short\nvery long line that will wrap'
     const mt = new MeasuredText(text, 15)
 
     // Line 0: "short" (explicit newline)
@@ -158,7 +160,7 @@ describe('Arrow key navigation logic', () => {
   }
 
   test('Up arrow on middle line moves cursor (not history)', () => {
-    const input = "line1\nline2\nline3"
+    const input = 'line1\nline2\nline3'
     const cursorOffset = 8 // Middle of line2
 
     const disableCursor = shouldDisableCursorMovement({
@@ -181,7 +183,7 @@ describe('Arrow key navigation logic', () => {
   })
 
   test('Up arrow on first line navigates history', () => {
-    const input = "line1\nline2\nline3"
+    const input = 'line1\nline2\nline3'
     const cursorOffset = 3 // Middle of line1 (first line)
 
     const disableCursor = shouldDisableCursorMovement({
@@ -204,7 +206,7 @@ describe('Arrow key navigation logic', () => {
   })
 
   test('Down arrow on middle line moves cursor (not history)', () => {
-    const input = "line1\nline2\nline3"
+    const input = 'line1\nline2\nline3'
     const cursorOffset = 8 // Middle of line2
 
     const disableCursor = shouldDisableCursorMovement({
@@ -227,7 +229,7 @@ describe('Arrow key navigation logic', () => {
   })
 
   test('Down arrow on last line navigates history', () => {
-    const input = "line1\nline2\nline3"
+    const input = 'line1\nline2\nline3'
     const cursorOffset = 14 // Middle of line3 (last line)
 
     const disableCursor = shouldDisableCursorMovement({
@@ -250,7 +252,7 @@ describe('Arrow key navigation logic', () => {
   })
 
   test('Single-line input always navigates history', () => {
-    const input = "single line without newlines"
+    const input = 'single line without newlines'
     const cursorOffset = 10
 
     const disableCursor = shouldDisableCursorMovement({
@@ -273,7 +275,7 @@ describe('Arrow key navigation logic', () => {
   })
 
   test('Fast browse mode overrides line-based logic', () => {
-    const input = "line1\nline2\nline3"
+    const input = 'line1\nline2\nline3'
     const cursorOffset = 8 // Middle of line2
 
     const disableCursor = shouldDisableCursorMovement({
@@ -296,7 +298,7 @@ describe('Arrow key navigation logic', () => {
   })
 
   test('Browsing history (historyIndex > 0) always navigates history', () => {
-    const input = "line1\nline2\nline3"
+    const input = 'line1\nline2\nline3'
     const cursorOffset = 8 // Middle of line2
 
     const disableCursor = shouldDisableCursorMovement({
@@ -319,7 +321,7 @@ describe('Arrow key navigation logic', () => {
   })
 
   test('Completion active always navigates suggestions (not cursor)', () => {
-    const input = "line1\nline2\nline3"
+    const input = 'line1\nline2\nline3'
     const cursorOffset = 8 // Middle of line2
 
     const disableCursor = shouldDisableCursorMovement({

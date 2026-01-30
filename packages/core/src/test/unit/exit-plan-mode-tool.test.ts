@@ -41,7 +41,7 @@ describe('ExitPlanModeTool', () => {
     rmSync(configDir, { recursive: true, force: true })
   })
 
-  test('does not throw when no plan file exists (uses placeholder)', async () => {
+  test('does not throw when no plan file exists (plan is null)', async () => {
     const ctx = makeContext()
     const conversationKey = getPlanConversationKey(ctx)
     const planFilePath = getPlanFilePath(undefined, conversationKey)
@@ -59,7 +59,7 @@ describe('ExitPlanModeTool', () => {
     }
     expect(first.value.type).toBe('result')
     expect(first.value.data.filePath).toBe(planFilePath)
-    expect(first.value.data.plan).toContain('No plan found')
+    expect(first.value.data.plan).toBe(null)
   })
 
   test('approved output includes filePath and plan content', async () => {

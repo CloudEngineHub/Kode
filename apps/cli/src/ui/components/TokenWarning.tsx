@@ -1,30 +1,74 @@
 import { Box, Text } from 'ink'
 import * as React from 'react'
+import {
+  ERROR_MARGIN_TOKENS,
+  WARNING_MARGIN_TOKENS,
+  calculateAutoCompactThresholds,
+  getEffectiveConversationContextLimit,
+} from '#core/utils/autoCompactThreshold'
+import { getModelManager } from '#core/utils/model'
 import { getTheme } from '#core/utils/theme'
 
 type Props = {
   tokenUsage: number
+  contextLimit?: number
 }
 
-const MAX_TOKENS = 190_000
-export const WARNING_THRESHOLD = MAX_TOKENS * 0.6
-const ERROR_THRESHOLD = MAX_TOKENS * 0.8
+const FALLBACK_CONTEXT_LIMIT = 190_000
 
-export function TokenWarning({ tokenUsage }: Props): React.ReactNode {
+function getActiveContextLimit(): number {
+  try {
+    const profile = getModelManager().getModel('main')
+    if (
+      typeof profile?.contextLength === 'number' &&
+      Number.isFinite(profile.contextLength) &&
+      profile.contextLength > 0
+    ) {
+      return profile.contextLength
+    }
+  } catch {
+    // fall through
+  }
+  return FALLBACK_CONTEXT_LIMIT
+}
+
+export function TokenWarning({
+  tokenUsage,
+  contextLimit: contextLimitProp,
+}: Props): React.ReactNode {
   const theme = getTheme()
+  const contextLimit =
+    typeof contextLimitProp === 'number' &&
+    Number.isFinite(contextLimitProp) &&
+    contextLimitProp > 0
+      ? contextLimitProp
+      : getActiveContextLimit()
+  const effectiveContextLimit =
+    getEffectiveConversationContextLimit(contextLimit)
+  const { autoCompactThreshold } = calculateAutoCompactThresholds(
+    tokenUsage,
+    effectiveContextLimit,
+  )
+  const safeThreshold = Math.max(1, Math.floor(autoCompactThreshold))
 
-  if (tokenUsage < WARNING_THRESHOLD) {
+  const warningThreshold = Math.max(0, safeThreshold - WARNING_MARGIN_TOKENS)
+  const errorThreshold = Math.max(0, safeThreshold - ERROR_MARGIN_TOKENS)
+
+  if (tokenUsage < warningThreshold) {
     return null
   }
 
-  const isError = tokenUsage >= ERROR_THRESHOLD
+  const isError = tokenUsage >= errorThreshold
+  const percentRemaining = Math.max(
+    0,
+    100 - Math.round((tokenUsage / safeThreshold) * 100),
+  )
 
   return (
     <Box flexDirection="row">
       <Text color={isError ? theme.error : theme.warning} wrap="truncate-end">
-        Context low (
-        {Math.max(0, 100 - Math.round((tokenUsage / MAX_TOKENS) * 100))}%
-        remaining) &middot; Run /compact to compact & continue
+        Context low ({percentRemaining}% remaining) &middot; Run /compact to
+        compact & continue
       </Text>
     </Box>
   )

@@ -139,10 +139,6 @@ export async function serveNode<TData>(
           wss.handleUpgrade(req, socket, head, ws => {
             const wsWithData = Object.assign(ws, { data: upgradeOptions.data })
 
-            try {
-              options.websocket.open(wsWithData)
-            } catch {}
-
             ws.on('message', message => {
               Promise.resolve(
                 options.websocket.message(wsWithData, message),
@@ -153,6 +149,10 @@ export async function serveNode<TData>(
                 options.websocket.close(wsWithData)
               } catch {}
             })
+
+            try {
+              options.websocket.open(wsWithData)
+            } catch {}
           })
           return true
         } catch {

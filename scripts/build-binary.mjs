@@ -300,11 +300,7 @@ async function main() {
   // Linux seccomp assets (best-effort). Stage only the current arch.
   if (process.platform === 'linux') {
     const seccompArch =
-      process.arch === 'x64'
-        ? 'x64'
-        : process.arch === 'arm64'
-          ? 'arm64'
-          : null
+      process.arch === 'x64' ? 'x64' : process.arch === 'arm64' ? 'arm64' : null
 
     if (seccompArch) {
       const seccompSrc = join('vendor', 'seccomp', seccompArch)

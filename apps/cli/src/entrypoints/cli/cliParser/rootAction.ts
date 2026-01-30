@@ -51,6 +51,7 @@ type RootCommandOptions = {
   appendSystemPrompt?: string
   appendSystemPromptFile?: string
   permissionMode?: string
+  planModeRequired?: boolean
   permissionPromptTool?: string
   safe?: boolean
   disableSlashCommands?: boolean
@@ -103,6 +104,7 @@ export function createRootAction(args: {
       appendSystemPrompt,
       appendSystemPromptFile,
       permissionMode,
+      planModeRequired,
       permissionPromptTool,
       safe,
       disableSlashCommands,
@@ -124,8 +126,7 @@ export function createRootAction(args: {
   ) => {
     const cwd = maybeCwd ?? process.cwd()
     const resolvedEntrypoint =
-      process.env.KODE_ENTRYPOINT ??
-      process.env[LEGACY_ENV.codeEntryPoint]
+      process.env.KODE_ENTRYPOINT ?? process.env[LEGACY_ENV.codeEntryPoint]
     if (!resolvedEntrypoint) {
       const isNonInteractive =
         print === true ||
@@ -140,6 +141,11 @@ export function createRootAction(args: {
       process.env.KODE_ENTRYPOINT
     ) {
       process.env[LEGACY_ENV.codeEntryPoint] = process.env.KODE_ENTRYPOINT
+    }
+
+    if (planModeRequired === true) {
+      process.env.KODE_PLAN_MODE_REQUIRED = 'true'
+      process.env[LEGACY_ENV.codePlanModeRequired] = 'true'
     }
     const normalizedPermissionMode =
       typeof permissionMode === 'string' ? permissionMode.trim() : ''

@@ -45,9 +45,7 @@ function BashToolResultMessage({
     <Box flexDirection="column">
       {bashId ? (
         <Box paddingLeft={2}>
-          <Text color={theme.secondaryText}>
-            (background task: {bashId})
-          </Text>
+          <Text color={theme.secondaryText}>(background task: {bashId})</Text>
         </Box>
       ) : null}
       {stdout !== '' ? (

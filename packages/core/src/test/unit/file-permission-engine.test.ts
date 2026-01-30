@@ -288,12 +288,14 @@ describe('Compatibility: filesystem permission engine', () => {
     }
   })
 
-  test('allows writing to scratchpad files for the current session (claude tmpdir layout)', async () => {
+  test('allows writing to scratchpad files for the current session (kode tmpdir layout)', async () => {
     if (process.platform === 'win32') return
 
     const tmpScratchBase = mkdtempSync(path.join(tmpdir(), 'kode-scratchpad-'))
+    const previousClaudeTmpDir = process.env.CLAUDE_TMPDIR
     const previousTmp = process.env.CLAUDE_CODE_TMPDIR
     const previousSessionId = getKodeAgentSessionId()
+    delete process.env.CLAUDE_TMPDIR
     process.env.CLAUDE_CODE_TMPDIR = tmpScratchBase
     setKodeAgentSessionId('session-scratchpad-test')
 
@@ -307,7 +309,7 @@ describe('Compatibility: filesystem permission engine', () => {
       const sessionId = getKodeAgentSessionId()
       const scratchpadFile = path.join(
         tmpScratchBase,
-        'claude',
+        'kode',
         projectKey,
         sessionId,
         'scratchpad',
@@ -323,6 +325,8 @@ describe('Compatibility: filesystem permission engine', () => {
       expect(allowed.result).toBe(true)
     } finally {
       setKodeAgentSessionId(previousSessionId)
+      if (previousClaudeTmpDir === undefined) delete process.env.CLAUDE_TMPDIR
+      else process.env.CLAUDE_TMPDIR = previousClaudeTmpDir
       process.env.CLAUDE_CODE_TMPDIR = previousTmp
       rmSync(tmpScratchBase, { recursive: true, force: true })
     }
@@ -332,7 +336,9 @@ describe('Compatibility: filesystem permission engine', () => {
     if (process.platform === 'win32') return
 
     const tmpScratchBase = mkdtempSync(path.join(tmpdir(), 'kode-tasks-out-'))
+    const previousClaudeTmpDir = process.env.CLAUDE_TMPDIR
     const previousTmp = process.env.CLAUDE_CODE_TMPDIR
+    delete process.env.CLAUDE_TMPDIR
     process.env.CLAUDE_CODE_TMPDIR = tmpScratchBase
 
     try {
@@ -360,6 +366,8 @@ describe('Compatibility: filesystem permission engine', () => {
       )
       expect(allowed.result).toBe(true)
     } finally {
+      if (previousClaudeTmpDir === undefined) delete process.env.CLAUDE_TMPDIR
+      else process.env.CLAUDE_TMPDIR = previousClaudeTmpDir
       process.env.CLAUDE_CODE_TMPDIR = previousTmp
       rmSync(tmpScratchBase, { recursive: true, force: true })
     }

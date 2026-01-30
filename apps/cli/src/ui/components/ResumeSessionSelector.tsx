@@ -87,7 +87,8 @@ const ResumeSessionList = React.memo(function ResumeSessionList({
           const isSelected = absoluteIndex === clampedSelection
 
           const session = row.session
-          const modifiedAt = session.modifiedAt ?? session.createdAt ?? new Date(0)
+          const modifiedAt =
+            session.modifiedAt ?? session.createdAt ?? new Date(0)
           const modifiedLabel = formatDate(modifiedAt)
 
           const tag = session.tag ? `#${session.tag}` : null
@@ -1189,269 +1190,270 @@ export function ResumeSessionSelector(props: {
 
   useKeypress(
     (inputChar, key) => {
-    if (didSubmitRef.current) return true
+      if (didSubmitRef.current) return true
 
-    if (agenticSearch.status === 'searching') {
-      if (key.escape || (key.ctrl && inputChar.toLowerCase() === 'c')) {
-        cancelAgenticSearch()
-        return true
-      }
-      return true
-    }
-
-    const input = inputChar.length === 1 ? inputChar : ''
-    const lower = input.toLowerCase()
-    const inputText = !key.ctrl && !key.meta && key.insertable ? inputChar : ''
-    const sanitizedInput = inputText.replace(/[\r\n]+/g, ' ')
-
-    if (view === 'rename') {
-      if (key.escape || (key.ctrl && lower === 'c')) {
-        setView('list')
-        setSubmitError(null)
-        return true
-      }
-      return
-    }
-
-    if (view === 'crossProject') {
-      if (key.escape || (key.ctrl && lower === 'c')) {
-        setView('list')
-        setCrossProjectCommand(null)
-        setCrossProjectCwd(null)
-        setCrossProjectTitle(null)
-        setCrossProjectCopyStatus(null)
-        setSubmitError(null)
-        return true
-      }
-      return
-    }
-
-    if (view === 'preview') {
-      if (key.escape || (key.ctrl && lower === 'c')) {
-        closePreview()
+      if (agenticSearch.status === 'searching') {
+        if (key.escape || (key.ctrl && inputChar.toLowerCase() === 'c')) {
+          cancelAgenticSearch()
+          return true
+        }
         return true
       }
 
-      if (!previewWrapped) return true
+      const input = inputChar.length === 1 ? inputChar : ''
+      const lower = input.toLowerCase()
+      const inputText =
+        !key.ctrl && !key.meta && key.insertable ? inputChar : ''
+      const sanitizedInput = inputText.replace(/[\r\n]+/g, ' ')
 
-      if (key.upArrow) {
-        setPreviewScrollTop(prev => clamp(prev - 1, 0, previewMaxScrollTop))
-        return true
-      }
-      if (key.downArrow) {
-        setPreviewScrollTop(prev => clamp(prev + 1, 0, previewMaxScrollTop))
-        return true
-      }
-      if (key.pageUp) {
-        setPreviewScrollTop(prev =>
-          clamp(prev - previewContentRows, 0, previewMaxScrollTop),
-        )
-        return true
-      }
-      if (key.pageDown) {
-        setPreviewScrollTop(prev =>
-          clamp(prev + previewContentRows, 0, previewMaxScrollTop),
-        )
-        return true
-      }
-      if (key.home || inputChar === 'g') {
-        setPreviewScrollTop(0)
-        return true
-      }
-      if (key.end || inputChar === 'G') {
-        setPreviewScrollTop(previewMaxScrollTop)
-        return true
+      if (view === 'rename') {
+        if (key.escape || (key.ctrl && lower === 'c')) {
+          setView('list')
+          setSubmitError(null)
+          return true
+        }
+        return
       }
 
-      return true
-    }
+      if (view === 'crossProject') {
+        if (key.escape || (key.ctrl && lower === 'c')) {
+          setView('list')
+          setCrossProjectCommand(null)
+          setCrossProjectCwd(null)
+          setCrossProjectTitle(null)
+          setCrossProjectCopyStatus(null)
+          setSubmitError(null)
+          return true
+        }
+        return
+      }
 
-    if (view === 'search') return false
+      if (view === 'preview') {
+        if (key.escape || (key.ctrl && lower === 'c')) {
+          closePreview()
+          return true
+        }
 
-    if (view !== 'list') return
+        if (!previewWrapped) return true
 
-    if (key.ctrl && lower === 'c') {
-      close()
-      return true
-    }
+        if (key.upArrow) {
+          setPreviewScrollTop(prev => clamp(prev - 1, 0, previewMaxScrollTop))
+          return true
+        }
+        if (key.downArrow) {
+          setPreviewScrollTop(prev => clamp(prev + 1, 0, previewMaxScrollTop))
+          return true
+        }
+        if (key.pageUp) {
+          setPreviewScrollTop(prev =>
+            clamp(prev - previewContentRows, 0, previewMaxScrollTop),
+          )
+          return true
+        }
+        if (key.pageDown) {
+          setPreviewScrollTop(prev =>
+            clamp(prev + previewContentRows, 0, previewMaxScrollTop),
+          )
+          return true
+        }
+        if (key.home || inputChar === 'g') {
+          setPreviewScrollTop(0)
+          return true
+        }
+        if (key.end || inputChar === 'G') {
+          setPreviewScrollTop(previewMaxScrollTop)
+          return true
+        }
 
-    if (showAgenticSearchPrompt) {
-      if (key.return) {
-        setShowAgenticSearchPrompt(false)
-        void startAgenticSearch()
         return true
       }
-      if (key.downArrow) {
-        setShowAgenticSearchPrompt(false)
-        return true
-      }
-      if (key.upArrow) {
-        setShowAgenticSearchPrompt(false)
-        setView('search')
-        setSearchCursorOffset(query.length)
-        return true
-      }
-      if (key.escape) {
-        setQuery('')
-        setSearchCursorOffset(0)
-        resetSelection()
-        setShowAgenticSearchPrompt(false)
-        setSubmitError(null)
+
+      if (view === 'search') return false
+
+      if (view !== 'list') return
+
+      if (key.ctrl && lower === 'c') {
         close()
         return true
       }
-    }
 
-    if (key.escape) {
-      if (query.trim()) {
-        setQuery('')
-        setSearchCursorOffset(0)
+      if (showAgenticSearchPrompt) {
+        if (key.return) {
+          setShowAgenticSearchPrompt(false)
+          void startAgenticSearch()
+          return true
+        }
+        if (key.downArrow) {
+          setShowAgenticSearchPrompt(false)
+          return true
+        }
+        if (key.upArrow) {
+          setShowAgenticSearchPrompt(false)
+          setView('search')
+          setSearchCursorOffset(query.length)
+          return true
+        }
+        if (key.escape) {
+          setQuery('')
+          setSearchCursorOffset(0)
+          resetSelection()
+          setShowAgenticSearchPrompt(false)
+          setSubmitError(null)
+          close()
+          return true
+        }
+      }
+
+      if (key.escape) {
+        if (query.trim()) {
+          setQuery('')
+          setSearchCursorOffset(0)
+          resetSelection()
+          setSubmitError(null)
+          return true
+        }
+        close()
+        return true
+      }
+
+      if (!key.ctrl && !key.meta && input === '/') {
+        setView('search')
+        setSearchCursorOffset(query.length)
+        setSubmitError(null)
+        return true
+      }
+
+      if (key.ctrl && lower === 'a') {
+        setShowAllProjects(prev => !prev)
+        setShowAllWorktrees(false)
         resetSelection()
         setSubmitError(null)
         return true
       }
-      close()
-      return true
-    }
 
-    if (!key.ctrl && !key.meta && input === '/') {
-      setView('search')
-      setSearchCursorOffset(query.length)
-      setSubmitError(null)
-      return true
-    }
-
-    if (key.ctrl && lower === 'a') {
-      setShowAllProjects(prev => !prev)
-      setShowAllWorktrees(false)
-      resetSelection()
-      setSubmitError(null)
-      return true
-    }
-
-    if (key.ctrl && lower === 'b') {
-      setBranchFilterEnabled(prev => !prev)
-      resetSelection()
-      setSubmitError(null)
-      return true
-    }
-
-    if (key.ctrl && lower === 'w') {
-      if (!canFilterWorktrees) return true
-      setShowAllWorktrees(prev => !prev)
-      setShowAllProjects(false)
-      resetSelection()
-      setSubmitError(null)
-      return true
-    }
-
-    if (key.tab) {
-      cycleTag(key.shift ? -1 : 1)
-      resetSelection()
-      setSubmitError(null)
-      return true
-    }
-
-    if (key.ctrl && lower === 'v') {
-      openPreview()
-      return true
-    }
-
-    if (key.ctrl && lower === 'r') {
-      startRename()
-      return true
-    }
-
-    if (key.leftArrow && selectedRow && selectedRow.groupSize > 1) {
-      const isExpanded = expandedGroups.has(selectedRow.groupKey)
-      if (!isExpanded) return true
-
-      setExpandedGroups(prev => {
-        const next = new Set(prev)
-        next.delete(selectedRow.groupKey)
-        return next
-      })
-
-      if (selectedRow.indexInGroup > 0) {
-        const headerIndex = rows.findIndex(
-          row =>
-            row.groupKey === selectedRow.groupKey && row.indexInGroup === 0,
-        )
-        if (headerIndex >= 0) setSelectedIndex(headerIndex)
-      }
-
-      return true
-    }
-
-    if (
-      key.rightArrow &&
-      selectedRow &&
-      selectedRow.groupSize > 1 &&
-      selectedRow.isGroupHeader
-    ) {
-      const isExpanded = expandedGroups.has(selectedRow.groupKey)
-      if (isExpanded) return true
-
-      setExpandedGroups(prev => {
-        const next = new Set(prev)
-        next.add(selectedRow.groupKey)
-        return next
-      })
-      return true
-    }
-
-    if (key.return) {
-      void submitSelection()
-      return true
-    }
-
-    if (rows.length === 0) return
-
-    if (key.upArrow) {
-      if (clampedSelection === 0) {
-        setView('search')
+      if (key.ctrl && lower === 'b') {
+        setBranchFilterEnabled(prev => !prev)
+        resetSelection()
         setSubmitError(null)
         return true
       }
 
-      setSelectedIndex(prev => clamp(prev - 1, 0, rows.length - 1))
-      return true
-    }
+      if (key.ctrl && lower === 'w') {
+        if (!canFilterWorktrees) return true
+        setShowAllWorktrees(prev => !prev)
+        setShowAllProjects(false)
+        resetSelection()
+        setSubmitError(null)
+        return true
+      }
 
-    if (key.downArrow) {
-      setSelectedIndex(prev => clamp(prev + 1, 0, rows.length - 1))
-      return true
-    }
+      if (key.tab) {
+        cycleTag(key.shift ? -1 : 1)
+        resetSelection()
+        setSubmitError(null)
+        return true
+      }
 
-    if (key.pageUp) {
-      setSelectedIndex(prev => clamp(prev - visibleRows, 0, rows.length - 1))
-      return true
-    }
+      if (key.ctrl && lower === 'v') {
+        openPreview()
+        return true
+      }
 
-    if (key.pageDown) {
-      setSelectedIndex(prev => clamp(prev + visibleRows, 0, rows.length - 1))
-      return true
-    }
+      if (key.ctrl && lower === 'r') {
+        startRename()
+        return true
+      }
 
-    if (key.home) {
-      resetSelection()
-      return true
-    }
+      if (key.leftArrow && selectedRow && selectedRow.groupSize > 1) {
+        const isExpanded = expandedGroups.has(selectedRow.groupKey)
+        if (!isExpanded) return true
 
-    if (key.end) {
-      setSelectedIndex(Math.max(0, rows.length - 1))
-      return true
-    }
+        setExpandedGroups(prev => {
+          const next = new Set(prev)
+          next.delete(selectedRow.groupKey)
+          return next
+        })
 
-    if (sanitizedInput.trim()) {
-      const nextQuery = sanitizedInput.trim()
-      setQuery(nextQuery)
-      setSearchCursorOffset(nextQuery.length)
-      resetSelection()
-      setView('search')
-      setSubmitError(null)
-      return true
-    }
+        if (selectedRow.indexInGroup > 0) {
+          const headerIndex = rows.findIndex(
+            row =>
+              row.groupKey === selectedRow.groupKey && row.indexInGroup === 0,
+          )
+          if (headerIndex >= 0) setSelectedIndex(headerIndex)
+        }
+
+        return true
+      }
+
+      if (
+        key.rightArrow &&
+        selectedRow &&
+        selectedRow.groupSize > 1 &&
+        selectedRow.isGroupHeader
+      ) {
+        const isExpanded = expandedGroups.has(selectedRow.groupKey)
+        if (isExpanded) return true
+
+        setExpandedGroups(prev => {
+          const next = new Set(prev)
+          next.add(selectedRow.groupKey)
+          return next
+        })
+        return true
+      }
+
+      if (key.return) {
+        void submitSelection()
+        return true
+      }
+
+      if (rows.length === 0) return
+
+      if (key.upArrow) {
+        if (clampedSelection === 0) {
+          setView('search')
+          setSubmitError(null)
+          return true
+        }
+
+        setSelectedIndex(prev => clamp(prev - 1, 0, rows.length - 1))
+        return true
+      }
+
+      if (key.downArrow) {
+        setSelectedIndex(prev => clamp(prev + 1, 0, rows.length - 1))
+        return true
+      }
+
+      if (key.pageUp) {
+        setSelectedIndex(prev => clamp(prev - visibleRows, 0, rows.length - 1))
+        return true
+      }
+
+      if (key.pageDown) {
+        setSelectedIndex(prev => clamp(prev + visibleRows, 0, rows.length - 1))
+        return true
+      }
+
+      if (key.home) {
+        resetSelection()
+        return true
+      }
+
+      if (key.end) {
+        setSelectedIndex(Math.max(0, rows.length - 1))
+        return true
+      }
+
+      if (sanitizedInput.trim()) {
+        const nextQuery = sanitizedInput.trim()
+        setQuery(nextQuery)
+        setSearchCursorOffset(nextQuery.length)
+        resetSelection()
+        setView('search')
+        setSubmitError(null)
+        return true
+      }
     },
     { priority: KEYPRESS_PRIORITY.FULLSCREEN_OVERLAY },
   )
@@ -1743,11 +1745,7 @@ export function ResumeSessionSelector(props: {
             width={Math.max(10, layout.columns - layout.paddingX * 2)}
           />
         ) : (
-          <SearchBox
-            query={query}
-            isFocused={false}
-            isTerminalFocused={true}
-          />
+          <SearchBox query={query} isFocused={false} isTerminalFocused={true} />
         )}
 
         {infoBits.length > 0 ? (

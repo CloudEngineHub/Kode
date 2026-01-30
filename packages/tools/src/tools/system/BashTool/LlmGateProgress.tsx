@@ -32,15 +32,16 @@ export function LlmGateProgress({
     return () => clearInterval(timer)
   }, [])
 
-  const truncatedCommand = command.length > 60
-    ? `${command.slice(0, 57)}...`
-    : command
+  const truncatedCommand =
+    command.length > 60 ? `${command.slice(0, 57)}...` : command
 
   return (
     <Box flexDirection="column" marginY={1}>
       <Box>
         <Text color={theme.warning}>{SPINNER_FRAMES[frame]} </Text>
-        <Text color={theme.warning} bold>Reviewing destructive command...</Text>
+        <Text color={theme.warning} bold>
+          Reviewing destructive command...
+        </Text>
         <Text color={theme.secondaryText}> ({elapsedTime}s)</Text>
       </Box>
 

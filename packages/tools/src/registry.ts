@@ -7,13 +7,17 @@ import { BashTool } from '#tools/tools/system/BashTool/BashTool'
 import { TaskOutputTool } from '#tools/tools/system/TaskOutputTool/TaskOutputTool'
 import { EnterPlanModeTool } from '#tools/tools/interaction/PlanModeTool/EnterPlanModeTool'
 import { ExitPlanModeTool } from '#tools/tools/interaction/PlanModeTool/ExitPlanModeTool'
+import { TaskCreateTool } from '#tools/tools/interaction/TaskCreateTool/TaskCreateTool'
+import { TaskGetTool } from '#tools/tools/interaction/TaskGetTool/TaskGetTool'
+import { TaskListTool } from '#tools/tools/interaction/TaskListTool/TaskListTool'
+import { TaskUpdateTool } from '#tools/tools/interaction/TaskUpdateTool/TaskUpdateTool'
 import { FileEditTool } from '#tools/tools/filesystem/FileEditTool/FileEditTool'
 import { FileReadTool } from '#tools/tools/filesystem/FileReadTool/FileReadTool'
 import { FileWriteTool } from '#tools/tools/filesystem/FileWriteTool/FileWriteTool'
 import { GlobTool } from '#tools/tools/filesystem/GlobTool/GlobTool'
 import { LSTool } from '#tools/tools/filesystem/LSTool/LSTool'
 import { GrepTool } from '#tools/tools/search/GrepTool/GrepTool'
-import { KillShellTool } from '#tools/tools/system/KillShellTool/KillShellTool'
+import { TaskStopTool } from '#tools/tools/system/TaskStopTool/TaskStopTool'
 import { ListMcpResourcesTool } from '#tools/tools/mcp/ListMcpResourcesTool/ListMcpResourcesTool'
 import { LspTool } from '#tools/tools/system/LspTool/LspTool'
 import { MCPTool } from '#tools/tools/mcp/MCPTool/MCPTool'
@@ -35,7 +39,7 @@ export const getAllTools = (): Tool[] => [
   AskExpertModelTool as unknown as Tool,
   BashTool as unknown as Tool,
   TaskOutputTool as unknown as Tool,
-  KillShellTool as unknown as Tool,
+  TaskStopTool as unknown as Tool,
   LSTool as unknown as Tool,
   GlobTool as unknown as Tool,
   GrepTool as unknown as Tool,
@@ -44,6 +48,10 @@ export const getAllTools = (): Tool[] => [
   FileEditTool as unknown as Tool,
   FileWriteTool as unknown as Tool,
   NotebookEditTool as unknown as Tool,
+  TaskCreateTool as unknown as Tool,
+  TaskListTool as unknown as Tool,
+  TaskGetTool as unknown as Tool,
+  TaskUpdateTool as unknown as Tool,
   TodoWriteTool as unknown as Tool,
   WebSearchTool as unknown as Tool,
   WebFetchTool as unknown as Tool,

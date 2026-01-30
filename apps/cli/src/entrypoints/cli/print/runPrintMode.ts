@@ -239,18 +239,15 @@ export async function runPrintMode({
         totalCost >= maxBudgetUsd
 
       if (budgetExceeded) {
-        process.stdout.write(
-          `Error: Exceeded USD budget (${maxBudgetUsd})\n`,
-        )
+        process.stdout.write(`Error: Exceeded USD budget (${maxBudgetUsd})\n`)
         process.exit(0)
       }
 
       process.stdout.write(`${response}\n`)
       process.exit(0)
     } catch (error) {
-      const { MaxBudgetUsdExceededError } = await import(
-        '#core/errors/maxBudgetUsd'
-      )
+      const { MaxBudgetUsdExceededError } =
+        await import('#core/errors/maxBudgetUsd')
       const { MaxTurnsExceededError } = await import('#core/errors/maxTurns')
       if (error instanceof MaxBudgetUsdExceededError) {
         const budget = maxBudgetUsd ?? error.maxBudgetUsd

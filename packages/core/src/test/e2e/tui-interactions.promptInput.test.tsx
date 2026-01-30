@@ -168,7 +168,9 @@ function PromptInputCtrlCCancelHarness({
         conversationKey={conversationKey}
         isBypassPermissionsModeAvailable={true}
       >
-        <PromptInputCtrlCCancelHarnessInner initialIsLoading={initialIsLoading} />
+        <PromptInputCtrlCCancelHarnessInner
+          initialIsLoading={initialIsLoading}
+        />
       </PermissionProvider>
     </KeypressProvider>
   )
@@ -495,7 +497,7 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
     h.stdin.write('\u001B[Z')
     await h.wait(50)
 
-    expect(h.getOutput()).toContain('accept edits on')
+    expect(h.getOutput()).toContain('plan mode')
     expect(h.getOutput()).toContain('(shift+tab to cycle)')
   })
 

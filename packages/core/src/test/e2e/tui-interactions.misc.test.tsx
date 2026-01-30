@@ -13,6 +13,10 @@ import {
 import type { Message as KodeMessage } from '#core/query'
 import { Message } from '#ui-ink/components/Message'
 import { MessageResponse } from '#ui-ink/components/MessageResponse'
+import {
+  FAST_RETURN_TIMEOUT,
+  KeypressProvider,
+} from '#ui-ink/contexts/KeypressContext'
 import { createInkHarnessManager, createInkTestHarness } from './inkTestHarness'
 
 const harnessManager = createInkHarnessManager()
@@ -65,13 +69,15 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     }
 
     const h = createInkTestHarness(
-      <AskUserQuestionPermissionRequest
-        toolUseConfirm={toolUseConfirm}
-        onDone={() => {
-          done = true
-        }}
-        verbose={false}
-      />,
+      <KeypressProvider>
+        <AskUserQuestionPermissionRequest
+          toolUseConfirm={toolUseConfirm}
+          onDone={() => {
+            done = true
+          }}
+          verbose={false}
+        />
+      </KeypressProvider>,
     )
     harnessManager.track(h)
 
@@ -87,15 +93,17 @@ describe('TUI E2E regression (Ink render): Misc', () => {
       await h.wait(5)
     }
 
+    // Avoid KeypressProvider's "fast return" heuristic (treats rapid enter after typing as insertable).
+    await h.wait(FAST_RETURN_TIMEOUT + 10)
     h.stdin.write('\r')
     await h.wait(25)
 
     expect(allowed).toBe(true)
     expect(done).toBe(true)
-    const answers = (
-      toolUseConfirm.input as { answers?: Record<string, string> }
-    ).answers
-    expect(answers?.['What type of Snake game would you like?']).toBe('threejs')
+    const stored =
+      toolUseConfirm.toolUseContext.options?.askUserQuestionAnswersByToolUseId
+        ?.m
+    expect(stored?.['What type of Snake game would you like?']).toBe('threejs')
   })
 
   test('Bash overlay: ctrl+b triggers background callback', async () => {

@@ -1,64 +1,18 @@
 import type { Command } from '../types'
-import {
-  getClients,
-  getMcprcServerStatus,
-  listMCPServers,
-} from '#core/mcp/client'
-import { PRODUCT_COMMAND } from '#core/constants/product'
-import chalk from 'chalk'
-import { getTheme } from '#core/utils/theme'
-import { getProjectMcpServerDefinitions } from '#core/utils/config'
+import React from 'react'
+
+import { McpServersScreen } from '#ui-ink/screens/overlays/McpServersScreen'
 
 const mcp = {
-  type: 'local',
+  type: 'local-jsx',
   name: 'mcp',
-  description: 'Show MCP server connection status',
+  description: 'Manage MCP servers',
   isEnabled: true,
   isHidden: false,
-  async call() {
-    const servers = listMCPServers()
-    const clients = await getClients()
-    const theme = getTheme()
-    const projectFileServers = getProjectMcpServerDefinitions()
-
-    if (Object.keys(servers).length === 0) {
-      return [
-        '⎿  No MCP servers configured.',
-        `⎿  - Create \`.mcp.json\` or \`.mcprc\` in this project, or run \`${PRODUCT_COMMAND} mcp add\`.`,
-        `⎿  - Run \`${PRODUCT_COMMAND} mcp list\` to view configured servers.`,
-      ].join('\n')
-    }
-
-    const clientByName = new Map<string, (typeof clients)[number]>()
-    for (const client of clients) {
-      clientByName.set(client.name, client)
-    }
-
-    const serverStatusLines = Object.keys(servers)
-      .sort((a, b) => a.localeCompare(b))
-      .map(name => {
-        const client = clientByName.get(name)
-        if (client?.type === 'connected') {
-          return `⎿  • ${name}: ${chalk.hex(theme.success)('connected')}`
-        }
-        if (client?.type === 'failed') {
-          return `⎿  • ${name}: ${chalk.hex(theme.error)('failed')}`
-        }
-
-        if (projectFileServers.servers[name]) {
-          const approval = getMcprcServerStatus(name)
-          if (approval === 'pending') {
-            return `⎿  • ${name}: ${chalk.hex(theme.warning)('pending approval')}`
-          }
-          if (approval === 'rejected') {
-            return `⎿  • ${name}: ${chalk.hex(theme.error)('rejected')}`
-          }
-        }
-
-        return `⎿  • ${name}: ${chalk.hex(theme.error)('disconnected')}`
-      })
-
-    return ['⎿  MCP Server Status', ...serverStatusLines].join('\n')
+  ui: { displayMode: 'fullscreen' },
+  disableNonInteractive: true,
+  async call(onDone) {
+    return React.createElement(McpServersScreen, { onDone })
   },
   userFacingName() {
     return 'mcp'

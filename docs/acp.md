@@ -37,7 +37,7 @@ toad acp "kode-acp"
 ACP sessions are persisted per-project, so `session/load` works across restarts.
 
 - Default location: `~/.kode/<project-slug>/acp-sessions/<sessionId>.json`
-- Override base dir: set `KODE_CONFIG_DIR` (also respects `CLAUDE_CONFIG_DIR` for compatibility)
+- Override base dir: set `KODE_CONFIG_DIR`
 
 ## Tool calls & diffs (toad-friendly)
 

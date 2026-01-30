@@ -9,6 +9,14 @@ export type ClientWsMessage =
       updatedInput: Record<string, unknown> | null
       rejectionMessage: string | null
     }
+  | { type: 'fs_read'; path: string }
+  | { type: 'fs_write'; path: string; content: string }
+  | { type: 'git_branches' }
+  | { type: 'git_checkout'; branch: string }
+  | { type: 'git_status' }
+  | { type: 'git_diff'; path: string; staged: boolean }
+  | { type: 'git_stage'; path: string }
+  | { type: 'git_commit'; message: string }
   | { type: 'list_sessions' }
   | { type: 'new_session' }
   | { type: 'resume'; sessionId: string }
@@ -57,6 +65,49 @@ export function parseClientWsMessage(message: RawData):
     return { ok: true, value: { type: 'list_sessions' } }
   if (type === 'new_session')
     return { ok: true, value: { type: 'new_session' } }
+
+  if (type === 'fs_read') {
+    const path = typeof payload.path === 'string' ? payload.path : ''
+    if (!path.trim()) return { ok: false, error: 'Invalid path' }
+    return { ok: true, value: { type: 'fs_read', path } }
+  }
+
+  if (type === 'fs_write') {
+    const path = typeof payload.path === 'string' ? payload.path : ''
+    const content = typeof payload.content === 'string' ? payload.content : ''
+    if (!path.trim()) return { ok: false, error: 'Invalid path' }
+    return { ok: true, value: { type: 'fs_write', path, content } }
+  }
+
+  if (type === 'git_branches')
+    return { ok: true, value: { type: 'git_branches' } }
+
+  if (type === 'git_checkout') {
+    const branch = typeof payload.branch === 'string' ? payload.branch : ''
+    if (!branch.trim()) return { ok: false, error: 'Invalid branch' }
+    return { ok: true, value: { type: 'git_checkout', branch } }
+  }
+
+  if (type === 'git_status') return { ok: true, value: { type: 'git_status' } }
+
+  if (type === 'git_diff') {
+    const path = typeof payload.path === 'string' ? payload.path : ''
+    const staged = payload.staged === true
+    if (!path.trim()) return { ok: false, error: 'Invalid path' }
+    return { ok: true, value: { type: 'git_diff', path, staged } }
+  }
+
+  if (type === 'git_stage') {
+    const path = typeof payload.path === 'string' ? payload.path : ''
+    if (!path.trim()) return { ok: false, error: 'Invalid path' }
+    return { ok: true, value: { type: 'git_stage', path } }
+  }
+
+  if (type === 'git_commit') {
+    const message = typeof payload.message === 'string' ? payload.message : ''
+    if (!message.trim()) return { ok: false, error: 'Invalid commit message' }
+    return { ok: true, value: { type: 'git_commit', message } }
+  }
 
   if (type === 'resume') {
     const sessionId =

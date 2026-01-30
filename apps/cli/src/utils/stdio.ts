@@ -124,7 +124,11 @@ function writeToInkStdout(
   }
 
   beginSynchronizedOutput()
-  const result = (originalStdoutWrite as unknown as any)(chunk, encodingOrCb, cb)
+  const result = (originalStdoutWrite as unknown as any)(
+    chunk,
+    encodingOrCb,
+    cb,
+  )
   scheduleEndSynchronizedOutput()
   return result
 }

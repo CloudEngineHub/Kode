@@ -4,12 +4,7 @@ import { join } from 'path'
 import { getKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
 
 import { appendToJsonLog, readJsonLog } from './jsonLog'
-import {
-  CACHE_PATHS,
-  DATE,
-  getErrorsPath,
-  getLegacyErrorsPath,
-} from './paths'
+import { CACHE_PATHS, DATE, getErrorsPath, getLegacyErrorsPath } from './paths'
 
 const IN_MEMORY_ERROR_LOG: Array<{ error: string; timestamp: string }> = []
 const MAX_IN_MEMORY_ERRORS = 100 // Limit to prevent memory issues

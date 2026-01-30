@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { getBashGateFindings, shouldReviewBashCommand } from './dataLossRules'
 
-const shouldTrigger = (cmd: string) => shouldReviewBashCommand(getBashGateFindings(cmd))
+const shouldTrigger = (cmd: string) =>
+  shouldReviewBashCommand(getBashGateFindings(cmd))
 
 describe('dataLossRules', () => {
   describe('Git operations', () => {
@@ -79,7 +80,9 @@ describe('dataLossRules', () => {
     })
 
     test('does not trigger on dd writing to file', () => {
-      expect(shouldTrigger('dd if=/dev/zero of=./test.img bs=1M count=100')).toBe(false)
+      expect(
+        shouldTrigger('dd if=/dev/zero of=./test.img bs=1M count=100'),
+      ).toBe(false)
     })
 
     test('detects rm on critical paths', () => {
@@ -141,7 +144,9 @@ describe('dataLossRules', () => {
 
     test('does not trigger on grep/cat reading files', () => {
       expect(shouldTrigger('grep "git reset" history.log')).toBe(false)
-      expect(shouldTrigger('cat scripts/deploy.sh | grep terraform')).toBe(false)
+      expect(shouldTrigger('cat scripts/deploy.sh | grep terraform')).toBe(
+        false,
+      )
     })
   })
 

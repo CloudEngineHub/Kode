@@ -4,6 +4,7 @@ import type {
 } from '@anthropic-ai/sdk/resources/index.mjs'
 
 import type { AssistantMessage, UserMessage } from '#core/query'
+import { resolveToolNameAlias } from '#core/utils/toolNameAliases'
 
 import type * as Protocol from '../protocol'
 import { isRecord } from './guards'
@@ -19,7 +20,8 @@ export function asJsonObject(value: unknown): Protocol.JsonObject | undefined {
 }
 
 export function toolKindForName(toolName: string): Protocol.ToolKind {
-  switch (toolName) {
+  const resolved = resolveToolNameAlias(toolName).resolvedName
+  switch (resolved) {
     case 'Read':
       return 'read'
     case 'Write':
@@ -32,7 +34,7 @@ export function toolKindForName(toolName: string): Protocol.ToolKind {
       return 'search'
     case 'Bash':
     case 'TaskOutput':
-    case 'KillShell':
+    case 'TaskStop':
       return 'execute'
     case 'SwitchModel':
       return 'switch_mode'

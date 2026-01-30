@@ -21,7 +21,10 @@ export function __getQueuedPromptLinesForTests(args: {
   if (safeWidth < 8) return []
   if (args.queuedPrompts.length === 0) return []
 
-  const hiddenEarlierCount = Math.max(0, args.queuedPrompts.length - maxMessages)
+  const hiddenEarlierCount = Math.max(
+    0,
+    args.queuedPrompts.length - maxMessages,
+  )
   const visiblePrompts =
     hiddenEarlierCount > 0
       ? args.queuedPrompts.slice(-maxMessages)
@@ -45,7 +48,9 @@ export function __getQueuedPromptLinesForTests(args: {
 
     visible.forEach((line, index) => {
       lines.push(
-        index === 0 ? `${FIRST_LINE_PREFIX}${line}` : `${WRAPPED_LINE_PREFIX}${line}`,
+        index === 0
+          ? `${FIRST_LINE_PREFIX}${line}`
+          : `${WRAPPED_LINE_PREFIX}${line}`,
       )
     })
 
@@ -81,4 +86,3 @@ export function QueuedPrompts({
     </Box>
   )
 }
-

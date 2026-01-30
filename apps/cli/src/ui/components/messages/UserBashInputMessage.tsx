@@ -21,7 +21,9 @@ export function UserBashInputMessage({
   return (
     <Box flexDirection="column" marginTop={addMargin ? 1 : 0} width="100%">
       <Box>
-        <Text color={theme.bashBorder} bold>$</Text>
+        <Text color={theme.bashBorder} bold>
+          $
+        </Text>
         <Text bold> {input}</Text>
       </Box>
     </Box>

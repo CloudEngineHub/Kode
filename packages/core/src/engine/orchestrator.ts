@@ -1,5 +1,5 @@
 import type { CanUseToolFn } from '#core/permissions/canUseTool'
-import { getCwd } from '#core/utils/state'
+import { getOriginalCwd } from '#core/utils/state'
 import { appendSessionJsonlFromMessage } from '#protocol/utils/kodeAgentSessionLog'
 
 import type {
@@ -29,13 +29,13 @@ export async function* query(
   const shouldPersistSession =
     toolUseContext.options?.persistSession !== false &&
     process.env.NODE_ENV !== 'test'
-  const cwd = shouldPersistSession ? getCwd() : null
+  const cwd = shouldPersistSession ? getOriginalCwd() : null
 
   if (shouldPersistSession) {
     const last = messages[messages.length - 1]
     if (last?.type === 'user') {
       appendSessionJsonlFromMessage({
-        cwd: cwd ?? getCwd(),
+        cwd: cwd ?? getOriginalCwd(),
         message: last,
         toolUseContext,
       })
@@ -52,7 +52,7 @@ export async function* query(
   )) {
     if (shouldPersistSession) {
       appendSessionJsonlFromMessage({
-        cwd: cwd ?? getCwd(),
+        cwd: cwd ?? getOriginalCwd(),
         message,
         toolUseContext,
       })

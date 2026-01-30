@@ -288,7 +288,10 @@ export function PromptInputView({
               <SentryErrorBoundary
                 children={
                   <Box justifyContent="flex-end" gap={1}>
-                    <TokenWarning tokenUsage={tokenUsage} />
+                    <TokenWarning
+                      tokenUsage={tokenUsage}
+                      contextLimit={modelInfo?.contextLength}
+                    />
                   </Box>
                 }
               />
@@ -309,6 +312,7 @@ export function PromptInputView({
           selectedIndex={selectedIndex}
           emptyDirMessage={emptyDirMessage}
           tokenUsage={tokenUsage}
+          contextLimit={modelInfo?.contextLength}
           reservedRows={completionReservedRows}
         />
       )}

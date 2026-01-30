@@ -1,15 +1,26 @@
 import { describe, expect, test } from 'bun:test'
+import { WebSocket as WsClient } from 'ws'
 
 import { startKodeDaemon } from '#daemon/server'
 
 type AnyEvent = any
 
-function getWsMessageData(ev: unknown): unknown {
-  if (!ev || typeof ev !== 'object' || Array.isArray(ev)) return undefined
-  return (ev as Record<string, unknown>).data
+function decodeWsMessageData(raw: unknown): string {
+  if (typeof raw === 'string') return raw
+  if (raw instanceof ArrayBuffer) {
+    return new TextDecoder().decode(new Uint8Array(raw))
+  }
+  if (ArrayBuffer.isView(raw)) {
+    const view = raw as ArrayBufferView
+    return new TextDecoder().decode(
+      new Uint8Array(view.buffer, view.byteOffset, view.byteLength),
+    )
+  }
+  return String(raw ?? '')
 }
 
 function waitForEvent(
+  label: string,
   events: AnyEvent[],
   predicate: (e: AnyEvent) => boolean,
   timeoutMs: number,
@@ -19,10 +30,29 @@ function waitForEvent(
     const tick = () => {
       const found = events.find(predicate)
       if (found) return resolve(found)
-      if (Date.now() > deadline) return reject(new Error('timeout'))
+      if (Date.now() > deadline) {
+        return reject(new Error(`timeout (${label}, events=${events.length})`))
+      }
       setTimeout(tick, 10)
     }
     tick()
+  })
+}
+
+async function closeWs(ws: WsClient): Promise<void> {
+  await new Promise<void>(resolve => {
+    const done = () => resolve()
+    const timer = setTimeout(done, 250)
+    try {
+      ws.once('close', () => {
+        clearTimeout(timer)
+        done()
+      })
+      ws.close()
+    } catch {
+      clearTimeout(timer)
+      done()
+    }
   })
 }
 
@@ -52,27 +82,32 @@ describe('daemon (Bun HTTP+WS)', () => {
       ).then(r => r.json())
       expect(authorized.ok).toBe(true)
 
-      const ws = new WebSocket(
+      const ws = new WsClient(
         `ws://${daemon.host}:${daemon.port}/ws?token=${encodeURIComponent(
           daemon.token,
         )}`,
       )
 
       const events: AnyEvent[] = []
-      ws.addEventListener('message', ev => {
+      ws.on('message', data => {
         try {
-          events.push(JSON.parse(String(getWsMessageData(ev))))
+          events.push(JSON.parse(decodeWsMessageData(data)))
         } catch {}
       })
 
       await new Promise<void>((resolve, reject) => {
-        ws.addEventListener('open', () => resolve(), { once: true })
-        ws.addEventListener('error', () => reject(new Error('ws error')), {
-          once: true,
-        })
+        ws.once('open', () => resolve())
+        ws.once('error', err =>
+          reject(
+            err instanceof Error
+              ? err
+              : new Error(err ? String(err) : 'ws error'),
+          ),
+        )
       })
 
       await waitForEvent(
+        'init',
         events,
         e => e && e.type === 'system' && e.subtype === 'init',
         5_000,
@@ -81,6 +116,7 @@ describe('daemon (Bun HTTP+WS)', () => {
       ws.send(JSON.stringify({ type: 'prompt', prompt: 'hello' }))
 
       const result = await waitForEvent(
+        'result',
         events,
         e => e && e.type === 'result',
         5_000,
@@ -89,6 +125,7 @@ describe('daemon (Bun HTTP+WS)', () => {
       expect(result.result).toBe('hello')
 
       const assistant = await waitForEvent(
+        'assistant',
         events,
         e => e && e.type === 'assistant',
         5_000,
@@ -101,9 +138,7 @@ describe('daemon (Bun HTTP+WS)', () => {
         : ''
       expect(text).toContain('hello')
 
-      try {
-        ws.close()
-      } catch {}
+      await closeWs(ws)
     } finally {
       daemon.stop()
     }

@@ -1,7 +1,11 @@
 import type { ChatCompletionStream } from 'openai/lib/ChatCompletionStream'
 import type OpenAI from 'openai'
 import { debug as debugLogger } from '#core/utils/debugLogger'
-import { setRequestStatus, setRequestInputTokens, updateRequestTokens } from '#core/utils/requestStatus'
+import {
+  setRequestStatus,
+  setRequestInputTokens,
+  updateRequestTokens,
+} from '#core/utils/requestStatus'
 
 function messageReducer(
   previous: OpenAI.ChatCompletionMessage,

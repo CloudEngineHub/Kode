@@ -1,7 +1,7 @@
 import { dirname, isAbsolute, resolve, relative } from 'path'
 import { statSync } from 'fs'
 import { getCwd, getOriginalCwd } from '#core/utils/state'
-import { isMainPlanFilePathForActiveConversation } from '#core/utils/planMode'
+import { isPlanFilePathForActiveConversation } from '#core/utils/planMode'
 
 // In-memory storage for file permissions that resets each session
 // Sets of allowed directories for read and write operations
@@ -63,7 +63,7 @@ export function pathInOriginalCwd(path: string): boolean {
  * @returns true if read permission exists, false otherwise
  */
 export function hasReadPermission(directory: string): boolean {
-  if (isMainPlanFilePathForActiveConversation(directory)) return true
+  if (isPlanFilePathForActiveConversation(directory)) return true
   const absolutePath = toAbsolutePath(directory)
   for (const allowedPath of readFileAllowedDirectories) {
     if (isSubpath(allowedPath, absolutePath)) return true
@@ -77,7 +77,7 @@ export function hasReadPermission(directory: string): boolean {
  * @returns true if write permission exists, false otherwise
  */
 export function hasWritePermission(directory: string): boolean {
-  if (isMainPlanFilePathForActiveConversation(directory)) return true
+  if (isPlanFilePathForActiveConversation(directory)) return true
   const absolutePath = toAbsolutePath(directory)
   for (const allowedPath of writeFileAllowedDirectories) {
     if (isSubpath(allowedPath, absolutePath)) return true

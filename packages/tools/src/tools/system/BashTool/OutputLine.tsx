@@ -18,7 +18,9 @@ function renderTruncatedContent(
   // Show last N lines of output by default
   const lastLines = allLines.slice(-maxLines)
   return [
-    chalk.grey(`... ${totalLines - maxLines} lines hidden, showing last ${maxLines} lines`),
+    chalk.grey(
+      `... ${totalLines - maxLines} lines hidden, showing last ${maxLines} lines`,
+    ),
     ...lastLines,
   ].join('\n')
 }
@@ -43,7 +45,9 @@ export function OutputLine({
   const theme = getTheme()
 
   if (maxHeight && maxWidth) {
-    const coloredText = isError ? chalk.hex(theme.error)(trimmed) : chalk.dim(trimmed)
+    const coloredText = isError
+      ? chalk.hex(theme.error)(trimmed)
+      : chalk.dim(trimmed)
     return (
       <Box width="100%" paddingLeft={2}>
         <MaxSizedText

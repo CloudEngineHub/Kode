@@ -16,24 +16,21 @@ export type AnthropicProviderRuntime =
 export function getAnthropicProviderRuntime(): AnthropicProviderRuntime {
   if (
     isTruthyEnv(
-      process.env.KODE_USE_BEDROCK ??
-        process.env[LEGACY_ENV.codeUseBedrock],
+      process.env.KODE_USE_BEDROCK ?? process.env[LEGACY_ENV.codeUseBedrock],
     )
   ) {
     return 'bedrock'
   }
   if (
     isTruthyEnv(
-      process.env.KODE_USE_VERTEX ??
-        process.env[LEGACY_ENV.codeUseVertex],
+      process.env.KODE_USE_VERTEX ?? process.env[LEGACY_ENV.codeUseVertex],
     )
   ) {
     return 'vertex'
   }
   if (
     isTruthyEnv(
-      process.env.KODE_USE_FOUNDRY ??
-        process.env[LEGACY_ENV.codeUseFoundry],
+      process.env.KODE_USE_FOUNDRY ?? process.env[LEGACY_ENV.codeUseFoundry],
     )
   ) {
     return 'foundry'

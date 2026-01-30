@@ -85,7 +85,8 @@ export async function runNonTextPrintMode(
   args: RunNonTextPrintModeArgs,
 ): Promise<void> {
   const { createUserMessage } = await import('#core/utils/messages')
-  const { getTotalCost, getTotalAPIDuration } = await import('#core/cost-tracker')
+  const { getTotalCost, getTotalAPIDuration } =
+    await import('#core/cost-tracker')
   const { buildSystemPromptForSession, getSessionContext, runTurn, query } =
     await import('#core/engine')
   const { getKodeAgentSessionId } =

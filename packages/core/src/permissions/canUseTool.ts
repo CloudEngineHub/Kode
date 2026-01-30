@@ -8,7 +8,7 @@ export type CanUseToolFn = (
   toolUseContext: ToolUseContext,
   assistantMessage: AssistantMessage,
 ) => Promise<
-  | { result: true }
+  | { result: true; updatedInput?: { [key: string]: unknown } }
   | {
       result: false
       message: string

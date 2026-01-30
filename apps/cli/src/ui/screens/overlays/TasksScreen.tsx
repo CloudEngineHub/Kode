@@ -2,14 +2,17 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Box, Text } from 'ink'
 
 import { BunShell } from '#runtime/shell'
-import { getTaskOutputFilePath } from '#runtime/taskOutputStore'
+import {
+  getTaskOutputFilePath,
+  readTaskOutputTailLines,
+} from '#runtime/taskOutputStore'
 import {
   killBackgroundAgentTask,
   listBackgroundAgentTaskSnapshots,
   type BackgroundAgentStatus,
   type BackgroundAgentTask,
 } from '#core/utils/backgroundTasks'
-import { getCwd } from '#core/utils/state'
+import { getOriginalCwd } from '#core/utils/state'
 import { getTheme } from '#core/utils/theme'
 import { getKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
 import { getAgentLogFilePath } from '#protocol/utils/kodeAgentSessionLog'
@@ -21,7 +24,7 @@ import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 
 const VIEWPORT_SAFE_MARGIN_ROWS = 1
 const INDICATOR_ROWS = 2
-const REFRESH_INTERVAL_MS = 250
+const REFRESH_INTERVAL_MS = 1000
 
 type ShellTaskStatus = 'running' | 'completed' | 'failed' | 'killed'
 
@@ -30,6 +33,11 @@ type ShellTaskSummary = {
   command: string
   status: ShellTaskStatus
   exitCode: number | null
+  startedAt: number
+  completedAt?: number
+  outputFile: string
+  stdoutLineCount: number
+  stderrLineCount: number
 }
 
 type TreeNode =
@@ -73,6 +81,8 @@ type FlatItem =
       task: ShellTaskSummary
     }
 
+type DetailTarget = { kind: 'shell' | 'agent'; id: string }
+
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
 }
@@ -82,6 +92,15 @@ function firstLine(text: string, maxLen: number): string {
   const trimmed = line.trim()
   if (trimmed.length <= maxLen) return trimmed
   return trimmed.slice(0, maxLen - 1) + '…'
+}
+
+function formatRuntime(startedAt: number, completedAt?: number): string {
+  const end = completedAt ?? Date.now()
+  const deltaSeconds = Math.max(0, Math.floor((end - startedAt) / 1000))
+  const hours = Math.floor(deltaSeconds / 3600)
+  const minutes = Math.floor((deltaSeconds - hours * 3600) / 60)
+  const seconds = deltaSeconds - hours * 3600 - minutes * 60
+  return `${hours > 0 ? `${hours}h ` : ''}${minutes > 0 || hours > 0 ? `${minutes}m ` : ''}${seconds}s`
 }
 
 function rankStatus(status: BackgroundAgentStatus | ShellTaskStatus): number {
@@ -147,6 +166,11 @@ function buildShellSummaries(): ShellTaskSummary[] {
     command: t.command,
     status: shellStatusFromRuntime(t),
     exitCode: t.code,
+    startedAt: t.startedAt,
+    completedAt: t.completedAt,
+    outputFile: t.outputFile || getTaskOutputFilePath(t.id),
+    stdoutLineCount: t.stdoutLineCount,
+    stderrLineCount: t.stderrLineCount,
   }))
 }
 
@@ -407,6 +431,7 @@ export function TasksScreen({
   const [status, setStatus] = useState<string | null>(null)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [scrollTop, setScrollTop] = useState(0)
+  const [detailTarget, setDetailTarget] = useState<DetailTarget | null>(null)
   const userMovedSelectionRef = useRef(false)
 
   const [tick, setTick] = useState(0)
@@ -499,6 +524,24 @@ export function TasksScreen({
 
   const selected = flatItems[selectedIndex] ?? null
 
+  const detailTask = useMemo(() => {
+    if (!detailTarget) return null
+    if (detailTarget.kind === 'shell') {
+      return shellTasks.find(t => t.id === detailTarget.id) ?? null
+    }
+    return agentTasks.find(t => t.agentId === detailTarget.id) ?? null
+  }, [agentTasks, detailTarget, shellTasks])
+
+  const detailOutputLines = useMemo(() => {
+    if (!detailTarget) return []
+    return readTaskOutputTailLines(detailTarget.id, 10)
+  }, [detailTarget, tick])
+
+  const openDetails = useCallback(() => {
+    if (!selected || selected.kind === 'group') return
+    setDetailTarget({ kind: selected.kind, id: selected.id })
+  }, [selected])
+
   const openOutput = useCallback(async () => {
     if (!selected || selected.kind === 'group') return
 
@@ -515,7 +558,7 @@ export function TasksScreen({
     if (!selected || selected.kind !== 'agent') return
 
     const logPath = getAgentLogFilePath({
-      cwd: getCwd(),
+      cwd: getOriginalCwd(),
       sessionId: getKodeAgentSessionId(),
       agentId: selected.id,
     })
@@ -542,8 +585,45 @@ export function TasksScreen({
     setStatus(killed ? `Killed agent task: ${selected.id}` : 'Task not running')
   }, [selected])
 
+  const killDetailTask = useCallback(() => {
+    if (!detailTarget) return
+
+    if (detailTarget.kind === 'shell') {
+      const killed = BunShell.getInstance().killBackgroundShell(detailTarget.id)
+      setStatus(killed ? `Killed task: ${detailTarget.id}` : 'Task not running')
+      return
+    }
+
+    const killed = killBackgroundAgentTask(detailTarget.id)
+    setStatus(killed ? `Killed task: ${detailTarget.id}` : 'Task not running')
+  }, [detailTarget])
+
   useKeypress(
     (input, key) => {
+      if (detailTarget) {
+        if (key.leftArrow) {
+          setDetailTarget(null)
+          return true
+        }
+
+        if (input === 'k') {
+          killDetailTask()
+          return true
+        }
+
+        if (
+          key.escape ||
+          key.return ||
+          input === ' ' ||
+          (key.ctrl && input === 'c')
+        ) {
+          safeOnDone()
+          return true
+        }
+
+        return
+      }
+
       if (key.escape || (key.ctrl && input === 'c')) {
         safeOnDone()
         return true
@@ -589,7 +669,20 @@ export function TasksScreen({
         return true
       }
 
-      if (key.return || input === ' ') {
+      if (key.return) {
+        if (!selected) return true
+        if (selected.kind === 'shell' || selected.kind === 'agent') {
+          openDetails()
+          return true
+        }
+        if (selected.kind === 'group') {
+          toggleCollapse(selected.id)
+          return true
+        }
+        return true
+      }
+
+      if (input === ' ') {
         if (!selected) return true
         const id =
           selected.kind === 'agent'
@@ -642,7 +735,7 @@ export function TasksScreen({
   )
 
   const shortcutLine =
-    '↑/↓ select · ←/→ collapse · enter toggle · k kill · o open output · l open log · esc close'
+    '↑/↓ select · ←/→ collapse · Enter view · k kill · o open output · l open log · esc close'
 
   const detailLines: string[] = []
   if (!selected) {
@@ -658,7 +751,7 @@ export function TasksScreen({
     if (!layout.tightLayout) {
       detailLines.push(
         `log: ${getAgentLogFilePath({
-          cwd: getCwd(),
+          cwd: getOriginalCwd(),
           sessionId: getKodeAgentSessionId(),
           agentId: selected.id,
         })}`,
@@ -679,6 +772,131 @@ export function TasksScreen({
 
   const tipLine =
     'Tip: background task output is saved per task ID (no overwrites)'
+
+  if (detailTarget) {
+    const outputFile =
+      detailTarget.kind === 'shell' && detailTask && 'outputFile' in detailTask
+        ? (detailTask as ShellTaskSummary).outputFile
+        : getTaskOutputFilePath(detailTarget.id)
+
+    const detailStatus =
+      detailTarget.kind === 'shell'
+        ? (detailTask as ShellTaskSummary | null)?.status
+        : (detailTask as BackgroundAgentTask | null)?.status
+
+    const runtime =
+      detailTarget.kind === 'shell'
+        ? detailTask && 'startedAt' in detailTask
+          ? formatRuntime(
+              (detailTask as ShellTaskSummary).startedAt,
+              (detailTask as ShellTaskSummary).completedAt,
+            )
+          : null
+        : detailTask && 'startedAt' in detailTask
+          ? formatRuntime(
+              (detailTask as BackgroundAgentTask).startedAt,
+              (detailTask as BackgroundAgentTask).completedAt,
+            )
+          : null
+
+    const commandOrDescription =
+      detailTarget.kind === 'shell'
+        ? (detailTask as ShellTaskSummary | null)?.command
+        : (detailTask as BackgroundAgentTask | null)?.description
+
+    const totalLines =
+      detailTarget.kind === 'shell'
+        ? (detailTask as ShellTaskSummary | null)
+          ? (detailTask as ShellTaskSummary).stdoutLineCount +
+            (detailTask as ShellTaskSummary).stderrLineCount +
+            (detailOutputLines.length > 0 ? 1 : 0)
+          : null
+        : null
+
+    const showingLine =
+      detailOutputLines.length === 0
+        ? null
+        : totalLines !== null && totalLines > 10
+          ? `Showing last 10 lines of ${totalLines} total. Full output: ${outputFile}`
+          : totalLines !== null
+            ? `Showing ${totalLines} lines`
+            : `Full output: ${outputFile}`
+
+    const footerActions = [
+      '← to go back',
+      'Esc/Enter/Space to close',
+      detailStatus === 'running' ? 'k to kill' : null,
+    ]
+      .filter(Boolean)
+      .join(' · ')
+
+    return (
+      <ScreenFrame
+        title={detailTarget.kind === 'shell' ? 'Shell details' : 'Task details'}
+        exitState={exitState}
+        paddingX={layout.paddingX}
+        paddingY={layout.paddingY}
+        gap={layout.gap}
+      >
+        <Box flexDirection="column">
+          <Box
+            flexDirection="column"
+            borderStyle="round"
+            borderColor={theme.secondaryBorder}
+            paddingX={1}
+          >
+            <Text wrap="truncate-end">
+              <Text bold>Status</Text>: {detailStatus ?? '(unknown)'}
+            </Text>
+            {runtime ? (
+              <Text wrap="truncate-end">
+                <Text bold>Runtime</Text>: {runtime}
+              </Text>
+            ) : null}
+            <Text wrap="truncate-end">
+              <Text bold>
+                {detailTarget.kind === 'shell' ? 'Command' : 'Task'}
+              </Text>
+              : {commandOrDescription ?? '(unknown)'}
+            </Text>
+
+            <Box flexDirection="column" marginTop={1}>
+              <Text bold>Output:</Text>
+              {detailOutputLines.length > 0 ? (
+                <Box
+                  flexDirection="column"
+                  borderStyle="round"
+                  borderColor={theme.secondaryBorder}
+                  paddingX={1}
+                  height={12}
+                  width="100%"
+                >
+                  {detailOutputLines.map((line, index) => (
+                    <Text key={index} wrap="truncate-end">
+                      {line}
+                    </Text>
+                  ))}
+                </Box>
+              ) : (
+                <Text dimColor>No output available</Text>
+              )}
+              {showingLine ? (
+                <Text dimColor italic wrap="truncate-end">
+                  {showingLine}
+                </Text>
+              ) : null}
+            </Box>
+          </Box>
+
+          <Box marginLeft={2} marginTop={layout.gap}>
+            <Text dimColor wrap="truncate-end">
+              {footerActions}
+            </Text>
+          </Box>
+        </Box>
+      </ScreenFrame>
+    )
+  }
 
   return (
     <ScreenFrame

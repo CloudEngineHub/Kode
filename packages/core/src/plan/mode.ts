@@ -9,6 +9,7 @@ import {
   getPlanModeAttachmentState,
   getPlanModeFlags,
   isPlanModeEnabled,
+  resetPlanModeAttachmentCountsForConversationKey,
   setActivePlanConversationKey,
   setPlanModeAttachmentState,
   setPlanModeEnabledForConversationKey,
@@ -65,6 +66,7 @@ export function exitPlanMode(context?: ToolUseContext): {
   const flags = getPlanModeFlags(key)
   flags.hasExitedPlanMode = true
   flags.needsPlanModeExitAttachment = true
+  resetPlanModeAttachmentCountsForConversationKey(key)
 
   return { planFilePath: getPlanFilePath(context?.agentId, key) }
 }
@@ -74,6 +76,7 @@ export function exitPlanModeForConversationKey(conversationKey: string): void {
   const flags = getPlanModeFlags(conversationKey)
   flags.hasExitedPlanMode = true
   flags.needsPlanModeExitAttachment = true
+  resetPlanModeAttachmentCountsForConversationKey(conversationKey)
 }
 
 export function __resetPlanModeForTests(): void {

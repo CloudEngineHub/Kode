@@ -87,7 +87,7 @@ In plan mode, you should:
 Remember: DO NOT write or edit any files yet. This is a read-only exploration and planning phase.`
   },
   async *call(_input: z.infer<typeof inputSchema>, context: any) {
-    if (context?.agentId) {
+    if (context?.agentId && context.agentId !== 'main') {
       throw new Error('EnterPlanMode tool cannot be used in agent contexts')
     }
 

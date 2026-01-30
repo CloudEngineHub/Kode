@@ -174,7 +174,7 @@ export function AssistantToolUseMessage({
             })()}
           {isInProgress && (
             <Text color={paramColor} wrap="truncate-end">
-              ...
+              …
             </Text>
           )}
         </Box>

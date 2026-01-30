@@ -43,7 +43,9 @@ export function getSettingsFileCandidates(options: {
   switch (options.destination) {
     case 'localSettings': {
       const primary = join(projectDir, '.kode', 'settings.local.json')
-      const legacy = [legacyConfigPathInProject(projectDir, 'settings.local.json')]
+      const legacy = [
+        legacyConfigPathInProject(projectDir, 'settings.local.json'),
+      ]
       return { primary, legacy }
     }
     case 'projectSettings': {
@@ -52,9 +54,14 @@ export function getSettingsFileCandidates(options: {
       return { primary, legacy }
     }
     case 'userSettings': {
-      const roots = resolveDataRoots({ homeDir: options.homeDir, respectEnvOverride })
+      const roots = resolveDataRoots({
+        homeDir: options.homeDir,
+        respectEnvOverride,
+      })
       const primary = join(roots.kodeRoot, 'settings.json')
-      const legacy = roots.claudeCompatRoots.map(root => join(root, 'settings.json'))
+      const legacy = roots.claudeCompatRoots.map(root =>
+        join(root, 'settings.json'),
+      )
       return { primary, legacy }
     }
     default:

@@ -4,12 +4,14 @@ import figures from 'figures'
 import type { ToolUseConfirm } from '#ui-ink/components/permissions/PermissionRequest'
 import { getTheme } from '#core/utils/theme'
 import { usePermissionContext } from '#ui-ink/contexts/PermissionContext'
+import { PRODUCT_NAME } from '#core/constants/product'
 import {
   getPlanConversationKey,
   getPlanFilePath,
   readPlanFile,
 } from '#core/utils/planMode'
 import {
+  getExternalEditorLabel,
   launchExternalEditor,
   launchExternalEditorForFilePath,
 } from '#cli-utils/externalEditor'
@@ -32,6 +34,8 @@ import { getContext } from '#core/context'
 import { getCodeStyle } from '#core/utils/style'
 import { resetReminderSession } from '#core/services/systemReminder'
 import { resetFileFreshnessSession } from '#core/services/fileFreshness'
+import { formatBashPromptRule } from '#core/permissions/bash'
+import { LEGACY_ENV } from '#core/compat/legacyEnv'
 
 type Props = {
   toolUseConfirm: ToolUseConfirm
@@ -53,6 +57,45 @@ function clearConversationContextForPlanExit(): void {
   resetFileFreshnessSession()
 }
 
+type AllowedPrompt = { tool: 'Bash'; prompt: string }
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function parseAllowedPrompts(value: unknown): AllowedPrompt[] | null {
+  if (!Array.isArray(value)) return null
+  const out: AllowedPrompt[] = []
+  for (const item of value) {
+    if (!isRecord(item)) continue
+    if (item.tool !== 'Bash') continue
+    const prompt = typeof item.prompt === 'string' ? item.prompt : ''
+    if (!prompt.trim()) continue
+    out.push({ tool: 'Bash', prompt })
+  }
+  return out.length > 0 ? out : null
+}
+
+const TRUTHY_ENV_VALUES = new Set(['1', 'true', 'yes', 'on'])
+
+function isTruthyEnv(value: unknown): boolean {
+  if (typeof value !== 'string') return false
+  return TRUTHY_ENV_VALUES.has(value.trim().toLowerCase())
+}
+
+function isPlanExitSwarmEnabled(): boolean {
+  const raw =
+    process.env.KODE_PLAN_V2_AGENT_COUNT ??
+    process.env[LEGACY_ENV.codePlanV2AgentCount]
+  if (!raw) return false
+  const parsed = Number.parseInt(raw, 10)
+  return Number.isFinite(parsed) && parsed > 1
+}
+
+function isPlanExitPushToRemoteEnabled(): boolean {
+  return isTruthyEnv(process.env.KODE_PLAN_PUSH_TO_REMOTE)
+}
+
 export function ExitPlanModePermissionRequest({
   toolUseConfirm,
   onDone,
@@ -68,36 +111,55 @@ export function ExitPlanModePermissionRequest({
     () => getPlanFilePath(undefined, conversationKey),
     [conversationKey],
   )
-
-  const inputPlan = toolUseConfirm.input.plan
-  const planFromInput =
-    typeof inputPlan === 'string' && inputPlan.trim().length > 0
-      ? inputPlan
-      : null
-  const planSource: 'file' | 'input' = planFromInput ? 'input' : 'file'
+  const allowedPrompts = parseAllowedPrompts(
+    toolUseConfirm.input['allowedPrompts'],
+  )
+  const hasAllowedPrompts = allowedPrompts !== null
 
   const [planText, setPlanText] = useState(() => {
-    if (planSource === 'input') {
-      return planFromInput!
-    }
     const { content, exists } = readPlanFile(undefined, conversationKey)
     return exists ? content : planPlaceholder()
   })
   const [planExists, setPlanExists] = useState(() => {
-    if (planSource === 'input') return false
     const { exists } = readPlanFile(undefined, conversationKey)
     return exists
   })
   const [planSaved, setPlanSaved] = useState(false)
+  const [editorLabel, setEditorLabel] = useState(() => getExternalEditorLabel())
   const [rejectDraft, setRejectDraft] = useState('')
   const [focusedOptionIndex, setFocusedOptionIndex] = useState(0)
   const [planFocusIndex, setPlanFocusIndex] = useState(0)
+  const [focusedAllowedPromptIndex, setFocusedAllowedPromptIndex] = useState(0)
+  const [selectedAllowedPromptIndices, setSelectedAllowedPromptIndices] =
+    useState<number[]>(() =>
+      allowedPrompts ? allowedPrompts.map((_, i) => i) : [],
+    )
+  const [focusSection, setFocusSection] = useState<'options' | 'permissions'>(
+    'options',
+  )
+  const [swarmTeammateCount, setSwarmTeammateCount] = useState(3)
+  const [remoteExitState, setRemoteExitState] = useState<
+    'default' | 'checking' | 'unavailable'
+  >('default')
+  const [remoteExitMessage, setRemoteExitMessage] = useState<string | null>(
+    null,
+  )
 
   useEffect(() => {
     if (!planSaved) return
     const timeout = setTimeout(() => setPlanSaved(false), 5000)
     return () => clearTimeout(timeout)
   }, [planSaved])
+
+  useEffect(() => {
+    if (!allowedPrompts) return
+    setFocusedAllowedPromptIndex(prev =>
+      Math.max(0, Math.min(prev, allowedPrompts.length - 1)),
+    )
+    setSelectedAllowedPromptIndices(prev =>
+      prev.filter(idx => idx >= 0 && idx < allowedPrompts.length),
+    )
+  }, [allowedPrompts?.length])
 
   const planViewportWidth = Math.max(20, columns - layout.paddingX * 2 - 2)
   const planLines = useMemo(
@@ -124,14 +186,28 @@ export function ExitPlanModePermissionRequest({
     [planFocusIndex, planLines.length, planViewportRows],
   )
 
-  const showExitWithoutPlan =
-    planSource === 'file' && (!planExists || planText.trim().length === 0)
+  const showExitWithoutPlan = !planExists || planText.trim().length === 0
 
   const bypassAvailable =
     toolUseConfirm.toolUseContext.options?.safeMode !== true
+  const pushToRemoteAvailable = useMemo(
+    () => isPlanExitPushToRemoteEnabled(),
+    [],
+  )
+  const swarmAvailable = useMemo(() => isPlanExitSwarmEnabled(), [])
   const options = useMemo(() => {
-    return getExitPlanModeOptions({ bypassAvailable })
-  }, [bypassAvailable])
+    return getExitPlanModeOptions({
+      bypassAvailable,
+      pushToRemoteAvailable,
+      swarmAvailable,
+      teammateCount: swarmTeammateCount,
+    })
+  }, [
+    bypassAvailable,
+    pushToRemoteAvailable,
+    swarmAvailable,
+    swarmTeammateCount,
+  ])
 
   useEffect(() => {
     setFocusedOptionIndex(prev =>
@@ -163,21 +239,80 @@ export function ExitPlanModePermissionRequest({
     setMode(nextMode)
   }
 
+  const applyAllowedPromptsToSessionRules = () => {
+    if (!allowedPrompts || selectedAllowedPromptIndices.length === 0) return
+
+    const selected = new Set(selectedAllowedPromptIndices)
+    const rules = allowedPrompts
+      .filter((_prompt, idx) => selected.has(idx))
+      .map(prompt => formatBashPromptRule(prompt.prompt))
+      .filter(Boolean)
+    const deduped = Array.from(new Set(rules))
+    if (deduped.length === 0) return
+
+    const safeMode = toolUseConfirm.toolUseContext.options?.safeMode === true
+    const updatedToolPermissionContext =
+      applyToolPermissionContextUpdateForConversationKey({
+        conversationKey,
+        isBypassPermissionsModeAvailable: !safeMode,
+        update: {
+          type: 'addRules',
+          destination: 'session',
+          behavior: 'allow',
+          rules: deduped,
+        },
+      })
+    toolUseConfirm.toolUseContext.options ??= {}
+    toolUseConfirm.toolUseContext.options.toolPermissionContext =
+      updatedToolPermissionContext
+  }
+
+  const startPushToRemoteFlow = () => {
+    setRemoteExitMessage(null)
+    setRemoteExitState('checking')
+
+    void (async () => {
+      // Kode currently exposes remote-session headers for compat, but does not yet
+      // implement remote session creation. Keep the UX path consistent and fail
+      // gracefully until the remote agent runtime is finalized.
+      setRemoteExitMessage(
+        'Remote sessions are not configured for this build. If you already have a remote session ID, set KODE_REMOTE_SESSION_ID and retry.',
+      )
+      setRemoteExitState('unavailable')
+    })()
+  }
+
   const handleApprove = (value: ExitPlanModeOptionValue) => {
+    let updatedInput: { [key: string]: unknown } | undefined
     const clearContext =
-      value !== 'yes-accept-edits-keep-context' &&
-      value !== 'yes-default-keep-context'
+      value === 'yes-bypass-permissions' || value === 'yes-accept-edits'
 
     let nextMode: PermissionMode = 'default'
     switch (value) {
+      case 'yes-push-to-remote':
+        startPushToRemoteFlow()
+        return
       case 'yes-bypass-permissions':
         nextMode = 'bypassPermissions'
         break
       case 'yes-accept-edits':
         nextMode = 'acceptEdits'
         break
-      case 'yes-default':
-        nextMode = 'default'
+      case 'yes-launch-swarm-accept-edits':
+        nextMode = 'acceptEdits'
+        updatedInput = {
+          ...toolUseConfirm.input,
+          launchSwarm: true,
+          teammateCount: swarmTeammateCount,
+        }
+        break
+      case 'yes-launch-swarm-bypass':
+        nextMode = 'bypassPermissions'
+        updatedInput = {
+          ...toolUseConfirm.input,
+          launchSwarm: true,
+          teammateCount: swarmTeammateCount,
+        }
         break
       case 'yes-accept-edits-keep-context':
         nextMode = bypassAvailable ? 'bypassPermissions' : 'acceptEdits'
@@ -194,16 +329,30 @@ export function ExitPlanModePermissionRequest({
     }
 
     applyPermissionMode(nextMode)
+    applyAllowedPromptsToSessionRules()
 
     if (clearContext) {
       clearConversationContextForPlanExit()
     }
 
-    toolUseConfirm.onAllow('temporary')
+    if (updatedInput) {
+      toolUseConfirm.onAllow('temporary', { updatedInput })
+    } else {
+      toolUseConfirm.onAllow('temporary')
+    }
     onDone()
   }
 
   useKeypress((input, key) => {
+    if (remoteExitState !== 'default') {
+      if (key.escape) {
+        setRemoteExitState('default')
+        setRemoteExitMessage(null)
+        return true
+      }
+      return
+    }
+
     if (key.escape) {
       toolUseConfirm.onReject()
       onDone()
@@ -237,10 +386,8 @@ export function ExitPlanModePermissionRequest({
       return
     }
 
-    if (modeCycleShortcut.check(input, key)) {
-      const quickValue: ExitPlanModeOptionValue = bypassAvailable
-        ? 'yes-bypass-permissions'
-        : 'yes-accept-edits'
+    if (focusSection === 'options' && modeCycleShortcut.check(input, key)) {
+      const quickValue: ExitPlanModeOptionValue = 'yes-accept-edits'
       handleApprove(quickValue)
       return true
     }
@@ -271,18 +418,83 @@ export function ExitPlanModePermissionRequest({
     }
 
     if (key.upArrow) {
+      if (hasAllowedPrompts && focusSection === 'options') {
+        if (focusedOptionIndex === 0) {
+          setFocusSection('permissions')
+          setFocusedAllowedPromptIndex(
+            Math.max(0, (allowedPrompts?.length ?? 1) - 1),
+          )
+          return true
+        }
+        setFocusedOptionIndex(prev => Math.max(0, prev - 1))
+        return true
+      }
+
+      if (hasAllowedPrompts && focusSection === 'permissions') {
+        setFocusedAllowedPromptIndex(prev => Math.max(0, prev - 1))
+        return true
+      }
+
       setFocusedOptionIndex(prev => Math.max(0, prev - 1))
       return true
     }
 
     if (key.downArrow) {
+      if (hasAllowedPrompts && focusSection === 'permissions') {
+        if (focusedAllowedPromptIndex >= (allowedPrompts?.length ?? 1) - 1) {
+          setFocusSection('options')
+          setFocusedOptionIndex(0)
+          return true
+        }
+        setFocusedAllowedPromptIndex(prev =>
+          Math.min((allowedPrompts?.length ?? 1) - 1, prev + 1),
+        )
+        return true
+      }
+
       setFocusedOptionIndex(prev => Math.min(options.length - 1, prev + 1))
       return true
     }
 
     const focusedOption = options[focusedOptionIndex]
 
+    if (key.tab && !key.shift && focusSection === 'options') {
+      const swarmValues: ExitPlanModeOptionValue[] = [
+        'yes-launch-swarm-accept-edits',
+        'yes-launch-swarm-bypass',
+      ]
+      if (
+        focusedOption &&
+        'value' in focusedOption &&
+        swarmValues.includes(focusedOption.value)
+      ) {
+        const choices = [1, 2, 3, 4, 5]
+        setSwarmTeammateCount(prev => {
+          const idx = Math.max(0, choices.indexOf(prev))
+          return choices[(idx + 1) % choices.length] ?? 3
+        })
+        return true
+      }
+    }
+
     if (key.return) {
+      if (
+        hasAllowedPrompts &&
+        focusSection === 'permissions' &&
+        allowedPrompts
+      ) {
+        setSelectedAllowedPromptIndices(prev => {
+          const next = new Set(prev)
+          if (next.has(focusedAllowedPromptIndex)) {
+            next.delete(focusedAllowedPromptIndex)
+          } else {
+            next.add(focusedAllowedPromptIndex)
+          }
+          return Array.from(next).sort((a, b) => a - b)
+        })
+        return true
+      }
+
       if (focusedOption?.type === 'input') {
         const trimmed = rejectDraft.trim()
         if (!trimmed) return true
@@ -297,7 +509,7 @@ export function ExitPlanModePermissionRequest({
       }
     }
 
-    if (focusedOption?.type === 'input') {
+    if (focusSection === 'options' && focusedOption?.type === 'input') {
       if (key.backspace || key.delete) {
         setRejectDraft(prev => prev.slice(0, -1))
         return true
@@ -314,21 +526,15 @@ export function ExitPlanModePermissionRequest({
     if (!(key.ctrl && input.toLowerCase() === 'g')) return
 
     void (async () => {
-      if (planSource === 'input') {
-        const edited = await launchExternalEditor(planText)
-        if (edited.text !== null) {
-          setPlanText(edited.text)
-          setPlanSaved(true)
-        }
-        return
-      }
-
       if (!planExists) {
         const initial = planText === planPlaceholder() ? '# Plan\n' : planText
         try {
           writeFileSync(planFilePath, initial, 'utf-8')
         } catch {
           const edited = await launchExternalEditor(initial)
+          if ('editorLabel' in edited && edited.editorLabel) {
+            setEditorLabel(edited.editorLabel)
+          }
           if (edited.text !== null) {
             setPlanText(edited.text)
             setPlanSaved(true)
@@ -338,6 +544,9 @@ export function ExitPlanModePermissionRequest({
       }
 
       const opened = await launchExternalEditorForFilePath(planFilePath)
+      if ('editorLabel' in opened && opened.editorLabel) {
+        setEditorLabel(opened.editorLabel)
+      }
       if (opened.ok) {
         const next = readPlanFile(undefined, conversationKey)
         setPlanExists(next.exists)
@@ -346,6 +555,48 @@ export function ExitPlanModePermissionRequest({
       }
     })()
   })
+
+  if (remoteExitState === 'checking') {
+    return (
+      <Box marginTop={1} width="100%">
+        <ScreenFrame
+          title="Pushing to remote…"
+          titleColor={theme.planMode}
+          paddingX={layout.paddingX}
+          paddingY={layout.tightLayout ? 0 : layout.paddingY}
+          gap={layout.gap}
+        >
+          <Box flexDirection="column" gap={layout.gap}>
+            <Text>Checking prerequisites…</Text>
+            <Text dimColor wrap="truncate-end">
+              Esc to go back
+            </Text>
+          </Box>
+        </ScreenFrame>
+      </Box>
+    )
+  }
+
+  if (remoteExitState === 'unavailable') {
+    return (
+      <Box marginTop={1} width="100%">
+        <ScreenFrame
+          title="Push to remote unavailable"
+          titleColor={theme.planMode}
+          paddingX={layout.paddingX}
+          paddingY={layout.tightLayout ? 0 : layout.paddingY}
+          gap={layout.gap}
+        >
+          <Box flexDirection="column" gap={layout.gap}>
+            <Text>{remoteExitMessage ?? 'Remote push is unavailable.'}</Text>
+            <Text dimColor wrap="truncate-end">
+              Esc to go back
+            </Text>
+          </Box>
+        </ScreenFrame>
+      </Box>
+    )
+  }
 
   if (showExitWithoutPlan) {
     const yesIsFocused = focusedOptionIndex === 0
@@ -361,7 +612,7 @@ export function ExitPlanModePermissionRequest({
           gap={layout.gap}
         >
           <Box flexDirection="column" gap={layout.gap}>
-            <Text>Agent wants to exit plan mode</Text>
+            <Text>{PRODUCT_NAME} wants to exit plan mode</Text>
             <Box flexDirection="column">
               <Box paddingLeft={2} paddingRight={1}>
                 {yesIsFocused ? (
@@ -433,17 +684,82 @@ export function ExitPlanModePermissionRequest({
             </Box>
           </Box>
 
-          <Text dimColor wrap="truncate-end">
-            Tip: Ctrl+G to edit{' '}
-            {planSource === 'file' ? planFilePath : 'plan text'}
-            {planSaved ? ' · Plan saved!' : ''}
-          </Text>
+          {editorLabel ? (
+            <Box flexDirection="row" gap={1}>
+              <Box flexDirection="row">
+                <Text dimColor wrap="truncate-end">
+                  ctrl-g to edit in{' '}
+                </Text>
+                <Text bold dimColor wrap="truncate-end">
+                  {editorLabel}
+                </Text>
+                <Text dimColor wrap="truncate-end">
+                  {' · '}
+                  {planFilePath}
+                </Text>
+              </Box>
+              {planSaved ? (
+                <Box flexDirection="row">
+                  <Text dimColor> · </Text>
+                  <Text color={theme.success}>{figures.tick} Plan saved!</Text>
+                </Box>
+              ) : null}
+            </Box>
+          ) : null}
+
+          {allowedPrompts ? (
+            <Box flexDirection="column">
+              <Text bold>Requested permissions:</Text>
+              <Box flexDirection="column" paddingLeft={2}>
+                {allowedPrompts.map((prompt, idx) => {
+                  const isFocused =
+                    focusSection === 'permissions' &&
+                    idx === focusedAllowedPromptIndex
+                  const isSelected = selectedAllowedPromptIndices.includes(idx)
+                  const checkbox = isSelected
+                    ? figures.checkboxOn
+                    : figures.checkboxOff
+
+                  const rowColor =
+                    focusSection === 'permissions'
+                      ? isFocused
+                        ? theme.kode
+                        : theme.text
+                      : theme.secondaryText
+
+                  return (
+                    <Box key={`${prompt.tool}-${idx}`} paddingRight={1}>
+                      {isFocused ? (
+                        <Text color={theme.kode}>{figures.pointer}</Text>
+                      ) : (
+                        <Text> </Text>
+                      )}
+                      <Text
+                        color={rowColor}
+                        bold={isFocused}
+                        wrap="truncate-end"
+                      >
+                        {checkbox} {prompt.tool} {figures.arrowRight}{' '}
+                        {prompt.prompt}
+                      </Text>
+                    </Box>
+                  )
+                })}
+              </Box>
+              <Text dimColor wrap="truncate-end">
+                {focusSection === 'permissions'
+                  ? `${figures.arrowDown} to proceed · Enter to toggle`
+                  : `${figures.arrowUp} on first option to edit`}
+              </Text>
+            </Box>
+          ) : null}
 
           <Box flexDirection="column">
             <Text dimColor>Would you like to proceed?</Text>
             <Box flexDirection="column">
               {options.map((option, idx) => {
-                const isFocused = idx === focusedOptionIndex
+                const isFocused =
+                  focusSection === 'options' && idx === focusedOptionIndex
 
                 if (option.type === 'input') {
                   const placeholder = option.placeholder
@@ -459,7 +775,13 @@ export function ExitPlanModePermissionRequest({
                       ) : null}
                       <Text
                         bold={isFocused}
-                        color={isFocused ? theme.kode : theme.text}
+                        color={
+                          isFocused
+                            ? theme.kode
+                            : focusSection === 'permissions'
+                              ? theme.secondaryText
+                              : theme.text
+                        }
                         wrap="truncate-end"
                       >
                         {option.label}
@@ -479,7 +801,13 @@ export function ExitPlanModePermissionRequest({
                     ) : null}
                     <Text
                       bold={isFocused}
-                      color={isFocused ? theme.kode : theme.text}
+                      color={
+                        isFocused
+                          ? theme.kode
+                          : focusSection === 'permissions'
+                            ? theme.secondaryText
+                            : theme.text
+                      }
                       wrap="truncate-end"
                     >
                       {option.label}
@@ -491,8 +819,9 @@ export function ExitPlanModePermissionRequest({
           </Box>
 
           <Text dimColor wrap="truncate-end">
-            Enter to confirm · Esc to exit · {modeCycleShortcut.displayText}{' '}
-            quick select
+            {focusSection === 'permissions'
+              ? 'Enter to toggle · Esc to exit'
+              : `Enter to confirm · Esc to exit · ${modeCycleShortcut.displayText} quick select`}
           </Text>
         </Box>
       </ScreenFrame>

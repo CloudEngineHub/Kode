@@ -6,7 +6,9 @@ import { processUserInput } from '#ui-ink/utils/processUserInput'
 import type { Message } from '#core/query'
 import type { SetToolJSXFn, ToolUseContext } from '#core/tooling/Tool'
 
-function makeTestCommandContext(args: { commands: Command[] }): ToolUseContext & {
+function makeTestCommandContext(args: {
+  commands: Command[]
+}): ToolUseContext & {
   setForkConvoWithMessagesOnTheNextRender: (fork: Message[]) => void
 } {
   return {
@@ -52,7 +54,13 @@ describe('interactive local-jsx command transcript behavior', () => {
     } satisfies Command
 
     const ctx = makeTestCommandContext({ commands: [interactive] })
-    const messages = await processUserInput('/ui', 'prompt', setToolJSX, ctx, null)
+    const messages = await processUserInput(
+      '/ui',
+      'prompt',
+      setToolJSX,
+      ctx,
+      null,
+    )
 
     expect(messages).toHaveLength(0)
     expect(setToolJSXCalls.some(v => v && typeof v === 'object')).toBe(true)
@@ -92,4 +100,3 @@ describe('interactive local-jsx command transcript behavior', () => {
     expect(messages[0]?.type).toBe('assistant')
   })
 })
-

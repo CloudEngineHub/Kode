@@ -97,8 +97,13 @@ export function execPromotable(
     | ((background: (bashId?: string) => { bashId: string } | null) => void)
     | null = null
 
-  const countNonEmptyLines = (chunk: string): number =>
-    chunk.split('\n').filter(line => line.length > 0).length
+  const countNewlines = (chunk: string): number => {
+    let count = 0
+    for (let i = 0; i < chunk.length; i++) {
+      if (chunk.charCodeAt(i) === 10) count++
+    }
+    return count
+  }
 
   const spawnedProcess = spawn(cmdToRun[0], cmdToRun.slice(1), {
     cwd: executionCwd,
@@ -150,7 +155,7 @@ export function execPromotable(
         if (backgroundProcess) {
           backgroundProcess.stdout = stdout
           appendTaskOutput(backgroundProcess.id, chunk)
-          backgroundProcess.stdoutLineCount += countNonEmptyLines(chunk)
+          backgroundProcess.stdoutLineCount += countNewlines(chunk)
         }
       },
     },
@@ -165,7 +170,7 @@ export function execPromotable(
         if (backgroundProcess) {
           backgroundProcess.stderr = stderr
           appendTaskOutput(backgroundProcess.id, chunk)
-          backgroundProcess.stderrLineCount += countNonEmptyLines(chunk)
+          backgroundProcess.stderrLineCount += countNewlines(chunk)
         }
       },
     },
@@ -206,8 +211,8 @@ export function execPromotable(
       stderr,
       stdoutCursor: 0,
       stderrCursor: 0,
-      stdoutLineCount: countNonEmptyLines(stdout),
-      stderrLineCount: countNonEmptyLines(stderr),
+      stdoutLineCount: countNewlines(stdout),
+      stderrLineCount: countNewlines(stderr),
       lastReportedStdoutLines: 0,
       lastReportedStderrLines: 0,
       code: null,
@@ -217,6 +222,7 @@ export function execPromotable(
       completionStatusSentInAttachment: false,
       notified: false,
       startedAt,
+      completedAt: undefined,
       timeoutAt: Number.POSITIVE_INFINITY,
       process: spawnedProcess,
       abortController: internalAbortController,
@@ -246,6 +252,8 @@ export function execPromotable(
     if (backgroundProcess) {
       backgroundProcess.interrupted = true
       backgroundProcess.killed = true
+      backgroundProcess.completedAt =
+        backgroundProcess.completedAt ?? Date.now()
     }
   }
 
@@ -266,6 +274,8 @@ export function execPromotable(
           backgroundProcess.interrupted ||
           wasAborted ||
           internalAbortController.signal.aborted
+        backgroundProcess.completedAt =
+          backgroundProcess.completedAt ?? Date.now()
       }
 
       if (!wasBackgrounded) {
@@ -307,7 +317,7 @@ export function execPromotable(
           const delta = stderrAnnotated.slice(previousStderr.length)
           if (delta) {
             appendTaskOutput(backgroundProcess.id, delta)
-            backgroundProcess.stderrLineCount += countNonEmptyLines(delta)
+            backgroundProcess.stderrLineCount += countNewlines(delta)
           }
         }
       }

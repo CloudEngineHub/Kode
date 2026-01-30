@@ -2,8 +2,8 @@ import React, { useMemo, useState } from 'react'
 import { Box, Text } from 'ink'
 import figures from 'figures'
 
-import { getTodoRenderModel } from '#core/utils/todoRenderModel'
-import { getTodos } from '#core/utils/todoStorage'
+import { getTaskListRenderModel } from '#core/utils/taskRenderModel'
+import { listTaskSummaries } from '#core/utils/taskStorage'
 import { getTheme } from '#core/utils/theme'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
@@ -11,7 +11,7 @@ import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import { getWindowedList } from '#ui-ink/primitives/list/windowedList'
 
-function TodosEmptyView({
+function WorkTasksEmptyView({
   message,
   onClose,
   exitState,
@@ -38,7 +38,7 @@ function TodosEmptyView({
 
   return (
     <ScreenFrame
-      title="Todos"
+      title="Work Tasks"
       exitState={exitState}
       paddingX={layout.paddingX}
       paddingY={layout.paddingY}
@@ -47,14 +47,14 @@ function TodosEmptyView({
       <Box flexDirection="column" gap={layout.gap}>
         <Text dimColor>{message}</Text>
         <Text dimColor wrap="truncate-end">
-          Esc or Ctrl+C to close
+          Esc or Ctrl+C/Ctrl+T to close
         </Text>
       </Box>
     </ScreenFrame>
   )
 }
 
-function TodosListView({
+function WorkTasksListView({
   items,
   count,
   label,
@@ -62,8 +62,8 @@ function TodosListView({
   onClose,
 }: {
   items: Array<{
-    checkbox: '☐' | '☒'
-    checkboxDim: boolean
+    icon: '◻' | '◼' | '✔'
+    iconDim: boolean
     content: string
     contentBold: boolean
     contentDim: boolean
@@ -146,7 +146,7 @@ function TodosListView({
 
   return (
     <ScreenFrame
-      title="Todos"
+      title="Work Tasks"
       exitState={exitState}
       paddingX={layout.paddingX}
       paddingY={layout.paddingY}
@@ -169,7 +169,7 @@ function TodosListView({
                 <Text color={isSelected ? theme.kode : theme.secondaryText}>
                   {isSelected ? figures.pointer : ' '}
                 </Text>
-                <Text dimColor={item.checkboxDim}>{item.checkbox}</Text>
+                <Text dimColor={item.iconDim}>{item.icon}</Text>
                 <Text
                   bold={item.contentBold || isSelected}
                   dimColor={item.contentDim && !isSelected}
@@ -188,29 +188,27 @@ function TodosListView({
         </Box>
 
         <Text dimColor wrap="truncate-end">
-          ↑/↓ or j/k · PgUp/PgDn · Home/End · Esc/Ctrl+C close
+          ↑/↓ or j/k · PgUp/PgDn · Home/End · Esc/Ctrl+C/Ctrl+T close
         </Text>
       </Box>
     </ScreenFrame>
   )
 }
 
-export function TodosScreen({
-  agentId,
+export function WorkTasksScreen({
   onDone,
 }: {
-  agentId?: string
   onDone: () => void
 }): React.ReactNode {
   const layout = useScreenLayout()
   const exitState = { pending: false, keyName: null } as const
 
-  const todos = getTodos(agentId)
-  const model = getTodoRenderModel(todos)
+  const tasks = listTaskSummaries()
+  const model = getTaskListRenderModel(tasks)
 
   if (model.kind === 'empty') {
     return (
-      <TodosEmptyView
+      <WorkTasksEmptyView
         message={model.message}
         onClose={onDone}
         exitState={exitState}
@@ -220,10 +218,10 @@ export function TodosScreen({
   }
 
   const count = model.items.length
-  const label = count === 1 ? 'todo' : 'todos'
+  const label = count === 1 ? 'task' : 'tasks'
 
   return (
-    <TodosListView
+    <WorkTasksListView
       items={model.items}
       count={count}
       label={label}

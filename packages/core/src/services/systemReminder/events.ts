@@ -4,7 +4,16 @@ import type { MentionReminderParams } from './mentions'
 export type SystemReminderEventBindings = {
   sessionState: SessionReminderState
   resetSession: () => void
+  clearTaskReminders: (agentId?: string) => void
   clearTodoReminders: (agentId?: string) => void
+  enqueueInjectedReminder: (params: {
+    key?: string
+    type: string
+    category: ReminderMessage['category']
+    priority: ReminderMessage['priority']
+    content: string
+    timestamp: number
+  }) => void
   generateFileChangeReminder: (context: unknown) => ReminderMessage | null
   emitEvent: (event: string, context: unknown) => void
   addEventListener: (
@@ -18,9 +27,23 @@ export function registerSystemReminderEvents(
   service: SystemReminderEventBindings,
 ): void {
   service.addEventListener('session:startup', context => {
+    const ctx = context as {
+      sessionId?: string
+      context?: Record<string, unknown>
+    } | null
+
+    const sessionId =
+      typeof ctx?.sessionId === 'string' && ctx.sessionId.trim()
+        ? ctx.sessionId.trim()
+        : undefined
+
+    // Only reset when the session identity actually changes. Session startup
+    // events can be emitted multiple times (e.g., per turn or per agent).
+    if (sessionId && service.sessionState.sessionId === sessionId) return
+
     service.resetSession()
+    service.sessionState.sessionId = sessionId
     service.sessionState.sessionStartTime = Date.now()
-    const ctx = context as { context?: Record<string, unknown> } | null
     service.sessionState.contextPresent =
       Object.keys(ctx?.context ?? {}).length > 0
   })
@@ -29,6 +52,12 @@ export function registerSystemReminderEvents(
     const ctx = context as { agentId?: string } | null
     service.sessionState.lastTodoUpdate = Date.now()
     service.clearTodoReminders(ctx?.agentId)
+  })
+
+  service.addEventListener('task:changed', context => {
+    const ctx = context as { agentId?: string } | null
+    service.sessionState.lastTaskUpdate = Date.now()
+    service.clearTaskReminders(ctx?.agentId)
   })
 
   service.addEventListener('todo:file_changed', context => {
@@ -46,6 +75,38 @@ export function registerSystemReminderEvents(
         timestamp: Date.now(),
       })
     }
+  })
+
+  service.addEventListener('reminder:inject', context => {
+    const ctx = context as {
+      key?: string
+      type?: string
+      category?: ReminderMessage['category']
+      priority?: ReminderMessage['priority']
+      reminder?: string
+      content?: string
+      timestamp?: number
+    } | null
+    const content =
+      typeof ctx?.reminder === 'string'
+        ? ctx.reminder
+        : typeof ctx?.content === 'string'
+          ? ctx.content
+          : ''
+    if (!content.trim()) return
+
+    service.enqueueInjectedReminder({
+      key: ctx?.key,
+      type:
+        typeof ctx?.type === 'string' && ctx.type.trim()
+          ? ctx.type.trim()
+          : 'general',
+      category: ctx?.category ?? 'general',
+      priority: ctx?.priority ?? 'medium',
+      content: content.trim(),
+      timestamp:
+        typeof ctx?.timestamp === 'number' ? ctx.timestamp : Date.now(),
+    })
   })
 
   service.addEventListener('file:read', () => {

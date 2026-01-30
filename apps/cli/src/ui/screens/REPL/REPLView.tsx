@@ -1,11 +1,6 @@
 import { Box, Static, Text, type DOMElement, measureElement } from 'ink'
 import * as React from 'react'
-import {
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import type { ToolUseConfirm } from '#ui-ink/components/permissions/PermissionRequest'

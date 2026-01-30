@@ -13,6 +13,7 @@ export function ChatPage(props: {
   onInputChange: (v: string) => void
   onSend: () => void
   disabled?: boolean
+  sending?: boolean
 }) {
   const bottomRef = React.useRef<HTMLDivElement | null>(null)
 
@@ -56,6 +57,7 @@ export function ChatPage(props: {
             onChange={props.onInputChange}
             onSubmit={props.onSend}
             disabled={props.disabled}
+            isSending={props.sending}
           />
           <div className="mt-2 text-center text-xs text-muted-foreground">
             Press Enter to send · Shift+Enter for new line

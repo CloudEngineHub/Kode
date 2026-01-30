@@ -3,9 +3,12 @@ import React from 'react'
 import { KeypressProvider } from '#ui-ink/contexts/KeypressContext'
 import { ModelPickerScreen } from '#ui-ink/screens/overlays/ModelPickerScreen'
 import { ThinkingToggleScreen } from '#ui-ink/screens/overlays/ThinkingToggleScreen'
-import { TodosScreen } from '#ui-ink/screens/overlays/TodosScreen'
+import { WorkTasksScreen } from '#ui-ink/screens/overlays/WorkTasksScreen'
 import { TranscriptScreen } from '#ui-ink/screens/overlays/TranscriptScreen'
 import { createInkHarnessManager, createInkTestHarness } from './inkTestHarness'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 const harnessManager = createInkHarnessManager()
 
@@ -35,25 +38,40 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
     expect(closed).toBe(true)
   })
 
-  test('TodosScreen: Ctrl+T closes', async () => {
+  test('WorkTasksScreen: Ctrl+T closes', async () => {
+    const tmpRoot = mkdtempSync(join(tmpdir(), 'kode-worktasks-overlay-'))
+    const previousConfigDir = process.env.KODE_CONFIG_DIR
+    const previousTaskListId = process.env.KODE_TASK_LIST_ID
+    process.env.KODE_CONFIG_DIR = tmpRoot
+    process.env.KODE_TASK_LIST_ID = 'overlay-test'
+
     let closed = false
-    const h = createInkTestHarness(
-      <KeypressProvider>
-        <TodosScreen
-          agentId="main"
-          onDone={() => {
-            closed = true
-          }}
-        />
-      </KeypressProvider>,
-    )
-    harnessManager.track(h)
+    try {
+      const h = createInkTestHarness(
+        <KeypressProvider>
+          <WorkTasksScreen
+            onDone={() => {
+              closed = true
+            }}
+          />
+        </KeypressProvider>,
+      )
+      harnessManager.track(h)
 
-    await h.wait(25)
-    h.stdin.write('\x14')
-    await h.wait(25)
+      await h.wait(25)
+      h.stdin.write('\x14')
+      await h.wait(25)
 
-    expect(closed).toBe(true)
+      expect(closed).toBe(true)
+    } finally {
+      if (previousConfigDir === undefined) delete process.env.KODE_CONFIG_DIR
+      else process.env.KODE_CONFIG_DIR = previousConfigDir
+
+      if (previousTaskListId === undefined) delete process.env.KODE_TASK_LIST_ID
+      else process.env.KODE_TASK_LIST_ID = previousTaskListId
+
+      rmSync(tmpRoot, { recursive: true, force: true })
+    }
   })
 
   test('ModelPickerScreen: Alt+P closes', async () => {
@@ -100,7 +118,7 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
     expect(closed).toBe(true)
   })
 
-  test('HistorySearchScreen: Enter triggers execute', async () => {
+  test('HistorySearchScreen: Enter triggers accept', async () => {
     try {
       mock.module('#core/history', () => {
         return {
@@ -127,7 +145,7 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
       await h.wait(25)
 
       expect(result).toEqual({
-        action: 'execute',
+        action: 'accept',
         value: 'hello',
         pastedTexts: [],
       })

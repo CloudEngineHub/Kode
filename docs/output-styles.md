@@ -87,7 +87,7 @@ Custom styles are discovered (and merged by name) from:
 2. **User styles** (if `--setting-sources` includes `user`):
    - `~/.claude/output-styles/`
    - `~/.kode/output-styles/`
-   - If `KODE_CONFIG_DIR` / `CLAUDE_CONFIG_DIR` is set, those bases are used instead of the default home dirs.
+   - `KODE_CONFIG_DIR` overrides the `~/.kode` base; `CLAUDE_CONFIG_DIR` overrides the legacy `~/.claude` base.
 
 3. **Project styles** (if `--setting-sources` includes `project`):
    - `./.claude/output-styles/` (searches up the directory tree)

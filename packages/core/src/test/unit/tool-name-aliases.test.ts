@@ -29,6 +29,12 @@ test('resolveToolNameAlias maps legacy tool names to canonical ids', () => {
     resolvedName: 'TaskOutput',
     wasAliased: false,
   })
+
+  expect(resolveToolNameAlias('KillShell')).toEqual({
+    originalName: 'KillShell',
+    resolvedName: 'TaskStop',
+    wasAliased: true,
+  })
 })
 
 test('tool name alias map rejects conflicting aliases', () => {

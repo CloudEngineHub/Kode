@@ -9,7 +9,6 @@ describe('ExitPlanMode options', () => {
 
     expect(options.map(o => o.value)).toEqual([
       'yes-bypass-permissions',
-      'yes-default',
       'yes-accept-edits-keep-context',
       'yes-default-keep-context',
       'no',
@@ -23,7 +22,25 @@ describe('ExitPlanMode options', () => {
 
     expect(options.map(o => o.value)).toEqual([
       'yes-accept-edits',
-      'yes-default',
+      'yes-accept-edits-keep-context',
+      'yes-default-keep-context',
+      'no',
+    ])
+  })
+
+  test('includes push-to-remote and swarm options when enabled', () => {
+    const options = __getExitPlanModeOptionsForTests({
+      bypassAvailable: true,
+      pushToRemoteAvailable: true,
+      swarmAvailable: true,
+      teammateCount: 3,
+    })
+
+    expect(options.map(o => o.value)).toEqual([
+      'yes-bypass-permissions',
+      'yes-push-to-remote',
+      'yes-launch-swarm-accept-edits',
+      'yes-launch-swarm-bypass',
       'yes-accept-edits-keep-context',
       'yes-default-keep-context',
       'no',

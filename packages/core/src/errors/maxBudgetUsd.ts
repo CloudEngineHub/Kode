@@ -9,4 +9,3 @@ export class MaxBudgetUsdExceededError extends Error {
     this.totalCostUsd = args.totalCostUsd
   }
 }
-

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { getKodeBaseDir } from '#core/utils/env'
@@ -12,7 +12,7 @@ export const OLD_TOOL_RESULT_CONTENT_CLEARED_MARKER =
   '[Old tool result content cleared]'
 
 const DEFAULT_MAX_RESULT_SIZE_CHARS = 400_000
-const PREVIEW_CHARS = 2_000
+const DEFAULT_PREVIEW_CHARS = 2_000
 
 type ToolResultContent = string | any[]
 
@@ -22,6 +22,17 @@ type PersistedToolResult = {
   isJson: boolean
   preview: string
   hasMore: boolean
+  previewChars: number
+}
+
+export type MicrocompactRecord = {
+  timestamp: number
+  trigger: 'auto' | 'manual'
+  tokenUsageBefore: number
+  tokenUsageAfter: number
+  totalToolResultTokens: number
+  tokensSaved: number
+  toolUseIds: string[]
 }
 
 function toLocaleNumber(value: number): string {
@@ -37,6 +48,23 @@ function buildSessionToolResultsDir(cwd: string): string {
   const projectKey = sanitizeProjectNameForSessionStore(cwd)
   const sessionId = getKodeAgentSessionId()
   return join(baseDir, 'projects', projectKey, sessionId, 'tool-results')
+}
+
+export function appendMicrocompactRecord(args: {
+  cwd: string
+  record: MicrocompactRecord
+}): void {
+  const dir = buildSessionToolResultsDir(args.cwd)
+  try {
+    mkdirSync(dir, { recursive: true })
+    const path = join(dir, 'microcompact.jsonl')
+    appendFileSync(path, `${JSON.stringify(args.record)}\n`, {
+      encoding: 'utf8',
+      mode: 0o600,
+    })
+  } catch {
+    // best-effort
+  }
 }
 
 function hasImageBlock(content: any[]): boolean {
@@ -65,7 +93,7 @@ function buildPreview(args: { content: string; maxChars: number }): {
 
 function formatPersistedOutput(meta: PersistedToolResult): string {
   const originalSize = toLocaleNumber(meta.originalSize)
-  const previewChars = toLocaleNumber(PREVIEW_CHARS)
+  const previewChars = toLocaleNumber(meta.previewChars)
 
   let out = `${PERSISTED_OUTPUT_OPEN_TAG}\n`
   out += `Output too large (${originalSize}). Full output saved to: ${meta.filepath}\n\n`
@@ -80,6 +108,7 @@ function persistToolResultContent(args: {
   cwd: string
   toolUseId: string
   content: ToolResultContent
+  previewChars?: number
 }): PersistedToolResult | null {
   let isJson = false
   let serialized: string
@@ -108,9 +137,14 @@ function persistToolResultContent(args: {
     return null
   }
 
+  const previewChars =
+    typeof args.previewChars === 'number' && Number.isFinite(args.previewChars)
+      ? Math.max(0, Math.trunc(args.previewChars))
+      : DEFAULT_PREVIEW_CHARS
+
   const { preview, hasMore } = buildPreview({
     content: serialized,
-    maxChars: PREVIEW_CHARS,
+    maxChars: previewChars,
   })
 
   return {
@@ -119,6 +153,7 @@ function persistToolResultContent(args: {
     isJson,
     preview,
     hasMore,
+    previewChars,
   }
 }
 
@@ -127,6 +162,7 @@ export function maybePersistOversizedToolResult(args: {
   toolUseId: string
   content: ToolResultContent
   maxResultSizeChars?: number
+  previewChars?: number
 }): ToolResultContent {
   const contentValue = args.content
   if (!contentValue) return contentValue
@@ -146,6 +182,7 @@ export function maybePersistOversizedToolResult(args: {
     cwd: args.cwd,
     toolUseId: args.toolUseId,
     content: contentValue,
+    previewChars: args.previewChars,
   })
   if (!persisted) return contentValue
 

@@ -20,18 +20,58 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>
 }
 
+function decodeWsMessageData(raw: unknown): string {
+  if (typeof raw === 'string') return raw
+  if (raw instanceof ArrayBuffer) {
+    return new TextDecoder().decode(new Uint8Array(raw))
+  }
+  if (ArrayBuffer.isView(raw)) {
+    const view = raw as ArrayBufferView
+    return new TextDecoder().decode(
+      new Uint8Array(view.buffer, view.byteOffset, view.byteLength),
+    )
+  }
+  return String(raw ?? '')
+}
+
 function getGlobalWebSocketCtor(): WebSocketCtor | null {
   const ws = asRecord(globalThis)?.WebSocket
   return typeof ws === 'function' ? (ws as unknown as WebSocketCtor) : null
 }
 
+function isBrowserRuntime(): boolean {
+  const maybeWindow = asRecord(globalThis)?.window
+  if (!maybeWindow) return false
+  return typeof maybeWindow === 'object' && maybeWindow !== null
+}
+
 async function getWebSocketImpl(): Promise<WebSocketCtor> {
+  // In browsers, prefer the global WebSocket.
+  if (isBrowserRuntime()) {
+    const globalWebSocket = getGlobalWebSocketCtor()
+    if (globalWebSocket) return globalWebSocket
+    throw new Error('No WebSocket implementation available')
+  }
+
+  // In non-browser runtimes (Node/Bun tests), prefer stable userland implementations.
+  try {
+    const undici = await import('undici')
+    const ws = asRecord(undici)?.WebSocket
+    if (typeof ws === 'function') return ws as unknown as WebSocketCtor
+  } catch {}
+
+  try {
+    const wsPkg = await import('ws')
+    const ws = asRecord(wsPkg)?.WebSocket
+    if (typeof ws === 'function') return ws as unknown as WebSocketCtor
+    const fallbackDefault = (wsPkg as unknown as { default?: unknown }).default
+    if (typeof fallbackDefault === 'function')
+      return fallbackDefault as WebSocketCtor
+  } catch {}
+
   const globalWebSocket = getGlobalWebSocketCtor()
   if (globalWebSocket) return globalWebSocket
 
-  const undici = await import('undici')
-  const ws = asRecord(undici)?.WebSocket
-  if (typeof ws === 'function') return ws as unknown as WebSocketCtor
   throw new Error('No WebSocket implementation available')
 }
 
@@ -140,8 +180,7 @@ export function createKodeDaemonClient(args: {
     })
 
     socket.addEventListener('message', (ev: unknown) => {
-      const raw = asRecord(ev)?.data
-      const text = typeof raw === 'string' ? raw : String(raw ?? '')
+      const text = decodeWsMessageData(asRecord(ev)?.data ?? ev)
       try {
         const parsed = JSON.parse(text)
         const validated = AgentEventSchema.safeParse(parsed)
