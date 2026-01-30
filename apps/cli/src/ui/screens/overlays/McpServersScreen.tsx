@@ -127,8 +127,8 @@ function headerConfigLocationForScope(
   const fallback = configLocationForScope(scope)
   if (serversInScope.length === 0) return fallback
 
-  // UX parity with Claude Code: if the primary config file does not exist but
-  // legacy MCP servers were loaded, show the effective legacy config location
+  // UX parity with the reference CLI: if the primary config file does not exist
+  // but legacy MCP servers were loaded, show the effective legacy config location
   // in the group header.
   const globalPath = getGlobalConfigFilePath()
 
