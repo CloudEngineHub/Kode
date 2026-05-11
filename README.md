@@ -1,5 +1,6 @@
 # Kode - AI Coding
 <img width="991" height="479" alt="image" src="https://github.com/user-attachments/assets/c1751e92-94dc-4e4a-9558-8cd2d058c1a1" />  <br> 
+<a href="https://trendshift.io/repositories/22005" target="_blank"><img src="https://trendshift.io/api/badge/repositories/22005" alt="shareAI-lab%2FKode-Agent | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 [![npm version](https://badge.fury.io/js/@shareai-lab%2Fkode.svg)](https://www.npmjs.com/package/@shareai-lab/kode)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![AGENTS.md](https://img.shields.io/badge/AGENTS.md-Compatible-brightgreen)](https://agents.md)
