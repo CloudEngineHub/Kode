@@ -129,7 +129,7 @@ export function hasSuspiciousWindowsPathPattern(inputPath: string): boolean {
   const p = String(inputPath)
 
   if (p.indexOf(':', 2) !== -1) return true
-  if (/~\d/.test(p)) return true
+  if (process.platform !== 'win32' && /~\d/.test(p)) return true
   if (
     p.startsWith('\\\\?\\') ||
     p.startsWith('\\\\.\\') ||
