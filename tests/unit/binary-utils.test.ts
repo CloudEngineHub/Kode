@@ -1,5 +1,6 @@
 import { test, expect } from 'bun:test'
 import { createRequire } from 'node:module'
+import { join } from 'node:path'
 
 const require = createRequire(import.meta.url)
 const utils = require('../../scripts/binary-utils.cjs') as {
@@ -38,7 +39,7 @@ test('binary-utils: cached binary path', () => {
       arch: 'arm64',
       baseDir: '/tmp/kode-bin',
     }),
-  ).toBe('/tmp/kode-bin/2.0.0/darwin-arm64/kode')
+  ).toBe(join('/tmp/kode-bin', '2.0.0', 'darwin-arm64', 'kode'))
 
   expect(
     utils.getCachedBinaryPath({
@@ -47,7 +48,7 @@ test('binary-utils: cached binary path', () => {
       arch: 'x64',
       baseDir: '/tmp/kode-bin',
     }),
-  ).toBe('/tmp/kode-bin/2.0.0/win32-x64/kode.exe')
+  ).toBe(join('/tmp/kode-bin', '2.0.0', 'win32-x64', 'kode.exe'))
 })
 
 test('binary-utils: GitHub release URL', () => {
