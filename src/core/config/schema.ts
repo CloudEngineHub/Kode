@@ -175,6 +175,7 @@ export type GlobalConfig = {
   modelPointers?: ModelPointers
   defaultModelName?: string
   lastDismissedUpdateVersion?: string
+  shiftEnterKeyBindingInstalled?: boolean
 }
 
 export const GLOBAL_CONFIG_KEYS = [

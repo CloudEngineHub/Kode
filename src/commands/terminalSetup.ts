@@ -1,14 +1,14 @@
 import { Command } from '@commands'
 import { EOL, platform, homedir } from 'os'
-import { execFileNoThrow } from '@utils/execFileNoThrow'
+import { execFileNoThrow } from '@utils/system/execFileNoThrow'
 import chalk from 'chalk'
 import { getTheme } from '@utils/theme'
-import { env } from '@utils/env'
+import { env } from '@utils/config/env'
 import { getGlobalConfig, saveGlobalConfig } from '@utils/config'
 import { markProjectOnboardingComplete } from '@components/ProjectOnboarding'
 import { readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
-import { safeParseJSON } from '@utils/json'
+import { safeParseJSON } from '@utils/text/json'
 import { logError } from '@utils/log'
 
 const terminalSetup: Command = {
