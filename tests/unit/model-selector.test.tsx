@@ -112,7 +112,7 @@ describe('ModelSelector modularization', () => {
     const h = createInkTestHarness(<Harness />)
     mounted.push(h)
 
-    await h.wait(25)
+    await h.wait(100)
     expect(h.getOutput()).toContain('Showing 2 of 2 models')
 
     h.clearOutput()

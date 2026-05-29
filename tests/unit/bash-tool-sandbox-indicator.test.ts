@@ -2,8 +2,22 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { dirname, join } from 'path'
+import which from 'which'
 import { BunShell } from '@utils/bun/shell'
 import { BashTool } from '@tools/BashTool/BashTool'
+
+function isSandboxBinaryAvailable(): boolean {
+  if (process.platform === 'linux') {
+    return !!(
+      which.sync('bwrap', { nothrow: true }) ??
+      which.sync('bubblewrap', { nothrow: true })
+    )
+  }
+  if (process.platform === 'darwin') {
+    return !!which.sync('sandbox-exec', { nothrow: true })
+  }
+  return false
+}
 
 function writeJson(filePath: string, value: unknown) {
   mkdirSync(dirname(filePath), { recursive: true })
@@ -35,6 +49,8 @@ describe('BashTool sandbox indicator (Reference CLI parity)', () => {
   })
 
   test('shows SandboxedBash when sandbox enabled and indicator env is set', () => {
+    if (!isSandboxBinaryAvailable()) return
+
     writeJson(join(projectDir, '.kode', 'settings.json'), {
       sandbox: { enabled: true },
     })

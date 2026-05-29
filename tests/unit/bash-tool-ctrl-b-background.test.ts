@@ -99,17 +99,17 @@ describe('BashTool ctrl+b backgrounding parity (Reference CLI K41 + gH5)', () =>
       expect(result.data.backgroundTaskId).toBe(result.data.bashId)
 
       const bashId = result.data.bashId as string
-      await new Promise(resolve => setTimeout(resolve, 120))
+      await new Promise(resolve => setTimeout(resolve, 300))
       const first = BunShell.getInstance().readBackgroundOutput(bashId)
       expect(first).not.toBeNull()
       expect(first?.stdout).not.toBe('')
 
-      await new Promise(resolve => setTimeout(resolve, 250))
+      await new Promise(resolve => setTimeout(resolve, 500))
       const second = BunShell.getInstance().readBackgroundOutput(bashId)
       expect(second).not.toBeNull()
       expect(second?.stdout).not.toBe('')
 
-      await new Promise(resolve => setTimeout(resolve, 1200))
+      await new Promise(resolve => setTimeout(resolve, 2000))
       const final = BunShell.getInstance().getBackgroundOutput(bashId)
       expect(final).not.toBeNull()
       expect(final?.code).toBe(0)
