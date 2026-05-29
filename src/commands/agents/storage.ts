@@ -125,7 +125,10 @@ export async function saveAgent(
     } catch (cleanupError) {
       logError(cleanupError)
       debugLogger.warn('AGENT_STORAGE_TEMP_CLEANUP_FAILED', {
-        error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+        error:
+          cleanupError instanceof Error
+            ? cleanupError.message
+            : String(cleanupError),
       })
     }
     throw error

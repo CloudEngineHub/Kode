@@ -466,7 +466,6 @@ export class ModelManager {
     return this.getActiveModelProfiles().length > 0
   }
 
-
   getModel(pointer: ModelPointerType): ModelProfile | null {
     const pointerId = this.config.modelPointers?.[pointer]
     if (!pointerId) {

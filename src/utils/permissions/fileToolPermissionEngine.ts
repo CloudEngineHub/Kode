@@ -120,8 +120,7 @@ export function expandSymlinkPaths(inputPath: string): string[] {
   try {
     const resolved = realpathSync(inputPath)
     if (resolved && resolved !== inputPath) out.push(resolved)
-  } catch {
-  }
+  } catch {}
   return out
 }
 
@@ -507,7 +506,9 @@ export function getWriteSafetyCheckForPath(
   return { safe: true }
 }
 
-export function getPlanFileWritePrivilegeForContext(context: ToolUseContext): string {
+export function getPlanFileWritePrivilegeForContext(
+  context: ToolUseContext,
+): string {
   const conversationKey = getPlanConversationKey(context)
   return getPlanFilePath(context.agentId, conversationKey)
 }
@@ -637,7 +638,9 @@ export function getSpecialAllowedReadReason(args: {
   }
 
   const projectDir = process.cwd().replace(/[^a-zA-Z0-9]/g, '-')
-  const tasksDir = resolveLikeCliPath(path.join(baseDirResolved, projectDir, 'tasks'))
+  const tasksDir = resolveLikeCliPath(
+    path.join(baseDirResolved, projectDir, 'tasks'),
+  )
   const tasksDirPosix = toPosixPath(tasksDir)
   if (
     absPosix === tasksDirPosix ||

@@ -114,7 +114,6 @@ export async function runCli() {
     }
   }
 
-
   let inputPrompt = ''
   let renderContext: RenderOptions | undefined = {
     exitOnCtrlC: false,
@@ -695,7 +694,6 @@ async function parseArgs(
     )
     .version(MACRO.VERSION, '-v, --version')
 
-
   const config = program
     .command('config')
     .description(
@@ -753,7 +751,6 @@ async function parseArgs(
       )
       process.exit(0)
     })
-
 
   const modelsCmd = program
     .command('models')
@@ -822,10 +819,12 @@ async function parseArgs(
     .option('--json', 'Output as JSON')
     .action(async (options: any) => {
       try {
-        const workingDir = typeof options?.cwd === 'string' ? options.cwd : cwd()
+        const workingDir =
+          typeof options?.cwd === 'string' ? options.cwd : cwd()
         const asJson = options?.json === true
         await setup(workingDir, false)
-        const { reloadModelManager, getModelManager } = await import('@utils/model')
+        const { reloadModelManager, getModelManager } =
+          await import('@utils/model')
         reloadModelManager()
         const manager = getModelManager()
         const config = getGlobalConfig()
@@ -846,7 +845,7 @@ async function parseArgs(
                     isActive: profile.isActive,
                   }
                 : null,
-              error: resolved.success ? null : resolved.error ?? null,
+              error: resolved.success ? null : (resolved.error ?? null),
             }
           },
         )
@@ -864,7 +863,8 @@ async function parseArgs(
           lastUsed: typeof p.lastUsed === 'number' ? p.lastUsed : null,
           isGPT5: p.isGPT5 ?? null,
           validationStatus: p.validationStatus ?? null,
-          lastValidation: typeof p.lastValidation === 'number' ? p.lastValidation : null,
+          lastValidation:
+            typeof p.lastValidation === 'number' ? p.lastValidation : null,
           hasApiKey: Boolean(p.apiKey),
         }))
 
@@ -885,7 +885,9 @@ async function parseArgs(
         }
 
         const active = profiles.filter(p => p.isActive)
-        console.log(`\nModel profiles (${active.length}/${profiles.length} active):\n`)
+        console.log(
+          `\nModel profiles (${active.length}/${profiles.length} active):\n`,
+        )
         for (const p of profiles.sort((a, b) => a.name.localeCompare(b.name))) {
           const status = p.isActive ? 'active' : 'inactive'
           console.log(`  - ${p.name} (${status})`)
@@ -908,60 +910,65 @@ async function parseArgs(
 
   agentsCmd
     .command('validate [paths...]')
-    .description('Validate agent markdown files (defaults to user+project agent dirs)')
+    .description(
+      'Validate agent markdown files (defaults to user+project agent dirs)',
+    )
     .option('--cwd <cwd>', 'The current working directory', String, cwd())
     .option('--json', 'Output as JSON')
-    .option('--no-tools-check', 'Skip validating tool names against the tool registry')
-    .action(
-      async (paths: string[] | undefined, options: any) => {
-        try {
-          const workingDir = typeof options?.cwd === 'string' ? options.cwd : cwd()
-          await setup(workingDir, false)
-          const { validateAgentTemplates } = await import('./agentsValidate')
-          const report = await validateAgentTemplates({
-            cwd: workingDir,
-            paths: Array.isArray(paths) ? paths : [],
-            checkTools: options.toolsCheck !== false,
-          })
+    .option(
+      '--no-tools-check',
+      'Skip validating tool names against the tool registry',
+    )
+    .action(async (paths: string[] | undefined, options: any) => {
+      try {
+        const workingDir =
+          typeof options?.cwd === 'string' ? options.cwd : cwd()
+        await setup(workingDir, false)
+        const { validateAgentTemplates } = await import('./agentsValidate')
+        const report = await validateAgentTemplates({
+          cwd: workingDir,
+          paths: Array.isArray(paths) ? paths : [],
+          checkTools: options.toolsCheck !== false,
+        })
 
-          if (options.json) {
-            console.log(JSON.stringify(report, null, 2))
-            process.exitCode = report.ok ? 0 : 1
-            return
-          }
-
-          console.log(
-            `Validated ${report.results.length} agent file(s): ${report.errorCount} error(s), ${report.warningCount} warning(s)\n`,
-          )
-
-          for (const r of report.results) {
-            const rel = r.filePath
-            const title = r.agentType ? `${r.agentType}` : '(unknown agent)'
-            console.log(`${title} — ${rel}`)
-            if (r.model) {
-              const normalized = r.normalizedModel ? ` (normalized: ${r.normalizedModel})` : ''
-              console.log(`  model: ${r.model}${normalized}`)
-            }
-            if (r.issues.length === 0) {
-              console.log(`  OK`)
-            } else {
-              for (const issue of r.issues) {
-                console.log(`  - ${issue.level}: ${issue.message}`)
-              }
-            }
-            console.log('')
-          }
-
+        if (options.json) {
+          console.log(JSON.stringify(report, null, 2))
           process.exitCode = report.ok ? 0 : 1
           return
-        } catch (error) {
-          console.error((error as Error).message)
-          process.exitCode = 1
-          return
         }
-      },
-    )
 
+        console.log(
+          `Validated ${report.results.length} agent file(s): ${report.errorCount} error(s), ${report.warningCount} warning(s)\n`,
+        )
+
+        for (const r of report.results) {
+          const rel = r.filePath
+          const title = r.agentType ? `${r.agentType}` : '(unknown agent)'
+          console.log(`${title} — ${rel}`)
+          if (r.model) {
+            const normalized = r.normalizedModel
+              ? ` (normalized: ${r.normalizedModel})`
+              : ''
+            console.log(`  model: ${r.model}${normalized}`)
+          }
+          if (r.issues.length === 0) {
+            console.log(`  OK`)
+          } else {
+            for (const issue of r.issues) {
+              console.log(`  - ${issue.level}: ${issue.message}`)
+            }
+          }
+          console.log('')
+        }
+
+        process.exitCode = report.ok ? 0 : 1
+        return
+      } catch (error) {
+        console.error((error as Error).message)
+        process.exitCode = 1
+        return
+      }
+    })
 
   const registerMarketplaceCommands = (marketplaceCmd: Command) => {
     marketplaceCmd
@@ -1341,7 +1348,6 @@ async function parseArgs(
       }
     })
 
-
   const skillsCmd = program
     .command('skills')
     .description('Manage skills and skill marketplaces')
@@ -1425,7 +1431,6 @@ async function parseArgs(
       }
     })
 
-
   const allowedTools = program
     .command('approved-tools')
     .description('Manage approved tools')
@@ -1447,7 +1452,6 @@ async function parseArgs(
       console.log(result.message)
       process.exit(result.success ? 0 : 1)
     })
-
 
   const mcp = program
     .command('mcp')
@@ -1969,7 +1973,6 @@ async function parseArgs(
           process.exit(1)
         }
 
-
         addMcpServer(name, serverConfig, scope)
 
         switch (serverConfig.type) {
@@ -2433,7 +2436,6 @@ async function parseArgs(
       })
       process.exit(0)
     })
-
 
   program
     .command('update')

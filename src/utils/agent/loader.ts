@@ -1,4 +1,3 @@
-
 import {
   existsSync,
   readFileSync,
@@ -185,7 +184,9 @@ function listMarkdownFilesRecursively(rootDir: string): string[] {
   return files
 }
 
-function readMarkdownFile(filePath: string): { frontmatter: any; content: string } | null {
+function readMarkdownFile(
+  filePath: string,
+): { frontmatter: any; content: string } | null {
   try {
     const raw = readFileSync(filePath, 'utf8')
     const yamlSchema = (yaml as any).JSON_SCHEMA
@@ -323,7 +324,12 @@ function parseAgentFromFile(options: {
     let name: unknown = fm.name
     let description: unknown = fm.description
 
-    if (!name || typeof name !== 'string' || !description || typeof description !== 'string') {
+    if (
+      !name ||
+      typeof name !== 'string' ||
+      !description ||
+      typeof description !== 'string'
+    ) {
       return null
     }
 
@@ -336,8 +342,7 @@ function parseAgentFromFile(options: {
     if (typeof modelRaw !== 'string' && typeof fm.model_name === 'string') {
       modelRaw = fm.model_name
     }
-    let model =
-      typeof modelRaw === 'string' ? modelRaw.trim() : undefined
+    let model = typeof modelRaw === 'string' ? modelRaw.trim() : undefined
     if (model === '') model = undefined
 
     const forkContextValue: unknown = fm.forkContext
@@ -364,7 +369,9 @@ function parseAgentFromFile(options: {
     const permissionModeValue: unknown = fm.permissionMode
     const permissionModeIsValid =
       typeof permissionModeValue === 'string' &&
-      VALID_PERMISSION_MODES.includes(permissionModeValue as AgentPermissionMode)
+      VALID_PERMISSION_MODES.includes(
+        permissionModeValue as AgentPermissionMode,
+      )
     if (
       typeof permissionModeValue === 'string' &&
       permissionModeValue &&
@@ -382,10 +389,9 @@ function parseAgentFromFile(options: {
       toolsList === undefined || toolsList.includes('*') ? '*' : toolsList
 
     const disallowedRaw =
-      fm.disallowedTools ??
-      fm['disallowed-tools'] ??
-      fm['disallowed_tools']
-    const disallowedTools = disallowedRaw !== undefined ? z2A(disallowedRaw) : undefined
+      fm.disallowedTools ?? fm['disallowed-tools'] ?? fm['disallowed_tools']
+    const disallowedTools =
+      disallowedRaw !== undefined ? z2A(disallowedRaw) : undefined
 
     const skills = qP(fm.skills)
     const systemPrompt = parsed.content.trim()
@@ -403,7 +409,9 @@ function parseAgentFromFile(options: {
       filename,
       ...(color ? { color } : {}),
       ...(model ? { model: model as AgentModel } : {}),
-      ...(permissionModeIsValid ? { permissionMode: permissionModeValue as AgentPermissionMode } : {}),
+      ...(permissionModeIsValid
+        ? { permissionMode: permissionModeValue as AgentPermissionMode }
+        : {}),
       ...(forkContext ? { forkContext: true } : {}),
     }
 
@@ -424,13 +432,18 @@ const agentJsonSchema = z.object({
 
 const agentsJsonSchema = z.record(z.string(), agentJsonSchema)
 
-function parseAgentFromJson(agentType: string, value: unknown): AgentConfig | null {
+function parseAgentFromJson(
+  agentType: string,
+  value: unknown,
+): AgentConfig | null {
   const parsed = agentJsonSchema.safeParse(value)
   if (!parsed.success) return null
 
   const toolsList = z2A(parsed.data.tools)
   const disallowedList =
-    parsed.data.disallowedTools !== undefined ? z2A(parsed.data.disallowedTools) : undefined
+    parsed.data.disallowedTools !== undefined
+      ? z2A(parsed.data.disallowedTools)
+      : undefined
   const model =
     typeof parsed.data.model === 'string' ? parsed.data.model.trim() : undefined
 
@@ -438,12 +451,16 @@ function parseAgentFromJson(agentType: string, value: unknown): AgentConfig | nu
     agentType,
     whenToUse: parsed.data.description,
     tools: toolsList === undefined || toolsList.includes('*') ? '*' : toolsList,
-    ...(disallowedList !== undefined ? { disallowedTools: disallowedList } : {}),
+    ...(disallowedList !== undefined
+      ? { disallowedTools: disallowedList }
+      : {}),
     systemPrompt: parsed.data.prompt,
     source: 'flagSettings',
     location: 'built-in',
     ...(model ? { model: model as AgentModel } : {}),
-    ...(parsed.data.permissionMode ? { permissionMode: parsed.data.permissionMode } : {}),
+    ...(parsed.data.permissionMode
+      ? { permissionMode: parsed.data.permissionMode }
+      : {}),
   }
 }
 
@@ -672,7 +689,10 @@ function mergeAgents(allAgents: AgentConfig[]): AgentConfig[] {
 function inodeKeyForPath(filePath: string): string | null {
   try {
     const st = statSync(filePath)
-    if (typeof (st as any).dev === 'number' && typeof (st as any).ino === 'number') {
+    if (
+      typeof (st as any).dev === 'number' &&
+      typeof (st as any).ino === 'number'
+    ) {
       return `${(st as any).dev}:${(st as any).ino}`
     }
     return null
@@ -882,8 +902,7 @@ export async function stopAgentWatcher(): Promise<void> {
     for (const watcher of watchers) {
       try {
         watcher.close()
-      } catch {
-      }
+      } catch {}
     }
   } finally {
     watchers = []

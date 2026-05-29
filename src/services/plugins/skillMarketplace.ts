@@ -257,7 +257,6 @@ function safeCopyDirectory(srcDir: string, destDir: string): void {
       copyFileSync(srcPath, destPath)
       continue
     }
-
   }
 }
 
@@ -334,8 +333,7 @@ function resolvePluginForInstall(pluginInput: string): {
       const manifest = readMarketplaceFromDirectory(entry.installLocation)
       const found = manifest.plugins.find(p => p.name === trimmed)
       if (found) matches.push({ marketplace, entry: found })
-    } catch {
-    }
+    } catch {}
   }
 
   if (matches.length === 0) {
@@ -542,14 +540,14 @@ async function tryDownloadGithubZip(
     ? [ref]
     : [`refs/heads/${ref}`, `refs/tags/${ref}`]
 
-	  let lastError: Error | null = null
-	  for (const candidate of candidates) {
-	    const url = `https://codeload.github.com/${owner}/${name}/zip/${candidate}`
-	    try {
-	      return await fetchBinary(url)
-	    } catch (err) {
-	      lastError = err instanceof Error ? err : Error(String(err))
-	    }
+  let lastError: Error | null = null
+  for (const candidate of candidates) {
+    const url = `https://codeload.github.com/${owner}/${name}/zip/${candidate}`
+    try {
+      return await fetchBinary(url)
+    } catch (err) {
+      lastError = err instanceof Error ? err : Error(String(err))
+    }
   }
   throw lastError ?? new Error(`Failed to download GitHub repo ${repo}@${ref}`)
 }
@@ -770,8 +768,7 @@ export function removeMarketplace(name: string): void {
     if (existsSync(entry.installLocation)) {
       rmSync(entry.installLocation, { recursive: true, force: true })
     }
-  } catch {
-  }
+  } catch {}
 }
 
 export async function refreshMarketplaceAsync(name: string): Promise<void> {

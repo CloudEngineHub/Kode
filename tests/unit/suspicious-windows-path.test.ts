@@ -43,9 +43,7 @@ describe('hasSuspiciousWindowsPathPattern', () => {
 
     test('PROGRA~1 in path (Program Files 8.3 name)', () => {
       expect(
-        hasSuspiciousWindowsPathPattern(
-          'C:\\PROGRA~1\\Common Files\\file.txt',
-        ),
+        hasSuspiciousWindowsPathPattern('C:\\PROGRA~1\\Common Files\\file.txt'),
       ).toBe(false)
     })
 
@@ -70,9 +68,7 @@ describe('hasSuspiciousWindowsPathPattern', () => {
     })
 
     test('tilde followed by multiple digits (8.3 pattern)', () => {
-      expect(hasSuspiciousWindowsPathPattern('/path/FILENA~12.txt')).toBe(
-        false,
-      )
+      expect(hasSuspiciousWindowsPathPattern('/path/FILENA~12.txt')).toBe(false)
     })
   })
 

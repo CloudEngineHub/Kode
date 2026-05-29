@@ -219,16 +219,16 @@ export class OAuthService {
     state: string,
     useManualRedirect: boolean = false,
   ): Promise<OAuthTokenExchangeResponse> {
-	    const requestBody = {
-	      grant_type: 'authorization_code',
-	      code: authorizationCode,
-	      redirect_uri: useManualRedirect
-	        ? OAUTH_CONFIG.MANUAL_REDIRECT_URL
-	        : `http://localhost:${OAUTH_CONFIG.REDIRECT_PORT}/callback`,
-	      client_id: OAUTH_CONFIG.CLIENT_ID,
-	      code_verifier: this.codeVerifier,
-	      state,
-	    }
+    const requestBody = {
+      grant_type: 'authorization_code',
+      code: authorizationCode,
+      redirect_uri: useManualRedirect
+        ? OAUTH_CONFIG.MANUAL_REDIRECT_URL
+        : `http://localhost:${OAUTH_CONFIG.REDIRECT_PORT}/callback`,
+      client_id: OAUTH_CONFIG.CLIENT_ID,
+      code_verifier: this.codeVerifier,
+      state,
+    }
 
     const response = await fetch(OAUTH_CONFIG.TOKEN_URL, {
       method: 'POST',
@@ -259,9 +259,7 @@ export class OAuthService {
 
     if (state !== this.expectedState) {
       if (this.pendingCodePromise) {
-        this.pendingCodePromise.reject(
-          new Error('Invalid state parameter'),
-        )
+        this.pendingCodePromise.reject(new Error('Invalid state parameter'))
         this.pendingCodePromise = null
       }
       return

@@ -109,8 +109,7 @@ function safeAppendJsonl(path: string, record: unknown): void {
   try {
     safeEnsureFile(path)
     appendFileSync(path, JSON.stringify(record) + '\n', 'utf8')
-  } catch {
-  }
+  } catch {}
 }
 
 const lastUuidByFile = new Map<string, string | null>()
@@ -213,8 +212,7 @@ function ensureFileHistorySnapshot(
       snapshotWrittenByFile.add(filePath)
       return
     }
-  } catch {
-  }
+  } catch {}
 
   const now = new Date().toISOString()
   safeAppendJsonl(filePath, {

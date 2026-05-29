@@ -31,8 +31,7 @@ export class StdioTransport {
 
       try {
         const payload = JSON.parse(trimmed)
-        const p = this.peer.handleIncoming(payload).catch(() => {
-        })
+        const p = this.peer.handleIncoming(payload).catch(() => {})
         this.pending.add(p)
         void p.finally(() => this.pending.delete(p))
       } catch (err) {

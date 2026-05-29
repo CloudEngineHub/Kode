@@ -385,12 +385,10 @@ function matcherMatchesTool(matcher: string, toolName: string): boolean {
   if (matcher === toolName) return true
   try {
     if (minimatch(toolName, matcher, { dot: true, nocase: false })) return true
-  } catch {
-  }
+  } catch {}
   try {
     if (new RegExp(matcher).test(toolName)) return true
-  } catch {
-  }
+  } catch {}
   return false
 }
 
@@ -398,7 +396,8 @@ function buildShellCommand(command: string): string[] {
   if (process.platform === 'win32') {
     const trimmed = command.trim()
     const firstSpace = trimmed.indexOf(' ')
-    const executable = firstSpace === -1 ? trimmed : trimmed.slice(0, firstSpace)
+    const executable =
+      firstSpace === -1 ? trimmed : trimmed.slice(0, firstSpace)
     const looksLikeDirectExec =
       /\.(?:exe|cmd|bat|ps1)$/i.test(executable) ||
       /^(?:bun|node|npm|npx|pnpm|yarn|deno)$/i.test(executable)
@@ -418,7 +417,8 @@ function buildShellCommand(command: string): string[] {
 function resolveExecutableForSpawn(name: string): string {
   if (process.platform !== 'win32') return name
   if (name === 'bun') return process.execPath
-  if (name === 'node') return process.execPath.replace(/[\\/]bun(\.exe)?$/i, 'node$1')
+  if (name === 'node')
+    return process.execPath.replace(/[\\/]bun(\.exe)?$/i, 'node$1')
   return name
 }
 
@@ -1009,8 +1009,7 @@ export async function getSessionStartAdditionalContext(args?: {
   const envFilePath = join(envFileDir, `${sessionId}.env`)
   try {
     writeFileSync(envFilePath, '', 'utf8')
-  } catch {
-  }
+  } catch {}
 
   const additionalContexts: string[] = []
 

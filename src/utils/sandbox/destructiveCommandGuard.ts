@@ -125,9 +125,7 @@ function resolvePathForSafety(
 ): string {
   const p = getPathForPlatform(platform)
   const expanded = resolveTilde(raw.trim(), homeDir)
-  return p.isAbsolute(expanded)
-    ? p.resolve(expanded)
-    : p.resolve(cwd, expanded)
+  return p.isAbsolute(expanded) ? p.resolve(expanded) : p.resolve(cwd, expanded)
 }
 
 function isCriticalRemovalTarget(
@@ -210,7 +208,12 @@ export function getBashDestructiveCommandBlock(args: {
         }
       }
 
-      const resolvedTarget = resolvePathForSafety(target, cwd, homeDir, platform)
+      const resolvedTarget = resolvePathForSafety(
+        target,
+        cwd,
+        homeDir,
+        platform,
+      )
       if (
         isCriticalRemovalTarget(resolvedTarget, {
           homeDir,

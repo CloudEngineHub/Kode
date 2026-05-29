@@ -37,11 +37,7 @@ describe('projectInstructions path normalization', () => {
   test('nested AGENTS.md path uses forward slashes in heading', () => {
     const nestedDir = join(projectDir, 'a')
     mkdirSync(nestedDir, { recursive: true })
-    writeFileSync(
-      join(nestedDir, 'AGENTS.md'),
-      'nested instructions\n',
-      'utf8',
-    )
+    writeFileSync(join(nestedDir, 'AGENTS.md'), 'nested instructions\n', 'utf8')
 
     const files = getProjectInstructionFiles(nestedDir)
     const { content } = readAndConcatProjectInstructionFiles(files, {
@@ -69,11 +65,7 @@ describe('projectInstructions path normalization', () => {
   })
 
   test('multiple AGENTS.md files in git tree are included', () => {
-    writeFileSync(
-      join(projectDir, 'AGENTS.md'),
-      'root instructions\n',
-      'utf8',
-    )
+    writeFileSync(join(projectDir, 'AGENTS.md'), 'root instructions\n', 'utf8')
 
     const aDir = join(projectDir, 'a')
     mkdirSync(aDir, { recursive: true })

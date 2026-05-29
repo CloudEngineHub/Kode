@@ -1,14 +1,14 @@
 import {
   Message as APIAssistantMessage,
-	MessageParam,
-	ToolUseBlock,
+  MessageParam,
+  ToolUseBlock,
 } from '@anthropic-ai/sdk/resources/index.mjs'
 import type { UUID } from '@kode-types/common'
 import type { Tool, ToolUseContext } from '@tool'
 import type { ToolPermissionContext } from '@kode-types/toolPermissionContext'
 import {
-	messagePairValidForBinaryFeedback,
-	shouldUseBinaryFeedback,
+  messagePairValidForBinaryFeedback,
+  shouldUseBinaryFeedback,
 } from './binaryFeedback'
 import type { CanUseToolFn } from '@kode-types/canUseTool'
 import { queryLLM } from '@services/llmLazy'
@@ -17,15 +17,15 @@ import { emitReminderEvent } from '@services/systemReminder'
 import { getOutputStyleSystemPromptAdditions } from '@services/outputStyles'
 import { logError } from '@utils/log'
 import {
-	debug as debugLogger,
-	markPhase,
-	getCurrentRequest,
-	logUserFriendly,
+  debug as debugLogger,
+  markPhase,
+  getCurrentRequest,
+  logUserFriendly,
 } from '@utils/log/debugLogger'
 import { getModelManager } from '@utils/model'
 import {
-	createAssistantMessage,
-	createProgressMessage,
+  createAssistantMessage,
+  createProgressMessage,
   createUserMessage,
   FullToolUseResult,
   INTERRUPT_MESSAGE,
@@ -42,17 +42,17 @@ import {
 import { setRequestStatus } from '@utils/session/requestStatus'
 import { BashTool } from '@tools/BashTool/BashTool'
 import {
-	BunShell,
-	renderBackgroundShellStatusAttachment,
-	renderBashNotification,
+  BunShell,
+  renderBackgroundShellStatusAttachment,
+  renderBashNotification,
 } from '@utils/bun/shell'
 import { resolveToolNameAlias } from '@utils/tooling/toolNameAliases'
 import { getCwd } from '@utils/state'
 import { checkAutoCompact } from '@utils/session/autoCompactCore'
 import {
-	drainHookSystemPromptAdditions,
-	getHookTranscriptPath,
-	queueHookAdditionalContexts,
+  drainHookSystemPromptAdditions,
+  getHookTranscriptPath,
+  queueHookAdditionalContexts,
   queueHookSystemMessages,
   runPostToolUseHooks,
   runPreToolUseHooks,
@@ -71,11 +71,11 @@ interface ExtendedToolUseContext extends ToolUseContext {
     mcpClients?: any[]
     verbose: boolean
     safeMode: boolean
-	    maxThinkingTokens: number
-	    isKodingRequest?: boolean
-	    lastUserPrompt?: string
-	    model?: string | import('@utils/config').ModelPointerType
-	    toolPermissionContext?: ToolPermissionContext
+    maxThinkingTokens: number
+    isKodingRequest?: boolean
+    lastUserPrompt?: string
+    model?: string | import('@utils/config').ModelPointerType
+    toolPermissionContext?: ToolPermissionContext
     shouldAvoidPermissionPrompts?: boolean
     persistSession?: boolean
   }
@@ -806,7 +806,6 @@ async function* queryCore(
       return
     }
 
-
     try {
       yield* await queryCore(
         [...messages, assistantMessage, ...toolMessagesForNextTurn],
@@ -918,7 +917,7 @@ export async function* runToolUse(
 export function normalizeToolInput(
   tool: Tool,
   input: Record<string, unknown>,
-  ): Record<string, unknown> {
+): Record<string, unknown> {
   switch (tool) {
     case BashTool: {
       const parsed = BashTool.inputSchema.parse(input)

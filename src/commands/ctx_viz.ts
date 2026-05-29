@@ -189,7 +189,9 @@ const command: Command = {
       const schema = JSON.stringify(
         'inputJSONSchema' in t && t.inputJSONSchema
           ? t.inputJSONSchema
-          : zodToJsonSchema(t.inputSchema as any as Parameters<typeof zodToJsonSchema>[0]),
+          : zodToJsonSchema(
+              t.inputSchema as any as Parameters<typeof zodToJsonSchema>[0],
+            ),
       )
 
       return {

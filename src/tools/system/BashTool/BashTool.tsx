@@ -495,14 +495,14 @@ export const BashTool = {
           if (!setToolJSX) return false
           if (abortController.signal.aborted) return false
 
-	          const hostForUrl =
-	            host.includes(':') && !host.startsWith('[') ? `[${host}]` : host
-	          const url = `http://${hostForUrl}:${port}/`
+          const hostForUrl =
+            host.includes(':') && !host.startsWith('[') ? `[${host}]` : host
+          const url = `http://${hostForUrl}:${port}/`
 
-	          return await new Promise<boolean>(resolve => {
-	            const assistantMessage = createAssistantMessage('')
-	            if (context.messageId) {
-	              ;(assistantMessage.message as any).id = context.messageId
+          return await new Promise<boolean>(resolve => {
+            const assistantMessage = createAssistantMessage('')
+            if (context.messageId) {
+              ;(assistantMessage.message as any).id = context.messageId
             }
 
             const toolUseConfirm: any = {

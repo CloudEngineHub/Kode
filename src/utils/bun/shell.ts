@@ -135,16 +135,14 @@ export function normalizeLinuxSandboxPath(
         const real = realpathSync(dir)
         const suffix = resolved.slice(dir.length)
         return real + suffix
-      } catch {
-      }
+      } catch {}
     }
     return resolved
   }
 
   try {
     resolved = realpathSync(resolved)
-  } catch {
-  }
+  } catch {}
 
   return resolved
 }
