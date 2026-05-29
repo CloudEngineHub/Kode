@@ -17,7 +17,7 @@ function createAcpHarness(options: { configDir: string }) {
   const repoRoot = process.cwd()
   const configDir = options.configDir
 
-  const proc = spawn('bun', ['src/entrypoints/acp.ts'], {
+  const proc = spawn(process.execPath, ['src/entrypoints/acp.ts'], {
     cwd: repoRoot,
     stdio: ['pipe', 'pipe', 'pipe'],
     env: {
