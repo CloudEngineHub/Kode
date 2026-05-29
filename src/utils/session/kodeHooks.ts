@@ -427,9 +427,15 @@ function expandEnvVars(
   extraEnv?: Record<string, string>,
 ): string {
   const merged = { ...process.env, ...extraEnv }
-  return command.replace(/\$\{([^}]+)\}/g, (_match, key: string) => {
+  const expanded = command.replace(/\$\{([^}]+)\}/g, (_match, key: string) => {
     return merged[key] ?? ''
   })
+  if (process.platform === 'win32') {
+    return expanded.replace(/%([^%]+)%/g, (_match, key: string) => {
+      return merged[key] ?? ''
+    })
+  }
+  return expanded
 }
 
 async function runCommandHook(args: {
