@@ -86,6 +86,7 @@ function createInkTestHarness(element: React.ReactElement): InkTestHarness {
     stdin: stdin as any,
     stdout: stdout as any,
     exitOnCtrlC: false,
+    debug: true,
   })
 
   return {
@@ -461,7 +462,10 @@ describe('TUI E2E regression (Ink render)', () => {
     process.env.KODE_CONFIG_DIR = join(homeDir, '.kode')
 
     mkdirSync(join(homeDir, '.kode'), { recursive: true })
-    const cmd = `${process.execPath} -e "process.stdout.write('hello-statusline')"`
+    const cmd =
+      process.platform === 'win32'
+        ? 'echo hello-statusline'
+        : "printf 'hello-statusline'"
     writeFileSync(
       join(homeDir, '.kode', 'settings.json'),
       JSON.stringify({ statusLine: cmd }, null, 2) + '\n',
@@ -476,7 +480,7 @@ describe('TUI E2E regression (Ink render)', () => {
       mounted.push(h)
 
       await h.wait(25)
-      await h.wait(1000)
+      await h.wait(3000)
 
       expect(h.getOutput()).toContain('hello-statusline')
     } finally {

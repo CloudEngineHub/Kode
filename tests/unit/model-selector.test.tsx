@@ -43,6 +43,7 @@ function createInkTestHarness(element: React.ReactElement): InkTestHarness {
     stdin: stdin as any,
     stdout: stdout as any,
     exitOnCtrlC: false,
+    debug: true,
   })
 
   return {
