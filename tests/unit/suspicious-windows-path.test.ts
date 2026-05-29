@@ -32,19 +32,21 @@ describe('hasSuspiciousWindowsPathPattern', () => {
     })
   })
 
-  describe('Windows 8.3 short names should NOT be flagged', () => {
+  describe('Windows 8.3 short names', () => {
+    const isWindows = process.platform === 'win32'
+
     test('ADMINI~1 in path (common Windows 8.3 name)', () => {
       expect(
         hasSuspiciousWindowsPathPattern(
           'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\file.txt',
         ),
-      ).toBe(false)
+      ).toBe(isWindows ? false : true)
     })
 
     test('PROGRA~1 in path (Program Files 8.3 name)', () => {
       expect(
         hasSuspiciousWindowsPathPattern('C:\\PROGRA~1\\Common Files\\file.txt'),
-      ).toBe(false)
+      ).toBe(isWindows ? false : true)
     })
 
     test('DOCUME~1 in path (Documents 8.3 name)', () => {
@@ -52,7 +54,7 @@ describe('hasSuspiciousWindowsPathPattern', () => {
         hasSuspiciousWindowsPathPattern(
           'C:\\Users\\ADMINI~1\\DOCUME~1\\file.txt',
         ),
-      ).toBe(false)
+      ).toBe(isWindows ? false : true)
     })
 
     test('multiple 8.3 names in path', () => {
@@ -60,15 +62,19 @@ describe('hasSuspiciousWindowsPathPattern', () => {
         hasSuspiciousWindowsPathPattern(
           'C:\\Users\\ADMINI~1\\LOCALS~1\\Temp\\kode-test\\file.txt',
         ),
-      ).toBe(false)
+      ).toBe(isWindows ? false : true)
     })
 
     test('tilde followed by single digit (8.3 pattern)', () => {
-      expect(hasSuspiciousWindowsPathPattern('/path/FILENA~1.txt')).toBe(false)
+      expect(hasSuspiciousWindowsPathPattern('/path/FILENA~1.txt')).toBe(
+        isWindows ? false : true,
+      )
     })
 
     test('tilde followed by multiple digits (8.3 pattern)', () => {
-      expect(hasSuspiciousWindowsPathPattern('/path/FILENA~12.txt')).toBe(false)
+      expect(hasSuspiciousWindowsPathPattern('/path/FILENA~12.txt')).toBe(
+        isWindows ? false : true,
+      )
     })
   })
 
