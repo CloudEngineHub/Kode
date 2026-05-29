@@ -83,7 +83,7 @@ describe('BashTool ctrl+b backgrounding parity (Reference CLI K41 + gH5)', () =>
       const gen = BashTool.call(
         {
           command:
-            'i=0; while [ $i -lt 10 ]; do i=$((i+1)); echo "tick-$i"; sleep 0.1; done',
+            'i=0; while [ $i -lt 30 ]; do i=$((i+1)); echo "tick-$i"; sleep 0.1; done',
           description: 'Emit progress ticks',
           timeout: 30_000,
         },
@@ -109,7 +109,7 @@ describe('BashTool ctrl+b backgrounding parity (Reference CLI K41 + gH5)', () =>
       expect(second).not.toBeNull()
       expect(second?.stdout).not.toBe('')
 
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      await new Promise(resolve => setTimeout(resolve, 3000))
       const final = BunShell.getInstance().getBackgroundOutput(bashId)
       expect(final).not.toBeNull()
       expect(final?.code).toBe(0)
