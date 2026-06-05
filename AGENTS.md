@@ -67,3 +67,7 @@ SKIP_BUNDLED_CHECK=true npm publish
 - Release checklist: `docs/release_checklist.md`
 - Architecture notes: `docs/upgrade_design.md`
 - Task ledger: `todo_tasks.json`, `todo_tasks_detail.md`
+
+## AI Context Notes
+
+- 2026-06-05：修复 Windows CI 时，优先检查 Bun 默认 5 秒测试超时、跨文件 `mock.module` 污染、以及 `cmd /c` 与 Unix shell 命令差异；不要用跳过 Windows 测试代替根因修复。
