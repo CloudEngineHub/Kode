@@ -43,6 +43,7 @@ import { zodToJsonSchema } from 'zod-to-json-schema'
 import type { BetaMessageStream } from '@anthropic-ai/sdk/lib/BetaMessageStream.mjs'
 import { ModelAdapterFactory } from './modelAdapterFactory'
 import { UnifiedRequestParams } from '@kode-types/modelCapabilities'
+import { getModelCapabilities } from '@constants/modelCapabilities'
 import { responseStateManager, getConversationId } from './responseStateManager'
 import type { ToolUseContext } from '@tool'
 import type {
@@ -1799,7 +1800,10 @@ async function queryOpenAI(
 
         if (toolSchemas.length > 0) {
           opts.tools = toolSchemas
-          opts.tool_choice = 'auto'
+          const caps = getModelCapabilities(modelProfile?.modelName || '')
+          if (caps.toolCalling.mode !== 'none') {
+            opts.tool_choice = 'auto'
+          }
         }
         const reasoningEffort = await getReasoningEffort(modelProfile, messages)
         if (reasoningEffort) {
