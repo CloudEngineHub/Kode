@@ -207,7 +207,12 @@ describe('session loader (projects/*.jsonl)', () => {
             role: 'assistant',
             content: [
               { type: 'text', text: 'Running ls...' },
-              { type: 'tool_use', id: 'toolu_bash1', name: 'Bash', input: { command: 'ls' } },
+              {
+                type: 'tool_use',
+                id: 'toolu_bash1',
+                name: 'Bash',
+                input: { command: 'ls' },
+              },
             ],
             stop_reason: 'tool_use',
             stop_sequence: null,

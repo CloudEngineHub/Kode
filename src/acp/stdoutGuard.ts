@@ -59,4 +59,3 @@ export function installStdoutGuard(): GuardHandle {
 
   return { writeAcpLine, restore, originalStdoutWrite }
 }
-

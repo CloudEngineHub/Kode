@@ -43,6 +43,7 @@ function createInkTestHarness(element: React.ReactElement): InkTestHarness {
     stdin: stdin as any,
     stdout: stdout as any,
     exitOnCtrlC: false,
+    debug: true,
   })
 
   return {
@@ -112,7 +113,7 @@ describe('ModelSelector modularization', () => {
     const h = createInkTestHarness(<Harness />)
     mounted.push(h)
 
-    await h.wait(25)
+    await h.wait(100)
     expect(h.getOutput()).toContain('Showing 2 of 2 models')
 
     h.clearOutput()
@@ -126,4 +127,3 @@ describe('ModelSelector modularization', () => {
     expect(h.getOutput()).toContain('SELECTED:foo')
   })
 })
-

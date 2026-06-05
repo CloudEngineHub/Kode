@@ -137,8 +137,7 @@ function writeToFile(filePath: string, entry: LogEntry) {
       ) + ',\n'
 
     appendFileSync(filePath, logLine)
-  } catch (error) {
-  }
+  } catch (error) {}
 }
 
 const recentLogs = new Map<string, number>()
@@ -207,8 +206,7 @@ function formatMessages(messages: any): string {
       if (Array.isArray(parsed)) {
         return formatMessages(parsed)
       }
-    } catch {
-    }
+    } catch {}
   }
 
   if (typeof messages === 'string' && messages.length > 200) {
@@ -559,7 +557,7 @@ export function logLLMInteraction(context: {
   terminalLog(chalk.cyan(`\n💬 Real API Messages${apiLabel} (last 10):`))
 
   const recentMessages = context.messages.slice(-10)
-    recentMessages.forEach((msg, index) => {
+  recentMessages.forEach((msg, index) => {
     const globalIndex = context.messages.length - recentMessages.length + index
     const roleColor =
       msg.role === 'user'

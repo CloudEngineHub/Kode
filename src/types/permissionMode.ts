@@ -4,6 +4,7 @@ export type PermissionMode =
   | 'acceptEdits'
   | 'plan'
   | 'bypassPermissions'
+  | 'dontAsk'
 
 export interface PermissionContext {
   mode: PermissionMode
@@ -98,6 +99,19 @@ export const MODE_CONFIGS: Record<PermissionMode, ModeConfig> = {
       bypassValidation: true,
     },
   },
+  dontAsk: {
+    name: 'dontAsk',
+    label: "DON'T ASK",
+    icon: '🚫',
+    color: 'red',
+    description: 'Auto-deny permission prompts without asking',
+    allowedTools: ['*'],
+    restrictions: {
+      readOnly: false,
+      requireConfirmation: false,
+      bypassValidation: false,
+    },
+  },
 }
 
 // Mode cycling function preserved from the Claude Code workflow
@@ -113,6 +127,8 @@ export function getNextPermissionMode(
     case 'plan':
       return isBypassAvailable ? 'bypassPermissions' : 'default'
     case 'bypassPermissions':
+      return 'default'
+    case 'dontAsk':
       return 'default'
     default:
       return 'default'

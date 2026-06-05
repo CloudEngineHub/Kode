@@ -1,8 +1,12 @@
-import path from 'path'
+import nodePath from 'path'
 import { homedir } from 'os'
 import { parse, type ParseEntry } from 'shell-quote'
 import { splitCommand } from '@utils/commands'
 import type { CommandSource } from '@tools/BashTool/commandSource'
+
+function getPathForPlatform(platform: NodeJS.Platform): typeof nodePath {
+  return platform === 'win32' ? nodePath.win32 : nodePath.posix
+}
 
 function parseBoolLike(value: string | undefined): boolean {
   if (!value) return false
@@ -117,27 +121,28 @@ function resolvePathForSafety(
   raw: string,
   cwd: string,
   homeDir: string,
+  platform: NodeJS.Platform,
 ): string {
+  const p = getPathForPlatform(platform)
   const expanded = resolveTilde(raw.trim(), homeDir)
-  return path.isAbsolute(expanded)
-    ? path.resolve(expanded)
-    : path.resolve(cwd, expanded)
+  return p.isAbsolute(expanded) ? p.resolve(expanded) : p.resolve(cwd, expanded)
 }
 
 function isCriticalRemovalTarget(
   resolvedPath: string,
-  options: { homeDir: string; originalCwd: string },
+  options: { homeDir: string; originalCwd: string; platform: NodeJS.Platform },
 ): boolean {
-  const home = path.resolve(options.homeDir)
-  const original = path.resolve(options.originalCwd)
-  const target = path.resolve(resolvedPath)
+  const p = getPathForPlatform(options.platform)
+  const home = p.resolve(options.homeDir)
+  const original = p.resolve(options.originalCwd)
+  const target = p.resolve(resolvedPath)
 
-  const root = path.parse(target).root
+  const root = p.parse(target).root
   if (target === root) return true
   if (target === home) return true
   if (target === original) return true
 
-  const parent = path.dirname(target)
+  const parent = p.dirname(target)
   if (parent === root) return true
 
   return false
@@ -170,6 +175,7 @@ export function getBashDestructiveCommandBlock(args: {
 
   const homeDir = args.homeDir ?? homedir()
   const cwd = args.cwd
+  const platform = args.platform ?? process.platform
 
   const maybeDestructive = /\brm\b|\brmdir\b/.test(args.command)
   if (!maybeDestructive) return null
@@ -202,11 +208,17 @@ export function getBashDestructiveCommandBlock(args: {
         }
       }
 
-      const resolvedTarget = resolvePathForSafety(target, cwd, homeDir)
+      const resolvedTarget = resolvePathForSafety(
+        target,
+        cwd,
+        homeDir,
+        platform,
+      )
       if (
         isCriticalRemovalTarget(resolvedTarget, {
           homeDir,
           originalCwd: args.originalCwd,
+          platform,
         })
       ) {
         return {

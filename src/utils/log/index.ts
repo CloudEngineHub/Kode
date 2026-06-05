@@ -173,8 +173,7 @@ function migrateLegacyMessageLogsIfNeeded() {
     if (existsSync(dest)) continue
     try {
       copyFileSync(src, dest)
-    } catch {
-    }
+    } catch {}
   }
 }
 
@@ -200,8 +199,7 @@ export function logError(error: unknown): void {
     appendToLog(getErrorsPath(), {
       error: errorStr,
     })
-  } catch {
-  }
+  } catch {}
   captureException(error)
 }
 
@@ -525,6 +523,5 @@ export function logMCPError(serverName: string, error: unknown): void {
     const messages = readLog(logFile)
     messages.push(errorInfo)
     writeFileSync(logFile, JSON.stringify(messages, null, 2), 'utf8')
-  } catch {
-  }
+  } catch {}
 }

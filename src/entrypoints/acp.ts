@@ -28,4 +28,3 @@ new KodeAcpAgent(peer)
 
 const transport = new StdioTransport(peer, { writeLine: writeAcpLine })
 transport.start()
-

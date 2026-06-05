@@ -11,6 +11,8 @@ async function renderToText(element: React.ReactElement): Promise<string> {
   ;(stdin as any).isTTY = true
   ;(stdin as any).isRaw = true
   ;(stdin as any).setRawMode = () => {}
+  ;(stdin as any).ref = () => {}
+  ;(stdin as any).unref = () => {}
   stdin.setEncoding('utf8')
   stdin.resume()
 

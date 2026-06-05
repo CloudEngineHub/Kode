@@ -107,18 +107,26 @@ export class JsonRpcPeer {
     if (response) this.sendRaw(response)
   }
 
-  private async handleIncomingOne(payload: unknown): Promise<JsonRpcResponse | null> {
+  private async handleIncomingOne(
+    payload: unknown,
+  ): Promise<JsonRpcResponse | null> {
     if (!isObject(payload)) {
       return makeErrorResponse(null, -32600, 'Invalid Request')
     }
 
     const jsonrpc = payload.jsonrpc
     if (jsonrpc !== JSONRPC_VERSION) {
-      return makeErrorResponse(normalizeId(payload.id), -32600, 'Invalid Request')
+      return makeErrorResponse(
+        normalizeId(payload.id),
+        -32600,
+        'Invalid Request',
+      )
     }
 
-    const hasMethod = typeof payload.method === 'string' && payload.method.length > 0
-    const hasId = typeof payload.id === 'string' || typeof payload.id === 'number'
+    const hasMethod =
+      typeof payload.method === 'string' && payload.method.length > 0
+    const hasId =
+      typeof payload.id === 'string' || typeof payload.id === 'number'
 
     if (!hasMethod && hasId && ('result' in payload || 'error' in payload)) {
       this.handleResponse(payload as unknown as JsonRpcResponse)
@@ -126,7 +134,11 @@ export class JsonRpcPeer {
     }
 
     if (!hasMethod) {
-      return makeErrorResponse(normalizeId(payload.id), -32600, 'Invalid Request')
+      return makeErrorResponse(
+        normalizeId(payload.id),
+        -32600,
+        'Invalid Request',
+      )
     }
 
     const method = String(payload.method)
@@ -142,8 +154,7 @@ export class JsonRpcPeer {
     if (id === null) {
       try {
         await handler(params)
-      } catch {
-      }
+      } catch {}
       return null
     }
 
@@ -168,10 +179,16 @@ export class JsonRpcPeer {
 
     if (pending.timeoutId) clearTimeout(pending.timeoutId)
 
-    if (msg && typeof msg === 'object' && 'error' in msg && (msg as any).error) {
+    if (
+      msg &&
+      typeof msg === 'object' &&
+      'error' in msg &&
+      (msg as any).error
+    ) {
       const e = (msg as any).error
       const code = typeof e.code === 'number' ? e.code : -32603
-      const message = typeof e.message === 'string' ? e.message : 'Unknown error'
+      const message =
+        typeof e.message === 'string' ? e.message : 'Unknown error'
       pending.reject(new JsonRpcError(code, message, e.data))
       return
     }
@@ -180,7 +197,11 @@ export class JsonRpcPeer {
   }
 
   sendNotification(method: string, params?: unknown): void {
-    this.sendRaw({ jsonrpc: JSONRPC_VERSION, method, ...(params !== undefined ? { params } : {}) })
+    this.sendRaw({
+      jsonrpc: JSONRPC_VERSION,
+      method,
+      ...(params !== undefined ? { params } : {}),
+    })
   }
 
   sendRequest<T = unknown>(args: {
@@ -242,4 +263,3 @@ export class JsonRpcPeer {
     send(line)
   }
 }
-

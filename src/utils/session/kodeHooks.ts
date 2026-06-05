@@ -385,20 +385,57 @@ function matcherMatchesTool(matcher: string, toolName: string): boolean {
   if (matcher === toolName) return true
   try {
     if (minimatch(toolName, matcher, { dot: true, nocase: false })) return true
-  } catch {
-  }
+  } catch {}
   try {
     if (new RegExp(matcher).test(toolName)) return true
-  } catch {
-  }
+  } catch {}
   return false
 }
 
 function buildShellCommand(command: string): string[] {
   if (process.platform === 'win32') {
+    const trimmed = command.trim()
+    const firstSpace = trimmed.indexOf(' ')
+    const executable =
+      firstSpace === -1 ? trimmed : trimmed.slice(0, firstSpace)
+    const looksLikeDirectExec =
+      /\.(?:exe|cmd|bat|ps1)$/i.test(executable) ||
+      /^(?:bun|node|npm|npx|pnpm|yarn|deno)$/i.test(executable)
+    if (looksLikeDirectExec) {
+      if (firstSpace === -1) return [executable]
+      let rest = trimmed.slice(firstSpace + 1).trim()
+      if (rest.length >= 2 && rest.startsWith('"') && rest.endsWith('"')) {
+        rest = rest.slice(1, -1)
+      }
+      return [executable, rest]
+    }
     return ['cmd.exe', '/d', '/s', '/c', command]
   }
   return ['/bin/sh', '-c', command]
+}
+
+function resolveExecutableForSpawn(name: string): string {
+  if (process.platform !== 'win32') return name
+  if (name === 'bun') return process.execPath
+  if (name === 'node')
+    return process.execPath.replace(/[\\/]bun(\.exe)?$/i, 'node$1')
+  return name
+}
+
+function expandEnvVars(
+  command: string,
+  extraEnv?: Record<string, string>,
+): string {
+  const merged = { ...process.env, ...extraEnv }
+  const expanded = command.replace(/\$\{([^}]+)\}/g, (_match, key: string) => {
+    return merged[key] ?? ''
+  })
+  if (process.platform === 'win32') {
+    return expanded.replace(/%([^%]+)%/g, (_match, key: string) => {
+      return merged[key] ?? ''
+    })
+  }
+  return expanded
 }
 
 async function runCommandHook(args: {
@@ -408,8 +445,9 @@ async function runCommandHook(args: {
   env?: Record<string, string>
   signal?: AbortSignal
 }): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const cmd = buildShellCommand(args.command)
-  const proc = spawn(cmd[0], cmd.slice(1), {
+  const expanded = expandEnvVars(args.command, args.env)
+  const cmd = buildShellCommand(expanded)
+  const proc = spawn(resolveExecutableForSpawn(cmd[0]), cmd.slice(1), {
     cwd: args.cwd,
     env: { ...(process.env as any), ...(args.env ?? {}) },
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -971,8 +1009,7 @@ export async function getSessionStartAdditionalContext(args?: {
   const envFilePath = join(envFileDir, `${sessionId}.env`)
   try {
     writeFileSync(envFilePath, '', 'utf8')
-  } catch {
-  }
+  } catch {}
 
   const additionalContexts: string[] = []
 

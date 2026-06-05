@@ -26,6 +26,11 @@ function makeContext(): any {
 }
 
 describe('BashTool progress parity (Reference CLI gH5)', () => {
+  const isWin = process.platform === 'win32'
+  const cmdSep = isWin ? ' & ' : '; '
+  const sleepCmd = (s: number) =>
+    isWin ? `ping -n ${s + 1} 127.0.0.1 >nul` : `sleep ${s}`
+
   test('yields progress for long-running commands and then yields final result', async () => {
     const configDir = mkdtempSync(join(tmpdir(), 'kode-test-config-'))
     process.env.KODE_CONFIG_DIR = configDir
@@ -33,7 +38,7 @@ describe('BashTool progress parity (Reference CLI gH5)', () => {
       const ctx = makeContext()
       const gen = BashTool.call(
         {
-          command: 'echo a; sleep 3; echo b',
+          command: `echo a${cmdSep}${sleepCmd(3)}${cmdSep}echo b`,
           description: 'Produce output with a delay',
           timeout: 10_000,
         },
@@ -64,7 +69,7 @@ describe('BashTool progress parity (Reference CLI gH5)', () => {
       const ctx = makeContext()
       const gen = BashTool.call(
         {
-          command: 'echo a; sleep 10',
+          command: `echo a${cmdSep}${sleepCmd(10)}`,
           description: 'Test abort handling',
           timeout: 60_000,
         },

@@ -57,7 +57,6 @@ export function validateAndRepairGPT5Profile(
   }
 
   if (isGPT5) {
-
     const validReasoningEfforts = ['minimal', 'low', 'medium', 'high']
     if (
       !profile.reasoningEffort ||

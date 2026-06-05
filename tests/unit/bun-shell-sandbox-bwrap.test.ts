@@ -14,6 +14,7 @@ import { BunShell, buildLinuxBwrapCommand } from '@utils/bun/shell'
 
 describe('BunShell Linux bwrap sandbox (Reference CLI parity)', () => {
   test('buildLinuxBwrapCommand generates expected bwrap args (read deny + write allow + denyWithinAllow + unshare-net)', () => {
+    if (process.platform !== 'linux') return
     const root = mkdtempSync(join(tmpdir(), 'kode-bwrap-'))
     try {
       const allowDir = join(root, 'allow')
@@ -138,6 +139,7 @@ describe('BunShell Linux bwrap sandbox (Reference CLI parity)', () => {
   })
 
   test('falls back consistently when bwrap fails to start (require=false)', async () => {
+    if (process.platform !== 'linux') return
     const root = mkdtempSync(join(tmpdir(), 'kode-bwrap-failed-start-'))
     try {
       const shell = new BunShell(root)

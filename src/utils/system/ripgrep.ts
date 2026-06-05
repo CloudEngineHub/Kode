@@ -181,4 +181,3 @@ export function resetRipgrepPathCacheForTests(): void {
   ;(getRipgrepPath as any).cache?.clear?.()
   alreadyDoneSignCheck = false
 }
-

@@ -5,7 +5,6 @@ import { randomUUID } from 'crypto'
 import { debug as debugLogger } from '@utils/log/debugLogger'
 import { logError } from '@utils/log'
 
-
 function getConfigDirectory(): string {
   return (
     process.env.KODE_CONFIG_DIR ??

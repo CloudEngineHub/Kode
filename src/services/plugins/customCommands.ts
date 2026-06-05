@@ -389,8 +389,7 @@ function loadPluginCommandsFromDir(args: {
         content,
       })
       if (cmd) out.push(cmd)
-    } catch {
-    }
+    } catch {}
   }
   return out
 }
@@ -447,7 +446,10 @@ function loadPluginSkillDirectoryCommandsFromBaseDir(args: {
       const name = buildPluginQualifiedName(args.pluginName, dirName)
       if (!validateName(dirName)) {
         if (strictMode) continue
-        debugLogger.warn('CUSTOM_COMMAND_SKILL_DIR_INVALID', { dirName, skillFile })
+        debugLogger.warn('CUSTOM_COMMAND_SKILL_DIR_INVALID', {
+          dirName,
+          skillFile,
+        })
       }
       const descriptionText =
         frontmatter.description ??
@@ -509,8 +511,7 @@ function loadPluginSkillDirectoryCommandsFromBaseDir(args: {
           return [{ role: 'user', content: prompt }]
         },
       })
-    } catch {
-    }
+    } catch {}
   }
 
   return out
@@ -656,8 +657,7 @@ function loadCommandMarkdownFilesFromBaseDir(
       const raw = readFileSync(filePath, 'utf8')
       const { frontmatter, content } = parseFrontmatter(raw)
       records.push({ baseDir, filePath, frontmatter, content, source, scope })
-    } catch {
-    }
+    } catch {}
   }
   return records
 }
@@ -715,7 +715,10 @@ function loadSkillDirectoryCommandsFromBaseDir(
       const name = dirName
       if (!validateName(name)) {
         if (strictMode) continue
-        debugLogger.warn('CUSTOM_COMMAND_SKILL_DIR_INVALID', { name, skillFile })
+        debugLogger.warn('CUSTOM_COMMAND_SKILL_DIR_INVALID', {
+          name,
+          skillFile,
+        })
       }
       const descriptionText =
         frontmatter.description ??
@@ -775,8 +778,7 @@ function loadSkillDirectoryCommandsFromBaseDir(
           return [{ role: 'user', content: prompt }]
         },
       })
-    } catch {
-    }
+    } catch {}
   }
 
   return out

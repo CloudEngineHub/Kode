@@ -323,7 +323,10 @@ export type ToolCallUpdate = {
   _meta?: JsonObject | null
 }
 
-export type ToolCallUpdatePermissionRequest = Omit<ToolCallUpdate, 'sessionUpdate'>
+export type ToolCallUpdatePermissionRequest = Omit<
+  ToolCallUpdate,
+  'sessionUpdate'
+>
 
 export type PermissionOptionKind =
   | 'allow_once'
@@ -338,7 +341,10 @@ export type PermissionOption = {
   _meta?: JsonObject | null
 }
 
-export type OutcomeCancelled = { outcome: 'cancelled'; _meta?: JsonObject | null }
+export type OutcomeCancelled = {
+  outcome: 'cancelled'
+  _meta?: JsonObject | null
+}
 export type OutcomeSelected = {
   outcome: 'selected'
   optionId: string

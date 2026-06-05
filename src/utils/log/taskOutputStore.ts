@@ -44,8 +44,7 @@ export function appendTaskOutput(taskId: string, chunk: string): void {
   try {
     ensureTaskOutputsDirExists()
     appendFileSync(getTaskOutputFilePath(taskId), chunk, 'utf8')
-  } catch {
-  }
+  } catch {}
 }
 
 export function readTaskOutputDelta(

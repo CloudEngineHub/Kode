@@ -91,7 +91,6 @@ export function ConsoleOAuthFlow({ onDone }: Props): React.ReactNode {
         return
       }
 
-
       oauthService.processCallback({
         authorizationCode,
         state,

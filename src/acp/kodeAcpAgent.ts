@@ -1,4 +1,10 @@
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 
 import { nanoid } from 'nanoid'
@@ -12,7 +18,12 @@ import { getContext } from '@context'
 import { getCommands, type Command } from '@commands'
 import { getTools } from '@tools'
 import type { Tool, ToolUseContext } from '@tool'
-import { query, type Message, type UserMessage, type AssistantMessage } from '@query'
+import {
+  query,
+  type Message,
+  type UserMessage,
+  type AssistantMessage,
+} from '@query'
 import { hasPermissionsToUseTool } from '@permissions'
 import { createAssistantMessage, createUserMessage } from '@utils/messages'
 import { getSystemPrompt } from '@constants/prompts'
@@ -70,7 +81,8 @@ type SessionState = {
 }
 
 function asJsonObject(value: unknown): Protocol.JsonObject | undefined {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    return undefined
   try {
     JSON.stringify(value)
     return value as Protocol.JsonObject
@@ -102,11 +114,17 @@ function toolKindForName(toolName: string): Protocol.ToolKind {
   }
 }
 
-function titleForToolCall(toolName: string, input: Record<string, unknown>): string {
+function titleForToolCall(
+  toolName: string,
+  input: Record<string, unknown>,
+): string {
   if (toolName === 'Read' && typeof input.file_path === 'string') {
     return `Read ${input.file_path}`
   }
-  if ((toolName === 'Write' || toolName === 'Edit' || toolName === 'MultiEdit') && typeof input.file_path === 'string') {
+  if (
+    (toolName === 'Write' || toolName === 'Edit' || toolName === 'MultiEdit') &&
+    typeof input.file_path === 'string'
+  ) {
     return `${toolName} ${input.file_path}`
   }
   if (toolName === 'Bash' && typeof input.command === 'string') {
@@ -125,7 +143,8 @@ function blocksToText(blocks: Protocol.ContentBlock[]): string {
 
     switch ((block as any).type) {
       case 'text': {
-        const text = typeof (block as any).text === 'string' ? (block as any).text : ''
+        const text =
+          typeof (block as any).text === 'string' ? (block as any).text : ''
         if (text) parts.push(text)
         break
       }
@@ -133,7 +152,9 @@ function blocksToText(blocks: Protocol.ContentBlock[]): string {
         const resource = (block as any).resource || {}
         const uri = typeof resource.uri === 'string' ? resource.uri : ''
         const mimeType =
-          typeof resource.mimeType === 'string' && resource.mimeType ? resource.mimeType : 'text/plain'
+          typeof resource.mimeType === 'string' && resource.mimeType
+            ? resource.mimeType
+            : 'text/plain'
         if (typeof resource.text === 'string') {
           parts.push(
             [
@@ -146,11 +167,9 @@ function blocksToText(blocks: Protocol.ContentBlock[]): string {
           )
         } else if (typeof resource.blob === 'string') {
           parts.push(
-            [
-              '',
-              `@resource ${uri} (${mimeType}) [base64]`,
-              resource.blob,
-            ].join('\n'),
+            ['', `@resource ${uri} (${mimeType}) [base64]`, resource.blob].join(
+              '\n',
+            ),
           )
         } else if (uri) {
           parts.push(`@resource ${uri} (${mimeType})`)
@@ -158,11 +177,16 @@ function blocksToText(blocks: Protocol.ContentBlock[]): string {
         break
       }
       case 'resource_link': {
-        const uri = typeof (block as any).uri === 'string' ? (block as any).uri : ''
-        const name = typeof (block as any).name === 'string' ? (block as any).name : ''
-        const title = typeof (block as any).title === 'string' ? (block as any).title : ''
+        const uri =
+          typeof (block as any).uri === 'string' ? (block as any).uri : ''
+        const name =
+          typeof (block as any).name === 'string' ? (block as any).name : ''
+        const title =
+          typeof (block as any).title === 'string' ? (block as any).title : ''
         const description =
-          typeof (block as any).description === 'string' ? (block as any).description : ''
+          typeof (block as any).description === 'string'
+            ? (block as any).description
+            : ''
 
         parts.push(
           [
@@ -188,34 +212,51 @@ function blocksToText(blocks: Protocol.ContentBlock[]): string {
 }
 
 function extractAssistantText(msg: AssistantMessage): string {
-  const blocks: any[] = Array.isArray((msg as any)?.message?.content) ? ((msg as any).message.content as any[]) : []
+  const blocks: any[] = Array.isArray((msg as any)?.message?.content)
+    ? ((msg as any).message.content as any[])
+    : []
   const texts: string[] = []
   for (const b of blocks) {
     if (!b || typeof b !== 'object') continue
     if (b.type === 'text' && typeof b.text === 'string') texts.push(b.text)
-    if (b.type === 'thinking' && typeof (b as any).thinking === 'string') texts.push((b as any).thinking)
+    if (b.type === 'thinking' && typeof (b as any).thinking === 'string')
+      texts.push((b as any).thinking)
   }
   return texts.join('').trim()
 }
 
-function extractToolUses(msg: AssistantMessage): Array<{ id: string; name: string; input: Record<string, unknown> }> {
-  const blocks: any[] = Array.isArray((msg as any)?.message?.content) ? ((msg as any).message.content as any[]) : []
-  const out: Array<{ id: string; name: string; input: Record<string, unknown> }> = []
+function extractToolUses(
+  msg: AssistantMessage,
+): Array<{ id: string; name: string; input: Record<string, unknown> }> {
+  const blocks: any[] = Array.isArray((msg as any)?.message?.content)
+    ? ((msg as any).message.content as any[])
+    : []
+  const out: Array<{
+    id: string
+    name: string
+    input: Record<string, unknown>
+  }> = []
   for (const b of blocks) {
     if (!b || typeof b !== 'object') continue
     if (b.type !== 'tool_use') continue
     const id = typeof b.id === 'string' ? b.id : ''
     const name = typeof b.name === 'string' ? b.name : ''
-    const input = b.input && typeof b.input === 'object' && !Array.isArray(b.input) ? (b.input as Record<string, unknown>) : {}
+    const input =
+      b.input && typeof b.input === 'object' && !Array.isArray(b.input)
+        ? (b.input as Record<string, unknown>)
+        : {}
     if (id && name) out.push({ id, name, input })
   }
   return out
 }
 
-function extractToolResults(msg: UserMessage): Array<{ toolUseId: string; isError: boolean; content: string }> {
+function extractToolResults(
+  msg: UserMessage,
+): Array<{ toolUseId: string; isError: boolean; content: string }> {
   const content = (msg as any)?.message?.content
   const blocks: any[] = Array.isArray(content) ? content : []
-  const out: Array<{ toolUseId: string; isError: boolean; content: string }> = []
+  const out: Array<{ toolUseId: string; isError: boolean; content: string }> =
+    []
 
   for (const b of blocks) {
     if (!b || typeof b !== 'object') continue
@@ -228,7 +269,9 @@ function extractToolResults(msg: UserMessage): Array<{ toolUseId: string; isErro
         ? raw
         : Array.isArray(raw)
           ? raw
-              .filter(x => x && typeof x === 'object' && (x as any).type === 'text')
+              .filter(
+                x => x && typeof x === 'object' && (x as any).type === 'text',
+              )
               .map(x => String((x as any).text ?? ''))
               .join('')
           : ''
@@ -310,7 +353,10 @@ function persistAcpSessionToDisk(session: SessionState): void {
   }
 }
 
-function loadAcpSessionFromDisk(cwd: string, sessionId: string): PersistedAcpSession | null {
+function loadAcpSessionFromDisk(
+  cwd: string,
+  sessionId: string,
+): PersistedAcpSession | null {
   try {
     const path = getAcpSessionFilePath(cwd, sessionId)
     if (!existsSync(path)) return null
@@ -326,7 +372,9 @@ function loadAcpSessionFromDisk(cwd: string, sessionId: string): PersistedAcpSes
   }
 }
 
-async function connectAcpMcpServers(mcpServers: Protocol.McpServer[]): Promise<WrappedClient[]> {
+async function connectAcpMcpServers(
+  mcpServers: Protocol.McpServer[],
+): Promise<WrappedClient[]> {
   if (!Array.isArray(mcpServers) || mcpServers.length === 0) return []
 
   const rawTimeout = process.env.MCP_CONNECTION_TIMEOUT_MS
@@ -337,12 +385,20 @@ async function connectAcpMcpServers(mcpServers: Protocol.McpServer[]): Promise<W
 
   type Candidate = { kind: 'stdio' | 'http' | 'sse'; transport: unknown }
 
-  const connectWithTimeout = async (client: Client, transport: unknown, name: string): Promise<void> => {
+  const connectWithTimeout = async (
+    client: Client,
+    transport: unknown,
+    name: string,
+  ): Promise<void> => {
     const connectPromise = client.connect(transport as any)
     if (timeoutMs > 0) {
       const timeoutPromise = new Promise<never>((_, reject) => {
         const timeoutId = setTimeout(() => {
-          reject(new Error(`Connection to MCP server "${name}" timed out after ${timeoutMs}ms`))
+          reject(
+            new Error(
+              `Connection to MCP server "${name}" timed out after ${timeoutMs}ms`,
+            ),
+          )
         }, timeoutMs)
         connectPromise.then(
           () => clearTimeout(timeoutId),
@@ -356,9 +412,15 @@ async function connectAcpMcpServers(mcpServers: Protocol.McpServer[]): Promise<W
   }
 
   for (const server of mcpServers) {
-    const serverType = typeof (server as any)?.type === 'string' ? String((server as any).type) : 'stdio'
+    const serverType =
+      typeof (server as any)?.type === 'string'
+        ? String((server as any).type)
+        : 'stdio'
 
-    const name = typeof (server as any)?.name === 'string' ? String((server as any).name) : ''
+    const name =
+      typeof (server as any)?.name === 'string'
+        ? String((server as any).name)
+        : ''
     if (!name) {
       results.push({ name: '<invalid>', type: 'failed' })
       continue
@@ -366,48 +428,81 @@ async function connectAcpMcpServers(mcpServers: Protocol.McpServer[]): Promise<W
 
     const candidates: Candidate[] = []
 
-	    if (serverType === 'http' || serverType === 'sse') {
-	      const url = typeof (server as any)?.url === 'string' ? String((server as any).url) : ''
-	      if (!url) {
-	        results.push({ name, type: 'failed' })
-	        continue
-	      }
-	
-	      let parsedUrl: URL
-	      try {
-	        parsedUrl = new URL(url)
-	      } catch (e) {
-	        logError(e)
-	        results.push({ name, type: 'failed' })
-	        continue
-	      }
+    if (serverType === 'http' || serverType === 'sse') {
+      const url =
+        typeof (server as any)?.url === 'string'
+          ? String((server as any).url)
+          : ''
+      if (!url) {
+        results.push({ name, type: 'failed' })
+        continue
+      }
 
-	      const headerList = Array.isArray((server as any)?.headers) ? ((server as any).headers as unknown[]) : []
-	      const headers: Record<string, string> = {}
-	      for (const h of headerList) {
-	        if (!h || typeof h !== 'object') continue
-        const k = typeof (h as any).name === 'string' ? String((h as any).name) : ''
-        const val = typeof (h as any).value === 'string' ? String((h as any).value) : ''
+      let parsedUrl: URL
+      try {
+        parsedUrl = new URL(url)
+      } catch (e) {
+        logError(e)
+        results.push({ name, type: 'failed' })
+        continue
+      }
+
+      const headerList = Array.isArray((server as any)?.headers)
+        ? ((server as any).headers as unknown[])
+        : []
+      const headers: Record<string, string> = {}
+      for (const h of headerList) {
+        if (!h || typeof h !== 'object') continue
+        const k =
+          typeof (h as any).name === 'string' ? String((h as any).name) : ''
+        const val =
+          typeof (h as any).value === 'string' ? String((h as any).value) : ''
         if (k) headers[k] = val
       }
 
-	      const requestInit = Object.keys(headers).length > 0 ? { requestInit: { headers } } : {}
+      const requestInit =
+        Object.keys(headers).length > 0 ? { requestInit: { headers } } : {}
 
-	      if (serverType === 'http') {
-	        candidates.push(
-	          { kind: 'http', transport: new StreamableHTTPClientTransport(parsedUrl, requestInit as any) },
-	          { kind: 'sse', transport: new SSEClientTransport(parsedUrl, requestInit as any) },
-	        )
-	      } else {
-	        candidates.push(
-	          { kind: 'sse', transport: new SSEClientTransport(parsedUrl, requestInit as any) },
-	          { kind: 'http', transport: new StreamableHTTPClientTransport(parsedUrl, requestInit as any) },
-	        )
-	      }
-	    } else {
-      const command = typeof (server as any)?.command === 'string' ? String((server as any).command) : ''
-      const args = Array.isArray((server as any)?.args) ? ((server as any).args as unknown[]).map(a => String(a)) : []
-      const envList = Array.isArray((server as any)?.env) ? ((server as any).env as unknown[]) : []
+      if (serverType === 'http') {
+        candidates.push(
+          {
+            kind: 'http',
+            transport: new StreamableHTTPClientTransport(
+              parsedUrl,
+              requestInit as any,
+            ),
+          },
+          {
+            kind: 'sse',
+            transport: new SSEClientTransport(parsedUrl, requestInit as any),
+          },
+        )
+      } else {
+        candidates.push(
+          {
+            kind: 'sse',
+            transport: new SSEClientTransport(parsedUrl, requestInit as any),
+          },
+          {
+            kind: 'http',
+            transport: new StreamableHTTPClientTransport(
+              parsedUrl,
+              requestInit as any,
+            ),
+          },
+        )
+      }
+    } else {
+      const command =
+        typeof (server as any)?.command === 'string'
+          ? String((server as any).command)
+          : ''
+      const args = Array.isArray((server as any)?.args)
+        ? ((server as any).args as unknown[]).map(a => String(a))
+        : []
+      const envList = Array.isArray((server as any)?.env)
+        ? ((server as any).env as unknown[])
+        : []
 
       if (!command) {
         results.push({ name, type: 'failed' })
@@ -417,8 +512,10 @@ async function connectAcpMcpServers(mcpServers: Protocol.McpServer[]): Promise<W
       const envFromParams: Record<string, string> = {}
       for (const v of envList) {
         if (!v || typeof v !== 'object') continue
-        const k = typeof (v as any).name === 'string' ? String((v as any).name) : ''
-        const val = typeof (v as any).value === 'string' ? String((v as any).value) : ''
+        const k =
+          typeof (v as any).name === 'string' ? String((v as any).name) : ''
+        const val =
+          typeof (v as any).value === 'string' ? String((v as any).value) : ''
         if (k) envFromParams[k] = val
       }
 
@@ -470,7 +567,10 @@ async function connectAcpMcpServers(mcpServers: Protocol.McpServer[]): Promise<W
   return results
 }
 
-function mergeMcpClients(base: WrappedClient[], extra: WrappedClient[]): WrappedClient[] {
+function mergeMcpClients(
+  base: WrappedClient[],
+  extra: WrappedClient[],
+): WrappedClient[] {
   const map = new Map<string, WrappedClient>()
   for (const c of base) map.set(c.name, c)
   for (const c of extra) map.set(c.name, c)
@@ -490,17 +590,33 @@ export class KodeAcpAgent {
     this.peer.registerMethod('authenticate', this.handleAuthenticate.bind(this))
     this.peer.registerMethod('session/new', this.handleSessionNew.bind(this))
     this.peer.registerMethod('session/load', this.handleSessionLoad.bind(this))
-    this.peer.registerMethod('session/prompt', this.handleSessionPrompt.bind(this))
-    this.peer.registerMethod('session/set_mode', this.handleSessionSetMode.bind(this))
-    this.peer.registerMethod('session/cancel', this.handleSessionCancel.bind(this))
+    this.peer.registerMethod(
+      'session/prompt',
+      this.handleSessionPrompt.bind(this),
+    )
+    this.peer.registerMethod(
+      'session/set_mode',
+      this.handleSessionSetMode.bind(this),
+    )
+    this.peer.registerMethod(
+      'session/cancel',
+      this.handleSessionCancel.bind(this),
+    )
   }
 
-  private async handleInitialize(params: unknown): Promise<Protocol.InitializeResponse> {
+  private async handleInitialize(
+    params: unknown,
+  ): Promise<Protocol.InitializeResponse> {
     const p = (params ?? {}) as Partial<Protocol.InitializeParams>
-    const protocolVersion = typeof p.protocolVersion === 'number' ? p.protocolVersion : Protocol.ACP_PROTOCOL_VERSION
+    const protocolVersion =
+      typeof p.protocolVersion === 'number'
+        ? p.protocolVersion
+        : Protocol.ACP_PROTOCOL_VERSION
 
     this.clientCapabilities =
-      p.clientCapabilities && typeof p.clientCapabilities === 'object' ? (p.clientCapabilities as Protocol.ClientCapabilities) : {}
+      p.clientCapabilities && typeof p.clientCapabilities === 'object'
+        ? (p.clientCapabilities as Protocol.ClientCapabilities)
+        : {}
 
     return {
       protocolVersion: Protocol.ACP_PROTOCOL_VERSION,
@@ -526,11 +642,15 @@ export class KodeAcpAgent {
     }
   }
 
-  private async handleAuthenticate(_params: unknown): Promise<Protocol.AuthenticateResponse> {
+  private async handleAuthenticate(
+    _params: unknown,
+  ): Promise<Protocol.AuthenticateResponse> {
     return {}
   }
 
-  private async handleSessionNew(params: unknown): Promise<Protocol.NewSessionResponse> {
+  private async handleSessionNew(
+    params: unknown,
+  ): Promise<Protocol.NewSessionResponse> {
     const p = (params ?? {}) as Partial<Protocol.NewSessionParams>
     const cwd = typeof p.cwd === 'string' ? p.cwd : ''
     if (!cwd) {
@@ -544,15 +664,18 @@ export class KodeAcpAgent {
     await setCwd(cwd)
     grantReadPermissionForOriginalDir()
 
-    const mcpServers = Array.isArray(p.mcpServers) ? (p.mcpServers as Protocol.McpServer[]) : []
+    const mcpServers = Array.isArray(p.mcpServers)
+      ? (p.mcpServers as Protocol.McpServer[])
+      : []
 
-    const [commands, tools, ctx, systemPrompt, configuredMcpClients] = await Promise.all([
-      getCommands(),
-      getTools(),
-      getContext(),
-      getSystemPrompt({ disableSlashCommands: false }),
-      getClients().catch(() => [] as WrappedClient[]),
-    ])
+    const [commands, tools, ctx, systemPrompt, configuredMcpClients] =
+      await Promise.all([
+        getCommands(),
+        getTools(),
+        getContext(),
+        getSystemPrompt({ disableSlashCommands: false }),
+        getClients().catch(() => [] as WrappedClient[]),
+      ])
     const acpMcpClients = await connectAcpMcpServers(mcpServers)
     const mcpClients = mergeMcpClients(configuredMcpClients, acpMcpClients)
 
@@ -594,11 +717,14 @@ export class KodeAcpAgent {
     }
   }
 
-  private async handleSessionLoad(params: unknown): Promise<Protocol.LoadSessionResponse> {
+  private async handleSessionLoad(
+    params: unknown,
+  ): Promise<Protocol.LoadSessionResponse> {
     const p = (params ?? {}) as Partial<Protocol.LoadSessionParams>
     const sessionId = typeof p.sessionId === 'string' ? p.sessionId : ''
     const cwd = typeof p.cwd === 'string' ? p.cwd : ''
-    if (!sessionId) throw new JsonRpcError(-32602, 'Missing required param: sessionId')
+    if (!sessionId)
+      throw new JsonRpcError(-32602, 'Missing required param: sessionId')
     if (!cwd) throw new JsonRpcError(-32602, 'Missing required param: cwd')
     if (!isAbsolute(cwd)) {
       throw new JsonRpcError(-32602, `cwd must be an absolute path: ${cwd}`)
@@ -613,15 +739,18 @@ export class KodeAcpAgent {
       throw new JsonRpcError(-32602, `Session not found: ${sessionId}`)
     }
 
-    const mcpServers = Array.isArray(p.mcpServers) ? (p.mcpServers as Protocol.McpServer[]) : []
+    const mcpServers = Array.isArray(p.mcpServers)
+      ? (p.mcpServers as Protocol.McpServer[])
+      : []
 
-    const [commands, tools, ctx, systemPrompt, configuredMcpClients] = await Promise.all([
-      getCommands(),
-      getTools(),
-      getContext(),
-      getSystemPrompt({ disableSlashCommands: false }),
-      getClients().catch(() => [] as WrappedClient[]),
-    ])
+    const [commands, tools, ctx, systemPrompt, configuredMcpClients] =
+      await Promise.all([
+        getCommands(),
+        getTools(),
+        getContext(),
+        getSystemPrompt({ disableSlashCommands: false }),
+        getClients().catch(() => [] as WrappedClient[]),
+      ])
 
     const acpMcpClients = await connectAcpMcpServers(mcpServers)
     const mcpClients = mergeMcpClients(configuredMcpClients, acpMcpClients)
@@ -635,7 +764,7 @@ export class KodeAcpAgent {
     const currentModeId =
       typeof persisted.currentModeId === 'string' && persisted.currentModeId
         ? persisted.currentModeId
-        : toolPermissionContext.mode ?? 'default'
+        : (toolPermissionContext.mode ?? 'default')
     toolPermissionContext.mode = currentModeId as any
 
     const session: SessionState = {
@@ -650,7 +779,8 @@ export class KodeAcpAgent {
       messages: Array.isArray(persisted.messages) ? persisted.messages : [],
       toolPermissionContext,
       readFileTimestamps:
-        persisted.readFileTimestamps && typeof persisted.readFileTimestamps === 'object'
+        persisted.readFileTimestamps &&
+        typeof persisted.readFileTimestamps === 'object'
           ? (persisted.readFileTimestamps as Record<string, number>)
           : {},
       responseState:
@@ -670,15 +800,20 @@ export class KodeAcpAgent {
     return { modes: this.getModeState(session) }
   }
 
-  private async handleSessionSetMode(params: unknown): Promise<Protocol.SetSessionModeResponse> {
+  private async handleSessionSetMode(
+    params: unknown,
+  ): Promise<Protocol.SetSessionModeResponse> {
     const p = (params ?? {}) as Partial<Protocol.SetSessionModeParams>
     const sessionId = typeof p.sessionId === 'string' ? p.sessionId : ''
     const modeId = typeof p.modeId === 'string' ? p.modeId : ''
 
     const session = this.sessions.get(sessionId)
-    if (!session) throw new JsonRpcError(-32602, `Session not found: ${sessionId}`)
+    if (!session)
+      throw new JsonRpcError(-32602, `Session not found: ${sessionId}`)
 
-    const allowed = new Set(this.getModeState(session).availableModes.map(m => m.id))
+    const allowed = new Set(
+      this.getModeState(session).availableModes.map(m => m.id),
+    )
     if (!allowed.has(modeId)) {
       throw new JsonRpcError(-32602, `Unknown modeId: ${modeId}`)
     }
@@ -699,7 +834,9 @@ export class KodeAcpAgent {
     session.activeAbortController?.abort()
   }
 
-  private async handleSessionPrompt(params: unknown): Promise<Protocol.PromptResponse> {
+  private async handleSessionPrompt(
+    params: unknown,
+  ): Promise<Protocol.PromptResponse> {
     const p = (params ?? {}) as any
     const sessionId = typeof p.sessionId === 'string' ? p.sessionId : ''
     const blocks: Protocol.ContentBlock[] = Array.isArray(p.prompt)
@@ -709,10 +846,14 @@ export class KodeAcpAgent {
         : []
 
     const session = this.sessions.get(sessionId)
-    if (!session) throw new JsonRpcError(-32602, `Session not found: ${sessionId}`)
+    if (!session)
+      throw new JsonRpcError(-32602, `Session not found: ${sessionId}`)
 
     if (session.activeAbortController) {
-      throw new JsonRpcError(-32000, `Session already has an active prompt: ${sessionId}`)
+      throw new JsonRpcError(
+        -32000,
+        `Session already has an active prompt: ${sessionId}`,
+      )
     }
 
     setOriginalCwd(session.cwd)
@@ -752,15 +893,21 @@ export class KodeAcpAgent {
 
     let stopReason: Protocol.StopReason = 'end_turn'
     try {
-      for await (const m of query(baseMessages, session.systemPrompt, session.context, canUseTool, {
-        options,
-        abortController,
-        messageId: undefined,
-        readFileTimestamps: session.readFileTimestamps,
-        setToolJSX: () => {},
-        agentId: 'main',
-        responseState: session.responseState,
-      })) {
+      for await (const m of query(
+        baseMessages,
+        session.systemPrompt,
+        session.context,
+        canUseTool,
+        {
+          options,
+          abortController,
+          messageId: undefined,
+          readFileTimestamps: session.readFileTimestamps,
+          setToolJSX: () => {},
+          agentId: 'main',
+          responseState: session.responseState,
+        },
+      )) {
         if (abortController.signal.aborted) {
           stopReason = 'cancelled'
         }
@@ -784,23 +931,34 @@ export class KodeAcpAgent {
     return { stopReason }
   }
 
-  private async handleKodeMessage(session: SessionState, m: Message): Promise<void> {
+  private async handleKodeMessage(
+    session: SessionState,
+    m: Message,
+  ): Promise<void> {
     if (!m || typeof m !== 'object') return
 
     if (m.type === 'assistant') {
       session.messages.push(m)
 
-      const blocks: any[] = Array.isArray((m as any).message?.content) ? ((m as any).message.content as any[]) : []
+      const blocks: any[] = Array.isArray((m as any).message?.content)
+        ? ((m as any).message.content as any[])
+        : []
       for (const b of blocks) {
         if (!b || typeof b !== 'object') continue
         if (b.type === 'text' && typeof b.text === 'string') {
           this.sendAgentMessage(session.sessionId, b.text)
-        } else if (b.type === 'thinking' && typeof (b as any).thinking === 'string') {
+        } else if (
+          b.type === 'thinking' &&
+          typeof (b as any).thinking === 'string'
+        ) {
           this.sendAgentThought(session.sessionId, (b as any).thinking)
         } else if (b.type === 'tool_use') {
           const toolUseId = typeof b.id === 'string' ? b.id : ''
           const toolName = typeof b.name === 'string' ? b.name : ''
-          const input = b.input && typeof b.input === 'object' && !Array.isArray(b.input) ? (b.input as Record<string, unknown>) : {}
+          const input =
+            b.input && typeof b.input === 'object' && !Array.isArray(b.input)
+              ? (b.input as Record<string, unknown>)
+              : {}
           if (!toolUseId || !toolName) continue
           const kind = toolKindForName(toolName)
           const title = titleForToolCall(toolName, input)
@@ -885,7 +1043,9 @@ export class KodeAcpAgent {
           })
         }
 
-        const status: Protocol.ToolCallStatus = tr.isError ? 'failed' : 'completed'
+        const status: Protocol.ToolCallStatus = tr.isError
+          ? 'failed'
+          : 'completed'
         session.toolCalls.set(tr.toolUseId, {
           title,
           kind,
@@ -896,10 +1056,20 @@ export class KodeAcpAgent {
         const rawOutput = asJsonObject((m as any).toolUseResult?.data)
 
         const content: Protocol.ToolCallContent[] = []
-        const diffContent = status === 'completed' ? this.buildDiffContentForToolResult(session, tr.toolUseId, rawOutput) : null
+        const diffContent =
+          status === 'completed'
+            ? this.buildDiffContentForToolResult(
+                session,
+                tr.toolUseId,
+                rawOutput,
+              )
+            : null
         if (diffContent) content.push(diffContent)
         if (tr.content) {
-          content.push({ type: 'content', content: { type: 'text', text: tr.content } })
+          content.push({
+            type: 'content',
+            content: { type: 'text', text: tr.content },
+          })
         }
 
         this.sendToolCallUpdate(session.sessionId, {
@@ -924,11 +1094,17 @@ export class KodeAcpAgent {
 
     return async (tool, input, toolUseContext, assistantMessage) => {
       const toolUseId =
-        typeof toolUseContext?.toolUseId === 'string' && toolUseContext.toolUseId
+        typeof toolUseContext?.toolUseId === 'string' &&
+        toolUseContext.toolUseId
           ? toolUseContext.toolUseId
           : `call_${nanoid()}`
 
-      const base = await hasPermissionsToUseTool(tool, input, toolUseContext, assistantMessage)
+      const base = await hasPermissionsToUseTool(
+        tool,
+        input,
+        toolUseContext,
+        assistantMessage,
+      )
       if (base.result === true) {
         this.captureFileSnapshotForTool(session, toolUseId, tool.name, input)
         return base
@@ -943,7 +1119,12 @@ export class KodeAcpAgent {
       const kind = toolKindForName(tool.name)
 
       if (!session.toolCalls.has(toolUseId)) {
-        session.toolCalls.set(toolUseId, { title, kind, status: 'pending', rawInput: asJsonObject(input) })
+        session.toolCalls.set(toolUseId, {
+          title,
+          kind,
+          status: 'pending',
+          rawInput: asJsonObject(input),
+        })
         this.peer.sendNotification('session/update', {
           sessionId: session.sessionId,
           update: {
@@ -961,7 +1142,10 @@ export class KodeAcpAgent {
         { optionId: 'allow_once', name: 'Allow once', kind: 'allow_once' },
         { optionId: 'reject_once', name: 'Reject', kind: 'reject_once' },
       ]
-      if (Array.isArray((denied as any).suggestions) && (denied as any).suggestions.length > 0) {
+      if (
+        Array.isArray((denied as any).suggestions) &&
+        (denied as any).suggestions.length > 0
+      ) {
         options.splice(1, 0, {
           optionId: 'allow_always',
           name: 'Allow always (remember)',
@@ -970,49 +1154,69 @@ export class KodeAcpAgent {
       }
 
       try {
-        const response = await this.peer.sendRequest<Protocol.RequestPermissionResponse>({
-          method: 'session/request_permission',
-          params: {
-            sessionId: session.sessionId,
-            toolCall: {
-              toolCallId: toolUseId,
-              title,
-              kind,
-              status: 'pending',
-              content: [
-                {
-                  type: 'content',
-                  content: { type: 'text', text: denied.message },
-                },
-              ],
-              rawInput: asJsonObject(input),
-            },
-            options,
-          } satisfies Protocol.RequestPermissionParams,
-          signal: toolUseContext.abortController.signal,
-          timeoutMs,
-        })
+        const response =
+          await this.peer.sendRequest<Protocol.RequestPermissionResponse>({
+            method: 'session/request_permission',
+            params: {
+              sessionId: session.sessionId,
+              toolCall: {
+                toolCallId: toolUseId,
+                title,
+                kind,
+                status: 'pending',
+                content: [
+                  {
+                    type: 'content',
+                    content: { type: 'text', text: denied.message },
+                  },
+                ],
+                rawInput: asJsonObject(input),
+              },
+              options,
+            } satisfies Protocol.RequestPermissionParams,
+            signal: toolUseContext.abortController.signal,
+            timeoutMs,
+          })
 
         const outcome = response?.outcome
         if (!outcome || outcome.outcome === 'cancelled') {
           toolUseContext.abortController.abort()
-          return { result: false as const, message: denied.message, shouldPromptUser: false }
+          return {
+            result: false as const,
+            message: denied.message,
+            shouldPromptUser: false,
+          }
         }
 
-        if (outcome.outcome === 'selected' && outcome.optionId === 'allow_once') {
+        if (
+          outcome.outcome === 'selected' &&
+          outcome.optionId === 'allow_once'
+        ) {
           this.captureFileSnapshotForTool(session, toolUseId, tool.name, input)
           return { result: true as const }
         }
 
-        if (outcome.outcome === 'selected' && outcome.optionId === 'allow_always') {
-          const suggestions = Array.isArray((denied as any).suggestions) ? ((denied as any).suggestions as any[]) : []
+        if (
+          outcome.outcome === 'selected' &&
+          outcome.optionId === 'allow_always'
+        ) {
+          const suggestions = Array.isArray((denied as any).suggestions)
+            ? ((denied as any).suggestions as any[])
+            : []
           if (suggestions.length > 0) {
-            const next = applyToolPermissionContextUpdates(session.toolPermissionContext, suggestions as any)
+            const next = applyToolPermissionContextUpdates(
+              session.toolPermissionContext,
+              suggestions as any,
+            )
             session.toolPermissionContext = next
-            if (toolUseContext?.options) toolUseContext.options.toolPermissionContext = next
+            if (toolUseContext?.options)
+              toolUseContext.options.toolPermissionContext = next
             for (const update of suggestions) {
               try {
-                persistToolPermissionUpdateToDisk({ update, projectDir: session.cwd })
+                persistToolPermissionUpdateToDisk({
+                  update,
+                  projectDir: session.cwd,
+                })
               } catch (e) {
                 logError(e)
               }
@@ -1025,7 +1229,11 @@ export class KodeAcpAgent {
         return { result: false as const, message: denied.message }
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e)
-        return { result: false as const, message: `Permission prompt failed: ${msg}`, shouldPromptUser: false }
+        return {
+          result: false as const,
+          message: `Permission prompt failed: ${msg}`,
+          shouldPromptUser: false,
+        }
       }
     }
   }
@@ -1038,10 +1246,15 @@ export class KodeAcpAgent {
   ): void {
     if (toolName !== 'Write' && toolName !== 'MultiEdit') return
 
-    const filePath = input && typeof input === 'object' ? String((input as any).file_path ?? '') : ''
+    const filePath =
+      input && typeof input === 'object'
+        ? String((input as any).file_path ?? '')
+        : ''
     if (!filePath) return
 
-    const absPath = isAbsolute(filePath) ? filePath : resolve(session.cwd, filePath)
+    const absPath = isAbsolute(filePath)
+      ? filePath
+      : resolve(session.cwd, filePath)
 
     const oldContent = existsSync(absPath) ? readTextFileForDiff(absPath) : ''
     if (oldContent === null) return
@@ -1079,7 +1292,9 @@ export class KodeAcpAgent {
 
     if (!inputFilePath) return null
 
-    const absPath = isAbsolute(inputFilePath) ? inputFilePath : resolve(session.cwd, inputFilePath)
+    const absPath = isAbsolute(inputFilePath)
+      ? inputFilePath
+      : resolve(session.cwd, inputFilePath)
 
     const oldText =
       rawOutput && typeof (rawOutput as any).originalFile === 'string'
@@ -1091,7 +1306,10 @@ export class KodeAcpAgent {
     if (oldText === undefined) return null
 
     const newTextFromDisk = readTextFileForDiff(absPath)
-    const newTextFromOutput = rawOutput && typeof (rawOutput as any).content === 'string' ? String((rawOutput as any).content) : null
+    const newTextFromOutput =
+      rawOutput && typeof (rawOutput as any).content === 'string'
+        ? String((rawOutput as any).content)
+        : null
     const newText = newTextFromDisk ?? newTextFromOutput
     if (newText === null) return null
 
@@ -1110,17 +1328,25 @@ export class KodeAcpAgent {
       if (!m || typeof m !== 'object') continue
 
       if (m.type === 'assistant') {
-        const blocks: any[] = Array.isArray((m as any).message?.content) ? ((m as any).message.content as any[]) : []
+        const blocks: any[] = Array.isArray((m as any).message?.content)
+          ? ((m as any).message.content as any[])
+          : []
         for (const b of blocks) {
           if (!b || typeof b !== 'object') continue
           if (b.type === 'text' && typeof b.text === 'string') {
             this.sendAgentMessage(session.sessionId, b.text)
-          } else if (b.type === 'thinking' && typeof (b as any).thinking === 'string') {
+          } else if (
+            b.type === 'thinking' &&
+            typeof (b as any).thinking === 'string'
+          ) {
             this.sendAgentThought(session.sessionId, (b as any).thinking)
           } else if (b.type === 'tool_use') {
             const toolUseId = typeof b.id === 'string' ? b.id : ''
             const toolName = typeof b.name === 'string' ? b.name : ''
-            const input = b.input && typeof b.input === 'object' && !Array.isArray(b.input) ? (b.input as Record<string, unknown>) : {}
+            const input =
+              b.input && typeof b.input === 'object' && !Array.isArray(b.input)
+                ? (b.input as Record<string, unknown>)
+                : {}
             if (!toolUseId || !toolName) continue
 
             if (!session.toolCalls.has(toolUseId)) {
@@ -1164,7 +1390,11 @@ export class KodeAcpAgent {
           const kind = existing?.kind ?? 'other'
 
           if (!existing) {
-            session.toolCalls.set(tr.toolUseId, { title, kind, status: 'pending' })
+            session.toolCalls.set(tr.toolUseId, {
+              title,
+              kind,
+              status: 'pending',
+            })
             this.peer.sendNotification('session/update', {
               sessionId: session.sessionId,
               update: {
@@ -1177,10 +1407,15 @@ export class KodeAcpAgent {
             } satisfies Protocol.SessionUpdateNotification)
           }
 
-          const status: Protocol.ToolCallStatus = tr.isError ? 'failed' : 'completed'
+          const status: Protocol.ToolCallStatus = tr.isError
+            ? 'failed'
+            : 'completed'
           const contentBlocks: Protocol.ToolCallContent[] = []
           if (tr.content) {
-            contentBlocks.push({ type: 'content', content: { type: 'text', text: tr.content } })
+            contentBlocks.push({
+              type: 'content',
+              content: { type: 'text', text: tr.content },
+            })
           }
 
           const rawOutput = asJsonObject((m as any).toolUseResult?.data)
@@ -1205,14 +1440,34 @@ export class KodeAcpAgent {
 
   private getModeState(session: SessionState): Protocol.SessionModeState {
     const availableModes: Protocol.SessionMode[] = [
-      { id: 'default', name: 'Default', description: 'Normal permissions (prompt when needed)' },
-      { id: 'acceptEdits', name: 'Accept Edits', description: 'Auto-approve safe file edits' },
+      {
+        id: 'default',
+        name: 'Default',
+        description: 'Normal permissions (prompt when needed)',
+      },
+      {
+        id: 'acceptEdits',
+        name: 'Accept Edits',
+        description: 'Auto-approve safe file edits',
+      },
       { id: 'plan', name: 'Plan', description: 'Read-only planning mode' },
-      { id: 'dontAsk', name: "Don't Ask", description: 'Auto-deny permission prompts' },
-      { id: 'bypassPermissions', name: 'Bypass', description: 'Bypass permission prompts (dangerous)' },
+      {
+        id: 'dontAsk',
+        name: "Don't Ask",
+        description: 'Auto-deny permission prompts',
+      },
+      {
+        id: 'bypassPermissions',
+        name: 'Bypass',
+        description: 'Bypass permission prompts (dangerous)',
+      },
     ]
 
-    const currentModeId = availableModes.some(m => m.id === session.currentModeId) ? session.currentModeId : 'default'
+    const currentModeId = availableModes.some(
+      m => m.id === session.currentModeId,
+    )
+      ? session.currentModeId
+      : 'default'
     return { currentModeId, availableModes }
   }
 
@@ -1277,7 +1532,10 @@ export class KodeAcpAgent {
     } satisfies Protocol.SessionUpdateNotification)
   }
 
-  private sendToolCallUpdate(sessionId: string, update: Omit<Protocol.ToolCallUpdate, 'sessionUpdate'>): void {
+  private sendToolCallUpdate(
+    sessionId: string,
+    update: Omit<Protocol.ToolCallUpdate, 'sessionUpdate'>,
+  ): void {
     this.peer.sendNotification('session/update', {
       sessionId,
       update: {
