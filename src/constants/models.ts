@@ -446,9 +446,9 @@ export default {
       output_cost_per_token: 0.00000219,
       provider: 'deepseek',
       mode: 'chat',
-      supports_function_calling: true,
+      supports_function_calling: false,
       supports_assistant_prefill: true,
-      supports_tool_choice: true,
+      supports_tool_choice: false,
       supports_prompt_caching: true,
     },
     {

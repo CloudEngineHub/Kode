@@ -23,7 +23,9 @@ export class ChatCompletionsAdapter extends OpenAIAdapter {
 
     if (tools && tools.length > 0) {
       request.tools = this.buildTools(tools)
-      request.tool_choice = 'auto'
+      if (this.capabilities.toolCalling.mode !== 'none') {
+        request.tool_choice = 'auto'
+      }
     }
 
     if (
