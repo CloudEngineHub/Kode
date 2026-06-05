@@ -1743,10 +1743,6 @@ export function ModelSelector({
         activeFieldIndex === formFields.length - 1
       ) {
         handleModelParamsSubmit()
-      } else if (currentField.component === 'select') {
-        setActiveFieldIndex(current =>
-          Math.min(current + 1, formFields.length - 1),
-        )
       }
       return
     }
