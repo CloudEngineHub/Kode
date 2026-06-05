@@ -25,18 +25,19 @@ if (missingFiles.length > 0) {
   process.exit(1);
 }
 
-// Check cli.js is executable
-const cliStats = fs.statSync('cli.js');
-if (!(cliStats.mode & 0o100)) {
-  console.error('❌ cli.js is not executable');
-  process.exit(1);
-}
+// Check cli.js is executable (skip on Windows — no Unix permission bits)
+if (process.platform !== 'win32') {
+  const cliStats = fs.statSync('cli.js');
+  if (!(cliStats.mode & 0o100)) {
+    console.error('❌ cli.js is not executable');
+    process.exit(1);
+  }
 
-// Check cli-acp.js is executable
-const acpStats = fs.statSync('cli-acp.js');
-if (!(acpStats.mode & 0o100)) {
-  console.error('❌ cli-acp.js is not executable');
-  process.exit(1);
+  const acpStats = fs.statSync('cli-acp.js');
+  if (!(acpStats.mode & 0o100)) {
+    console.error('❌ cli-acp.js is not executable');
+    process.exit(1);
+  }
 }
 
 // Check package.json
