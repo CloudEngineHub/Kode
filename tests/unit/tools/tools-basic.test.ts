@@ -36,17 +36,6 @@ const makeContext = (safeMode = true) => ({
 
 let configDir = ''
 
-function quoteForShell(value: string): string {
-  if (process.platform === 'win32') return `"${value.replace(/"/g, '""')}"`
-  return `'${value.replace(/'/g, `'\\''`)}'`
-}
-
-function jsStdoutCommand(text: string): string {
-  const encoded = Buffer.from(text, 'utf8').toString('base64')
-  const script = `process.stdout.write(Buffer.from('${encoded}', 'base64'))`
-  return `${quoteForShell(process.execPath)} -e ${quoteForShell(script)}`
-}
-
 async function waitForBackgroundStdout(
   bashId: string,
   predicate: (stdout: string) => boolean,
@@ -185,9 +174,7 @@ describe('Bash background execution', () => {
   })
 
   test('readBackgroundOutput returns only new output', async () => {
-    const { bashId } = BunShell.getInstance().execInBackground(
-      jsStdoutCommand('a\nb\n'),
-    )
+    const { bashId } = BunShell.getInstance().execInBackground('echo a&&echo b')
     expect(bashId).toBeTruthy()
     expect(bashId).toMatch(/^b[0-9a-f]{6}$/i)
     await waitForBackgroundStdout(
