@@ -71,3 +71,4 @@ SKIP_BUNDLED_CHECK=true npm publish
 ## AI Context Notes
 
 - 2026-06-05：修复 Windows CI 时，优先检查 Bun 默认 5 秒测试超时、跨文件 `mock.module` 污染、以及 `cmd /c` 与 Unix shell 命令差异；不要用跳过 Windows 测试代替根因修复。
+- 2026-06-05：背景 shell 单测不要用固定短延迟假设 Windows runner 已经产出 stdout；先用不推进 cursor 的 `getBackgroundOutput` 等待目标输出，再断言 `readBackgroundOutput` 的增量语义。
