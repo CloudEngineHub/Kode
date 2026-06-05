@@ -36,6 +36,30 @@ const makeContext = (safeMode = true) => ({
 
 let configDir = ''
 
+async function waitForBackgroundStdout(
+  bashId: string,
+  predicate: (stdout: string) => boolean,
+  timeoutMs = 3_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  let lastStdout = ''
+  let lastStderr = ''
+
+  while (Date.now() < deadline) {
+    const output = BunShell.getInstance().getBackgroundOutput(bashId)
+    if (output) {
+      lastStdout = output.stdout
+      lastStderr = output.stderr
+      if (predicate(output.stdout)) return
+    }
+    await new Promise(resolve => setTimeout(resolve, 50))
+  }
+
+  throw new Error(
+    `Timed out waiting for background stdout. stdout=${JSON.stringify(lastStdout)} stderr=${JSON.stringify(lastStderr)}`,
+  )
+}
+
 beforeEach(() => {
   configDir = mkdtempSync(join(tmpdir(), 'kode-test-config-'))
   process.env.KODE_CONFIG_DIR = configDir
@@ -141,7 +165,7 @@ describe('Bash background execution', () => {
     const { bashId } = BunShell.getInstance().execInBackground('echo hello')
     expect(bashId).toBeTruthy()
     expect(bashId).toMatch(/^b[0-9a-f]{6}$/i)
-    await new Promise(resolve => setTimeout(resolve, 200))
+    await waitForBackgroundStdout(bashId, stdout => stdout.includes('hello'))
     const output = BunShell.getInstance().getBackgroundOutput(bashId)
     expect(output).not.toBeNull()
     if (output) {
@@ -150,11 +174,13 @@ describe('Bash background execution', () => {
   })
 
   test('readBackgroundOutput returns only new output', async () => {
-    const { bashId } =
-      BunShell.getInstance().execInBackground('printf "a\\nb\\n"')
+    const { bashId } = BunShell.getInstance().execInBackground('echo a&&echo b')
     expect(bashId).toBeTruthy()
     expect(bashId).toMatch(/^b[0-9a-f]{6}$/i)
-    await new Promise(resolve => setTimeout(resolve, 200))
+    await waitForBackgroundStdout(
+      bashId,
+      stdout => stdout.includes('a') && stdout.includes('b'),
+    )
 
     const first = BunShell.getInstance().readBackgroundOutput(bashId)
     expect(first).not.toBeNull()
