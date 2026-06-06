@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { BunShell } from '@utils/bun/shell'
+import { BunShell, getShellStdioForPlatform } from '@utils/bun/shell'
 
 describe('shell command selection', () => {
   test('win32 uses ComSpec when provided', () => {
@@ -19,5 +19,21 @@ describe('shell command selection', () => {
     const cmd = BunShell.getShellCmdForPlatform('darwin', 'echo hi', {} as any)
     expect(cmd[1]).toBe('-c')
     expect(cmd[2]).toBe('echo hi')
+  })
+
+  test('non-Windows shell stdio ignores stdin and pipes output', () => {
+    expect(getShellStdioForPlatform('linux')).toEqual([
+      'ignore',
+      'pipe',
+      'pipe',
+    ])
+  })
+
+  test('Windows shell stdio ignores stdin and uses overlapped output pipes', () => {
+    expect(getShellStdioForPlatform('win32')).toEqual([
+      'ignore',
+      'overlapped',
+      'overlapped',
+    ])
   })
 })

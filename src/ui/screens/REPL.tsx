@@ -7,7 +7,7 @@ import { CostThresholdDialog } from '@components/CostThresholdDialog'
 import * as React from 'react'
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { Command } from '@commands'
-import { Logo } from '@components/Logo'
+import { Logo, UpdateBanner } from '@components/Logo'
 import { Message } from '@components/Message'
 import { MessageResponse } from '@components/MessageResponse'
 import { MessageSelector } from '@components/MessageSelector'
@@ -63,7 +63,7 @@ import {
   createAssistantMessage,
 } from '@utils/messages'
 import { getReplStaticPrefixLength } from '@utils/terminal/replStaticSplit'
-import { getModelManager, ModelManager } from '@utils/model'
+import { getModelManager } from '@utils/model'
 import { clearTerminal, updateTerminalTitle } from '@utils/terminal'
 import { BinaryFeedback } from '@components/binary-feedback/BinaryFeedback'
 import { getMaxThinkingTokens } from '@utils/model/thinking'
@@ -71,6 +71,7 @@ import { getOriginalCwd } from '@utils/state'
 import { handleHashCommand } from '@utils/commands/hashCommand'
 import { debug as debugLogger } from '@utils/log/debugLogger'
 import { getToolPermissionContextForConversationKey } from '@utils/permissions/toolPermissionContextState'
+import { logStartupProfileDuration } from '@utils/config/startupProfile'
 
 type Props = {
   commands: Command[]
@@ -88,6 +89,10 @@ type Props = {
   isDefaultModel?: boolean
   initialUpdateVersion?: string | null
   initialUpdateCommands?: string[] | null
+  updateCheckPromise?: Promise<{
+    version: string | null
+    commands: string[] | null
+  }>
 }
 
 export type BinaryFeedbackContext = {
@@ -112,6 +117,7 @@ export function REPL({
   isDefaultModel = true,
   initialUpdateVersion,
   initialUpdateCommands,
+  updateCheckPromise,
 }: Props): React.ReactNode {
   const [verboseConfig] = useState(
     () => verboseFromCLI ?? getGlobalConfig().verbose,
@@ -153,8 +159,18 @@ export function REPL({
 
   const [binaryFeedbackContext, setBinaryFeedbackContext] =
     useState<BinaryFeedbackContext | null>(null)
-  const updateAvailableVersion = initialUpdateVersion ?? null
-  const updateCommands = initialUpdateCommands ?? null
+  const initialUpdateAvailableVersion = initialUpdateVersion ?? null
+  const initialUpdateCommandList = initialUpdateCommands ?? null
+  const [asyncUpdateInfo, setAsyncUpdateInfo] = useState<{
+    version: string | null
+    commands: string[] | null
+  }>({
+    version: null,
+    commands: null,
+  })
+  const updateAvailableVersion =
+    initialUpdateAvailableVersion ?? asyncUpdateInfo.version
+  const updateCommands = initialUpdateCommandList ?? asyncUpdateInfo.commands
 
   const getBinaryFeedbackResponse = useCallback(
     (
@@ -228,7 +244,6 @@ export function REPL({
     const newAbortController = new AbortController()
     setAbortController(newAbortController)
 
-    const model = new ModelManager(getGlobalConfig()).getModelName('main')
     const newMessages = await processUserInput(
       initialPrompt,
       'prompt',
@@ -270,13 +285,41 @@ export function REPL({
         return
       }
 
-      const [systemPrompt, context, model, maxThinkingTokens] =
-        await Promise.all([
-          getSystemPrompt({ disableSlashCommands }),
-          getContext(),
-          new ModelManager(getGlobalConfig()).getModelName('main'),
-          getMaxThinkingTokens([...messages, ...newMessages]),
-        ])
+      const queryPrepStartedAt = Date.now()
+      const systemPromptPromise = (async () => {
+        const startedAt = Date.now()
+        try {
+          return await getSystemPrompt({ disableSlashCommands })
+        } finally {
+          logStartupProfileDuration(
+            'query_prep_system_prompt',
+            Date.now() - startedAt,
+          )
+        }
+      })()
+      const contextPromise = (async () => {
+        const startedAt = Date.now()
+        try {
+          return await getContext()
+        } finally {
+          logStartupProfileDuration(
+            'query_prep_context',
+            Date.now() - startedAt,
+          )
+        }
+      })()
+      const modelStartedAt = Date.now()
+      void getModelManager().getModelName('main')
+      logStartupProfileDuration('query_prep_model', Date.now() - modelStartedAt)
+      const [systemPrompt, context, maxThinkingTokens] = await Promise.all([
+        systemPromptPromise,
+        contextPromise,
+        getMaxThinkingTokens([...messages, ...newMessages]),
+      ])
+      logStartupProfileDuration(
+        'query_prep_total',
+        Date.now() - queryPrepStartedAt,
+      )
 
       for await (const message of query(
         [...messages, ...newMessages],
@@ -351,13 +394,37 @@ export function REPL({
       return
     }
 
-    const [systemPrompt, context, model, maxThinkingTokens] = await Promise.all(
-      [
-        getSystemPrompt({ disableSlashCommands }),
-        getContext(),
-        new ModelManager(getGlobalConfig()).getModelName('main'),
-        getMaxThinkingTokens([...messages, lastMessage]),
-      ],
+    const queryPrepStartedAt = Date.now()
+    const systemPromptPromise = (async () => {
+      const startedAt = Date.now()
+      try {
+        return await getSystemPrompt({ disableSlashCommands })
+      } finally {
+        logStartupProfileDuration(
+          'query_prep_system_prompt',
+          Date.now() - startedAt,
+        )
+      }
+    })()
+    const contextPromise = (async () => {
+      const startedAt = Date.now()
+      try {
+        return await getContext()
+      } finally {
+        logStartupProfileDuration('query_prep_context', Date.now() - startedAt)
+      }
+    })()
+    const modelStartedAt = Date.now()
+    void getModelManager().getModelName('main')
+    logStartupProfileDuration('query_prep_model', Date.now() - modelStartedAt)
+    const [systemPrompt, context, maxThinkingTokens] = await Promise.all([
+      systemPromptPromise,
+      contextPromise,
+      getMaxThinkingTokens([...messages, lastMessage]),
+    ])
+    logStartupProfileDuration(
+      'query_prep_total',
+      Date.now() - queryPrepStartedAt,
     )
 
     let lastAssistantMessage: MessageType | null = null
@@ -436,6 +503,22 @@ export function REPL({
       setUiRefreshCounter(prev => prev + 1)
     })
   }, [])
+
+  useEffect(() => {
+    if (initialUpdateAvailableVersion || !updateCheckPromise) return
+    let cancelled = false
+    updateCheckPromise
+      .then(updateInfo => {
+        if (cancelled || !updateInfo.version) return
+        setAsyncUpdateInfo(updateInfo)
+      })
+      .catch(error => {
+        logError(`update-banner: ${error}`)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [initialUpdateAvailableVersion, updateCheckPromise])
 
   useLogMessages(messages, messageLogName, forkNumber)
 
@@ -601,8 +684,8 @@ export function REPL({
             <Logo
               mcpClients={mcpClients}
               isDefaultModel={isDefaultModel}
-              updateBannerVersion={updateAvailableVersion}
-              updateBannerCommands={updateCommands}
+              updateBannerVersion={initialUpdateAvailableVersion}
+              updateBannerCommands={initialUpdateCommandList}
             />
             <ProjectOnboarding workspaceDir={getOriginalCwd()} />
           </Box>
@@ -616,8 +699,8 @@ export function REPL({
       replStaticPrefixLength,
       mcpClients,
       isDefaultModel,
-      updateAvailableVersion,
-      updateCommands,
+      initialUpdateAvailableVersion,
+      initialUpdateCommandList,
     ],
   )
 
@@ -639,6 +722,12 @@ export function REPL({
         <React.Fragment key={`static-messages-${forkNumber}`}>
           <Static items={staticItems} children={(item: any) => item.jsx} />
         </React.Fragment>
+        {!initialUpdateAvailableVersion && updateAvailableVersion ? (
+          <UpdateBanner
+            version={updateAvailableVersion}
+            commands={updateCommands}
+          />
+        ) : null}
         {transientItems.map(_ => _.jsx)}
         <Box
           borderColor="red"
@@ -722,6 +811,7 @@ export function REPL({
                   onModeChange={setInputMode}
                   submitCount={submitCount}
                   onSubmitCountChange={setSubmitCount}
+                  onModelChange={() => setUiRefreshCounter(prev => prev + 1)}
                   setIsLoading={setIsLoading}
                   setAbortController={setAbortController}
                   uiRefreshCounter={uiRefreshCounter}

@@ -16,8 +16,7 @@ import type { SetToolJSXFn, Tool } from '@tool'
 import { TokenWarning, WARNING_THRESHOLD } from './TokenWarning'
 import { useTerminalSize } from '@hooks/useTerminalSize'
 import { getTheme } from '@utils/theme'
-import { getModelManager, reloadModelManager } from '@utils/model'
-import { saveGlobalConfig } from '@utils/config'
+import { getModelManager } from '@utils/model'
 import { setTerminalTitle } from '@utils/terminal'
 import { launchExternalEditor } from '@utils/system/externalEditor'
 import {
@@ -65,6 +64,22 @@ async function interpretHashCommand(input: string): Promise<string> {
   } catch (e) {
     return `# ${input}\n\n_Added on ${new Date().toLocaleString()}_`
   }
+}
+
+let didScheduleGPT5ProfileRepair = false
+
+function scheduleDeferredGPT5ProfileRepair(): void {
+  if (didScheduleGPT5ProfileRepair) return
+  didScheduleGPT5ProfileRepair = true
+  setTimeout(() => {
+    void import('@utils/config')
+      .then(({ validateAndRepairAllGPT5Profiles }) => {
+        validateAndRepairAllGPT5Profiles()
+      })
+      .catch(error => {
+        logError(`GPT-5 configuration validation failed: ${error}`)
+      })
+  }, 0)
 }
 
 type Props = {
@@ -137,6 +152,7 @@ function PromptInput({
   useEffect(() => {
     if (!isDisabled && !isLoading) {
       logStartupProfile('prompt_ready')
+      scheduleDeferredGPT5ProfileRepair()
     }
   }, [isDisabled, isLoading])
 

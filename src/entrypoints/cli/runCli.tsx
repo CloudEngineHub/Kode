@@ -23,7 +23,6 @@ import {
   getConfigForCLI,
   listConfigForCLI,
   enableConfigs,
-  validateAndRepairAllGPT5Profiles,
 } from '@utils/config'
 import { cwd } from 'process'
 import { dateToFilename, logError, parseLogFilename } from '@utils/log'
@@ -99,14 +98,6 @@ export async function runCli() {
 
   try {
     enableConfigs()
-
-    queueMicrotask(() => {
-      try {
-        validateAndRepairAllGPT5Profiles()
-      } catch (repairError) {
-        logError(`GPT-5 configuration validation failed: ${repairError}`)
-      }
-    })
   } catch (error: unknown) {
     if (error instanceof ConfigParseError) {
       await showInvalidConfigDialog({ error })
@@ -600,34 +591,15 @@ async function parseArgs(
             process.exit(1)
           }
 
-          const updateInfo = await (async () => {
-            try {
-              const [
-                { getLatestVersion, getUpdateCommandSuggestions },
-                semverMod,
-              ] = await Promise.all([
-                import('@utils/session/autoUpdater'),
-                import('semver'),
-              ])
-              const semver: any = (semverMod as any)?.default ?? semverMod
-              const gt = semver?.gt
-              if (typeof gt !== 'function')
-                return {
-                  version: null as string | null,
-                  commands: null as string[] | null,
-                }
+          // Start update check early, outside REPL render critical path
+          const updateCheckPromise = import('@utils/session/autoUpdater')
+            .then(({ getUpdateBannerInfo }) => getUpdateBannerInfo())
+            .catch(() => ({ version: null, commands: null }))
 
-              const latest = await getLatestVersion()
-              if (latest && gt(latest, MACRO.VERSION)) {
-                const cmds = await getUpdateCommandSuggestions()
-                return { version: latest as string, commands: cmds as string[] }
-              }
-            } catch {}
-            return {
-              version: null as string | null,
-              commands: null as string[] | null,
-            }
-          })()
+          const updateInfo = {
+            version: null as string | null,
+            commands: null as string[] | null,
+          }
 
           if (needsResumeSelector) {
             const sessions = listKodeAgentSessions({ cwd })
@@ -656,6 +628,7 @@ async function parseArgs(
                   forkSessionId={sessionId ? String(sessionId) : null}
                   initialUpdateVersion={updateInfo.version}
                   initialUpdateCommands={updateInfo.commands}
+                  updateCheckPromise={updateCheckPromise}
                 />,
                 renderContextWithExitOnCtrlC,
               )
@@ -685,6 +658,7 @@ async function parseArgs(
                 initialUpdateVersion={updateInfo.version}
                 initialUpdateCommands={updateInfo.commands}
                 initialMessages={initialMessages}
+                updateCheckPromise={updateCheckPromise}
               />,
               renderContext,
             )

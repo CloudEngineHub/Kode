@@ -16,6 +16,32 @@ const DEFAULT_UPDATE_COMMANDS = [
   'npm install -g @shareai-lab/kode@latest',
 ] as const
 
+export function UpdateBanner({
+  version,
+  commands,
+}: {
+  version: string
+  commands?: string[] | null
+}): React.ReactNode {
+  return (
+    <Box flexDirection="column">
+      <Text color="yellow">
+        New version available: {version} (current: {MACRO.VERSION})
+      </Text>
+      <Text>Run the following command to update:</Text>
+      <Text>
+        {'  '}
+        {commands?.[1] ?? DEFAULT_UPDATE_COMMANDS[1]}
+      </Text>
+      {process.platform !== 'win32' && (
+        <Text dimColor>
+          Note: you may need to prefix with "sudo" on macOS/Linux.
+        </Text>
+      )}
+    </Box>
+  )
+}
+
 export function Logo({
   mcpClients,
   isDefaultModel = false,
@@ -52,22 +78,10 @@ export function Logo({
         width={width}
       >
         {updateBannerVersion ? (
-          <Box flexDirection="column">
-            <Text color="yellow">
-              New version available: {updateBannerVersion} (current:{' '}
-              {MACRO.VERSION})
-            </Text>
-            <Text>Run the following command to update:</Text>
-            <Text>
-              {'  '}
-              {updateBannerCommands?.[1] ?? DEFAULT_UPDATE_COMMANDS[1]}
-            </Text>
-            {process.platform !== 'win32' && (
-              <Text dimColor>
-                Note: you may need to prefix with "sudo" on macOS/Linux.
-              </Text>
-            )}
-          </Box>
+          <UpdateBanner
+            version={updateBannerVersion}
+            commands={updateBannerCommands}
+          />
         ) : null}
         <Text>
           <Text color={theme.kode}>✻</Text> Welcome to{' '}

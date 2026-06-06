@@ -2,6 +2,7 @@ import { memoize } from 'lodash-es'
 
 import { logError } from '@utils/log'
 import { debug as debugLogger } from '@utils/log/debugLogger'
+import { logStartupProfileDuration } from '@utils/config/startupProfile'
 import {
   getGlobalConfig,
   ModelProfile,
@@ -640,11 +641,13 @@ export class ModelManager {
   }
 
   private saveConfig(): void {
+    const startedAt = Date.now()
     const updatedConfig = {
       ...this.config,
       modelProfiles: this.modelProfiles,
     }
     saveGlobalConfig(updatedConfig)
+    logStartupProfileDuration('model_config_save', Date.now() - startedAt)
   }
 
   async getFallbackModel(): Promise<string> {

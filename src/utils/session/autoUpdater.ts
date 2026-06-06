@@ -1,8 +1,14 @@
 import { execFileNoThrow } from '@utils/system/execFileNoThrow'
 import { logError } from '@utils/log'
+import { logStartupProfileDuration } from '@utils/config/startupProfile'
 
 import { MACRO } from '@constants/macros'
 import { PRODUCT_NAME } from '@constants/product'
+
+export type UpdateBannerInfo = {
+  version: string | null
+  commands: string[] | null
+}
 
 async function getSemver() {
   const mod: any = await import('semver')
@@ -81,6 +87,26 @@ export async function getUpdateCommandSuggestions(): Promise<string[]> {
     `bun add -g ${MACRO.PACKAGE_URL}@latest`,
     `npm install -g ${MACRO.PACKAGE_URL}@latest`,
   ]
+}
+
+export async function getUpdateBannerInfo(): Promise<UpdateBannerInfo> {
+  const startedAt = Date.now()
+  try {
+    if (process.env.NODE_ENV === 'test') {
+      return { version: null, commands: null }
+    }
+    const semver = await getSemver()
+    const latest = await getLatestVersion()
+    if (latest && semver.gt(latest, MACRO.VERSION)) {
+      const commands = await getUpdateCommandSuggestions()
+      return { version: latest, commands }
+    }
+  } catch {
+  } finally {
+    logStartupProfileDuration('update_check', Date.now() - startedAt)
+  }
+
+  return { version: null, commands: null }
 }
 
 export async function checkAndNotifyUpdate(): Promise<void> {
