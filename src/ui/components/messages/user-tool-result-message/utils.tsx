@@ -35,13 +35,11 @@ export function useGetToolFromMessages(
   toolUseID: string,
   tools: Tool[],
   messages: Message[],
-) {
+): { tool: Tool; toolUse: ToolUseBlockParam } | null {
   return useMemo(() => {
     const toolUse = getToolUseFromMessages(toolUseID, messages)
     if (!toolUse) {
-      throw new ReferenceError(
-        `Tool use not found for tool_use_id ${toolUseID}`,
-      )
+      return null
     }
     const tool = [...tools, GlobTool, GrepTool].find(
       _ => _.name === toolUse.name,
@@ -49,7 +47,7 @@ export function useGetToolFromMessages(
     if (tool === GlobTool || tool === GrepTool) {
     }
     if (!tool) {
-      throw new ReferenceError(`Tool not found for ${toolUse.name}`)
+      return null
     }
     return { tool, toolUse }
   }, [toolUseID, messages, tools])
