@@ -9,6 +9,7 @@ import { Tool, ValidationResult, ToolUseContext } from '@tool'
 import { splitCommand } from '@utils/commands'
 import { isInDirectory } from '@utils/fs/file'
 import { logError } from '@utils/log'
+import { logStartupProfileDuration } from '@utils/config/startupProfile'
 import { createAssistantMessage } from '@utils/messages'
 import { BunShell } from '@utils/bun/shell'
 import { getBunShellSandboxPlan } from '@utils/sandbox/bunShellSandboxPlan'
@@ -700,6 +701,7 @@ export const BashTool = {
         }
 
         if (race.kind === 'done') {
+          const finalizeStartedAt = Date.now()
           const result = race.r
 
           stdout += (result.stdout || '').trim() + EOL
@@ -743,6 +745,10 @@ export const BashTool = {
             interrupted: result.interrupted,
           }
 
+          logStartupProfileDuration(
+            'bash_result_finalize',
+            Date.now() - finalizeStartedAt,
+          )
           yield {
             type: 'result',
             resultForAssistant: this.renderResultForAssistant(data),

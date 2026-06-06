@@ -8,6 +8,7 @@ import { getCwd } from '@utils/state'
 import { safeParseJSON } from '@utils/text/json'
 import { ConfigParseError } from '@utils/text/errors'
 import { debug as debugLogger } from '@utils/log/debugLogger'
+import { logStartupProfileDuration } from '@utils/config/startupProfile'
 import {
   DEFAULT_GLOBAL_CONFIG,
   DEFAULT_PROJECT_CONFIG,
@@ -91,7 +92,7 @@ function findMatchingProjectKey(
 
 export function checkHasTrustDialogAccepted(): boolean {
   let currentPath = getCwd()
-  const config = getConfig(getGlobalConfigFilePath(), DEFAULT_GLOBAL_CONFIG)
+  const config = getLoadedGlobalConfig()
 
   while (true) {
     const projectKey = findMatchingProjectKey(config.projects, currentPath)
@@ -117,6 +118,36 @@ const TEST_PROJECT_CONFIG_FOR_TESTING: ProjectConfig = {
   ...DEFAULT_PROJECT_CONFIG,
 }
 
+let globalConfigCache: GlobalConfig | null = null
+let globalConfigCachePath: string | null = null
+
+function cacheGlobalConfig(file: string, config: GlobalConfig): GlobalConfig {
+  const migrated = migrateModelProfilesRemoveId(config)
+  globalConfigCachePath = file
+  globalConfigCache = cloneDeep(migrated)
+  return cloneDeep(migrated)
+}
+
+function getCachedGlobalConfig(file: string): GlobalConfig | null {
+  if (globalConfigCachePath !== file || !globalConfigCache) return null
+  return cloneDeep(globalConfigCache)
+}
+
+function getLoadedGlobalConfig(throwOnInvalid?: boolean): GlobalConfig {
+  const file = getGlobalConfigFilePath()
+  const cached = getCachedGlobalConfig(file)
+  if (cached) return cached
+  return cacheGlobalConfig(
+    file,
+    getConfig(file, DEFAULT_GLOBAL_CONFIG, throwOnInvalid),
+  )
+}
+
+export function clearConfigCacheForTesting(): void {
+  globalConfigCache = null
+  globalConfigCachePath = null
+}
+
 export function saveGlobalConfig(config: GlobalConfig): void {
   if (process.env.NODE_ENV === 'test') {
     for (const key in config) {
@@ -125,23 +156,24 @@ export function saveGlobalConfig(config: GlobalConfig): void {
     return
   }
 
-  saveConfig(
-    getGlobalConfigFilePath(),
-    {
-      ...config,
-      projects: getConfig(getGlobalConfigFilePath(), DEFAULT_GLOBAL_CONFIG)
-        .projects,
-    },
-    DEFAULT_GLOBAL_CONFIG,
-  )
+  const file = getGlobalConfigFilePath()
+  const existingConfig =
+    getCachedGlobalConfig(file) ?? getConfig(file, DEFAULT_GLOBAL_CONFIG)
+  const nextConfig = {
+    ...config,
+    projects: existingConfig.projects,
+  }
+
+  if (saveConfig(file, nextConfig, DEFAULT_GLOBAL_CONFIG)) {
+    cacheGlobalConfig(file, nextConfig)
+  }
 }
 
 export function getGlobalConfig(): GlobalConfig {
   if (process.env.NODE_ENV === 'test') {
     return TEST_GLOBAL_CONFIG_FOR_TESTING
   }
-  const config = getConfig(getGlobalConfigFilePath(), DEFAULT_GLOBAL_CONFIG)
-  return migrateModelProfilesRemoveId(config)
+  return getLoadedGlobalConfig()
 }
 
 export function normalizeApiKeyForConfig(apiKey: string): string {
@@ -165,7 +197,8 @@ function saveConfig<A extends object>(
   file: string,
   config: A,
   defaultConfig: A,
-): void {
+): boolean {
+  const startedAt = Date.now()
   const filteredConfig = Object.fromEntries(
     Object.entries(config).filter(
       ([key, value]) =>
@@ -174,6 +207,8 @@ function saveConfig<A extends object>(
   )
   try {
     writeFileSync(file, JSON.stringify(filteredConfig, null, 2), 'utf-8')
+    logStartupProfileDuration('config_write', Date.now() - startedAt, { file })
+    return true
   } catch (error) {
     const err = error as NodeJS.ErrnoException
     if (
@@ -185,7 +220,7 @@ function saveConfig<A extends object>(
         file,
         reason: String(err.code),
       })
-      return
+      return false
     }
     throw error
   }
@@ -195,7 +230,7 @@ let configReadingAllowed = false
 
 export function enableConfigs(): void {
   configReadingAllowed = true
-  getConfig(getGlobalConfigFilePath(), DEFAULT_GLOBAL_CONFIG, true)
+  getLoadedGlobalConfig(true)
 }
 
 function getConfig<A>(
@@ -203,6 +238,7 @@ function getConfig<A>(
   defaultConfig: A,
   throwOnInvalid?: boolean,
 ): A {
+  const startedAt = Date.now()
   void configReadingAllowed
 
   debugLogger.state('CONFIG_LOAD_START', {
@@ -217,7 +253,12 @@ function getConfig<A>(
       reason: 'file_not_exists',
       defaultConfigKeys: Object.keys(defaultConfig as object).join(', '),
     })
-    return cloneDeep(defaultConfig)
+    const config = cloneDeep(defaultConfig)
+    logStartupProfileDuration('config_read', Date.now() - startedAt, {
+      file,
+      source: 'default',
+    })
+    return config
   }
 
   try {
@@ -246,6 +287,10 @@ function getConfig<A>(
         finalConfigKeys: Object.keys(finalConfig as object).join(', '),
       })
 
+      logStartupProfileDuration('config_read', Date.now() - startedAt, {
+        file,
+        source: 'file',
+      })
       return finalConfig
     } catch (error) {
       const errorMessage =
@@ -278,7 +323,12 @@ function getConfig<A>(
       action: 'using_default_config',
     })
 
-    return cloneDeep(defaultConfig)
+    const config = cloneDeep(defaultConfig)
+    logStartupProfileDuration('config_read', Date.now() - startedAt, {
+      file,
+      source: 'fallback',
+    })
+    return config
   }
 }
 
@@ -288,7 +338,7 @@ export function getCurrentProjectConfig(): ProjectConfig {
   }
 
   const absolutePath = resolve(getCwd())
-  const config = getConfig(getGlobalConfigFilePath(), DEFAULT_GLOBAL_CONFIG)
+  const config = getLoadedGlobalConfig()
 
   if (!config.projects) {
     return defaultConfigForProject(absolutePath)
@@ -321,22 +371,22 @@ export function saveCurrentProjectConfig(projectConfig: ProjectConfig): void {
     }
     return
   }
-  const config = getConfig(getGlobalConfigFilePath(), DEFAULT_GLOBAL_CONFIG)
+  const config = getLoadedGlobalConfig()
   const resolvedCwd = resolve(getCwd())
   const existingKey = findMatchingProjectKey(config.projects, resolvedCwd)
   const storageKey = existingKey ?? resolvedCwd
-
-  saveConfig(
-    getGlobalConfigFilePath(),
-    {
-      ...config,
-      projects: {
-        ...config.projects,
-        [storageKey]: projectConfig,
-      },
+  const nextConfig = {
+    ...config,
+    projects: {
+      ...config.projects,
+      [storageKey]: projectConfig,
     },
-    DEFAULT_GLOBAL_CONFIG,
-  )
+  }
+
+  const file = getGlobalConfigFilePath()
+  if (saveConfig(file, nextConfig, DEFAULT_GLOBAL_CONFIG)) {
+    cacheGlobalConfig(file, nextConfig)
+  }
 }
 
 export async function isAutoUpdaterDisabled(): Promise<boolean> {

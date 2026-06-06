@@ -12,6 +12,14 @@ import {
 } from '@utils/log/taskOutputStore'
 
 type ShellChildProcess = ChildProcess & { exited: Promise<void> }
+type ShellStdio = ['ignore', 'pipe' | 'overlapped', 'pipe' | 'overlapped']
+
+export function getShellStdioForPlatform(
+  platform: NodeJS.Platform = process.platform,
+): ShellStdio {
+  const output = platform === 'win32' ? 'overlapped' : 'pipe'
+  return ['ignore', output, output]
+}
 
 function whichSync(bin: string): string | null {
   try {
@@ -33,7 +41,7 @@ function spawnWithExited(options: {
   const child = spawn(options.cmd[0], options.cmd.slice(1), {
     cwd: options.cwd,
     env: options.env ?? process.env,
-    stdio: ['inherit', 'pipe', 'pipe'],
+    stdio: getShellStdioForPlatform(),
     windowsHide: true,
   }) as ShellChildProcess
 

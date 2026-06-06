@@ -29,6 +29,10 @@ type Props = {
   forkSessionId?: string | null
   initialUpdateVersion?: string | null
   initialUpdateCommands?: string[] | null
+  updateCheckPromise?: Promise<{
+    version: string | null
+    commands: string[] | null
+  }>
 }
 
 export function ResumeConversation({
@@ -47,6 +51,7 @@ export function ResumeConversation({
   forkSessionId,
   initialUpdateVersion,
   initialUpdateCommands,
+  updateCheckPromise,
 }: Props): React.ReactNode {
   async function onSelect(index: number) {
     try {
@@ -82,6 +87,7 @@ export function ResumeConversation({
           isDefaultModel={isDefaultModel}
           initialUpdateVersion={initialUpdateVersion}
           initialUpdateCommands={initialUpdateCommands}
+          updateCheckPromise={updateCheckPromise}
         />,
         {
           exitOnCtrlC: false,

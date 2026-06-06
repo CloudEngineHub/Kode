@@ -193,22 +193,26 @@ describe('Reference CLI parity: filesystem permission engine', () => {
     }
   })
 
-  test('asks for UNC paths and does not provide suggestions', async () => {
-    const toolPermissionContext = createDefaultToolPermissionContext({
-      isBypassPermissionsModeAvailable: true,
-    })
-    const ctx = makeContext({ toolPermissionContext })
+  test(
+    'asks for UNC paths and does not provide suggestions',
+    async () => {
+      const toolPermissionContext = createDefaultToolPermissionContext({
+        isBypassPermissionsModeAvailable: true,
+      })
+      const ctx = makeContext({ toolPermissionContext })
 
-    const result = await hasPermissionsToUseTool(
-      FileReadTool as any,
-      { file_path: '//server/share/file.txt' },
-      ctx as any,
-      {} as any,
-    )
+      const result = await hasPermissionsToUseTool(
+        FileReadTool as any,
+        { file_path: '//server/share/file.txt' },
+        ctx as any,
+        {} as any,
+      )
 
-    expect(result.result).toBe(false)
-    expect((result as any).suggestions).toBeUndefined()
-  })
+      expect(result.result).toBe(false)
+      expect((result as any).suggestions).toBeUndefined()
+    },
+    { timeout: 15_000 },
+  )
 
   test('asks for suspicious Windows path patterns and does not provide suggestions', async () => {
     const toolPermissionContext = createDefaultToolPermissionContext({

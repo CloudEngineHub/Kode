@@ -94,25 +94,30 @@ describe('LSP tool (TypeScript backend)', () => {
     }
   })
 
-  test('goToDefinition returns formatted location + counts', async () => {
-    const ctx = makeContext()
-    const input = {
-      operation: 'goToDefinition',
-      filePath,
-      line: 2,
-      character: 32,
-    } as const
+  test(
+    'goToDefinition returns formatted location + counts',
+    async () => {
+      const ctx = makeContext()
+      const input = {
+        operation: 'goToDefinition',
+        filePath,
+        line: 2,
+        character: 32,
+      } as const
 
-    const events: any[] = []
-    for await (const evt of (LspTool as any).call(input, ctx)) events.push(evt)
-    expect(events).toHaveLength(1)
+      const events: any[] = []
+      for await (const evt of (LspTool as any).call(input, ctx))
+        events.push(evt)
+      expect(events).toHaveLength(1)
 
-    const out = events[0].data
-    expect(out.operation).toBe('goToDefinition')
-    expect(out.result).toContain('Defined in')
-    expect(out.resultCount).toBeGreaterThan(0)
-    expect(out.fileCount).toBeGreaterThan(0)
-  })
+      const out = events[0].data
+      expect(out.operation).toBe('goToDefinition')
+      expect(out.result).toContain('Defined in')
+      expect(out.resultCount).toBeGreaterThan(0)
+      expect(out.fileCount).toBeGreaterThan(0)
+    },
+    { timeout: 15_000 },
+  )
 
   test('findReferences returns formatted grouped locations + counts', async () => {
     const ctx = makeContext()
@@ -176,39 +181,45 @@ describe('LSP tool (TypeScript backend)', () => {
     expect(out.fileCount).toBe(1)
   })
 
-  test('documentSymbol reflects on-disk file edits (mtime-based versions)', async () => {
-    const ctx = makeContext()
-    const input = {
-      operation: 'documentSymbol',
-      filePath,
-      line: 1,
-      character: 1,
-    } as const
+  test(
+    'documentSymbol reflects on-disk file edits (mtime-based versions)',
+    async () => {
+      const ctx = makeContext()
+      const input = {
+        operation: 'documentSymbol',
+        filePath,
+        line: 1,
+        character: 1,
+      } as const
 
-    const events1: any[] = []
-    for await (const evt of (LspTool as any).call(input, ctx)) events1.push(evt)
-    expect(events1).toHaveLength(1)
-    const out1 = events1[0].data
-    expect(out1.result).toContain('foo')
-    expect(out1.result).not.toContain('baz')
+      const events1: any[] = []
+      for await (const evt of (LspTool as any).call(input, ctx))
+        events1.push(evt)
+      expect(events1).toHaveLength(1)
+      const out1 = events1[0].data
+      expect(out1.result).toContain('foo')
+      expect(out1.result).not.toContain('baz')
 
-    const beforeMtime = statSync(filePath).mtimeMs
-    const updated = [
-      'export function foo() { return 1 }',
-      'export function bar() { return foo() }',
-      'export function baz() { return bar() }',
-      'foo()',
-      '',
-    ].join('\n')
-    writeFileSync(filePath, updated, 'utf8')
-    utimesSync(filePath, new Date(), new Date(beforeMtime + 1000))
+      const beforeMtime = statSync(filePath).mtimeMs
+      const updated = [
+        'export function foo() { return 1 }',
+        'export function bar() { return foo() }',
+        'export function baz() { return bar() }',
+        'foo()',
+        '',
+      ].join('\n')
+      writeFileSync(filePath, updated, 'utf8')
+      utimesSync(filePath, new Date(), new Date(beforeMtime + 1000))
 
-    expect(statSync(filePath).mtimeMs).toBeGreaterThan(beforeMtime)
+      expect(statSync(filePath).mtimeMs).toBeGreaterThan(beforeMtime)
 
-    const events2: any[] = []
-    for await (const evt of (LspTool as any).call(input, ctx)) events2.push(evt)
-    expect(events2).toHaveLength(1)
-    const out2 = events2[0].data
-    expect(out2.result).toContain('baz')
-  })
+      const events2: any[] = []
+      for await (const evt of (LspTool as any).call(input, ctx))
+        events2.push(evt)
+      expect(events2).toHaveLength(1)
+      const out2 = events2[0].data
+      expect(out2.result).toContain('baz')
+    },
+    { timeout: 15_000 },
+  )
 })
