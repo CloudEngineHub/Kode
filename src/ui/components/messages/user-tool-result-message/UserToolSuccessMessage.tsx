@@ -4,6 +4,7 @@ import * as React from 'react'
 import { Tool } from '@tool'
 import { Message, UserMessage } from '@query'
 import { useGetToolFromMessages } from './utils'
+import { FallbackToolResultMessage } from './FallbackToolResultMessage'
 
 type Props = {
   param: ToolResultBlockParam
@@ -22,13 +23,28 @@ export function UserToolSuccessMessage({
   verbose,
   width,
 }: Props): React.ReactNode {
-  const { tool } = useGetToolFromMessages(param.tool_use_id, tools, messages)
+  const lookup = useGetToolFromMessages(param.tool_use_id, tools, messages)
+
+  if (
+    !lookup ||
+    !lookup.tool.renderToolResultMessage ||
+    !message.toolUseResult
+  ) {
+    return (
+      <Box flexDirection="column" width={width}>
+        <FallbackToolResultMessage content={param.content} verbose={verbose} />
+      </Box>
+    )
+  }
 
   return (
     <Box flexDirection="column" width={width}>
-      {tool.renderToolResultMessage?.(message.toolUseResult!.data as never, {
-        verbose,
-      })}
+      {lookup.tool.renderToolResultMessage(
+        message.toolUseResult.data as never,
+        {
+          verbose,
+        },
+      )}
     </Box>
   )
 }
