@@ -70,6 +70,7 @@ SKIP_BUNDLED_CHECK=true npm publish
 
 ## AI Context Notes
 
+- 2026-06-06：项目已从 ESLint 8 迁移到 ESLint 9 flat config（`eslint.config.mjs`）。不再有 `.eslintrc*` 文件。Lint 命令不变：`bun run lint`。
 - 2026-06-05：修复 Windows CI 时，优先检查 Bun 默认 5 秒测试超时、跨文件 `mock.module` 污染、以及 `cmd /c` 与 Unix shell 命令差异；不要用跳过 Windows 测试代替根因修复。
 - 2026-06-05：背景 shell 单测不要用固定短延迟假设 Windows runner 已经产出 stdout；先用不推进 cursor 的 `getBackgroundOutput` 等待目标输出，再断言 `readBackgroundOutput` 的增量语义。
 - 2026-06-05：通过 `cmd /c` 执行测试命令时，不要手写 `process.execPath` 的 Windows 引用；若只需要 stdout，优先用 shell/cmd 都支持的简单命令。
