@@ -71,6 +71,12 @@ export function getVertexRegionForModel(
 export class ModelManager {
   private config: any
   private modelProfiles: ModelProfile[]
+  private readonly modelPointers: ModelPointerType[] = [
+    'main',
+    'task',
+    'compact',
+    'quick',
+  ]
 
   constructor(config: any) {
     this.config = config
@@ -544,6 +550,43 @@ export class ModelManager {
     return config.modelName
   }
 
+  async upsertModel(
+    config: Omit<ModelProfile, 'createdAt' | 'isActive'>,
+  ): Promise<string> {
+    const existingIndex = this.modelProfiles.findIndex(
+      p => p.modelName === config.modelName,
+    )
+
+    if (existingIndex === -1) {
+      return this.addModel(config)
+    }
+
+    const existingByName = this.modelProfiles.find(
+      p => p.name === config.name && p.modelName !== config.modelName,
+    )
+    if (existingByName) {
+      throw new Error(`Model with name '${config.name}' already exists`)
+    }
+
+    const existing = this.modelProfiles[existingIndex]
+    const updatedModel: ModelProfile = {
+      ...existing,
+      ...config,
+      apiKey: config.apiKey || existing.apiKey,
+      reasoningEffort: config.reasoningEffort ?? existing.reasoningEffort,
+      createdAt: existing.createdAt,
+      lastUsed: existing.lastUsed,
+      isActive: true,
+      isGPT5: existing.isGPT5,
+      validationStatus: existing.validationStatus,
+      lastValidation: existing.lastValidation,
+    }
+
+    this.modelProfiles[existingIndex] = updatedModel
+    this.saveConfig()
+    return config.modelName
+  }
+
   setPointer(pointer: ModelPointerType, modelName: string): void {
     if (!this.findModelProfile(modelName)) {
       throw new Error(`Model '${modelName}' not found`)
@@ -616,17 +659,32 @@ export class ModelManager {
       p => p.modelName !== modelName,
     )
 
-    if (this.config.modelPointers) {
-      Object.keys(this.config.modelPointers).forEach(pointer => {
-        if (
-          this.config.modelPointers[pointer as ModelPointerType] === modelName
-        ) {
-          this.config.modelPointers[pointer as ModelPointerType] =
-            this.config.defaultModelName || ''
-        }
-      })
+    if (!this.config.modelPointers) {
+      this.config.modelPointers = {
+        main: '',
+        task: '',
+        compact: '',
+        quick: '',
+      }
     }
 
+    const fallbackModelName =
+      this.modelProfiles.find(p => p.isActive)?.modelName || ''
+
+    for (const pointer of this.modelPointers) {
+      const currentModelName = this.config.modelPointers[pointer]
+      const pointsToDeletedModel = currentModelName === modelName
+      const pointsToMissingModel =
+        currentModelName && !this.findModelProfile(currentModelName)
+
+      if (!fallbackModelName) {
+        this.config.modelPointers[pointer] = ''
+      } else if (pointsToDeletedModel || pointsToMissingModel) {
+        this.config.modelPointers[pointer] = fallbackModelName
+      }
+    }
+
+    this.config.defaultModelName = fallbackModelName
     this.saveConfig()
   }
 
@@ -642,6 +700,7 @@ export class ModelManager {
 
   private saveConfig(): void {
     const startedAt = Date.now()
+    this.config.modelProfiles = this.modelProfiles
     const updatedConfig = {
       ...this.config,
       modelProfiles: this.modelProfiles,

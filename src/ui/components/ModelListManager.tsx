@@ -17,6 +17,7 @@ export function ModelListManager({ onClose }: Props): React.ReactNode {
   const theme = getTheme()
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [showModelSelector, setShowModelSelector] = useState(false)
+  const [editingModelName, setEditingModelName] = useState<string | null>(null)
   const [isDeleteMode, setIsDeleteMode] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
   const exitState = useExitOnCtrlCD(onClose)
@@ -66,11 +67,19 @@ export function ModelListManager({ onClose }: Props): React.ReactNode {
   }
 
   const handleAddNewModel = () => {
+    setEditingModelName(null)
+    setIsDeleteMode(false)
+    setShowModelSelector(true)
+  }
+
+  const handleEditModel = (modelName: string) => {
+    setEditingModelName(modelName)
     setShowModelSelector(true)
   }
 
   const handleModelConfigurationComplete = () => {
     setShowModelSelector(false)
+    setEditingModelName(null)
     setRefreshKey(prev => prev + 1)
   }
 
@@ -82,7 +91,7 @@ export function ModelListManager({ onClose }: Props): React.ReactNode {
         } else {
           onClose()
         }
-      } else if (input === 'd' && !isDeleteMode && availableModels.length > 1) {
+      } else if (input === 'd' && !isDeleteMode && availableModels.length > 0) {
         setIsDeleteMode(true)
       } else if (key.upArrow) {
         setSelectedIndex(prev => Math.max(0, prev - 1))
@@ -92,17 +101,11 @@ export function ModelListManager({ onClose }: Props): React.ReactNode {
         const item = menuItems[selectedIndex]
 
         if (isDeleteMode && item.type === 'model') {
-          if (availableModels.length <= 1) {
-            setIsDeleteMode(false)
-            return
-          }
-          if (config.modelPointers?.main === item.id) {
-            setIsDeleteMode(false)
-            return
-          }
           handleDeleteModel(item.id)
         } else if (item.type === 'action') {
           handleAddNewModel()
+        } else if (item.type === 'model') {
+          handleEditModel(item.id)
         }
       }
     },
@@ -112,12 +115,18 @@ export function ModelListManager({ onClose }: Props): React.ReactNode {
   useInput(handleInput, { isActive: !showModelSelector })
 
   if (showModelSelector) {
+    const editingModel =
+      editingModelName === null
+        ? undefined
+        : availableModels.find(model => model.modelName === editingModelName)
+
     return (
       <ModelSelector
         onDone={handleModelConfigurationComplete}
         onCancel={handleModelConfigurationComplete}
         skipModelType={true}
         isOnboarding={false}
+        initialModelProfile={editingModel}
         abortController={new AbortController()}
       />
     )
@@ -140,11 +149,7 @@ export function ModelListManager({ onClose }: Props): React.ReactNode {
         </Text>
         <Text dimColor>
           {isDeleteMode ? (
-            availableModels.length <= 1 ? (
-              'Cannot delete the last model, Esc to cancel'
-            ) : (
-              'Press Enter/Space to DELETE selected model (cannot delete main), Esc to cancel'
-            )
+            'Press Enter/Space to DELETE selected model, Esc to cancel'
           ) : (
             <>
               Navigate: ↑↓ | Select: Enter |{' '}
@@ -204,16 +209,11 @@ export function ModelListManager({ onClose }: Props): React.ReactNode {
                 </Text>
               </Box>
             )}
-            {isSelected &&
-              isDeleteMode &&
-              item.type === 'model' &&
-              config.modelPointers?.main === item.id && (
-                <Box paddingLeft={2} marginTop={1}>
-                  <Text color="yellow">
-                    Cannot delete: This model is currently set as main
-                  </Text>
-                </Box>
-              )}
+            {isSelected && !isDeleteMode && item.type === 'model' && (
+              <Box paddingLeft={2} marginTop={1}>
+                <Text dimColor>Edit this model configuration</Text>
+              </Box>
+            )}
           </Box>
         )
       })}
@@ -226,20 +226,16 @@ export function ModelListManager({ onClose }: Props): React.ReactNode {
       >
         <Text dimColor>
           {isDeleteMode ? (
-            availableModels.length <= 1 ? (
-              'Cannot delete the last model - press Esc to cancel'
-            ) : (
-              'DELETE MODE: Press Enter/Space to delete (cannot delete main model), Esc to cancel'
-            )
-          ) : availableModels.length <= 1 ? (
-            'Use ↑/↓ to navigate, Enter to add new, Esc to exit (cannot delete last model)'
+            'DELETE MODE: Press Enter/Space to delete. Pointers will be reassigned or cleared.'
+          ) : availableModels.length === 0 ? (
+            'Use ↑/↓ to navigate, Enter to add new, Esc to exit'
           ) : (
             <>
               Use ↑/↓ to navigate,{' '}
               <Text bold color="red">
                 d to delete model
               </Text>
-              , Enter to add new, Esc to exit
+              , Enter to add/edit, Esc to exit
             </>
           )}
         </Text>
