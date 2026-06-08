@@ -1,11 +1,21 @@
-import { afterEach, describe, expect, test } from 'bun:test'
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  test,
+} from 'bun:test'
 import React, { useState } from 'react'
 import { PassThrough } from 'stream'
 import stripAnsi from 'strip-ansi'
 import { Box, Text, render } from 'ink'
 import { buildModelOptions } from '@components/model-selector/filterModels'
 import { ModelSelectionScreen } from '@components/model-selector/ModelSelectionScreen'
+import { ModelListManager } from '@components/ModelListManager'
 import { getTheme } from '@utils/theme'
+import { getGlobalConfig, saveGlobalConfig } from '@utils/config'
+import { getModelManager, reloadModelManager } from '@utils/model'
 
 type InkTestHarness = {
   stdin: PassThrough & {
@@ -58,6 +68,42 @@ function createInkTestHarness(element: React.ReactElement): InkTestHarness {
 }
 
 const mounted: InkTestHarness[] = []
+const originalNodeEnv = process.env.NODE_ENV
+
+function configureModelProfiles(modelProfiles: any[]) {
+  const firstModelName = modelProfiles[0]?.modelName || ''
+  saveGlobalConfig({
+    ...(getGlobalConfig() as any),
+    modelProfiles,
+    modelPointers: {
+      main: firstModelName,
+      task: firstModelName,
+      compact: firstModelName,
+      quick: firstModelName,
+    },
+    defaultModelName: firstModelName,
+  } as any)
+  reloadModelManager()
+}
+
+function makeModelProfile(overrides: Record<string, unknown> = {}) {
+  return {
+    name: 'Model A',
+    provider: 'openai',
+    modelName: 'model-a',
+    baseURL: 'https://example.com/v1',
+    apiKey: 'test-key',
+    maxTokens: 1024,
+    contextLength: 300000,
+    isActive: true,
+    createdAt: 1,
+    ...overrides,
+  }
+}
+
+beforeAll(() => {
+  process.env.NODE_ENV = 'test'
+})
 
 afterEach(() => {
   while (mounted.length > 0) {
@@ -65,6 +111,15 @@ afterEach(() => {
       mounted.pop()!.unmount()
     } catch {}
   }
+  configureModelProfiles([])
+})
+
+afterAll(() => {
+  if (originalNodeEnv === undefined) {
+    delete process.env.NODE_ENV
+    return
+  }
+  process.env.NODE_ENV = originalNodeEnv
 })
 
 describe('ModelSelector modularization', () => {
@@ -125,5 +180,48 @@ describe('ModelSelector modularization', () => {
     h.stdin.write('\r')
     await h.wait(50)
     expect(h.getOutput()).toContain('SELECTED:foo')
+  })
+
+  test('ModelListManager can delete the only configured model', async () => {
+    configureModelProfiles([makeModelProfile()])
+
+    const h = createInkTestHarness(<ModelListManager onClose={() => {}} />)
+    mounted.push(h)
+
+    await h.wait(100)
+    h.stdin.write('\u001B[B')
+    await h.wait(20)
+    h.stdin.write('d')
+    await h.wait(20)
+
+    expect(h.getOutput()).toContain('DELETE MODE')
+
+    h.stdin.write('\r')
+    await h.wait(50)
+
+    expect(getModelManager().getAllConfiguredModels()).toEqual([])
+    expect(getGlobalConfig().modelPointers).toEqual({
+      main: '',
+      task: '',
+      compact: '',
+      quick: '',
+    })
+  })
+
+  test('ModelListManager opens existing model in edit mode', async () => {
+    configureModelProfiles([makeModelProfile()])
+
+    const h = createInkTestHarness(<ModelListManager onClose={() => {}} />)
+    mounted.push(h)
+
+    await h.wait(100)
+    h.stdin.write('\u001B[B')
+    await h.wait(20)
+    h.stdin.write('\r')
+    await h.wait(50)
+
+    expect(h.getOutput()).toContain('Model Parameters')
+    expect(h.getOutput()).toContain('Configure parameters for model-a')
+    expect(h.getOutput()).toContain('1K tokens')
   })
 })

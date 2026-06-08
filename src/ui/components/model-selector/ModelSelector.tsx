@@ -13,6 +13,7 @@ import {
 } from '@services/gpt5ConnectionTest'
 import {
   getGlobalConfig,
+  ModelProfile,
   ModelPointerType,
   ProviderType,
   saveGlobalConfig,
@@ -105,6 +106,7 @@ type Props = {
   isOnboarding?: boolean
   onCancel?: () => void
   skipModelType?: boolean
+  initialModelProfile?: ModelProfile
 }
 
 export function ModelSelector({
@@ -114,6 +116,7 @@ export function ModelSelector({
   isOnboarding = false,
   onCancel,
   skipModelType = false,
+  initialModelProfile,
 }: Props): React.ReactNode {
   const config = getGlobalConfig()
   const theme = getTheme()
@@ -130,6 +133,9 @@ export function ModelSelector({
   const exitState = useExitOnCtrlCD(() => process.exit(0))
 
   const getInitialScreen = (): string => {
+    if (initialModelProfile) {
+      return 'modelParams'
+    }
     return 'provider'
   }
 
@@ -178,28 +184,65 @@ export function ModelSelector({
     }
   }
 
+  const initialMaxTokens =
+    initialModelProfile?.maxTokens ?? config.maxTokens ?? DEFAULT_MAX_TOKENS
+  const initialContextLength =
+    initialModelProfile?.contextLength ?? DEFAULT_CONTEXT_LENGTH
+  const initialMaxTokensMode = MAX_TOKENS_OPTIONS.some(
+    option => option.value === initialMaxTokens,
+  )
+    ? 'preset'
+    : 'custom'
+
   const [selectedProvider, setSelectedProvider] = useState<ProviderType>(
-    config.primaryProvider ?? 'anthropic',
+    (initialModelProfile?.provider as ProviderType | undefined) ??
+      config.primaryProvider ??
+      'anthropic',
   )
 
-  const [selectedModel, setSelectedModel] = useState<string>('')
-  const [apiKey, setApiKey] = useState<string>('')
+  const [selectedModel, setSelectedModel] = useState<string>(
+    initialModelProfile?.modelName ?? '',
+  )
+  const [apiKey, setApiKey] = useState<string>(
+    initialModelProfile?.apiKey ?? '',
+  )
 
   const [maxTokens, setMaxTokens] = useState<string>(
-    config.maxTokens?.toString() || DEFAULT_MAX_TOKENS.toString(),
+    initialMaxTokens.toString(),
   )
   const [maxTokensMode, setMaxTokensMode] = useState<'preset' | 'custom'>(
-    'preset',
+    initialMaxTokensMode,
   )
   const [selectedMaxTokensPreset, setSelectedMaxTokensPreset] =
-    useState<number>(config.maxTokens || DEFAULT_MAX_TOKENS)
-  const [reasoningEffort, setReasoningEffort] =
-    useState<ReasoningEffortOption>('medium')
+    useState<number>(initialMaxTokens)
+  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffortOption>(
+    (initialModelProfile?.reasoningEffort as ReasoningEffortOption) ?? 'medium',
+  )
   const [supportsReasoningEffort, setSupportsReasoningEffort] =
-    useState<boolean>(false)
+    useState<boolean>(Boolean(initialModelProfile?.reasoningEffort))
 
-  const [contextLength, setContextLength] = useState<number>(
-    DEFAULT_CONTEXT_LENGTH,
+  const [contextLength, setContextLength] =
+    useState<number>(initialContextLength)
+
+  const contextLengthOptions = useMemo(() => {
+    if (CONTEXT_LENGTH_OPTIONS.some(opt => opt.value === contextLength)) {
+      return CONTEXT_LENGTH_OPTIONS
+    }
+
+    return [
+      ...CONTEXT_LENGTH_OPTIONS,
+      {
+        label: `${contextLength.toLocaleString()} tokens (current)`,
+        value: contextLength,
+      },
+    ].sort((a, b) => a.value - b.value)
+  }, [contextLength])
+
+  const getContextLengthLabel = useCallback(
+    (value: number) =>
+      contextLengthOptions.find(opt => opt.value === value)?.label ||
+      `${value.toLocaleString()} tokens`,
+    [contextLengthOptions],
   )
 
   const [activeFieldIndex, setActiveFieldIndex] = useState(0)
@@ -215,7 +258,9 @@ export function ModelSelector({
   const [modelSearchCursorOffset, setModelSearchCursorOffset] =
     useState<number>(0)
   const [cursorOffset, setCursorOffset] = useState<number>(0)
-  const [apiKeyEdited, setApiKeyEdited] = useState<boolean>(false)
+  const [apiKeyEdited, setApiKeyEdited] = useState<boolean>(
+    Boolean(initialModelProfile),
+  )
   const [providerFocusIndex, setProviderFocusIndex] = useState(0)
   const [partnerProviderFocusIndex, setPartnerProviderFocusIndex] = useState(0)
   const [codingPlanFocusIndex, setCodingPlanFocusIndex] = useState(0)
@@ -236,21 +281,31 @@ export function ModelSelector({
   const [resourceName, setResourceName] = useState<string>('')
   const [resourceNameCursorOffset, setResourceNameCursorOffset] =
     useState<number>(0)
-  const [customModelName, setCustomModelName] = useState<string>('')
+  const [customModelName, setCustomModelName] = useState<string>(
+    initialModelProfile?.modelName ?? '',
+  )
   const [customModelNameCursorOffset, setCustomModelNameCursorOffset] =
     useState<number>(0)
 
   const [ollamaBaseUrl, setOllamaBaseUrl] = useState<string>(
-    'http://localhost:11434/v1',
+    initialModelProfile?.provider === 'ollama' && initialModelProfile.baseURL
+      ? initialModelProfile.baseURL
+      : 'http://localhost:11434/v1',
   )
   const [ollamaBaseUrlCursorOffset, setOllamaBaseUrlCursorOffset] =
     useState<number>(0)
 
-  const [customBaseUrl, setCustomBaseUrl] = useState<string>('')
+  const [customBaseUrl, setCustomBaseUrl] = useState<string>(
+    initialModelProfile?.provider === 'custom-openai'
+      ? initialModelProfile.baseURL || ''
+      : '',
+  )
   const [customBaseUrlCursorOffset, setCustomBaseUrlCursorOffset] =
     useState<number>(0)
 
-  const [providerBaseUrl, setProviderBaseUrl] = useState<string>('')
+  const [providerBaseUrl, setProviderBaseUrl] = useState<string>(
+    initialModelProfile?.baseURL ?? '',
+  )
   const [providerBaseUrlCursorOffset, setProviderBaseUrlCursorOffset] =
     useState<number>(0)
 
@@ -317,6 +372,10 @@ export function ModelSelector({
   })
 
   useEffect(() => {
+    if (initialModelProfile) {
+      return
+    }
+
     if (!apiKeyEdited && selectedProvider) {
       if (process.env[selectedProvider.toUpperCase() + '_API_KEY']) {
         setApiKey(
@@ -326,16 +385,7 @@ export function ModelSelector({
         setApiKey('')
       }
     }
-  }, [selectedProvider, apiKey, apiKeyEdited])
-
-  useEffect(() => {
-    if (
-      currentScreen === 'contextLength' &&
-      !CONTEXT_LENGTH_OPTIONS.find(opt => opt.value === contextLength)
-    ) {
-      setContextLength(DEFAULT_CONTEXT_LENGTH)
-    }
-  }, [currentScreen, contextLength])
+  }, [selectedProvider, apiKey, apiKeyEdited, initialModelProfile])
 
   const providerReservedLines = 8 + containerPaddingY * 2 + containerGap * 2
   const partnerReservedLines = 10 + containerPaddingY * 2 + containerGap * 3
@@ -900,9 +950,6 @@ export function ModelSelector({
   }
 
   const handleModelParamsSubmit = () => {
-    if (!CONTEXT_LENGTH_OPTIONS.find(opt => opt.value === contextLength)) {
-      setContextLength(DEFAULT_CONTEXT_LENGTH)
-    }
     navigateTo('contextLength')
   }
 
@@ -1373,7 +1420,7 @@ export function ModelSelector({
   }
 
   const handleContextLengthSubmit = () => {
-    navigateTo('connectionTest')
+    navigateTo(initialModelProfile ? 'confirmation' : 'connectionTest')
   }
 
   async function saveConfiguration(
@@ -1412,7 +1459,7 @@ export function ModelSelector({
         reasoningEffort,
       }
 
-      return await modelManager.addModel(modelConfig)
+      return await modelManager.upsertModel(modelConfig)
     } catch (error) {
       setValidationError(
         error instanceof Error ? error.message : 'Failed to add model',
@@ -1427,6 +1474,11 @@ export function ModelSelector({
     const modelId = await saveConfiguration(selectedProvider, selectedModel)
 
     if (!modelId) {
+      return
+    }
+
+    if (initialModelProfile) {
+      onDone()
       return
     }
 
@@ -1688,32 +1740,32 @@ export function ModelSelector({
       }
 
       if (key.upArrow) {
-        const currentIndex = CONTEXT_LENGTH_OPTIONS.findIndex(
+        const currentIndex = contextLengthOptions.findIndex(
           opt => opt.value === contextLength,
         )
         const newIndex =
           currentIndex > 0
             ? currentIndex - 1
             : currentIndex === -1
-              ? CONTEXT_LENGTH_OPTIONS.findIndex(
+              ? contextLengthOptions.findIndex(
                   opt => opt.value === DEFAULT_CONTEXT_LENGTH,
                 ) || 0
-              : CONTEXT_LENGTH_OPTIONS.length - 1
-        setContextLength(CONTEXT_LENGTH_OPTIONS[newIndex].value)
+              : contextLengthOptions.length - 1
+        setContextLength(contextLengthOptions[newIndex].value)
         return
       }
 
       if (key.downArrow) {
-        const currentIndex = CONTEXT_LENGTH_OPTIONS.findIndex(
+        const currentIndex = contextLengthOptions.findIndex(
           opt => opt.value === contextLength,
         )
         const newIndex =
           currentIndex === -1
-            ? CONTEXT_LENGTH_OPTIONS.findIndex(
+            ? contextLengthOptions.findIndex(
                 opt => opt.value === DEFAULT_CONTEXT_LENGTH,
               ) || 0
-            : (currentIndex + 1) % CONTEXT_LENGTH_OPTIONS.length
-        setContextLength(CONTEXT_LENGTH_OPTIONS[newIndex].value)
+            : (currentIndex + 1) % contextLengthOptions.length
+        setContextLength(contextLengthOptions[newIndex].value)
         return
       }
     }
@@ -2542,8 +2594,9 @@ export function ModelSelector({
 
   if (currentScreen === 'contextLength') {
     const selectedOption =
-      CONTEXT_LENGTH_OPTIONS.find(opt => opt.value === contextLength) ||
-      CONTEXT_LENGTH_OPTIONS[2]
+      contextLengthOptions.find(opt => opt.value === contextLength) ||
+      contextLengthOptions.find(opt => opt.value === DEFAULT_CONTEXT_LENGTH) ||
+      contextLengthOptions[0]
 
     return (
       <Box flexDirection="column" gap={1}>
@@ -2572,7 +2625,7 @@ export function ModelSelector({
             </Box>
 
             <Box flexDirection="column" marginY={1}>
-              {CONTEXT_LENGTH_OPTIONS.map((option, index) => {
+              {contextLengthOptions.map(option => {
                 const isSelected = option.value === contextLength
                 return (
                   <Box key={option.value} flexDirection="row">
@@ -2799,9 +2852,7 @@ export function ModelSelector({
               <Text>
                 <Text bold>Context Length: </Text>
                 <Text color={theme.suggestion}>
-                  {CONTEXT_LENGTH_OPTIONS.find(
-                    opt => opt.value === contextLength,
-                  )?.label || `${contextLength.toLocaleString()} tokens`}
+                  {getContextLengthLabel(contextLength)}
                 </Text>
               </Text>
 
