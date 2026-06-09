@@ -5,6 +5,7 @@ import { Cost } from '@components/Cost'
 import { FallbackToolUseRejectedMessage } from '@components/FallbackToolUseRejectedMessage'
 import type { Tool, ToolUseContext } from '@tool'
 import { getClients } from '@services/mcpClient'
+import { logMCPError } from '@utils/log'
 import { ListResourcesResultSchema } from '@modelcontextprotocol/sdk/types.js'
 import { DESCRIPTION, PROMPT, TOOL_NAME } from './prompt'
 
@@ -26,6 +27,7 @@ type OutputItem = {
 }
 
 type Output = OutputItem[]
+type ListedResource = Omit<OutputItem, 'server'>
 
 export const ListMcpResourcesTool = {
   name: TOOL_NAME,
@@ -118,12 +120,19 @@ export const ListMcpResourcesTool = {
         )
         if (!result.resources) continue
         resources.push(
-          ...result.resources.map(r => ({
-            ...r,
-            server: wrapped.name,
-          })),
+          ...(result.resources as ListedResource[]).map(
+            (r: ListedResource) => ({
+              ...r,
+              server: wrapped.name,
+            }),
+          ),
         )
-      } catch {}
+      } catch (error) {
+        logMCPError(
+          wrapped.name,
+          `Failed to list resources: ${error instanceof Error ? error.message : String(error)}`,
+        )
+      }
     }
 
     yield {

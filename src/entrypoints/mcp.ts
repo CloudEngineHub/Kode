@@ -19,6 +19,7 @@ import { Command } from '@commands'
 import review from '@commands/review'
 import { lastX } from '@utils/text/generators'
 import { MACRO } from '@constants/macros'
+import { assertJsonPayloadBudget } from '../acp/validation'
 type ToolInput = Record<string, unknown>
 
 const state: {
@@ -74,6 +75,10 @@ export async function startMCPServer(cwd: string): Promise<void> {
       }
 
       try {
+        assertJsonPayloadBudget(args ?? {}, {
+          label: `MCP tool ${name} arguments`,
+        })
+
         if (!(await tool.isEnabled())) {
           throw new Error(`Tool ${name} is not enabled`)
         }
