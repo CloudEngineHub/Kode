@@ -1,4 +1,8 @@
-import { TextBlock, ToolUseBlock } from '@anthropic-ai/sdk/resources/index.mjs'
+import type {
+  ContentBlock,
+  TextBlock,
+  ToolUseBlock,
+} from '@anthropic-ai/sdk/resources/index.mjs'
 import type { AssistantMessage, BinaryFeedbackResult } from './query'
 import { isEqual, zip } from 'lodash-es'
 
@@ -30,23 +34,25 @@ function textContentBlocksEqual(cb1: TextBlock, cb2: TextBlock): boolean {
   return cb1.text === cb2.text
 }
 
-function contentBlocksEqual(
-  cb1: TextBlock | ToolUseBlock,
-  cb2: TextBlock | ToolUseBlock,
-): boolean {
+function contentBlocksEqual(cb1: ContentBlock, cb2: ContentBlock): boolean {
   if (cb1.type !== cb2.type) {
     return false
   }
   if (cb1.type === 'text') {
     return textContentBlocksEqual(cb1, cb2 as TextBlock)
   }
-  cb2 = cb2 as ToolUseBlock
-  return cb1.name === cb2.name && isEqual(cb1.input, cb2.input)
+  if (cb1.type === 'tool_use') {
+    const toolUseBlock = cb2 as ToolUseBlock
+    return (
+      cb1.name === toolUseBlock.name && isEqual(cb1.input, toolUseBlock.input)
+    )
+  }
+  return isEqual(cb1, cb2)
 }
 
 function allContentBlocksEqual(
-  content1: (TextBlock | ToolUseBlock)[],
-  content2: (TextBlock | ToolUseBlock)[],
+  content1: ContentBlock[],
+  content2: ContentBlock[],
 ): boolean {
   if (content1.length !== content2.length) {
     return false

@@ -2,6 +2,7 @@ import { Message } from '@query'
 import type { UUID } from '@kode-types/common'
 import { countTokens } from '@utils/model/tokens'
 import crypto from 'crypto'
+import { createAnthropicUsage } from '@utils/ai/anthropic'
 
 export interface MessageRetentionStrategy {
   type:
@@ -116,11 +117,20 @@ export class MessageContextManager {
     const summaryMessage: Message = {
       type: 'assistant',
       message: {
+        id: crypto.randomUUID(),
+        container: null,
+        model: '<synthetic>',
         role: 'assistant',
+        stop_details: null,
+        stop_reason: 'stop_sequence',
+        stop_sequence: '',
+        type: 'message',
+        usage: createAnthropicUsage(),
         content: [
           {
             type: 'text',
             text: `[CONVERSATION SUMMARY - ${olderMessages.length} messages compressed]\n\n${summary}\n\n[END SUMMARY - Recent context follows...]`,
+            citations: [],
           },
         ],
       },

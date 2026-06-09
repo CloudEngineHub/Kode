@@ -1,6 +1,7 @@
 import { StreamingEvent } from './base'
 import { AssistantMessage } from '@query'
 import { setRequestStatus } from '@utils/session/requestStatus'
+import { createAnthropicUsage } from '@utils/ai/anthropic'
 
 export async function processResponsesStream(
   stream: AsyncGenerator<StreamingEvent>,
@@ -74,9 +75,16 @@ export async function processResponsesStream(
   const assistantMessage: AssistantMessage = {
     type: 'assistant',
     message: {
+      id: responseId,
+      container: null,
+      model: '<responses-stream>',
       role: 'assistant',
       content: contentBlocks,
-      usage: {
+      stop_details: null,
+      stop_reason: 'end_turn',
+      stop_sequence: null,
+      type: 'message',
+      usage: createAnthropicUsage({
         input_tokens: usage.prompt_tokens ?? 0,
         output_tokens: usage.completion_tokens ?? 0,
         prompt_tokens: usage.prompt_tokens ?? 0,
@@ -85,7 +93,7 @@ export async function processResponsesStream(
           usage.totalTokens ??
           (usage.prompt_tokens || 0) + (usage.completion_tokens || 0),
         reasoningTokens: usage.reasoningTokens,
-      },
+      }),
     },
     costUSD: 0,
     durationMs: Date.now() - startTime,

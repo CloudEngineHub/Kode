@@ -1,4 +1,3 @@
-import '@anthropic-ai/sdk/shims/node'
 import Anthropic, { APIConnectionError, APIError } from '@anthropic-ai/sdk'
 import { StreamingEvent } from './adapters/base'
 import { AnthropicBedrock } from '@anthropic-ai/bedrock-sdk'
@@ -74,6 +73,10 @@ import {
   NO_CONTENT_MESSAGE,
   PROMPT_TOO_LONG_ERROR_MESSAGE,
 } from './llmConstants'
+import {
+  createAnthropicUsage,
+  normalizeAnthropicUsage,
+} from '@utils/ai/anthropic'
 
 function isGPT5Model(modelName: string): boolean {
   return modelName.startsWith('gpt-5')
@@ -613,6 +616,7 @@ function convertOpenAIResponseToAnthropic(
         input: toolArgs,
         name: toolName,
         id: toolCall.id?.length > 0 ? toolCall.id : nanoid(),
+        caller: { type: 'direct' },
       })
     }
   }
@@ -1417,6 +1421,7 @@ async function queryAnthropicNative(
         return {
           type: 'text' as const,
           text: block.text,
+          citations: block.citations ?? null,
         }
       } else if (block.type === 'tool_use') {
         return {
@@ -1424,6 +1429,7 @@ async function queryAnthropicNative(
           id: block.id,
           name: block.name,
           input: block.input,
+          caller: block.caller,
         }
       }
       return block
@@ -1432,9 +1438,11 @@ async function queryAnthropicNative(
     const assistantMessage: AssistantMessage = {
       message: {
         id: response.id,
+        container: (response as any).container ?? null,
         content,
         model: response.model,
         role: 'assistant',
+        stop_details: (response as any).stop_details ?? null,
         stop_reason: response.stop_reason,
         stop_sequence: response.stop_sequence,
         type: 'message',
@@ -1909,6 +1917,7 @@ function buildAssistantMessageFromUnifiedResponse(
         input: toolArgs,
         name: toolName,
         id: toolCall.id?.length > 0 ? toolCall.id : nanoid(),
+        caller: { type: 'direct' },
       })
     }
   }
@@ -1916,9 +1925,19 @@ function buildAssistantMessageFromUnifiedResponse(
   return {
     type: 'assistant',
     message: {
+      id:
+        unifiedResponse.responseId ??
+        unifiedResponse.id ??
+        `resp_${Date.now()}`,
+      container: null,
+      model: unifiedResponse.model ?? '<unified>',
       role: 'assistant',
       content: contentBlocks,
-      usage: {
+      stop_details: null,
+      stop_reason: unifiedResponse.stopReason ?? 'end_turn',
+      stop_sequence: null,
+      type: 'message',
+      usage: createAnthropicUsage({
         input_tokens:
           unifiedResponse.usage?.promptTokens ??
           unifiedResponse.usage?.input_tokens ??
@@ -1951,7 +1970,7 @@ function buildAssistantMessageFromUnifiedResponse(
             (unifiedResponse.usage?.completionTokens ??
               unifiedResponse.usage?.output_tokens ??
               0),
-      },
+      }),
     },
     costUSD: 0,
     durationMs: Date.now() - startTime,
@@ -1961,34 +1980,7 @@ function buildAssistantMessageFromUnifiedResponse(
 }
 
 function normalizeUsage(usage?: any) {
-  if (!usage) {
-    return {
-      input_tokens: 0,
-      output_tokens: 0,
-      cache_read_input_tokens: 0,
-      cache_creation_input_tokens: 0,
-    }
-  }
-
-  const inputTokens =
-    usage.input_tokens ?? usage.prompt_tokens ?? usage.inputTokens ?? 0
-  const outputTokens =
-    usage.output_tokens ?? usage.completion_tokens ?? usage.outputTokens ?? 0
-  const cacheReadInputTokens =
-    usage.cache_read_input_tokens ??
-    usage.prompt_token_details?.cached_tokens ??
-    usage.cacheReadInputTokens ??
-    0
-  const cacheCreationInputTokens =
-    usage.cache_creation_input_tokens ?? usage.cacheCreatedInputTokens ?? 0
-
-  return {
-    ...usage,
-    input_tokens: inputTokens,
-    output_tokens: outputTokens,
-    cache_read_input_tokens: cacheReadInputTokens,
-    cache_creation_input_tokens: cacheCreationInputTokens,
-  }
+  return normalizeAnthropicUsage(usage)
 }
 
 function getModelInputTokenCostUSD(model: string): number {

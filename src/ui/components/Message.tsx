@@ -21,6 +21,7 @@ import { NormalizedMessage } from '@utils/messages'
 import { AssistantThinkingMessage } from './messages/AssistantThinkingMessage'
 import { AssistantRedactedThinkingMessage } from './messages/AssistantRedactedThinkingMessage'
 import { useTerminalSize } from '@hooks/useTerminalSize'
+import type { ToolUseLikeBlockParam } from '@utils/ai/anthropic'
 
 type Props = {
   message: UserMessage | AssistantMessage
@@ -160,7 +161,7 @@ function AssistantMessage({
     | TextBlockParam
     | ImageBlockParam
     | ThinkingBlockParam
-    | ToolUseBlockParam
+    | ToolUseLikeBlockParam
     | ToolResultBlockParam
   costUSD: number
   durationMs: number
