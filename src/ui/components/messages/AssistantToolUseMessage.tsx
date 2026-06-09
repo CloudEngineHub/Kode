@@ -1,7 +1,7 @@
 import { Box, Text } from 'ink'
 import React from 'react'
 import { logError } from '@utils/log'
-import { ToolUseBlockParam } from '@anthropic-ai/sdk/resources/index.mjs'
+import type { ToolUseLikeBlockParam } from '@utils/ai/anthropic'
 import { Tool } from '@tool'
 import { Cost } from '@components/Cost'
 import { ToolUseLoader } from '@components/ToolUseLoader'
@@ -11,7 +11,7 @@ import { TaskToolMessage } from './TaskToolMessage'
 import { resolveToolNameAlias } from '@utils/tooling/toolNameAliases'
 
 type Props = {
-  param: ToolUseBlockParam
+  param: ToolUseLikeBlockParam
   costUSD: number
   durationMs: number
   addMargin: boolean

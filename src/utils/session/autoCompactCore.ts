@@ -13,6 +13,7 @@ import { getModelManager } from '@utils/model'
 import { debug as debugLogger } from '@utils/log/debugLogger'
 import { logError } from '@utils/log'
 import { calculateAutoCompactThresholds } from './autoCompactThreshold'
+import { createAnthropicUsage } from '@utils/ai/anthropic'
 
 async function getMainConversationContextLimit(): Promise<number> {
   try {
@@ -164,12 +165,9 @@ async function executeAutoCompact(
     )
   }
 
-  summaryResponse.message.usage = {
-    input_tokens: 0,
+  summaryResponse.message.usage = createAnthropicUsage({
     output_tokens: summaryResponse.message.usage.output_tokens,
-    cache_creation_input_tokens: 0,
-    cache_read_input_tokens: 0,
-  }
+  })
 
   const recoveredFiles = await selectAndReadFiles()
 

@@ -1,12 +1,12 @@
 import { Box, Text } from 'ink'
 import * as React from 'react'
-import { Hunk } from 'diff'
+import type { StructuredPatchHunk } from 'diff'
 import { getTheme, ThemeNames } from '@utils/theme'
 import { useMemo } from 'react'
 import { wrapText } from '@utils/terminal/format'
 
 type Props = {
-  patch: Hunk
+  patch: StructuredPatchHunk
   dim: boolean
   width: number
   overrideTheme?: ThemeNames

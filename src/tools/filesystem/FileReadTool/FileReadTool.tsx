@@ -1,7 +1,4 @@
-import {
-  DocumentBlockParam,
-  ImageBlockParam,
-} from '@anthropic-ai/sdk/resources/index.mjs'
+import { DocumentBlockParam } from '@anthropic-ai/sdk/resources/index.mjs'
 import { statSync } from 'fs'
 import { Box, Text } from 'ink'
 import * as path from 'node:path'
@@ -29,6 +26,10 @@ import { DESCRIPTION, PROMPT } from './prompt'
 import { hasReadPermission } from '@utils/permissions/filesystem'
 import { secureFileService } from '@utils/fs/secureFile'
 import { readFileBun, fileExistsBun, getFileSizeBun } from '@utils/bun/file'
+import {
+  type AnthropicImageMediaType,
+  normalizeImageMediaType,
+} from '@utils/ai/anthropic'
 
 const MAX_LINES_TO_RENDER = 5
 const MAX_LINE_LENGTH = 2000
@@ -432,7 +433,7 @@ export const FileReadTool = {
       type: 'image'
       file: {
         base64: string
-        type: ImageBlockParam.Source['media_type']
+        type: AnthropicImageMediaType
         originalSize: number
       }
     }
@@ -454,18 +455,19 @@ function createImageResponse(
   type: 'image'
   file: {
     base64: string
-    type: ImageBlockParam.Source['media_type']
+    type: AnthropicImageMediaType
     originalSize: number
   }
 } {
-  const normalized: ImageBlockParam.Source['media_type'] =
+  const normalized = normalizeImageMediaType(
     ext === '.jpg' || ext === '.jpeg'
       ? 'image/jpeg'
       : ext === '.png'
         ? 'image/png'
         : ext === '.gif'
           ? 'image/gif'
-          : 'image/webp'
+          : 'image/webp',
+  )
   return {
     type: 'image',
     file: {
@@ -483,7 +485,7 @@ async function readImage(
   type: 'image'
   file: {
     base64: string
-    type: ImageBlockParam.Source['media_type']
+    type: AnthropicImageMediaType
     originalSize: number
   }
 }> {

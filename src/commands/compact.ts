@@ -9,6 +9,7 @@ import { getCodeStyle } from '@utils/config/style'
 import { clearTerminal } from '@utils/terminal'
 import { resetReminderSession } from '@services/systemReminder'
 import { resetFileFreshnessSession } from '@services/fileFreshness'
+import { createAnthropicUsage } from '@utils/ai/anthropic'
 
 const COMPRESSION_PROMPT = `Please provide a comprehensive summary of our conversation structured as follows:
 
@@ -88,12 +89,9 @@ const compact = {
       throw new Error(summary)
     }
 
-    summaryResponse.message.usage = {
-      input_tokens: 0,
+    summaryResponse.message.usage = createAnthropicUsage({
       output_tokens: summaryResponse.message.usage.output_tokens,
-      cache_creation_input_tokens: 0,
-      cache_read_input_tokens: 0,
-    }
+    })
 
     await clearTerminal()
     getMessagesSetter()([])

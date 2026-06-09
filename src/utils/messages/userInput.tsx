@@ -146,12 +146,17 @@ export async function processUserInput(
       return []
     }
 
+    const secondMessageContent =
+      newMessages[1]?.type === 'assistant'
+        ? (newMessages[1].message as { content?: unknown }).content
+        : null
+
     if (
       newMessages.length === 2 &&
       newMessages[0]!.type === 'user' &&
       newMessages[1]!.type === 'assistant' &&
-      typeof newMessages[1]!.message.content === 'string' &&
-      newMessages[1]!.message.content.startsWith('Unknown command:')
+      typeof secondMessageContent === 'string' &&
+      secondMessageContent.startsWith('Unknown command:')
     ) {
       return newMessages
     }

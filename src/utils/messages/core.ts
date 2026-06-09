@@ -12,6 +12,7 @@ import {
   ContentBlockParam,
   ContentBlock,
 } from '@anthropic-ai/sdk/resources/index.mjs'
+import { createAnthropicUsage } from '@utils/ai/anthropic'
 
 export const INTERRUPT_MESSAGE = '[Request interrupted by user]'
 export const INTERRUPT_MESSAGE_FOR_TOOL_USE =
@@ -48,17 +49,14 @@ function baseCreateAssistantMessage(
     uuid: randomUUID(),
     message: {
       id: randomUUID(),
+      container: null,
       model: '<synthetic>',
       role: 'assistant',
+      stop_details: null,
       stop_reason: 'stop_sequence',
       stop_sequence: '',
       type: 'message',
-      usage: {
-        input_tokens: 0,
-        output_tokens: 0,
-        cache_creation_input_tokens: 0,
-        cache_read_input_tokens: 0,
-      },
+      usage: createAnthropicUsage(),
       content,
     },
     ...extra,

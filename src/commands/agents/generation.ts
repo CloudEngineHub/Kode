@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto'
 import type { AgentConfig } from '@utils/agent/loader'
 import { debug as debugLogger } from '@utils/log/debugLogger'
 import { logError } from '@utils/log'
+import { extractTextFromContent } from '@utils/ai/anthropic'
 
 export type GeneratedAgent = {
   identifier: string
@@ -33,17 +34,7 @@ Make the agent highly specialized and effective for the described use case.`
     ] as any
     const response = await queryModel('main', messages, [systemPrompt])
 
-    let responseText = ''
-    if (typeof response.message?.content === 'string') {
-      responseText = response.message.content
-    } else if (Array.isArray(response.message?.content)) {
-      const textContent = response.message.content.find(
-        (c: any) => c.type === 'text',
-      )
-      responseText = textContent?.text || ''
-    } else if (response.message?.content?.[0]?.text) {
-      responseText = response.message.content[0].text
-    }
+    const responseText = extractTextFromContent(response.message?.content) ?? ''
 
     if (!responseText) {
       throw new Error('No text content in model response')
