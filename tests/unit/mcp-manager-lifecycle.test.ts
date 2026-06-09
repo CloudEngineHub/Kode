@@ -11,7 +11,10 @@ function createMockSdkClient() {
   } as any
 }
 
-const sdkClientsByName = new Map<string, ReturnType<typeof createMockSdkClient>>()
+const sdkClientsByName = new Map<
+  string,
+  ReturnType<typeof createMockSdkClient>
+>()
 
 function getOrCreateSdkClient(name: string) {
   let client = sdkClientsByName.get(name)

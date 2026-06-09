@@ -23,10 +23,7 @@ describe('MCP content normalization', () => {
       },
     }
 
-    const messages = await runCommand(
-      { name: 'screenshot', client },
-      {},
-    )
+    const messages = await runCommand({ name: 'screenshot', client }, {})
 
     expect(messages).toEqual([
       {
@@ -65,10 +62,7 @@ describe('MCP content normalization', () => {
       },
     }
 
-    const messages = await runCommand(
-      { name: 'screenshot', client },
-      {},
-    )
+    const messages = await runCommand({ name: 'screenshot', client }, {})
 
     expect((messages[0]!.content as any[])[0].source.media_type).toBe(
       'image/png',
@@ -96,10 +90,7 @@ describe('MCP content normalization', () => {
       },
     }
 
-    const messages = await runCommand(
-      { name: 'screenshot', client },
-      {},
-    )
+    const messages = await runCommand({ name: 'screenshot', client }, {})
 
     expect((messages[0]!.content as any[])[0].source.media_type).toBe(
       'image/png',

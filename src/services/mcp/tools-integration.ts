@@ -4,7 +4,10 @@ import { MCPTool } from '@tools/mcp/MCPTool/MCPTool'
 import { logMCPError } from '@utils/log'
 import { debug } from '@utils/log/debugLogger'
 import type { Command } from '@commands'
-import type { MessageParam, ToolResultBlockParam } from '@anthropic-ai/sdk/resources/index.mjs'
+import type {
+  MessageParam,
+  ToolResultBlockParam,
+} from '@anthropic-ai/sdk/resources/index.mjs'
 import {
   CallToolResultSchema,
   PromptListChangedNotificationSchema,
