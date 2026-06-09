@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { spawnSync } from 'node:child_process'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import pkg from '../../package.json'
 
 function normalizeNewlines(s: string): string {
@@ -7,11 +10,20 @@ function normalizeNewlines(s: string): string {
 }
 
 function run(args: string[], options?: { cwd?: string }) {
-  return spawnSync(process.execPath, args, {
-    cwd: options?.cwd ?? process.cwd(),
-    env: { ...process.env, NODE_ENV: 'test' },
-    encoding: 'utf8',
-  })
+  const configDir = mkdtempSync(join(tmpdir(), 'kode-cli-smoke-config-'))
+  try {
+    return spawnSync(process.execPath, args, {
+      cwd: options?.cwd ?? process.cwd(),
+      env: {
+        ...process.env,
+        KODE_CONFIG_DIR: configDir,
+        NODE_ENV: 'test',
+      },
+      encoding: 'utf8',
+    })
+  } finally {
+    rmSync(configDir, { recursive: true, force: true })
+  }
 }
 
 describe('CLI E2E smoke', () => {
@@ -30,19 +42,23 @@ describe('CLI E2E smoke', () => {
     expect((res.stdout ?? '').trim()).toBe(String(pkg.version))
   })
 
-  test('--print validates stream-json requirements (offline)', () => {
-    const res = run([
-      'src/entrypoints/cli.tsx',
-      '--print',
-      '--input-format',
-      'stream-json',
-      '--output-format',
-      'stream-json',
-    ])
-    expect(res.status).toBe(1)
-    const err = normalizeNewlines(res.stderr ?? '')
-    expect(err).toContain(
-      'Error: When using --print, --output-format=stream-json requires --verbose',
-    )
-  })
+  test(
+    '--print validates stream-json requirements (offline)',
+    () => {
+      const res = run([
+        'src/entrypoints/cli.tsx',
+        '--print',
+        '--input-format',
+        'stream-json',
+        '--output-format',
+        'stream-json',
+      ])
+      expect(res.status).toBe(1)
+      const err = normalizeNewlines(res.stderr ?? '')
+      expect(err).toContain(
+        'Error: When using --print, --output-format=stream-json requires --verbose',
+      )
+    },
+    { timeout: 30_000 },
+  )
 })

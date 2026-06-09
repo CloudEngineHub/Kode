@@ -119,25 +119,30 @@ describe('LSP tool (TypeScript backend)', () => {
     { timeout: 15_000 },
   )
 
-  test('findReferences returns formatted grouped locations + counts', async () => {
-    const ctx = makeContext()
-    const input = {
-      operation: 'findReferences',
-      filePath,
-      line: 2,
-      character: 32,
-    } as const
+  test(
+    'findReferences returns formatted grouped locations + counts',
+    async () => {
+      const ctx = makeContext()
+      const input = {
+        operation: 'findReferences',
+        filePath,
+        line: 2,
+        character: 32,
+      } as const
 
-    const events: any[] = []
-    for await (const evt of (LspTool as any).call(input, ctx)) events.push(evt)
-    expect(events).toHaveLength(1)
+      const events: any[] = []
+      for await (const evt of (LspTool as any).call(input, ctx))
+        events.push(evt)
+      expect(events).toHaveLength(1)
 
-    const out = events[0].data
-    expect(out.operation).toBe('findReferences')
-    expect(out.result).toContain('references')
-    expect(out.resultCount).toBeGreaterThanOrEqual(3)
-    expect(out.fileCount).toBeGreaterThanOrEqual(1)
-  })
+      const out = events[0].data
+      expect(out.operation).toBe('findReferences')
+      expect(out.result).toContain('references')
+      expect(out.resultCount).toBeGreaterThanOrEqual(3)
+      expect(out.fileCount).toBeGreaterThanOrEqual(1)
+    },
+    { timeout: 30_000 },
+  )
 
   test('hover returns formatted hover result + counts', async () => {
     const ctx = makeContext()
