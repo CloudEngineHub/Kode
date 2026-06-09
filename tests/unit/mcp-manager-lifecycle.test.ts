@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test'
 import type { WrappedClient } from '../../src/services/mcp/connection'
+import { MCPClientManager } from '../../src/services/mcp/manager'
 
 function createMockSdkClient() {
   return {
@@ -34,15 +35,6 @@ const mockConnectMcpServer = mock(
   }),
 )
 
-mock.module('../../src/services/mcp/connection', () => ({
-  connectMcpServer: mockConnectMcpServer,
-  captureMcpCapabilities: () => null,
-  getMcpConnectionTimeoutMs: () => 5_000,
-  getMcpServerConnectionBatchSize: () => 3,
-}))
-
-const { MCPClientManager } = await import('../../src/services/mcp/manager')
-
 const stdioServer = { command: 'echo', args: [] } as any
 
 function staleHealthCheck(manager: any, name: string) {
@@ -57,7 +49,7 @@ describe('MCPClientManager', () => {
   })
 
   test('connects to new servers', async () => {
-    const manager = new MCPClientManager()
+    const manager = new MCPClientManager(mockConnectMcpServer as any)
 
     const results = await manager.getClientsForServers({ alpha: stdioServer })
 
@@ -68,7 +60,7 @@ describe('MCPClientManager', () => {
   })
 
   test('reuses connection when health check is not yet due', async () => {
-    const manager = new MCPClientManager()
+    const manager = new MCPClientManager(mockConnectMcpServer as any)
     const servers = { alpha: stdioServer }
 
     const first = await manager.getClientsForServers(servers)
@@ -79,7 +71,7 @@ describe('MCPClientManager', () => {
   })
 
   test('reconnects when ping fails', async () => {
-    const manager = new MCPClientManager()
+    const manager = new MCPClientManager(mockConnectMcpServer as any)
     const servers = { alpha: stdioServer }
 
     await manager.getClientsForServers(servers)
@@ -102,7 +94,7 @@ describe('MCPClientManager', () => {
   })
 
   test('closes removed servers by default (closeMissing=true)', async () => {
-    const manager = new MCPClientManager()
+    const manager = new MCPClientManager(mockConnectMcpServer as any)
 
     await manager.getClientsForServers({
       alpha: stdioServer,
@@ -117,7 +109,7 @@ describe('MCPClientManager', () => {
   })
 
   test('keeps removed servers when closeMissing=false', async () => {
-    const manager = new MCPClientManager()
+    const manager = new MCPClientManager(mockConnectMcpServer as any)
 
     await manager.getClientsForServers({
       alpha: stdioServer,
@@ -135,7 +127,7 @@ describe('MCPClientManager', () => {
   })
 
   test('reconnects when server config changes', async () => {
-    const manager = new MCPClientManager()
+    const manager = new MCPClientManager(mockConnectMcpServer as any)
 
     await manager.getClientsForServers({
       alpha: { command: 'echo', args: ['v1'] } as any,
@@ -153,7 +145,7 @@ describe('MCPClientManager', () => {
   })
 
   test('clear() closes all connections', async () => {
-    const manager = new MCPClientManager()
+    const manager = new MCPClientManager(mockConnectMcpServer as any)
 
     await manager.getClientsForServers({
       alpha: stdioServer,
@@ -170,7 +162,7 @@ describe('MCPClientManager', () => {
   })
 
   test('returns failed type when connection fails', async () => {
-    const manager = new MCPClientManager()
+    const manager = new MCPClientManager(mockConnectMcpServer as any)
     mockConnectMcpServer.mockImplementationOnce(async () => ({
       name: 'alpha',
       type: 'failed' as const,
@@ -183,7 +175,7 @@ describe('MCPClientManager', () => {
   })
 
   test('does not retry failed server within FAILED_RETRY_INTERVAL_MS', async () => {
-    const manager = new MCPClientManager()
+    const manager = new MCPClientManager(mockConnectMcpServer as any)
     mockConnectMcpServer.mockImplementation(async () => ({
       name: 'alpha',
       type: 'failed' as const,

@@ -63,6 +63,11 @@ async function pingWrappedClient(client: WrappedClient): Promise<boolean> {
 
 export class MCPClientManager {
   private readonly clients = new Map<string, ManagedClientEntry>()
+  private readonly connector: typeof connectMcpServer
+
+  constructor(connector?: typeof connectMcpServer) {
+    this.connector = connector ?? connectMcpServer
+  }
 
   async getClientsForServers(
     servers: Record<string, McpServerConfig>,
@@ -155,7 +160,7 @@ export class MCPClientManager {
       }
     }
 
-    const wrapped = await connectMcpServer(name, serverRef, {
+    const wrapped = await this.connector(name, serverRef, {
       clientVersion: options?.clientVersion,
     })
     this.clients.set(name, {
