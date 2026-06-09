@@ -8,6 +8,7 @@ import { queryQuick } from '@services/llmLazy'
 import { PROMPT, TOOL_NAME_FOR_PROMPT } from './prompt'
 import { convertHtmlToMarkdown } from './htmlToMarkdown'
 import { urlCache } from './cache'
+import { extractTextFromContent } from '@utils/ai/anthropic'
 
 const inputSchema = z.strictObject({
   url: z.string().url().describe('The URL to fetch content from'),
@@ -399,7 +400,8 @@ To complete your request, I need to fetch content from the redirected URL. Pleas
       })
 
       const result =
-        aiResponse.message.content[0]?.text || 'No response from model'
+        extractTextFromContent(aiResponse.message.content) ||
+        'No response from model'
 
       const output: Output = {
         bytes,
