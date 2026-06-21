@@ -33,7 +33,7 @@ export function StepSelectTools(props: {
           />
         </Box>
       </Panel>
-      <Instructions instructions="Press Enter to activate - Up/Down to navigate - Esc to go back" />
+      <Instructions instructions="Enter activate - c continue - a all/none - Up/Down or j/k navigate - Esc back" />
     </>
   )
 }

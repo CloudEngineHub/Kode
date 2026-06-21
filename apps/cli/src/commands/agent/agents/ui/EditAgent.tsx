@@ -139,7 +139,7 @@ export function EditAgent(props: {
             </Box>
           ) : null}
         </Panel>
-        <Instructions instructions="Press Enter to toggle selection - Up/Down Navigate - Esc to go back" />
+        <Instructions instructions="Enter activate - c continue - a all/none - Up/Down or j/k navigate - Esc back" />
       </>
     )
   }

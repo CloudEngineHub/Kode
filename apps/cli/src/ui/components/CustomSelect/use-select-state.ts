@@ -202,7 +202,7 @@ export const useSelectState = ({
   onFocus,
   focusValue,
 }: UseSelectStateProps) => {
-  const flatOptions = flattenOptions(options)
+  const flatOptions = useMemo(() => flattenOptions(options), [options])
 
   const [state, dispatch] = useReducer(
     reducer,
