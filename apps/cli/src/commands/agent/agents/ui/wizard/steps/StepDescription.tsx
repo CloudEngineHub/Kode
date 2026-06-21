@@ -32,7 +32,7 @@ export function StepDescription({ ctx }: { ctx: WizardContextValue }) {
   return (
     <WizardPanel
       subtitle="Description (tell the agent when to use this agent)"
-      footerText="Press Enter to continue · Esc to go back"
+      footerText="Press Enter to continue - Esc to go back"
     >
       <Box flexDirection="column" marginTop={1} gap={1}>
         <Text>When should this agent be used?</Text>

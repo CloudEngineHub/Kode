@@ -16,7 +16,7 @@ export function StepChooseMethod({ ctx }: { ctx: WizardContextValue }) {
   return (
     <WizardPanel
       subtitle="Creation method"
-      footerText="Press ↑↓ to navigate · Enter to select · Esc to go back"
+      footerText="Press Up/Down to navigate - Enter to select - Esc to go back"
     >
       <Box marginTop={1}>
         <Select

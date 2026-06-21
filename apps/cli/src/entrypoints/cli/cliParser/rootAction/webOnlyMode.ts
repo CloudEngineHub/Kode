@@ -2,27 +2,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { exec } from 'node:child_process'
 import { LEGACY_ENV } from '#core/compat/legacyEnv'
-
-function openBrowser(url: string): void {
-  const platform = process.platform
-  let cmd: string
-
-  if (platform === 'darwin') {
-    cmd = `open "${url}"`
-  } else if (platform === 'win32') {
-    cmd = `start "" "${url}"`
-  } else {
-    cmd = `xdg-open "${url}"`
-  }
-
-  exec(cmd, err => {
-    if (err) {
-      // Silent fail - user can still click the link
-    }
-  })
-}
+import { openBrowser } from '#core/utils/browser'
 
 function getKodeConfigDir(): string {
   const envDir =
@@ -89,7 +70,7 @@ export async function runWebOnlyMode(args: {
   console.log('Press Ctrl+C to stop')
   console.log('')
 
-  openBrowser(daemon.url)
+  void openBrowser(daemon.url)
 
   await new Promise<void>(resolve => {
     const cleanup = () => {

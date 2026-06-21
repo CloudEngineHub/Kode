@@ -118,8 +118,8 @@ export function AgentsUI({ onExit }: { onExit: (message?: string) => void }) {
   if (loading) {
     return (
       <>
-        <Panel title="Agents" subtitle="Loading…">
-          <Text dimColor>Loading agents…</Text>
+        <Panel title="Agents" subtitle="Loading...">
+          <Text dimColor>Loading agents...</Text>
         </Panel>
         <Instructions />
       </>

@@ -43,7 +43,7 @@ export function DeleteConfirm(props: {
           </Box>
         </Box>
       </Panel>
-      <Instructions instructions="Press ↑↓ to navigate, Enter to select, Esc to cancel" />
+      <Instructions instructions="Press Up/Down to navigate, Enter to select, Esc to cancel" />
     </>
   )
 }

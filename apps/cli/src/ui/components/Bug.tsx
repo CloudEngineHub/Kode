@@ -1,13 +1,12 @@
 import { Box, Text } from 'ink'
 import * as React from 'react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 
 import { GITHUB_ISSUES_REPO_URL } from '#core/constants/product'
 import { MACRO } from '#core/constants/macros'
 import { getGlobalConfig } from '#core/utils/config'
 import { env } from '#core/utils/env'
 import { openBrowser } from '#core/utils/browser'
-import { getTheme } from '#core/utils/theme'
 import { useExitOnCtrlCD } from '#ui-ink/hooks/useExitOnCtrlCD'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
@@ -22,11 +21,12 @@ type Props = {
 type Step = 'userInput' | 'consent'
 
 export function Bug({ onDone }: Props): React.ReactNode {
-  const theme = getTheme()
   const layout = useScreenLayout()
   const [step, setStep] = useState<Step>('userInput')
   const [cursorOffset, setCursorOffset] = useState(0)
   const [description, setDescription] = useState('')
+  const [isOpening, setIsOpening] = useState(false)
+  const isOpeningRef = useRef(false)
   const textInputColumns = Math.max(
     10,
     layout.columns - layout.paddingX * 2 - 10,
@@ -35,20 +35,45 @@ export function Bug({ onDone }: Props): React.ReactNode {
   const exitState = useExitOnCtrlCD(() => process.exit(0))
 
   const canContinue = description.trim().length > 0
+  const footerText = getBugFooterText({
+    exitPending: exitState.pending,
+    exitKeyName: exitState.keyName,
+    step,
+    canContinue,
+    isOpening,
+  })
+
+  const openIssue = async () => {
+    if (isOpeningRef.current) return
+
+    isOpeningRef.current = true
+    setIsOpening(true)
+    const issueUrl = createGitHubIssueUrl({
+      title: (description.trim() || 'Bug Report').slice(0, 80),
+      description: description.trim(),
+    })
+    const opened = await openBrowser(issueUrl)
+
+    if (opened) {
+      onDone('<bash-stdout>Opened GitHub issue</bash-stdout>')
+    } else {
+      onDone(
+        `<bash-stderr>Failed to open browser. Open this URL manually:\n${issueUrl}</bash-stderr>`,
+      )
+    }
+  }
 
   useKeypress((input, key) => {
+    if (isOpeningRef.current) return true
+
     if (key.escape) {
       onDone('<bash-stderr>Bug report cancelled</bash-stderr>')
       return
     }
 
     if (step === 'consent' && (key.return || input === ' ')) {
-      const issueUrl = createGitHubIssueUrl({
-        title: (description.trim() || 'Bug Report').slice(0, 80),
-        description: description.trim(),
-      })
-      void openBrowser(issueUrl)
-      onDone('<bash-stdout>Opened GitHub issue</bash-stdout>')
+      void openIssue()
+      return true
     }
   })
 
@@ -99,25 +124,52 @@ export function Bug({ onDone }: Props): React.ReactNode {
               </Text>
               <Text wrap="truncate-end">- Model settings (no API keys)</Text>
             </Box>
-            <Text wrap="truncate-end">
-              Press <Text bold>Enter</Text> to open GitHub and create an issue.
-            </Text>
+            {isOpening ? (
+              <Text wrap="truncate-end">Opening GitHub...</Text>
+            ) : (
+              <Text wrap="truncate-end">
+                Press <Text bold>Enter</Text> to open GitHub and create an
+                issue.
+              </Text>
+            )}
           </Box>
         )}
 
         <Box marginTop={layout.tightLayout ? 0 : 1}>
           <Text dimColor wrap="truncate-end">
-            {exitState.pending
-              ? `Press ${exitState.keyName} again to exit`
-              : step === 'userInput'
-                ? 'Enter to continue · Esc to cancel'
-                : 'Enter to open browser · Esc to cancel'}
+            {footerText}
           </Text>
         </Box>
       </Box>
     </ScreenFrame>
   )
 }
+
+function getBugFooterText(args: {
+  exitPending: boolean
+  exitKeyName: string
+  step: 'userInput' | 'consent'
+  canContinue: boolean
+  isOpening?: boolean
+}): string {
+  if (args.isOpening) {
+    return 'Opening browser...'
+  }
+
+  if (args.exitPending) {
+    return `Press ${args.exitKeyName} again to exit`
+  }
+
+  if (args.step === 'userInput') {
+    return args.canContinue
+      ? 'Enter to continue - Esc to cancel'
+      : 'Type a description - Esc to cancel'
+  }
+
+  return 'Enter to open browser - Esc to cancel'
+}
+
+export const __getBugFooterTextForTests = getBugFooterText
 
 function createGitHubIssueUrl(args: {
   title: string
@@ -135,7 +187,7 @@ function createGitHubIssueUrl(args: {
       modelInfo += `- ${profile.name}\\n`
       modelInfo += `    - provider: ${profile.provider}\\n`
       modelInfo += `    - model: ${profile.modelName}\\n`
-      modelInfo += `    - baseURL: ${profile.baseURL}\\n`
+      modelInfo += `    - baseURL: ${redactBugReportUrl(profile.baseURL)}\\n`
       modelInfo += `    - maxTokens: ${profile.maxTokens}\\n`
       modelInfo += `    - contextLength: ${profile.contextLength}\\n`
       if (profile.reasoningEffort) {
@@ -157,3 +209,27 @@ ${modelInfo}`)
 
   return `${GITHUB_ISSUES_REPO_URL}/new?title=${encodeURIComponent(args.title)}&body=${body}&labels=user-reported,bug`
 }
+
+function redactBugReportUrl(rawValue: unknown): string {
+  const raw = String(rawValue ?? '')
+  if (!raw) return ''
+
+  try {
+    const url = new URL(raw)
+    url.username = ''
+    url.password = ''
+    for (const key of Array.from(url.searchParams.keys())) {
+      if (/(api[_-]?key|token|secret|password|credential|auth)/i.test(key)) {
+        url.searchParams.set(key, '[redacted]')
+      }
+    }
+    return url.toString()
+  } catch {
+    return raw.replace(
+      /(api[_-]?key|token|secret|password|credential|auth)=([^&\s]+)/gi,
+      '$1=[redacted]',
+    )
+  }
+}
+
+export const __redactBugReportUrlForTests = redactBugReportUrl

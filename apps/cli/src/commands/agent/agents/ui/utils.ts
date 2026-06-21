@@ -4,32 +4,53 @@ import { getModelManager } from '#core/utils/model'
 import type { AgentSourceFilter } from './types'
 import { DEFAULT_AGENT_MODEL } from './types'
 
+const EDITOR_OPEN_TIMEOUT_MS = 10_000
+
+function getOpenInEditorCommand(
+  filePath: string,
+  platform: NodeJS.Platform = process.platform,
+): { command: string; args: string[] } {
+  if (platform === 'darwin') {
+    return { command: 'open', args: [filePath] }
+  }
+
+  if (platform === 'win32') {
+    return {
+      command: 'rundll32.exe',
+      args: ['url.dll,FileProtocolHandler', filePath],
+    }
+  }
+
+  return { command: 'xdg-open', args: [filePath] }
+}
+
+export const __getOpenInEditorCommandForTests = getOpenInEditorCommand
+
 export function openInEditor(filePath: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const platform = process.platform
-    let command: string
-    let args: string[]
+    const { command, args } = getOpenInEditorCommand(filePath)
+    let settled = false
+    let timeout: ReturnType<typeof setTimeout> | undefined
 
-    switch (platform) {
-      case 'darwin':
-        command = 'open'
-        args = [filePath]
-        break
-      case 'win32':
-        command = 'cmd'
-        args = ['/c', 'start', '', filePath]
-        break
-      default:
-        command = 'xdg-open'
-        args = [filePath]
-        break
+    const finish = (callback: () => void) => {
+      if (settled) return
+      settled = true
+      if (timeout) clearTimeout(timeout)
+      callback()
     }
 
     const child = spawn(command, args, { detached: true, stdio: 'ignore' })
+    timeout = setTimeout(() => {
+      child.kill()
+      finish(() => reject(new Error('Timed out launching editor')))
+    }, EDITOR_OPEN_TIMEOUT_MS)
+
     child.unref()
-    child.on('error', err => reject(err))
+    child.on('error', err => finish(() => reject(err)))
     child.on('exit', code =>
-      code === 0 ? resolve() : reject(new Error(`Editor exited with ${code}`)),
+      code === 0
+        ? finish(resolve)
+        : finish(() => reject(new Error(`Editor exited with ${code}`))),
     )
   })
 }

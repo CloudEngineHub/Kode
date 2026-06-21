@@ -241,7 +241,7 @@ export function ToolPicker(props: {
       >
         {cursorIndex === 0 ? `${figures.pointer} ` : '  '}[ Continue ]
       </Text>
-      <Text dimColor>{'─'.repeat(40)}</Text>
+      <Text dimColor>{'-'.repeat(40)}</Text>
       {items.slice(1).map((item, idx) => {
         const index = idx + 1
         const focused = index === cursorIndex
@@ -252,7 +252,7 @@ export function ToolPicker(props: {
             : '  '
         return (
           <React.Fragment key={item.id}>
-            {item.isToggle ? <Text dimColor>{'─'.repeat(40)}</Text> : null}
+            {item.isToggle ? <Text dimColor>{'-'.repeat(40)}</Text> : null}
             <Text
               dimColor={item.isHeader}
               color={

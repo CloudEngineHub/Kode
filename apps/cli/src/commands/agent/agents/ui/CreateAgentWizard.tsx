@@ -20,7 +20,7 @@ import { StepSystemPrompt } from './wizard/steps/StepSystemPrompt'
 export function CreateAgentWizard(props: {
   tools: Tool[]
   existingAgents: AgentConfig[]
-  onComplete: (message: string) => void
+  onComplete: (message: string) => void | Promise<void>
   onCancel: () => void
 }) {
   const steps = useMemo(() => {
@@ -63,13 +63,13 @@ export function CreateAgentWizard(props: {
                 finalAgent.agentType,
               )
               await openInEditor(path)
-              props.onComplete(
+              await props.onComplete(
                 `Created agent: ${chalk.bold(finalAgent.agentType)} and opened in editor. If you made edits, restart to load the latest version.`,
               )
               return
             }
 
-            props.onComplete(
+            await props.onComplete(
               `Created agent: ${chalk.bold(finalAgent.agentType)}`,
             )
           }}

@@ -20,7 +20,7 @@ export function StepSelectModel({ ctx }: { ctx: WizardContextValue }) {
   return (
     <WizardPanel
       subtitle="Select model"
-      footerText="Press ↑↓ to navigate · Enter to select · Esc to go back"
+      footerText="Press Up/Down to navigate - Enter to select - Esc to go back"
     >
       <Box flexDirection="column" marginTop={1} gap={1}>
         <Text dimColor>

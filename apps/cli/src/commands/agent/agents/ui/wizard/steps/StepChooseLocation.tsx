@@ -15,7 +15,7 @@ export function StepChooseLocation({ ctx }: { ctx: WizardContextValue }) {
   return (
     <WizardPanel
       subtitle="Choose location"
-      footerText="Press ↑↓ to navigate · Enter to select · Esc to cancel"
+      footerText="Press Up/Down to navigate - Enter to select - Esc to cancel"
     >
       <Box marginTop={1}>
         <Select

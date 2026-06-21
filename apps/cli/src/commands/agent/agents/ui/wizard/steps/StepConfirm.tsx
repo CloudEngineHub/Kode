@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import { Box, Text } from 'ink'
 import type { AgentConfig } from '#core/utils/agentLoader'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
@@ -54,6 +54,14 @@ function validateFinalAgent(args: {
   return { errors, warnings }
 }
 
+function getConfirmFooterText(isSaving: boolean): string {
+  return isSaving
+    ? 'Saving agent...'
+    : 'Press s/Enter to save - e to edit in your editor - Esc to cancel'
+}
+
+export const __getConfirmFooterTextForTests = getConfirmFooterText
+
 export function StepConfirm(props: {
   ctx: WizardContextValue
   tools: Tool[]
@@ -63,8 +71,12 @@ export function StepConfirm(props: {
   const { ctx } = props
   const finalAgent = ctx.wizardData.finalAgent
   const [error, setError] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+  const isSavingRef = useRef(false)
 
   useKeypress((input, key) => {
+    if (isSavingRef.current) return true
+
     if (key.escape) {
       ctx.goBack()
       return true
@@ -88,7 +100,8 @@ export function StepConfirm(props: {
   }
 
   const doSave = async (openEditor: boolean) => {
-    if (!finalAgent) return
+    if (!finalAgent || isSavingRef.current) return
+
     const { errors } = validateFinalAgent({
       finalAgent,
       tools: props.tools,
@@ -98,10 +111,16 @@ export function StepConfirm(props: {
       setError(errors[0] ?? 'Invalid agent configuration')
       return
     }
+
+    setError(null)
+    isSavingRef.current = true
+    setIsSaving(true)
     try {
       await props.onSave(finalAgent, openEditor)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
+      isSavingRef.current = false
+      setIsSaving(false)
     }
   }
 
@@ -119,13 +138,12 @@ export function StepConfirm(props: {
       : getPrimaryAgentFilePath('user', finalAgent.agentType)
 
   const truncate = (text: string) =>
-    text.length > 240 ? `${text.slice(0, 240)}…` : text
+    text.length > 240 ? `${text.slice(0, 240)}...` : text
+
+  const footerText = getConfirmFooterText(isSaving)
 
   return (
-    <WizardPanel
-      subtitle="Confirm and save"
-      footerText="Press s/Enter to save · e to edit in your editor · Esc to cancel"
-    >
+    <WizardPanel subtitle="Confirm and save" footerText={footerText}>
       <Box flexDirection="column" marginTop={1} gap={1}>
         <Text>
           <Text bold>Name</Text>: {finalAgent.agentType}
@@ -164,7 +182,7 @@ export function StepConfirm(props: {
             <Text color={themeColor('warning')}>Warnings:</Text>
             {validation.warnings.map((w, i) => (
               <React.Fragment key={i}>
-                <Text dimColor> • {w}</Text>
+                <Text dimColor> - {w}</Text>
               </React.Fragment>
             ))}
           </Box>
@@ -175,9 +193,15 @@ export function StepConfirm(props: {
             <Text color={themeColor('error')}>Errors:</Text>
             {validation.errors.map((e, i) => (
               <React.Fragment key={i}>
-                <Text color={themeColor('error')}> • {e}</Text>
+                <Text color={themeColor('error')}> - {e}</Text>
               </React.Fragment>
             ))}
+          </Box>
+        ) : null}
+
+        {isSaving ? (
+          <Box marginTop={1}>
+            <Text dimColor>Saving agent...</Text>
           </Box>
         ) : null}
 

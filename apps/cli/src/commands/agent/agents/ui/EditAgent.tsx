@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 import { Box, Text } from 'ink'
 import figures from 'figures'
 import chalk from 'chalk'
@@ -22,7 +22,7 @@ import { useKeypress } from '#ui-ink/hooks/useKeypress'
 export function EditAgent(props: {
   agent: AgentWithOverride
   tools: Tool[]
-  onSaved: (message: string) => void
+  onSaved: (message: string) => void | Promise<void>
   onBack: () => void
 }) {
   const [mode, setMode] = useState<
@@ -30,6 +30,8 @@ export function EditAgent(props: {
   >('menu')
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const [isOpeningEditor, setIsOpeningEditor] = useState(false)
+  const isOpeningEditorRef = useRef(false)
 
   const menuItems = useMemo(
     () => [
@@ -42,7 +44,12 @@ export function EditAgent(props: {
   )
 
   const doOpen = async () => {
+    if (isOpeningEditorRef.current) return
+
     try {
+      setError(null)
+      isOpeningEditorRef.current = true
+      setIsOpeningEditor(true)
       const location =
         props.agent.source === 'projectSettings'
           ? 'project'
@@ -53,11 +60,13 @@ export function EditAgent(props: {
         throw new Error(`Cannot open ${props.agent.source} agent in editor`)
       const filePath = getPrimaryAgentFilePath(location, props.agent.agentType)
       await openInEditor(filePath)
-      props.onSaved(
+      await props.onSaved(
         `Opened ${props.agent.agentType} in editor. If you made edits, restart to load the latest version.`,
       )
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
+      isOpeningEditorRef.current = false
+      setIsOpeningEditor(false)
     }
   }
 
@@ -75,13 +84,15 @@ export function EditAgent(props: {
         patch.color ?? props.agent.color,
         patch.model ?? props.agent.model,
       )
-      props.onSaved(`Updated agent: ${chalk.bold(props.agent.agentType)}`)
+      await props.onSaved(`Updated agent: ${chalk.bold(props.agent.agentType)}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     }
   }
 
   useKeypress((_input, key) => {
+    if (isOpeningEditorRef.current) return true
+
     if (key.escape) {
       setError(null)
       if (mode === 'menu') props.onBack()
@@ -128,19 +139,12 @@ export function EditAgent(props: {
             </Box>
           ) : null}
         </Panel>
-        <Instructions instructions="Press Enter to toggle selection · ↑↓ Navigate · Esc to go back" />
+        <Instructions instructions="Press Enter to toggle selection - Up/Down Navigate - Esc to go back" />
       </>
     )
   }
 
   if (mode === 'edit-model') {
-    useKeypress((_input, key) => {
-      if (key.escape) {
-        setMode('menu')
-        return true
-      }
-    })
-
     return (
       <>
         <Panel title={`Edit agent: ${props.agent.agentType}`}>
@@ -220,9 +224,20 @@ export function EditAgent(props: {
               <Text color={themeColor('error')}>{error}</Text>
             </Box>
           ) : null}
+          {isOpeningEditor ? (
+            <Box marginTop={1}>
+              <Text dimColor>Opening editor...</Text>
+            </Box>
+          ) : null}
         </Box>
       </Panel>
-      <Instructions />
+      <Instructions
+        instructions={
+          isOpeningEditor
+            ? 'Opening editor...'
+            : 'Up/Down Navigate - Enter to select - Esc to go back'
+        }
+      />
     </>
   )
 }

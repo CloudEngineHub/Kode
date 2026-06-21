@@ -8,6 +8,11 @@ export type GeneratedAgent = {
   systemPrompt: string
 }
 
+const MAX_JSON_SIZE = 100_000 // 100KB
+const MAX_FIELD_LENGTH = 10_000
+const INVALID_GENERATED_AGENT_JSON_MESSAGE =
+  'Failed to generate agent draft: model returned invalid JSON. Please try again with a more specific description.'
+
 const DEFAULT_AGENT_GENERATION_SYSTEM_PROMPT = `You are an elite AI agent architect specializing in crafting high-performance agent configurations. Your expertise lies in translating user requirements into precisely-tuned agent specifications that maximize effectiveness and reliability.
 
 **Important Context**: You may have access to project-specific instructions (AGENTS.md stack; legacy CLAUDE.md when present) and other context that may include coding standards, project structure, and custom requirements. Consider this context when creating agents to ensure they align with the project's established patterns and practices.
@@ -39,7 +44,7 @@ When a user describes what they want an agent to do, you will:
    - Is memorable and easy to type
    - Avoids generic terms like "helper" or "assistant"
 
-6 **Example agent descriptions**:
+6. **Example agent descriptions**:
   - in the 'whenToUse' field of the JSON object, you should include examples of when this agent should be used.
   - examples should be of the form:
     - <example>
@@ -53,11 +58,11 @@ When a user describes what they want an agent to do, you will:
       assistant: "Now let me use the test-runner agent to run the tests"
     </example>
     - <example>
-      Context: User is creating an agent to respond to the word "hello" with a friendly jok.
+      Context: User is creating an agent to respond to the word "hello" with a friendly joke.
       user: "Hello"
       assistant: "I'm going to use the Task tool to launch the greeting-responder agent to respond with a friendly joke"
       <commentary>
-      Since the user is greeting, use the greeting-responder agent to respond with a friendly joke. 
+      Since the user is greeting, use the greeting-responder agent to respond with a friendly joke.
       </commentary>
     </example>
   - If the user mentioned or implied that the agent should be used proactively, you should include examples of this.
@@ -80,6 +85,155 @@ Key principles for your system prompts:
 
 Remember: The agents you create should be autonomous experts capable of handling their designated tasks with minimal additional guidance. Your system prompts are their complete operational manual.
 `
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  return value as Record<string, unknown>
+}
+
+function extractBalancedJsonObjects(text: string): string[] {
+  const objects: string[] = []
+  const startIdx = text.indexOf('{')
+  if (startIdx === -1) return objects
+
+  let depth = 0
+  let inString = false
+  let escaped = false
+  let objectStartIdx = -1
+
+  for (let i = startIdx; i < text.length; i += 1) {
+    const char = text[i]
+
+    if (inString) {
+      if (escaped) {
+        escaped = false
+      } else if (char === '\\') {
+        escaped = true
+      } else if (char === '"') {
+        inString = false
+      }
+      continue
+    }
+
+    if (char === '"') {
+      inString = true
+      continue
+    }
+
+    if (char === '{') {
+      if (depth === 0) objectStartIdx = i
+      depth += 1
+      continue
+    }
+
+    if (char === '}') {
+      depth -= 1
+      if (depth === 0 && objectStartIdx !== -1) {
+        objects.push(text.slice(objectStartIdx, i + 1))
+        objectStartIdx = -1
+      }
+      if (depth < 0) {
+        depth = 0
+        objectStartIdx = -1
+      }
+    }
+  }
+
+  return objects
+}
+
+function extractFencedJsonCandidates(text: string): string[] {
+  const candidates: string[] = []
+  const fencePattern = /```(?:json)?\s*([\s\S]*?)```/gi
+  let match: RegExpExecArray | null
+
+  while ((match = fencePattern.exec(text)) !== null) {
+    const candidate = match[1]?.trim()
+    if (candidate?.includes('{')) candidates.push(candidate)
+  }
+
+  return candidates
+}
+
+function getGeneratedAgentJsonCandidates(responseText: string): string[] {
+  const trimmed = responseText.trim()
+  const candidates = [
+    trimmed,
+    ...extractFencedJsonCandidates(trimmed),
+    ...extractBalancedJsonObjects(trimmed),
+  ].filter(Boolean)
+
+  return Array.from(new Set(candidates))
+}
+
+function parseGeneratedAgentResponse(responseText: string): GeneratedAgent {
+  if (!responseText) {
+    throw new Error('No text content in model response')
+  }
+
+  if (responseText.length > MAX_JSON_SIZE) {
+    throw new Error('Response too large')
+  }
+
+  let parsed: unknown
+  let lastParseError: unknown
+  for (const candidate of getGeneratedAgentJsonCandidates(responseText)) {
+    if (candidate.length > MAX_JSON_SIZE) {
+      throw new Error('JSON content too large')
+    }
+
+    try {
+      parsed = JSON.parse(candidate)
+      break
+    } catch (error) {
+      lastParseError = error
+    }
+  }
+
+  if (parsed === undefined) {
+    debugLogger.warn('AGENT_GENERATION_INVALID_JSON', {
+      error:
+        lastParseError instanceof Error
+          ? lastParseError.message
+          : String(lastParseError ?? 'No JSON object found'),
+    })
+    throw new Error(INVALID_GENERATED_AGENT_JSON_MESSAGE)
+  }
+
+  const record = asRecord(parsed)
+  const identifier = String(record?.identifier || '')
+    .slice(0, 100)
+    .trim()
+  const whenToUse = String(record?.whenToUse || '')
+    .slice(0, MAX_FIELD_LENGTH)
+    .trim()
+  const agentSystemPrompt = String(record?.systemPrompt || '')
+    .slice(0, MAX_FIELD_LENGTH)
+    .trim()
+
+  if (!identifier || !whenToUse || !agentSystemPrompt) {
+    throw new Error(
+      'Invalid response structure: missing required fields (identifier, whenToUse, systemPrompt)',
+    )
+  }
+
+  const sanitize = (str: string) => str.replace(/[\x00-\x1F\x7F-\x9F]/g, '')
+
+  const cleanIdentifier = sanitize(identifier)
+  if (!/^[a-z0-9-]+$/.test(cleanIdentifier)) {
+    throw new Error(
+      'Invalid identifier format: only lowercase letters, numbers, and hyphens allowed',
+    )
+  }
+
+  return {
+    identifier: cleanIdentifier,
+    whenToUse: sanitize(whenToUse),
+    systemPrompt: sanitize(agentSystemPrompt),
+  }
+}
+
+export const __parseGeneratedAgentResponseForTests = parseGeneratedAgentResponse
 
 export async function generateAgentWithModel(
   prompt: string,
@@ -109,10 +263,6 @@ export async function generateAgentWithModel(
     if (typeof content === 'string') {
       responseText = content
     } else if (Array.isArray(content)) {
-      const asRecord = (value: unknown): Record<string, unknown> | null => {
-        if (!value || typeof value !== 'object') return null
-        return value as Record<string, unknown>
-      }
       const textBlock = content.find(block => {
         const record = asRecord(block)
         return record?.type === 'text' && typeof record.text === 'string'
@@ -126,68 +276,7 @@ export async function generateAgentWithModel(
       throw new Error('No text content in model response')
     }
 
-    const MAX_JSON_SIZE = 100_000 // 100KB
-    const MAX_FIELD_LENGTH = 10_000
-
-    if (responseText.length > MAX_JSON_SIZE) {
-      throw new Error('Response too large')
-    }
-
-    let parsed: any
-    try {
-      parsed = JSON.parse(responseText.trim())
-    } catch {
-      const startIdx = responseText.indexOf('{')
-      const endIdx = responseText.lastIndexOf('}')
-
-      if (startIdx === -1 || endIdx === -1 || startIdx >= endIdx) {
-        throw new Error('No valid JSON found in model response')
-      }
-
-      const jsonStr = responseText.substring(startIdx, endIdx + 1)
-      if (jsonStr.length > MAX_JSON_SIZE) {
-        throw new Error('JSON content too large')
-      }
-
-      try {
-        parsed = JSON.parse(jsonStr)
-      } catch (parseError) {
-        throw new Error(
-          `Invalid JSON format: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`,
-        )
-      }
-    }
-
-    const identifier = String(parsed.identifier || '')
-      .slice(0, 100)
-      .trim()
-    const whenToUse = String(parsed.whenToUse || '')
-      .slice(0, MAX_FIELD_LENGTH)
-      .trim()
-    const agentSystemPrompt = String(parsed.systemPrompt || '')
-      .slice(0, MAX_FIELD_LENGTH)
-      .trim()
-
-    if (!identifier || !whenToUse || !agentSystemPrompt) {
-      throw new Error(
-        'Invalid response structure: missing required fields (identifier, whenToUse, systemPrompt)',
-      )
-    }
-
-    const sanitize = (str: string) => str.replace(/[\x00-\x1F\x7F-\x9F]/g, '')
-
-    const cleanIdentifier = sanitize(identifier)
-    if (!/^[a-z0-9-]+$/.test(cleanIdentifier)) {
-      throw new Error(
-        'Invalid identifier format: only lowercase letters, numbers, and hyphens allowed',
-      )
-    }
-
-    return {
-      identifier: cleanIdentifier,
-      whenToUse: sanitize(whenToUse),
-      systemPrompt: sanitize(agentSystemPrompt),
-    }
+    return parseGeneratedAgentResponse(responseText)
   } catch (error) {
     logError(error)
     debugLogger.warn('AGENT_GENERATION_FAILED', {

@@ -34,7 +34,7 @@ export function StepAgentType({ ctx }: { ctx: WizardContextValue }) {
   return (
     <WizardPanel
       subtitle="Agent type (identifier)"
-      footerText="Press Enter to continue · Esc to go back"
+      footerText="Press Enter to continue - Esc to go back"
     >
       <Box flexDirection="column" marginTop={1} gap={1}>
         <Text>Enter a unique identifier for your agent:</Text>

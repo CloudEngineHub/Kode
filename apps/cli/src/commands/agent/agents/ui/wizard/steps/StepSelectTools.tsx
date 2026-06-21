@@ -23,7 +23,7 @@ export function StepSelectTools(props: {
           onCancel={ctx.goBack}
         />
       </Panel>
-      <Instructions instructions="Press Enter to toggle selection · ↑↓ Navigate · Esc to go back" />
+      <Instructions instructions="Press Enter to toggle selection - Up/Down Navigate - Esc to go back" />
     </>
   )
 }

@@ -32,7 +32,7 @@ export function StepSystemPrompt({ ctx }: { ctx: WizardContextValue }) {
   return (
     <WizardPanel
       subtitle="System prompt"
-      footerText="Press Enter to continue · Esc to go back"
+      footerText="Press Enter to continue - Esc to go back"
     >
       <Box flexDirection="column" marginTop={1} gap={1}>
         <Text>Enter the system prompt for your agent:</Text>

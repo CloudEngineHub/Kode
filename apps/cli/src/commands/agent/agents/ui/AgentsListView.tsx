@@ -139,7 +139,7 @@ export function AgentsListView(props: {
           {agent.agentType}
         </Text>
         <Text dimColor color={rowColor}>
-          {' · '}
+          {' - '}
           {formatModelShort(agent.model)}
         </Text>
         {agent.overriddenBy ? (
@@ -214,7 +214,7 @@ export function AgentsListView(props: {
           props.agents.some(a => a.source === 'built-in') ? (
             <>
               <Box marginTop={1}>
-                <Text dimColor>{'─'.repeat(40)}</Text>
+                <Text dimColor>{'-'.repeat(40)}</Text>
               </Box>
               {builtInSection()}
             </>

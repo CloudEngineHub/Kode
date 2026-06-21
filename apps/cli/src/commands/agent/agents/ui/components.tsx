@@ -44,7 +44,7 @@ export function Panel(props: {
 }
 
 export function Instructions({
-  instructions = 'Press ↑↓ to navigate · Enter to select · Esc to go back',
+  instructions = 'Press Up/Down to navigate - Enter to select - Esc to go back',
 }: {
   instructions?: string
 }) {

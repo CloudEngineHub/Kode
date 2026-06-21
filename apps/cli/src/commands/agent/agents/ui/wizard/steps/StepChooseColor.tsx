@@ -38,7 +38,7 @@ export function StepChooseColor({ ctx }: { ctx: WizardContextValue }) {
   return (
     <WizardPanel
       subtitle="Choose background color"
-      footerText="Press ↑↓ to navigate · Enter to select · Esc to go back"
+      footerText="Press Up/Down to navigate - Enter to select - Esc to go back"
     >
       <Box marginTop={1}>
         <ColorPicker

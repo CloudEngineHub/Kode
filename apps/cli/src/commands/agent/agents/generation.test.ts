@@ -1,11 +1,64 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  __parseGeneratedAgentResponseForTests,
   generateAgentFileContent,
   validateAgentConfig,
   validateAgentType,
 } from './generation'
 
+const generatedAgent = {
+  identifier: 'code-reviewer',
+  whenToUse: 'Use this agent when reviewing recently written code changes.',
+  systemPrompt:
+    'You are a senior code reviewer. Focus on correctness, regressions, and missing validation.',
+}
+
 describe('agents/generation', () => {
+  test('parseGeneratedAgentResponse accepts raw JSON', () => {
+    expect(
+      __parseGeneratedAgentResponseForTests(JSON.stringify(generatedAgent)),
+    ).toEqual(generatedAgent)
+  })
+
+  test('parseGeneratedAgentResponse accepts fenced JSON', () => {
+    const parsed = __parseGeneratedAgentResponseForTests(
+      `Here is the draft:\n\n\`\`\`json\n${JSON.stringify(generatedAgent, null, 2)}\n\`\`\``,
+    )
+
+    expect(parsed).toEqual(generatedAgent)
+  })
+
+  test('parseGeneratedAgentResponse extracts the first balanced JSON object', () => {
+    const parsed = __parseGeneratedAgentResponseForTests(
+      `Draft follows:\n${JSON.stringify({
+        ...generatedAgent,
+        systemPrompt:
+          'You are a reviewer. Keep examples with literal braces like {path} intact.',
+      })}\nDone.`,
+    )
+
+    expect(parsed.identifier).toBe('code-reviewer')
+    expect(parsed.systemPrompt).toContain('{path}')
+  })
+
+  test('parseGeneratedAgentResponse skips prose braces before the JSON object', () => {
+    const parsed = __parseGeneratedAgentResponseForTests(
+      `Use placeholders like {path} in examples.\n${JSON.stringify(generatedAgent)}`,
+    )
+
+    expect(parsed).toEqual(generatedAgent)
+  })
+
+  test('parseGeneratedAgentResponse hides low-level JSON parse errors', () => {
+    expect(() =>
+      __parseGeneratedAgentResponseForTests(
+        '{"identifier":"broken-agent","whenToUse":"Use this agent when reviewing code."',
+      ),
+    ).toThrow(
+      'Failed to generate agent draft: model returned invalid JSON. Please try again with a more specific description.',
+    )
+  })
+
   test('generateAgentFileContent escapes and quotes description', () => {
     const description = `Line 1: "quoted" and backslash \\\nLine 2`
     const content = generateAgentFileContent(
