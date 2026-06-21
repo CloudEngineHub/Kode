@@ -4,6 +4,31 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { spawnSync } = require('node:child_process')
 
+function tryResolveNativeBinaryFromOptionalDeps() {
+  const platform = process.platform
+  const arch = process.arch
+
+  const candidates = [`@shareai-lab/kode-bin-${platform}-${arch}`]
+
+  // Windows ARM64 can usually run x64 binaries via emulation, so offer a fallback.
+  if (platform === 'win32' && arch === 'arm64') {
+    candidates.push('@shareai-lab/kode-bin-win32-x64')
+  }
+
+  for (const pkgName of candidates) {
+    try {
+      // eslint-disable-next-line import/no-dynamic-require
+      const mod = require(pkgName)
+      const binPath = mod?.kodePath
+      if (typeof binPath === 'string' && fs.existsSync(binPath)) {
+        return binPath
+      }
+    } catch {}
+  }
+
+  return null
+}
+
 function findPackageRoot(startDir) {
   let dir = startDir
   for (let i = 0; i < 25; i++) {
@@ -54,11 +79,6 @@ function main() {
   const packageRoot = findPackageRoot(__dirname)
   const pkg = readPackageJson(packageRoot)
   const version = pkg?.version || ''
-  const { getCachedBinaryPath } = require(path.join(
-    packageRoot,
-    'scripts',
-    'binary-utils.cjs',
-  ))
 
   if (hasFlag('--help-lite')) {
     printHelpLite()
@@ -70,36 +90,41 @@ function main() {
     process.exit(0)
   }
 
-  // 1) Prefer native binary (Windows OOTB, no Bun required)
-  if (version) {
-    const binPath = getCachedBinaryPath({ version })
-    if (fs.existsSync(binPath)) {
-      run(binPath, process.argv.slice(2))
-    }
+  // Native binary (npm optionalDependencies, no GitHub postinstall).
+  const nativeBin = tryResolveNativeBinaryFromOptionalDeps()
+  if (nativeBin) {
+    run(nativeBin, process.argv.slice(2))
   }
 
-  // 2) Fallback: Node.js runtime (npm install should work without Bun)
+  // Node.js runtime fallback.
   const distEntry = path.join(packageRoot, 'dist', 'index.js')
   if (fs.existsSync(distEntry)) {
     run(process.execPath, [distEntry, ...process.argv.slice(2)])
   }
 
-  // 3) Final fallback: explain what to do
+  // Final fallback: explain what to do
   process.stderr.write(
     [
       '❌ Kode is not runnable on this system.',
       '',
       'Tried:',
-      '- Native binary (postinstall download)',
-      '- Node.js runtime fallback',
+      '- Native binary (optionalDependencies)',
+      '- Node.js runtime (dist/index.js)',
       '',
       'Fix:',
-      '- Reinstall (ensure network access), or set KODE_BINARY_BASE_URL to a mirror',
-      '- Or download a standalone binary from GitHub Releases',
+      '- Reinstall with optionalDependencies enabled (avoid --no-optional/--omit=optional)',
+      '- Or install a platform binary package: @shareai-lab/kode-bin-<platform>-<arch>',
+      '- Or reinstall and ensure dist/ is present (npm install -g @shareai-lab/kode)',
+      '- Or run from source: bun run dev',
       '',
+      version ? `Package version: ${version}` : '',
     ].join('\n'),
   )
   process.exit(1)
 }
 
-main()
+if (require.main === module) {
+  main()
+}
+
+module.exports = { main }

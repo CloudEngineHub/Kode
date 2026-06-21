@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(open:*)",
+      "Bash(bun run typecheck)",
+      "Bash(bun run build)",
+      "Bash(bun run:*)",
+      "Bash(find:*)",
+      "Bash(ls:*)"
+    ]
+  }
+}

@@ -1,16 +1,33 @@
 # AGENTS.md
 
-This file provides concise guidance to automation agents working in this repository.
+This file guides automation/coding agents working in this repository.
+For longer-form background (product intent, repo hygiene, and deeper design notes), see `AGENT_CONTEXT/README.md`.
+For product-level UX intent and principles, see `docs/product/11_post_human_blueprint.md`.
+For repeatable repo workflows (debug/test/build/release/compat), prefer the skill at `./.claude/skills/kode-repo-maintain/`.
 
-## Hard Constraints
+## Product Intent (High Level)
 
-- Do not change any external CLI behavior/flags/output/protocols.
-- Keep gates green: `bun run typecheck`, `bun run lint`, `bun test`, `bun run build:npm`.
-- When a reference repo is available, keep parity green: `KODE_REFERENCE_REPO=/path/to/legacy-kode-cli bun run parity:reference`.
+- **Post-human workflows**: optimize for “one operator → many parallel actions” across coding and non-coding tasks.
+- **Unit-agent CLI**: one consistent interface for human–computer work (tools, context, permissions, memory).
+- **Multi-model + collaboration**: model profiles, sub-agents, and tool-orchestrated execution.
+- **UX first**: fast feedback loops, low-friction defaults, and predictable guardrails.
+
+## Repository Map
+
+- `apps/cli/`: CLI entrypoints, command system, and Ink TUI (`apps/cli/src/entrypoints/cli.ts`).
+- `apps/server/`: local server/daemon utilities and Web UI serving (`apps/server/src/server/webui.ts`).
+- `apps/web/`: Web UI source; built into `dist/webui/**` during `bun run build`.
+- `packages/core/`: orchestration engine, agent loading, permissions, MCP integration, and model wiring.
+- `packages/tools/`: built-in tools (Task/Bash/WebFetch/WebSearch/Lsp/…) and their prompts/schemas.
+- `packages/runtime/`: shell execution primitives + background task output store.
+- `packages/config/`: config loading, data-root resolution, and schema.
+- `packages/protocol/`: session/log protocol helpers (import/export, stream-json, etc.).
+- `packages/builtin-skills/skills/`: bundled runtime skills shipped with the npm package.
 
 ## Development Commands
 
-### Workflow
+### Essential Workflow
+
 ```bash
 # Install dependencies
 bun install
@@ -18,9 +35,7 @@ bun install
 # Run in development mode (hot reload with verbose output)
 bun run dev
 
-# Build npm runtime dist (Node.js runnable)
-bun run build:npm
-# (alias)
+# Build the CLI wrapper for distribution
 bun run build
 
 # Clean build artifacts
@@ -38,32 +53,177 @@ bun run format:check
 ```
 
 ### Build System Details
-- **Primary Build Tool**: Bun (required for development)
-- **Distribution**: npm bin shims (`cli.js`, `cli-acp.js`) prefer cached standalone binaries, otherwise run `node dist/index.js` (no Bun runtime required)
-- **Entry Point**: `src/entrypoints/cli.tsx`
-- **Build Output**: `dist/index.js` (+ chunks), `dist/package.json`, `dist/yoga.wasm`, root `cli.js`, root `cli-acp.js`
+
+- **Primary build tool**: Bun (required for development)
+- **Distribution (npm)**: `cli.js` wrapper runs the bundled Node.js runtime entry (`dist/index.js`)
+- **Distribution (optional)**: standalone single-file binaries are built via `bun run build:binary` and published as GitHub Release assets
+- **Main entrypoints**: `apps/cli/src/dispatch.ts` (dispatch) + `apps/cli/src/entrypoints/cli.ts` (Ink TUI)
 
 ### Publishing
+
 ```bash
 # Publish to npm (requires build first)
-bun run build:npm
 npm publish
 # Or with bundled dependency check skip:
 SKIP_BUNDLED_CHECK=true npm publish
 ```
 
-## Repo Map (Where Things Live)
+## System Architecture (Practical)
 
-- `src/entrypoints/`: CLI/MCP/ACP entrypoints and orchestration
-- `src/core/`: core logic (must not depend on `src/ui/`)
-- `src/services/`: integrations, grouped by domain (`ai/`, `mcp/`, `plugins/`, `system/`, `auth/`, `telemetry/`, `context/`, `ui/`)
-- `src/tools/`: tool implementations (Bash/File/Grep/MCP/etc.)
-- `src/ui/`: Ink UI (screens/components/hooks)
-- `src/utils/`: reusable utilities (domain-grouped)
-- `tests/`: `unit/`, `integration/`, `e2e/` (offline by default)
+Kode is intentionally layered so UX, orchestration, and tool execution can evolve independently:
 
-## References
+1. **Interaction/UI**: `apps/cli/src/ui/**` (Ink screens, overlays, input, and renderers)
+2. **Orchestration**: `packages/core/src/engine/**` + `packages/tools/src/tools/ai/TaskTool/**`
+3. **Tools**: `packages/tools/src/tools/**` (permission-aware, schema-first tool implementations)
 
-- Release checklist: `docs/release_checklist.md`
-- Architecture notes: `docs/upgrade_design.md`
-- Task ledger: `todo_tasks.json`, `todo_tasks_detail.md`
+## UX Guardrails (Low-friction by default)
+
+- Avoid rigid “menus” and hidden mechanisms as the primary user path (not just install/setup); prefer intent-driven commands/screens and agent-driven actions with verification.
+- Keep core flows resilient: avoid hidden coupling to unrelated third-party endpoints; prefer graceful fallbacks.
+- Keep terminal UX predictable: clear state, minimal questions, concise output.
+
+## Compatibility (Kode-first)
+
+- `.kode/**` is the canonical write surface. Avoid implicit writes to legacy surfaces; treat `.claude/**` and `.claude-plugin/**` as read-compat + explicit import only (write there only when the user opts in).
+- Keep interoperability terminology scoped: legacy labels are interoperability nouns, not the product narrative (apply “legacy” framing consistently in user-facing strings, code identifiers, and comments).
+- Centralize all legacy aliases (env vars, headers, directory names, request-strategy labels) in the compat layer (`packages/core/src/compat/**`) and reference them via exported constants (e.g. `LEGACY_CLAUDE_ENV`) rather than hardcoded `CLAUDE_*` strings.
+
+## Skills (Runtime Knowledge Packages)
+
+This repo supports filesystem-discovered skills (`SKILL.md` packages) as a first-class mechanism for shipping on-demand workflows to the _running_ agent.
+
+- **Packaging boundary**: content under `docs/` and `AGENT_CONTEXT/` is developer-facing only; runtime-required knowledge must live in shipped skill locations (bundled: `packages/builtin-skills/skills/**`, or user/project skill dirs).
+- **Discovery order (Kode-first)**: bundled (`packages/builtin-skills/skills/**`) → `~/.kode/skills/**` → `./.kode/skills/**` → legacy read-compat (`~/.claude/skills/**`, `./.claude/skills/**`).
+- **Progressive disclosure**: skill frontmatter is loaded at discovery; keep `description` keyword-rich and keep bodies short; push long references into `references/`/`scripts/` within the skill.
+- **No hard install menus**: prefer intent-driven actions (SlashCommand/Skill/Task) over long “run these commands” menu flows.
+- **Bundled skill pack**: keep bundled skills small, general-purpose, and platform-agnostic. Bundled skills live under `packages/builtin-skills/skills/**` and are discoverable via `/skills`; use `skill-judge` when auditing or improving skill design.
+- **Repo maintenance skill**: prefer `./.claude/skills/kode-repo-maintain/` when work touches any of:
+  - multi-file refactors or wide-reaching changes
+  - build/release/packaging behavior
+  - onboarding/capability UX changes (avoid “install menus”; keep flows intent-driven)
+  - permissions or network tools (WebFetch/WebSearch)
+  - compatibility/interop surfaces (`.kode/**`, `.claude/**`, env aliases)
+  - “tool didn’t run / task output missing / session weirdness” debugging
+  - If unsure, start by loading this skill and follow its scenario router + checklists; load only the relevant `references/**`.
+
+## Permissions + Subagents (Gotchas)
+
+- `allowedTools` constraints must be merged into the same permission engine as persisted rules; otherwise constraints silently won’t apply.
+- Subagents inherit the parent `toolPermissionContext` and the invoking command’s constraints; they must not implicitly “auto-escalate” permissions.
+
+## Async Tool Descriptions
+
+Tool descriptions can be async functions and must be awaited:
+
+```ts
+// INCORRECT
+const description = tool.description
+
+// CORRECT
+const description =
+  typeof tool.description === 'function'
+    ? await tool.description()
+    : tool.description
+```
+
+## Debugging & Forensics (Session Storage)
+
+When debugging “tool didn’t run / background task didn’t start / LLM gate blocked unexpectedly”, inspect the persisted artifacts under `~/.kode/`.
+
+### Per-project data root
+
+- `~/.kode/-Users-<you>-<path-to-project>/`
+
+Useful subdirectories:
+
+- `messages/`: conversation transcripts (includes tool_use + tool_result)
+- `errors/`: error logs and structured dumps
+- `tasks/`: background shell output files (`<bashId>.output`)
+
+### Bash LLM intent gate debug dumps
+
+If the gate fails closed (timeout / invalid output / API error), Kode writes a dedicated dump:
+
+- `~/.kode/.../errors/bash-llm-gate/*.txt`
+
+## Development Patterns
+
+### Adding a Tool
+
+1. Create `packages/tools/src/tools/<domain>/<ToolName>/`
+2. Implement the tool + `prompt.ts` and Zod schema
+3. Register in `packages/tools/src/registry.ts`
+4. Add/update tests where there is existing coverage
+
+### Adding a CLI Command
+
+1. Add a command under `apps/cli/src/commands/**`
+2. Register it in `apps/cli/src/commands/registry.ts`
+3. Ensure help text is coherent with onboarding and permission model
+
+It looks like the content you wanted to transform didn't come through in your message. I can see references to "Pasted text #1" and "Pasted text #2," but the actual text is missing.
+
+Please paste the content of those two blocks here, and I will immediately structure them into a clean, well-formatted note for your `AGENTS.md` file!
+
+_Added on 1/26/2026, 2:38:04 AM GMT+8_
+
+It looks like the actual content of the notes you intended to paste didn't come through—I only see the placeholders `[Pasted text #1 +16 lines]` and `[Pasted text #2 +5 lines]`.
+
+Please paste the text content here, and I will immediately format it into a structured note for your `AGENTS.md` file.
+
+_Added on 1/26/2026, 2:38:05 AM GMT+8_
+
+It looks like the actual text content for **Pasted text #1** and **Pasted text #2** didn't come through in your message.
+
+Please paste the raw notes here, and I will immediately structure them into a clean, readable format for your `AGENTS.md` file.
+
+_Added on 1/26/2026, 2:38:12 AM GMT+8_
+
+⚠️ **Input Missing**
+
+It looks like the actual content of the notes wasn't included in your message. You likely pasted the clipboard labels (e.g., `[Pasted text #1 +16 lines]`) instead of the raw text.
+
+Please paste the content of the notes, and I will format them for `AGENTS.md` immediately.
+
+_Added on 1/26/2026, 2:38:16 AM GMT+8_
+
+It looks like the text content for **Pasted text #1** and **Pasted text #2** wasn't included in your message.
+
+Please provide the raw text you would like me to structure. Once you paste it, I will format it into a clean, well-structured entry for your `AGENTS.md` file.
+
+_Added on 1/26/2026, 2:38:16 AM GMT+8_
+
+It looks like the actual text content for your note didn't come through—I only see the placeholders `[Pasted text #1...]` and `[Pasted text #2...]`.
+
+Please paste the text you would like me to structure, and I will format it immediately for `AGENTS.md` with appropriate headings, bullets, and code blocks.
+
+_Added on 1/26/2026, 2:38:17 AM GMT+8_
+
+It looks like the text content for **Pasted text #1** and **Pasted text #2** wasn't included in your message.
+
+Please paste the notes you'd like me to structure. Once you provide them, I will format them into a clean, well-organized Markdown section ready for your `AGENTS.md` file.
+
+Here is an example of how I will structure it once you provide the text:
+
+```markdown
+## [Agent Name / Topic]
+
+### Overview
+[Brief summary of the agent's purpose or the topic]
+
+### Key Capabilities
+- [Capability 1]
+- [Capability 2]
+- [Capability 3]
+
+### Configuration & Usage
+\`\`\`bash
+# Example command or config
+\`\`\`
+
+### Notes / Limitations
+- [Important note]
+- [Limitation or constraint]
+```
+
+_Added on 1/26/2026, 2:38:18 AM GMT+8_

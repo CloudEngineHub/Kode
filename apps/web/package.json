@@ -1,0 +1,16 @@
+{
+  "name": "@kode/web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "dependencies": {
+    "@kode/client": "workspace:*",
+    "@kode/protocol": "workspace:*"
+  },
+  "scripts": {
+    "dev": "bun x vite --config vite.config.ts",
+    "build": "bun x vite build --config vite.config.ts",
+    "preview": "bun x vite preview --config vite.config.ts",
+    "typecheck": "tsc --noEmit"
+  }
+}

@@ -1,0 +1,7 @@
+export const BULLET = '◆'
+export const RIGHT_ARROW = '→'
+export const CHECKMARK = '✓'
+export const CROSS = '✗'
+export const DIAMOND_HOLLOW = '◇'
+export const DIAMOND_FILLED = '◆'
+export const CIRCLE = '●'

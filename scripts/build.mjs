@@ -2,77 +2,191 @@
 import {
   chmodSync,
   cpSync,
+  existsSync,
   mkdirSync,
-  readFileSync,
   rmSync,
   writeFileSync,
 } from 'node:fs'
-import { join } from 'node:path'
-import { build as esbuildBuild } from 'esbuild'
+import { join, resolve, sep } from 'node:path'
+import * as esbuild from 'esbuild'
 
 const OUT_DIR = 'dist'
 
-function loadEsbuildTsconfigRaw() {
-  try {
-    const raw = JSON.parse(readFileSync('tsconfig.json', 'utf8'))
-    const compilerOptions = raw?.compilerOptions ?? {}
-    const paths = { ...(compilerOptions.paths ?? {}) }
-    // Prevent esbuild from rewriting all package imports via "*" -> node_modules/*.
-    delete paths['*']
-
-    return {
-      compilerOptions: {
-        ...compilerOptions,
-        paths,
-      },
-    }
-  } catch {
-    return undefined
-  }
+async function buildNodeRuntime() {
+  await esbuild.build({
+    entryPoints: {
+      index: 'apps/cli/src/dispatch.ts',
+      'entrypoints/cli': 'apps/cli/src/entrypoints/cli.ts',
+      'entrypoints/mcp': 'packages/core/src/mcp/index.ts',
+      'entrypoints/daemon': 'apps/cli/src/entrypoints/daemon.ts',
+    },
+    outdir: OUT_DIR,
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    splitting: true,
+    sourcemap: 'external',
+    target: ['node20'],
+    tsconfig: 'tsconfig.json',
+    packages: 'external',
+    entryNames: '[dir]/[name]',
+    chunkNames: 'chunks/[name]-[hash]',
+    minify: false,
+  })
 }
 
-const ESBUILD_TSCONFIG_RAW = loadEsbuildTsconfigRaw()
+async function buildSdkEntry(options) {
+  await esbuild.build({
+    entryPoints: [options.entrypoint],
+    outfile: options.outfile,
+    bundle: true,
+    platform: 'node',
+    format: options.format,
+    sourcemap: 'external',
+    target: ['node20'],
+    tsconfig: 'tsconfig.json',
+    packages: 'external',
+    splitting: false,
+    minify: false,
+    ...(options.format === 'cjs'
+      ? {
+          // We intentionally ship a CJS build for `require()`. Some files contain
+          // an `import.meta.url` fallback for ESM builds, which is safe but
+          // triggers this esbuild warning in CJS output.
+          logOverride: {
+            'empty-import-meta': 'silent',
+          },
+        }
+      : null),
+  })
+}
 
-async function buildWithEsbuild(options) {
-  try {
-    await esbuildBuild({
-      entryPoints: options.entrypoints,
-      outdir: options.outdir,
-      bundle: true,
-      platform: 'node',
-      target: ['node20'],
-      format: 'esm',
-      splitting: true,
-      // Keep node_modules as runtime dependencies (avoid bundling optional deps like ink devtools).
-      packages: 'external',
-      sourcemap: 'external',
-      banner: {
-        // Allow CJS-style `require(...)` from ESM output (esbuild may emit dynamic requires
-        // for optional dependencies).
-        js: 'import { createRequire as __kodeCreateRequire } from "node:module";\nconst require = __kodeCreateRequire(import.meta.url);',
-      },
-      ...(ESBUILD_TSCONFIG_RAW ? { tsconfigRaw: ESBUILD_TSCONFIG_RAW } : {}),
-    })
-  } catch (err) {
-    throw new Error(
-      `esbuild failed (${options.label}): ${err instanceof Error ? err.message : String(err)}`,
-    )
+function runOrThrow(cmd, options) {
+  const proc = Bun.spawnSync({
+    cmd,
+    stdout: 'inherit',
+    stderr: 'inherit',
+    ...options,
+  })
+
+  if (proc.exitCode !== 0) {
+    throw new Error(`Command failed (${proc.exitCode}): ${cmd.join(' ')}`)
   }
 }
 
 async function main() {
-  console.log('🚀 Building Kode CLI (Bun dev + Node runtime)...')
+  console.log('🚀 Building Kode (Node runtime baseline)...')
 
   rmSync(OUT_DIR, { recursive: true, force: true })
-  mkdirSync(OUT_DIR, { recursive: true })
+  mkdirSync(join(OUT_DIR, 'entrypoints'), { recursive: true })
+  mkdirSync(join(OUT_DIR, 'sdk'), { recursive: true })
 
-  // Build the unified entry (src/entrypoints/index.ts -> dist/index.js)
-  // and its dynamic imports (cli/acp/mcp) as split chunks.
-  await buildWithEsbuild({
-    label: 'npm',
-    entrypoints: ['src/entrypoints/index.ts'],
-    outdir: OUT_DIR,
+  // Build Node runtime entrypoints (preserve lightweight index.js + split chunks)
+  await buildNodeRuntime()
+
+  // Build SDK entrypoints (subpath exports)
+  await buildSdkEntry({
+    entrypoint: 'packages/protocol/src/index.ts',
+    outfile: join(OUT_DIR, 'sdk', 'protocol.js'),
+    format: 'esm',
   })
+  await buildSdkEntry({
+    entrypoint: 'apps/server/src/client.ts',
+    outfile: join(OUT_DIR, 'sdk', 'daemon-client.js'),
+    format: 'esm',
+  })
+  await buildSdkEntry({
+    entrypoint: 'packages/core/src/index.ts',
+    outfile: join(OUT_DIR, 'sdk', 'core.js'),
+    format: 'esm',
+  })
+  await buildSdkEntry({
+    entrypoint: 'packages/runtime/src/index.ts',
+    outfile: join(OUT_DIR, 'sdk', 'runtime.js'),
+    format: 'esm',
+  })
+  await buildSdkEntry({
+    entrypoint: 'packages/runtime/src/node.ts',
+    outfile: join(OUT_DIR, 'sdk', 'runtime-node.js'),
+    format: 'esm',
+  })
+  await buildSdkEntry({
+    entrypoint: 'packages/client/src/index.ts',
+    outfile: join(OUT_DIR, 'sdk', 'client.js'),
+    format: 'esm',
+  })
+  await buildSdkEntry({
+    entrypoint: 'packages/tools/src/index.ts',
+    outfile: join(OUT_DIR, 'sdk', 'tools.js'),
+    format: 'esm',
+  })
+
+  await buildSdkEntry({
+    entrypoint: 'packages/protocol/src/index.ts',
+    outfile: join(OUT_DIR, 'sdk', 'protocol.cjs'),
+    format: 'cjs',
+  })
+  await buildSdkEntry({
+    entrypoint: 'apps/server/src/client.ts',
+    outfile: join(OUT_DIR, 'sdk', 'daemon-client.cjs'),
+    format: 'cjs',
+  })
+  await buildSdkEntry({
+    entrypoint: 'packages/core/src/index.ts',
+    outfile: join(OUT_DIR, 'sdk', 'core.cjs'),
+    format: 'cjs',
+  })
+  await buildSdkEntry({
+    entrypoint: 'packages/runtime/src/index.ts',
+    outfile: join(OUT_DIR, 'sdk', 'runtime.cjs'),
+    format: 'cjs',
+  })
+  await buildSdkEntry({
+    entrypoint: 'packages/runtime/src/node.ts',
+    outfile: join(OUT_DIR, 'sdk', 'runtime-node.cjs'),
+    format: 'cjs',
+  })
+  await buildSdkEntry({
+    entrypoint: 'packages/client/src/index.ts',
+    outfile: join(OUT_DIR, 'sdk', 'client.cjs'),
+    format: 'cjs',
+  })
+  await buildSdkEntry({
+    entrypoint: 'packages/tools/src/index.ts',
+    outfile: join(OUT_DIR, 'sdk', 'tools.cjs'),
+    format: 'cjs',
+  })
+
+  // Build web UI (Vite) and copy to dist/webui
+  try {
+    if (existsSync(join('apps', 'web', 'vite.config.ts'))) {
+      runOrThrow([
+        'bun',
+        'x',
+        'vite',
+        'build',
+        '--config',
+        'apps/web/vite.config.ts',
+      ])
+      const srcWebDist = join('apps', 'web', 'dist')
+      if (existsSync(join(srcWebDist, 'index.html'))) {
+        cpSync(srcWebDist, join(OUT_DIR, 'webui'), { recursive: true })
+        const serverStaticDir = join('apps', 'server', 'static')
+        rmSync(serverStaticDir, { recursive: true, force: true })
+        mkdirSync(serverStaticDir, { recursive: true })
+        cpSync(srcWebDist, serverStaticDir, { recursive: true })
+      } else {
+        console.warn(
+          '⚠️  WebUI build completed but apps/web/dist/index.html was not found',
+        )
+      }
+    }
+  } catch (err) {
+    console.warn(
+      '⚠️  Could not build/copy WebUI:',
+      err instanceof Error ? err.message : String(err),
+    )
+  }
 
   // Mark dist as ESM for interoperability (some tooling still expects this)
   writeFileSync(
@@ -90,12 +204,49 @@ async function main() {
     )
   }
 
-  // Copy vendor assets if present (ripgrep, future bundled tools)
-  // Note: vendor assets are intentionally not shipped in the npm package.
+  // Best-effort: build Linux seccomp assets for the current arch (Unix socket blocking).
+  // CI release workflows assemble both x64+arm64 assets before publishing the main package.
+  if (process.platform === 'linux') {
+    try {
+      runOrThrow(['node', 'scripts/build-seccomp-assets.mjs'])
+    } catch (err) {
+      console.warn(
+        '⚠️  Could not build Linux seccomp assets:',
+        err instanceof Error ? err.message : String(err),
+      )
+    }
+  }
+
+  // Copy vendor assets if present (future bundled tools).
+  // NOTE: ripgrep is distributed via npm optionalDependencies to avoid GitHub downloads
+  // and to keep the main package small.
+  try {
+    if (existsSync('vendor')) {
+      const vendorRoot = resolve('vendor')
+      const ripgrepRoot = resolve('vendor', 'ripgrep')
+      cpSync('vendor', join(OUT_DIR, 'vendor'), {
+        recursive: true,
+        filter: src => {
+          const abs = resolve(src)
+          if (abs === ripgrepRoot) return false
+          if (abs.startsWith(ripgrepRoot + sep)) return false
+          // Also skip the "vendor/ripgrep" path on platforms where `resolve()` normalizes differently.
+          if (abs === vendorRoot + sep + 'ripgrep') return false
+          if (abs.startsWith(vendorRoot + sep + 'ripgrep' + sep)) return false
+          return true
+        },
+      })
+    }
+  } catch (err) {
+    console.warn(
+      '⚠️  Could not copy vendor assets:',
+      err instanceof Error ? err.message : String(err),
+    )
+  }
 
   // Generate Node-based CLI shim (npm bin points here)
-  // - Prefer cached native binary (Windows OOTB)
-  // - Fallback to Node.js runtime (npm users don't need Bun)
+  // - Prefer native binary via npm optionalDependencies (@shareai-lab/kode-bin-<platform>-<arch>)
+  // - Fallback to Node runtime (no Bun required)
   cpSync(join('scripts', 'cli-wrapper.cjs'), 'cli.js')
   try {
     chmodSync('cli.js', 0o755)
@@ -117,20 +268,35 @@ async function main() {
     )
   }
 
-  // Create .npmrc file (kept intentionally tiny)
-  writeFileSync(
-    '.npmrc',
-    `# Kode npm configuration
-package-lock=false
-save-exact=true
-`,
-  )
+  // Generate Node-based mcp-cli shim (npm bin points here)
+  cpSync(join('scripts', 'mcp-cli-wrapper.cjs'), 'mcp-cli.js')
+  try {
+    chmodSync('mcp-cli.js', 0o755)
+  } catch (err) {
+    console.warn(
+      '⚠️  Could not make mcp-cli.js executable:',
+      err instanceof Error ? err.message : String(err),
+    )
+  }
 
   console.log('✅ Build completed')
   console.log('📋 Outputs:')
   console.log('  - dist/index.js')
+  console.log('  - dist/entrypoints/cli.js')
+  console.log('  - dist/entrypoints/mcp.js')
+  console.log('  - dist/entrypoints/daemon.js')
+  console.log('  - dist/sdk/protocol.js (+ .cjs)')
+  console.log('  - dist/sdk/daemon-client.js (+ .cjs)')
+  console.log('  - dist/sdk/core.js (+ .cjs)')
+  console.log('  - dist/sdk/runtime.js (+ .cjs)')
+  console.log('  - dist/sdk/runtime-node.js (+ .cjs)')
+  console.log('  - dist/sdk/client.js (+ .cjs)')
+  console.log('  - dist/sdk/tools.js (+ .cjs)')
+  console.log('  - dist/webui/* (if available)')
+  console.log('  - apps/server/static/* (if available)')
   console.log('  - cli.js')
   console.log('  - cli-acp.js')
+  console.log('  - mcp-cli.js')
 }
 
 main().catch(err => {

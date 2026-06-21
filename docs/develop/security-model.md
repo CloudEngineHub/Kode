@@ -7,31 +7,40 @@ Kode implements a comprehensive security model that balances usability with safe
 ## Security Principles
 
 ### 1. Principle of Least Privilege
+
 Operations are granted minimum necessary permissions. Tools request only the specific permissions they need.
 
 ### 2. Explicit User Consent
+
 Potentially dangerous operations require explicit user approval, with clear explanations of risks.
 
 ### 3. Defense in Depth
+
 Multiple security layers ensure that a single failure doesn't compromise the system.
 
 ### 4. Transparency
+
 All operations are logged and auditable. Users can see exactly what the AI is doing.
 
 ### 5. Safe Defaults
+
 The system defaults to safer options, with more permissive modes requiring explicit opt-in.
 
 ## Security Modes
 
 ### Permissive Mode (Default)
+
 Balances security with usability:
+
 - Auto-approves safe read operations
 - Prompts for file writes and system commands
 - Caches approvals for session
 - Suitable for trusted environments
 
 ### Safe Mode (--safe flag)
+
 Maximum security for sensitive environments:
+
 - Requires approval for all operations
 - No automatic approvals
 - No cached permissions
@@ -81,6 +90,7 @@ kode --safe -p "update the production config"
 ### 1. File System Permissions
 
 #### Read Permissions
+
 - Automatically granted for project directories
 - Restricted for system directories
 - Hidden files require explicit permission
@@ -95,6 +105,7 @@ interface FileReadPermission {
 ```
 
 #### Write Permissions
+
 - Always require explicit approval
 - Path validation to prevent traversal
 - Backup creation for existing files
@@ -110,20 +121,22 @@ interface FileWritePermission {
 ### 2. Command Execution Permissions
 
 #### Command Approval Patterns
+
 Commands are matched against approval patterns:
 
 ```json
 {
   "allowedCommands": [
-    "git *",           // All git commands
-    "npm test",        // Specific command
-    "bun run *",       // Pattern matching
-    "echo *"           // Safe commands
+    "git *", // All git commands
+    "npm test", // Specific command
+    "bun run *", // Pattern matching
+    "echo *" // Safe commands
   ]
 }
 ```
 
 #### Restricted Commands
+
 Never allowed, even with permission:
 
 ```typescript
@@ -133,18 +146,20 @@ const RESTRICTED_COMMANDS = [
   'fdisk',
   'dd',
   'mkfs',
-  ':(){:|:&};:',  // Fork bomb
+  ':(){:|:&};:', // Fork bomb
 ]
 ```
 
 ### 3. Network Permissions
 
 #### API Access
+
 - API keys stored securely
 - Rate limiting enforced
 - Request logging for audit
 
 #### Web Fetch
+
 - URL validation
 - Redirect following with limits
 - Content size restrictions
@@ -152,6 +167,7 @@ const RESTRICTED_COMMANDS = [
 ### 4. MCP Server Permissions
 
 #### Server Approval
+
 - Project-scoped server approval
 - Capability-based permissions
 - Runtime sandboxing
@@ -173,18 +189,18 @@ interface MCPServerPermission {
 function validatePath(requestedPath: string, allowedBase: string): boolean {
   const resolved = path.resolve(requestedPath)
   const base = path.resolve(allowedBase)
-  
+
   // Prevent traversal outside allowed directory
   if (!resolved.startsWith(base)) {
     throw new SecurityError('Path traversal detected')
   }
-  
+
   // Check for symbolic links
   const realPath = fs.realpathSync(resolved)
   if (!realPath.startsWith(base)) {
     throw new SecurityError('Symbolic link escape detected')
   }
-  
+
   return true
 }
 ```
@@ -198,7 +214,7 @@ function sanitizeCommand(command: string): string {
   if (dangerous.test(command)) {
     throw new SecurityError('Dangerous command characters detected')
   }
-  
+
   // Use array execution to prevent injection
   const [cmd, ...args] = shellQuote.parse(command)
   return { cmd, args }
@@ -209,11 +225,11 @@ function sanitizeCommand(command: string): string {
 
 ```typescript
 interface ResourceLimits {
-  maxFileSize: number      // 10MB default
-  maxOutputSize: number    // 1MB default
+  maxFileSize: number // 10MB default
+  maxOutputSize: number // 1MB default
   maxExecutionTime: number // 2 minutes default
   maxConcurrentOps: number // 10 default
-  maxMemoryUsage: number   // 500MB default
+  maxMemoryUsage: number // 500MB default
 }
 ```
 
@@ -233,7 +249,7 @@ interface AuditLog {
 function logSecurityEvent(event: AuditLog) {
   // Write to secure audit log
   appendToAuditLog(event)
-  
+
   // Alert on suspicious patterns
   if (detectSuspiciousPattern(event)) {
     alertSecurity(event)
@@ -325,12 +341,7 @@ interface PermissionRequest {
     "maxFileSize": 10485760,
     "maxExecutionTime": 120000,
     "auditLogging": true,
-    "restrictedPaths": [
-      "/etc",
-      "/sys",
-      "/proc",
-      "~/.ssh"
-    ]
+    "restrictedPaths": ["/etc", "/sys", "/proc", "~/.ssh"]
   }
 }
 ```
@@ -340,23 +351,10 @@ interface PermissionRequest {
 ```json
 {
   "security": {
-    "allowedCommands": [
-      "git *",
-      "npm test",
-      "npm run build"
-    ],
-    "allowedPaths": [
-      "./src",
-      "./tests",
-      "./docs"
-    ],
-    "deniedTools": [
-      "bash"
-    ],
-    "requireApproval": [
-      "file_write",
-      "file_delete"
-    ]
+    "allowedCommands": ["git *", "npm test", "npm run build"],
+    "allowedPaths": ["./src", "./tests", "./docs"],
+    "deniedTools": ["bash"],
+    "requireApproval": ["file_write", "file_delete"]
   }
 }
 ```
@@ -366,35 +364,38 @@ interface PermissionRequest {
 ### Security Incident Response
 
 1. **Immediate Actions**
+
    ```bash
    # Kill all Kode processes
    pkill -f kode
-   
+
    # Revoke API keys
    kode config remove -g apiKey
-   
+
    # Enable safe mode globally
    kode config set -g security.mode safe
    ```
 
 2. **Investigation**
+
    ```bash
    # Check modified files
    git status
    git diff
-   
+
    # Review permission grants
    kode security permissions list
    ```
 
 3. **Recovery**
+
    ```bash
    # Reset permissions
    kode security reset
-   
+
    # Restore from backup
    git restore .
-   
+
    # Update security settings
    kode config set security.mode safe
    ```
@@ -417,7 +418,7 @@ function monitorSecurity() {
   if (metrics.deniedOperations > threshold) {
     alert('High number of denied operations')
   }
-  
+
   // Pattern detection
   if (detectAttackPattern(auditLog)) {
     alert('Potential security threat detected')

@@ -1,228 +1,160 @@
-# Agent Configuration System
+# Agents / Subagents
 
-## Overview
+Kode supports subagents (agent templates): Markdown files with YAML frontmatter that define a named subagent (`subagent_type`) with its own prompt, tool allowlist, and (optional) model preference.
 
-Kode's Agent system allows you to create specialized AI agents with predefined configurations, tools, and prompts. This enables more efficient task execution by using purpose-built agents for specific types of work.
+Agents can be stored under `.kode/agents` (Kode-native) or `.claude/agents` (compatibility layout). Kode loads both.
 
-**New in this version**: Use `@run-agent-name` for intelligent delegation with auto-completion support.
+This powers:
 
-## Features
-
-- **Dynamic Agent Loading**: Agents are loaded from configuration files at runtime
-- **Five-tier Priority System**: Built-in < .claude (user) < .kode (user) < .claude (project) < .kode (project)
-- **Hot Reload**: Agent files monitored via Node.js fs.watch with cache invalidation
-- **Tool Restrictions**: Limit agents to specific tools for security and focus
-- **Model Selection**: Each agent can specify its preferred AI model
-- **Interactive Management**: Use `/agents` command for graphical management
+- `@run-agent-<agentType> ...` (mention system)
+- The `Task` tool (`subagent_type: "<agentType>"`)
+- The `/agents` interactive manager
 
 ## Quick Start
 
-### Using Pre-configured Agents
+### Create / edit agents (interactive)
 
-Kode has one built-in agent:
-
-```bash
-@run-agent-general-purpose Find all TypeScript test files
-@run-agent-my-custom-agent Implement a new user authentication feature
-```
-
-### Managing Agents
-
-Use the `/agents` command in the Kode REPL to manage agents:
-
-```bash
+```text
 kode
 > /agents
 ```
 
-This opens an interactive UI where you can:
-- View all available agents
-- Create new agents
-- Edit existing agents
-- Delete custom agents
+Default write location (interactive `/agents`):
 
-Keyboard shortcuts:
-- `c` - Create new agent
-- `r` - Reload agents
-- `d` - Delete selected agent (when viewing)
-- `q` or `Esc` - Exit
+- Project: `./.kode/agents/<agentType>.md`
+- User: `~/.kode/agents/<agentType>.md`
 
-## Agent Configuration
+Kode also loads legacy `.claude/agents` (and will edit/delete there if that’s where the agent currently lives).
 
-### File Structure
+### Create an agent (manual)
 
-Agents are defined as Markdown files with YAML frontmatter:
+Create `./.kode/agents/api-designer.md` (or `./.claude/agents/...` if you prefer the compatibility layout):
 
-```markdown
----
-name: agent-name
-description: "When to use this agent"
-tools: ["Tool1", "Tool2", "Tool3"]  # or "*" for all tools
-model_name: model-name  # optional (preferred over deprecated 'model' field)
----
-
-System prompt content goes here...
-```
-
-**Note**: Use `model_name` to specify the AI model. The deprecated `model` field is ignored.
-
-### Configuration Locations
-
-Agents can be defined at five levels with priority order (later overrides earlier):
-
-1. **Built-in** (lowest priority)
-   - Provided with Kode
-   - Cannot be modified
-
-2. **.claude User (Claude Code)** (`~/.claude/agents/`)
-   - Compatibility with Claude Code user directories
-   - Personal agents available across all projects
-
-3. **Kode User** (`~/.kode/agents/`)
-   - Kode-specific user-level agents
-   - Overrides Claude user agents with same name
-   - Create with `/agents` command or manually
-
-4. **.claude Project (Claude Code)** (`./.claude/agents/`)
-   - Compatibility with Claude Code project directories
-   - Overrides user-level agents
-
-5. **Kode Project** (`./.kode/agents/`)
-   - Kode-specific project agents
-   - Highest priority, overrides all others
-
-### Example: Creating a Custom Agent
-
-#### 1. Manual Creation
-
-Create a file `~/.kode/agents/api-designer.md`:
-
-```markdown
+```md
 ---
 name: api-designer
-description: "Designs RESTful APIs and GraphQL schemas with best practices"
-tools: ["FileRead", "FileWrite", "Grep"]
-model_name: reasoning
+description: 'Design APIs with clear contracts and robust error handling'
+tools: ['Read', 'Edit', 'Grep', 'Glob']
+model: inherit
+permissionMode: plan
+forkContext: 'false'
 ---
 
-You are an API design specialist. Your expertise includes:
+You are an API design specialist. Focus on:
 
-- Designing RESTful APIs following OpenAPI specifications
-- Creating GraphQL schemas with efficient resolvers
-- Implementing proper authentication and authorization
-- Ensuring API versioning and backward compatibility
-- Writing comprehensive API documentation
-
-Design principles:
-- Follow REST best practices (proper HTTP verbs, status codes, etc.)
-- Design for scalability and performance
-- Include proper error handling and validation
-- Consider rate limiting and caching strategies
-- Maintain consistency across endpoints
+- clear interfaces and types
+- compatibility, migrations, and versioning
+- concrete, actionable output
 ```
 
-#### 2. Using /agents Command
+Then use it:
 
-1. Run `kode` to start the REPL
-2. Type `/agents`
-3. Press `c` to create
-4. Follow the prompts:
-   - Enter agent name
-   - Describe when to use it
-   - Specify allowed tools
-   - Optionally specify a model
-   - Write the system prompt
-
-## Advanced Usage
-
-### Tool Restrictions
-
-```yaml
-tools: ["FileRead", "Grep", "Glob"]  # Specific tools
-tools: ["*"]                         # All tools (default)
+```text
+@run-agent-api-designer Propose an API for uploading files and tracking progress
 ```
 
-### Model Selection
+## Agent File Format (Frontmatter)
 
-Specify which AI model the agent should use:
+Agents are Markdown files with YAML frontmatter + a prompt body.
 
-```yaml
-model_name: quick      # Fast responses for simple tasks
-model_name: main       # Default model for general tasks  
-model_name: reasoning  # Complex analysis and design
-```
+Required:
 
+- `name`: agent type (used as `subagent_type`)
+- `description`: “when to use this agent” (supports `\\n` for line breaks)
 
-## Available Built-in Agents
+Common optional fields:
 
-### general-purpose
-- **Use for**: General research, complex multi-step tasks
-- **Tools**: All tools
-- **Model**: task (default)
+- `tools`: `*` for all tools, or an allowlist (array or string). Supports tool specs like `Bash(git:*)`.
+- `disallowedTools`: denylist applied after `tools` (also accepts `disallowed-tools` / `disallowed_tools`).
+- `model` / `model_name`:
+  - Compatibility aliases: `inherit`, `haiku`, `sonnet`, `opus`
+  - Kode selectors (resolved via `/model` profiles + pointers):
+    - pointer: `main | task | compact | quick`
+    - profile name: e.g. `OpenAI Main`
+    - modelName: e.g. `o3`, `qwen-coder`
+    - provider-qualified: `provider:modelName` (or `provider:profileName`), e.g. `openai:o3`
+- `permissionMode`: `default | acceptEdits | plan | bypassPermissions | dontAsk | delegate`
+- `forkContext`: must be the **string** `"true"` or `"false"` (quoted). When `"true"`, the agent runs with a forked snapshot of the main-thread context and `model` is forced to `inherit`.
 
-Note: This is currently the only built-in agent. Create custom agents using the `/agents` command or by adding configuration files.
+Model mapping notes (aliases → pointers):
 
-## Custom Agents
+- `inherit` keeps the parent model at runtime
+- `opus` maps to the `main` pointer
+- `sonnet` maps to the `task` pointer
+- `haiku` maps to the `quick` pointer (set `quick` = `task` if you want haiku+sonnet to behave the same)
 
-Create your own agents in the appropriate directory:
+Notes:
+
+- In subagent context, orchestration tools are removed regardless of configuration (e.g. `Task`, `TaskOutput`, `TaskStop` (legacy alias: `KillShell`), `EnterPlanMode`, `ExitPlanMode`, `AskUserQuestion`).
+
+## Loading & Priority Order
+
+Agents are loaded from multiple sources and merged by `name` (later wins):
+
+1. built-in (always available)
+2. plugins
+3. user settings (from `~/.claude/agents` and `~/.kode/agents`)
+4. project settings (from `./.claude/agents` and `./.kode/agents` in the directory tree)
+5. CLI `--agents` (flagSettings)
+6. policy-managed agents (system directory; highest priority)
+
+## CLI Flags
+
+### `--agents <json>`
+
+Inject ephemeral agents for this run (useful in `--print` mode):
 
 ```bash
-mkdir -p .kode/agents    # Project-specific
-mkdir -p ~/.kode/agents  # User-wide
+kode --agents '{"reviewer":{"description":"Review code","prompt":"Be strict.","tools":["Read","Grep"]}}'
 ```
 
-## Best Practices
+### `--setting-sources <sources>`
 
-1. **Agent Naming**: Use descriptive, action-oriented names (e.g., `test-writer`, `api-designer`)
+Control which settings sources are loaded (comma-separated):
 
-2. **Tool Selection**: Only include tools the agent actually needs
+- `user` → user agents/styles
+- `project` → project agents/styles
+- `local` → local settings (e.g. output style selection)
 
-3. **System Prompts**: Be specific about the agent's role and guidelines
+Example: ignore local settings and only load user/project:
 
-4. **Model Choice**: 
-   - Use `quick` for simple, fast operations
-   - Use `main` for general coding tasks
-   - Use `reasoning` for complex analysis
-
-5. **Organization**: 
-   - Keep user agents for personal workflows
-   - Keep project agents for team-shared configurations
+```bash
+kode --setting-sources user,project
+```
 
 ## Troubleshooting
 
-### Agents not loading?
-- Check file permissions in `~/.kode/agents/` or `./.kode/agents/`
-- Ensure YAML frontmatter is valid
-- Use `/agents` command and press `r` to reload
-
-### Agent not working as expected?
-- Verify the tools list includes necessary tools
-- Check the system prompt is clear and specific
-- Test with verbose mode to see actual prompts
-
-### Hot reload not working?
-- File watcher requires proper file system events
-- Try manual reload with `/agents` then `r`
-- Restart Kode if needed
-
-## Integration with Task Tool
-
-The agent system is integrated with Kode's Task tool:
-
-```typescript
-// In your code or scripts
-await TaskTool.call({
-  description: "Search for patterns",
-  prompt: "Find all instances of TODO comments",
-  subagent_type: "general-purpose"
-})
-```
+- Agent not found: ensure file is in `.claude/agents` (or `.kode/agents`) and frontmatter contains both `name` + `description`.
+- Tool mismatch: verify tool names match Kode’s tool names (use the list shown in `/agents` UI).
 
 This allows programmatic use of agents in automation and scripts.
+
+## CLI Utilities
+
+### Validate agent templates
+
+```bash
+# Validate project/user agent dirs (default)
+kode agents validate
+
+# Validate specific files/dirs
+kode agents validate ./.claude/agents ./some-agent.md
+
+# Machine-readable output
+kode agents validate --json
+```
+
+### List configured models
+
+```bash
+kode models list
+kode models list --json
+```
 
 ## Future Enhancements
 
 Planned improvements:
+
 - Agent templates and inheritance
 - Performance metrics per agent
 - Agent composition (agents using other agents)

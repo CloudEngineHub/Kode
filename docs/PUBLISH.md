@@ -1,37 +1,50 @@
 # Publishing Kode to NPM
 
-## Architecture Overview
+Kode publishing includes:
 
-This package uses an elegant hybrid approach:
-- **Bun** for development and building
-- **Direct source execution** without bundling (avoiding complex build issues)
-- **Automatic runtime detection** (bun > tsx > npx tsx)
-- **Full TypeScript/JSX support** out of the box
+- npm package: `@shareai-lab/kode`
+- per-platform native CLI binaries (npm optional deps): `@shareai-lab/kode-bin-<platform>-<arch>`
+- per-platform ripgrep binaries (npm optional deps): `@shareai-lab/kode-ripgrep-<platform>-<arch>`
+- standalone single-file binaries (Bun `--compile`) as GitHub Release assets
 
-## Build System
+## Automated releases (recommended)
 
-The build process (`scripts/build.ts`) creates:
-1. `cli.js` - Smart wrapper that detects and uses the best available runtime
-2. `.npmrc` - Ensures proper dependency resolution
+Required secrets:
+
+- `NPM_TOKEN`: npm access token with publish permissions.
+
+Release channels:
+
+- **Dev channel (main)**: `.github/workflows/dev-release.yml`
+  - publishes npm dist-tag `dev` (e.g. `2.0.0-dev.123`)
+  - creates a GitHub prerelease with tag `v<version>` and binary assets
+- **Stable channel (tags)**: `.github/workflows/npm-publish.yml`
+  - triggers on stable tags `v*.*.*` (example: `v2.0.0`, pre-release tags are ignored)
+  - validates the tag matches `package.json` version
+  - builds binaries (matrix), uploads `checksums-sha256.txt`, publishes npm `latest` (platform packages first)
+
+See `docs/develop/releasing.md` for details.
 
 ## Pre-publish Checklist
 
 1. **Update version** in package.json
-2. **Run build**: `bun run build`
-3. **Test locally**: `./cli.js --help`
-4. **Run checks**: `node scripts/prepublish-check.js`
+2. **Prepare platform binaries**:
+   - ripgrep: `bun run scripts/ensure-ripgrep.mjs && node scripts/prepare-ripgrep-packages.mjs`
+   - Kode: `node scripts/prepare-kode-bin-packages.mjs` (requires built/downloaded binaries)
+3. **Run build**: `bun run build`
+4. **Test locally**: `./cli.js --help` and `./mcp-cli.js --help`
+5. **Run checks**: `bun run scripts/prepublish-check.js`
 
 ## Publishing Steps
 
 ```bash
-# 1. Clean and build
-bun run clean
+# 1. Build
 bun run build
 
-# 2. Test the CLI
+# 2. Test
 ./cli.js --help
 
-# 3. Publish to npm
+# 3. Publish
 npm publish --access public
 ```
 
@@ -47,8 +60,7 @@ kode --help
 
 ## Key Features
 
-- ✅ No complex bundling - runs TypeScript directly
-- ✅ Works with both Bun and Node.js environments
-- ✅ Minimal dependencies bundled
-- ✅ Fast startup time
-- ✅ Source maps for debugging
+- ✅ All-in-Bun builds (`bun build` + `bun build --compile`)
+- ✅ npm-first install (no postinstall GitHub downloads)
+- ✅ Optional standalone single-file binaries (GitHub Releases)
+- ✅ Dev vs stable channels (`@dev` dist-tag)

@@ -1,0 +1,11 @@
+{
+  "name": "@kode/vscode",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "dist/extension.js",
+  "scripts": {
+    "dev": "echo \"Open apps/vscode in VSCode and press F5\"",
+    "typecheck": "tsc --noEmit"
+  }
+}

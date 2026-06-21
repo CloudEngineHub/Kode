@@ -1,0 +1,27 @@
+{
+  "name": "@shareai-lab/kode-bin-linux-arm64",
+  "version": "2.2.1",
+  "description": "Prebuilt Kode native binary for linux-arm64.",
+  "license": "Apache-2.0",
+  "author": "ShareAI-lab <ai-lab@foxmail.com>",
+  "homepage": "https://github.com/shareAI-lab/kode",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shareAI-lab/kode.git"
+  },
+  "bugs": {
+    "url": "https://github.com/shareAI-lab/kode/issues"
+  },
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "type": "commonjs",
+  "main": "index.js",
+  "files": [
+    "index.js",
+    "bin"
+  ]
+}

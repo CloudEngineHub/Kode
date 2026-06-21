@@ -1,6 +1,5 @@
 # Kode - AI Coding
 <img width="991" height="479" alt="image" src="https://github.com/user-attachments/assets/c1751e92-94dc-4e4a-9558-8cd2d058c1a1" />  <br> 
-<a href="https://trendshift.io/repositories/22005" target="_blank"><img src="https://trendshift.io/api/badge/repositories/22005" alt="shareAI-lab%2FKode-Agent | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 [![npm version](https://badge.fury.io/js/@shareai-lab%2Fkode.svg)](https://www.npmjs.com/package/@shareai-lab/kode)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![AGENTS.md](https://img.shields.io/badge/AGENTS.md-Compatible-brightgreen)](https://agents.md)
@@ -19,7 +18,7 @@
 
 ## 📢 Update Log
 
-**2025-12-22**: Native-first distribution (Windows OOTB). Kode prefers a cached native binary and falls back to the Node.js runtime when needed. See `docs/binary-distribution.md`.
+**2025-12-22**: npm + optionalDependencies distribution (all platforms). Kode prefers the per-platform native binary package (`@shareai-lab/kode-bin-*`) with Node.js as a fallback; standalone binaries are also published on GitHub Releases. See `docs/binary-distribution.md`.
 
 
 ## 🤝 AGENTS.md Standard Support
@@ -114,6 +113,12 @@ npm install -g @shareai-lab/kode
 > ```bash
 > npm install -g @shareai-lab/kode --registry=https://registry.npmmirror.com
 > ```
+>
+> Kode uses ripgrep (`rg`) for fast search. By default it is installed via per-platform `optionalDependencies` (`@shareai-lab/kode-ripgrep-<platform>-<arch>`). If you install with `--no-optional`, install system `rg` or set `KODE_RIPGREP_PATH`.
+>
+> Kode also ships an optional per-platform native CLI binary via `optionalDependencies` (`@shareai-lab/kode-bin-<platform>-<arch>`). If you install with `--no-optional` / `--omit=optional`, it runs via the Node.js entry (`dist/index.js`).
+>
+> Kode does **not** download anything from GitHub during install. (The optional standalone binaries live on GitHub Releases, separate from npm.)
 
 Dev channel (latest features):
 
@@ -126,22 +131,17 @@ After installation, you can use any of these commands:
 - `kwa` - Kode With Agent (alternative)
 - `kd` - Ultra-short alias
 
-### Native binaries (Windows OOTB)
+### Standalone single-file binaries (optional)
 
-- No WSL/Git Bash required.
-- On `postinstall`, Kode will best-effort download a native binary from GitHub Releases into `${KODE_BIN_DIR:-~/.kode/bin}/<version>/<platform>-<arch>/kode(.exe)`.
-- The wrapper (`cli.js`) prefers the native binary and falls back to the Node.js runtime (`node dist/index.js`) when needed.
+For users who prefer a “portable” executable (no npm install), download the Bun-compiled asset from GitHub Releases:
 
-Overrides:
-- Mirror downloads: `KODE_BINARY_BASE_URL`
-- Disable download: `KODE_SKIP_BINARY_DOWNLOAD=1`
-- Cache directory: `KODE_BIN_DIR`
+- https://github.com/shareAI-lab/kode/releases
 
-See `docs/binary-distribution.md`.
+See `docs/binary-distribution.md` for details (asset names, local build).
 
 ### Configuration / API keys
 
-- Global config (models, pointers, theme, etc): `~/.kode.json` (or `<KODE_CONFIG_DIR>/config.json` when `KODE_CONFIG_DIR`/`CLAUDE_CONFIG_DIR` is set).
+- Global config (models, pointers, theme, etc): `~/.kode.json` (or `<KODE_CONFIG_DIR>/config.json` when `KODE_CONFIG_DIR` is set).
 - Project/local settings (output style, etc): `./.kode/settings.json` and `./.kode/settings.local.json` (legacy `.claude` is supported for some features).
 - Configure models via `/model` (UI) or `kode models import/export` (YAML). Details: `docs/develop/configuration.md`.
 
@@ -257,7 +257,7 @@ Example `.mcprc`:
 ### Troubleshooting
 
 - Models: use `/model`, or `kode models import kode-models.yaml`, and ensure required API key env vars exist.
-- Windows: if the native binary download is blocked/offline, set `KODE_BINARY_BASE_URL` (mirror) or `KODE_SKIP_BINARY_DOWNLOAD=1` (skip download); the wrapper will fall back to the Node.js runtime (`dist/index.js`).
+- Windows: install via npm as usual; if you want a single-file executable, use the GitHub Release asset for your platform.
 - MCP: use `kode mcp list` to check server status; tune `MCP_CONNECTION_TIMEOUT_MS`, `MCP_SERVER_CONNECTION_BATCH_SIZE`, and `MCP_TOOL_TIMEOUT` if servers are slow.
 - Sandbox: install `bwrap` (bubblewrap) on Linux, or set `KODE_SYSTEM_SANDBOX=0` to disable.
 
@@ -341,7 +341,7 @@ As long as you have an openai-like endpoint, it should work.
 Kode supports subagents (agent templates) for delegation and task orchestration.
 
 - Agents are loaded from `.kode/agents` and `.claude/agents` (user + project), plus plugins/policy and `--agents`.
-- Manage in the UI: `/agents` (creates new agents under `./.claude/agents` / `~/.claude/agents` by default).
+- Manage in the UI: `/agents` (creates new agents under `./.kode/agents` / `~/.kode/agents` by default; legacy `.claude/agents` is read-compat).
 - Run via mentions: `@run-agent-<agentType> ...`
 - Run via tooling: `Task(subagent_type: "<agentType>", ...)`
 - CLI flags: `--agents <json>` (inject agents for this run), `--setting-sources user,project,local` (control which sources are loaded)
@@ -373,25 +373,9 @@ See `docs/agents-system.md`.
 
 ## Skills & Plugins
 
-Kode supports the [Agent Skills](https://agentskills.io) open format for extending agent capabilities:
-- **Agent Skills** format (`SKILL.md`) - see [specification](https://agentskills.io/specification)
-- **Marketplace compatibility** (`.kode-plugin/marketplace.json`, legacy `.claude-plugin/marketplace.json`)
-- **Install from any repository** using [`add-skill` CLI](https://github.com/vercel-labs/add-skill)
-
-### Quick install with add-skill
-
-Install skills from any git repository:
-
-```bash
-# Install from GitHub
-npx add-skill vercel-labs/agent-skills -a kode
-
-# Install to global directory
-npx add-skill vercel-labs/agent-skills -a kode -g
-
-# Install specific skills
-npx add-skill vercel-labs/agent-skills -a kode -s pdf -s xlsx
-```
+Kode supports:
+- **Agent Skills** format (`SKILL.md`) for reusable skill packs
+- **Marketplace compatibility** (`.kode-plugin/marketplace.json`, legacy `.claude-plugin/marketplace.json`) for sharing/installing skill packs
 
 ### Install skills from a marketplace
 

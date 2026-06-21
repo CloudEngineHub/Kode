@@ -7,7 +7,7 @@ Kode's @ mention system provides intelligent auto-completion and smart delegatio
 ## Features
 
 - 🦜 **Expert Model Consultation** - `@ask-model-name`
-- 👤 **Agent Delegation** - `@run-agent-name` 
+- 👤 **Agent Delegation** - `@run-agent-name`
 - 📁 **File References** - `@path/to/file`
 - ⚡ **Smart Completion** - Real-time suggestions as you type
 - 🔍 **Context-Aware** - Shows relevant options based on input
@@ -21,6 +21,7 @@ Consult specific AI models for specialized analysis and expert opinions.
 **Format**: `@ask-{model-name}`
 
 **Examples**:
+
 ```bash
 @ask-claude-sonnet-4 How should I optimize this React component?
 @ask-gpt-5 What are the security implications of this API design?
@@ -28,6 +29,7 @@ Consult specific AI models for specialized analysis and expert opinions.
 ```
 
 **Behavior**:
+
 - Triggers `AskExpertModelTool`
 - Model receives only your question (no conversation history)
 - Requires complete, self-contained questions
@@ -40,12 +42,14 @@ Delegate tasks to specialized subagents with predefined capabilities.
 **Format**: `@run-agent-{agent-type}`
 
 **Examples**:
+
 ```bash
 @run-agent-general-purpose Review this code for over-engineering
 @run-agent-my-custom-agent Design a microservices architecture
 ```
 
 **Behavior**:
+
 - Triggers `TaskTool` with specified subagent
 - Agent has access to project context and tools
 - Uses agent's specialized prompt and model preferences
@@ -58,14 +62,16 @@ Reference files and directories with intelligent path completion.
 **Format**: `@{file-path}`
 
 **Examples**:
+
 ```bash
-@src/components/Button.tsx
+@packages/core/src/query/index.ts
 @docs/api-reference.md
 @package.json
 @README.md
 ```
 
 **Behavior**:
+
 - Shows file/directory structure as you type
 - Supports relative and absolute paths
 - Integrates with file reading tools
@@ -76,7 +82,7 @@ Reference files and directories with intelligent path completion.
 ### Completion Priority
 
 1. **🦜 Ask Models** (Score: 90) - Expert consultation options
-2. **👤 Run Agents** (Score: 85) - Available subagents  
+2. **👤 Run Agents** (Score: 85) - Available subagents
 3. **📁 Files** (Score: 70-80) - Project files and directories
 
 ### Keyboard Navigation
@@ -108,7 +114,7 @@ Reference files and directories with intelligent path completion.
 ```typescript
 // Recognized patterns
 /@(ask-[\w\-]+)/g           // @ask-model-name
-/@(run-agent-[\w\-]+)/g     // @run-agent-name  
+/@(run-agent-[\w\-]+)/g     // @run-agent-name
 /@(agent-[\w\-]+)/g         // @agent-name (legacy)
 /@([a-zA-Z0-9/._-]+)/g      // @file/path
 ```
@@ -116,6 +122,7 @@ Reference files and directories with intelligent path completion.
 ### Email Protection
 
 The system intelligently detects email addresses and treats them as regular text:
+
 ```bash
 user@domain.com  # Treated as regular text, no completion
 @ask-claude      # Triggers completion
@@ -135,7 +142,7 @@ user@domain.com  # Treated as regular text, no completion
 # Old format (still works)
 @my-agent
 
-# New format (recommended)  
+# New format (recommended)
 @run-agent-my-agent
 ```
 
@@ -144,6 +151,7 @@ user@domain.com  # Treated as regular text, no completion
 ### Available Models
 
 Models are loaded dynamically from your configuration:
+
 ```bash
 # View configured models
 /model
@@ -154,6 +162,7 @@ Models are loaded dynamically from your configuration:
 ### Available Agents
 
 Agents are loaded from multiple sources:
+
 - Built-in agents (only general-purpose currently available)
 - User agents (`~/.kode/agents/`)
 - Project agents (`./.kode/agents/`)
@@ -215,6 +224,7 @@ Agents are loaded from multiple sources:
 ## Future Enhancements
 
 Planned improvements:
+
 - **Fuzzy Matching** - Better completion matching
 - **Context Hints** - Show tool descriptions in completions
 - **Custom Shortcuts** - User-defined @ shortcuts

@@ -1,28 +1,12 @@
 # Skills & Plugins
 
-Kode supports the [Agent Skills](https://agentskills.io) open format for extending agent capabilities with reusable instruction sets.
+Kode supports:
 
-- **Agent Skills** (directories containing `SKILL.md` - see [specification](https://agentskills.io/specification))
+- **Agent Skills** (directories containing `SKILL.md`)
 - **Marketplace compatibility** (`.kode-plugin/marketplace.json`, legacy `.claude-plugin/marketplace.json`)
 - **Plugin packs** installed via `kode plugin install ...`
-- **Install from any repository** using [`add-skill` CLI](https://github.com/vercel-labs/add-skill)
 
 This doc is a compact reference for installing/using/creating/distributing skills.
-
-## Quick Install with add-skill
-
-Install skills from any git repository:
-
-```bash
-# Install from GitHub
-npx add-skill vercel-labs/agent-skills -a kode
-
-# Install to global directory
-npx add-skill vercel-labs/agent-skills -a kode -g
-
-# Install specific skills
-npx add-skill vercel-labs/agent-skills -a kode -s pdf -s xlsx
-```
 
 ## Install skills (marketplace → plugin pack)
 

@@ -3,7 +3,10 @@ name: Stable Release (tags)
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*.*.*'
+    tags-ignore:
+      - 'v*.*.*-*'
+  workflow_dispatch:
 
 concurrency:
   group: stable-release-${{ github.ref }}
@@ -11,6 +14,7 @@ concurrency:
 
 jobs:
   verify:
+    if: github.event_name != 'push' || github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.ver.outputs.version }}
@@ -43,23 +47,11 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            target: bun-linux-x64
-            asset: kode-linux-x64
-          - os: ubuntu-latest
-            target: bun-linux-arm64
-            asset: kode-linux-arm64
+          - os: ubuntu-24.04-arm64
           - os: macos-latest
-            target: bun-darwin-x64
-            asset: kode-darwin-x64
-          - os: macos-latest
-            target: bun-darwin-arm64
-            asset: kode-darwin-arm64
+          - os: macos-13
           - os: windows-latest
-            target: bun-windows-x64
-            asset: kode-win32-x64.exe
     runs-on: ${{ matrix.os }}
-    env:
-      KODE_SKIP_BINARY_DOWNLOAD: "1"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -77,25 +69,66 @@ jobs:
       - name: Install
         run: bun install
 
-      - name: Build binary
-        run: bun build src/entrypoints/index.ts --compile --target=${{ matrix.target }} --format=esm --outfile=${{ matrix.asset }}
+      - name: Build Linux seccomp assets (Unix socket blocking)
+        if: runner.os == 'Linux'
+        run: node scripts/build-seccomp-assets.mjs --require --verbose
 
-      - name: Make binary executable
-        if: runner.os != 'Windows'
-        run: chmod +x ${{ matrix.asset }}
+      - name: Stage seccomp assets for publishing
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          ARCH="$(node -p 'process.arch')"
+          mkdir -p "seccomp-assets/linux-${ARCH}"
+          cp "vendor/seccomp/${ARCH}/apply-seccomp" "seccomp-assets/linux-${ARCH}/apply-seccomp"
+          cp "vendor/seccomp/${ARCH}/unix-block.bpf" "seccomp-assets/linux-${ARCH}/unix-block.bpf"
+          chmod 755 "seccomp-assets/linux-${ARCH}/apply-seccomp" || true
+
+      - name: Upload seccomp assets artifact
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: seccomp-linux-${{ matrix.os }}
+          path: seccomp-assets/**
+          if-no-files-found: error
+
+      - name: Build (assets needed for standalone binary)
+        run: bun run build
+
+      - name: Ensure bundled ripgrep (current platform only)
+        run: bun run scripts/ensure-ripgrep.mjs --current-only
+
+      - name: Build binary
+        run: bun run build:binary
+
+      - name: Prepare release asset
+        id: asset
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs')
+          const path = require('node:path')
+          const platform = process.platform
+          const arch = process.arch
+          const ext = platform === 'win32' ? '.exe' : ''
+          const src = path.join('dist', 'bin', `${platform}-${arch}`, `kode${ext}`)
+          const dest = `kode-${platform}-${arch}${ext}`
+          fs.copyFileSync(src, dest)
+          if (platform !== 'win32') {
+            try { fs.chmodSync(dest, 0o755) } catch {}
+          }
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `asset=${dest}\n`)
+          console.log(`Prepared ${dest}`)
+          NODE
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.asset }}
-          path: ${{ matrix.asset }}
+          name: ${{ steps.asset.outputs.asset }}
+          path: ${{ steps.asset.outputs.asset }}
           if-no-files-found: error
 
   publish-npm:
-    needs: verify
+    needs: [verify, build-binaries]
     runs-on: ubuntu-latest
-    env:
-      KODE_SKIP_BINARY_DOWNLOAD: "1"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -114,17 +147,61 @@ jobs:
       - name: Install
         run: bun install
 
+      - name: Sync workspace versions
+        run: node scripts/set-version.mjs "${{ needs.verify.outputs.version }}"
+
+      - name: Download binary artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Ensure bundled ripgrep
+        run: bun run scripts/ensure-ripgrep.mjs
+
+      - name: Prepare Linux seccomp assets (x64 + arm64) for publishing
+        run: node scripts/prepare-seccomp-assets.mjs --artifacts-dir artifacts --dest-root vendor/seccomp
+
+      - name: Prepare ripgrep platform packages
+        run: node scripts/prepare-ripgrep-packages.mjs
+
+      - name: Prepare Kode binary platform packages
+        run: node scripts/prepare-kode-bin-packages.mjs
+
       - name: Typecheck
         run: bun run typecheck
 
       - name: Test
         run: bun test
 
-      - name: Build (npm)
-        run: bun run build:npm
+      - name: Build (all-in-bun)
+        run: bun run build
 
       - name: Prepublish check
         run: bun run scripts/prepublish-check.js
+
+      - name: Smoke test packaged install (no scripts)
+        run: bash scripts/smoke-packaged-install.sh
+
+      - name: "Publish Kode binary platform packages (dist-tag: latest)"
+        run: |
+          set -euo pipefail
+          for dir in packages/kode-bin-*; do
+            echo "Publishing $dir"
+            (cd "$dir" && npm publish --access public --ignore-scripts)
+          done
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: "Publish ripgrep platform packages (dist-tag: latest)"
+        run: |
+          set -euo pipefail
+          for dir in packages/kode-ripgrep-*; do
+            echo "Publishing $dir"
+            (cd "$dir" && npm publish --access public --ignore-scripts)
+          done
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: "Publish npm (dist-tag: latest)"
         run: npm publish --access public --ignore-scripts

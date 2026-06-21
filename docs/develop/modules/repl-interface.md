@@ -2,7 +2,7 @@
 
 ## Overview
 
-The REPL module (`src/screens/REPL.tsx`) provides the main interactive interface for Kode. It's a sophisticated React-based terminal UI that handles user input, displays responses, manages conversation state, and orchestrates the entire interactive experience.
+The REPL module (`ui/ink/src/screens/REPL.tsx`) provides the main interactive interface for Kode. It's a sophisticated React-based terminal UI that handles user input, displays responses, manages conversation state, and orchestrates the entire interactive experience.
 
 ## Architecture
 
@@ -28,7 +28,7 @@ export function REPL(props: REPLProps): JSX.Element {
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [currentModel, setCurrentModel] = useState<Model>()
-  
+
   // Conversation handling
   // UI rendering
   // Event handlers
@@ -49,19 +49,16 @@ interface ConversationState {
 }
 
 const useConversationState = () => {
-  const [state, dispatch] = useReducer(
-    conversationReducer,
-    initialState
-  )
-  
+  const [state, dispatch] = useReducer(conversationReducer, initialState)
+
   const addMessage = (message: Message) => {
     dispatch({ type: 'ADD_MESSAGE', payload: message })
   }
-  
+
   const updateStreamingContent = (content: string) => {
     dispatch({ type: 'UPDATE_STREAMING', payload: content })
   }
-  
+
   return { state, addMessage, updateStreamingContent }
 }
 ```
@@ -73,13 +70,13 @@ const useModelState = () => {
   const [modelPointer, setModelPointer] = useState('main')
   const [modelProfile, setModelProfile] = useState<ModelProfile>()
   const [isDefaultModel, setIsDefaultModel] = useState(true)
-  
+
   const switchModel = async (pointer: string) => {
     const profile = await resolveModelProfile(pointer)
     setModelProfile(profile)
     setModelPointer(pointer)
   }
-  
+
   return { modelProfile, switchModel, isDefaultModel }
 }
 ```
@@ -96,7 +93,7 @@ const PromptInput: React.FC<{
 }> = ({ onSubmit, isLoading, multiline }) => {
   const [value, setValue] = useState('')
   const [cursorPosition, setCursorPosition] = useState(0)
-  
+
   const handleKeyPress = (key: string, event: KeyEvent) => {
     if (key === 'enter' && !event.shift) {
       if (!isLoading && value.trim()) {
@@ -106,7 +103,7 @@ const PromptInput: React.FC<{
     }
     // Handle other keys (arrows, backspace, etc.)
   }
-  
+
   return (
     <Box flexDirection="column">
       <TextInput
@@ -127,20 +124,20 @@ const PromptInput: React.FC<{
 ```typescript
 async function processUserInput(
   input: string,
-  context: REPLContext
+  context: REPLContext,
 ): Promise<void> {
   // Check for slash commands
   if (input.startsWith('/')) {
     await handleSlashCommand(input, context)
     return
   }
-  
+
   // Check for special shortcuts
   if (input === '!!') {
     await retryLastCommand(context)
     return
   }
-  
+
   // Process as AI conversation
   await handleAIConversation(input, context)
 }
@@ -158,19 +155,19 @@ const MessageRenderer: React.FC<{
   switch (message.type) {
     case 'user':
       return <UserMessage message={message} />
-      
+
     case 'assistant':
       return <AssistantMessage message={message} verbose={verbose} />
-      
+
     case 'tool_use':
       return <ToolUseMessage message={message} />
-      
+
     case 'tool_result':
       return <ToolResultMessage message={message} />
-      
+
     case 'error':
       return <ErrorMessage message={message} />
-      
+
     default:
       return null
   }
@@ -186,12 +183,12 @@ const StreamingMessage: React.FC<{
 }> = ({ content, isThinking }) => {
   const [displayContent, setDisplayContent] = useState('')
   const [cursor, setCursor] = useState(true)
-  
+
   // Animate content appearance
   useEffect(() => {
     const chars = content.split('')
     let index = 0
-    
+
     const interval = setInterval(() => {
       if (index < chars.length) {
         setDisplayContent(prev => prev + chars[index])
@@ -200,19 +197,19 @@ const StreamingMessage: React.FC<{
         clearInterval(interval)
       }
     }, 10) // Typing animation speed
-    
+
     return () => clearInterval(interval)
   }, [content])
-  
+
   // Cursor blink
   useEffect(() => {
     const interval = setInterval(() => {
       setCursor(prev => !prev)
     }, 500)
-    
+
     return () => clearInterval(interval)
   }, [])
-  
+
   return (
     <Box>
       <Text color={isThinking ? 'gray' : 'white'}>
@@ -231,17 +228,17 @@ const StreamingMessage: React.FC<{
 ```typescript
 async function executeQuery(
   prompt: string,
-  context: REPLContext
+  context: REPLContext,
 ): Promise<void> {
   const abortController = new AbortController()
-  
+
   try {
     setIsLoading(true)
-    
+
     // Add user message
     const userMessage = createUserMessage(prompt)
     addMessage(userMessage)
-    
+
     // Execute query
     const stream = query({
       prompt,
@@ -249,14 +246,13 @@ async function executeQuery(
       model: context.currentModel,
       tools: context.tools,
       abortSignal: abortController.signal,
-      safeMode: context.safeMode
+      safeMode: context.safeMode,
     })
-    
+
     // Process stream
     for await (const event of stream) {
       await processStreamEvent(event, context)
     }
-    
   } catch (error) {
     handleQueryError(error, context)
   } finally {
@@ -270,31 +266,31 @@ async function executeQuery(
 ```typescript
 async function processStreamEvent(
   event: QueryStreamEvent,
-  context: REPLContext
+  context: REPLContext,
 ): Promise<void> {
   switch (event.type) {
     case 'text_delta':
       updateStreamingContent(event.text)
       break
-      
+
     case 'tool_request':
       await handleToolRequest(event.tool, context)
       break
-      
+
     case 'tool_result':
       displayToolResult(event.result)
       break
-      
+
     case 'thinking':
       if (context.showThinking) {
         displayThinking(event.content)
       }
       break
-      
+
     case 'complete':
       finalizeResponse(context)
       break
-      
+
     case 'error':
       handleStreamError(event.error, context)
       break
@@ -319,7 +315,7 @@ const ToolExecutionDisplay: React.FC<{
       case 'error': return '❌'
     }
   }
-  
+
   return (
     <Box flexDirection="column" borderStyle="round" padding={1}>
       <Box>
@@ -347,18 +343,18 @@ const PermissionRequestHandler: React.FC<{
   onDeny: () => void
 }> = ({ request, onApprove, onDeny }) => {
   const [showDetails, setShowDetails] = useState(false)
-  
+
   return (
     <Box flexDirection="column" borderStyle="double" borderColor="yellow">
       <Text bold color="yellow">⚠️ Permission Required</Text>
       <Text>{request.description}</Text>
-      
+
       {showDetails && (
         <Box marginTop={1}>
           <Text dim>{request.details}</Text>
         </Box>
       )}
-      
+
       <Box marginTop={1}>
         <SelectInput
           items={[
@@ -391,15 +387,15 @@ const useKeyboardShortcuts = (context: REPLContext) => {
     if (key.ctrl && input === 'c') {
       handleCancel(context)
     }
-    
+
     if (key.ctrl && input === 'l') {
       clearScreen()
     }
-    
+
     if (key.ctrl && input === 'r') {
       searchHistory(context)
     }
-    
+
     // Vim mode shortcuts
     if (context.vimMode) {
       handleVimKeys(input, key, context)
@@ -423,12 +419,12 @@ const StatusBar: React.FC<{
         <Text dim>Model: </Text>
         <Text color="cyan">{model.name}</Text>
       </Box>
-      
+
       <Box>
         <Text dim>Cost: </Text>
         <Text color={cost > 1 ? 'red' : 'green'}>${cost.toFixed(4)}</Text>
       </Box>
-      
+
       <Box>
         {mode === 'safe' && <Text color="yellow">🛡️ Safe Mode</Text>}
         {isLoading && <Spinner />}
@@ -446,29 +442,29 @@ const StatusBar: React.FC<{
 class ConversationHistory {
   private history: Message[][] = []
   private currentIndex: number = -1
-  
+
   save(messages: Message[]): void {
     this.history.push([...messages])
     this.currentIndex = this.history.length - 1
   }
-  
+
   navigate(direction: 'prev' | 'next'): Message[] | null {
     if (direction === 'prev' && this.currentIndex > 0) {
       this.currentIndex--
       return this.history[this.currentIndex]
     }
-    
+
     if (direction === 'next' && this.currentIndex < this.history.length - 1) {
       this.currentIndex++
       return this.history[this.currentIndex]
     }
-    
+
     return null
   }
-  
+
   search(query: string): Message[][] {
     return this.history.filter(messages =>
-      messages.some(m => m.content.includes(query))
+      messages.some(m => m.content.includes(query)),
     )
   }
 }
@@ -479,20 +475,20 @@ class ConversationHistory {
 ```typescript
 async function saveConversationLog(
   messages: Message[],
-  logName: string
+  logName: string,
 ): Promise<void> {
   const logPath = path.join(CACHE_DIR, 'messages', `${logName}.json`)
-  
+
   const logData = {
     timestamp: new Date().toISOString(),
     messages: messages.map(sanitizeMessage),
     metadata: {
       model: getCurrentModel(),
       cost: calculateCost(messages),
-      duration: getSessionDuration()
-    }
+      duration: getSessionDuration(),
+    },
   }
-  
+
   await fs.writeFile(logPath, JSON.stringify(logData, null, 2))
 }
 ```
@@ -504,19 +500,19 @@ async function saveConversationLog(
 ```typescript
 const ErrorDisplay: React.FC<{ error: Error }> = ({ error }) => {
   const [showDetails, setShowDetails] = useState(false)
-  
+
   return (
     <Box flexDirection="column" borderStyle="round" borderColor="red">
       <Text color="red" bold>❌ Error</Text>
       <Text>{error.message}</Text>
-      
+
       {showDetails && (
         <Box marginTop={1} flexDirection="column">
           <Text dim>Stack trace:</Text>
           <Text dim wrap="wrap">{error.stack}</Text>
         </Box>
       )}
-      
+
       <Box marginTop={1}>
         <Text dim>
           Press 'd' for details, 'r' to retry, 'c' to continue
@@ -530,31 +526,28 @@ const ErrorDisplay: React.FC<{ error: Error }> = ({ error }) => {
 ### Recovery Options
 
 ```typescript
-function handleError(
-  error: Error,
-  context: REPLContext
-): RecoveryAction {
+function handleError(error: Error, context: REPLContext): RecoveryAction {
   if (error.name === 'AbortError') {
     return { type: 'cancelled' }
   }
-  
+
   if (error.name === 'RateLimitError') {
     return {
       type: 'switch_model',
-      suggestion: 'Switch to a different model?'
+      suggestion: 'Switch to a different model?',
     }
   }
-  
+
   if (error.name === 'ContextLengthError') {
     return {
       type: 'compact_context',
-      suggestion: 'Compact conversation history?'
+      suggestion: 'Compact conversation history?',
     }
   }
-  
+
   return {
     type: 'retry',
-    suggestion: 'Retry the operation?'
+    suggestion: 'Retry the operation?',
   }
 }
 ```
@@ -569,18 +562,18 @@ const MessageList: React.FC<{
   height: number
 }> = ({ messages, height }) => {
   const [visibleRange, setVisibleRange] = useState({ start: 0, end: 50 })
-  
+
   const handleScroll = (offset: number) => {
     const start = Math.floor(offset / MESSAGE_HEIGHT)
     const end = start + Math.ceil(height / MESSAGE_HEIGHT)
     setVisibleRange({ start, end })
   }
-  
+
   const visibleMessages = messages.slice(
     visibleRange.start,
     visibleRange.end
   )
-  
+
   return (
     <VirtualScroll
       height={height}
@@ -599,14 +592,13 @@ const MessageList: React.FC<{
 ### Memoization
 
 ```typescript
-const MemoizedMessage = React.memo(
-  MessageRenderer,
-  (prevProps, nextProps) => {
-    // Only re-render if message content changes
-    return prevProps.message.content === nextProps.message.content &&
-           prevProps.verbose === nextProps.verbose
-  }
-)
+const MemoizedMessage = React.memo(MessageRenderer, (prevProps, nextProps) => {
+  // Only re-render if message content changes
+  return (
+    prevProps.message.content === nextProps.message.content &&
+    prevProps.verbose === nextProps.verbose
+  )
+})
 ```
 
 The REPL module provides a sophisticated, responsive, and user-friendly interface for AI conversations with comprehensive state management, error handling, and performance optimizations.

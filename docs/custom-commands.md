@@ -8,10 +8,10 @@ Kode supports custom slash commands through Markdown files placed in `.claude/co
 
 Custom commands are loaded from multiple locations (both .claude and .kode directories are supported):
 
-- **Global commands**: 
+- **Global commands**:
   - `~/.claude/commands/` - Available in all projects
   - `~/.kode/commands/` - Available in all projects
-- **Project commands**: 
+- **Project commands**:
   - `./.claude/commands/` - Specific to the current project
   - `./.kode/commands/` - Specific to the current project
 
@@ -39,15 +39,15 @@ You can reference arguments using {arg1} and {arg2} placeholders.
 
 ### Frontmatter Options
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `name` | string | filename | Command name (used as `/name`) |
-| `description` | string | auto-generated | Description shown in help |
-| `aliases` | string[] | `[]` | Alternative command names |
-| `enabled` | boolean | `true` | Whether command is available |
-| `hidden` | boolean | `false` | Hide from help output |
-| `progressMessage` | string | auto-generated | Message shown while running |
-| `argNames` | string[] | `[]` | Named arguments for substitution |
+| Field             | Type     | Default        | Description                      |
+| ----------------- | -------- | -------------- | -------------------------------- |
+| `name`            | string   | filename       | Command name (used as `/name`)   |
+| `description`     | string   | auto-generated | Description shown in help        |
+| `aliases`         | string[] | `[]`           | Alternative command names        |
+| `enabled`         | boolean  | `true`         | Whether command is available     |
+| `hidden`          | boolean  | `false`        | Hide from help output            |
+| `progressMessage` | string   | auto-generated | Message shown while running      |
+| `argNames`        | string[] | `[]`           | Named arguments for substitution |
 
 ## Examples
 
@@ -63,6 +63,7 @@ aliases: [st, info]
 ---
 
 Provide a comprehensive project status including:
+
 - Current git status and recent commits
 - Modified files summary
 - Test results and build status
@@ -89,17 +90,20 @@ progressMessage: Preparing deployment for {environment}...
 Generate deployment checklist for {environment} environment, version {version}:
 
 **Pre-deployment:**
+
 - Code review completion
 - All tests passing
 - Security scans completed
 
 **Deployment steps:**
+
 1. Backup current state
 2. Deploy to {environment}
 3. Verify deployment
 4. Monitor metrics
 
 **Post-deployment:**
+
 - Health checks
 - Performance monitoring
 - Documentation updates
@@ -125,18 +129,21 @@ progressMessage: Conducting security analysis...
 Perform a comprehensive security analysis:
 
 **Vulnerability Assessment:**
+
 - OWASP Top 10 vulnerabilities
 - Dependency vulnerabilities
 - Input validation issues
 - Authentication/authorization flaws
 
 **Code Security Review:**
+
 - Hardcoded secrets detection
 - Insecure data handling
 - Error handling security
 - Access control issues
 
 **Infrastructure Security:**
+
 - Environment configuration
 - Network security
 - SSL/TLS configuration
@@ -150,22 +157,26 @@ Please provide prioritized security recommendations with remediation steps.
 ## Best Practices
 
 ### 1. Command Naming
+
 - Use descriptive names with hyphens: `code-review`, `performance-audit`
 - Provide meaningful aliases: `[cr, review]` for `code-review`
 - Keep names concise but clear
 
 ### 2. Content Structure
+
 - Start with clear objectives
 - Use structured lists and sections
 - Include specific context requests
 - End with actionable requests
 
 ### 3. Argument Usage
+
 - Define clear `argNames` for parameterized commands
 - Use descriptive placeholder names: `{environment}`, `{version}`
 - Provide default behavior when arguments are optional
 
 ### 4. Organization
+
 - Group related commands in directories
 - Use consistent naming patterns
 - Keep global commands general-purpose
@@ -206,25 +217,28 @@ Use `hidden: true` for internal commands or work-in-progress commands:
 
 ```markdown
 ---
-hidden: true  # Won't appear in /help output
+hidden: true # Won't appear in /help output
 ---
 ```
 
 ## Troubleshooting
 
 ### Commands Not Loading
+
 1. Check file extension is `.md`
 2. Verify frontmatter syntax (YAML format)
 3. Ensure directories exist: `~/.claude/commands/`, `~/.kode/commands/`, `./.claude/commands/`, or `./.kode/commands/`
 4. Check file permissions
 
 ### Syntax Errors
+
 - YAML frontmatter must be properly formatted
 - Arrays can be `[item1, item2]` or multi-line with `- item`
 - Boolean values should be `true`/`false` (not quoted)
 - Strings with special characters should be quoted
 
 ### Performance
+
 - Commands are cached and loaded once per session
 - Large numbers of commands may affect startup time
 - Use `enabled: false` to temporarily disable commands

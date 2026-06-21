@@ -1,0 +1,412 @@
+import OpenAI from 'openai'
+import type { ChatCompletionStream } from 'openai/lib/ChatCompletionStream'
+import { randomUUID } from 'crypto'
+import type { UUID } from 'crypto'
+import { zodToJsonSchema } from 'zod-to-json-schema'
+import type { TextBlockParam } from '@anthropic-ai/sdk/resources/index.mjs'
+import type { Tool, ToolUseContext } from '#core/tooling/Tool'
+import type { AssistantMessage, UserMessage } from '#core/query'
+import type { ModelProfile } from '#core/utils/config'
+import { getGlobalConfig } from '#core/utils/config'
+import { getModelManager } from '#core/utils/model'
+import {
+  debug as debugLogger,
+  getCurrentRequest,
+  logLLMInteraction,
+  logSystemPromptConstruction,
+} from '#core/utils/debugLogger'
+import { logError } from '#core/utils/log'
+import { addToTotalCost } from '#core/cost-tracker'
+import { normalizeContentFromAPI } from '#core/utils/messages'
+import { getCLISyspromptPrefix } from '#core/constants/prompts'
+import { getReasoningEffort } from '#core/utils/thinking'
+import { generateKodeContext } from '#core/ai/llm/kodeContext'
+import { MAIN_QUERY_TEMPERATURE } from '#core/ai/llm/constants'
+import {
+  PROMPT_CACHING_ENABLED,
+  splitSysPromptPrefix,
+} from '#core/ai/llm/systemPromptUtils'
+import { withRetry } from '#core/ai/llm/retry'
+import { getAssistantMessageFromError } from '#core/ai/llm/errors'
+import { ModelAdapterFactory } from '#core/ai/modelAdapterFactory'
+import {
+  getCompletionWithProfile,
+  getGPT5CompletionWithProfile,
+} from '#core/ai/openai'
+import type { UnifiedRequestParams } from '#core/types/modelCapabilities'
+import type { RequestHeadersProfile } from '#core/ai/llm/restrictedClientCompat'
+
+import {
+  convertAnthropicMessagesToOpenAIMessages,
+  convertOpenAIResponseToAnthropic,
+} from './conversion'
+import { buildOpenAIChatCompletionCreateParams, isGPT5Model } from './params'
+import { handleMessageStream } from './stream'
+import { buildAssistantMessageFromUnifiedResponse } from './unifiedResponse'
+import { getMaxTokensFromProfile, normalizeUsage } from './usage'
+
+const SONNET_COST_PER_MILLION_INPUT_TOKENS = 3
+const SONNET_COST_PER_MILLION_OUTPUT_TOKENS = 15
+const SONNET_COST_PER_MILLION_PROMPT_CACHE_WRITE_TOKENS = 3.75
+const SONNET_COST_PER_MILLION_PROMPT_CACHE_READ_TOKENS = 0.3
+
+export { buildOpenAIChatCompletionCreateParams, isGPT5Model } from './params'
+
+export async function queryOpenAI(
+  messages: (UserMessage | AssistantMessage)[],
+  systemPrompt: string[],
+  maxThinkingTokens: number,
+  tools: Tool[],
+  signal: AbortSignal,
+  options?: {
+    safeMode: boolean
+    model: string
+    prependCLISysprompt: boolean
+    temperature?: number
+    maxTokens?: number
+    stopSequences?: string[]
+    modelProfile?: ModelProfile | null
+    toolUseContext?: ToolUseContext
+    requestHeadersProfile?: RequestHeadersProfile
+    cliSyspromptPrefix?: string
+  },
+): Promise<AssistantMessage> {
+  const config = getGlobalConfig()
+  const modelManager = getModelManager()
+  const toolUseContext = options?.toolUseContext
+
+  const modelProfile = options?.modelProfile || modelManager.getModel('main')
+  let model: string
+
+  // 🔍 Debug: 记录模型配置详情
+  const currentRequest = getCurrentRequest()
+  debugLogger.api('MODEL_CONFIG_OPENAI', {
+    modelProfileFound: !!modelProfile,
+    modelProfileId: modelProfile?.modelName,
+    modelProfileName: modelProfile?.name,
+    modelProfileModelName: modelProfile?.modelName,
+    modelProfileProvider: modelProfile?.provider,
+    modelProfileBaseURL: modelProfile?.baseURL,
+    modelProfileApiKeyExists: !!modelProfile?.apiKey,
+    optionsModel: options?.model,
+    requestId: getCurrentRequest()?.id,
+  })
+
+  if (modelProfile) {
+    model = modelProfile.modelName
+  } else {
+    model = options?.model || modelProfile?.modelName || ''
+  }
+  // Prepend system prompt block for easy API identification
+  if (options?.prependCLISysprompt) {
+    const prefix = options.cliSyspromptPrefix ?? getCLISyspromptPrefix()
+    // Some OpenAI-like providers need the entire system prompt as a single block.
+    systemPrompt = [[prefix, ...systemPrompt].join('\n')]
+  }
+
+  const system: TextBlockParam[] = splitSysPromptPrefix(systemPrompt).map(
+    _ => ({
+      ...(PROMPT_CACHING_ENABLED
+        ? { cache_control: { type: 'ephemeral' } }
+        : {}),
+      text: _,
+      type: 'text',
+    }),
+  )
+
+  const toolSchemas = await Promise.all(
+    tools.map(
+      async _ =>
+        ({
+          type: 'function',
+          function: {
+            name: _.name,
+            description: await _.prompt({
+              safeMode: options?.safeMode,
+              tools,
+            }),
+            // Use tool's JSON schema directly if provided, otherwise convert Zod schema
+            parameters:
+              'inputJSONSchema' in _ && _.inputJSONSchema
+                ? _.inputJSONSchema
+                : (zodToJsonSchema(_.inputSchema) as Record<string, unknown>),
+          },
+        }) as OpenAI.ChatCompletionTool,
+    ),
+  )
+
+  const openaiSystem = system.map(
+    s =>
+      ({
+        role: 'system',
+        content: s.text,
+      }) as OpenAI.ChatCompletionMessageParam,
+  )
+
+  const openaiMessages = convertAnthropicMessagesToOpenAIMessages(messages)
+
+  // 记录系统提示构建过程 (OpenAI path)
+  logSystemPromptConstruction({
+    basePrompt: systemPrompt.join('\n'),
+    kodeContext: generateKodeContext() || '',
+    reminders: [], // 这里可以从 generateSystemReminders 获取
+    finalPrompt: systemPrompt.join('\n'),
+  })
+
+  let start = Date.now()
+
+  type AdapterExecutionContext = {
+    adapter: ReturnType<typeof ModelAdapterFactory.createAdapter>
+    request: any
+    shouldUseResponses: boolean
+  }
+
+  type QueryResult = {
+    assistantMessage: AssistantMessage
+    rawResponse?: any
+    apiFormat: 'openai'
+  }
+
+  let adapterContext: AdapterExecutionContext | null = null
+
+  if (modelProfile && modelProfile.modelName) {
+    debugLogger.api('CHECKING_ADAPTER_SYSTEM', {
+      modelProfileName: modelProfile.modelName,
+      modelName: modelProfile.modelName,
+      provider: modelProfile.provider,
+      requestId: getCurrentRequest()?.id,
+    })
+
+    const USE_NEW_ADAPTER_SYSTEM = process.env.USE_NEW_ADAPTERS !== 'false'
+
+    if (USE_NEW_ADAPTER_SYSTEM) {
+      const shouldUseResponses =
+        ModelAdapterFactory.shouldUseResponsesAPI(modelProfile)
+
+      // Only use new adapters for Responses API models
+      // Chat Completions models use legacy path for stability
+      if (shouldUseResponses) {
+        const adapter = ModelAdapterFactory.createAdapter(modelProfile)
+        const reasoningEffort = await getReasoningEffort(
+          modelProfile,
+          messages,
+          {
+            thinkingTokens: maxThinkingTokens,
+          },
+        )
+
+        // Determine verbosity based on model name
+        // Most GPT-5 codex models only support 'medium', so default to that unless we detect 'high' in the name
+        let verbosity: 'low' | 'medium' | 'high' = 'medium'
+        const modelNameLower = modelProfile.modelName.toLowerCase()
+        if (modelNameLower.includes('high')) {
+          verbosity = 'high'
+        } else if (modelNameLower.includes('low')) {
+          verbosity = 'low'
+        }
+        // Default to 'medium' for all other cases, including mini, codex, etc.
+
+        const unifiedParams: UnifiedRequestParams = {
+          messages: openaiMessages,
+          systemPrompt: openaiSystem.map(s => s.content as string),
+          tools,
+          maxTokens:
+            options?.maxTokens ?? getMaxTokensFromProfile(modelProfile),
+          stream: config.stream,
+          reasoningEffort: reasoningEffort ?? undefined,
+          temperature:
+            options?.temperature ??
+            (isGPT5Model(model) ? 1 : MAIN_QUERY_TEMPERATURE),
+          previousResponseId: toolUseContext?.responseState?.previousResponseId,
+          verbosity,
+          ...(options?.stopSequences && options.stopSequences.length > 0
+            ? { stopSequences: options.stopSequences }
+            : {}),
+        }
+
+        adapterContext = {
+          adapter,
+          request: adapter.createRequest(unifiedParams),
+          shouldUseResponses: true,
+        }
+      }
+    }
+  }
+
+  let queryResult: QueryResult
+  let startIncludingRetries = Date.now()
+
+  try {
+    queryResult = await withRetry(
+      async () => {
+        start = Date.now()
+
+        if (adapterContext) {
+          if (adapterContext.shouldUseResponses) {
+            const { callGPT5ResponsesAPI } = await import('#core/ai/openai')
+
+            const response = await callGPT5ResponsesAPI(
+              modelProfile,
+              adapterContext.request,
+              signal,
+              options?.requestHeadersProfile,
+            )
+
+            const unifiedResponse =
+              await adapterContext.adapter.parseResponse(response)
+
+            const assistantMessage = buildAssistantMessageFromUnifiedResponse(
+              unifiedResponse,
+              start,
+            )
+            assistantMessage.message.usage = normalizeUsage(
+              assistantMessage.message.usage,
+            )
+
+            return {
+              assistantMessage,
+              rawResponse: unifiedResponse,
+              apiFormat: 'openai',
+            }
+          }
+
+          const s = await getCompletionWithProfile(
+            modelProfile,
+            adapterContext.request,
+            0,
+            10,
+            signal,
+            options?.requestHeadersProfile,
+          )
+          let finalResponse
+          if (config.stream) {
+            finalResponse = await handleMessageStream(
+              s as ChatCompletionStream,
+              signal,
+            )
+          } else {
+            finalResponse = s
+          }
+
+          const message = convertOpenAIResponseToAnthropic(finalResponse, tools)
+          const assistantMsg: AssistantMessage = {
+            type: 'assistant',
+            message,
+            costUSD: 0,
+            durationMs: Date.now() - start,
+            uuid: randomUUID() as UUID,
+          }
+          return {
+            assistantMessage: assistantMsg,
+            rawResponse: finalResponse,
+            apiFormat: 'openai',
+          }
+        }
+
+        const maxTokens =
+          options?.maxTokens ?? getMaxTokensFromProfile(modelProfile)
+
+        const opts = buildOpenAIChatCompletionCreateParams({
+          model,
+          maxTokens,
+          messages: [...openaiSystem, ...openaiMessages],
+          temperature:
+            options?.temperature ??
+            (isGPT5Model(model) ? 1 : MAIN_QUERY_TEMPERATURE),
+          stream: config.stream,
+          toolSchemas: toolSchemas,
+          stopSequences: options?.stopSequences,
+          reasoningEffort: await getReasoningEffort(modelProfile, messages, {
+            thinkingTokens: maxThinkingTokens,
+          }),
+        })
+
+        const completionFunction = isGPT5Model(modelProfile?.modelName || '')
+          ? getGPT5CompletionWithProfile
+          : getCompletionWithProfile
+        const s = await completionFunction(
+          modelProfile,
+          opts,
+          0,
+          10,
+          signal,
+          options?.requestHeadersProfile,
+        )
+        let finalResponse
+        if (opts.stream) {
+          finalResponse = await handleMessageStream(
+            s as ChatCompletionStream,
+            signal,
+          )
+        } else {
+          finalResponse = s
+        }
+        const message = convertOpenAIResponseToAnthropic(finalResponse, tools)
+        const assistantMsg: AssistantMessage = {
+          type: 'assistant',
+          message,
+          costUSD: 0,
+          durationMs: Date.now() - start,
+          uuid: randomUUID() as UUID,
+        }
+        return {
+          assistantMessage: assistantMsg,
+          rawResponse: finalResponse,
+          apiFormat: 'openai',
+        }
+      },
+      { signal },
+    )
+  } catch (error) {
+    logError(error)
+    return getAssistantMessageFromError(error)
+  }
+
+  const durationMs = Date.now() - start
+  const durationMsIncludingRetries = Date.now() - startIncludingRetries
+
+  const assistantMessage = queryResult.assistantMessage
+  assistantMessage.message.content = normalizeContentFromAPI(
+    assistantMessage.message.content || [],
+  )
+
+  const normalizedUsage = normalizeUsage(assistantMessage.message.usage)
+  assistantMessage.message.usage = normalizedUsage
+
+  const inputTokens = normalizedUsage.input_tokens ?? 0
+  const outputTokens = normalizedUsage.output_tokens ?? 0
+  const cacheReadInputTokens = normalizedUsage.cache_read_input_tokens ?? 0
+  const cacheCreationInputTokens =
+    normalizedUsage.cache_creation_input_tokens ?? 0
+
+  const costUSD =
+    (inputTokens / 1_000_000) * SONNET_COST_PER_MILLION_INPUT_TOKENS +
+    (outputTokens / 1_000_000) * SONNET_COST_PER_MILLION_OUTPUT_TOKENS +
+    (cacheReadInputTokens / 1_000_000) *
+      SONNET_COST_PER_MILLION_PROMPT_CACHE_READ_TOKENS +
+    (cacheCreationInputTokens / 1_000_000) *
+      SONNET_COST_PER_MILLION_PROMPT_CACHE_WRITE_TOKENS
+
+  addToTotalCost(costUSD, durationMsIncludingRetries)
+
+  logLLMInteraction({
+    systemPrompt: systemPrompt.join('\n'),
+    messages: [...openaiSystem, ...openaiMessages],
+    response: assistantMessage.message || queryResult.rawResponse,
+    usage: {
+      inputTokens,
+      outputTokens,
+    },
+    timing: {
+      start,
+      end: Date.now(),
+    },
+    apiFormat: queryResult.apiFormat,
+  })
+
+  assistantMessage.costUSD = costUSD
+  assistantMessage.durationMs = durationMs
+  assistantMessage.uuid = assistantMessage.uuid || (randomUUID() as UUID)
+
+  return assistantMessage
+}

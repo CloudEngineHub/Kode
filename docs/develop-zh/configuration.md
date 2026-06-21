@@ -1,222 +1,114 @@
 # 配置系统
 
-## 概述
+Kode 使用两层互补的配置体系：
 
-Kode 使用复杂的多级配置系统，允许在全局、项目和运行时级别进行自定义。配置从全局默认值通过项目特定设置级联到运行时覆盖。
+1. **全局配置**（全局生效）：模型 profiles / 模型指针、主题、统计等
+2. **settings 文件**（用户/项目/本地）：`.kode/settings.json`、`.kode/settings.local.json` 等（并兼容读取 legacy 的 `.claude`）
 
-## 配置层次结构
+本文重点说明文件位置与**模型配置**的正确方式。
 
-```
-环境变量（最高优先级）
-           ↓
-    运行时标志 (CLI)
-           ↓
-  项目配置 (./.claude/config.json)
-           ↓
-   全局配置 (~/.claude/config.json)
-           ↓
-      默认值（最低优先级）
-```
+## 文件位置
 
-## 配置文件
+### 全局配置（primary）
 
-### 全局配置
-**位置**：`~/.claude/config.json`
+- 默认：`~/.kode.json`
+- 如果设置了 `KODE_CONFIG_DIR`：`<KODE_CONFIG_DIR>/config.json`
+
+Kode 还会使用一个数据目录存放日志/任务/记忆等：
+
+- 默认：`~/.kode/`
+- 如果设置了 `KODE_CONFIG_DIR`：`<KODE_CONFIG_DIR>/`
+
+legacy 兼容：
+
+- `CLAUDE_CONFIG_DIR` 仅影响 legacy 读取兼容根目录（例如 `~/.claude`），不会改变 Kode 的 primary 配置/数据目录。
+
+### 项目 / 本地 settings（每个仓库）
+
+- 项目 settings：`./.kode/settings.json`（legacy：`./.claude/settings.json`）
+- 本地 settings：`./.kode/settings.local.json`（legacy：`./.claude/settings.local.json`）
+
+例如：`/output-style` 会把选择写到 `settings.local.json` 的 `outputStyle`。
+
+## 模型
+
+### Model Profiles + Model Pointers（存储在全局配置里）
+
+模型配置在全局配置中：
+
+- `modelProfiles`：模型配置数组（provider / endpoint / key / 上下文等）
+- `modelPointers`：默认指针 `main / task / compact / quick`
+
+最小示例（仅示意）：
 
 ```json
 {
-  "theme": "dark",
-  "hasCompletedOnboarding": true,
-  "modelProfiles": {
-    "default": {
-      "type": "anthropic",
-      "model": "claude-3-5-sonnet-20241022",
-      "maxTokens": 8192
+  "modelProfiles": [
+    {
+      "name": "o3",
+      "provider": "openai",
+      "modelName": "o3",
+      "baseURL": "https://api.openai.com/v1",
+      "apiKey": "<YOUR_API_KEY>",
+      "maxTokens": 8192,
+      "contextLength": 200000,
+      "isActive": true,
+      "createdAt": 1710000000000
     }
-  },
+  ],
   "modelPointers": {
-    "main": "default",
-    "task": "fast",
-    "reasoning": "smart",
-    "quick": "quick"
-  },
-  "mcpServers": {},
-  "customApiKey": null,
-  "autoUpdaterStatus": "enabled",
-  "numStartups": 42
-}
-```
-
-### 项目配置
-**位置**：`./.claude/config.json`
-
-```json
-{
-  "enableArchitectTool": false,
-  "allowedCommands": [
-    "git *",
-    "npm *",
-    "bun *"
-  ],
-  "approvedTools": [
-    "file_read",
-    "file_edit",
-    "bash"
-  ],
-  "context": {
-    "projectName": "my-project",
-    "description": "项目描述"
-  },
-  "mcpServers": {},
-  "lastCost": 0.0234,
-  "lastDuration": 45000
-}
-```
-
-## 配置模式
-
-### 模型配置
-
-#### 模型配置文件
-定义可重用的 AI 模型配置：
-
-```typescript
-interface ModelProfile {
-  id: string
-  name: string
-  provider: 'anthropic' | 'openai' | 'custom'
-  config: {
-    model: string
-    baseURL?: string
-    apiKey?: string
-    maxTokens?: number
-    temperature?: number
-    headers?: Record<string, string>
+    "main": "o3",
+    "task": "o3",
+    "compact": "o3",
+    "quick": "o3"
   }
 }
 ```
 
-#### 模型指针
-将角色映射到模型配置文件：
+推荐的配置方式：
 
-```typescript
-interface ModelPointers {
-  main: string      // 主要对话模型
-  task: string      // 任务执行模型
-  reasoning: string // 复杂推理模型
-  quick: string     // 快速响应模型
-}
-```
+- 交互 UI：`/model`
+- 团队可共享 YAML：`kode models export` / `kode models import`
+- 查看当前配置（profiles/pointers）：`kode models list`
 
-### MCP 服务器配置
-
-```typescript
-interface MCPServerConfig {
-  type: 'stdio' | 'sse'
-  // 对于 stdio 服务器
-  command?: string
-  args?: string[]
-  env?: Record<string, string>
-  // 对于 SSE 服务器
-  url?: string
-}
-
-interface MCPServers {
-  [serverName: string]: MCPServerConfig
-}
-```
-
-### 权限配置
-
-```typescript
-interface PermissionConfig {
-  // 批准的 shell 命令模式
-  allowedCommands: string[]
-  
-  // 批准的工具名称
-  approvedTools: string[]
-  
-  // 文件/目录访问模式
-  allowedPaths: string[]
-  
-  // 拒绝的 MCP 服务器
-  rejectedMcprcServers: string[]
-  
-  // 批准的 MCP 服务器
-  approvedMcprcServers: string[]
-}
-```
-
-### UI 配置
-
-```typescript
-interface UIConfig {
-  theme: 'dark' | 'light'
-  compactMode: boolean
-  showCosts: boolean
-  syntaxHighlighting: boolean
-  vimKeybindings: boolean
-  shiftEnterKeyBindingInstalled: boolean
-}
-```
-
-## 配置管理 API
-
-### 读取配置
-
-```typescript
-import { getGlobalConfig, getCurrentProjectConfig } from './utils/config'
-
-// 获取全局配置
-const globalConfig = getGlobalConfig()
-
-// 获取项目配置
-const projectConfig = getCurrentProjectConfig()
-
-// 获取合并配置（项目覆盖全局）
-const config = {
-  ...globalConfig,
-  ...projectConfig
-}
-```
-
-### 写入配置
-
-```typescript
-import { saveGlobalConfig, saveCurrentProjectConfig } from './utils/config'
-
-// 更新全局配置
-saveGlobalConfig({
-  ...getGlobalConfig(),
-  theme: 'light'
-})
-
-// 更新项目配置
-saveCurrentProjectConfig({
-  ...getCurrentProjectConfig(),
-  enableArchitectTool: true
-})
-```
-
-### CLI 配置命令
+### YAML 导入/导出（团队共享）
 
 ```bash
-# 获取配置值
-kode config get theme
-kode config get -g modelProfiles.default.model
-
-# 设置配置值
-kode config set theme dark
-kode config set -g autoUpdaterStatus enabled
-
-# 删除配置值
-kode config remove customApiKey
-kode config remove -g mcpServers.myserver
-
-# 列出所有配置
-kode config list
-kode config list -g
+kode models export --output kode-models.yaml
+kode models import kode-models.yaml
+kode models import --replace kode-models.yaml
 ```
+
+导出的 YAML 默认会使用 `apiKey: { fromEnv: ... }`，建议把 key 放到环境变量里。
+
+### Model selector（`model:` 字段应该怎么写）
+
+在 Kode 的各类 `model:` 字段里（agents、Task tool 覆盖等），通常可以用：
+
+- 指针：`main | task | compact | quick`
+- Profile 名称：`OpenAI Main`
+- ModelName：`o3`、`gpt-4o`、`qwen2.5-coder-32b-instruct`
+- Provider 限定：`provider:modelName`（或 `provider:profileName`），例如 `openai:o3`
+
+用 `kode models list` 可以快速查看当前可用的配置。
+
+## `kode config` CLI（仅限少量 key）
+
+`kode config` 主要用于少量“安全”的开关项（主题、verbose、少数项目开关等）。
+
+```bash
+# 全局 config keys
+kode config get -g theme
+kode config set -g theme dark
+kode config list -g
+
+# 项目级 keys（实际存储在全局配置的 projects[...] 下）
+kode config get enableArchitectTool
+kode config set enableArchitectTool true
+kode config list
+```
+
+模型请优先使用 `/model` 或 `kode models import/export`（不建议用 `kode config set`）。
 
 ## 环境变量
 
@@ -249,6 +141,7 @@ LOG_LEVEL=debug
 ### 优先级规则
 
 环境变量覆盖配置文件（Anthropic 密钥除外）：
+
 1. 检查环境变量
 2. 检查项目配置
 3. 检查全局配置
@@ -267,18 +160,18 @@ function migrateConfig(config: any): Config {
     config.shiftEnterKeyBindingInstalled = config.iterm2KeyBindingInstalled
     delete config.iterm2KeyBindingInstalled
   }
-  
+
   // v2 到 v3：更新模型格式
   if (typeof config.model === 'string') {
     config.modelProfiles = {
       default: {
         type: 'anthropic',
-        model: config.model
-      }
+        model: config.model,
+      },
     }
     delete config.model
   }
-  
+
   return config
 }
 ```
@@ -292,7 +185,7 @@ function saveConfigWithBackup(config: Config) {
   // 创建备份
   const backupPath = `${configPath}.backup`
   fs.copyFileSync(configPath, backupPath)
-  
+
   try {
     // 保存新配置
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2))
@@ -336,14 +229,18 @@ function loadConfig(path: string): Config {
 ## 配置范围
 
 ### 全局范围
+
 影响所有项目：
+
 - 用户偏好（主题、键绑定）
 - 模型配置文件和 API 密钥
 - 全局 MCP 服务器
 - 自动更新程序设置
 
 ### 项目范围
+
 特定于当前项目：
+
 - 工具权限
 - 允许的命令
 - 项目上下文
@@ -351,7 +248,9 @@ function loadConfig(path: string): Config {
 - 成本跟踪
 
 ### 会话范围
+
 当前会话的临时：
+
 - 运行时标志
 - 临时权限
 - 活动 MCP 连接
@@ -426,24 +325,28 @@ function loadConfig(path: string): Config {
 ## 配置最佳实践
 
 ### 1. 安全性
+
 - 永远不要将 API 密钥提交到版本控制
 - 使用环境变量存储机密
 - 验证所有配置输入
 - 适当限制命令权限
 
 ### 2. 组织
+
 - 为用户偏好保留全局配置
 - 为项目特定设置使用项目配置
 - 在 README 中记录自定义配置
 - 版本控制项目配置
 
 ### 3. 性能
+
 - 在内存中缓存配置
 - 仅在文件更改时重新加载
 - 使用高效的 JSON 解析
 - 最小化配置文件大小
 
 ### 4. 调试
+
 - 为配置问题使用详细模式
 - 使用 `config list` 检查配置
 - 加载时验证配置

@@ -31,7 +31,7 @@
 │                   Service Integration Layer                  │
 │  ┌─────────────┐  ┌──────────────┐  ┌──────────────────┐  │
 │  │ AI Providers│  │  MCP Servers │  │  External APIs   │  │
-│  │(Claude/GPT) │  │ (stdio/SSE)  │  │  (Git/Sentry)    │  │
+│  │(Claude/GPT) │  │ (stdio/SSE)  │  │ (Git/Local Logs) │  │
 │  └─────────────┘  └──────────────┘  └──────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
                               │
@@ -184,7 +184,9 @@ Result Translation
 ## Key Architectural Decisions
 
 ### 1. Tool Abstraction
+
 Every capability is a Tool implementing a standard interface:
+
 ```typescript
 interface Tool {
   name: string
@@ -197,28 +199,36 @@ interface Tool {
 ```
 
 ### 2. Streaming Architecture
+
 All long-running operations use async generators:
+
 - Enables real-time progress updates
 - Supports cancellation at any point
 - Allows incremental result display
 
 ### 3. React in Terminal
+
 Using React with Ink for terminal UI:
+
 - Component reusability
 - State management
 - Complex interactive UIs
 - Consistent styling
 
 ### 4. Permission Layers
+
 Multi-level permission system:
+
 - **Tool Level**: Each tool declares permission needs
 - **Session Level**: Temporary permissions for current session
 - **Persistent Level**: Saved permissions across sessions
 - **Mode Level**: Safe vs Permissive modes
 
 ### 5. Context Management
+
 Automatic context injection:
-- Project files (AGENTS.md, CLAUDE.md)
+
+- Project files (AGENTS.md; legacy CLAUDE.md supported)
 - Git status and recent commits
 - Directory structure
 - Previous conversation history
@@ -226,21 +236,27 @@ Automatic context injection:
 ## Module Communication Patterns
 
 ### Event-Driven Updates
+
 Components communicate through:
+
 - React props and callbacks
 - Abort signals for cancellation
 - Progress generators for updates
 - Event emitters for cross-cutting concerns
 
 ### Service Integration
+
 External services accessed through:
+
 - Dedicated service modules
 - Unified error handling
 - Retry logic with backoff
 - Streaming response handling
 
 ### Configuration Access
+
 Configuration accessed via:
+
 - Singleton config manager
 - Lazy loading on first access
 - Automatic migration on version change
@@ -249,6 +265,7 @@ Configuration accessed via:
 ## Security Architecture
 
 ### Permission Model
+
 ```
 Request → Permission Check → Decision
              ↓                    ↓
@@ -270,12 +287,14 @@ Request → Permission Check → Decision
 ```
 
 ### File System Security
+
 - Directory-based access control
 - Path traversal prevention
 - Symbolic link resolution
 - Hidden file protection
 
 ### Command Execution Security
+
 - Command approval system
 - Environment variable sanitization
 - Working directory restrictions
@@ -284,18 +303,21 @@ Request → Permission Check → Decision
 ## Performance Considerations
 
 ### Caching Strategy
+
 - Model responses cached in memory
 - File reads cached with freshness checks
 - Configuration cached per session
 - MCP tool discovery cached
 
 ### Lazy Loading
+
 - Commands loaded on first use
 - MCP servers started on demand
 - Context loaded incrementally
 - Heavy dependencies loaded when needed
 
 ### Streaming Optimizations
+
 - Chunked response processing
 - Incremental rendering
 - Partial result display
@@ -304,23 +326,27 @@ Request → Permission Check → Decision
 ## Extension Points
 
 ### Adding New Tools
+
 1. Create class extending Tool
 2. Implement required methods
 3. Register in tools.ts
 4. Tool automatically available
 
 ### Adding AI Providers
+
 1. Implement provider interface
 2. Add to ModelManager
 3. Configure in model profiles
 4. Provider available for use
 
 ### Adding Commands
+
 1. Create command handler
 2. Register in commands.ts
 3. Command available via slash
 
 ### Adding MCP Servers
+
 1. Configure server details
 2. Server tools auto-discovered
 3. Tools available in conversation
@@ -328,12 +354,14 @@ Request → Permission Check → Decision
 ## System Boundaries
 
 ### Internal Boundaries
+
 - Clear module interfaces
 - Dependency injection
 - Service abstractions
 - Tool isolation
 
 ### External Boundaries
+
 - API rate limiting
 - File system access control
 - Network request timeouts
@@ -342,12 +370,14 @@ Request → Permission Check → Decision
 ## Scalability Considerations
 
 ### Horizontal Scalability
+
 - Stateless command execution
 - Independent tool operations
 - Parallel tool execution (when safe)
 - Distributed MCP servers
 
 ### Vertical Scalability
+
 - Streaming for large responses
 - Chunked file processing
 - Incremental context loading

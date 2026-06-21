@@ -1,0 +1,100 @@
+export const MAX_LINES_TO_RENDER = 5
+export const MAX_LINE_LENGTH = 2000
+export const MAX_OUTPUT_SIZE = 0.25 * 1024 * 1024 // 0.25MB in bytes (post-truncation safeguard)
+
+// Common image extensions (compatibility)
+export const IMAGE_EXTENSIONS = new Set([
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.webp',
+])
+
+// Maximum dimensions for images
+export const MAX_WIDTH = 2000
+export const MAX_HEIGHT = 2000
+export const MAX_IMAGE_SIZE = 3.75 * 1024 * 1024 // 5MB in bytes, with base64 encoding
+
+// Binary extensions this tool refuses to read as text (compatibility with legacy clients)
+export const BINARY_EXTENSIONS = new Set([
+  '.mp3',
+  '.wav',
+  '.flac',
+  '.ogg',
+  '.aac',
+  '.m4a',
+  '.wma',
+  '.aiff',
+  '.opus',
+  '.mp4',
+  '.avi',
+  '.mov',
+  '.wmv',
+  '.flv',
+  '.mkv',
+  '.webm',
+  '.m4v',
+  '.mpeg',
+  '.mpg',
+  '.zip',
+  '.rar',
+  '.tar',
+  '.gz',
+  '.bz2',
+  '.7z',
+  '.xz',
+  '.z',
+  '.tgz',
+  '.iso',
+  '.exe',
+  '.dll',
+  '.so',
+  '.dylib',
+  '.app',
+  '.msi',
+  '.deb',
+  '.rpm',
+  '.bin',
+  '.dat',
+  '.db',
+  '.sqlite',
+  '.sqlite3',
+  '.mdb',
+  '.idx',
+  '.doc',
+  '.docx',
+  '.xls',
+  '.xlsx',
+  '.ppt',
+  '.pptx',
+  '.odt',
+  '.ods',
+  '.odp',
+  '.ttf',
+  '.otf',
+  '.woff',
+  '.woff2',
+  '.eot',
+  '.psd',
+  '.ai',
+  '.eps',
+  '.sketch',
+  '.fig',
+  '.xd',
+  '.blend',
+  '.obj',
+  '.3ds',
+  '.max',
+  '.class',
+  '.jar',
+  '.war',
+  '.pyc',
+  '.pyo',
+  '.rlib',
+  '.swf',
+  '.fla',
+])
+
+export const formatFileSizeError = (sizeInBytes: number) =>
+  `File content (${Math.round(sizeInBytes / 1024)}KB) exceeds maximum allowed size (${Math.round(MAX_OUTPUT_SIZE / 1024)}KB). Please use offset and limit parameters to read specific portions of the file, or use the Grep tool to search for specific content.`

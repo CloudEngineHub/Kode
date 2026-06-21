@@ -13,24 +13,21 @@ export abstract class Tool {
   abstract name: string
   abstract description: string
   abstract inputSchema: z.ZodTypeAny
-  
+
   // Permission checking
   abstract needsPermissions(input: unknown): boolean
-  
+
   // Input validation
   validateInput(input: unknown): unknown
-  
+
   // Main execution method
   abstract call(
-    input: unknown, 
-    context: ToolUseContext
-  ): AsyncGenerator<ToolCallEvent>
-  
-  // Format results for AI
-  abstract renderResultForAssistant(
     input: unknown,
-    result: unknown
-  ): string
+    context: ToolUseContext,
+  ): AsyncGenerator<ToolCallEvent>
+
+  // Format results for AI
+  abstract renderResultForAssistant(input: unknown, result: unknown): string
 }
 ```
 
@@ -61,6 +58,7 @@ export abstract class Tool {
 ### 1. File Operation Tools
 
 #### FileReadTool
+
 - **Purpose**: Read file contents with encoding detection
 - **Key Features**:
   - Automatic encoding detection (UTF-8, UTF-16, etc.)
@@ -70,6 +68,7 @@ export abstract class Tool {
 - **Security**: Checks file access permissions
 
 #### FileEditTool
+
 - **Purpose**: Make precise edits to existing files
 - **Key Features**:
   - String replacement with exact matching
@@ -79,6 +78,7 @@ export abstract class Tool {
 - **Security**: Requires file write permissions
 
 #### FileWriteTool
+
 - **Purpose**: Create or overwrite entire files
 - **Key Features**:
   - Full file replacement
@@ -87,6 +87,7 @@ export abstract class Tool {
 - **Security**: Requires explicit write permissions
 
 #### NotebookEditTool
+
 - **Purpose**: Edit Jupyter notebook cells
 - **Key Features**:
   - Cell-level operations (replace, insert, delete)
@@ -96,6 +97,7 @@ export abstract class Tool {
 ### 2. Search and Discovery Tools
 
 #### GrepTool
+
 - **Purpose**: Search file contents using regular expressions
 - **Key Features**:
   - Ripgrep integration for speed
@@ -103,8 +105,10 @@ export abstract class Tool {
   - Context lines support (-A, -B, -C)
   - File type filtering
 - **Implementation**: Uses ripgrep binary for performance
+- **Distribution**: npm releases ship ripgrep via per-platform optionalDependencies (`@shareai-lab/kode-ripgrep-<platform>-<arch>`). Set `USE_BUILTIN_RIPGREP=0` to prefer system `rg`.
 
 #### GlobTool
+
 - **Purpose**: Find files by name patterns
 - **Key Features**:
   - Glob pattern matching
@@ -112,15 +116,18 @@ export abstract class Tool {
   - Result sorting by modification time
   - Symlink following options
 
-#### LSTool
-- **Purpose**: List directory contents
+#### LS (Directory Listing)
+
+- **Purpose**: List the contents of a directory (non-recursive)
 - **Key Features**:
-  - Recursive listing
-  - Hidden file display
-  - Size and permission information
-  - Pattern filtering
+  - Lists files and subdirectories in a single directory
+  - Optional dotfiles via `all: true` (like `ls -a`)
+  - Result limiting via `limit` (default 200, max 5000)
+  - Marks directories with `/` and symlinks with `@`
+- **Security**: Requires read permission for the target directory
 
 #### WebSearchTool
+
 - **Purpose**: Search the web for current information
 - **Key Features**:
   - DuckDuckGo integration for web search
@@ -131,6 +138,7 @@ export abstract class Tool {
 - **Implementation**: HTML parsing of DuckDuckGo search results
 
 #### URLFetcherTool
+
 - **Purpose**: Fetch and analyze web content using AI
 - **Key Features**:
   - Fetches content from any URL
@@ -143,10 +151,10 @@ export abstract class Tool {
   ```typescript
   {
     url: string (URI format, required)
-    prompt: string (analysis instruction, required) 
+    prompt: string (analysis instruction, required)
   }
   ```
-- **Use Cases**: 
+- **Use Cases**:
   - Summarizing articles or documentation
   - Extracting specific information from web pages
   - Analyzing pricing, features, or technical requirements
@@ -156,6 +164,7 @@ export abstract class Tool {
 ### 3. System Execution Tools
 
 #### BashTool
+
 - **Purpose**: Execute shell commands
 - **Key Features**:
   - Persistent shell sessions
@@ -163,7 +172,7 @@ export abstract class Tool {
   - Environment variable handling
   - Timeout support (default 2 minutes)
   - Output streaming
-- **Security**: 
+- **Security**:
   - Command approval in safe mode
   - Restricted commands blacklist
   - Environment sanitization
@@ -171,6 +180,7 @@ export abstract class Tool {
 ### 4. AI Enhancement Tools
 
 #### TaskTool (Architect)
+
 - **Purpose**: Launch sub-agents for complex tasks
 - **Key Features**:
   - Autonomous multi-step execution
@@ -180,6 +190,7 @@ export abstract class Tool {
 - **Use Cases**: Complex refactoring, system design
 
 #### ThinkTool
+
 - **Purpose**: Allow AI to reason through problems
 - **Key Features**:
   - Structured thinking blocks
@@ -187,17 +198,24 @@ export abstract class Tool {
   - Hidden from user output
 - **Implementation**: Special message formatting
 
-#### TodoWriteTool
-- **Purpose**: Task management and tracking
+#### Task List Tools (TaskCreate/TaskUpdate/TaskList/TaskGet)
+
+- **Purpose**: Persistent, Linear-style work task tracking (cross-session, cross-agent)
 - **Key Features**:
-  - Persistent todo lists
+  - Create/update/list/get tasks with stable IDs
   - Status tracking (pending, in_progress, completed)
-  - Progress visualization
-  - Automatic task breakdown
+  - Enforces a single in_progress task (via tool validation)
+  - Optional dependency tracking (blocks/blockedBy)
+
+#### TodoWriteTool (legacy)
+
+- **Purpose**: Legacy todo-list compatibility only
+- **Notes**: Disabled by default; enabled via `KODE_ENABLE_LEGACY_TODO=1`
 
 ### 5. External Integration Tools
 
 #### MCPTool
+
 - **Purpose**: Bridge to Model Context Protocol servers
 - **Key Features**:
   - Dynamic tool discovery
@@ -214,42 +232,42 @@ export abstract class Tool {
 export class MyCustomTool extends Tool {
   name = 'my_custom_tool'
   description = 'Does something custom'
-  
+
   inputSchema = z.object({
     param1: z.string(),
-    param2: z.number().optional()
+    param2: z.number().optional(),
   })
-  
+
   needsPermissions(input: unknown): boolean {
     // Return true if this operation needs user approval
     return true
   }
-  
+
   async *call(
     input: z.infer<typeof this.inputSchema>,
-    context: ToolUseContext
+    context: ToolUseContext,
   ): AsyncGenerator<ToolCallEvent> {
     // Yield progress updates
     yield {
       type: 'progress',
-      message: 'Starting operation...'
+      message: 'Starting operation...',
     }
-    
+
     // Check abort signal
     if (context.abortSignal.aborted) {
       throw new Error('Operation cancelled')
     }
-    
+
     // Perform operation
     const result = await this.performOperation(input)
-    
+
     // Yield final result
     yield {
       type: 'result',
-      result: result
+      result: result,
     }
   }
-  
+
   renderResultForAssistant(input: unknown, result: unknown): string {
     // Format result for AI consumption
     return `Operation completed: ${JSON.stringify(result)}`
@@ -269,11 +287,11 @@ export async function getTools(): Promise<Tool[]> {
     new MyCustomTool(), // Add your tool here
     // ... other tools
   ]
-  
+
   // Add MCP tools dynamically
   const mcpTools = await getMCPTools()
   tools.push(...mcpTools)
-  
+
   return tools
 }
 ```
@@ -293,18 +311,18 @@ export async function getTools(): Promise<Tool[]> {
 async function checkPermissionsAndCallTool(
   tool: Tool,
   input: unknown,
-  context: ToolUseContext
+  context: ToolUseContext,
 ): Promise<ToolResult> {
   if (!tool.needsPermissions(input)) {
     // No permission needed
     return await tool.call(input, context)
   }
-  
+
   const permission = await requestPermission({
     tool: tool.name,
-    operation: describeOperation(input)
+    operation: describeOperation(input),
   })
-  
+
   if (permission.approved) {
     if (permission.saveForSession) {
       saveSessionPermission(tool.name, input)
@@ -324,20 +342,20 @@ async function checkPermissionsAndCallTool(
 interface ToolUseContext {
   // Cancellation support
   abortSignal: AbortSignal
-  
+
   // Current working directory
   cwd: string
-  
+
   // Permission helpers
   hasPermission: (operation: string) => boolean
   requestPermission: (operation: string) => Promise<boolean>
-  
+
   // Logging and metrics
   logEvent: (event: string, data: any) => void
-  
+
   // UI helpers
   showProgress: (message: string) => void
-  
+
   // Configuration access
   config: Configuration
 }
@@ -346,31 +364,37 @@ interface ToolUseContext {
 ## Tool Best Practices
 
 ### 1. Input Validation
+
 - Use Zod schemas for type-safe validation
 - Provide clear error messages for invalid input
 - Validate file paths and command arguments
 
 ### 2. Error Handling
+
 - Throw descriptive errors with actionable messages
 - Handle common failure cases gracefully
 - Provide recovery suggestions
 
 ### 3. Progress Reporting
+
 - Yield progress updates for long operations
 - Include percentage or step information
 - Update at reasonable intervals (not too frequent)
 
 ### 4. Cancellation Support
+
 - Check abort signal regularly
 - Clean up resources on cancellation
 - Save partial progress when possible
 
 ### 5. Result Formatting
+
 - Provide human-readable output for users
 - Include structured data for AI parsing
 - Summarize large results appropriately
 
 ### 6. Security Considerations
+
 - Always validate and sanitize inputs
 - Check permissions before operations
 - Limit resource consumption
@@ -387,20 +411,20 @@ describe('MyCustomTool', () => {
     const validInput = { param1: 'test' }
     expect(() => tool.validateInput(validInput)).not.toThrow()
   })
-  
+
   it('should handle cancellation', async () => {
     const tool = new MyCustomTool()
     const abortController = new AbortController()
     abortController.abort()
-    
+
     const context = {
       abortSignal: abortController.signal,
       // ... other context
     }
-    
-    await expect(
-      tool.call(input, context)
-    ).rejects.toThrow('Operation cancelled')
+
+    await expect(tool.call(input, context)).rejects.toThrow(
+      'Operation cancelled',
+    )
   })
 })
 ```
@@ -411,9 +435,9 @@ describe('MyCustomTool', () => {
 it('should integrate with permission system', async () => {
   const tool = new MyCustomTool()
   const context = createTestContext({
-    permissions: ['my_custom_tool']
+    permissions: ['my_custom_tool'],
   })
-  
+
   const result = await tool.call(input, context)
   expect(result).toBeDefined()
 })
@@ -422,22 +446,20 @@ it('should integrate with permission system', async () => {
 ## Advanced Tool Patterns
 
 ### Composite Tools
+
 Tools that orchestrate multiple other tools:
 
 ```typescript
 class CompositeAnalysisTool extends Tool {
   async *call(input, context) {
     // First, search for files
-    const files = await this.globTool.call(
-      { pattern: input.pattern },
-      context
-    )
-    
+    const files = await this.globTool.call({ pattern: input.pattern }, context)
+
     // Then grep each file
     for (const file of files) {
       const results = await this.grepTool.call(
         { file, pattern: input.search },
-        context
+        context,
       )
       yield { type: 'progress', file, results }
     }
@@ -446,41 +468,43 @@ class CompositeAnalysisTool extends Tool {
 ```
 
 ### Streaming Tools
+
 Tools that process data incrementally:
 
 ```typescript
 class StreamingFileTool extends Tool {
   async *call(input, context) {
     const stream = createReadStream(input.file)
-    
+
     for await (const chunk of stream) {
       const processed = processChunk(chunk)
       yield { type: 'partial', data: processed }
-      
+
       if (context.abortSignal.aborted) break
     }
-    
+
     yield { type: 'complete' }
   }
 }
 ```
 
 ### Stateful Tools
+
 Tools that maintain state across calls:
 
 ```typescript
 class SessionTool extends Tool {
   private session: Session
-  
+
   async *call(input, context) {
     if (!this.session) {
       this.session = await createSession()
     }
-    
+
     const result = await this.session.execute(input.command)
     yield { type: 'result', result }
   }
-  
+
   cleanup() {
     this.session?.close()
   }
@@ -495,7 +519,7 @@ class SessionTool extends Tool {
 class InstrumentedTool extends Tool {
   async *call(input, context) {
     const startTime = Date.now()
-    
+
     try {
       yield* super.call(input, context)
     } finally {
@@ -503,7 +527,7 @@ class InstrumentedTool extends Tool {
       context.logEvent('tool_execution', {
         tool: this.name,
         duration,
-        success: true
+        success: true,
       })
     }
   }
@@ -521,7 +545,7 @@ class MonitoredTool extends Tool {
       context.logEvent('tool_error', {
         tool: this.name,
         error: error.message,
-        stack: error.stack
+        stack: error.stack,
       })
       throw error
     }

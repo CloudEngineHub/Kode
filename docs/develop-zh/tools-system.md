@@ -13,24 +13,21 @@ export abstract class Tool {
   abstract name: string
   abstract description: string
   abstract inputSchema: z.ZodTypeAny
-  
+
   // 权限检查
   abstract needsPermissions(input: unknown): boolean
-  
+
   // 输入验证
   validateInput(input: unknown): unknown
-  
+
   // 主执行方法
   abstract call(
-    input: unknown, 
-    context: ToolUseContext
-  ): AsyncGenerator<ToolCallEvent>
-  
-  // 为 AI 格式化结果
-  abstract renderResultForAssistant(
     input: unknown,
-    result: unknown
-  ): string
+    context: ToolUseContext,
+  ): AsyncGenerator<ToolCallEvent>
+
+  // 为 AI 格式化结果
+  abstract renderResultForAssistant(input: unknown, result: unknown): string
 }
 ```
 
@@ -61,6 +58,7 @@ export abstract class Tool {
 ### 1. 文件操作工具
 
 #### FileReadTool（文件读取工具）
+
 - **用途**：读取带编码检测的文件内容
 - **主要功能**：
   - 自动编码检测（UTF-8、UTF-16 等）
@@ -70,6 +68,7 @@ export abstract class Tool {
 - **安全性**：检查文件访问权限
 
 #### FileEditTool（文件编辑工具）
+
 - **用途**：对现有文件进行精确编辑
 - **主要功能**：
   - 精确匹配的字符串替换
@@ -79,6 +78,7 @@ export abstract class Tool {
 - **安全性**：需要文件写入权限
 
 #### FileWriteTool（文件写入工具）
+
 - **用途**：创建或覆盖整个文件
 - **主要功能**：
   - 完整文件替换
@@ -87,6 +87,7 @@ export abstract class Tool {
 - **安全性**：需要明确的写入权限
 
 #### NotebookEditTool（笔记本编辑工具）
+
 - **用途**：编辑 Jupyter 笔记本单元格
 - **主要功能**：
   - 单元格级操作（替换、插入、删除）
@@ -96,6 +97,7 @@ export abstract class Tool {
 ### 2. 搜索和发现工具
 
 #### GrepTool（搜索工具）
+
 - **用途**：使用正则表达式搜索文件内容
 - **主要功能**：
   - Ripgrep 集成以提高速度
@@ -103,8 +105,10 @@ export abstract class Tool {
   - 上下文行支持（-A、-B、-C）
   - 文件类型过滤
 - **实现**：使用 ripgrep 二进制文件以提高性能
+- **分发**：npm 发布包通过按平台拆分的 optionalDependencies 提供 ripgrep（`@shareai-lab/kode-ripgrep-<platform>-<arch>`）；如需优先使用系统 `rg`，设置 `USE_BUILTIN_RIPGREP=0`。
 
 #### GlobTool（文件匹配工具）
+
 - **用途**：按名称模式查找文件
 - **主要功能**：
   - Glob 模式匹配
@@ -112,17 +116,20 @@ export abstract class Tool {
   - 按修改时间排序结果
   - 符号链接跟随选项
 
-#### LSTool（列表工具）
-- **用途**：列出目录内容
+#### LS（目录列表）
+
+- **用途**：列出某个目录的内容（非递归）
 - **主要功能**：
-  - 递归列表
-  - 隐藏文件显示
-  - 大小和权限信息
-  - 模式过滤
+  - 列出单层目录下的文件与子目录
+  - `all: true` 可包含以 `.` 开头的隐藏文件（类似 `ls -a`）
+  - `limit` 限制返回数量（默认 200，最大 5000）
+  - 目录以 `/` 结尾、符号链接以 `@` 结尾
+- **安全性**：需要对目标目录具备读取权限
 
 ### 3. 系统执行工具
 
 #### BashTool（Shell 工具）
+
 - **用途**：执行 shell 命令
 - **主要功能**：
   - 持久 shell 会话
@@ -138,6 +145,7 @@ export abstract class Tool {
 ### 4. AI 增强工具
 
 #### TaskTool（任务工具/架构师）
+
 - **用途**：为复杂任务启动子代理
 - **主要功能**：
   - 自主多步骤执行
@@ -147,6 +155,7 @@ export abstract class Tool {
 - **用例**：复杂重构、系统设计
 
 #### ThinkTool（思考工具）
+
 - **用途**：允许 AI 推理问题
 - **主要功能**：
   - 结构化思考块
@@ -154,17 +163,24 @@ export abstract class Tool {
   - 对用户输出隐藏
 - **实现**：特殊消息格式
 
-#### TodoWriteTool（待办事项工具）
-- **用途**：任务管理和跟踪
+#### 任务清单工具（TaskCreate/TaskUpdate/TaskList/TaskGet）
+
+- **用途**：持久化、Linear 风格的工作任务清单（跨 session / 跨 agent）
 - **主要功能**：
-  - 持久待办事项列表
-  - 状态跟踪（待处理、进行中、已完成）
-  - 进度可视化
-  - 自动任务分解
+  - 创建/更新/列出/获取任务（稳定 ID）
+  - 状态跟踪（pending / in_progress / completed）
+  - 通过工具校验保证同一时间只有一个 in_progress
+  - 可选依赖关系（blocks/blockedBy）
+
+#### TodoWriteTool（legacy）
+
+- **用途**：仅用于兼容旧版 todo 清单
+- **说明**：默认关闭；可通过 `KODE_ENABLE_LEGACY_TODO=1` 启用
 
 ### 5. 外部集成工具
 
 #### MCPTool（MCP 工具）
+
 - **用途**：桥接到模型上下文协议服务器
 - **主要功能**：
   - 动态工具发现
@@ -174,6 +190,7 @@ export abstract class Tool {
 - **实现**：通过 stdio/SSE 的 JSON-RPC
 
 #### WebFetchTool（网页获取工具）
+
 - **用途**：获取和处理网页内容
 - **主要功能**：
   - HTML 到 markdown 转换
@@ -189,42 +206,42 @@ export abstract class Tool {
 export class MyCustomTool extends Tool {
   name = 'my_custom_tool'
   description = '执行自定义操作'
-  
+
   inputSchema = z.object({
     param1: z.string(),
-    param2: z.number().optional()
+    param2: z.number().optional(),
   })
-  
+
   needsPermissions(input: unknown): boolean {
     // 如果此操作需要用户批准，返回 true
     return true
   }
-  
+
   async *call(
     input: z.infer<typeof this.inputSchema>,
-    context: ToolUseContext
+    context: ToolUseContext,
   ): AsyncGenerator<ToolCallEvent> {
     // 产生进度更新
     yield {
       type: 'progress',
-      message: '开始操作...'
+      message: '开始操作...',
     }
-    
+
     // 检查中止信号
     if (context.abortSignal.aborted) {
       throw new Error('操作已取消')
     }
-    
+
     // 执行操作
     const result = await this.performOperation(input)
-    
+
     // 产生最终结果
     yield {
       type: 'result',
-      result: result
+      result: result,
     }
   }
-  
+
   renderResultForAssistant(input: unknown, result: unknown): string {
     // 为 AI 消费格式化结果
     return `操作完成：${JSON.stringify(result)}`
@@ -244,11 +261,11 @@ export async function getTools(): Promise<Tool[]> {
     new MyCustomTool(), // 在这里添加您的工具
     // ... 其他工具
   ]
-  
+
   // 动态添加 MCP 工具
   const mcpTools = await getMCPTools()
   tools.push(...mcpTools)
-  
+
   return tools
 }
 ```
@@ -268,18 +285,18 @@ export async function getTools(): Promise<Tool[]> {
 async function checkPermissionsAndCallTool(
   tool: Tool,
   input: unknown,
-  context: ToolUseContext
+  context: ToolUseContext,
 ): Promise<ToolResult> {
   if (!tool.needsPermissions(input)) {
     // 无需权限
     return await tool.call(input, context)
   }
-  
+
   const permission = await requestPermission({
     tool: tool.name,
-    operation: describeOperation(input)
+    operation: describeOperation(input),
   })
-  
+
   if (permission.approved) {
     if (permission.saveForSession) {
       saveSessionPermission(tool.name, input)
@@ -299,20 +316,20 @@ async function checkPermissionsAndCallTool(
 interface ToolUseContext {
   // 取消支持
   abortSignal: AbortSignal
-  
+
   // 当前工作目录
   cwd: string
-  
+
   // 权限助手
   hasPermission: (operation: string) => boolean
   requestPermission: (operation: string) => Promise<boolean>
-  
+
   // 日志和指标
   logEvent: (event: string, data: any) => void
-  
+
   // UI 助手
   showProgress: (message: string) => void
-  
+
   // 配置访问
   config: Configuration
 }
@@ -321,31 +338,37 @@ interface ToolUseContext {
 ## 工具最佳实践
 
 ### 1. 输入验证
+
 - 使用 Zod 模式进行类型安全验证
 - 为无效输入提供清晰的错误消息
 - 验证文件路径和命令参数
 
 ### 2. 错误处理
+
 - 抛出带有可操作消息的描述性错误
 - 优雅地处理常见故障情况
 - 提供恢复建议
 
 ### 3. 进度报告
+
 - 为长操作产生进度更新
 - 包括百分比或步骤信息
 - 以合理的间隔更新（不要太频繁）
 
 ### 4. 取消支持
+
 - 定期检查中止信号
 - 取消时清理资源
 - 可能时保存部分进度
 
 ### 5. 结果格式化
+
 - 为用户提供人类可读的输出
 - 包括用于 AI 解析的结构化数据
 - 适当地总结大型结果
 
 ### 6. 安全考虑
+
 - 始终验证和清理输入
 - 在操作前检查权限
 - 限制资源消耗
@@ -362,20 +385,18 @@ describe('MyCustomTool', () => {
     const validInput = { param1: 'test' }
     expect(() => tool.validateInput(validInput)).not.toThrow()
   })
-  
+
   it('应该处理取消', async () => {
     const tool = new MyCustomTool()
     const abortController = new AbortController()
     abortController.abort()
-    
+
     const context = {
       abortSignal: abortController.signal,
       // ... 其他上下文
     }
-    
-    await expect(
-      tool.call(input, context)
-    ).rejects.toThrow('操作已取消')
+
+    await expect(tool.call(input, context)).rejects.toThrow('操作已取消')
   })
 })
 ```
@@ -386,9 +407,9 @@ describe('MyCustomTool', () => {
 it('应该与权限系统集成', async () => {
   const tool = new MyCustomTool()
   const context = createTestContext({
-    permissions: ['my_custom_tool']
+    permissions: ['my_custom_tool'],
   })
-  
+
   const result = await tool.call(input, context)
   expect(result).toBeDefined()
 })
@@ -397,22 +418,20 @@ it('应该与权限系统集成', async () => {
 ## 高级工具模式
 
 ### 复合工具
+
 编排多个其他工具的工具：
 
 ```typescript
 class CompositeAnalysisTool extends Tool {
   async *call(input, context) {
     // 首先，搜索文件
-    const files = await this.globTool.call(
-      { pattern: input.pattern },
-      context
-    )
-    
+    const files = await this.globTool.call({ pattern: input.pattern }, context)
+
     // 然后 grep 每个文件
     for (const file of files) {
       const results = await this.grepTool.call(
         { file, pattern: input.search },
-        context
+        context,
       )
       yield { type: 'progress', file, results }
     }
@@ -421,41 +440,43 @@ class CompositeAnalysisTool extends Tool {
 ```
 
 ### 流式工具
+
 增量处理数据的工具：
 
 ```typescript
 class StreamingFileTool extends Tool {
   async *call(input, context) {
     const stream = createReadStream(input.file)
-    
+
     for await (const chunk of stream) {
       const processed = processChunk(chunk)
       yield { type: 'partial', data: processed }
-      
+
       if (context.abortSignal.aborted) break
     }
-    
+
     yield { type: 'complete' }
   }
 }
 ```
 
 ### 有状态工具
+
 跨调用维护状态的工具：
 
 ```typescript
 class SessionTool extends Tool {
   private session: Session
-  
+
   async *call(input, context) {
     if (!this.session) {
       this.session = await createSession()
     }
-    
+
     const result = await this.session.execute(input.command)
     yield { type: 'result', result }
   }
-  
+
   cleanup() {
     this.session?.close()
   }
@@ -470,7 +491,7 @@ class SessionTool extends Tool {
 class InstrumentedTool extends Tool {
   async *call(input, context) {
     const startTime = Date.now()
-    
+
     try {
       yield* super.call(input, context)
     } finally {
@@ -478,7 +499,7 @@ class InstrumentedTool extends Tool {
       context.logEvent('tool_execution', {
         tool: this.name,
         duration,
-        success: true
+        success: true,
       })
     }
   }
@@ -496,7 +517,7 @@ class MonitoredTool extends Tool {
       context.logEvent('tool_error', {
         tool: this.name,
         error: error.message,
-        stack: error.stack
+        stack: error.stack,
       })
       throw error
     }

@@ -52,18 +52,23 @@ This comprehensive documentation provides a complete understanding of the Kode c
 ## Key Concepts
 
 ### Tool-First Architecture
+
 Everything in Kode is implemented as a Tool with standardized interfaces for validation, permissions, and execution. This provides unlimited extensibility while maintaining consistency.
 
 ### Multi-Level Configuration
+
 Configuration cascades from environment variables → runtime flags → project config → global config → defaults, allowing flexible customization at any level.
 
 ### Context-Aware AI
+
 The system automatically gathers and injects relevant project context (git status, directory structure, documentation) to improve AI response quality.
 
 ### Security Layers
+
 Multiple security layers including permission system, command validation, path traversal prevention, and resource limits ensure safe operation.
 
 ### Streaming Architecture
+
 All long-running operations use async generators for real-time progress updates and cancellation support.
 
 ## Development Workflow
@@ -89,7 +94,7 @@ bun run dev
 bun test
 
 # Run specific test file
-bun test src/tools/BashTool.test.ts
+bun test packages/core/src/test/unit/bash-tool-progress.test.ts
 
 # Run with coverage
 bun test --coverage
@@ -111,48 +116,54 @@ bun run format
 ## Architecture Principles
 
 ### 1. Modular Design
+
 Each component has a single responsibility with clear interfaces and minimal dependencies.
 
 ### 2. Extensibility
+
 New capabilities can be added through Tools, Commands, or MCP servers without modifying core code.
 
 ### 3. Security by Default
+
 All operations require appropriate permissions with safe defaults and explicit user consent.
 
 ### 4. Performance Conscious
+
 Streaming responses, lazy loading, and intelligent caching ensure responsive interaction.
 
 ### 5. User Experience First
+
 Terminal-native design with keyboard shortcuts, syntax highlighting, and clear error messages.
 
 ## Code Organization
 
 ```
-src/
-├── entrypoints/        # Application entry points
-│   ├── cli.tsx        # Main CLI entry
-│   └── mcp.ts         # MCP server entry
-├── screens/           # Full-screen UI components
-│   ├── REPL.tsx       # Main interactive interface
-│   └── Doctor.tsx     # System diagnostics
-├── components/        # Reusable UI components
-│   ├── messages/      # Message rendering
-│   └── permissions/   # Permission dialogs
-├── tools/            # Tool implementations
-│   ├── BashTool.ts   # Shell execution
-│   └── FileEditTool.ts # File manipulation
-├── services/         # External service integrations
-│   ├── claude.ts     # Anthropic API
-│   └── mcpClient.ts  # MCP client
-├── utils/            # Utility functions
-│   ├── config.ts     # Configuration management
-│   └── model.ts      # Model management
-└── Tool.ts           # Base Tool class
+apps/
+└── kode/src/
+    ├── index.ts                  # Lightweight dispatcher (help-lite/version early-return)
+    └── entrypoints/*             # Build entrypoints (cli/acp/mcp/daemon)
+
+packages/
+├── core/src/                     # Engine + shared domain modules
+│   ├── engine/*                  # Headless turn runner (runTurn/runTurnEvents)
+│   ├── query/*                   # LLM + tool pipeline
+│   ├── permissions/*             # Policy/store/key helpers
+│   └── utils/*                   # Shared utilities
+├── tools-builtin/src/            # Built-in tools + registry
+│   ├── registry.ts
+│   └── tools/*
+├── host-cli/src/                 # CLI host wiring (Commander + Ink integration)
+└── daemon/src/                   # Local daemon (HTTP/WS + WebUI hosting) + client SDK
+
+ui/
+├── ink/src/                      # Ink TUI components + screens
+└── web/                          # Built-in WebUI (Vite/React)
 ```
 
 ## Contributing Guidelines
 
 ### Code Style
+
 - TypeScript with relaxed strict mode
 - 2-space indentation
 - No semicolons (Prettier enforced)
@@ -160,18 +171,21 @@ src/
 - Comprehensive error handling
 
 ### Testing Requirements
+
 - Unit tests for new Tools
 - Integration tests for command flows
 - Mock external dependencies
 - Test error conditions
 
 ### Documentation Standards
+
 - Update relevant documentation
 - Include code examples
 - Document breaking changes
 - Add inline comments for complex logic
 
 ### Pull Request Process
+
 1. Create feature branch
 2. Implement with tests
 3. Update documentation
@@ -181,18 +195,21 @@ src/
 ## Advanced Topics
 
 ### Performance Optimization
+
 - Use streaming for large operations
 - Implement caching strategically
 - Lazy load heavy dependencies
 - Profile with Chrome DevTools
 
 ### Debugging
+
 - Enable debug mode: `kode --debug`
 - Check logs: `kode error`
 - Use verbose output: `kode --verbose`
 - Inspect with Node debugger
 
 ### Security Considerations
+
 - Always validate user input
 - Use path.resolve for file operations
 - Implement rate limiting
@@ -201,11 +218,13 @@ src/
 ## Resources
 
 ### Internal Documentation
+
 - [Project Structure](../PROJECT_STRUCTURE.md)
 - [Custom Commands Guide](../custom-commands.md)
 - [Publishing Guide](../PUBLISH.md)
 
 ### External Resources
+
 - [Anthropic API Documentation](https://docs.anthropic.com)
 - [Model Context Protocol](https://modelcontextprotocol.io)
 - [Ink React Renderer](https://github.com/vadimdemedes/ink)
@@ -213,6 +232,7 @@ src/
 ## Support
 
 For questions or issues:
+
 - GitHub Issues: [Report bugs](https://github.com/shareAI-lab/kode/issues)
 - Discussions: [Ask questions](https://github.com/shareAI-lab/kode/discussions)
 

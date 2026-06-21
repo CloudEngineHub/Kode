@@ -1,0 +1,2085 @@
+{
+  "source": {
+    "cli_js_path": "<CLAUDE_CODE_PKG_ROOT>/cli.js",
+    "cli_js_sha256": "b34653bf5caebdafe4d8baed2997166b5e9bb787a87dcc37a262d2ef649b98ea",
+    "package": {
+      "name": "@anthropic-ai/claude-code",
+      "version": "2.1.6"
+    },
+    "extracted_literals": {
+      "VERSION": "2.1.6",
+      "BUILD_TIME": "2026-01-13T01:42:19Z"
+    }
+  },
+  "entrypoint": {
+    "functionName": "lO7",
+    "evidence": {
+      "line": 5196,
+      "excerpt": ".buffer=this.buffer.subarray(4+A);let B=Q.toString(\"utf-8\");this.pendingResolve(B),this.pendingResolve=null}async read(){if(this.closed)return null;if(this.buffer.length>=4){let A=this.buffer.readUInt32LE(0);if(A>0&&A<=rS0&&this.buffer.length>=4+A){let Q=this.buffer.subarray(4,4+A);return this.buffer=this.buffer.subarray(4+A),Q.toString(\"utf-8\")}}return new Promise((A)=>{this.pendingResolve=A,this.tryProcessMessage()})}}tS0();KN();X$();XQ();OEA();process.env.COREPACK_ENABLE_AUTO_PIN=\"0\";if(process.env.CLAUDE_CODE_REMOTE===\"true\"){let A=process.env.NODE_OPTIONS||\"\";process.env.NODE_OPTIONS=A?`${A} --max-old-space-size=8192`:\"--max-old-space-size=8192\"}x9(\"cli_entry\");x9(\"cli_imports_loaded\");async function lO7(){let A=process.argv.slice(2);if(A.length===1&&(A[0]===\"--version\"||A[0]===\"-v\"||A[0]===\"-V\")){x9(\"cli_version_fast_path\"),console.log(`${{ISSUES_EXPLAINER:\"report the issue at https://github.com/anthropics/claude-code/issues\",PACKAGE_URL:\"@anthropic-ai/claude-code\",README_URL:\"https://code.claude.com/docs/en/overview\",VERSION:\"2.1.6\",FEEDBACK_CHANNEL:\"https://github.com/anthropics/claude-code/issues\",BUILD_TIME:\"2026-01-13T01:42:19Z\"}.VERSION} (Claude Code)`);return}if(A[0]===\"--mcp-cli\"&&qJ()){let B=A.slice(1);process.exit(await AC9(B))}if(A[0]===\"--ripgrep\"){x9(\"cli_ripgrep_path\");let B=A.slice(1),{ripgrepMain:G}=await Promise.resolve().then(() => (KC9(),DC9));process.exitCode=G(B);return}if(process.argv[2]===\"--claude-in-chrome-mcp\"){x9(\"cli_claude_in_chrome_mcp_path\"),await BC9();return}else if(process.argv[2]===\"--chrome-native-host\"){x9(\"cli_chrome_native_host_path\"),await XC9();return}x9(\"cli_before_main_import\");let{main:Q}=await Promise.resolve().then(() => (bN9(),kN9));x9(\"cli_after_main_import\"),await Q(),x9(\"cli_after_main_complete\")}lO7();\n\n"
+    },
+    "fast_paths": [
+      {
+        "trigger": ["--version", "-v", "-V"],
+        "behavior": "print version and return"
+      },
+      {
+        "trigger": ["--mcp-cli"],
+        "behavior": "delegate to AC9(argvRest) when qJ() is truthy"
+      },
+      {
+        "trigger": ["--ripgrep"],
+        "behavior": "delegate to ripgrepMain(argvRest)"
+      },
+      {
+        "trigger": ["--claude-in-chrome-mcp"],
+        "behavior": "run BC9()"
+      },
+      {
+        "trigger": ["--chrome-native-host"],
+        "behavior": "run XC9()"
+      }
+    ],
+    "main_import_evidence": {
+      "line": 5196,
+      "excerpt": "se.resolve().then(() => (KC9(),DC9));process.exitCode=G(B);return}if(process.argv[2]===\"--claude-in-chrome-mcp\"){x9(\"cli_claude_in_chrome_mcp_path\"),await BC9();return}else if(process.argv[2]===\"--chrome-native-host\"){x9(\"cli_chrome_native_host_path\"),await XC9();return}x9(\"cli_before_main_import\");let{main:Q}=await Promise.resolve().then(() => (bN9(),kN9));x9(\"cli_after_main_import\"),await Q(),x9(\"cli_after_main_complete\")}lO7();\n\n"
+    },
+    "piped_input_evidence": {
+      "line": 5119,
+      "excerpt": "_AUTH_FILE_DESCRIPTOR)return\"remote\";return\"cli\"})();Gb0(Y),x9(\"main_client_type_determined\"),fO7(),x9(\"main_before_run\"),process.title=\"claude\",await dO7(),x9(\"main_after_run\")}function uO7(A){let Q=0,B=DY(A);if(B.stdin)l(\"tengu_stdin_interactive\",{});return{...B,onFlicker:(G,Z,Y,J)=>{if(J===\"resize\")return;let X=Date.now();if(X-Q<1000)l(\"tengu_flicker\",{desiredHeight:G,actualHeight:Z,ink2Enabled:Y,reason:J});Q=X}}}async function mO7(A,Q){if(!process.stdin.isTTY&&!process.argv.includes(\"mcp\")){if(Q===\"stream-json\")return process.stdin;process.stdin.setEncoding(\"utf8\");let B=\"\";return process.stdin.on(\"data\",(G)=>{B+=G}),await new Promise((G)=>{process.stdin.on(\"end\",G)}),[A,B].filter(Boolean).join(`\n`)}return A}async function dO7(){x9(\"run_function_start\");function A(){let X=(I)=>I.long?.replace(/^--/,\"\")??I.short?.replace(/^-/,\"\")??\"\";return Object.assign({sortSubcommands:!0,sortOptions:!0},{compareOptions:(I,W)=>X(I).localeCompare(X(W))})}let Q=new FC1().configureHelp(A());x9(\"run_commander_initialized\"),Q.hook(\"preAction\",async()=>{x9(\"preAction_start\");let X=wC9();if(X instanceof Promise)await X;x9(\"preAction_after_init\"),UA2(),yO7(),x9(\"preAction_after_migrations\"),qk2(),x9(\"preAction_after_remote_settings\")}),Q.name(\"claude\").description(\"Claude Code - starts an interactive session by default"
+    }
+  },
+  "commands": {
+    "help": {
+      "line": 3437,
+      "excerpt": "ps://code.claude.com/docs/en/overview\"}))),u8.createElement(T,{marginTop:1},u8.createElement(C,{dimColor:!0},Y.pending?u8.createElement(u8.Fragment,null,\"Press \",Y.keyName,\" again to exit\"):u8.createElement(C,{italic:!0},\"Esc to cancel\")))))}var u8;var yX9=w(()=>{bA();hW();i3A();TX9();SX9();GV();M4();z9();bA();u8=p(QA(),1)});var yj0,bD7,vX9;var kX9=w(()=>{yX9();yj0=p(QA(),1),bD7={type:\"local-jsx\",name:\"help\",description:\"Show help and available commands\",isEnabled:()=>!0,isHidden:!1,async call(A,{options:{commands:Q}}){return yj0.createElement(xX9,{commands:Q,onClose:A})},userFacingName(){return\"help\"}},vX9=bD7});function bX9({onComplete:A}){let Q=OQ(),B=vj0.useCallback(async(Z)=>{let Y=Z===\"yes\";g0((J)=>({...J,autoConnectIde:Y,hasIdeAutoConnectDialogBeenShown:!0})),A()},[A]);return X0((Z,Y)=>{if(Y.escape)A()}),kJ.default.createElement(T,{marginTop:1,flexDirection:\"column\"},kJ.default.createElement(T,{flexDirection:\"column\",borderStyle:\"round\",borderColor:\"ide\",paddingX:2,paddingY:1,width:\"100%\"},kJ.default.createElement(T,{marginBottom:1},kJ.default.createElement(C,{color:\"ide\"},\"Do you wish to enable auto-connect to IDE?\")),kJ.default.createElement(T,{flexDirection:\"column\",paddingX:1},kJ.default.createElement(v0,{options:[{label:\"Yes\",value:\"yes\"},{label:\"No\",value:\"no\"}],onCh"
+    },
+    "notFound": {
+      "line": 4108,
+      "excerpt": "ls:[]}}}function Et(){l_.cache?.clear?.(),Tp.cache?.clear?.(),qK1.cache?.clear?.(),rE1(),Q59(),DF1()}function Rp(A,Q){return Q.some((B)=>B.name===A||B.userFacingName()===A||B.aliases?.includes(A))}function Qx(A,Q){let B=Q.find((G)=>G.name===A||G.userFacingName()===A||G.aliases?.includes(A));if(!B)throw ReferenceError(`Command ${A} not found. Available commands: ${Q.map((G)=>{let Z=G.userFacingName();return G.aliases?`${Z} (aliases: ${G.aliases.join(\", \")})`:Z}).sort((G,Z)=>G.localeCompare(Z)).join(\", \")}`);return B}function nHA(A){if(A.type!==\"prompt\")return A.description;if(A.source===\"plugin\"){if(A.pluginInfo?.repository)return`${A.description} (plugin:${A.pluginInfo.repository})`;return`${A.description} (plugin)`}if(A.source===\"builtin\"||A.source===\"mcp\")return A.description;if(A.source===\"bundled\")return`${A.description} (bundled)`;return`${A.description} (${on(A.source)})`}var Iz9,ts,l_,Tp,qK1;var GV=w(()=>{dz1();dY9();sY9();eY9();MF1();AJ9();QJ9();BJ9();ZJ9();vJ9();mJ9();pJ9();cJ9();AX9();KX9();$X9();_X9();kX9();cX9();iX9();aX9();AK1();mD1();jI9();SI9();CW9();RK9();_K9();jK9();PK9();yK9();kK9();QV"
+    }
+  },
+  "tty_evidence": [
+    {
+      "needle": "process.stdin.isTTY",
+      "line": 2751,
+      "excerpt": "agment,null,\"Enter to confirm · Esc to exit\"))))}var EE;var Vk2=w(()=>{bA();b8();wN();z9();DC0();EE=p(QA(),1)});import{openSync as lm5}from\"fs\";import{ReadStream as im5}from\"tty\";function nm5(){if($p!==null)return $p;if(process.stdin.isTTY){$p=void 0;return}if(n1(!1)){$p=void 0;return}if(process.argv.includes(\"mcp\")){$p=void 0;return}if(process.platform===\"win32\"){$p=void 0;return}try{let A=lm5(\"/dev/tty\",\"r\"),Q=new im5(A);return Q.isTTY=!0,$p=Q,$p}catch(A){e(A),$p=void 0;return}}function DY(A=!1){let Q=nm5(),B={exitOnCtrlC:A};if(Q)B.stdin=Q;return B}var $p=null;var Ef=w(()=>{bQ();b1()});function om5(A,Q){let{addNotification:B,remov"
+    },
+    {
+      "needle": "process.stdout.isTTY",
+      "line": 59,
+      "excerpt": "(G5Q())return\"ssh-session\";if(process.env.TERM){let Q=process.env.TERM;if(Q.includes(\"alacritty\"))return\"alacritty\";if(Q.includes(\"rxvt\"))return\"rxvt\";if(Q.includes(\"termite\"))return\"termite\";return process.env.TERM}if(!process.stdout.isTTY)return\"non-interactive\";return null}function G5Q(){return!!(process.env.SSH_CONNECTION||process.env.SSH_CLIENT||process.env.SSH_TTY)}var pM1,l74,i74,n74,B5Q,a74,o74=()=>{return process.env.__CFBundleIdentifier===\"com.conductor.app\"},cM1,s74,c0;var g3=w(()=>{Y9();R5();WQ();RY();bQ();AX();pM1=p(CpA(),1);l74=D0(async()=>{try{let A=l9(),Q=setTimeout(()=>A.abort(),1000);return await PQ.head(\"http://1."
+    },
+    {
+      "needle": "process.stderr.isTTY",
+      "line": 5194,
+      "excerpt": "kipPermissionsPassed:H,modeIsBypass:E,allowDangerouslySkipPermissionsPassed:z,...$&&{systemPromptFlag:$},...O&&{appendSystemPromptFlag:O},...L&&{rh:L}})}catch(L){e(L instanceof Error?L:Error(String(L)))}}function cO7(){(process.stderr.isTTY?process.stderr:process.stdout.isTTY?process.stdout:void 0)?.write($P)}var B3,RO7=null;var bN9=w(()=>{yAA();A0();ZB();Bm();zC9();LC9();J3();MC9();g3();d1A();luA();SP0();TC9();xC9();a_0();bC9();yC();RfA();BcA();hC9();A0();Ef();bA();HH1();FS();hV1();fS0();hz();zr();o6();oC9();tC9();xeA();SHA();YEA();h3();XQ();eB();$OA();fFA();JB0();b1();a4();rP();a4();ZU9();Cp();EbA();Lj0();Xw0();Zx0();wU9();Kj0();O"
+    }
+  ],
+  "env_vars": [
+    {
+      "name": "__CFB",
+      "count": 2,
+      "firstLine": 59
+    },
+    {
+      "name": "ALACRITTY_LOG",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "ALIYUN_REGION_ID",
+      "count": 2,
+      "firstLine": 106
+    },
+    {
+      "name": "ANTHROPIC_API_KEY",
+      "count": 22,
+      "firstLine": 236
+    },
+    {
+      "name": "ANTHROPIC_AUTH_TOKEN",
+      "count": 3,
+      "firstLine": 236
+    },
+    {
+      "name": "ANTHROPIC_BASE_URL",
+      "count": 5,
+      "firstLine": 120
+    },
+    {
+      "name": "ANTHROPIC_BEDROCK_BASE_URL",
+      "count": 4,
+      "firstLine": 228
+    },
+    {
+      "name": "ANTHROPIC_BETAS",
+      "count": 2,
+      "firstLine": 236
+    },
+    {
+      "name": "ANTHROPIC_CUSTOM_HEADERS",
+      "count": 2,
+      "firstLine": 1077
+    },
+    {
+      "name": "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+      "count": 2,
+      "firstLine": 236
+    },
+    {
+      "name": "ANTHROPIC_DEFAULT_OPUS_MODEL",
+      "count": 2,
+      "firstLine": 236
+    },
+    {
+      "name": "ANTHROPIC_DEFAULT_SONNET_MODEL",
+      "count": 2,
+      "firstLine": 236
+    },
+    {
+      "name": "ANTHROPIC_FOUNDRY_API_KEY",
+      "count": 1,
+      "firstLine": 1077
+    },
+    {
+      "name": "ANTHROPIC_FOUNDRY_BASE_URL",
+      "count": 1,
+      "firstLine": 3391
+    },
+    {
+      "name": "ANTHROPIC_FOUNDRY_RESOURCE",
+      "count": 1,
+      "firstLine": 3391
+    },
+    {
+      "name": "ANTHROPIC_LOG",
+      "count": 1,
+      "firstLine": 928
+    },
+    {
+      "name": "ANTHROPIC_MODEL",
+      "count": 5,
+      "firstLine": 236
+    },
+    {
+      "name": "ANTHROPIC_SMALL_FAST_MODEL",
+      "count": 3,
+      "firstLine": 236
+    },
+    {
+      "name": "ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION",
+      "count": 2,
+      "firstLine": 1077
+    },
+    {
+      "name": "ANTHROPIC_VERTEX_PROJECT_ID",
+      "count": 2,
+      "firstLine": 1077
+    },
+    {
+      "name": "API_MAX_INPUT_TOKENS",
+      "count": 4,
+      "firstLine": 542
+    },
+    {
+      "name": "API_TARGET_INPUT_TOKENS",
+      "count": 4,
+      "firstLine": 542
+    },
+    {
+      "name": "API_TIMEOUT_MS",
+      "count": 5,
+      "firstLine": 1077
+    },
+    {
+      "name": "APP_URL",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "APPDATA",
+      "count": 4,
+      "firstLine": 889
+    },
+    {
+      "name": "AWS_ACCESS_KEY_ID",
+      "count": 3,
+      "firstLine": 952
+    },
+    {
+      "name": "AWS_BEARER_TOKEN_BEDROCK",
+      "count": 4,
+      "firstLine": 228
+    },
+    {
+      "name": "AWS_DEFAULT_REGION",
+      "count": 2,
+      "firstLine": 9
+    },
+    {
+      "name": "AWS_EXECUTION_ENV",
+      "count": 3,
+      "firstLine": 59
+    },
+    {
+      "name": "AWS_LAMBDA_BENCHMARK_MODE",
+      "count": 1,
+      "firstLine": 120
+    },
+    {
+      "name": "AWS_LAMBDA_FUNCTION_NAME",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "AWS_LOGIN_CACHE_DIRECTORY",
+      "count": 1,
+      "firstLine": 170
+    },
+    {
+      "name": "AWS_PROFILE",
+      "count": 1,
+      "firstLine": 236
+    },
+    {
+      "name": "AWS_REGION",
+      "count": 5,
+      "firstLine": 9
+    },
+    {
+      "name": "AWS_SECRET_ACCESS_KEY",
+      "count": 3,
+      "firstLine": 952
+    },
+    {
+      "name": "AWS_SESSION_TOKEN",
+      "count": 2,
+      "firstLine": 952
+    },
+    {
+      "name": "AZURE_ADDITIONALLY_ALLOWED_TENANTS",
+      "count": 1,
+      "firstLine": 1077
+    },
+    {
+      "name": "AZURE_AUTHORITY_HOST",
+      "count": 2,
+      "firstLine": 1022
+    },
+    {
+      "name": "AZURE_CLIENT_CERTIFICATE_PASSWORD",
+      "count": 1,
+      "firstLine": 1077
+    },
+    {
+      "name": "AZURE_CLIENT_CERTIFICATE_PATH",
+      "count": 1,
+      "firstLine": 1077
+    },
+    {
+      "name": "AZURE_CLIENT_ID",
+      "count": 4,
+      "firstLine": 1042
+    },
+    {
+      "name": "AZURE_CLIENT_SECRET",
+      "count": 1,
+      "firstLine": 1077
+    },
+    {
+      "name": "AZURE_CLIENT_SEND_CERTIFICATE_CHAIN",
+      "count": 2,
+      "firstLine": 1077
+    },
+    {
+      "name": "AZURE_FEDERATED_TOKEN_FILE",
+      "count": 5,
+      "firstLine": 1042
+    },
+    {
+      "name": "AZURE_FUNCTIONS_ENVIRONMENT",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "AZURE_IDENTITY_DISABLE_MULTITENANTAUTH",
+      "count": 1,
+      "firstLine": 1013
+    },
+    {
+      "name": "AZURE_PASSWORD",
+      "count": 1,
+      "firstLine": 1077
+    },
+    {
+      "name": "AZURE_POD_IDENTITY_AUTHORITY_HOST",
+      "count": 2,
+      "firstLine": 1041
+    },
+    {
+      "name": "AZURE_REGIONAL_AUTHORITY_NAME",
+      "count": 1,
+      "firstLine": 1041
+    },
+    {
+      "name": "AZURE_TENANT_ID",
+      "count": 5,
+      "firstLine": 1042
+    },
+    {
+      "name": "AZURE_TOKEN_CREDENTIALS",
+      "count": 3,
+      "firstLine": 1077
+    },
+    {
+      "name": "AZURE_USERNAME",
+      "count": 1,
+      "firstLine": 1077
+    },
+    {
+      "name": "BASH_DEFAULT_TIMEOUT_MS",
+      "count": 1,
+      "firstLine": 1383
+    },
+    {
+      "name": "BASH_MAX_OUTPUT_LENGTH",
+      "count": 1,
+      "firstLine": 1383
+    },
+    {
+      "name": "BASH_MAX_TIMEOUT_MS",
+      "count": 1,
+      "firstLine": 1383
+    },
+    {
+      "name": "BEDROCK_BASE_URL",
+      "count": 1,
+      "firstLine": 3391
+    },
+    {
+      "name": "BETA_TRACING_ENDPOINT",
+      "count": 2,
+      "firstLine": 1786
+    },
+    {
+      "name": "BITBUCKET_TOKEN",
+      "count": 3,
+      "firstLine": 1754
+    },
+    {
+      "name": "BROWSER",
+      "count": 1,
+      "firstLine": 1753
+    },
+    {
+      "name": "BUILDKITE",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "C",
+      "count": 6,
+      "firstLine": 8
+    },
+    {
+      "name": "CF_PAGES",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "CF_PAGES_COMMIT_SHA",
+      "count": 1,
+      "firstLine": 108
+    },
+    {
+      "name": "CHOKIDAR_INTERVAL",
+      "count": 1,
+      "firstLine": 417
+    },
+    {
+      "name": "CHOKIDAR_USEPOLLING",
+      "count": 1,
+      "firstLine": 417
+    },
+    {
+      "name": "CIRCLECI",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "CLAUBBIT",
+      "count": 2,
+      "firstLine": 236
+    },
+    {
+      "name": "CLAUDE_AGENT_SDK_VERSION",
+      "count": 4,
+      "firstLine": 236
+    },
+    {
+      "name": "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE",
+      "count": 1,
+      "firstLine": 3271
+    },
+    {
+      "name": "CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR",
+      "count": 1,
+      "firstLine": 9
+    },
+    {
+      "name": "CLAUDE_BASH_NO_LOGIN",
+      "count": 2,
+      "firstLine": 1633
+    },
+    {
+      "name": "CLAUDE_CODE_ACCESSIBILITY",
+      "count": 3,
+      "firstLine": 856
+    },
+    {
+      "name": "CLAUDE_CODE_ACTION",
+      "count": 3,
+      "firstLine": 236
+    },
+    {
+      "name": "CLAUDE_CODE_ADDITIONAL_PROTECTION",
+      "count": 1,
+      "firstLine": 1077
+    },
+    {
+      "name": "CLAUDE_CODE_AGENT_ID",
+      "count": 1,
+      "firstLine": 2751
+    },
+    {
+      "name": "CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR",
+      "count": 2,
+      "firstLine": 120
+    },
+    {
+      "name": "CLAUDE_CODE_API_KEY_HELPER_TTL_MS",
+      "count": 1,
+      "firstLine": 236
+    },
+    {
+      "name": "CLAUDE_CODE_AUTO_CONNECT_IDE",
+      "count": 2,
+      "firstLine": 2896
+    },
+    {
+      "name": "CLAUDE_CODE_BASH_SANDBOX_SHOW_INDICATOR",
+      "count": 1,
+      "firstLine": 3217
+    },
+    {
+      "name": "CLAUDE_CODE_BLOCKING_LIMIT_OVERRIDE",
+      "count": 1,
+      "firstLine": 3271
+    },
+    {
+      "name": "CLAUDE_CODE_BUBBLEWRAP",
+      "count": 2,
+      "firstLine": 120
+    },
+    {
+      "name": "CLAUDE_CODE_CLIENT_CERT",
+      "count": 4,
+      "firstLine": 228
+    },
+    {
+      "name": "CLAUDE_CODE_CLIENT_KEY",
+      "count": 4,
+      "firstLine": 228
+    },
+    {
+      "name": "CLAUDE_CODE_CLIENT_KEY_PASSPHRASE",
+      "count": 2,
+      "firstLine": 228
+    },
+    {
+      "name": "CLAUDE_CODE_CONTAINER_ID",
+      "count": 4,
+      "firstLine": 236
+    },
+    {
+      "name": "CLAUDE_CODE_DEBUG_LOGS_DIR",
+      "count": 1,
+      "firstLine": 11
+    },
+    {
+      "name": "CLAUDE_CODE_DIAGNOSTICS_FILE",
+      "count": 1,
+      "firstLine": 1725
+    },
+    {
+      "name": "CLAUDE_CODE_DISABLE_ATTACHMENTS",
+      "count": 1,
+      "firstLine": 3267
+    },
+    {
+      "name": "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS",
+      "count": 6,
+      "firstLine": 1417
+    },
+    {
+      "name": "CLAUDE_CODE_DISABLE_CLAUDE_MDS",
+      "count": 1,
+      "firstLine": 1949
+    },
+    {
+      "name": "CLAUDE_CODE_DISABLE_COMMAND_INJECTION_CHECK",
+      "count": 3,
+      "firstLine": 2393
+    },
+    {
+      "name": "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS",
+      "count": 1,
+      "firstLine": 236
+    },
+    {
+      "name": "CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY",
+      "count": 2,
+      "firstLine": 2902
+    },
+    {
+      "name": "CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING",
+      "count": 3,
+      "firstLine": 2262
+    },
+    {
+      "name": "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+      "count": 7,
+      "firstLine": 12
+    },
+    {
+      "name": "CLAUDE_CODE_DISABLE_TERMINAL_TITLE",
+      "count": 2,
+      "firstLine": 1671
+    },
+    {
+      "name": "CLAUDE_CODE_DONT_INHERIT_ENV",
+      "count": 1,
+      "firstLine": 1630
+    },
+    {
+      "name": "CLAUDE_CODE_EFFORT_LEVEL",
+      "count": 1,
+      "firstLine": 2871
+    },
+    {
+      "name": "CLAUDE_CODE_ENABLE_CFC",
+      "count": 2,
+      "firstLine": 3035
+    },
+    {
+      "name": "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION",
+      "count": 2,
+      "firstLine": 3323
+    },
+    {
+      "name": "CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING",
+      "count": 1,
+      "firstLine": 2262
+    },
+    {
+      "name": "CLAUDE_CODE_ENABLE_TELEMETRY",
+      "count": 1,
+      "firstLine": 2742
+    },
+    {
+      "name": "CLAUDE_CODE_ENABLE_TOKEN_USAGE_ATTACHMENT",
+      "count": 1,
+      "firstLine": 3269
+    },
+    {
+      "name": "CLAUDE_CODE_ENTRYPOINT",
+      "count": 21,
+      "firstLine": 236
+    },
+    {
+      "name": "CLAUDE_CODE_ENVIRONMENT_RUNNER_VERSION",
+      "count": 1,
+      "firstLine": 4992
+    },
+    {
+      "name": "CLAUDE_CODE_EXIT_AFTER_STOP_DELAY",
+      "count": 1,
+      "firstLine": 4993
+    },
+    {
+      "name": "CLAUDE_CODE_EXTRA_BODY",
+      "count": 1,
+      "firstLine": 4402
+    },
+    {
+      "name": "CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS",
+      "count": 1,
+      "firstLine": 1681
+    },
+    {
+      "name": "CLAUDE_CODE_FORCE_FULL_LOGO",
+      "count": 1,
+      "firstLine": 2859
+    },
+    {
+      "name": "CLAUDE_CODE_GIT_BASH_PATH",
+      "count": 4,
+      "firstLine": 75
+    },
+    {
+      "name": "CLAUDE_CODE_IDE_HOST_OVERRIDE",
+      "count": 2,
+      "firstLine": 3267
+    },
+    {
+      "name": "CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL",
+      "count": 1,
+      "firstLine": 3267
+    },
+    {
+      "name": "CLAUDE_CODE_IDE_SKIP_VALID_CHECK",
+      "count": 1,
+      "firstLine": 3266
+    },
+    {
+      "name": "CLAUDE_CODE_LOOPY_MODE",
+      "count": 1,
+      "firstLine": 5120
+    },
+    {
+      "name": "CLAUDE_CODE_MAX_OUTPUT_TOKENS",
+      "count": 1,
+      "firstLine": 4404
+    },
+    {
+      "name": "CLAUDE_CODE_MAX_RETRIES",
+      "count": 2,
+      "firstLine": 1078
+    },
+    {
+      "name": "CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY",
+      "count": 1,
+      "firstLine": 3323
+    },
+    {
+      "name": "CLAUDE_CODE_OAUTH_CLIENT_ID",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "CLAUDE_CODE_OAUTH_TOKEN",
+      "count": 4,
+      "firstLine": 120
+    },
+    {
+      "name": "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR",
+      "count": 2,
+      "firstLine": 120
+    },
+    {
+      "name": "CLAUDE_CODE_OTEL_FLUSH_TIMEOUT_MS",
+      "count": 1,
+      "firstLine": 2751
+    },
+    {
+      "name": "CLAUDE_CODE_OTEL_HEADERS_HELPER_DEBOUNCE_MS",
+      "count": 1,
+      "firstLine": 237
+    },
+    {
+      "name": "CLAUDE_CODE_OTEL_SHUTDOWN_TIMEOUT_MS",
+      "count": 2,
+      "firstLine": 2742
+    },
+    {
+      "name": "CLAUDE_CODE_PARENT_SESSION_ID",
+      "count": 4,
+      "firstLine": 236
+    },
+    {
+      "name": "CLAUDE_CODE_PLAN_V2_AGENT_COUNT",
+      "count": 2,
+      "firstLine": 4565
+    },
+    {
+      "name": "CLAUDE_CODE_PLAN_V2_EXPLORE_AGENT_COUNT",
+      "count": 2,
+      "firstLine": 4565
+    },
+    {
+      "name": "CLAUDE_CODE_PROFILE_STARTUP",
+      "count": 2,
+      "firstLine": 12
+    },
+    {
+      "name": "CLAUDE_CODE_PROXY_RESOLVES_HOSTS",
+      "count": 1,
+      "firstLine": 228
+    },
+    {
+      "name": "CLAUDE_CODE_REMOTE",
+      "count": 6,
+      "firstLine": 236
+    },
+    {
+      "name": "CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE",
+      "count": 2,
+      "firstLine": 236
+    },
+    {
+      "name": "CLAUDE_CODE_REMOTE_SESSION_ID",
+      "count": 3,
+      "firstLine": 236
+    },
+    {
+      "name": "CLAUDE_CODE_SESSION_ACCESS_TOKEN",
+      "count": 2,
+      "firstLine": 1703
+    },
+    {
+      "name": "CLAUDE_CODE_SESSION_ID",
+      "count": 4,
+      "firstLine": 8
+    },
+    {
+      "name": "CLAUDE_CODE_SHELL",
+      "count": 1,
+      "firstLine": 1633
+    },
+    {
+      "name": "CLAUDE_CODE_SHELL_PREFIX",
+      "count": 7,
+      "firstLine": 1633
+    },
+    {
+      "name": "CLAUDE_CODE_SKIP_BEDROCK_AUTH",
+      "count": 6,
+      "firstLine": 228
+    },
+    {
+      "name": "CLAUDE_CODE_SKIP_FOUNDRY_AUTH",
+      "count": 2,
+      "firstLine": 1077
+    },
+    {
+      "name": "CLAUDE_CODE_SKIP_PROMPT_HISTORY",
+      "count": 1,
+      "firstLine": 914
+    },
+    {
+      "name": "CLAUDE_CODE_SKIP_VERTEX_AUTH",
+      "count": 2,
+      "firstLine": 1077
+    },
+    {
+      "name": "CLAUDE_CODE_SSE_PORT",
+      "count": 1,
+      "firstLine": 3266
+    },
+    {
+      "name": "CLAUDE_CODE_SUBAGENT_MODEL",
+      "count": 2,
+      "firstLine": 236
+    },
+    {
+      "name": "CLAUDE_CODE_SYNTAX_HIGHLIGHT",
+      "count": 2,
+      "firstLine": 2333
+    },
+    {
+      "name": "CLAUDE_CODE_TAGS",
+      "count": 2,
+      "firstLine": 236
+    },
+    {
+      "name": "CLAUDE_CODE_TASK_LIST_ID",
+      "count": 1,
+      "firstLine": 724
+    },
+    {
+      "name": "CLAUDE_CODE_TEAM_NAME",
+      "count": 1,
+      "firstLine": 724
+    },
+    {
+      "name": "CLAUDE_CODE_TEST_FIXTURES_ROOT",
+      "count": 2,
+      "firstLine": 1078
+    },
+    {
+      "name": "CLAUDE_CODE_TMPDIR",
+      "count": 3,
+      "firstLine": 1383
+    },
+    {
+      "name": "CLAUDE_CODE_USE_BEDROCK",
+      "count": 15,
+      "firstLine": 12
+    },
+    {
+      "name": "CLAUDE_CODE_USE_FOUNDRY",
+      "count": 10,
+      "firstLine": 12
+    },
+    {
+      "name": "CLAUDE_CODE_USE_NATIVE_FILE_SEARCH",
+      "count": 1,
+      "firstLine": 4482
+    },
+    {
+      "name": "CLAUDE_CODE_USE_VERTEX",
+      "count": 12,
+      "firstLine": 12
+    },
+    {
+      "name": "CLAUDE_CODE_WEBSOCKET_AUTH_FILE_DESCRIPTOR",
+      "count": 2,
+      "firstLine": 1703
+    },
+    {
+      "name": "CLAUDE_CONFIG_DIR",
+      "count": 3,
+      "firstLine": 9
+    },
+    {
+      "name": "CLAUDE_DEBUG",
+      "count": 1,
+      "firstLine": 4758
+    },
+    {
+      "name": "CLAUDE_ENV_FILE",
+      "count": 1,
+      "firstLine": 1632
+    },
+    {
+      "name": "CLAUDE_FORCE_DISPLAY_SURVEY",
+      "count": 1,
+      "firstLine": 2902
+    },
+    {
+      "name": "CLOUD_ML_REGION",
+      "count": 1,
+      "firstLine": 9
+    },
+    {
+      "name": "CLOUD_RUN_JOB",
+      "count": 1,
+      "firstLine": 987
+    },
+    {
+      "name": "CODESPACES",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "COLORTERM",
+      "count": 1,
+      "firstLine": 3043
+    },
+    {
+      "name": "COMMIT_REF",
+      "count": 1,
+      "firstLine": 108
+    },
+    {
+      "name": "COREPACK_ENABLE_AUTO_PIN",
+      "count": 1,
+      "firstLine": 5196
+    },
+    {
+      "name": "CURSOR_TRACE_ID",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "DEBUG",
+      "count": 6,
+      "firstLine": 11
+    },
+    {
+      "name": "DEBUG_AUTH",
+      "count": 1,
+      "firstLine": 987
+    },
+    {
+      "name": "DEBUG_SDK",
+      "count": 1,
+      "firstLine": 11
+    },
+    {
+      "name": "DEMO_VERSION",
+      "count": 2,
+      "firstLine": 2859
+    },
+    {
+      "name": "DENO_DEPLOYMENT_ID",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "DETECT_GCP_RETRIES",
+      "count": 2,
+      "firstLine": 987
+    },
+    {
+      "name": "DEV",
+      "count": 2,
+      "firstLine": 821
+    },
+    {
+      "name": "DISABLE_AUTO_COMPACT",
+      "count": 1,
+      "firstLine": 3271
+    },
+    {
+      "name": "DISABLE_AUTO_MIGRATE_TO_NATIVE",
+      "count": 1,
+      "firstLine": 2822
+    },
+    {
+      "name": "DISABLE_AUTOUPDATER",
+      "count": 2,
+      "firstLine": 254
+    },
+    {
+      "name": "DISABLE_BUG_COMMAND",
+      "count": 1,
+      "firstLine": 3388
+    },
+    {
+      "name": "DISABLE_COMPACT",
+      "count": 3,
+      "firstLine": 3271
+    },
+    {
+      "name": "DISABLE_COST_WARNINGS",
+      "count": 1,
+      "firstLine": 254
+    },
+    {
+      "name": "DISABLE_DOCTOR_COMMAND",
+      "count": 1,
+      "firstLine": 3432
+    },
+    {
+      "name": "DISABLE_ERROR_REPORTING",
+      "count": 2,
+      "firstLine": 12
+    },
+    {
+      "name": "DISABLE_EXTRA_USAGE_COMMAND",
+      "count": 1,
+      "firstLine": 2753
+    },
+    {
+      "name": "DISABLE_FEEDBACK_COMMAND",
+      "count": 1,
+      "firstLine": 3388
+    },
+    {
+      "name": "DISABLE_INSTALL_GITHUB_APP_COMMAND",
+      "count": 1,
+      "firstLine": 3607
+    },
+    {
+      "name": "DISABLE_INSTALLATION_CHECKS",
+      "count": 2,
+      "firstLine": 2388
+    },
+    {
+      "name": "DISABLE_INTERLEAVED_THINKING",
+      "count": 1,
+      "firstLine": 236
+    },
+    {
+      "name": "DISABLE_LOGIN_COMMAND",
+      "count": 1,
+      "firstLine": 2753
+    },
+    {
+      "name": "DISABLE_LOGOUT_COMMAND",
+      "count": 1,
+      "firstLine": 2751
+    },
+    {
+      "name": "DISABLE_MICROCOMPACT",
+      "count": 1,
+      "firstLine": 2823
+    },
+    {
+      "name": "DISABLE_PROMPT_CACHING",
+      "count": 1,
+      "firstLine": 4402
+    },
+    {
+      "name": "DISABLE_PROMPT_CACHING_HAIKU",
+      "count": 1,
+      "firstLine": 4402
+    },
+    {
+      "name": "DISABLE_PROMPT_CACHING_OPUS",
+      "count": 1,
+      "firstLine": 4402
+    },
+    {
+      "name": "DISABLE_PROMPT_CACHING_SONNET",
+      "count": 1,
+      "firstLine": 4402
+    },
+    {
+      "name": "DISABLE_TELEMETRY",
+      "count": 1,
+      "firstLine": 236
+    },
+    {
+      "name": "DISABLE_UPGRADE_COMMAND",
+      "count": 1,
+      "firstLine": 4097
+    },
+    {
+      "name": "DYNO",
+      "count": 2,
+      "firstLine": 59
+    },
+    {
+      "name": "EDITOR",
+      "count": 4,
+      "firstLine": 2602
+    },
+    {
+      "name": "ENABLE_BETA_TRACING_DETAILED",
+      "count": 1,
+      "firstLine": 1786
+    },
+    {
+      "name": "ENABLE_ENHANCED_TELEMETRY_BETA",
+      "count": 2,
+      "firstLine": 1801
+    },
+    {
+      "name": "ENABLE_EXPERIMENTAL_MCP_CLI",
+      "count": 4,
+      "firstLine": 1179
+    },
+    {
+      "name": "ENABLE_INCREMENTAL_TUI",
+      "count": 2,
+      "firstLine": 876
+    },
+    {
+      "name": "ENABLE_MCP_CLI",
+      "count": 2,
+      "firstLine": 1179
+    },
+    {
+      "name": "ENABLE_MCP_CLI_ENDPOINT",
+      "count": 1,
+      "firstLine": 4737
+    },
+    {
+      "name": "ENABLE_MCP_LARGE_OUTPUT_FILES",
+      "count": 1,
+      "firstLine": 3265
+    },
+    {
+      "name": "ENABLE_TOOL_SEARCH",
+      "count": 8,
+      "firstLine": 1179
+    },
+    {
+      "name": "FALLBACK_FOR_ALL_PRIMARY_MODELS",
+      "count": 1,
+      "firstLine": 1078
+    },
+    {
+      "name": "FLY_APP_NAME",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "FLY_MACHINE_ID",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "FLY_REGION",
+      "count": 2,
+      "firstLine": 106
+    },
+    {
+      "name": "FORCE_AUTOUPDATE_PLUGINS",
+      "count": 1,
+      "firstLine": 254
+    },
+    {
+      "name": "FORCE_CODE_TERMINAL",
+      "count": 1,
+      "firstLine": 3267
+    },
+    {
+      "name": "FUNCTION_NAME",
+      "count": 2,
+      "firstLine": 987
+    },
+    {
+      "name": "FUNCTION_TARGET",
+      "count": 1,
+      "firstLine": 988
+    },
+    {
+      "name": "GAE_MODULE_NAME",
+      "count": 1,
+      "firstLine": 988
+    },
+    {
+      "name": "GAE_SERVICE",
+      "count": 1,
+      "firstLine": 988
+    },
+    {
+      "name": "GCE_METADATA_HOST",
+      "count": 2,
+      "firstLine": 987
+    },
+    {
+      "name": "GCE_METADATA_IP",
+      "count": 2,
+      "firstLine": 987
+    },
+    {
+      "name": "GCLOUD_PROJECT",
+      "count": 2,
+      "firstLine": 1005
+    },
+    {
+      "name": "GCP_PROJECT",
+      "count": 1,
+      "firstLine": 106
+    },
+    {
+      "name": "GH_TOKEN",
+      "count": 3,
+      "firstLine": 1754
+    },
+    {
+      "name": "GITHUB_ACTION_INPUTS",
+      "count": 1,
+      "firstLine": 5164
+    },
+    {
+      "name": "GITHUB_ACTION_PATH",
+      "count": 2,
+      "firstLine": 236
+    },
+    {
+      "name": "GITHUB_ACTIONS",
+      "count": 5,
+      "firstLine": 59
+    },
+    {
+      "name": "GITHUB_ACTOR",
+      "count": 1,
+      "firstLine": 254
+    },
+    {
+      "name": "GITHUB_ACTOR_ID",
+      "count": 1,
+      "firstLine": 254
+    },
+    {
+      "name": "GITHUB_EVENT_NAME",
+      "count": 1,
+      "firstLine": 236
+    },
+    {
+      "name": "GITHUB_REPOSITORY",
+      "count": 1,
+      "firstLine": 254
+    },
+    {
+      "name": "GITHUB_REPOSITORY_ID",
+      "count": 1,
+      "firstLine": 254
+    },
+    {
+      "name": "GITHUB_REPOSITORY_OWNER",
+      "count": 1,
+      "firstLine": 254
+    },
+    {
+      "name": "GITHUB_REPOSITORY_OWNER_ID",
+      "count": 1,
+      "firstLine": 254
+    },
+    {
+      "name": "GITHUB_SHA",
+      "count": 1,
+      "firstLine": 108
+    },
+    {
+      "name": "GITHUB_TOKEN",
+      "count": 3,
+      "firstLine": 1754
+    },
+    {
+      "name": "GITLAB_CI",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "GITLAB_TOKEN",
+      "count": 3,
+      "firstLine": 1754
+    },
+    {
+      "name": "GITPOD_WORKSPACE_ID",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "GL_TOKEN",
+      "count": 3,
+      "firstLine": 1754
+    },
+    {
+      "name": "GNOME_TERMINAL_SERVICE",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "GOOGLE_APPLICATION_CREDENTIALS",
+      "count": 2,
+      "firstLine": 1005
+    },
+    {
+      "name": "GOOGLE_CLOUD_PROJECT",
+      "count": 3,
+      "firstLine": 59
+    },
+    {
+      "name": "GOOGLE_CLOUD_QUOTA_PROJECT",
+      "count": 1,
+      "firstLine": 1005
+    },
+    {
+      "name": "GRACEFUL_FS_PLATFORM",
+      "count": 1,
+      "firstLine": 75
+    },
+    {
+      "name": "GRPC_DEFAULT_SSL_ROOTS_FILE_PATH",
+      "count": 1,
+      "firstLine": 2712
+    },
+    {
+      "name": "GRPC_EXPERIMENTAL_ENABLE_OUTLIER_DETECTION",
+      "count": 1,
+      "firstLine": 2732
+    },
+    {
+      "name": "GRPC_NODE_TRACE",
+      "count": 1,
+      "firstLine": 2712
+    },
+    {
+      "name": "GRPC_NODE_USE_ALTERNATIVE_RESOLVER",
+      "count": 1,
+      "firstLine": 2726
+    },
+    {
+      "name": "GRPC_NODE_VERBOSITY",
+      "count": 1,
+      "firstLine": 2712
+    },
+    {
+      "name": "GRPC_SSL_CIPHER_SUITES",
+      "count": 1,
+      "firstLine": 2712
+    },
+    {
+      "name": "GRPC_TRACE",
+      "count": 1,
+      "firstLine": 2712
+    },
+    {
+      "name": "GRPC_VERBOSITY",
+      "count": 1,
+      "firstLine": 2712
+    },
+    {
+      "name": "HOME",
+      "count": 2,
+      "firstLine": 1005
+    },
+    {
+      "name": "HTTP_PROXY",
+      "count": 3,
+      "firstLine": 223
+    },
+    {
+      "name": "HTTPS_PROXY",
+      "count": 3,
+      "firstLine": 223
+    },
+    {
+      "name": "IBM_CLOUD_REGION",
+      "count": 2,
+      "firstLine": 106
+    },
+    {
+      "name": "IS_DEMO",
+      "count": 7,
+      "firstLine": 889
+    },
+    {
+      "name": "IS_SANDBOX",
+      "count": 2,
+      "firstLine": 1078
+    },
+    {
+      "name": "JEST_WORKER_ID",
+      "count": 1,
+      "firstLine": 196
+    },
+    {
+      "name": "K_CONFIGURATION",
+      "count": 1,
+      "firstLine": 988
+    },
+    {
+      "name": "K_SERVICE",
+      "count": 2,
+      "firstLine": 59
+    },
+    {
+      "name": "KITTY_WINDOW_ID",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "KONSOLE_VERSION",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "KUBERNETES_SERVICE_HOST",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "LOCALAPPDATA",
+      "count": 1,
+      "firstLine": 2858
+    },
+    {
+      "name": "MAX_MCP_OUTPUT_TOKENS",
+      "count": 1,
+      "firstLine": 1703
+    },
+    {
+      "name": "MAX_STRUCTURED_OUTPUT_RETRIES",
+      "count": 1,
+      "firstLine": 2894
+    },
+    {
+      "name": "MAX_THINKING_TOKENS",
+      "count": 4,
+      "firstLine": 915
+    },
+    {
+      "name": "MCP_CONNECTION_NONBLOCKING",
+      "count": 1,
+      "firstLine": 5164
+    },
+    {
+      "name": "MCP_OAUTH_CALLBACK_PORT",
+      "count": 1,
+      "firstLine": 1754
+    },
+    {
+      "name": "MCP_REMOTE_SERVER_CONNECTION_BATCH_SIZE",
+      "count": 1,
+      "firstLine": 3265
+    },
+    {
+      "name": "MCP_SERVER_CONNECTION_BATCH_SIZE",
+      "count": 1,
+      "firstLine": 3265
+    },
+    {
+      "name": "MCP_TIMEOUT",
+      "count": 1,
+      "firstLine": 3265
+    },
+    {
+      "name": "MCP_TOOL_TIMEOUT",
+      "count": 1,
+      "firstLine": 4736
+    },
+    {
+      "name": "METADATA_SERVER_DETECTION",
+      "count": 2,
+      "firstLine": 987
+    },
+    {
+      "name": "MODIFIERS_NODE_PATH",
+      "count": 2,
+      "firstLine": 3367
+    },
+    {
+      "name": "MSYSTEM",
+      "count": 3,
+      "firstLine": 59
+    },
+    {
+      "name": "N",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "NETLIFY",
+      "count": 2,
+      "firstLine": 59
+    },
+    {
+      "name": "NO_PROXY",
+      "count": 5,
+      "firstLine": 223
+    },
+    {
+      "name": "NODE_DEBUG",
+      "count": 8,
+      "firstLine": 75
+    },
+    {
+      "name": "NODE_EXTRA_CA_CERTS",
+      "count": 3,
+      "firstLine": 228
+    },
+    {
+      "name": "NODE_OPTIONS",
+      "count": 5,
+      "firstLine": 3265
+    },
+    {
+      "name": "NODE_V8_COVERAGE",
+      "count": 2,
+      "firstLine": 185
+    },
+    {
+      "name": "OSTYPE",
+      "count": 2,
+      "firstLine": 20
+    },
+    {
+      "name": "OTEL_EXPORTER_OTLP_ENDPOINT",
+      "count": 2,
+      "firstLine": 2732
+    },
+    {
+      "name": "OTEL_EXPORTER_OTLP_HEADERS",
+      "count": 2,
+      "firstLine": 2732
+    },
+    {
+      "name": "OTEL_EXPORTER_OTLP_INSECURE",
+      "count": 1,
+      "firstLine": 2732
+    },
+    {
+      "name": "OTEL_EXPORTER_OTLP_LOGS_PROTOCOL",
+      "count": 1,
+      "firstLine": 2742
+    },
+    {
+      "name": "OTEL_EXPORTER_OTLP_METRICS_PROTOCOL",
+      "count": 1,
+      "firstLine": 2742
+    },
+    {
+      "name": "OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE",
+      "count": 2,
+      "firstLine": 2740
+    },
+    {
+      "name": "OTEL_EXPORTER_OTLP_PROTOCOL",
+      "count": 3,
+      "firstLine": 2742
+    },
+    {
+      "name": "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL",
+      "count": 1,
+      "firstLine": 2742
+    },
+    {
+      "name": "OTEL_EXPORTER_PROMETHEUS_HOST",
+      "count": 1,
+      "firstLine": 2740
+    },
+    {
+      "name": "OTEL_EXPORTER_PROMETHEUS_PORT",
+      "count": 1,
+      "firstLine": 2740
+    },
+    {
+      "name": "OTEL_LOG_TOOL_CONTENT",
+      "count": 1,
+      "firstLine": 1801
+    },
+    {
+      "name": "OTEL_LOG_USER_PROMPTS",
+      "count": 2,
+      "firstLine": 1786
+    },
+    {
+      "name": "OTEL_LOGS_EXPORT_INTERVAL",
+      "count": 2,
+      "firstLine": 260
+    },
+    {
+      "name": "OTEL_LOGS_EXPORTER",
+      "count": 1,
+      "firstLine": 2742
+    },
+    {
+      "name": "OTEL_METRIC_EXPORT_INTERVAL",
+      "count": 1,
+      "firstLine": 2740
+    },
+    {
+      "name": "OTEL_METRICS_EXPORTER",
+      "count": 1,
+      "firstLine": 2740
+    },
+    {
+      "name": "OTEL_TRACES_EXPORT_INTERVAL",
+      "count": 1,
+      "firstLine": 2742
+    },
+    {
+      "name": "OTEL_TRACES_EXPORTER",
+      "count": 1,
+      "firstLine": 2742
+    },
+    {
+      "name": "P",
+      "count": 2,
+      "firstLine": 18
+    },
+    {
+      "name": "PATH",
+      "count": 5,
+      "firstLine": 18
+    },
+    {
+      "name": "PATHEXT",
+      "count": 2,
+      "firstLine": 20
+    },
+    {
+      "name": "PERMISSION_EXPLAINER_ENABLED",
+      "count": 1,
+      "firstLine": 2399
+    },
+    {
+      "name": "PKG_CONFIG_PATH",
+      "count": 1,
+      "firstLine": 1077
+    },
+    {
+      "name": "PROJECT_DOMAIN",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "PWD",
+      "count": 1,
+      "firstLine": 4481
+    },
+    {
+      "name": "RAILWAY_ENVIRONMENT_NAME",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "RAILWAY_SERVICE_NAME",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "REGION_NAME",
+      "count": 2,
+      "firstLine": 106
+    },
+    {
+      "name": "RENDER",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "REPL_ID",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "REPL_SLUG",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "RIPGREP_NODE_PATH",
+      "count": 2,
+      "firstLine": 4758
+    },
+    {
+      "name": "RUNNER_ENVIRONMENT",
+      "count": 1,
+      "firstLine": 236
+    },
+    {
+      "name": "RUNNER_OS",
+      "count": 1,
+      "firstLine": 236
+    },
+    {
+      "name": "S",
+      "count": 2,
+      "firstLine": 18
+    },
+    {
+      "name": "SENTRY_BAGGAGE",
+      "count": 1,
+      "firstLine": 108
+    },
+    {
+      "name": "SENTRY_DSN",
+      "count": 2,
+      "firstLine": 108
+    },
+    {
+      "name": "SENTRY_ENVIRONMENT",
+      "count": 2,
+      "firstLine": 108
+    },
+    {
+      "name": "SENTRY_NAME",
+      "count": 1,
+      "firstLine": 99
+    },
+    {
+      "name": "SENTRY_RELEASE",
+      "count": 2,
+      "firstLine": 108
+    },
+    {
+      "name": "SENTRY_TRACE",
+      "count": 1,
+      "firstLine": 108
+    },
+    {
+      "name": "SENTRY_TRACES_SAMPLE_RATE",
+      "count": 1,
+      "firstLine": 108
+    },
+    {
+      "name": "SENTRY_USE_ENVIRONMENT",
+      "count": 1,
+      "firstLine": 108
+    },
+    {
+      "name": "SESSIONNAME",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "SHARP_FORCE_GLOBAL_LIBVIPS",
+      "count": 1,
+      "firstLine": 1077
+    },
+    {
+      "name": "SHARP_IGNORE_GLOBAL_LIBVIPS",
+      "count": 1,
+      "firstLine": 1077
+    },
+    {
+      "name": "SHELL",
+      "count": 3,
+      "firstLine": 75
+    },
+    {
+      "name": "SLASH_COMMAND_TOOL_CHAR_BUDGET",
+      "count": 1,
+      "firstLine": 2784
+    },
+    {
+      "name": "SPACE_CREATOR_USER_ID",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "SRT_DEBUG",
+      "count": 1,
+      "firstLine": 400
+    },
+    {
+      "name": "SSH_AUTH_SOCK",
+      "count": 2,
+      "firstLine": 1754
+    },
+    {
+      "name": "SSH_CLIENT",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "SSH_CONNECTION",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "SSH_TTY",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "STY",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "SWE_BENCH_INSTANCE_ID",
+      "count": 1,
+      "firstLine": 236
+    },
+    {
+      "name": "SWE_BENCH_RUN_ID",
+      "count": 1,
+      "firstLine": 236
+    },
+    {
+      "name": "SWE_BENCH_TASK_ID",
+      "count": 1,
+      "firstLine": 236
+    },
+    {
+      "name": "SYSTEMROOT",
+      "count": 4,
+      "firstLine": 18
+    },
+    {
+      "name": "TASK_MAX_OUTPUT_LENGTH",
+      "count": 1,
+      "firstLine": 3067
+    },
+    {
+      "name": "TEMP",
+      "count": 1,
+      "firstLine": 1383
+    },
+    {
+      "name": "TENCENTCLOUD_APPID",
+      "count": 1,
+      "firstLine": 106
+    },
+    {
+      "name": "TENCENTCLOUD_REGION",
+      "count": 2,
+      "firstLine": 106
+    },
+    {
+      "name": "TENCENTCLOUD_ZONE",
+      "count": 1,
+      "firstLine": 106
+    },
+    {
+      "name": "TERM",
+      "count": 8,
+      "firstLine": 59
+    },
+    {
+      "name": "TERM_PROGRAM",
+      "count": 7,
+      "firstLine": 59
+    },
+    {
+      "name": "TERM_PROGRAM_VERSION",
+      "count": 2,
+      "firstLine": 858
+    },
+    {
+      "name": "TERMINAL_EMULATOR",
+      "count": 2,
+      "firstLine": 59
+    },
+    {
+      "name": "TERMINATOR_UUID",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "TEST_ENABLE_SESSION_PERSISTENCE",
+      "count": 1,
+      "firstLine": 4719
+    },
+    {
+      "name": "TEST_GRACEFUL_FS_GLOBAL_PATCH",
+      "count": 1,
+      "firstLine": 76
+    },
+    {
+      "name": "TILIX_ID",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "TMPDIR",
+      "count": 1,
+      "firstLine": 416
+    },
+    {
+      "name": "TMUX",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "UNDICI_NO_FG",
+      "count": 1,
+      "firstLine": 185
+    },
+    {
+      "name": "USE_API_CLEAR_TOOL_RESULTS",
+      "count": 1,
+      "firstLine": 542
+    },
+    {
+      "name": "USE_API_CLEAR_TOOL_USES",
+      "count": 1,
+      "firstLine": 542
+    },
+    {
+      "name": "USE_API_CONTEXT_MANAGEMENT",
+      "count": 2,
+      "firstLine": 236
+    },
+    {
+      "name": "USE_BUILTIN_RIPGREP",
+      "count": 1,
+      "firstLine": 29
+    },
+    {
+      "name": "USE_MCP_CLI_DIR",
+      "count": 1,
+      "firstLine": 4728
+    },
+    {
+      "name": "USER",
+      "count": 2,
+      "firstLine": 119
+    },
+    {
+      "name": "USERNAME",
+      "count": 1,
+      "firstLine": 2977
+    },
+    {
+      "name": "USERPROFILE",
+      "count": 5,
+      "firstLine": 3253
+    },
+    {
+      "name": "UV_THREADPOOL_SIZE",
+      "count": 1,
+      "firstLine": 3265
+    },
+    {
+      "name": "V",
+      "count": 1,
+      "firstLine": 9
+    },
+    {
+      "name": "VERCEL",
+      "count": 2,
+      "firstLine": 59
+    },
+    {
+      "name": "VERCEL_BITBUCKET_COMMIT_SHA",
+      "count": 1,
+      "firstLine": 108
+    },
+    {
+      "name": "VERCEL_GIT_COMMIT_SHA",
+      "count": 1,
+      "firstLine": 108
+    },
+    {
+      "name": "VERCEL_GITHUB_COMMIT_SHA",
+      "count": 1,
+      "firstLine": 108
+    },
+    {
+      "name": "VERCEL_GITLAB_COMMIT_SHA",
+      "count": 1,
+      "firstLine": 108
+    },
+    {
+      "name": "VERCEL_REGION",
+      "count": 1,
+      "firstLine": 106
+    },
+    {
+      "name": "VERTEX_BASE_URL",
+      "count": 1,
+      "firstLine": 3391
+    },
+    {
+      "name": "VERTEX_REGION_CLAUDE_3_5_HAIKU",
+      "count": 1,
+      "firstLine": 9
+    },
+    {
+      "name": "VERTEX_REGION_CLAUDE_3_5_SONNET",
+      "count": 1,
+      "firstLine": 9
+    },
+    {
+      "name": "VERTEX_REGION_CLAUDE_3_7_SONNET",
+      "count": 1,
+      "firstLine": 9
+    },
+    {
+      "name": "VERTEX_REGION_CLAUDE_4_0_OPUS",
+      "count": 1,
+      "firstLine": 9
+    },
+    {
+      "name": "VERTEX_REGION_CLAUDE_4_0_SONNET",
+      "count": 1,
+      "firstLine": 9
+    },
+    {
+      "name": "VERTEX_REGION_CLAUDE_4_1_OPUS",
+      "count": 1,
+      "firstLine": 9
+    },
+    {
+      "name": "VERTEX_REGION_CLAUDE_4_5_SONNET",
+      "count": 1,
+      "firstLine": 9
+    },
+    {
+      "name": "VERTEX_REGION_CLAUDE_HAIKU_4_5",
+      "count": 1,
+      "firstLine": 9
+    },
+    {
+      "name": "VISUAL",
+      "count": 4,
+      "firstLine": 2602
+    },
+    {
+      "name": "VSCODE_GIT_ASKPASS_MAIN",
+      "count": 2,
+      "firstLine": 59
+    },
+    {
+      "name": "VTE_VERSION",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "WEBSITE_SITE_NAME",
+      "count": 2,
+      "firstLine": 59
+    },
+    {
+      "name": "WEBSITE_SKU",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "WS_NO_BUFFER_UTIL",
+      "count": 1,
+      "firstLine": 748
+    },
+    {
+      "name": "WS_NO_UTF_8_VALIDATE",
+      "count": 1,
+      "firstLine": 748
+    },
+    {
+      "name": "WSL_DISTRO_NAME",
+      "count": 8,
+      "firstLine": 59
+    },
+    {
+      "name": "WT_SESSION",
+      "count": 3,
+      "firstLine": 59
+    },
+    {
+      "name": "XDG_CACHE_HOME",
+      "count": 1,
+      "firstLine": 2820
+    },
+    {
+      "name": "XDG_CONFIG_HOME",
+      "count": 1,
+      "firstLine": 889
+    },
+    {
+      "name": "XDG_DATA_HOME",
+      "count": 1,
+      "firstLine": 2820
+    },
+    {
+      "name": "XDG_DESKTOP_DIR",
+      "count": 1,
+      "firstLine": 3253
+    },
+    {
+      "name": "XDG_DOCUMENTS_DIR",
+      "count": 1,
+      "firstLine": 3253
+    },
+    {
+      "name": "XDG_DOWNLOAD_DIR",
+      "count": 1,
+      "firstLine": 3253
+    },
+    {
+      "name": "XDG_RUNTIME_DIR",
+      "count": 1,
+      "firstLine": 2324
+    },
+    {
+      "name": "XDG_STATE_HOME",
+      "count": 1,
+      "firstLine": 2820
+    },
+    {
+      "name": "XTERM_VERSION",
+      "count": 1,
+      "firstLine": 59
+    },
+    {
+      "name": "ZDOTDIR",
+      "count": 1,
+      "firstLine": 2368
+    },
+    {
+      "name": "ZEIT_BITBUCKET_COMMIT_SHA",
+      "count": 1,
+      "firstLine": 108
+    },
+    {
+      "name": "ZEIT_GITHUB_COMMIT_SHA",
+      "count": 1,
+      "firstLine": 108
+    },
+    {
+      "name": "ZEIT_GITLAB_COMMIT_SHA",
+      "count": 1,
+      "firstLine": 108
+    }
+  ]
+}

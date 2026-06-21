@@ -2,7 +2,7 @@
 
 ## 概述
 
-模型管理系统（`src/utils/model.ts`）为管理多个 AI 提供商、模型配置和智能模型切换提供了统一的接口。它将不同 AI API 的复杂性抽象在一致的接口后面。
+模型管理系统（`packages/core/src/utils/model.ts`）为管理多个 AI 提供商、模型配置和智能模型切换提供了统一的接口。它将不同 AI API 的复杂性抽象在一致的接口后面。
 
 ## 核心架构
 
@@ -14,22 +14,22 @@ export class ModelManager {
   private pointers: ModelPointers
   private currentModel: ModelInfo
   private contextLimit: Map<string, number>
-  
+
   constructor(config: ModelConfig) {
     this.loadProfiles(config.profiles)
     this.loadPointers(config.pointers)
     this.initializeContextLimits()
   }
-  
+
   // 模型解析
   resolveModel(pointer: string): ModelInfo
-  
+
   // 模型切换
   switchToNextModel(reason: SwitchReason): ModelInfo
-  
+
   // 上下文分析
   analyzeContextCompatibility(messages: Message[]): ContextAnalysis
-  
+
   // 配置文件管理
   addProfile(profile: ModelProfile): void
   updateProfile(id: string, updates: Partial<ModelProfile>): void
@@ -43,36 +43,36 @@ export class ModelManager {
 
 ```typescript
 interface ModelProfile {
-  id: string                    // 唯一标识符
-  name: string                  // 显示名称
-  provider: ModelProvider       // 'anthropic' | 'openai' | 'bedrock' | 'vertex' | 'custom'
+  id: string // 唯一标识符
+  name: string // 显示名称
+  provider: ModelProvider // 'anthropic' | 'openai' | 'bedrock' | 'vertex' | 'custom'
   config: {
-    model: string              // 模型标识符（例如 'claude-3-5-sonnet-20241022'）
-    baseURL?: string           // 自定义端点 URL
-    apiKey?: string            // 提供商 API 密钥
-    maxTokens?: number         // 最大输出令牌
-    temperature?: number       // 采样温度
-    topP?: number             // 核采样
-    topK?: number             // Top-K 采样
-    stopSequences?: string[]   // 停止序列
-    systemPrompt?: string      // 默认系统提示
-    headers?: Record<string, string>  // 自定义头部
-    timeout?: number           // 请求超时
+    model: string // 模型标识符（例如 'claude-3-5-sonnet-20241022'）
+    baseURL?: string // 自定义端点 URL
+    apiKey?: string // 提供商 API 密钥
+    maxTokens?: number // 最大输出令牌
+    temperature?: number // 采样温度
+    topP?: number // 核采样
+    topK?: number // Top-K 采样
+    stopSequences?: string[] // 停止序列
+    systemPrompt?: string // 默认系统提示
+    headers?: Record<string, string> // 自定义头部
+    timeout?: number // 请求超时
     retryConfig?: RetryConfig // 重试配置
   }
   capabilities?: {
-    supportsTools: boolean     // 工具/函数调用支持
-    supportsVision: boolean    // 图像输入支持
+    supportsTools: boolean // 工具/函数调用支持
+    supportsVision: boolean // 图像输入支持
     supportsStreaming: boolean // 流式响应支持
-    maxContextTokens: number   // 上下文窗口大小
+    maxContextTokens: number // 上下文窗口大小
     costPer1kTokens: {
       input: number
       output: number
     }
   }
   metadata?: {
-    description?: string       // 配置文件描述
-    tags?: string[]           // 分类标签
+    description?: string // 配置文件描述
+    tags?: string[] // 分类标签
     createdAt?: Date
     updatedAt?: Date
     usageCount?: number
@@ -80,17 +80,27 @@ interface ModelProfile {
 }
 ```
 
+### Claude 模型兼容请求策略（Request Profiles）
+
+部分 Claude 模型网关/中转服务会校验特定的**客户端指纹**（headers/UA/system prompt/tools），从而拒绝第三方客户端请求。Kode 采用 **Kode-first** 策略：默认使用 Kode 自己的请求信息，仅在检测到“受限客户端”信号（或用户在模型配置页面手动选择）时才逐级启用兼容请求策略。为保证指纹严格一致，兼容 prompt 会刻意忽略 Kode 自定义扩展（例如 Output Styles、权限摘要）。
+
+实现入口（代码引用）：
+
+- 回退计划与错误分类：`packages/core/src/ai/llm/restrictedClientCompat.ts`
+- LLM 调用链路按 step 切换 headers/prompt/tools：`packages/core/src/ai/llm.ts`
+- 模型配置页连接测试（真实 tool-use 写文件验证）：`apps/cli/src/ui/components/ModelSelector/flow/actions/connectionTest/testAnthropicMessagesEndpoint.ts`、`apps/cli/src/ui/components/ModelSelector/flow/actions/connectionTest/testChatEndpoint.ts`
+
 ### 模型指针
 
 ```typescript
 interface ModelPointers {
-  main: string        // 主要对话模型
-  task: string        // 任务执行模型（快速、高效）
-  reasoning: string   // 复杂推理模型（强大）
-  quick: string       // 快速响应（超快）
-  vision?: string     // 图像分析模型
-  code?: string       // 代码特定模型
-  [key: string]: string | undefined  // 自定义指针
+  main: string // 主要对话模型
+  task: string // 任务执行模型（快速、高效）
+  reasoning: string // 复杂推理模型（强大）
+  quick: string // 快速响应（超快）
+  vision?: string // 图像分析模型
+  code?: string // 代码特定模型
+  [key: string]: string | undefined // 自定义指针
 }
 ```
 
@@ -105,7 +115,7 @@ const DEFAULT_PROFILES: ModelProfile[] = [
     config: {
       model: 'claude-3-5-sonnet-20241022',
       maxTokens: 8192,
-      temperature: 0.7
+      temperature: 0.7,
     },
     capabilities: {
       supportsTools: true,
@@ -114,9 +124,9 @@ const DEFAULT_PROFILES: ModelProfile[] = [
       maxContextTokens: 200000,
       costPer1kTokens: {
         input: 0.003,
-        output: 0.015
-      }
-    }
+        output: 0.015,
+      },
+    },
   },
   {
     id: 'claude-haiku',
@@ -125,7 +135,7 @@ const DEFAULT_PROFILES: ModelProfile[] = [
     config: {
       model: 'claude-3-5-haiku-20241022',
       maxTokens: 8192,
-      temperature: 0.7
+      temperature: 0.7,
     },
     capabilities: {
       supportsTools: true,
@@ -134,9 +144,9 @@ const DEFAULT_PROFILES: ModelProfile[] = [
       maxContextTokens: 200000,
       costPer1kTokens: {
         input: 0.0008,
-        output: 0.004
-      }
-    }
+        output: 0.004,
+      },
+    },
   },
   {
     id: 'gpt-4o',
@@ -145,7 +155,7 @@ const DEFAULT_PROFILES: ModelProfile[] = [
     config: {
       model: 'gpt-4o',
       maxTokens: 4096,
-      temperature: 0.7
+      temperature: 0.7,
     },
     capabilities: {
       supportsTools: true,
@@ -154,10 +164,10 @@ const DEFAULT_PROFILES: ModelProfile[] = [
       maxContextTokens: 128000,
       costPer1kTokens: {
         input: 0.0025,
-        output: 0.01
-      }
-    }
-  }
+        output: 0.01,
+      },
+    },
+  },
 ]
 ```
 
@@ -171,19 +181,19 @@ class ProviderFactory {
     switch (profile.provider) {
       case 'anthropic':
         return new AnthropicProvider(profile)
-      
+
       case 'openai':
         return new OpenAIProvider(profile)
-      
+
       case 'bedrock':
         return new BedrockProvider(profile)
-      
+
       case 'vertex':
         return new VertexProvider(profile)
-      
+
       case 'custom':
         return new CustomProvider(profile)
-      
+
       default:
         throw new Error(`未知提供商：${profile.provider}`)
     }
@@ -197,17 +207,17 @@ class ProviderFactory {
 class AnthropicProvider implements AIProvider {
   private client: Anthropic
   private profile: ModelProfile
-  
+
   constructor(profile: ModelProfile) {
     this.profile = profile
     this.client = new Anthropic({
       apiKey: profile.config.apiKey,
       baseURL: profile.config.baseURL,
       defaultHeaders: profile.config.headers,
-      timeout: profile.config.timeout
+      timeout: profile.config.timeout,
     })
   }
-  
+
   async createMessage(request: MessageRequest): Promise<MessageResponse> {
     const response = await this.client.messages.create({
       model: this.profile.config.model,
@@ -216,20 +226,18 @@ class AnthropicProvider implements AIProvider {
       temperature: request.temperature || this.profile.config.temperature,
       system: request.systemPrompt,
       tools: this.convertTools(request.tools),
-      stream: request.stream
+      stream: request.stream,
     })
-    
+
     return this.normalizeResponse(response)
   }
-  
-  async *streamMessage(
-    request: MessageRequest
-  ): AsyncGenerator<StreamEvent> {
+
+  async *streamMessage(request: MessageRequest): AsyncGenerator<StreamEvent> {
     const stream = await this.client.messages.stream({
       ...this.buildRequest(request),
-      stream: true
+      stream: true,
     })
-    
+
     for await (const event of stream) {
       yield this.normalizeStreamEvent(event)
     }
@@ -243,17 +251,17 @@ class AnthropicProvider implements AIProvider {
 class OpenAIProvider implements AIProvider {
   private client: OpenAI
   private profile: ModelProfile
-  
+
   constructor(profile: ModelProfile) {
     this.profile = profile
     this.client = new OpenAI({
       apiKey: profile.config.apiKey || process.env.OPENAI_API_KEY,
       baseURL: profile.config.baseURL,
       defaultHeaders: profile.config.headers,
-      timeout: profile.config.timeout
+      timeout: profile.config.timeout,
     })
   }
-  
+
   async createMessage(request: MessageRequest): Promise<MessageResponse> {
     const completion = await this.client.chat.completions.create({
       model: this.profile.config.model,
@@ -261,18 +269,18 @@ class OpenAIProvider implements AIProvider {
       max_tokens: request.maxTokens,
       temperature: request.temperature,
       functions: this.convertTools(request.tools),
-      stream: request.stream
+      stream: request.stream,
     })
-    
+
     return this.normalizeResponse(completion)
   }
-  
+
   private convertMessages(messages: Message[]): OpenAIMessage[] {
     return messages.map(msg => ({
       role: this.mapRole(msg.role),
       content: msg.content,
       name: msg.name,
-      function_call: msg.toolCalls?.[0]
+      function_call: msg.toolCalls?.[0],
     }))
   }
 }
@@ -284,29 +292,29 @@ class OpenAIProvider implements AIProvider {
 class CustomProvider implements AIProvider {
   private profile: ModelProfile
   private httpClient: HTTPClient
-  
+
   constructor(profile: ModelProfile) {
     this.profile = profile
     this.httpClient = new HTTPClient({
       baseURL: profile.config.baseURL,
       headers: {
-        'Authorization': `Bearer ${profile.config.apiKey}`,
-        ...profile.config.headers
+        Authorization: `Bearer ${profile.config.apiKey}`,
+        ...profile.config.headers,
       },
-      timeout: profile.config.timeout
+      timeout: profile.config.timeout,
     })
   }
-  
+
   async createMessage(request: MessageRequest): Promise<MessageResponse> {
     // 自定义 API 实现
     const response = await this.httpClient.post('/v1/messages', {
       model: this.profile.config.model,
-      ...this.transformRequest(request)
+      ...this.transformRequest(request),
     })
-    
+
     return this.normalizeResponse(response)
   }
-  
+
   private transformRequest(request: MessageRequest): any {
     // 转换为自定义 API 格式
     return {
@@ -328,52 +336,52 @@ class ModelSelector {
   selectModel(context: SelectionContext): ModelProfile {
     // 基于优先级的选择
     const candidates = this.filterCandidates(context)
-    
+
     // 为每个候选者评分
     const scored = candidates.map(model => ({
       model,
-      score: this.scoreModel(model, context)
+      score: this.scoreModel(model, context),
     }))
-    
+
     // 按分数排序并选择最佳
     scored.sort((a, b) => b.score - a.score)
     return scored[0].model
   }
-  
-  private scoreModel(
-    model: ModelProfile,
-    context: SelectionContext
-  ): number {
+
+  private scoreModel(model: ModelProfile, context: SelectionContext): number {
     let score = 0
-    
+
     // 上下文大小兼容性
     if (context.tokenCount <= model.capabilities.maxContextTokens) {
       score += 100
     } else {
       return -1 // 如果上下文太大则取消资格
     }
-    
+
     // 工具支持要求
     if (context.requiresTools && model.capabilities.supportsTools) {
       score += 50
     } else if (context.requiresTools) {
       return -1 // 如果需要工具但不支持则取消资格
     }
-    
+
     // 成本优化
-    const costScore = 100 - (model.capabilities.costPer1kTokens.input * 10)
+    const costScore = 100 - model.capabilities.costPer1kTokens.input * 10
     score += costScore * context.costWeight
-    
+
     // 速度优化
     if (context.prioritizeSpeed && model.metadata?.tags?.includes('fast')) {
       score += 50
     }
-    
+
     // 质量优化
-    if (context.prioritizeQuality && model.metadata?.tags?.includes('powerful')) {
+    if (
+      context.prioritizeQuality &&
+      model.metadata?.tags?.includes('powerful')
+    ) {
       score += 50
     }
-    
+
     return score
   }
 }
@@ -388,7 +396,7 @@ class ContextAnalyzer {
     const hasImages = this.detectImages(messages)
     const codeRatio = this.calculateCodeRatio(messages)
     const complexity = this.estimateComplexity(messages)
-    
+
     return {
       tokenCount,
       hasImages,
@@ -398,36 +406,36 @@ class ContextAnalyzer {
         tokenCount,
         hasImages,
         codeRatio,
-        complexity
-      })
+        complexity,
+      }),
     }
   }
-  
+
   private countTokens(messages: Message[]): number {
     // 使用 tiktoken 进行准确计数
     const encoder = getEncoding('cl100k_base')
-    
+
     let total = 0
     for (const message of messages) {
       const tokens = encoder.encode(message.content)
       total += tokens.length
-      
+
       // 添加消息结构开销
       total += 4 // 角色、内容标记
     }
-    
+
     encoder.free()
     return total
   }
-  
+
   private estimateComplexity(messages: Message[]): ComplexityLevel {
     const indicators = {
       multiStep: /步骤 \d+|首先|然后|最后/i,
       technical: /算法|优化|重构|架构/i,
       analysis: /分析|解释|比较|评估/i,
-      creative: /创建|设计|生成|想象/i
+      creative: /创建|设计|生成|想象/i,
     }
-    
+
     let score = 0
     for (const message of messages) {
       for (const [type, pattern] of Object.entries(indicators)) {
@@ -436,7 +444,7 @@ class ContextAnalyzer {
         }
       }
     }
-    
+
     if (score >= 4) return 'high'
     if (score >= 2) return 'medium'
     return 'low'
@@ -453,57 +461,60 @@ class ModelSwitcher {
   async switchModel(
     reason: SwitchReason,
     currentModel: ModelProfile,
-    context: SwitchContext
+    context: SwitchContext,
   ): Promise<ModelProfile> {
     switch (reason) {
       case 'CONTEXT_OVERFLOW':
         return this.switchToLargerContext(currentModel, context)
-      
+
       case 'RATE_LIMITED':
         return this.switchToBackup(currentModel)
-      
+
       case 'ERROR':
         return this.switchToFallback(currentModel)
-      
+
       case 'COST_OPTIMIZATION':
         return this.switchToCheaper(currentModel, context)
-      
+
       case 'QUALITY_NEEDED':
         return this.switchToStronger(currentModel)
-      
+
       case 'SPEED_NEEDED':
         return this.switchToFaster(currentModel)
-      
+
       default:
         return currentModel
     }
   }
-  
+
   private async switchToLargerContext(
     current: ModelProfile,
-    context: SwitchContext
+    context: SwitchContext,
   ): Promise<ModelProfile> {
     const candidates = this.getAllProfiles()
       .filter(p => p.capabilities.maxContextTokens > context.requiredTokens)
-      .sort((a, b) => a.capabilities.maxContextTokens - b.capabilities.maxContextTokens)
-    
+      .sort(
+        (a, b) =>
+          a.capabilities.maxContextTokens - b.capabilities.maxContextTokens,
+      )
+
     if (candidates.length === 0) {
       throw new Error('没有可用的具有足够上下文的模型')
     }
-    
+
     // 选择最小的足够模型以优化成本
     return candidates[0]
   }
-  
+
   private switchToBackup(current: ModelProfile): ModelProfile {
     // 定义备份链
     const backupChain = {
       'claude-3-5-sonnet': 'claude-3-5-haiku',
       'claude-3-5-haiku': 'gpt-4o',
       'gpt-4o': 'gpt-3.5-turbo',
-      'gpt-3.5-turbo': 'claude-3-5-haiku'
+      'gpt-3.5-turbo': 'claude-3-5-haiku',
     }
-    
+
     const backupId = backupChain[current.id]
     return this.getProfile(backupId) || current
   }
@@ -516,31 +527,31 @@ class ModelSwitcher {
 class ModelUI {
   async selectModel(
     profiles: ModelProfile[],
-    current: ModelProfile
+    current: ModelProfile,
   ): Promise<ModelProfile> {
     const items = profiles.map(profile => ({
       label: this.formatProfileLabel(profile),
       value: profile.id,
-      description: this.formatProfileDescription(profile)
+      description: this.formatProfileDescription(profile),
     }))
-    
+
     const selected = await prompt({
       type: 'select',
       message: '选择一个模型：',
       choices: items,
-      initial: current.id
+      initial: current.id,
     })
-    
+
     return profiles.find(p => p.id === selected)!
   }
-  
+
   private formatProfileLabel(profile: ModelProfile): string {
     const cost = profile.capabilities.costPer1kTokens
     const context = profile.capabilities.maxContextTokens
-    
+
     return `${profile.name} (${this.formatTokens(context)} 上下文, $${cost.input}/$${cost.output} 每千令牌)`
   }
-  
+
   private formatTokens(tokens: number): string {
     if (tokens >= 1000000) {
       return `${(tokens / 1000000).toFixed(1)}M`
@@ -560,43 +571,41 @@ class ModelUI {
 ```typescript
 class CostTracker {
   private usage: Map<string, ModelUsage> = new Map()
-  
-  track(
-    model: ModelProfile,
-    inputTokens: number,
-    outputTokens: number
-  ): void {
+
+  track(model: ModelProfile, inputTokens: number, outputTokens: number): void {
     const usage = this.usage.get(model.id) || {
       inputTokens: 0,
       outputTokens: 0,
       cost: 0,
-      requests: 0
+      requests: 0,
     }
-    
+
     usage.inputTokens += inputTokens
     usage.outputTokens += outputTokens
     usage.requests += 1
-    
+
     // 计算成本
-    const inputCost = (inputTokens / 1000) * model.capabilities.costPer1kTokens.input
-    const outputCost = (outputTokens / 1000) * model.capabilities.costPer1kTokens.output
+    const inputCost =
+      (inputTokens / 1000) * model.capabilities.costPer1kTokens.input
+    const outputCost =
+      (outputTokens / 1000) * model.capabilities.costPer1kTokens.output
     usage.cost += inputCost + outputCost
-    
+
     this.usage.set(model.id, usage)
-    
+
     // 发出成本更新事件
     this.emitCostUpdate(model.id, usage)
   }
-  
+
   getUsageSummary(): UsageSummary {
     const summary: UsageSummary = {
       totalCost: 0,
       totalInputTokens: 0,
       totalOutputTokens: 0,
       totalRequests: 0,
-      byModel: {}
+      byModel: {},
     }
-    
+
     for (const [modelId, usage] of this.usage) {
       summary.totalCost += usage.cost
       summary.totalInputTokens += usage.inputTokens
@@ -604,19 +613,19 @@ class CostTracker {
       summary.totalRequests += usage.requests
       summary.byModel[modelId] = { ...usage }
     }
-    
+
     return summary
   }
-  
+
   async enforceCostLimit(limit: number): Promise<void> {
     const summary = this.getUsageSummary()
-    
+
     if (summary.totalCost >= limit) {
       throw new CostLimitExceededError(
-        `超出成本限制 $${limit}。当前：$${summary.totalCost.toFixed(4)}`
+        `超出成本限制 $${limit}。当前：$${summary.totalCost.toFixed(4)}`,
       )
     }
-    
+
     if (summary.totalCost >= limit * 0.8) {
       this.emitCostWarning(summary.totalCost, limit)
     }
@@ -631,34 +640,34 @@ class CostOptimizer {
   optimizeModelSelection(
     task: TaskType,
     budget: number,
-    profiles: ModelProfile[]
+    profiles: ModelProfile[],
   ): ModelProfile {
     // 估算任务的令牌
     const estimatedTokens = this.estimateTokensForTask(task)
-    
+
     // 筛选预算内的模型
     const affordable = profiles.filter(profile => {
       const cost = this.calculateCost(profile, estimatedTokens)
       return cost <= budget
     })
-    
+
     if (affordable.length === 0) {
       throw new Error('预算内没有可用的模型')
     }
-    
+
     // 在预算内选择最佳质量
     return this.selectBestQuality(affordable, task)
   }
-  
+
   private estimateTokensForTask(task: TaskType): TokenEstimate {
     const estimates = {
       simple_question: { input: 500, output: 500 },
       code_generation: { input: 1000, output: 2000 },
       analysis: { input: 2000, output: 1500 },
       refactoring: { input: 3000, output: 3000 },
-      complex_task: { input: 5000, output: 5000 }
+      complex_task: { input: 5000, output: 5000 },
     }
-    
+
     return estimates[task] || estimates.complex_task
   }
 }

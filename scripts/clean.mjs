@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { rmSync } from 'node:fs'
 
-const artifacts = ['dist', 'cli.js', '.npmrc', 'vendor', '.tmp']
+const artifacts = ['dist', 'cli.js', 'cli-acp.js', 'vendor', '.tmp']
 
 for (const target of artifacts) {
   try {

@@ -1,222 +1,114 @@
 # Configuration System
 
-## Overview
+Kode uses **two complementary configuration layers**:
 
-Kode uses a sophisticated multi-level configuration system that allows customization at global, project, and runtime levels. Configuration cascades from global defaults through project-specific settings to runtime overrides.
+1. **Global config** (app-wide): model profiles, model pointers, theme, etc.
+2. **Settings files** (user/project/local): `.kode/settings.json`, `.kode/settings.local.json`, etc. (with legacy `.claude` fallbacks)
 
-## Configuration Hierarchy
+This doc focuses on where the files live and how to configure **models** reliably.
 
-```
-Environment Variables (Highest Priority)
-           ↓
-    Runtime Flags (CLI)
-           ↓
-  Project Configuration (./.claude/config.json)
-           ↓
-   Global Configuration (~/.claude/config.json)
-           ↓
-      Default Values (Lowest Priority)
-```
+## File locations
 
-## Configuration Files
+### Global config (primary)
 
-### Global Configuration
-**Location**: `~/.claude/config.json`
+- Default: `~/.kode.json`
+- If `KODE_CONFIG_DIR` is set: `<KODE_CONFIG_DIR>/config.json`
+
+Kode also uses a data directory for logs/tasks/memory:
+
+- Default: `~/.kode/`
+- If `KODE_CONFIG_DIR` is set: `<KODE_CONFIG_DIR>/`
+
+Legacy compatibility:
+
+- `CLAUDE_CONFIG_DIR` affects only legacy read-compat roots (e.g. `~/.claude`), and never changes Kode’s primary config/data locations.
+
+### Project/local settings (per-repo)
+
+- Project settings: `./.kode/settings.json` (legacy `./.claude/settings.json`)
+- Local settings: `./.kode/settings.local.json` (legacy `./.claude/settings.local.json`)
+
+Example: output style selection is stored in `settings.local.json` under `outputStyle`.
+
+## Models
+
+### Model profiles + pointers (stored in global config)
+
+Model configuration lives in the global config under:
+
+- `modelProfiles`: array of provider/model entries
+- `modelPointers`: default assignments for `main`, `task`, `compact`, `quick`
+
+Minimal example (illustrative):
 
 ```json
 {
-  "theme": "dark",
-  "hasCompletedOnboarding": true,
-  "modelProfiles": {
-    "default": {
-      "type": "anthropic",
-      "model": "claude-3-5-sonnet-20241022",
-      "maxTokens": 8192
+  "modelProfiles": [
+    {
+      "name": "o3",
+      "provider": "openai",
+      "modelName": "o3",
+      "baseURL": "https://api.openai.com/v1",
+      "apiKey": "<YOUR_API_KEY>",
+      "maxTokens": 8192,
+      "contextLength": 200000,
+      "isActive": true,
+      "createdAt": 1710000000000
     }
-  },
+  ],
   "modelPointers": {
-    "main": "default",
-    "task": "fast",
-    "reasoning": "smart",
-    "quick": "quick"
-  },
-  "mcpServers": {},
-  "customApiKey": null,
-  "autoUpdaterStatus": "enabled",
-  "numStartups": 42
-}
-```
-
-### Project Configuration
-**Location**: `./.claude/config.json`
-
-```json
-{
-  "enableArchitectTool": false,
-  "allowedCommands": [
-    "git *",
-    "npm *",
-    "bun *"
-  ],
-  "approvedTools": [
-    "file_read",
-    "file_edit",
-    "bash"
-  ],
-  "context": {
-    "projectName": "my-project",
-    "description": "Project description"
-  },
-  "mcpServers": {},
-  "lastCost": 0.0234,
-  "lastDuration": 45000
-}
-```
-
-## Configuration Schema
-
-### Model Configuration
-
-#### Model Profiles
-Define reusable AI model configurations:
-
-```typescript
-interface ModelProfile {
-  id: string
-  name: string
-  provider: 'anthropic' | 'openai' | 'custom'
-  config: {
-    model: string
-    baseURL?: string
-    apiKey?: string
-    maxTokens?: number
-    temperature?: number
-    headers?: Record<string, string>
+    "main": "o3",
+    "task": "o3",
+    "compact": "o3",
+    "quick": "o3"
   }
 }
 ```
 
-#### Model Pointers
-Map roles to model profiles:
+Recommended ways to manage models:
 
-```typescript
-interface ModelPointers {
-  main: string      // Primary conversation model
-  task: string      // Task execution model
-  reasoning: string // Complex reasoning model
-  quick: string     // Fast responses model
-}
-```
+- Interactive UI: `/model`
+- Shareable YAML: `kode models export` / `kode models import`
+- List configured profiles/pointers: `kode models list`
 
-### MCP Server Configuration
-
-```typescript
-interface MCPServerConfig {
-  type: 'stdio' | 'sse'
-  // For stdio servers
-  command?: string
-  args?: string[]
-  env?: Record<string, string>
-  // For SSE servers
-  url?: string
-}
-
-interface MCPServers {
-  [serverName: string]: MCPServerConfig
-}
-```
-
-### Permission Configuration
-
-```typescript
-interface PermissionConfig {
-  // Approved shell command patterns
-  allowedCommands: string[]
-  
-  // Approved tool names
-  approvedTools: string[]
-  
-  // File/directory access patterns
-  allowedPaths: string[]
-  
-  // Rejected MCP servers
-  rejectedMcprcServers: string[]
-  
-  // Approved MCP servers
-  approvedMcprcServers: string[]
-}
-```
-
-### UI Configuration
-
-```typescript
-interface UIConfig {
-  theme: 'dark' | 'light'
-  compactMode: boolean
-  showCosts: boolean
-  syntaxHighlighting: boolean
-  vimKeybindings: boolean
-  shiftEnterKeyBindingInstalled: boolean
-}
-```
-
-## Configuration Management API
-
-### Reading Configuration
-
-```typescript
-import { getGlobalConfig, getCurrentProjectConfig } from './utils/config'
-
-// Get global configuration
-const globalConfig = getGlobalConfig()
-
-// Get project configuration
-const projectConfig = getCurrentProjectConfig()
-
-// Get merged configuration (project overrides global)
-const config = {
-  ...globalConfig,
-  ...projectConfig
-}
-```
-
-### Writing Configuration
-
-```typescript
-import { saveGlobalConfig, saveCurrentProjectConfig } from './utils/config'
-
-// Update global configuration
-saveGlobalConfig({
-  ...getGlobalConfig(),
-  theme: 'light'
-})
-
-// Update project configuration
-saveCurrentProjectConfig({
-  ...getCurrentProjectConfig(),
-  enableArchitectTool: true
-})
-```
-
-### CLI Configuration Commands
+### Shareable YAML import/export
 
 ```bash
-# Get configuration value
-kode config get theme
-kode config get -g modelProfiles.default.model
-
-# Set configuration value
-kode config set theme dark
-kode config set -g autoUpdaterStatus enabled
-
-# Remove configuration value
-kode config remove customApiKey
-kode config remove -g mcpServers.myserver
-
-# List all configuration
-kode config list
-kode config list -g
+kode models export --output kode-models.yaml
+kode models import kode-models.yaml
+kode models import --replace kode-models.yaml
 ```
+
+The exported YAML defaults to `apiKey: { fromEnv: ... }` so you can keep secrets in environment variables.
+
+### Model selectors (what to put in `model:` fields)
+
+Across Kode features (agents, Task tool overrides, etc.), you can generally reference a model using:
+
+- Pointer: `main | task | compact | quick`
+- Profile name: `OpenAI Main`
+- Model name (modelName): `o3`, `gpt-4o`, `qwen2.5-coder-32b-instruct`
+- Provider-qualified: `provider:modelName` (or `provider:profileName`), e.g. `openai:o3`
+
+Use `kode models list` to see what’s currently configured.
+
+## `kode config` CLI (limited keys)
+
+`kode config` is intended for a small set of “safe” keys (theme, verbosity, a few project toggles).
+
+```bash
+# Global config keys
+kode config get -g theme
+kode config set -g theme dark
+kode config list -g
+
+# Project config keys (stored under projects[...] inside the global config)
+kode config get enableArchitectTool
+kode config set enableArchitectTool true
+kode config list
+```
+
+For models, prefer `/model` or `kode models import/export` (not `kode config set`).
 
 ## Environment Variables
 
@@ -249,6 +141,7 @@ LOG_LEVEL=debug
 ### Precedence Rules
 
 Environment variables override configuration files (Anthropic keys excluded):
+
 1. Check environment variable
 2. Check project configuration
 3. Check global configuration
@@ -267,18 +160,18 @@ function migrateConfig(config: any): Config {
     config.shiftEnterKeyBindingInstalled = config.iterm2KeyBindingInstalled
     delete config.iterm2KeyBindingInstalled
   }
-  
+
   // v2 to v3: Update model format
   if (typeof config.model === 'string') {
     config.modelProfiles = {
       default: {
         type: 'anthropic',
-        model: config.model
-      }
+        model: config.model,
+      },
     }
     delete config.model
   }
-  
+
   return config
 }
 ```
@@ -292,7 +185,7 @@ function saveConfigWithBackup(config: Config) {
   // Create backup
   const backupPath = `${configPath}.backup`
   fs.copyFileSync(configPath, backupPath)
-  
+
   try {
     // Save new configuration
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2))
@@ -336,14 +229,18 @@ function loadConfig(path: string): Config {
 ## Configuration Scopes
 
 ### Global Scope
+
 Affects all projects:
+
 - User preferences (theme, keybindings)
 - Model profiles and API keys
 - Global MCP servers
 - Auto-updater settings
 
 ### Project Scope
+
 Specific to current project:
+
 - Tool permissions
 - Allowed commands
 - Project context
@@ -351,7 +248,9 @@ Specific to current project:
 - Cost tracking
 
 ### Session Scope
+
 Temporary for current session:
+
 - Runtime flags
 - Temporary permissions
 - Active MCP connections
@@ -426,24 +325,28 @@ Temporary for current session:
 ## Configuration Best Practices
 
 ### 1. Security
+
 - Never commit API keys to version control
 - Use environment variables for secrets
 - Validate all configuration inputs
 - Limit command permissions appropriately
 
 ### 2. Organization
+
 - Keep global config for user preferences
 - Use project config for project-specific settings
 - Document custom configuration in README
 - Version control project configuration
 
 ### 3. Performance
+
 - Cache configuration in memory
 - Reload only when files change
 - Use efficient JSON parsing
 - Minimize configuration file size
 
 ### 4. Debugging
+
 - Use verbose mode for configuration issues
 - Check configuration with `config list`
 - Validate configuration on load

@@ -1,0 +1,23 @@
+{
+  "name": "kode-webui-vscode-poc",
+  "displayName": "Kode WebUI (PoC)",
+  "description": "Minimal VSCode PoC that opens the local Kode WebUI (served by `kode --web`) in a webview.",
+  "version": "0.0.1",
+  "private": true,
+  "license": "Apache-2.0",
+  "categories": ["Other"],
+  "main": "extension.js",
+  "type": "commonjs",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "activationEvents": ["onCommand:kode.openWebUI"],
+  "contributes": {
+    "commands": [
+      {
+        "command": "kode.openWebUI",
+        "title": "Kode: Open WebUI (PoC)"
+      }
+    ]
+  }
+}
