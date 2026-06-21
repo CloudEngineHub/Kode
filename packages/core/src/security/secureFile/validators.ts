@@ -26,16 +26,7 @@ export function validateFilePath(args: {
       }
     }
 
-    const suspiciousPatterns = [
-      /\.\./,
-      /\$\{/,
-      /`/,
-      /\|/,
-      /;/,
-      /&/,
-      />/,
-      /</,
-    ]
+    const suspiciousPatterns = [/\.\./, /\$\{/, /`/, /\|/, /;/, /&/, />/, /</]
 
     for (const pattern of suspiciousPatterns) {
       if (pattern.test(normalizedPath)) {

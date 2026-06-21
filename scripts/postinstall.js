@@ -80,7 +80,9 @@ function downloadFile(url, destPath, redirectCount = 0) {
           })
         })
         file.on('error', err => {
-          try { fs.unlinkSync(tmpPath) } catch {}
+          try {
+            fs.unlinkSync(tmpPath)
+          } catch {}
           reject(err)
         })
       },
@@ -125,16 +127,16 @@ async function maybeInstallBinary() {
   } catch (err) {
     safeWarn(`⚠️  Kode: could not download native binary (${platformArch})`)
     safeWarn(`    URL: ${url}`)
-    safeWarn(
-      `    Reason: ${err instanceof Error ? err.message : String(err)}`,
-    )
+    safeWarn(`    Reason: ${err instanceof Error ? err.message : String(err)}`)
     safeWarn(`    This is non-fatal. Kode will fall back to Bun if available.`)
   }
 }
 
 async function postinstallNotice() {
   safeLog('✅ @shareai-lab/kode installed. Commands available: kode, kwa, kd')
-  safeLog('   If shell cannot find them, reload your terminal or reinstall globally:')
+  safeLog(
+    '   If shell cannot find them, reload your terminal or reinstall globally:',
+  )
   safeLog('   npm i -g @shareai-lab/kode  (or use: npx @shareai-lab/kode)')
   await maybeInstallBinary()
 }

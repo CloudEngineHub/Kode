@@ -1,5 +1,8 @@
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
-import { DEFAULT_CONTEXT_LENGTH, type ContextLengthOption } from './flow/options'
+import {
+  DEFAULT_CONTEXT_LENGTH,
+  type ContextLengthOption,
+} from './flow/options'
 import type { ModelSelectorScreen } from './flow/state'
 import type { ConnectionTestResult } from './flow/actions/connectionTest'
 import type { ProviderType } from '#core/utils/config'

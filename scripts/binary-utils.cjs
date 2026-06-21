@@ -24,10 +24,18 @@ function getCachedBinaryPath(options) {
   const baseDir = options?.baseDir ?? getDefaultBinBaseDir()
   if (!version) throw new Error('getCachedBinaryPath: version is required')
 
-  return path.join(baseDir, version, getPlatformArch(platform, arch), getBinaryFilename(platform))
+  return path.join(
+    baseDir,
+    version,
+    getPlatformArch(platform, arch),
+    getBinaryFilename(platform),
+  )
 }
 
-function getGithubReleaseBinaryAssetName(platform = process.platform, arch = process.arch) {
+function getGithubReleaseBinaryAssetName(
+  platform = process.platform,
+  arch = process.arch,
+) {
   const ext = platform === 'win32' ? '.exe' : ''
   return `kode-${platform}-${arch}${ext}`
 }
@@ -41,7 +49,8 @@ function getGithubReleaseBinaryUrl(options) {
   const tag = options?.tag ?? `v${version}`
   const baseUrl = options?.baseUrl ?? process.env.KODE_BINARY_BASE_URL
 
-  if (!version) throw new Error('getGithubReleaseBinaryUrl: version is required')
+  if (!version)
+    throw new Error('getGithubReleaseBinaryUrl: version is required')
 
   if (baseUrl) {
     const trimmed = String(baseUrl).replace(/\/+$/, '')
@@ -59,4 +68,3 @@ module.exports = {
   getGithubReleaseBinaryAssetName,
   getGithubReleaseBinaryUrl,
 }
-

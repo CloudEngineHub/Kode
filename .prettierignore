@@ -8,6 +8,8 @@ dist/
 build/
 out/
 apps/server/static/
+apps/web/dist/
+docs/_archive/
 
 # Misc
 .git/

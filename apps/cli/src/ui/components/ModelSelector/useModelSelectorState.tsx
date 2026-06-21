@@ -58,7 +58,9 @@ export function useModelSelectorState(opts: {
     initialModelProfile?.apiKey ?? '',
   )
 
-  const [maxTokens, setMaxTokens] = useState<string>(initialMaxTokens.toString())
+  const [maxTokens, setMaxTokens] = useState<string>(
+    initialMaxTokens.toString(),
+  )
   const [maxTokensMode, setMaxTokensMode] = useState<'preset' | 'custom'>(
     initialMaxTokensMode,
   )
@@ -72,9 +74,8 @@ export function useModelSelectorState(opts: {
   const [supportsReasoningEffort, setSupportsReasoningEffort] =
     useState<boolean>(Boolean(initialModelProfile?.reasoningEffort))
 
-  const [contextLength, setContextLength] = useState<number>(
-    initialContextLength,
-  )
+  const [contextLength, setContextLength] =
+    useState<number>(initialContextLength)
   const contextLengthOptions = useMemo(() => {
     if (CONTEXT_LENGTH_OPTIONS.some(opt => opt.value === contextLength)) {
       return CONTEXT_LENGTH_OPTIONS
@@ -89,10 +90,9 @@ export function useModelSelectorState(opts: {
     ].sort((a, b) => a.value - b.value)
   }, [contextLength])
 
-  const [requestStrategy, setRequestStrategy] =
-    useState<RequestStrategyOption>(
-      (initialModelProfile?.requestStrategy as RequestStrategyOption) ?? 'auto',
-    )
+  const [requestStrategy, setRequestStrategy] = useState<RequestStrategyOption>(
+    (initialModelProfile?.requestStrategy as RequestStrategyOption) ?? 'auto',
+  )
 
   const [activeFieldIndex, setActiveFieldIndex] = useState(0)
   const [maxTokensCursorOffset, setMaxTokensCursorOffset] = useState<number>(

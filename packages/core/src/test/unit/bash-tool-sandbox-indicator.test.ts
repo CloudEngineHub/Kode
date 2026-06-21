@@ -34,28 +34,27 @@ describe('BashTool sandbox indicator (compatibility)', () => {
     rmSync(homeDir, { recursive: true, force: true })
   })
 
-  const testSandboxIndicator =
-    process.platform === 'win32' ? test.skip : test
+  const testSandboxIndicator = process.platform === 'win32' ? test.skip : test
 
   testSandboxIndicator(
     'shows SandboxedBash when sandbox enabled and indicator env is set',
     () => {
-    writeJson(join(projectDir, '.kode', 'settings.json'), {
-      sandbox: { enabled: true },
-    })
+      writeJson(join(projectDir, '.kode', 'settings.json'), {
+        sandbox: { enabled: true },
+      })
 
-    process.env.HOME = homeDir
-    process.env.KODE_BASH_SANDBOX_SHOW_INDICATOR = '1'
+      process.env.HOME = homeDir
+      process.env.KODE_BASH_SANDBOX_SHOW_INDICATOR = '1'
 
-    process.chdir(projectDir)
-    BunShell.restart()
+      process.chdir(projectDir)
+      BunShell.restart()
 
-    expect(
-      BashTool.userFacingName?.({
-        command: 'echo hi',
-        dangerouslyDisableSandbox: false,
-      }),
-    ).toBe('SandboxedBash')
+      expect(
+        BashTool.userFacingName?.({
+          command: 'echo hi',
+          dangerouslyDisableSandbox: false,
+        }),
+      ).toBe('SandboxedBash')
     },
   )
 

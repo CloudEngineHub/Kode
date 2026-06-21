@@ -142,13 +142,17 @@ async function main() {
   const newRoot = resolve(process.cwd())
 
   if (!referenceRoot || referenceRoot === newRoot) {
-    console.error('Error: --reference (or KODE_REFERENCE_REPO) must point to a different repo root.')
+    console.error(
+      'Error: --reference (or KODE_REFERENCE_REPO) must point to a different repo root.',
+    )
     process.exit(1)
   }
 
   const node = Bun.which('node')
   if (!node) {
-    console.error('Error: node not found in PATH (required to run the npm bin shims).')
+    console.error(
+      'Error: node not found in PATH (required to run the npm bin shims).',
+    )
     process.exit(1)
   }
 
@@ -197,10 +201,18 @@ async function main() {
         'stream-json',
       ],
     },
-    { label: 'cli unknown flag', args: ['cli.js', '--this-flag-should-not-exist'] },
+    {
+      label: 'cli unknown flag',
+      args: ['cli.js', '--this-flag-should-not-exist'],
+    },
     {
       label: 'cli --cwd bad path (help-lite)',
-      args: ['cli.js', '--cwd', join(tmp, 'definitely-does-not-exist'), '--help-lite'],
+      args: [
+        'cli.js',
+        '--cwd',
+        join(tmp, 'definitely-does-not-exist'),
+        '--help-lite',
+      ],
     },
     { label: 'acp --help', args: ['cli-acp.js', '--help'] },
     { label: 'acp --version', args: ['cli-acp.js', '--version'] },
@@ -212,14 +224,20 @@ async function main() {
   console.log('')
 
   for (const testCase of cases) {
-    const ref = run([node, join(referenceRoot, testCase.args[0]), ...testCase.args.slice(1)], {
-      cwd: projectCwd,
-      env: envBase,
-    })
-    const cur = run([node, join(newRoot, testCase.args[0]), ...testCase.args.slice(1)], {
-      cwd: projectCwd,
-      env: envBase,
-    })
+    const ref = run(
+      [node, join(referenceRoot, testCase.args[0]), ...testCase.args.slice(1)],
+      {
+        cwd: projectCwd,
+        env: envBase,
+      },
+    )
+    const cur = run(
+      [node, join(newRoot, testCase.args[0]), ...testCase.args.slice(1)],
+      {
+        cwd: projectCwd,
+        env: envBase,
+      },
+    )
 
     const refStdout = normalizeOutput(ref.stdout, { newRoot, referenceRoot })
     const refStderr = normalizeOutput(ref.stderr, { newRoot, referenceRoot })
@@ -272,7 +290,9 @@ async function main() {
       refCommands.every((c, i) => c === curCommands[i])
 
     const commandsToCheck =
-      sameList && refCommands.length > 0 ? refCommands : FALLBACK_TOP_LEVEL_COMMANDS
+      sameList && refCommands.length > 0
+        ? refCommands
+        : FALLBACK_TOP_LEVEL_COMMANDS
 
     if (!sameList && refCommands.length > 0 && curCommands.length > 0) {
       mismatches.push({
@@ -286,38 +306,38 @@ async function main() {
       `✅ help matrix: ${commandsToCheck.length} top-level command(s)`,
     )
     for (const cmdName of commandsToCheck) {
-        const label = `help matrix: ${cmdName} --help`
-        const ref = run(
-          [node, join(referenceRoot, 'cli.js'), cmdName, '--help'],
-          { cwd: projectCwd, env: envBase, timeoutMs: 60_000 },
-        )
-        const cur = run([node, join(newRoot, 'cli.js'), cmdName, '--help'], {
-          cwd: projectCwd,
-          env: envBase,
-          timeoutMs: 60_000,
-        })
+      const label = `help matrix: ${cmdName} --help`
+      const ref = run(
+        [node, join(referenceRoot, 'cli.js'), cmdName, '--help'],
+        { cwd: projectCwd, env: envBase, timeoutMs: 60_000 },
+      )
+      const cur = run([node, join(newRoot, 'cli.js'), cmdName, '--help'], {
+        cwd: projectCwd,
+        env: envBase,
+        timeoutMs: 60_000,
+      })
 
-        const refStdout = normalizeOutput(ref.stdout, { newRoot, referenceRoot })
-        const refStderr = normalizeOutput(ref.stderr, { newRoot, referenceRoot })
-        const curStdout = normalizeOutput(cur.stdout, { newRoot, referenceRoot })
-        const curStderr = normalizeOutput(cur.stderr, { newRoot, referenceRoot })
+      const refStdout = normalizeOutput(ref.stdout, { newRoot, referenceRoot })
+      const refStderr = normalizeOutput(ref.stderr, { newRoot, referenceRoot })
+      const curStdout = normalizeOutput(cur.stdout, { newRoot, referenceRoot })
+      const curStderr = normalizeOutput(cur.stderr, { newRoot, referenceRoot })
 
-        const ok =
-          ref.exitCode === cur.exitCode &&
-          refStdout === curStdout &&
-          refStderr === curStderr
+      const ok =
+        ref.exitCode === cur.exitCode &&
+        refStdout === curStdout &&
+        refStderr === curStderr
 
-        if (ok) {
-          continue
-        }
-
-        console.log(`❌ ${label}`)
-        mismatches.push({
-          label,
-          ref: { ...ref, stdout: refStdout, stderr: refStderr },
-          cur: { ...cur, stdout: curStdout, stderr: curStderr },
-        })
+      if (ok) {
+        continue
       }
+
+      console.log(`❌ ${label}`)
+      mismatches.push({
+        label,
+        ref: { ...ref, stdout: refStdout, stderr: refStderr },
+        cur: { ...cur, stdout: curStdout, stderr: curStderr },
+      })
+    }
   }
 
   console.log('')
@@ -328,7 +348,7 @@ async function main() {
     "import { zodToJsonSchema } from 'zod-to-json-schema'",
     "import { getAllTools } from './src/tools'",
     '',
-    "let getToolDescription = null",
+    'let getToolDescription = null',
     "for (const candidate of ['./src/Tool', './src/core/tools/tool']) {",
     '  try {',
     '    const mod = await import(candidate)',
@@ -373,17 +393,29 @@ async function main() {
     'process.exit(0)',
   ].join('\n')
 
-  const refTools = run([process.execPath, '-e', toolSnippet, '--cwd', referenceRoot], {
-    cwd: referenceRoot,
-    env: envBase,
-  })
-  const curTools = run([process.execPath, '-e', toolSnippet, '--cwd', newRoot], {
-    cwd: newRoot,
-    env: envBase,
-  })
+  const refTools = run(
+    [process.execPath, '-e', toolSnippet, '--cwd', referenceRoot],
+    {
+      cwd: referenceRoot,
+      env: envBase,
+    },
+  )
+  const curTools = run(
+    [process.execPath, '-e', toolSnippet, '--cwd', newRoot],
+    {
+      cwd: newRoot,
+      env: envBase,
+    },
+  )
 
-  const refToolsOut = normalizeOutput(refTools.stdout, { newRoot, referenceRoot })
-  const curToolsOut = normalizeOutput(curTools.stdout, { newRoot, referenceRoot })
+  const refToolsOut = normalizeOutput(refTools.stdout, {
+    newRoot,
+    referenceRoot,
+  })
+  const curToolsOut = normalizeOutput(curTools.stdout, {
+    newRoot,
+    referenceRoot,
+  })
 
   const toolOk =
     refTools.exitCode === 0 &&
@@ -397,8 +429,16 @@ async function main() {
     const snippet = firstDiffSnippet(refToolsOut, curToolsOut)
     mismatches.push({
       label: 'tools manifest',
-      ref: { ...refTools, stdout: refToolsOut, stderr: normalizeOutput(refTools.stderr, { newRoot, referenceRoot }) },
-      cur: { ...curTools, stdout: curToolsOut, stderr: normalizeOutput(curTools.stderr, { newRoot, referenceRoot }) },
+      ref: {
+        ...refTools,
+        stdout: refToolsOut,
+        stderr: normalizeOutput(refTools.stderr, { newRoot, referenceRoot }),
+      },
+      cur: {
+        ...curTools,
+        stdout: curToolsOut,
+        stderr: normalizeOutput(curTools.stderr, { newRoot, referenceRoot }),
+      },
       snippet,
     })
   }
