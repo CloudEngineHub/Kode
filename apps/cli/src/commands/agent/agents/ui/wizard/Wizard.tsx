@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { Instructions, Panel } from '../components'
-import type { WizardData } from './types'
+import type { WizardData, WizardMethod } from './types'
 
 export type WizardContextValue = {
   stepIndex: number
@@ -12,6 +12,28 @@ export type WizardContextValue = {
   goToStep: (index: number) => void
   cancel: () => void
   done: () => void
+}
+
+const WIZARD_PATHS: Record<WizardMethod, number[]> = {
+  quickGenerate: [0, 1, 2, 9],
+  customGenerate: [0, 1, 2, 6, 7, 8, 9],
+  manual: [0, 1, 3, 4, 5, 6, 7, 8, 9],
+}
+
+export function getWizardStepSubtitle(
+  ctx: Pick<WizardContextValue, 'stepIndex' | 'totalSteps' | 'wizardData'>,
+  subtitle: string,
+): string {
+  const method = ctx.wizardData.method
+  if (!method) return `Step ${ctx.stepIndex + 1} - ${subtitle}`
+
+  const path = WIZARD_PATHS[method]
+  const pathIndex = path.indexOf(ctx.stepIndex)
+  if (pathIndex === -1) {
+    return `Step ${ctx.stepIndex + 1}/${ctx.totalSteps} - ${subtitle}`
+  }
+
+  return `Step ${pathIndex + 1}/${path.length} - ${subtitle}`
 }
 
 export function Wizard(props: {

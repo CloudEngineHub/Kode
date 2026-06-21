@@ -3,7 +3,11 @@ import { Box, Text } from 'ink'
 import TextInput from '#ui-ink/components/TextInput'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { themeColor } from '../../colors'
-import { WizardPanel, type WizardContextValue } from '../Wizard'
+import {
+  getWizardStepSubtitle,
+  WizardPanel,
+  type WizardContextValue,
+} from '../Wizard'
 
 export function StepSystemPrompt({ ctx }: { ctx: WizardContextValue }) {
   const [value, setValue] = useState(ctx.wizardData.systemPrompt ?? '')
@@ -31,12 +35,15 @@ export function StepSystemPrompt({ ctx }: { ctx: WizardContextValue }) {
 
   return (
     <WizardPanel
-      subtitle="System prompt"
+      subtitle={getWizardStepSubtitle(ctx, 'Write instructions')}
       footerText="Press Enter to continue - Esc to go back"
     >
       <Box flexDirection="column" marginTop={1} gap={1}>
         <Text>Enter the system prompt for your agent:</Text>
-        <Text dimColor>Be comprehensive for best results</Text>
+        <Text dimColor>
+          Define role, rules, done criteria, and what to do when information is
+          missing.
+        </Text>
         <TextInput
           value={value}
           onChange={setValue}

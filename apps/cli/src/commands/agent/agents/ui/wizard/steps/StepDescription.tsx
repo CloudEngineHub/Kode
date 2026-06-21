@@ -3,7 +3,11 @@ import { Box, Text } from 'ink'
 import TextInput from '#ui-ink/components/TextInput'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { themeColor } from '../../colors'
-import { WizardPanel, type WizardContextValue } from '../Wizard'
+import {
+  getWizardStepSubtitle,
+  WizardPanel,
+  type WizardContextValue,
+} from '../Wizard'
 
 export function StepDescription({ ctx }: { ctx: WizardContextValue }) {
   const [value, setValue] = useState(ctx.wizardData.whenToUse ?? '')
@@ -31,11 +35,15 @@ export function StepDescription({ ctx }: { ctx: WizardContextValue }) {
 
   return (
     <WizardPanel
-      subtitle="Description (tell the agent when to use this agent)"
+      subtitle={getWizardStepSubtitle(ctx, 'Set trigger conditions')}
       footerText="Press Enter to continue - Esc to go back"
     >
       <Box flexDirection="column" marginTop={1} gap={1}>
         <Text>When should this agent be used?</Text>
+        <Text dimColor>
+          Start with "Use this agent when..." and name the exact situations that
+          should trigger it.
+        </Text>
         <TextInput
           value={value}
           onChange={setValue}

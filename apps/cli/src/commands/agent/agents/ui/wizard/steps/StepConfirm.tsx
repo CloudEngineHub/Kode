@@ -7,7 +7,11 @@ import { validateAgentConfig, validateAgentType } from '../../../generation'
 import { getPrimaryAgentFilePath } from '../../../storage'
 import { themeColor } from '../../colors'
 import { formatModelLong, titleForSource } from '../../utils'
-import { WizardPanel, type WizardContextValue } from '../Wizard'
+import {
+  getWizardStepSubtitle,
+  WizardPanel,
+  type WizardContextValue,
+} from '../Wizard'
 import type { WizardFinalAgent } from '../types'
 
 function validateFinalAgent(args: {
@@ -57,10 +61,51 @@ function validateFinalAgent(args: {
 function getConfirmFooterText(isSaving: boolean): string {
   return isSaving
     ? 'Saving agent...'
-    : 'Press s/Enter to save - e to edit in your editor - Esc to cancel'
+    : 'Enter/s to save - e to save and edit - Esc to go back'
 }
 
 export const __getConfirmFooterTextForTests = getConfirmFooterText
+
+function getToolSummary(tools: string[] | undefined): string {
+  if (tools === undefined) return 'All tools (recommended default)'
+  if (tools.length === 0) return 'No tools (strict and limited)'
+  if (tools.length === 1) return tools[0] || 'No tools'
+  if (tools.length === 2) return tools.join(' and ')
+  return `${tools.slice(0, -1).join(', ')}, and ${tools[tools.length - 1]}`
+}
+
+export const __getToolSummaryForTests = getToolSummary
+
+function getLocationSummary(source: WizardFinalAgent['source']): string {
+  return source === 'projectSettings'
+    ? 'Project agent (.kode/agents)'
+    : 'Personal agent (~/.kode/agents)'
+}
+
+const TOOL_ACCESS_ADVISORY_NOTES: Record<string, string> = {
+  'Agent has access to all tools':
+    'All tools are enabled. Limit tools only for stricter specialists.',
+  'No tools selected - agent will have very limited capabilities':
+    'No tools are enabled. This is strict, but limits what the agent can do.',
+}
+
+function splitValidationWarnings(warnings: string[]): {
+  notes: string[]
+  warnings: string[]
+} {
+  const notes: string[] = []
+  const actionableWarnings: string[] = []
+
+  for (const warning of warnings) {
+    const note = TOOL_ACCESS_ADVISORY_NOTES[warning]
+    if (note) notes.push(note)
+    else actionableWarnings.push(warning)
+  }
+
+  return { notes, warnings: actionableWarnings }
+}
+
+export const __splitValidationWarningsForTests = splitValidationWarnings
 
 export function StepConfirm(props: {
   ctx: WizardContextValue
@@ -90,14 +135,6 @@ export function StepConfirm(props: {
       return true
     }
   })
-
-  const toolSummary = (tools: string[] | undefined): string => {
-    if (tools === undefined) return 'All tools'
-    if (tools.length === 0) return 'None'
-    if (tools.length === 1) return tools[0] || 'None'
-    if (tools.length === 2) return tools.join(' and ')
-    return `${tools.slice(0, -1).join(', ')}, and ${tools[tools.length - 1]}`
-  }
 
   const doSave = async (openEditor: boolean) => {
     if (!finalAgent || isSavingRef.current) return
@@ -141,18 +178,29 @@ export function StepConfirm(props: {
     text.length > 240 ? `${text.slice(0, 240)}...` : text
 
   const footerText = getConfirmFooterText(isSaving)
+  const validationMessages = splitValidationWarnings(validation.warnings)
 
   return (
-    <WizardPanel subtitle="Confirm and save" footerText={footerText}>
+    <WizardPanel
+      subtitle={getWizardStepSubtitle(ctx, 'Review and save')}
+      footerText={footerText}
+    >
       <Box flexDirection="column" marginTop={1} gap={1}>
+        {ctx.wizardData.method === 'quickGenerate' ? (
+          <Text dimColor>
+            Quick draft used recommended defaults. Save now, or press e to open
+            advanced editing after save.
+          </Text>
+        ) : null}
         <Text>
           <Text bold>Name</Text>: {finalAgent.agentType}
         </Text>
         <Text>
-          <Text bold>Location</Text>: {locationPath}
+          <Text bold>Location</Text>: {getLocationSummary(finalAgent.source)}
         </Text>
+        <Text dimColor>File: {locationPath}</Text>
         <Text>
-          <Text bold>Tools</Text>: {toolSummary(finalAgent.tools)}
+          <Text bold>Tools</Text>: {getToolSummary(finalAgent.tools)}
         </Text>
         <Text>
           <Text bold>Model</Text>: {formatModelLong(finalAgent.model)}
@@ -160,8 +208,7 @@ export function StepConfirm(props: {
 
         <Box marginTop={1} flexDirection="column">
           <Text>
-            <Text bold>Description</Text> (tells the agent when to use this
-            agent):
+            <Text bold>Trigger</Text>:
           </Text>
           <Box marginLeft={2} marginTop={1}>
             <Text>{truncate(finalAgent.whenToUse)}</Text>
@@ -177,10 +224,21 @@ export function StepConfirm(props: {
           </Box>
         </Box>
 
-        {validation.warnings.length > 0 ? (
+        {validationMessages.notes.length > 0 ? (
+          <Box marginTop={1} flexDirection="column">
+            <Text dimColor>Notes:</Text>
+            {validationMessages.notes.map((w, i) => (
+              <React.Fragment key={i}>
+                <Text dimColor> - {w}</Text>
+              </React.Fragment>
+            ))}
+          </Box>
+        ) : null}
+
+        {validationMessages.warnings.length > 0 ? (
           <Box marginTop={1} flexDirection="column">
             <Text color={themeColor('warning')}>Warnings:</Text>
-            {validation.warnings.map((w, i) => (
+            {validationMessages.warnings.map((w, i) => (
               <React.Fragment key={i}>
                 <Text dimColor> - {w}</Text>
               </React.Fragment>

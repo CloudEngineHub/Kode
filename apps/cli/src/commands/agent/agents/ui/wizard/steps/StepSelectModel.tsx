@@ -4,7 +4,11 @@ import { Select } from '#ui-ink/components/CustomSelect/select'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { modelOptions } from '../../utils'
 import { DEFAULT_AGENT_MODEL } from '../../types'
-import { WizardPanel, type WizardContextValue } from '../Wizard'
+import {
+  getWizardStepSubtitle,
+  WizardPanel,
+  type WizardContextValue,
+} from '../Wizard'
 
 export function StepSelectModel({ ctx }: { ctx: WizardContextValue }) {
   useKeypress((_input, key) => {
@@ -19,12 +23,13 @@ export function StepSelectModel({ ctx }: { ctx: WizardContextValue }) {
 
   return (
     <WizardPanel
-      subtitle="Select model"
+      subtitle={getWizardStepSubtitle(ctx, 'Select model')}
       footerText="Press Up/Down to navigate - Enter to select - Esc to go back"
     >
       <Box flexDirection="column" marginTop={1} gap={1}>
         <Text dimColor>
-          Model determines the agent&apos;s reasoning capabilities and speed.
+          Default is fine for most agents. Change this only for speed, cost, or
+          reasoning needs.
         </Text>
         <Select
           options={options}

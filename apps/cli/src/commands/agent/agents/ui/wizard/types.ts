@@ -1,5 +1,5 @@
 export type WizardLocation = 'projectSettings' | 'userSettings'
-export type WizardMethod = 'generate' | 'manual'
+export type WizardMethod = 'quickGenerate' | 'customGenerate' | 'manual'
 
 export type WizardFinalAgent = {
   agentType: string

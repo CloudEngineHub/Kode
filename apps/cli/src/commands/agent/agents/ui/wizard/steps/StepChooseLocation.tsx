@@ -1,8 +1,12 @@
 import React from 'react'
-import { Box } from 'ink'
+import { Box, Text } from 'ink'
 import { Select } from '#ui-ink/components/CustomSelect/select'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
-import { WizardPanel, type WizardContextValue } from '../Wizard'
+import {
+  getWizardStepSubtitle,
+  WizardPanel,
+  type WizardContextValue,
+} from '../Wizard'
 
 export function StepChooseLocation({ ctx }: { ctx: WizardContextValue }) {
   useKeypress((_input, key) => {
@@ -14,15 +18,24 @@ export function StepChooseLocation({ ctx }: { ctx: WizardContextValue }) {
 
   return (
     <WizardPanel
-      subtitle="Choose location"
+      subtitle={getWizardStepSubtitle(ctx, 'Choose location')}
       footerText="Press Up/Down to navigate - Enter to select - Esc to cancel"
     >
-      <Box marginTop={1}>
+      <Box flexDirection="column" marginTop={1} gap={1}>
+        <Text dimColor>
+          Project is best for this repo. Personal is best for reusable agents.
+        </Text>
         <Select
           key="location-select"
           options={[
-            { label: 'Project (.kode/agents/)', value: 'projectSettings' },
-            { label: 'Personal (~/.kode/agents/)', value: 'userSettings' },
+            {
+              label: 'Project (recommended) - saved in .kode/agents/',
+              value: 'projectSettings',
+            },
+            {
+              label: 'Personal - saved in ~/.kode/agents/',
+              value: 'userSettings',
+            },
           ]}
           onChange={value => {
             const location =

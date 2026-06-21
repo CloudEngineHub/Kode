@@ -5,7 +5,13 @@ import type { AgentConfig } from '#core/utils/agentLoader'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { generateAgentDraft } from '../../../generation'
 import { themeColor } from '../../colors'
-import { WizardPanel, type WizardContextValue } from '../Wizard'
+import { DEFAULT_AGENT_MODEL } from '../../types'
+import {
+  getWizardStepSubtitle,
+  WizardPanel,
+  type WizardContextValue,
+} from '../Wizard'
+import type { WizardFinalAgent } from '../types'
 
 function getGenerationPromptFooterText(isGenerating: boolean): string {
   return isGenerating
@@ -47,6 +53,10 @@ export function StepGenerationPrompt(props: {
         agentType: '',
         systemPrompt: '',
         whenToUse: '',
+        selectedTools: undefined,
+        selectedModel: undefined,
+        selectedColor: undefined,
+        finalAgent: undefined,
         wasGenerated: false,
         isGenerating: false,
       })
@@ -92,17 +102,31 @@ export function StepGenerationPrompt(props: {
         )
       }
 
+      const shouldCustomize = ctx.wizardData.method === 'customGenerate'
+      const quickFinalAgent: WizardFinalAgent = {
+        agentType: generated.identifier,
+        whenToUse: generated.whenToUse,
+        systemPrompt: generated.systemPrompt,
+        tools: undefined,
+        model: DEFAULT_AGENT_MODEL,
+        source: ctx.wizardData.location ?? 'projectSettings',
+      }
+
       ctx.updateWizardData({
         agentType: generated.identifier,
         whenToUse: generated.whenToUse,
         systemPrompt: generated.systemPrompt,
+        selectedTools: undefined,
+        selectedModel: DEFAULT_AGENT_MODEL,
+        selectedColor: undefined,
+        finalAgent: shouldCustomize ? undefined : quickFinalAgent,
         wasGenerated: true,
         isGenerating: false,
       })
       isGeneratingRef.current = false
       setIsGenerating(false)
       abortRef.current = null
-      ctx.goToStep(6)
+      ctx.goToStep(shouldCustomize ? 6 : 9)
     } catch (err) {
       if (abortRef.current !== abort) return
 
@@ -123,12 +147,15 @@ export function StepGenerationPrompt(props: {
   }
 
   return (
-    <WizardPanel subtitle="Describe the agent you want" footerText={footerText}>
+    <WizardPanel
+      subtitle={getWizardStepSubtitle(ctx, 'Describe the agent you want')}
+      footerText={footerText}
+    >
       <Box flexDirection="column" marginTop={1} gap={1}>
         <Text>What should this agent do?</Text>
         <Text dimColor>
-          Describe a role like "code reviewer", "security auditor", or "tech
-          lead".
+          Start simple: "review my recent code changes". Add constraints, tools,
+          or output style when you need expert control.
         </Text>
         <TextInput
           value={value}

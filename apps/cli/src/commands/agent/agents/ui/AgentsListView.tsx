@@ -199,16 +199,15 @@ export function AgentsListView(props: {
             <Box marginY={1}>{renderCreateNew()}</Box>
           ) : null}
           <Text dimColor>
-            No agents found. Create specialized subagents that the CLI can
-            delegate to.
+            No agents found. Press Enter on Create new agent to start.
           </Text>
           <Text dimColor>
-            Each subagent has its own context window, custom system prompt, and
-            specific tools.
+            Choose Quick draft for the shortest path, or Customize draft when
+            you need tools, model, or color control.
           </Text>
           <Text dimColor>
-            Try creating: Code Reviewer, Code Simplifier, Security Reviewer,
-            Tech Lead, or UX Reviewer.
+            Useful starters: code-reviewer, test-writer, security-reviewer,
+            tech-lead, ux-reviewer.
           </Text>
           {props.source !== 'built-in' &&
           props.agents.some(a => a.source === 'built-in') ? (

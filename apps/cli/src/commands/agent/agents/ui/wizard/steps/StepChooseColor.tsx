@@ -1,11 +1,18 @@
 import React from 'react'
-import { Box } from 'ink'
+import { Box, Text } from 'ink'
 import { ColorPicker } from '../../ColorPicker'
-import type { AgentColor } from '../../types'
-import { DEFAULT_AGENT_MODEL } from '../../types'
+import {
+  COLOR_OPTIONS,
+  DEFAULT_AGENT_MODEL,
+  type AgentColor,
+} from '../../types'
 import type { WizardFinalAgent } from '../types'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
-import { WizardPanel, type WizardContextValue } from '../Wizard'
+import {
+  getWizardStepSubtitle,
+  WizardPanel,
+  type WizardContextValue,
+} from '../Wizard'
 
 export function StepChooseColor({ ctx }: { ctx: WizardContextValue }) {
   useKeypress((_input, key) => {
@@ -16,6 +23,12 @@ export function StepChooseColor({ ctx }: { ctx: WizardContextValue }) {
   })
 
   const agentType = ctx.wizardData.agentType ?? 'agent'
+  const currentColor = COLOR_OPTIONS.includes(
+    ctx.wizardData.selectedColor as AgentColor,
+  )
+    ? (ctx.wizardData.selectedColor as AgentColor)
+    : 'automatic'
+
   const onConfirm = (color: AgentColor) => {
     const selectedColor = color === 'automatic' ? undefined : color
     const finalAgent: WizardFinalAgent = {
@@ -37,13 +50,17 @@ export function StepChooseColor({ ctx }: { ctx: WizardContextValue }) {
 
   return (
     <WizardPanel
-      subtitle="Choose background color"
+      subtitle={getWizardStepSubtitle(ctx, 'Choose color')}
       footerText="Press Up/Down to navigate - Enter to select - Esc to go back"
     >
-      <Box marginTop={1}>
+      <Box flexDirection="column" marginTop={1} gap={1}>
+        <Text dimColor>
+          Automatic is fine. Pick a color only to make busy agent lists easier
+          to scan.
+        </Text>
         <ColorPicker
           agentName={agentType}
-          currentColor="automatic"
+          currentColor={currentColor}
           onConfirm={onConfirm}
         />
       </Box>

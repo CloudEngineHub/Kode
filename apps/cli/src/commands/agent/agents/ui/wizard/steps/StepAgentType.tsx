@@ -4,7 +4,11 @@ import TextInput from '#ui-ink/components/TextInput'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { validateAgentType } from '../../../generation'
 import { themeColor } from '../../colors'
-import { WizardPanel, type WizardContextValue } from '../Wizard'
+import {
+  getWizardStepSubtitle,
+  WizardPanel,
+  type WizardContextValue,
+} from '../Wizard'
 
 export function StepAgentType({ ctx }: { ctx: WizardContextValue }) {
   const [value, setValue] = useState(ctx.wizardData.agentType ?? '')
@@ -33,7 +37,7 @@ export function StepAgentType({ ctx }: { ctx: WizardContextValue }) {
 
   return (
     <WizardPanel
-      subtitle="Agent type (identifier)"
+      subtitle={getWizardStepSubtitle(ctx, 'Name the agent')}
       footerText="Press Enter to continue - Esc to go back"
     >
       <Box flexDirection="column" marginTop={1} gap={1}>
@@ -46,7 +50,10 @@ export function StepAgentType({ ctx }: { ctx: WizardContextValue }) {
           cursorOffset={cursorOffset}
           onChangeCursorOffset={setCursorOffset}
         />
-        <Text dimColor>e.g., code-reviewer, tech-lead, etc</Text>
+        <Text dimColor>
+          Use a short lowercase name, usually 2-4 words: code-reviewer,
+          test-writer, tech-lead.
+        </Text>
         {error ? <Text color={themeColor('error')}>{error}</Text> : null}
       </Box>
     </WizardPanel>
