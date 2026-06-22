@@ -10,7 +10,7 @@ import { appendTaskOutput, touchTaskOutputFile } from '../taskOutputStore'
 import { buildSandboxCommand } from './sandboxCommand'
 import { annotateStderrWithSandboxViolations } from './sandboxViolations'
 import { createCancellableTextCollector } from './streamReaders'
-import { getShellCmdForPlatform } from './shellCmd'
+import { getShellCmdForPlatform, getShellStdioForPlatform } from './shellCmd'
 import { makeBackgroundTaskId } from './ids'
 
 type ExecResult = {
@@ -107,7 +107,7 @@ export function execPromotable(
 
   const spawnedProcess = spawn(cmdToRun[0], cmdToRun.slice(1), {
     cwd: executionCwd,
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: getShellStdioForPlatform(process.platform),
   })
   state.currentProcess = spawnedProcess
 

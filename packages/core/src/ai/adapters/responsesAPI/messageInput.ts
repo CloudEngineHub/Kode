@@ -1,3 +1,9 @@
+import {
+  extractTextAndImageUrls,
+  getImageUrlFromPart,
+  toResponsesImageParts,
+} from '#core/utils/visionContent'
+
 export function convertMessagesToInput(messages: any[]): any[] {
   // Convert Chat Completions messages to Response API input format
   const inputItems = []
@@ -9,26 +15,11 @@ export function convertMessagesToInput(messages: any[]): any[] {
       // Handle tool call results
       const callId = message.tool_call_id || message.id
       if (typeof callId === 'string' && callId) {
-        let content = message.content || ''
-        if (Array.isArray(content)) {
-          const texts = []
-          for (const part of content) {
-            if (typeof part === 'object' && part !== null) {
-              const t = part.text || part.content
-              if (typeof t === 'string' && t) {
-                texts.push(t)
-              }
-            }
-          }
-          content = texts.join('\n')
-        }
-        if (typeof content === 'string') {
-          inputItems.push({
-            type: 'function_call_output',
-            call_id: callId,
-            output: content,
-          })
-        }
+        inputItems.push({
+          type: 'function_call_output',
+          call_id: callId,
+          output: convertToolOutput(message.content),
+        })
       }
       continue
     }
@@ -78,12 +69,14 @@ export function convertMessagesToInput(messages: any[]): any[] {
             const kind = role === 'assistant' ? 'output_text' : 'input_text'
             contentItems.push({ type: kind, text: text })
           }
-        } else if (ptype === 'image_url') {
-          const image = part.image_url
-          const url =
-            typeof image === 'object' && image !== null ? image.url : image
-          if (typeof url === 'string' && url) {
-            contentItems.push({ type: 'input_image', image_url: url })
+        } else if (
+          ptype === 'image_url' ||
+          ptype === 'image' ||
+          ptype === 'input_image'
+        ) {
+          const imageUrl = getImageUrlFromPart(part)
+          if (imageUrl) {
+            contentItems.push({ type: 'input_image', image_url: imageUrl })
           }
         }
       }
@@ -103,6 +96,20 @@ export function convertMessagesToInput(messages: any[]): any[] {
   }
 
   return inputItems
+}
+
+function convertToolOutput(content: unknown): string | any[] {
+  const { text, imageUrls } = extractTextAndImageUrls(content)
+  if (imageUrls.length === 0) {
+    return text
+  }
+
+  const output: any[] = []
+  if (text) {
+    output.push({ type: 'input_text', text })
+  }
+  output.push(...toResponsesImageParts(imageUrls))
+  return output
 }
 
 export function buildInstructions(systemPrompt: string[]): string {

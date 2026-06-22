@@ -1,4 +1,5 @@
 import { format } from 'node:util'
+import { assertJsonPayloadBudget, JsonPayloadBudgetError } from './validation'
 
 export type JsonRpcId = string | number | null
 
@@ -76,6 +77,7 @@ export class JsonRpcPeer {
       resolve: (value: unknown) => void
       reject: (err: unknown) => void
       abort?: AbortSignal
+      abortHandler?: () => void
       timeoutId?: NodeJS.Timeout
     }
   >()
@@ -146,6 +148,17 @@ export class JsonRpcPeer {
     const params = 'params' in payload ? payload['params'] : undefined
     const id = hasId ? (payload.id as string | number) : null
 
+    try {
+      assertJsonPayloadBudget(payload, {
+        label: `JSON-RPC request ${method}`,
+      })
+    } catch (err) {
+      if (err instanceof JsonPayloadBudgetError) {
+        return makeErrorResponse(id, err.code, err.message, err.data)
+      }
+      throw err
+    }
+
     const handler = this.handlers.get(method)
     if (!handler) {
       if (id === null) return null
@@ -181,6 +194,9 @@ export class JsonRpcPeer {
     if (!pending) return
     this.pending.delete(id)
 
+    if (pending.abortHandler && pending.abort) {
+      pending.abort.removeEventListener('abort', pending.abortHandler)
+    }
     if (pending.timeoutId) clearTimeout(pending.timeoutId)
 
     const errorValue = msg && typeof msg === 'object' ? msg.error : undefined
@@ -220,6 +236,7 @@ export class JsonRpcPeer {
         resolve: (value: unknown) => void
         reject: (err: unknown) => void
         abort?: AbortSignal
+        abortHandler?: () => void
         timeoutId?: NodeJS.Timeout
       } = { resolve, reject, abort: args.signal }
 
@@ -240,6 +257,7 @@ export class JsonRpcPeer {
           onAbort()
           return
         }
+        entry.abortHandler = onAbort
         args.signal.addEventListener('abort', onAbort, { once: true })
       }
 

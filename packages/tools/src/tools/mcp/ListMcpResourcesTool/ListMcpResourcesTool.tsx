@@ -3,6 +3,7 @@ import React from 'react'
 import { z } from 'zod'
 import type { Tool, ToolUseContext } from '#core/tooling/Tool'
 import { getClients, type WrappedClient } from '#core/mcp/client'
+import { logMCPError } from '#core/utils/log'
 import { ListResourcesResultSchema } from '@modelcontextprotocol/sdk/types.js'
 import { DESCRIPTION, PROMPT, TOOL_NAME } from './prompt'
 
@@ -24,6 +25,7 @@ type OutputItem = {
 }
 
 type Output = OutputItem[]
+type ListedResource = Omit<OutputItem, 'server'>
 
 function isWrappedClient(value: unknown): value is WrappedClient {
   if (!value || typeof value !== 'object') return false
@@ -128,13 +130,18 @@ export const ListMcpResourcesTool = {
         )
         if (!result.resources) continue
         resources.push(
-          ...result.resources.map(r => ({
-            ...r,
-            server: wrapped.name,
-          })),
+          ...(result.resources as ListedResource[]).map(
+            (r: ListedResource) => ({
+              ...r,
+              server: wrapped.name,
+            }),
+          ),
         )
-      } catch {
-        // Best-effort: skip servers that fail to respond
+      } catch (error) {
+        logMCPError(
+          wrapped.name,
+          `Failed to list resources: ${error instanceof Error ? error.message : String(error)}`,
+        )
       }
     }
 

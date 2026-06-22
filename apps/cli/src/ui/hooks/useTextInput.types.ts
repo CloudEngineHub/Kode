@@ -1,4 +1,5 @@
 import type { Key } from '#ui-ink/hooks/useKeypress'
+import type { ClipboardImage } from '#core/utils/image/media'
 
 export type UseTextInputProps = {
   value: string
@@ -19,7 +20,7 @@ export type UseTextInputProps = {
   themeText: (text: string) => string
   columns: number
   maxHeight?: number
-  onImagePaste?: (base64Image: string) => string | void
+  onImagePaste?: (image: ClipboardImage) => string | void
   disableCursorMovementForUpDownKeys?: boolean | (() => boolean)
   externalOffset: number
   onOffsetChange: (offset: number) => void

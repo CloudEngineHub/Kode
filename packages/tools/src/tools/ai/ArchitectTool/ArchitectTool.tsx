@@ -1,4 +1,7 @@
-import type { TextBlock } from '@anthropic-ai/sdk/resources/index.mjs'
+import type {
+  TextBlock,
+  TextBlockParam,
+} from '@anthropic-ai/sdk/resources/index.mjs'
 import { Box, Text } from 'ink'
 import * as React from 'react'
 import { z } from 'zod'
@@ -6,6 +9,7 @@ import { highlight } from 'cli-highlight'
 import type { Tool } from '#core/tooling/Tool'
 import { getContext } from '#core/context'
 import { Message, query } from '#core/query'
+import { isTextBlock } from '#core/utils/anthropic'
 import { lastX } from '#core/utils/generators'
 import { createUserMessage } from '#core/utils/messages'
 import { BashTool } from '#tools/tools/system/BashTool/BashTool'
@@ -32,6 +36,8 @@ const inputSchema = z.strictObject({
     .describe('Optional context from previous conversation or system state')
     .optional(),
 })
+
+type ArchitectTextBlock = TextBlock | TextBlockParam
 
 export const ArchitectTool = {
   name: 'Architect',
@@ -99,7 +105,7 @@ export const ArchitectTool = {
       throw new Error(`Invalid response from API`)
     }
 
-    const data = lastResponse.message.content.filter(_ => _.type === 'text')
+    const data = lastResponse.message.content.filter(isTextBlock)
     yield {
       type: 'result',
       data,
@@ -109,7 +115,7 @@ export const ArchitectTool = {
   async prompt() {
     return DESCRIPTION
   },
-  renderResultForAssistant(data: TextBlock[]): string {
+  renderResultForAssistant(data: ArchitectTextBlock[]): string {
     return data.map(block => block.text).join('\n')
   },
   renderToolUseMessage(input) {
@@ -128,4 +134,4 @@ export const ArchitectTool = {
   renderToolUseRejectedMessage() {
     return null
   },
-} satisfies Tool<typeof inputSchema, TextBlock[]>
+} satisfies Tool<typeof inputSchema, ArchitectTextBlock[]>

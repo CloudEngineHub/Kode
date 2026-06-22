@@ -22,10 +22,14 @@ export function UserToolRejectMessage({
 }: Props): React.ReactNode {
   const { columns } = useTerminalSize()
   const { conversationKey } = usePermissionContext()
-  const { tool, toolUse } = useGetToolFromMessages(toolUseID, tools, messages)
-  const input = tool.inputSchema.safeParse(toolUse.input)
+  const lookup = useGetToolFromMessages(toolUseID, tools, messages)
+  if (!lookup) {
+    return <FallbackToolUseRejectedMessage />
+  }
+
+  const input = lookup.tool.inputSchema.safeParse(lookup.toolUse.input)
   if (input.success) {
-    return renderInkToolUseRejectedMessage(tool, input.data, {
+    return renderInkToolUseRejectedMessage(lookup.tool, input.data, {
       columns,
       verbose,
       conversationKey,

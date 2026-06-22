@@ -2,6 +2,7 @@ import { StreamingEvent } from './base'
 import { AssistantMessage } from '#core/query'
 import { setRequestStatus } from '#core/utils/requestStatus'
 import { randomUUID } from 'crypto'
+import { createAnthropicUsage } from '#core/utils/anthropic'
 
 export async function processResponsesStream(
   stream: AsyncGenerator<StreamingEvent>,
@@ -73,33 +74,29 @@ export async function processResponsesStream(
     })
   }
 
-  const messageUsage: AssistantMessage['message']['usage'] &
-    Record<string, unknown> = {
-    cache_creation_input_tokens: null,
-    cache_read_input_tokens: null,
-    input_tokens: usage.prompt_tokens ?? 0,
-    output_tokens: usage.completion_tokens ?? 0,
-    prompt_tokens: usage.prompt_tokens ?? 0,
-    completion_tokens: usage.completion_tokens ?? 0,
-    totalTokens:
-      usage.totalTokens ??
-      (usage.prompt_tokens || 0) + (usage.completion_tokens || 0),
-    reasoningTokens: usage.reasoningTokens,
-  }
-  const message: AssistantMessage['message'] = {
-    id: responseId,
-    model: '',
-    role: 'assistant',
-    type: 'message',
-    stop_reason: null,
-    stop_sequence: null,
-    content: contentBlocks,
-    usage: messageUsage,
-  }
-
   const assistantMessage: AssistantMessage = {
     type: 'assistant',
-    message,
+    message: {
+      id: responseId,
+      container: null,
+      model: '<responses-stream>',
+      role: 'assistant',
+      content: contentBlocks,
+      stop_details: null,
+      stop_reason: 'end_turn',
+      stop_sequence: null,
+      type: 'message',
+      usage: createAnthropicUsage({
+        input_tokens: usage.prompt_tokens ?? 0,
+        output_tokens: usage.completion_tokens ?? 0,
+        prompt_tokens: usage.prompt_tokens ?? 0,
+        completion_tokens: usage.completion_tokens ?? 0,
+        totalTokens:
+          usage.totalTokens ??
+          (usage.prompt_tokens || 0) + (usage.completion_tokens || 0),
+        reasoningTokens: usage.reasoningTokens,
+      }),
+    },
     costUSD: 0,
     durationMs: Date.now() - startTime,
     uuid: randomUUID(),

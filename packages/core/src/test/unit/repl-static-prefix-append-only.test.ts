@@ -1,8 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type {
-  ContentBlock,
-  ContentBlockParam,
-} from '@anthropic-ai/sdk/resources/index.mjs'
+import type { ContentBlockParam } from '@anthropic-ai/sdk/resources/index.mjs'
 import {
   createAssistantMessage,
   createProgressMessage,
@@ -44,7 +41,7 @@ describe('REPL Static prefix append-only (regression)', () => {
       { type: 'tool_use', id: 't1', name: 'Bash', input: {} },
       { type: 'tool_use', id: 't2', name: 'Read', input: {} },
       { type: 'text', text: 'after tools', citations: [] },
-    ] satisfies ContentBlock[]
+    ] satisfies any[]
     const toolUseMessage = {
       ...baseToolUseMessage,
       message: {
@@ -112,7 +109,7 @@ describe('REPL Static prefix append-only (regression)', () => {
       { type: 'tool_use', id: 't1', name: 'Bash', input: {} },
       { type: 'tool_use', id: 't2', name: 'Read', input: {} },
       { type: 'text', text: 'after tools', citations: [] },
-    ] satisfies ContentBlock[]
+    ] satisfies any[]
     const base = {
       ...baseMessage,
       message: {

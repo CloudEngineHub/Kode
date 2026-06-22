@@ -1,5 +1,3 @@
-import type { ContentBlock } from '@anthropic-ai/sdk/resources/index.mjs'
-
 import type { Message } from '#core/query'
 
 import type { JsonRpcPeer } from '../jsonrpc'
@@ -30,7 +28,7 @@ function toInputRecord(value: unknown): Record<string, unknown> {
 function emitAssistantContentBlocks(
   peer: JsonRpcPeer,
   session: SessionState,
-  blocks: ContentBlock[],
+  blocks: any[],
 ): void {
   for (const block of blocks) {
     switch (block.type) {

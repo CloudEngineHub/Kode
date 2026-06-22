@@ -2,8 +2,22 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { dirname, join } from 'path'
+import which from 'which'
 import { BunShell } from '#runtime/shell'
 import { BashTool } from '#tools/tools/system/BashTool/BashTool'
+
+function isSandboxBinaryAvailable(): boolean {
+  if (process.platform === 'linux') {
+    return !!(
+      which.sync('bwrap', { nothrow: true }) ??
+      which.sync('bubblewrap', { nothrow: true })
+    )
+  }
+  if (process.platform === 'darwin') {
+    return !!which.sync('sandbox-exec', { nothrow: true })
+  }
+  return false
+}
 
 function writeJson(filePath: string, value: unknown) {
   mkdirSync(dirname(filePath), { recursive: true })
@@ -34,29 +48,26 @@ describe('BashTool sandbox indicator (compatibility)', () => {
     rmSync(homeDir, { recursive: true, force: true })
   })
 
-  const testSandboxIndicator = process.platform === 'win32' ? test.skip : test
+  test('shows SandboxedBash when sandbox enabled and indicator env is set', () => {
+    if (!isSandboxBinaryAvailable()) return
 
-  testSandboxIndicator(
-    'shows SandboxedBash when sandbox enabled and indicator env is set',
-    () => {
-      writeJson(join(projectDir, '.kode', 'settings.json'), {
-        sandbox: { enabled: true },
-      })
+    writeJson(join(projectDir, '.kode', 'settings.json'), {
+      sandbox: { enabled: true },
+    })
 
-      process.env.HOME = homeDir
-      process.env.KODE_BASH_SANDBOX_SHOW_INDICATOR = '1'
+    process.env.HOME = homeDir
+    process.env.KODE_BASH_SANDBOX_SHOW_INDICATOR = '1'
 
-      process.chdir(projectDir)
-      BunShell.restart()
+    process.chdir(projectDir)
+    BunShell.restart()
 
-      expect(
-        BashTool.userFacingName?.({
-          command: 'echo hi',
-          dangerouslyDisableSandbox: false,
-        }),
-      ).toBe('SandboxedBash')
-    },
-  )
+    expect(
+      BashTool.userFacingName?.({
+        command: 'echo hi',
+        dangerouslyDisableSandbox: false,
+      }),
+    ).toBe('SandboxedBash')
+  })
 
   test('falls back to Bash when indicator env is unset', () => {
     writeJson(join(projectDir, '.kode', 'settings.json'), {

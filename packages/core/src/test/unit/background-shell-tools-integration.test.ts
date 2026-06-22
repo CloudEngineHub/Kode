@@ -5,14 +5,14 @@ import { BunShell } from '#runtime/shell'
 import { BashTool } from '#tools/tools/system/BashTool/BashTool'
 import { TaskOutputTool } from '#tools/tools/system/TaskOutputTool/TaskOutputTool'
 import { TaskStopTool } from '#tools/tools/system/TaskStopTool/TaskStopTool'
-import type { ToolUseBlock } from '@anthropic-ai/sdk/resources/index.mjs'
+import type { ToolUseLikeBlockParam } from '#core/utils/anthropic'
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
 function makeToolUse(id: string, name: string, input: any) {
-  const toolUse: ToolUseBlock = { id, name, input, type: 'tool_use' }
+  const toolUse: ToolUseLikeBlockParam = { id, name, input, type: 'tool_use' }
   return toolUse
 }
 

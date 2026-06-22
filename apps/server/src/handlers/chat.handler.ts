@@ -285,7 +285,7 @@ export async function handleChatPrompt(args: {
   }
 
   const resultFromAssistant = lastAssistant
-    ? extractFirstAssistantText(lastAssistant.message)
+    ? extractFirstAssistantText(lastAssistant.message as ApiMessage)
     : null
   const resultText =
     typeof resultFromAssistant === 'string'

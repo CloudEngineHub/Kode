@@ -14,6 +14,7 @@ import { addLineNumbers } from './file'
 import { getModelManager } from './model'
 import { debug as debugLogger } from '#core/utils/debugLogger'
 import { logError } from '#core/utils/log'
+import { createAnthropicUsage } from '#core/utils/anthropic'
 import {
   getHookTranscriptPath,
   runPreCompactHooks,
@@ -305,12 +306,12 @@ async function executeAutoCompact(
     )
   }
 
-  summaryResponse.message.usage = {
+  summaryResponse.message.usage = createAnthropicUsage({
     input_tokens: 0,
     output_tokens: summaryResponse.message.usage.output_tokens,
     cache_creation_input_tokens: 0,
     cache_read_input_tokens: 0,
-  }
+  })
 
   // Automatic file recovery: preserve recently accessed development files
   // This maintains coding context even after conversation compression

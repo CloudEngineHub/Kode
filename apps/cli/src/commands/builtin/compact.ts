@@ -16,6 +16,7 @@ import { runPreCompactHooks } from '#core/utils/kodeHooks'
 import { estimateTokens } from '#core/utils/tokens'
 import { getModelManager } from '#core/utils/model'
 import { getEffectiveConversationContextLimit } from '#core/utils/autoCompactThreshold'
+import { createAnthropicUsage } from '#core/utils/anthropic'
 import {
   formatCompactionMcpSnapshot,
   formatCompactionSkillCommandSnapshot,
@@ -153,12 +154,12 @@ const compact = {
       throw new Error(summary)
     }
 
-    summaryResponse.message.usage = {
+    summaryResponse.message.usage = createAnthropicUsage({
       input_tokens: 0,
       output_tokens: summaryResponse.message.usage.output_tokens,
       cache_creation_input_tokens: 0,
       cache_read_input_tokens: 0,
-    }
+    })
 
     const compactedIntro = createUserMessage(
       `Context has been compressed using structured 8-section algorithm. All essential information has been preserved for seamless continuation.`,

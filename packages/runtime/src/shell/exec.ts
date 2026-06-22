@@ -4,7 +4,7 @@ import type { BunShellState } from './state'
 import { buildSandboxCommand, isSandboxInitFailure } from './sandboxCommand'
 import { annotateStderrWithSandboxViolations } from './sandboxViolations'
 import { createCancellableTextCollector } from './streamReaders'
-import { getShellCmdForPlatform } from './shellCmd'
+import { getShellCmdForPlatform, getShellStdioForPlatform } from './shellCmd'
 
 function logError(error: unknown): void {
   if (process.env.NODE_ENV === 'test') {
@@ -63,9 +63,12 @@ export async function exec(
     cmd: string[],
     cwdOverride?: string,
   ): Promise<ExecResult> => {
+    const stdio = getShellStdioForPlatform(process.platform)
+    if (options?.stdin !== undefined) stdio[0] = 'pipe'
+
     state.currentProcess = spawn(cmd[0], cmd.slice(1), {
       cwd: cwdOverride ?? executionCwd,
-      stdio: [options?.stdin !== undefined ? 'pipe' : 'ignore', 'pipe', 'pipe'],
+      stdio,
     })
     const processRef = state.currentProcess
 

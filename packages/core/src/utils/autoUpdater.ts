@@ -1,8 +1,14 @@
 import { execFileNoThrow } from './execFileNoThrow'
 import { logError } from './log'
+import { logStartupProfileDuration } from './startupProfile'
 
 import { MACRO } from '#core/constants/macros'
 import { PRODUCT_NAME } from '#core/constants/product'
+
+export type UpdateBannerInfo = {
+  version: string | null
+  commands: string[] | null
+}
 
 async function getSemver() {
   const mod: any = await import('semver')
@@ -90,6 +96,26 @@ export async function getUpdateCommandSuggestions(): Promise<string[]> {
 }
 
 // Optional: background notifier that prints a simple banner
+export async function getUpdateBannerInfo(): Promise<UpdateBannerInfo> {
+  const startedAt = Date.now()
+  try {
+    if (process.env.NODE_ENV === 'test') {
+      return { version: null, commands: null }
+    }
+    const semver = await getSemver()
+    const latest = await getLatestVersion()
+    if (latest && semver.gt(latest, MACRO.VERSION)) {
+      const commands = await getUpdateCommandSuggestions()
+      return { version: latest, commands }
+    }
+  } catch {
+  } finally {
+    logStartupProfileDuration('update_check', Date.now() - startedAt)
+  }
+
+  return { version: null, commands: null }
+}
+
 export async function checkAndNotifyUpdate(): Promise<void> {
   try {
     if (process.env.NODE_ENV === 'test') return

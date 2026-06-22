@@ -4,6 +4,7 @@ import {
   normalizeLineEndings,
   shouldTreatAsSpecialPaste,
 } from '#core/utils/paste'
+import type { ClipboardImage } from '#core/utils/image/media'
 import type { PromptMode } from './types'
 
 export type PastedTextSegment = { placeholder: string; text: string }
@@ -105,13 +106,13 @@ export function usePromptPastes(args: {
   )
 
   const onImagePaste = useCallback(
-    (base64Image: string): string => {
+    (image: ClipboardImage): string => {
       args.onModeChange('prompt')
       const placeholder = `[Image #${pastedImageCounter.current}]`
       pastedImageCounter.current += 1
       setPastedImages(prev => [
         ...prev,
-        { placeholder, data: base64Image, mediaType: 'image/png' },
+        { placeholder, data: image.data, mediaType: image.mediaType },
       ])
       return placeholder
     },

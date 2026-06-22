@@ -17,6 +17,8 @@ const describeLinuxBwrap =
 
 describeLinuxBwrap('BunShell Linux bwrap sandbox (compatibility)', () => {
   test('buildLinuxBwrapCommand generates expected bwrap args (read deny + write allow + denyWithinAllow + unshare-net)', () => {
+    if (process.platform !== 'linux') return
+
     const previousKodeTmp = process.env.KODE_TMPDIR
     const previousClaudeTmpDir = process.env.CLAUDE_TMPDIR
     const previousClaudeTmp = process.env.CLAUDE_CODE_TMPDIR
@@ -152,6 +154,7 @@ describeLinuxBwrap('BunShell Linux bwrap sandbox (compatibility)', () => {
   })
 
   test('falls back consistently when bwrap fails to start (require=false)', async () => {
+    if (process.platform !== 'linux') return
     const root = mkdtempSync(join(tmpdir(), 'kode-bwrap-failed-start-'))
     try {
       const shell = new BunShell(root)

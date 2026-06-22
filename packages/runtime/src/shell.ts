@@ -23,3 +23,4 @@ export {
 } from './shell/notifications'
 
 export { BunShell } from './shell/BunShell'
+export { getShellStdioForPlatform } from './shell/shellCmd'

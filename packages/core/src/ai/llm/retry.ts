@@ -1,4 +1,3 @@
-import '@anthropic-ai/sdk/shims/node'
 import { APIConnectionError, APIError } from '@anthropic-ai/sdk'
 import { debug as debugLogger } from '#core/utils/debugLogger'
 

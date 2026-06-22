@@ -1,10 +1,11 @@
 import { ToolResultBlockParam } from '@anthropic-ai/sdk/resources/index.mjs'
-import { Box, Text } from 'ink'
+import { Box } from 'ink'
 import * as React from 'react'
 import { Tool } from '#core/tooling/Tool'
 import { Message, UserMessage } from '#core/query'
 import { useGetToolFromMessages } from './utils'
 import { renderInkToolResultMessage } from '#ui-ink/toolPresenters/registry'
+import { FallbackToolResultMessage } from './FallbackToolResultMessage'
 
 type Props = {
   param: ToolResultBlockParam
@@ -23,16 +24,12 @@ export function UserToolSuccessMessage({
   verbose,
   width,
 }: Props): React.ReactNode {
-  const { tool } = useGetToolFromMessages(param.tool_use_id, tools, messages)
+  const lookup = useGetToolFromMessages(param.tool_use_id, tools, messages)
 
-  if (!message.toolUseResult) {
-    const contentText = typeof param.content === 'string' ? param.content : null
+  if (!lookup || !message.toolUseResult) {
     return (
       <Box flexDirection="column" width={width}>
-        <Text dimColor wrap="truncate-end">
-          Tool output unavailable (missing persisted tool result data).
-        </Text>
-        {contentText ? <Text>{contentText}</Text> : null}
+        <FallbackToolResultMessage content={param.content} verbose={verbose} />
       </Box>
     )
   }
@@ -40,9 +37,13 @@ export function UserToolSuccessMessage({
   return (
     // NOTE: tool_result is rendered under the user message container for parity with the legacy transcript shape.
     <Box flexDirection="column" width={width}>
-      {renderInkToolResultMessage(tool, message.toolUseResult.data as never, {
-        verbose,
-      })}
+      {renderInkToolResultMessage(
+        lookup.tool,
+        message.toolUseResult.data as never,
+        {
+          verbose,
+        },
+      )}
     </Box>
   )
 }

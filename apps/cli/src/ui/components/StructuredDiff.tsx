@@ -1,12 +1,12 @@
 import { Box, Text } from 'ink'
 import * as React from 'react'
-import { Hunk } from 'diff'
+import type { StructuredPatchHunk } from 'diff'
 import { getTheme, ThemeNames } from '#core/utils/theme'
 import { useMemo } from 'react'
 import { wrapLines } from '#ui-ink/primitives/text/wrapLines'
 
 type Props = {
-  patch: Hunk
+  patch: StructuredPatchHunk
   dim: boolean
   width: number
   overrideTheme?: ThemeNames // custom theme for previews
@@ -28,7 +28,7 @@ export function StructuredDiff({
 }
 
 export function structuredDiffLines(args: {
-  patch: Hunk
+  patch: StructuredPatchHunk
   width: number
   dim: boolean
   overrideTheme?: ThemeNames

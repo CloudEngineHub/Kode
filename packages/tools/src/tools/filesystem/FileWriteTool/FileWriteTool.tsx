@@ -1,4 +1,4 @@
-import type { Hunk } from 'diff'
+import type { StructuredPatchHunk } from 'diff'
 import { mkdirSync, statSync } from 'fs'
 import { dirname, isAbsolute, relative, resolve } from 'path'
 import { z } from 'zod'
@@ -256,7 +256,7 @@ ${addLineNumbers({
     type: 'create' | 'update'
     filePath: string
     content: string
-    structuredPatch: Hunk[]
+    structuredPatch: StructuredPatchHunk[]
     originalFile: string | null
   }
 >

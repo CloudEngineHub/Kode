@@ -2,6 +2,8 @@ import type { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { UnauthorizedError } from '@modelcontextprotocol/sdk/client/auth.js'
+import type { ServerCapabilities } from '@modelcontextprotocol/sdk/types.js'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
@@ -18,6 +20,8 @@ import { getCwd } from '#core/utils/state'
 import { notifyMcpListChanged } from './listChanged'
 import { getMcpOAuthProvider } from './oauth'
 import { getMcpServer } from './config'
+import { getMcpServerConnectionBatchSize } from './settings'
+import type { WrappedClient } from './types'
 
 type GlobalWithWebSocket = { WebSocket?: unknown }
 
@@ -205,131 +209,147 @@ async function resolveRequestHeaders(
   return Object.keys(merged).length ? merged : undefined
 }
 
-type Candidate =
+export type McpTransportCandidate =
   | { kind: 'stdio'; transport: StdioClientTransport }
   | { kind: 'sse'; transport: SSEClientTransport }
   | { kind: 'http'; transport: StreamableHTTPClientTransport }
   | { kind: 'ws'; transport: WebSocketClientTransport }
 
+export function getMcpConnectionTimeoutMs(): number {
+  const rawTimeout = process.env.MCP_CONNECTION_TIMEOUT_MS
+  const parsedTimeout = rawTimeout ? Number.parseInt(rawTimeout, 10) : NaN
+  return Number.isFinite(parsedTimeout) ? parsedTimeout : 30_000
+}
+
+export async function createMcpTransportCandidates(
+  nameOrServerRef: string | McpServerConfig,
+  maybeServerRef?: McpServerConfig,
+): Promise<McpTransportCandidate[]> {
+  const name =
+    typeof nameOrServerRef === 'string' ? nameOrServerRef : 'mcp-server'
+  const serverRef =
+    typeof nameOrServerRef === 'string' ? maybeServerRef : nameOrServerRef
+
+  if (!serverRef) {
+    throw new Error('MCP server configuration is required')
+  }
+
+  switch (serverRef.type) {
+    case 'sse': {
+      const ref = serverRef
+      const authProvider = getMcpOAuthProvider(name)
+      const headers = await resolveRequestHeaders(name, ref)
+      return [
+        {
+          kind: 'sse',
+          transport: new SSEClientTransport(new URL(ref.url), {
+            authProvider,
+            ...(headers ? { requestInit: { headers } } : {}),
+          }),
+        },
+        {
+          kind: 'http',
+          transport: new StreamableHTTPClientTransport(new URL(ref.url), {
+            authProvider,
+            ...(headers ? { requestInit: { headers } } : {}),
+          }),
+        },
+      ]
+    }
+    case 'sse-ide': {
+      const ref = serverRef
+      const authProvider = getMcpOAuthProvider(name)
+      const headers = await resolveRequestHeaders(name, ref)
+      return [
+        {
+          kind: 'sse',
+          transport: new SSEClientTransport(new URL(ref.url), {
+            authProvider,
+            ...(headers ? { requestInit: { headers } } : {}),
+          }),
+        },
+      ]
+    }
+    case 'http': {
+      const ref = serverRef
+      const authProvider = getMcpOAuthProvider(name)
+      const headers = await resolveRequestHeaders(name, ref)
+      return [
+        {
+          kind: 'http',
+          transport: new StreamableHTTPClientTransport(new URL(ref.url), {
+            authProvider,
+            ...(headers ? { requestInit: { headers } } : {}),
+          }),
+        },
+        {
+          kind: 'sse',
+          transport: new SSEClientTransport(new URL(ref.url), {
+            authProvider,
+            ...(headers ? { requestInit: { headers } } : {}),
+          }),
+        },
+      ]
+    }
+    case 'ws': {
+      const ref = serverRef
+      await ensureWebSocketGlobal()
+      return [
+        {
+          kind: 'ws',
+          transport: new WebSocketClientTransport(new URL(ref.url)),
+        },
+      ]
+    }
+    case 'ws-ide': {
+      const ref = serverRef
+
+      let url = ref.url
+      if (ref.authToken) {
+        try {
+          const parsed = new URL(url)
+          if (!parsed.searchParams.has('authToken')) {
+            parsed.searchParams.set('authToken', ref.authToken)
+            url = parsed.toString()
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      await ensureWebSocketGlobal()
+      return [
+        {
+          kind: 'ws',
+          transport: new WebSocketClientTransport(new URL(url)),
+        },
+      ]
+    }
+    case 'stdio':
+    default: {
+      const ref = serverRef
+      return [
+        {
+          kind: 'stdio',
+          transport: new StdioClientTransport({
+            command: ref.command,
+            args: ref.args,
+            env: buildStdioEnv(ref.env),
+            stderr: 'pipe',
+          }),
+        },
+      ]
+    }
+  }
+}
+
 export async function connectToServer(
   name: string,
   serverRef: McpServerConfig,
 ): Promise<Client> {
-  const candidates: Candidate[] = await (async () => {
-    switch (serverRef.type) {
-      case 'sse': {
-        const ref = serverRef
-        const authProvider = getMcpOAuthProvider(name)
-        const headers = await resolveRequestHeaders(name, ref)
-        return [
-          {
-            kind: 'sse',
-            transport: new SSEClientTransport(new URL(ref.url), {
-              authProvider,
-              ...(headers ? { requestInit: { headers } } : {}),
-            }),
-          },
-          {
-            kind: 'http',
-            transport: new StreamableHTTPClientTransport(new URL(ref.url), {
-              authProvider,
-              ...(headers ? { requestInit: { headers } } : {}),
-            }),
-          },
-        ]
-      }
-      case 'sse-ide': {
-        const ref = serverRef
-        const authProvider = getMcpOAuthProvider(name)
-        const headers = await resolveRequestHeaders(name, ref)
-        return [
-          {
-            kind: 'sse',
-            transport: new SSEClientTransport(new URL(ref.url), {
-              authProvider,
-              ...(headers ? { requestInit: { headers } } : {}),
-            }),
-          },
-        ]
-      }
-      case 'http': {
-        const ref = serverRef
-        const authProvider = getMcpOAuthProvider(name)
-        const headers = await resolveRequestHeaders(name, ref)
-        return [
-          {
-            kind: 'http',
-            transport: new StreamableHTTPClientTransport(new URL(ref.url), {
-              authProvider,
-              ...(headers ? { requestInit: { headers } } : {}),
-            }),
-          },
-          {
-            kind: 'sse',
-            transport: new SSEClientTransport(new URL(ref.url), {
-              authProvider,
-              ...(headers ? { requestInit: { headers } } : {}),
-            }),
-          },
-        ]
-      }
-      case 'ws': {
-        const ref = serverRef
-        await ensureWebSocketGlobal()
-        return [
-          {
-            kind: 'ws',
-            transport: new WebSocketClientTransport(new URL(ref.url)),
-          },
-        ]
-      }
-      case 'ws-ide': {
-        const ref = serverRef
+  const candidates = await createMcpTransportCandidates(name, serverRef)
 
-        let url = ref.url
-        if (ref.authToken) {
-          try {
-            const parsed = new URL(url)
-            if (!parsed.searchParams.has('authToken')) {
-              parsed.searchParams.set('authToken', ref.authToken)
-              url = parsed.toString()
-            }
-          } catch {
-            // ignore
-          }
-        }
-
-        await ensureWebSocketGlobal()
-        return [
-          {
-            kind: 'ws',
-            transport: new WebSocketClientTransport(new URL(url)),
-          },
-        ]
-      }
-      case 'stdio':
-      default: {
-        const ref = serverRef
-        return [
-          {
-            kind: 'stdio',
-            transport: new StdioClientTransport({
-              command: ref.command,
-              args: ref.args,
-              env: buildStdioEnv(ref.env),
-              stderr: 'pipe',
-            }),
-          },
-        ]
-      }
-    }
-  })()
-
-  const rawTimeout = process.env.MCP_CONNECTION_TIMEOUT_MS
-  const parsedTimeout = rawTimeout ? Number.parseInt(rawTimeout, 10) : NaN
-  const connectionTimeoutMs = Number.isFinite(parsedTimeout)
-    ? parsedTimeout
-    : 30_000
+  const connectionTimeoutMs = getMcpConnectionTimeoutMs()
 
   let lastError: unknown
 
@@ -430,3 +450,41 @@ export async function connectToServer(
     ? lastError
     : new Error(`Failed to connect to MCP server "${name}"`)
 }
+
+export function captureMcpCapabilities(
+  client: Client,
+): ServerCapabilities | null {
+  try {
+    return client.getServerCapabilities() ?? null
+  } catch {
+    return null
+  }
+}
+
+export async function connectMcpServer(
+  name: string,
+  serverRef: McpServerConfig,
+  _options?: { clientVersion?: string },
+): Promise<WrappedClient> {
+  try {
+    const client = await connectToServer(name, serverRef)
+    return {
+      name,
+      client,
+      capabilities: captureMcpCapabilities(client),
+      type: 'connected',
+    }
+  } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      logMCPError(name, 'Connection failed: authentication required')
+      return { name, type: 'needs-auth' }
+    }
+    logMCPError(
+      name,
+      `Connection failed: ${error instanceof Error ? error.message : String(error)}`,
+    )
+    return { name, type: 'failed' }
+  }
+}
+
+export { getMcpServerConnectionBatchSize }

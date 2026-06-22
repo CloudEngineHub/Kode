@@ -137,7 +137,7 @@ export function readAndConcatProjectInstructionFiles(
     }
 
     const heading = includeHeadings
-      ? `# ${file.filename}\n\n_Path: ${file.relativePathFromGitRoot}_\n\n`
+      ? `# ${file.filename}\n\n_Path: ${file.relativePathFromGitRoot.replaceAll('\\', '/')}_\n\n`
       : ''
 
     const block = `${heading}${raw}`.trimEnd()

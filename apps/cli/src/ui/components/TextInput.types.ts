@@ -1,4 +1,5 @@
 import type { Key } from '#ui-ink/hooks/useKeypress'
+import type { ClipboardImage } from '#core/utils/image/media'
 
 export type Props = {
   /**
@@ -99,7 +100,7 @@ export type Props = {
   /**
    * Optional callback when an image is pasted
    */
-  readonly onImagePaste?: (base64Image: string) => string | void
+  readonly onImagePaste?: (image: ClipboardImage) => string | void
 
   /**
    * Optional callback when a large text (over 800 chars) is pasted

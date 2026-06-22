@@ -1,4 +1,9 @@
 import OpenAI from 'openai'
+import {
+  extractTextAndImageUrls,
+  getImageUrlFromPart,
+  toOpenAIImageUrlParts,
+} from '#core/utils/visionContent'
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object') return null
@@ -47,7 +52,13 @@ export function convertAnthropicMessagesToOpenAIMessages(
 )[] {
   const openaiMessages: OpenAI.ChatCompletionMessageParam[] = []
 
-  const toolResults: Record<string, OpenAI.ChatCompletionToolMessageParam> = {}
+  const toolResults: Record<
+    string,
+    {
+      toolMessage: OpenAI.ChatCompletionToolMessageParam
+      imageMessage?: OpenAI.ChatCompletionUserMessageParam
+    }
+  > = {}
 
   for (const message of messages) {
     const blocks: AnthropicBlock[] = []
@@ -80,18 +91,11 @@ export function convertAnthropicMessagesToOpenAIMessages(
       }
 
       if (block.type === 'image' && role === 'user') {
-        const source = (block as AnthropicImageBlock).source
-        if (source?.type === 'base64') {
+        const imageUrl = getImageUrlFromPart(block as any)
+        if (imageUrl) {
           userContentParts.push({
             type: 'image_url',
-            image_url: {
-              url: `data:${source.media_type};base64,${source.data}`,
-            },
-          })
-        } else if (source?.type === 'url') {
-          userContentParts.push({
-            type: 'image_url',
-            image_url: { url: source.url },
+            image_url: { url: imageUrl },
           })
         }
         continue
@@ -112,15 +116,33 @@ export function convertAnthropicMessagesToOpenAIMessages(
       if (block.type === 'tool_result') {
         const toolUseId = (block as AnthropicToolResultBlock).tool_use_id
         const rawToolContent = (block as AnthropicToolResultBlock).content
+        const { text, imageUrls } = extractTextAndImageUrls(rawToolContent)
         const toolContent =
-          typeof rawToolContent === 'string'
-            ? rawToolContent
-            : JSON.stringify(rawToolContent)
-        toolResults[toolUseId] = {
-          role: 'tool',
-          content: toolContent,
-          tool_call_id: toolUseId,
+          text || (imageUrls.length > 0 ? '(image output attached)' : '')
+        const result: {
+          toolMessage: OpenAI.ChatCompletionToolMessageParam
+          imageMessage?: OpenAI.ChatCompletionUserMessageParam
+        } = {
+          toolMessage: {
+            role: 'tool',
+            content: toolContent,
+            tool_call_id: toolUseId,
+          },
         }
+
+        if (imageUrls.length > 0) {
+          result.imageMessage = {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: `Image output from tool ${toolUseId}:`,
+              },
+              ...toOpenAIImageUrlParts(imageUrls),
+            ],
+          } as any
+        }
+        toolResults[toolUseId] = result
         continue
       }
     }
@@ -169,8 +191,12 @@ export function convertAnthropicMessagesToOpenAIMessages(
 
     if (message.role === 'assistant' && Array.isArray(message.tool_calls)) {
       for (const toolCall of message.tool_calls) {
-        if (toolResults[toolCall.id]) {
-          finalMessages.push(toolResults[toolCall.id])
+        const result = toolResults[toolCall.id]
+        if (result) {
+          finalMessages.push(result.toolMessage)
+          if (result.imageMessage) {
+            finalMessages.push(result.imageMessage)
+          }
         }
       }
     }

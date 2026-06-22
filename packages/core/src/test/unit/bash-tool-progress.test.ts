@@ -25,22 +25,20 @@ function makeContext(): any {
   }
 }
 
-const describeBashProgress =
-  process.platform === 'win32' ? describe.skip : describe
+describe('BashTool progress parity (Reference CLI gH5)', () => {
+  const isWin = process.platform === 'win32'
+  const cmdSep = isWin ? ' & ' : '; '
+  const sleepCmd = (s: number) =>
+    isWin ? `ping -n ${s + 1} 127.0.0.1 >nul` : `sleep ${s}`
 
-describeBashProgress('BashTool progress parity (Reference CLI gH5)', () => {
   test('yields progress for long-running commands and then yields final result', async () => {
     const configDir = mkdtempSync(join(tmpdir(), 'kode-config-'))
     process.env.KODE_CONFIG_DIR = configDir
     try {
       const ctx = makeContext()
-      const command =
-        process.platform === 'win32'
-          ? 'powershell -NoProfile -Command "Write-Output a; Start-Sleep -Seconds 3; Write-Output b"'
-          : 'echo a; sleep 3; echo b'
       const gen = BashTool.call(
         {
-          command,
+          command: `echo a${cmdSep}${sleepCmd(3)}${cmdSep}echo b`,
           description: 'Produce output with a delay',
           timeout: 10_000,
         },
@@ -69,13 +67,9 @@ describeBashProgress('BashTool progress parity (Reference CLI gH5)', () => {
     process.env.KODE_CONFIG_DIR = configDir
     try {
       const ctx = makeContext()
-      const command =
-        process.platform === 'win32'
-          ? 'powershell -NoProfile -Command "Write-Output a; Start-Sleep -Seconds 10"'
-          : 'echo a; sleep 10'
       const gen = BashTool.call(
         {
-          command,
+          command: `echo a${cmdSep}${sleepCmd(10)}`,
           description: 'Test abort handling',
           timeout: 60_000,
         },

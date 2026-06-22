@@ -9,6 +9,7 @@ import type {
 
 import { NO_CONTENT_MESSAGE } from '#core/ai/constants'
 import type { Tool } from '#core/tooling/Tool'
+import { createAnthropicUsage } from '#core/utils/anthropic'
 import type {
   AssistantMessage,
   Message,
@@ -40,12 +41,7 @@ function baseCreateAssistantMessage(
       stop_reason: 'stop_sequence',
       stop_sequence: '',
       type: 'message',
-      usage: {
-        input_tokens: 0,
-        output_tokens: 0,
-        cache_creation_input_tokens: 0,
-        cache_read_input_tokens: 0,
-      },
+      usage: createAnthropicUsage(),
       content,
     },
     ...extra,

@@ -38,6 +38,19 @@ type GateQueryFn = (args: {
   model?: 'quick' | 'main'
 }) => Promise<string>
 
+type LlmModuleLoader = () => Promise<{
+  API_ERROR_MESSAGE_PREFIX: string
+  queryLLM: (args: any) => Promise<any>
+}>
+
+let llmModuleLoader: LlmModuleLoader | null = null
+
+export function __setLlmModuleLoaderForTests(
+  loader: LlmModuleLoader | null,
+): void {
+  llmModuleLoader = loader
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object') return null
   return value as Record<string, unknown>
@@ -80,7 +93,9 @@ async function defaultGateQuery(args: {
   signal: AbortSignal
   model?: 'quick' | 'main'
 }): Promise<string> {
-  const { API_ERROR_MESSAGE_PREFIX, queryLLM } = await import('#core/ai/llm')
+  const { API_ERROR_MESSAGE_PREFIX, queryLLM } = llmModuleLoader
+    ? await llmModuleLoader()
+    : await import('#core/ai/llm')
   const messages = [createUserMessage(args.userInput)]
 
   // Use the normal model-pointer config but *without* the CLI sysprompt.

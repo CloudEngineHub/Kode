@@ -11,10 +11,8 @@ import {
 } from '#core/utils/messages'
 import { getReplStaticPrefixLength } from '#cli-utils/replStaticSplit'
 import type { Message as KodeMessage, AssistantMessage } from '#core/query'
-import type {
-  ToolUseBlock,
-  ToolResultBlockParam,
-} from '@anthropic-ai/sdk/resources/index.mjs'
+import type { ToolResultBlockParam } from '@anthropic-ai/sdk/resources/index.mjs'
+import type { ToolUseLikeBlockParam } from '#core/utils/anthropic'
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object') return null
@@ -25,7 +23,7 @@ function makeToolUseAssistantWithSiblings(
   toolUseIDs: string[],
 ): AssistantMessage {
   const base = createAssistantMessage('ignored')
-  const blocks: ToolUseBlock[] = toolUseIDs.map(id => ({
+  const blocks: ToolUseLikeBlockParam[] = toolUseIDs.map(id => ({
     type: 'tool_use',
     id,
     name: 'Bash',

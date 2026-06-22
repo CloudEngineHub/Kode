@@ -342,36 +342,35 @@ if (missingKodeBins.length > 0) {
   process.exit(1)
 }
 
-// Check cli.js is executable
-const cliStats = fs.statSync('cli.js')
-if (!(cliStats.mode & 0o100)) {
-  console.error('❌ cli.js is not executable')
-  process.exit(1)
-}
-
-// Check cli-acp.js is executable
-const cliAcpStats = fs.statSync('cli-acp.js')
-if (!(cliAcpStats.mode & 0o100)) {
-  console.error('❌ cli-acp.js is not executable')
-  process.exit(1)
-}
-
-// Check mcp-cli.js is executable (used as npm bin)
-const mcpCliStats = fs.statSync('mcp-cli.js')
-if (!(mcpCliStats.mode & 0o100)) {
-  console.error('❌ mcp-cli.js is not executable')
-  process.exit(1)
-}
-
-// Check Linux seccomp apply-seccomp binaries are executable (they are invoked directly by the sandbox runtime).
-for (const seccompBin of [
-  path.join('dist', 'vendor', 'seccomp', 'x64', 'apply-seccomp'),
-  path.join('dist', 'vendor', 'seccomp', 'arm64', 'apply-seccomp'),
-]) {
-  const st = fs.statSync(seccompBin)
-  if (!(st.mode & 0o100)) {
-    console.error(`❌ ${seccompBin} is not executable`)
+// Check Unix executable bits only on platforms that expose them meaningfully.
+if (process.platform !== 'win32') {
+  const cliStats = fs.statSync('cli.js')
+  if (!(cliStats.mode & 0o100)) {
+    console.error('❌ cli.js is not executable')
     process.exit(1)
+  }
+
+  const cliAcpStats = fs.statSync('cli-acp.js')
+  if (!(cliAcpStats.mode & 0o100)) {
+    console.error('❌ cli-acp.js is not executable')
+    process.exit(1)
+  }
+
+  const mcpCliStats = fs.statSync('mcp-cli.js')
+  if (!(mcpCliStats.mode & 0o100)) {
+    console.error('❌ mcp-cli.js is not executable')
+    process.exit(1)
+  }
+
+  for (const seccompBin of [
+    path.join('dist', 'vendor', 'seccomp', 'x64', 'apply-seccomp'),
+    path.join('dist', 'vendor', 'seccomp', 'arm64', 'apply-seccomp'),
+  ]) {
+    const st = fs.statSync(seccompBin)
+    if (!(st.mode & 0o100)) {
+      console.error(`❌ ${seccompBin} is not executable`)
+      process.exit(1)
+    }
   }
 }
 

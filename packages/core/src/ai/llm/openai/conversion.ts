@@ -1,9 +1,5 @@
 import OpenAI from 'openai'
 import { nanoid } from 'nanoid'
-import type {
-  ContentBlock,
-  Message as AnthropicMessage,
-} from '@anthropic-ai/sdk/resources/index.mjs'
 import type { Tool } from '#core/tooling/Tool'
 import type { AssistantMessage, UserMessage } from '#core/query'
 import { convertAnthropicMessagesToOpenAIMessages as convertAnthropicMessagesToOpenAIMessagesUtil } from '#core/utils/openaiMessageConversion'
@@ -11,7 +7,7 @@ import { normalizeUsage } from './usage'
 
 function mapFinishReasonToStopReason(
   reason: OpenAI.ChatCompletion.Choice['finish_reason'] | null | undefined,
-): AnthropicMessage['stop_reason'] {
+): AssistantMessage['message']['stop_reason'] {
   switch (reason) {
     case 'stop':
       return 'end_turn'
@@ -31,15 +27,15 @@ export function convertAnthropicMessagesToOpenAIMessages(
   | OpenAI.ChatCompletionMessageParam
   | OpenAI.ChatCompletionToolMessageParam
 )[] {
-  return convertAnthropicMessagesToOpenAIMessagesUtil(messages)
+  return convertAnthropicMessagesToOpenAIMessagesUtil(messages as any)
 }
 
 export function convertOpenAIResponseToAnthropic(
   response: OpenAI.ChatCompletion,
   tools?: Tool[],
-): AnthropicMessage {
+): AssistantMessage['message'] {
   const normalizedUsage = normalizeUsage(response.usage)
-  let contentBlocks: ContentBlock[] = []
+  const contentBlocks: AssistantMessage['message']['content'] = []
   const message = response.choices?.[0]?.message
   if (!message) {
     return {
@@ -52,13 +48,7 @@ export function convertOpenAIResponseToAnthropic(
       ),
       stop_sequence: null,
       type: 'message',
-      usage: {
-        input_tokens: normalizedUsage.input_tokens ?? 0,
-        output_tokens: normalizedUsage.output_tokens ?? 0,
-        cache_creation_input_tokens:
-          normalizedUsage.cache_creation_input_tokens ?? 0,
-        cache_read_input_tokens: normalizedUsage.cache_read_input_tokens ?? 0,
-      },
+      usage: normalizedUsage,
     }
   }
 
@@ -111,7 +101,7 @@ export function convertOpenAIResponseToAnthropic(
     })
   }
 
-  const finalMessage: AnthropicMessage = {
+  const finalMessage: AssistantMessage['message'] = {
     id: nanoid(),
     model: response.model ?? '<openai>',
     role: 'assistant',
@@ -121,13 +111,7 @@ export function convertOpenAIResponseToAnthropic(
     ),
     stop_sequence: null,
     type: 'message',
-    usage: {
-      input_tokens: normalizedUsage.input_tokens ?? 0,
-      output_tokens: normalizedUsage.output_tokens ?? 0,
-      cache_creation_input_tokens:
-        normalizedUsage.cache_creation_input_tokens ?? 0,
-      cache_read_input_tokens: normalizedUsage.cache_read_input_tokens ?? 0,
-    },
+    usage: normalizedUsage,
   }
 
   return finalMessage

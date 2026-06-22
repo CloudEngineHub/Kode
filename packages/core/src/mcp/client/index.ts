@@ -15,6 +15,7 @@ export {
 
 export { getClients, getClientsForCliMcpConfig } from './clients'
 export { __setMcpClientsForTests } from './clients'
+export { MCPClientManager } from './manager'
 
 export { getMCPTools } from './tools'
 export { getMCPCommands, runCommand } from './commands'

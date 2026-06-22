@@ -8,6 +8,7 @@ import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import type { Key } from '#ui-ink/hooks/useKeypress'
 import type { PermissionMode } from '#core/types/PermissionMode'
 import type { Theme } from '#core/utils/theme'
+import type { ClipboardImage } from '#core/utils/image/media'
 import type { PromptMode } from './types'
 import { PromptInputCompletionPanel } from './PromptInputCompletionPanel'
 import { PendingPrompts } from './PendingPrompts'
@@ -110,7 +111,7 @@ export function PromptInputView({
   onExit: () => never
   onExitMessage: (show: boolean, key?: string) => void
   onMessage: (show: boolean, text?: string) => void
-  onImagePaste: (base64Image: string) => string | void
+  onImagePaste: (image: ClipboardImage) => string | void
   onTextPaste: (text: string) => void
   onSpecialKey: (input: string, key: Key) => boolean
   exitMessage: ExitMessageState

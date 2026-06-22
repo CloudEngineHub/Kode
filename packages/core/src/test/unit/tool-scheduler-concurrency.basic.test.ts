@@ -3,7 +3,7 @@ import { __ToolUseQueueForTests } from '#core/query'
 import { z } from 'zod'
 import type { Tool } from '#core/tooling/Tool'
 import { createAssistantMessage } from '#core/utils/messages'
-import type { ToolUseBlock } from '@anthropic-ai/sdk/resources/index.mjs'
+import type { ToolUseLikeBlockParam } from '#core/utils/anthropic'
 
 function deferred<T = void>() {
   let resolve!: (value: T) => void
@@ -50,7 +50,7 @@ function makeTool(options: {
 }
 
 function makeToolUse(id: string, name: string, input: any = {}) {
-  const toolUse: ToolUseBlock = { id, name, input, type: 'tool_use' }
+  const toolUse: ToolUseLikeBlockParam = { id, name, input, type: 'tool_use' }
   return toolUse
 }
 

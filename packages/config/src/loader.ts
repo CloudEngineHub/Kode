@@ -166,7 +166,13 @@ const TEST_PROJECT_CONFIG_FOR_TESTING: ProjectConfig = {
 let CACHED_GLOBAL_CONFIG: GlobalConfig | null = null
 
 export function enableConfigs(): void {
-  getConfig(getGlobalConfigFilePath(), DEFAULT_GLOBAL_CONFIG, true)
+  CACHED_GLOBAL_CONFIG = migrateModelProfilesRemoveId(
+    getConfig(getGlobalConfigFilePath(), DEFAULT_GLOBAL_CONFIG, true),
+  )
+}
+
+export function clearConfigCacheForTesting(): void {
+  CACHED_GLOBAL_CONFIG = null
 }
 
 export function saveGlobalConfig(config: GlobalConfig): void {
@@ -192,6 +198,7 @@ export function saveGlobalConfig(config: GlobalConfig): void {
 
 export function getGlobalConfig(): GlobalConfig {
   if (process.env.NODE_ENV === 'test') return TEST_GLOBAL_CONFIG_FOR_TESTING
+  if (CACHED_GLOBAL_CONFIG) return CACHED_GLOBAL_CONFIG
   const config = getConfig(getGlobalConfigFilePath(), DEFAULT_GLOBAL_CONFIG)
   return migrateModelProfilesRemoveId(config)
 }

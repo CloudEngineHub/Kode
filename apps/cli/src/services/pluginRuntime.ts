@@ -54,14 +54,32 @@ async function expandPluginDirInputs(
     const abs = resolve(baseDir, expanded)
 
     if (isLikelyGlob(trimmed) || isLikelyGlob(expanded)) {
-      try {
-        const pattern = isLikelyGlob(expanded) ? expanded : trimmed
-        const matches = await glob(pattern, { cwd: baseDir, nodir: false })
-        for (const match of matches) out.push(resolve(baseDir, match))
-        continue
-      } catch {
-        // fall back to literal resolution
+      const patternsToTry =
+        expanded !== trimmed ? [expanded, trimmed] : [trimmed]
+      let matched = false
+      for (const pattern of patternsToTry) {
+        try {
+          const matches = await glob(pattern, {
+            cwd: baseDir,
+            absolute: true,
+            nodir: false,
+            nocase: process.platform === 'win32',
+          })
+          const dirs = matches.filter(match => {
+            try {
+              return existsSync(match) && statSync(match).isDirectory()
+            } catch {
+              return false
+            }
+          })
+          if (dirs.length > 0) {
+            out.push(...dirs)
+            matched = true
+            break
+          }
+        } catch {}
       }
+      if (matched) continue
     }
 
     out.push(abs)

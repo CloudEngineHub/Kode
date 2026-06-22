@@ -1,5 +1,14 @@
 import { existsSync } from 'fs'
 
+export function getShellStdioForPlatform(
+  platform: NodeJS.Platform,
+): ['ignore' | 'pipe', 'pipe' | 'overlapped', 'pipe' | 'overlapped'] {
+  if (platform === 'win32') {
+    return ['ignore', 'overlapped', 'overlapped']
+  }
+  return ['ignore', 'pipe', 'pipe']
+}
+
 export function getShellCmdForPlatform(
   platform: NodeJS.Platform,
   command: string,

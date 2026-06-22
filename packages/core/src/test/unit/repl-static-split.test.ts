@@ -1,8 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type {
-  ContentBlock,
-  ContentBlockParam,
-} from '@anthropic-ai/sdk/resources/index.mjs'
+import type { ContentBlockParam } from '@anthropic-ai/sdk/resources/index.mjs'
 import {
   createAssistantMessage,
   createUserMessage,
@@ -16,7 +13,7 @@ function makeToolUseAssistant(toolUseID: string) {
   const base = createAssistantMessage('ignored')
   const content = [
     { type: 'tool_use', id: toolUseID, name: 'Echo', input: {} },
-  ] satisfies ContentBlock[]
+  ] satisfies any[]
   return {
     ...base,
     message: {

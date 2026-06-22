@@ -3,6 +3,7 @@ import {
   CLIPBOARD_ERROR_MESSAGE,
   getImageFromClipboard,
 } from '#core/utils/imagePaste'
+import type { ClipboardImage } from '#core/utils/image/media'
 
 const IMAGE_PLACEHOLDER = '[Image pasted]'
 
@@ -16,7 +17,7 @@ export function tryImagePaste({
 }: {
   cursor: Cursor
   mask: string
-  onImagePaste?: (base64Image: string) => string | void
+  onImagePaste?: (image: ClipboardImage) => string | void
   onMessage?: (show: boolean, message?: string) => void
   setImagePasteErrorTimeout: (timeout: NodeJS.Timeout | null) => void
   clearImagePasteErrorTimeout: () => void
@@ -25,11 +26,8 @@ export function tryImagePaste({
     return cursor
   }
 
-  const base64Image = getImageFromClipboard()
-  if (base64Image === null) {
-    if (process.platform !== 'darwin') {
-      return cursor
-    }
+  const image = getImageFromClipboard()
+  if (image === null) {
     onMessage?.(true, CLIPBOARD_ERROR_MESSAGE)
     clearImagePasteErrorTimeout()
     setImagePasteErrorTimeout(
@@ -40,7 +38,7 @@ export function tryImagePaste({
     return cursor
   }
 
-  const placeholder = onImagePaste?.(base64Image)
+  const placeholder = onImagePaste?.(image)
   return cursor.insert(
     typeof placeholder === 'string' ? placeholder : IMAGE_PLACEHOLDER,
   )

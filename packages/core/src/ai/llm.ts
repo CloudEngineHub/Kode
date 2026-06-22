@@ -1,4 +1,3 @@
-import '@anthropic-ai/sdk/shims/node'
 import Anthropic from '@anthropic-ai/sdk'
 import { AnthropicBedrock } from '@anthropic-ai/bedrock-sdk'
 import { AnthropicVertex } from '@anthropic-ai/vertex-sdk'

@@ -1,13 +1,16 @@
 import type {
   Message as APIAssistantMessage,
   MessageParam,
-  ToolUseBlock,
 } from '@anthropic-ai/sdk/resources/index.mjs'
 
 import type { UUID } from '#core/types/common'
 import type { Tool, ToolUseContext } from '#core/tooling/Tool'
 import type { ToolPermissionContext } from '#core/types/toolPermissionContext'
 import type { FullToolUseResult, NormalizedMessage } from '#core/utils/messages'
+import type {
+  AnthropicUsage,
+  ToolUseLikeBlockParam,
+} from '#core/utils/anthropic'
 
 // Extended ToolUseContext for query functions.
 export interface ExtendedToolUseContext extends ToolUseContext {
@@ -74,10 +77,24 @@ export type UserMessage = {
   }
 }
 
+export type AssistantApiMessage = Omit<
+  Partial<APIAssistantMessage>,
+  'content' | 'usage' | 'role' | 'type'
+> & {
+  id: string
+  model: string
+  role: 'assistant'
+  type: 'message'
+  content: any[]
+  usage: AnthropicUsage
+  stop_reason?: APIAssistantMessage['stop_reason'] | null
+  stop_sequence?: string | null
+}
+
 export type AssistantMessage = {
   costUSD: number
   durationMs: number
-  message: APIAssistantMessage
+  message: AssistantApiMessage
   type: 'assistant'
   uuid: UUID
   isApiErrorMessage?: boolean
@@ -107,9 +124,7 @@ export type ProgressMessage = {
 // Each array item is either a single message or a message-and-response pair
 export type Message = UserMessage | AssistantMessage | ProgressMessage
 
-type ToolUseLikeBlock = ToolUseBlock & {
-  type: 'tool_use' | 'server_tool_use' | 'mcp_tool_use'
-}
+type ToolUseLikeBlock = ToolUseLikeBlockParam
 
 export function isToolUseLikeBlock(block: any): block is ToolUseLikeBlock {
   return (

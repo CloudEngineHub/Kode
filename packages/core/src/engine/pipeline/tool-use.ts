@@ -1,7 +1,6 @@
-import type { ToolUseBlock } from '@anthropic-ai/sdk/resources/index.mjs'
-
 import type { CanUseToolFn } from '#core/permissions/canUseTool'
 import type { ToolUseContext } from '#core/tooling/Tool'
+import type { ToolUseLikeBlockParam } from '#core/utils/anthropic'
 import { logError } from '#core/utils/log'
 import { createUserMessage } from '#core/utils/messages'
 import {
@@ -16,7 +15,7 @@ import type { AssistantMessage, ExtendedToolUseContext, Message } from './types'
 import { checkPermissionsAndCallTool } from './tool-call'
 
 export async function* runToolUse(
-  toolUse: ToolUseBlock,
+  toolUse: ToolUseLikeBlockParam,
   siblingToolUseIDs: Set<string>,
   assistantMessage: AssistantMessage,
   canUseTool: CanUseToolFn,

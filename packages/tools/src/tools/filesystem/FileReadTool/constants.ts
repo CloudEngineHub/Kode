@@ -9,6 +9,7 @@ export const IMAGE_EXTENSIONS = new Set([
   '.jpeg',
   '.gif',
   '.webp',
+  '.svg',
 ])
 
 // Maximum dimensions for images

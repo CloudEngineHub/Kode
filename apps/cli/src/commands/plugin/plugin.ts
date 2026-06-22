@@ -25,6 +25,34 @@ type PluginScope = 'user' | 'project' | 'local'
 const PLUGIN_SCOPES: readonly PluginScope[] = ['user', 'project', 'local']
 
 function parseTokens(input: string): string[] {
+  if (process.platform === 'win32') {
+    const tokens: string[] = []
+    let current = ''
+    let inSingleQuote = false
+    let inDoubleQuote = false
+    for (let i = 0; i < input.length; i++) {
+      const ch = input[i]
+      if (ch === "'" && !inDoubleQuote) {
+        inSingleQuote = !inSingleQuote
+        continue
+      }
+      if (ch === '"' && !inSingleQuote) {
+        inDoubleQuote = !inDoubleQuote
+        continue
+      }
+      if (ch === ' ' && !inSingleQuote && !inDoubleQuote) {
+        if (current) {
+          tokens.push(current)
+          current = ''
+        }
+        continue
+      }
+      current += ch
+    }
+    if (current) tokens.push(current)
+    return tokens
+  }
+
   const parts = parse(input)
   const out: string[] = []
   for (const part of parts) {

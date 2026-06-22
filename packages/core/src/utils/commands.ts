@@ -1,5 +1,5 @@
 import { memoize } from 'lodash-es'
-import { type ControlOperator, parse, ParseEntry } from 'shell-quote'
+import { parse, ParseEntry } from 'shell-quote'
 
 const SINGLE_QUOTE = '__SINGLE_QUOTE__'
 const DOUBLE_QUOTE = '__DOUBLE_QUOTE__'
@@ -337,7 +337,7 @@ const getCommandPrefix = memoize(
   command => command, // memoize by command only
 )
 
-const COMMAND_LIST_SEPARATORS = new Set<ControlOperator>([
+const COMMAND_LIST_SEPARATORS = new Set<string>([
   '&&',
   '||',
   ';',

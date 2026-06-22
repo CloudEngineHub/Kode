@@ -161,69 +161,9 @@ If the gate fails closed (timeout / invalid output / API error), Kode writes a d
 2. Register it in `apps/cli/src/commands/registry.ts`
 3. Ensure help text is coherent with onboarding and permission model
 
-It looks like the content you wanted to transform didn't come through in your message. I can see references to "Pasted text #1" and "Pasted text #2," but the actual text is missing.
+## AI Context Notes
 
-Please paste the content of those two blocks here, and I will immediately structure them into a clean, well-formatted note for your `AGENTS.md` file!
-
-_Added on 1/26/2026, 2:38:04 AM GMT+8_
-
-It looks like the actual content of the notes you intended to paste didn't come through—I only see the placeholders `[Pasted text #1 +16 lines]` and `[Pasted text #2 +5 lines]`.
-
-Please paste the text content here, and I will immediately format it into a structured note for your `AGENTS.md` file.
-
-_Added on 1/26/2026, 2:38:05 AM GMT+8_
-
-It looks like the actual text content for **Pasted text #1** and **Pasted text #2** didn't come through in your message.
-
-Please paste the raw notes here, and I will immediately structure them into a clean, readable format for your `AGENTS.md` file.
-
-_Added on 1/26/2026, 2:38:12 AM GMT+8_
-
-⚠️ **Input Missing**
-
-It looks like the actual content of the notes wasn't included in your message. You likely pasted the clipboard labels (e.g., `[Pasted text #1 +16 lines]`) instead of the raw text.
-
-Please paste the content of the notes, and I will format them for `AGENTS.md` immediately.
-
-_Added on 1/26/2026, 2:38:16 AM GMT+8_
-
-It looks like the text content for **Pasted text #1** and **Pasted text #2** wasn't included in your message.
-
-Please provide the raw text you would like me to structure. Once you paste it, I will format it into a clean, well-structured entry for your `AGENTS.md` file.
-
-_Added on 1/26/2026, 2:38:16 AM GMT+8_
-
-It looks like the actual text content for your note didn't come through—I only see the placeholders `[Pasted text #1...]` and `[Pasted text #2...]`.
-
-Please paste the text you would like me to structure, and I will format it immediately for `AGENTS.md` with appropriate headings, bullets, and code blocks.
-
-_Added on 1/26/2026, 2:38:17 AM GMT+8_
-
-It looks like the text content for **Pasted text #1** and **Pasted text #2** wasn't included in your message.
-
-Please paste the notes you'd like me to structure. Once you provide them, I will format them into a clean, well-organized Markdown section ready for your `AGENTS.md` file.
-
-Here is an example of how I will structure it once you provide the text:
-
-```markdown
-## [Agent Name / Topic]
-
-### Overview
-[Brief summary of the agent's purpose or the topic]
-
-### Key Capabilities
-- [Capability 1]
-- [Capability 2]
-- [Capability 3]
-
-### Configuration & Usage
-\`\`\`bash
-# Example command or config
-\`\`\`
-
-### Notes / Limitations
-- [Important note]
-- [Limitation or constraint]
-```
-
-_Added on 1/26/2026, 2:38:18 AM GMT+8_
+- 2026-06-06: The project has moved from ESLint 8 to ESLint 9 flat config (`eslint.config.mjs`). Do not restore `.eslintrc*`; `bun run lint` remains the lint command.
+- 2026-06-05: When fixing Windows CI, check Bun's default 5 second test timeout, cross-file `mock.module` pollution, and `cmd /c` versus Unix shell differences before skipping tests.
+- 2026-06-05: Background shell tests should wait for target stdout with `getBackgroundOutput` before asserting `readBackgroundOutput` cursor semantics.
+- 2026-06-05: For `cmd /c` tests, avoid hand-written Windows quoting around `process.execPath`; prefer simple shell/cmd-compatible commands when only stdout is needed.

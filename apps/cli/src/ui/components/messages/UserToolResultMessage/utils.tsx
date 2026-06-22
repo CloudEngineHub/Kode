@@ -57,9 +57,7 @@ export function useGetToolFromMessages(
   return useMemo(() => {
     const toolUse = getToolUseFromMessages(toolUseID, messages)
     if (!toolUse) {
-      throw new ReferenceError(
-        `Tool use not found for tool_use_id ${toolUseID}`,
-      )
+      return null
     }
     // Hack: we don't expose GlobTool and GrepTool in getTools anymore,
     // but we still want to be able to load old transcripts.
@@ -67,10 +65,8 @@ export function useGetToolFromMessages(
     const tool = [...tools, GlobTool, GrepTool].find(
       _ => _.name === toolUse.name,
     )
-    if (tool === GlobTool || tool === GrepTool) {
-    }
     if (!tool) {
-      throw new ReferenceError(`Tool not found for ${toolUse.name}`)
+      return null
     }
     return { tool, toolUse }
   }, [toolUseID, messages, tools])

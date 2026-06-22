@@ -7,7 +7,7 @@ import { isBashCommandReadOnly } from '#core/utils/permissions/bashReadOnly'
 import { BashTool } from '#tools/tools/system/BashTool/BashTool'
 import type { CanUseToolFn } from '#core/permissions/canUseTool'
 import type { ExtendedToolUseContext } from '#core/query'
-import type { ToolUseBlock } from '@anthropic-ai/sdk/resources/index.mjs'
+import type { ToolUseLikeBlockParam } from '#core/utils/anthropic'
 
 function deferred<T = void>() {
   let resolve!: (value: T) => void
@@ -55,7 +55,10 @@ function makeBashLikeTool(options: { callImpl: Tool['call'] }): Tool {
   } satisfies Tool
 }
 
-function makeToolUse(id: string, input: { command: string }): ToolUseBlock {
+function makeToolUse(
+  id: string,
+  input: { command: string },
+): ToolUseLikeBlockParam {
   return { id, name: 'Bash', input, type: 'tool_use' }
 }
 

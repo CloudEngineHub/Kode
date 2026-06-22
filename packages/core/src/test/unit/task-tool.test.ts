@@ -6,6 +6,7 @@ import { TaskTool } from '#tools/tools/ai/TaskTool/TaskTool'
 import { applyAgentPermissionMode } from '#tools/tools/ai/TaskTool/permissions'
 import { getBackgroundAgentTask } from '#core/utils/backgroundTasks'
 import { createAssistantMessage } from '#core/utils/messages'
+import { createAnthropicUsage } from '#core/utils/anthropic'
 import { createDefaultToolPermissionContext } from '#core/types/toolPermissionContext'
 import { FileReadTool } from '#tools/tools/filesystem/FileReadTool/FileReadTool'
 import { FileWriteTool } from '#tools/tools/filesystem/FileWriteTool/FileWriteTool'
@@ -191,12 +192,12 @@ describe('TaskTool', () => {
   test('completed output includes tool use count, duration, and tokens', async () => {
     async function* stubQuery() {
       const msg = createAssistantMessage('hello')
-      msg.message.usage = {
+      msg.message.usage = createAnthropicUsage({
         input_tokens: 10,
         output_tokens: 20,
         cache_creation_input_tokens: 3,
         cache_read_input_tokens: 2,
-      }
+      })
       msg.message.content = [
         { type: 'tool_use', id: 't1', name: 'Bash', input: {} },
         { type: 'tool_use', id: 't2', name: 'Read', input: {} },

@@ -9,6 +9,34 @@ import { OutputLine } from '#tools/tools/system/BashTool/OutputLine'
 // Allow any input object since MCP tools define their own schemas
 const inputSchema = z.object({}).passthrough()
 
+function extractSingleResultText(value: unknown): string | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+
+  const record = value as Record<string, unknown>
+  const keys = Object.keys(record)
+  if (keys.length === 1 && typeof record.result === 'string') {
+    return record.result
+  }
+
+  return null
+}
+
+function normalizeTextOutput(output: unknown): string {
+  if (typeof output === 'string') {
+    try {
+      const resultText = extractSingleResultText(JSON.parse(output))
+      if (resultText !== null) return resultText
+    } catch {}
+
+    return output
+  }
+
+  const resultText = extractSingleResultText(output)
+  if (resultText !== null) return resultText
+
+  return JSON.stringify(output)
+}
+
 export const MCPTool = {
   isMcp: true,
   async isEnabled() {
@@ -72,11 +100,12 @@ export const MCPTool = {
                 </Box>
               )
             }
-            const lines = item.text.split('\n').length
+            const content = normalizeTextOutput(item.text ?? item)
+            const lines = content.split('\n').length
             return (
               <OutputLine
                 key={i}
-                content={item.text}
+                content={content}
                 lines={lines}
                 verbose={verbose}
               />
@@ -97,8 +126,9 @@ export const MCPTool = {
       )
     }
 
-    const lines = output.split('\n').length
-    return <OutputLine content={output} lines={lines} verbose={verbose} />
+    const content = normalizeTextOutput(output)
+    const lines = content.split('\n').length
+    return <OutputLine content={content} lines={lines} verbose={verbose} />
   },
   renderResultForAssistant(content) {
     return content

@@ -1,8 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import type {
-  ContentBlockParam,
-  ToolUseBlock,
-} from '@anthropic-ai/sdk/resources/index.mjs'
+import type { ContentBlockParam } from '@anthropic-ai/sdk/resources/index.mjs'
+import type { ToolUseLikeBlockParam } from '#core/utils/anthropic'
 import {
   createAssistantAPIErrorMessage,
   createAssistantMessage,
@@ -17,7 +15,7 @@ import {
 
 function makeToolUseAssistant(toolUseID: string) {
   const base = createAssistantMessage('ignored')
-  const toolUseBlock: ToolUseBlock = {
+  const toolUseBlock: ToolUseLikeBlockParam = {
     type: 'tool_use',
     id: toolUseID,
     name: 'Echo',

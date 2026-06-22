@@ -54,7 +54,7 @@ jobs:
           node-version: '20.18.1'
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
@@ -129,92 +129,8 @@ jobs:
           path: ${{ steps.asset.outputs.asset }}
           if-no-files-found: error
 
-  publish-npm:
-    needs: [compute-version, build-binaries]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20.18.1'
-          registry-url: 'https://registry.npmjs.org'
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
-
-      - name: Install
-        run: bun install
-
-      - name: Sync workspace versions (dev)
-        run: node scripts/set-version.mjs "${DEV_VERSION}"
-        env:
-          DEV_VERSION: ${{ needs.compute-version.outputs.dev_version }}
-
-      - name: Download binary artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-          merge-multiple: true
-
-      - name: Ensure bundled ripgrep
-        run: bun run scripts/ensure-ripgrep.mjs
-
-      - name: Prepare Linux seccomp assets (x64 + arm64) for publishing
-        run: node scripts/prepare-seccomp-assets.mjs --artifacts-dir artifacts --dest-root vendor/seccomp
-
-      - name: Prepare ripgrep platform packages
-        run: node scripts/prepare-ripgrep-packages.mjs
-
-      - name: Prepare Kode binary platform packages
-        run: node scripts/prepare-kode-bin-packages.mjs
-
-      - name: Typecheck
-        run: bun run typecheck
-
-      - name: Test
-        run: bun test
-
-      - name: Build (all-in-bun)
-        run: bun run build
-
-      - name: Prepublish check
-        run: bun run scripts/prepublish-check.js
-
-      - name: Smoke test packaged install (no scripts)
-        run: bash scripts/smoke-packaged-install.sh
-
-      - name: "Publish Kode binary platform packages (dist-tag: dev)"
-        run: |
-          set -euo pipefail
-          for dir in packages/kode-bin-*; do
-            echo "Publishing $dir"
-            (cd "$dir" && npm publish --tag dev --access public --ignore-scripts)
-          done
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: "Publish ripgrep platform packages (dist-tag: dev)"
-        run: |
-          set -euo pipefail
-          for dir in packages/kode-ripgrep-*; do
-            echo "Publishing $dir"
-            (cd "$dir" && npm publish --tag dev --access public --ignore-scripts)
-          done
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: "Publish npm (dist-tag: dev)"
-        run: npm publish --tag dev --access public --ignore-scripts
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
   prerelease:
-    needs: [compute-version, build-binaries, publish-npm]
+    needs: [compute-version, build-binaries]
     runs-on: ubuntu-latest
     permissions:
       contents: write

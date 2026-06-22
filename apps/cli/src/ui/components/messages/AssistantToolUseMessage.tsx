@@ -1,13 +1,13 @@
 import { Box, Text } from 'ink'
 import React from 'react'
 import { logError } from '#core/utils/log'
-import { ToolUseBlockParam } from '@anthropic-ai/sdk/resources/index.mjs'
 import { Tool } from '#core/tooling/Tool'
 import { Cost } from '#ui-ink/components/Cost'
 import { ToolUseLoader } from '#ui-ink/components/ToolUseLoader'
 import { getTheme } from '#core/utils/theme'
 import { ThinkTool } from '#tools/tools/ai/ThinkTool/ThinkTool'
 import { AssistantThinkingMessage } from './AssistantThinkingMessage'
+import type { ToolUseLikeBlockParam } from '#core/utils/anthropic'
 import { TaskToolMessage } from './TaskToolMessage'
 import { resolveToolNameAlias } from '#core/utils/toolNameAliases'
 
@@ -24,7 +24,7 @@ function getSubagentType(input: unknown): string | null {
 }
 
 type Props = {
-  param: ToolUseBlockParam
+  param: ToolUseLikeBlockParam
   costUSD: number
   durationMs: number
   addMargin: boolean

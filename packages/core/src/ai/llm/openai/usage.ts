@@ -1,18 +1,20 @@
+import { createAnthropicUsage } from '#core/utils/anthropic'
+
 export function getMaxTokensFromProfile(modelProfile: any): number {
   return modelProfile?.maxTokens || 8000
 }
 
 export function normalizeUsage(usage?: any) {
   if (!usage) {
-    return {
+    return createAnthropicUsage({
       input_tokens: 0,
       output_tokens: 0,
       cache_read_input_tokens: 0,
       cache_creation_input_tokens: 0,
-    }
+    })
   }
 
-  return {
+  return createAnthropicUsage({
     input_tokens:
       usage.input_tokens ??
       usage.prompt_tokens ??
@@ -49,5 +51,5 @@ export function normalizeUsage(usage?: any) {
           usage.completionTokens ??
           0),
     reasoningTokens: usage.reasoningTokens,
-  }
+  })
 }

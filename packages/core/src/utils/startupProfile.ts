@@ -20,3 +20,23 @@ export function logStartupProfile(event: StartupEvent): void {
   // Use stderr so we don't corrupt Ink's stdout rendering.
   process.stderr.write(`[startup] ${event}=${ms}ms\n`)
 }
+
+export function logStartupProfileDuration(
+  event: string,
+  durationMs: number,
+  details?: Record<string, string | number | boolean | undefined>,
+): void {
+  if (!isEnabled()) return
+
+  const suffix = details
+    ? Object.entries(details)
+        .filter((entry): entry is [string, string | number | boolean] => {
+          return entry[1] !== undefined
+        })
+        .map(([key, value]) => `${key}=${String(value)}`)
+        .join(' ')
+    : ''
+  process.stderr.write(
+    `[startup] ${event}=${Math.round(durationMs)}ms${suffix ? ` ${suffix}` : ''}\n`,
+  )
+}

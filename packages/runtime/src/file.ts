@@ -6,7 +6,15 @@
  */
 
 import { existsSync } from 'node:fs'
-import { appendFile, open, readFile, stat, writeFile } from 'node:fs/promises'
+import {
+  appendFile,
+  mkdir,
+  open,
+  readFile,
+  stat,
+  writeFile,
+} from 'node:fs/promises'
+import { dirname } from 'node:path'
 
 function logError(message: string): void {
   if (process.env.NODE_ENV === 'test') {
@@ -37,6 +45,7 @@ export async function writeFileBun(
   content: string | Buffer,
 ): Promise<boolean> {
   try {
+    await mkdir(dirname(filepath), { recursive: true })
     await writeFile(filepath, content)
     return true
   } catch (error) {

@@ -14,7 +14,7 @@ import {
 import { buildSandboxCommand } from './sandboxCommand'
 import { annotateStderrWithSandboxViolations } from './sandboxViolations'
 import { startStreamReader } from './streamReaders'
-import { getShellCmdForPlatform } from './shellCmd'
+import { getShellCmdForPlatform, getShellStdioForPlatform } from './shellCmd'
 import { makeBackgroundTaskId } from './ids'
 
 export function execInBackground(
@@ -50,7 +50,7 @@ export function execInBackground(
 
   const childProcess = spawn(cmdToRun[0], cmdToRun.slice(1), {
     cwd: executionCwd,
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: getShellStdioForPlatform(process.platform),
   })
   const exitPromise = new Promise<
     { kind: 'exit'; code: number | null } | { kind: 'error'; error: Error }

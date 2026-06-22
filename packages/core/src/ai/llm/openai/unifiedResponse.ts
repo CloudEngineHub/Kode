@@ -2,6 +2,7 @@ import { nanoid } from 'nanoid'
 import { randomUUID } from 'crypto'
 import type { UUID } from 'crypto'
 import type { AssistantMessage } from '#core/query'
+import { createAnthropicUsage } from '#core/utils/anthropic'
 
 export function buildAssistantMessageFromUnifiedResponse(
   unifiedResponse: any,
@@ -48,12 +49,12 @@ export function buildAssistantMessageFromUnifiedResponse(
       stop_reason: unifiedResponse.stopReason ?? null,
       stop_sequence: null,
       content: contentBlocks,
-      usage: {
+      usage: createAnthropicUsage({
         input_tokens: inputTokens,
         output_tokens: outputTokens,
         cache_creation_input_tokens: 0,
         cache_read_input_tokens: 0,
-      },
+      }),
     },
     costUSD: 0,
     durationMs: Date.now() - startTime,

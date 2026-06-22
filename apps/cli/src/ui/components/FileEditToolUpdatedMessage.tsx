@@ -1,4 +1,4 @@
-import { Hunk } from 'diff'
+import type { StructuredPatchHunk } from 'diff'
 import { Box, Text } from 'ink'
 import * as React from 'react'
 import { intersperse } from '#core/utils/array'
@@ -10,15 +10,15 @@ import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 
 type Props = {
   filePath: string
-  structuredPatch?: Hunk[]
+  structuredPatch?: StructuredPatchHunk[]
   verbose: boolean
 }
 
 const MAX_HUNKS_TO_RENDER = 4
 const MAX_DIFF_LINES_TO_RENDER = 200
 
-function truncateHunks(hunks: Hunk[]): {
-  hunks: Hunk[]
+function truncateHunks(hunks: StructuredPatchHunk[]): {
+  hunks: StructuredPatchHunk[]
   hiddenHunks: number
   hiddenLines: number
 } {
@@ -27,7 +27,7 @@ function truncateHunks(hunks: Hunk[]): {
   }
 
   let remainingLines = MAX_DIFF_LINES_TO_RENDER
-  const kept: Hunk[] = []
+  const kept: StructuredPatchHunk[] = []
   let hiddenLines = 0
 
   for (const hunk of hunks) {

@@ -1,7 +1,6 @@
-import type { ToolUseBlock } from '@anthropic-ai/sdk/resources/index.mjs'
-
 import type { CanUseToolFn } from '#core/permissions/canUseTool'
 import type { Tool } from '#core/tooling/Tool'
+import type { ToolUseLikeBlockParam } from '#core/utils/anthropic'
 import { resolveToolNameAlias } from '#core/utils/toolNameAliases'
 import {
   createAssistantMessage,
@@ -21,7 +20,7 @@ import { runToolUse } from './tool-use'
 
 type ToolQueueEntry = {
   id: string
-  block: ToolUseBlock
+  block: ToolUseLikeBlockParam
   assistantMessage: AssistantMessage
   status: 'queued' | 'executing' | 'completed' | 'yielded'
   isConcurrencySafe: boolean
@@ -83,7 +82,7 @@ export class ToolUseQueue {
     this.shouldSkipPermissionCheck = options.shouldSkipPermissionCheck
   }
 
-  addTool(toolUse: ToolUseBlock, assistantMessage: AssistantMessage) {
+  addTool(toolUse: ToolUseLikeBlockParam, assistantMessage: AssistantMessage) {
     const resolvedToolName = resolveToolNameAlias(toolUse.name).resolvedName
     const toolDefinition = this.toolDefinitions.find(
       t => t.name === resolvedToolName,

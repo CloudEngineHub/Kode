@@ -1,5 +1,6 @@
-import { describe, expect, mock, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import {
+  __setLlmModuleLoaderForTests,
   formatBashLlmGateBlockMessage,
   runBashLlmSafetyGate,
 } from '#tools/tools/system/BashTool/llmSafetyGate'
@@ -186,24 +187,20 @@ describe('Bash LLM intent gate', () => {
 
   test('uses defaultGateQuery (mocked) when no query is provided', async () => {
     try {
-      mock.module('#core/ai/llm', () => {
-        return {
-          queryLLM: async () => {
-            return {
-              message: {
-                content: [
-                  { type: 'not_text', text: 'ignored' },
-                  {
-                    type: 'text',
-                    text: 'ALLOW',
-                  },
-                ],
+      __setLlmModuleLoaderForTests(async () => ({
+        queryLLM: async () => ({
+          message: {
+            content: [
+              { type: 'not_text', text: 'ignored' },
+              {
+                type: 'text',
+                text: 'ALLOW',
               },
-            }
+            ],
           },
-          API_ERROR_MESSAGE_PREFIX: 'API_ERROR: ',
-        }
-      })
+        }),
+        API_ERROR_MESSAGE_PREFIX: 'API_ERROR: ',
+      }))
 
       const result = await runBashLlmSafetyGate({
         command: TRIGGER_COMMAND,
@@ -220,25 +217,21 @@ describe('Bash LLM intent gate', () => {
       })
       expect(result.decision).toBe('allow')
     } finally {
-      mock.restore()
+      __setLlmModuleLoaderForTests(null)
     }
   })
 
   test('defaultGateQuery surfaces API error messages as gate errors', async () => {
     try {
-      mock.module('#core/ai/llm', () => {
-        return {
-          queryLLM: async () => {
-            return {
-              isApiErrorMessage: true,
-              message: {
-                content: [{ type: 'text', text: 'API_ERROR: Invalid API key' }],
-              },
-            }
+      __setLlmModuleLoaderForTests(async () => ({
+        queryLLM: async () => ({
+          isApiErrorMessage: true,
+          message: {
+            content: [{ type: 'text', text: 'API_ERROR: Invalid API key' }],
           },
-          API_ERROR_MESSAGE_PREFIX: 'API_ERROR: ',
-        }
-      })
+        }),
+        API_ERROR_MESSAGE_PREFIX: 'API_ERROR: ',
+      }))
 
       const result = await runBashLlmSafetyGate({
         command: TRIGGER_COMMAND,
@@ -258,7 +251,7 @@ describe('Bash LLM intent gate', () => {
         expect(result.error).toContain('LLM gate model error:')
       }
     } finally {
-      mock.restore()
+      __setLlmModuleLoaderForTests(null)
     }
   })
 

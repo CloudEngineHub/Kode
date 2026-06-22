@@ -29,10 +29,6 @@ import { openSync } from 'fs'
 import { cwd } from 'process'
 import { ReadStream } from 'tty'
 
-// Keep a reference so bundlers don't drop this side-effect import.
-import * as anthropicNodeShims from '@anthropic-ai/sdk/shims/node'
-Object.keys(anthropicNodeShims)
-
 // ink and REPL are imported lazily to avoid top-level awaits during module init
 import type { RenderOptions } from 'ink'
 

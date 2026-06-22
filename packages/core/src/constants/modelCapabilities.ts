@@ -102,6 +102,18 @@ export const MODEL_CAPABILITIES_REGISTRY: Record<string, ModelCapabilities> = {
       temperatureMode: 'fixed_one',
     },
   },
+
+  'deepseek-reasoner': {
+    ...CHAT_COMPLETIONS_CAPABILITIES,
+    parameters: {
+      ...CHAT_COMPLETIONS_CAPABILITIES.parameters,
+      temperatureMode: 'restricted',
+    },
+    toolCalling: {
+      ...CHAT_COMPLETIONS_CAPABILITIES.toolCalling,
+      mode: 'none',
+    },
+  },
 }
 
 // Intelligently infer capabilities for unregistered models
