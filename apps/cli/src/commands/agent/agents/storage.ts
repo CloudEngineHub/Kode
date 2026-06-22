@@ -160,15 +160,9 @@ export async function updateAgent(
 
   const location = agent.location as AgentLocation
   const primaryPath = getPrimaryAgentFilePath(location, agent.agentType)
-  const legacyPath = getLegacyAgentFilePath(location, agent.agentType)
-  const filePath = existsSync(primaryPath)
-    ? primaryPath
-    : existsSync(legacyPath)
-      ? legacyPath
-      : primaryPath
 
   ensureDirectoryExists(location)
-  writeFileSync(filePath, content, { encoding: 'utf-8', flag: 'w' })
+  writeFileSync(primaryPath, content, { encoding: 'utf-8', flag: 'w' })
 }
 
 export async function deleteAgent(agent: AgentConfig): Promise<void> {
@@ -182,8 +176,12 @@ export async function deleteAgent(agent: AgentConfig): Promise<void> {
 
   if (existsSync(primaryPath)) {
     unlinkSync(primaryPath)
+    return
   }
+
   if (existsSync(legacyPath)) {
-    unlinkSync(legacyPath)
+    throw new Error(
+      `Cannot delete legacy agent "${agent.agentType}" from .claude. Legacy agents are read-only; remove it manually or create a .kode override.`,
+    )
   }
 }
