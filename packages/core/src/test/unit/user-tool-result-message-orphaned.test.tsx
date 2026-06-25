@@ -179,6 +179,27 @@ describe('UserToolResultMessage orphaned fallback', () => {
     expect(out).not.toContain('Tool use not found')
   })
 
+  test('wraps matched rejected tool string renderers for Ink', async () => {
+    const param = makeToolResultParam('tool-use-rejected', REJECT_MESSAGE, true)
+    const message = makeToolResultMessage(param)
+    const toolUse = makeToolUseMessage('tool-use-rejected', 'FakeTool')
+    const tool = makeTool({
+      renderToolUseRejectedMessage() {
+        return 'custom reject message'
+      },
+    })
+
+    const out = await renderToolResult({
+      param,
+      message,
+      messages: [toolUse, message],
+      tools: [tool],
+    })
+
+    expect(out).toContain('custom reject message')
+    expect(out).not.toContain('No (tell')
+  })
+
   test('uses the matched tool renderer when the tool_use and tool exist', async () => {
     const param = makeToolResultParam('tool-use-1', 'assistant content')
     const message = makeToolResultMessage(param, { value: 'from data' })
@@ -200,6 +221,27 @@ describe('UserToolResultMessage orphaned fallback', () => {
 
     expect(rendered).toBe(true)
     expect(out).toContain('custom result: from data')
+    expect(out).not.toContain('Tool result unavailable')
+  })
+
+  test('wraps matched tool string result renderers for Ink', async () => {
+    const param = makeToolResultParam('tool-use-string', 'assistant content')
+    const message = makeToolResultMessage(param, { value: 'from data' })
+    const toolUse = makeToolUseMessage('tool-use-string', 'FakeTool')
+    const tool = makeTool({
+      renderToolResultMessage(output) {
+        return `string result: ${(output as any).value}`
+      },
+    })
+
+    const out = await renderToolResult({
+      param,
+      message,
+      messages: [toolUse, message],
+      tools: [tool],
+    })
+
+    expect(out).toContain('string result: from data')
     expect(out).not.toContain('Tool result unavailable')
   })
 

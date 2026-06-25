@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { Text } from 'ink'
 
 import type { Tool } from '#core/tooling/Tool'
 import { FallbackToolUseRejectedMessage } from '#ui-ink/components/FallbackToolUseRejectedMessage'
@@ -79,6 +80,24 @@ const inkPresentersByToolName: Record<string, InkToolPresenter> = {
   },
 }
 
+function normalizeInkToolRenderOutput(node: React.ReactNode): React.ReactNode {
+  if (typeof node === 'string' || typeof node === 'number') {
+    return <Text>{node}</Text>
+  }
+
+  if (Array.isArray(node)) {
+    return node.map((child, index) =>
+      typeof child === 'string' || typeof child === 'number' ? (
+        <Text key={`text-${index}`}>{child}</Text>
+      ) : (
+        child
+      ),
+    )
+  }
+
+  return node
+}
+
 export function renderInkToolResultMessage(
   tool: Tool,
   output: unknown,
@@ -86,9 +105,13 @@ export function renderInkToolResultMessage(
 ): React.ReactNode {
   const presenter = inkPresentersByToolName[tool.name]
   if (presenter?.renderToolResultMessage) {
-    return presenter.renderToolResultMessage(output, options)
+    return normalizeInkToolRenderOutput(
+      presenter.renderToolResultMessage(output, options),
+    )
   }
-  return tool.renderToolResultMessage?.(output, options) ?? null
+  return normalizeInkToolRenderOutput(
+    tool.renderToolResultMessage?.(output, options) ?? null,
+  )
 }
 
 export function renderInkToolUseRejectedMessage(
@@ -99,12 +122,16 @@ export function renderInkToolUseRejectedMessage(
   const presenter = inkPresentersByToolName[tool.name]
   if (presenter?.renderToolUseRejectedMessage) {
     const node = presenter.renderToolUseRejectedMessage(input, options)
-    return node ?? <FallbackToolUseRejectedMessage />
+    return normalizeInkToolRenderOutput(
+      node ?? <FallbackToolUseRejectedMessage />,
+    )
   }
 
   if (typeof tool.renderToolUseRejectedMessage === 'function') {
     const node = tool.renderToolUseRejectedMessage(input, options)
-    return node ?? <FallbackToolUseRejectedMessage />
+    return normalizeInkToolRenderOutput(
+      node ?? <FallbackToolUseRejectedMessage />,
+    )
   }
 
   return <FallbackToolUseRejectedMessage />
