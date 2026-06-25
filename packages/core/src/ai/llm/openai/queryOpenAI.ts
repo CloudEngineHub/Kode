@@ -52,6 +52,12 @@ const SONNET_COST_PER_MILLION_PROMPT_CACHE_READ_TOKENS = 0.3
 
 export { buildOpenAIChatCompletionCreateParams, isGPT5Model } from './params'
 
+function containsCommittedToolResult(
+  messages: OpenAI.ChatCompletionMessageParam[],
+): boolean {
+  return messages.some(message => message.role === 'tool')
+}
+
 export async function queryOpenAI(
   messages: (UserMessage | AssistantMessage)[],
   systemPrompt: string[],
@@ -144,6 +150,8 @@ export async function queryOpenAI(
   )
 
   const openaiMessages = convertAnthropicMessagesToOpenAIMessages(messages)
+  const hasCommittedToolResult = containsCommittedToolResult(openaiMessages)
+  const providerMaxAttempts = hasCommittedToolResult ? 1 : 10
 
   // 记录系统提示构建过程 (OpenAI path)
   logSystemPromptConstruction({
@@ -274,7 +282,7 @@ export async function queryOpenAI(
             modelProfile,
             adapterContext.request,
             0,
-            10,
+            providerMaxAttempts,
             signal,
             options?.requestHeadersProfile,
           )
@@ -328,7 +336,7 @@ export async function queryOpenAI(
           modelProfile,
           opts,
           0,
-          10,
+          providerMaxAttempts,
           signal,
           options?.requestHeadersProfile,
         )
@@ -355,7 +363,7 @@ export async function queryOpenAI(
           apiFormat: 'openai',
         }
       },
-      { signal },
+      { signal, maxRetries: hasCommittedToolResult ? 0 : undefined },
     )
   } catch (error) {
     logError(error)
