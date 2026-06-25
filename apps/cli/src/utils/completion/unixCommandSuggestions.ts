@@ -5,26 +5,10 @@ import {
 } from './commonUnixCommands'
 import type { UnifiedSuggestion } from './types'
 
-export function generateUnixCommandSuggestions(args: {
-  prefix: string
-  systemCommands: string[]
-  isLoadingCommands: boolean
-}): UnifiedSuggestion[] {
-  const { prefix, systemCommands, isLoadingCommands } = args
-  if (!prefix) return []
-
-  if (isLoadingCommands) {
-    return [
-      {
-        value: 'loading...',
-        displayValue: `⏳ Loading system commands...`,
-        type: 'file' as const,
-        score: 0,
-        metadata: { isLoading: true },
-      },
-    ]
-  }
-
+function buildCommandSuggestions(
+  prefix: string,
+  systemCommands: string[],
+): UnifiedSuggestion[] {
   const commonCommands = getCommonSystemCommands(systemCommands)
   const uniqueCommands = Array.from(new Set(commonCommands))
   const matches = matchCommands(uniqueCommands, prefix)
@@ -58,4 +42,30 @@ export function generateUnixCommandSuggestions(args: {
     score: item.score,
     metadata: { isUnixCommand: true },
   }))
+}
+
+function loadingSuggestion(): UnifiedSuggestion {
+  return {
+    value: 'loading...',
+    displayValue: 'Loading system commands...',
+    type: 'file' as const,
+    score: 0,
+    metadata: { isLoading: true },
+  }
+}
+
+export function generateUnixCommandSuggestions(args: {
+  prefix: string
+  systemCommands: string[]
+  isLoadingCommands: boolean
+}): UnifiedSuggestion[] {
+  const { prefix, systemCommands, isLoadingCommands } = args
+  if (!prefix) return []
+
+  const commandSuggestions = buildCommandSuggestions(prefix, systemCommands)
+  if (commandSuggestions.length > 0) return commandSuggestions
+
+  if (isLoadingCommands) return [loadingSuggestion()]
+
+  return []
 }
