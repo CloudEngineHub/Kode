@@ -5,6 +5,30 @@ import { MaxBudgetUsdExceededError } from '#core/errors/maxBudgetUsd'
 import { MaxTurnsExceededError } from '#core/errors/maxTurns'
 import { randomUUID } from 'crypto'
 
+const PRINT_MODE_ABORT_SIGNALS: NodeJS.Signals[] = [
+  'SIGINT',
+  'SIGTERM',
+  'SIGBREAK',
+]
+
+function installPrintModeSignalAbort(
+  abortController: AbortController,
+): () => void {
+  const abort = () => {
+    abortController.abort()
+  }
+
+  for (const signal of PRINT_MODE_ABORT_SIGNALS) {
+    process.prependListener(signal, abort)
+  }
+
+  return () => {
+    for (const signal of PRINT_MODE_ABORT_SIGNALS) {
+      process.removeListener(signal, abort)
+    }
+  }
+}
+
 type RunTurnFn = (args: {
   messages: Message[]
   canUseTool: CanUseToolFn
@@ -54,6 +78,9 @@ export async function runSingleTurnPrint(args: {
 }): Promise<void> {
   let lastAssistant: Message | null = null
   let queryError: unknown = null
+  const cleanupSignalAbort = installPrintModeSignalAbort(
+    args.toolUseContext.abortController,
+  )
 
   try {
     for await (const m of args.runTurn({
@@ -75,6 +102,8 @@ export async function runSingleTurnPrint(args: {
       args.toolUseContext.abortController.abort()
     } catch {}
     queryError = e
+  } finally {
+    cleanupSignalAbort()
   }
 
   const totalCostUsd = args.getTotalCostUsd()
@@ -219,3 +248,5 @@ export async function runSingleTurnPrint(args: {
   }
   process.exit((resultMsg as any)?.is_error ? 1 : 0)
 }
+
+export const __installPrintModeSignalAbortForTests = installPrintModeSignalAbort

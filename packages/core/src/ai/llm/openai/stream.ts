@@ -52,6 +52,12 @@ function messageReducer(
   return reduce(previous, choice.delta) as OpenAI.ChatCompletionMessage
 }
 
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new Error('Request was cancelled')
+  }
+}
+
 export async function handleMessageStream(
   stream: ChatCompletionStream,
   signal?: AbortSignal,
@@ -71,13 +77,16 @@ export async function handleMessageStream(
 
   let id, model, created, object, usage
   try {
+    throwIfAborted(signal)
     for await (const chunk of stream) {
-      if (signal?.aborted) {
+      try {
+        throwIfAborted(signal)
+      } catch (error) {
         debugLogger.flow('OPENAI_STREAM_ABORTED', {
           chunkCount,
           timestamp: Date.now(),
         })
-        throw new Error('Request was cancelled')
+        throw error
       }
 
       chunkCount++
@@ -147,6 +156,8 @@ export async function handleMessageStream(
         // Continue processing other chunks
       }
     }
+
+    throwIfAborted(signal)
 
     debugLogger.api('OPENAI_STREAM_COMPLETE', {
       totalChunks: String(chunkCount),
