@@ -96,4 +96,52 @@ describe('ask(): system prompt flags', () => {
     expect(captured?.systemPromptOverride).toBe('')
     expect(captured?.appendSystemPrompt).toBe('APPEND')
   })
+
+  test('returns text content when a thinking block comes first', async () => {
+    const out = await ask(
+      {
+        commands: [] as any,
+        tools: [] as any,
+        hasPermissionsToUseTool: (() => ({ result: true })) as any,
+        messageLogName: 'test',
+        prompt: 'what is 2+2?',
+        cwd: '/tmp',
+      },
+      {
+        setCwd: async () => {},
+        getCurrentOutputStyleDefinition: () => null,
+        buildSystemPromptForSession: async () => ['DEFAULT'],
+        getContext: async () => ({}),
+        getMaxThinkingTokens: async () => 0,
+        query: async function* () {
+          yield {
+            type: 'assistant',
+            uuid: 'assistant-uuid',
+            message: {
+              content: [
+                {
+                  type: 'thinking',
+                  thinking:
+                    'The user asked a simple arithmetic question; answer directly.',
+                  signature: '',
+                },
+                { type: 'text', text: '4' },
+              ],
+            },
+          } as any
+        },
+        createUserMessage: (prompt: string) =>
+          ({
+            type: 'user',
+            uuid: 'user-uuid',
+            message: { content: [{ type: 'text', text: prompt }] },
+          }) as any,
+        getMessagesPath: () => 'messages.json',
+        overwriteLog: () => {},
+        getTotalCost: () => 0,
+      },
+    )
+
+    expect(out.resultText).toBe('4')
+  })
 })
