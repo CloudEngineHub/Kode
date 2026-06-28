@@ -5,7 +5,7 @@
 ## 1. 范围与真相源
 
 - 真相源：`todo_tasks.json`（T01–T31 的任务拆解与状态）。
-- Claude Code 研究证据：`docs/research/claude-code/**`（指纹化清点、changelog 全量索引、文件映射、cli.js/wasm/SDK 类型分析、UX stringbook、差异矩阵等）。
+- Claude Code 研究证据：来自外部 Claude Code 包与本地临时证据快照；原始快照不提交到仓库，仓库只保留收口后的差异矩阵与设计结论。
 - 产品蓝图：`docs/product/11_post_human_blueprint.md`（最小摩擦默认路径 + 对齐/超越策略）。
 
 ## 2. 20+ 改进点（T12–T31）
