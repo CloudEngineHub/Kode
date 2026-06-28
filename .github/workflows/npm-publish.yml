@@ -102,22 +102,7 @@ jobs:
 
       - name: Prepare release asset
         id: asset
-        run: |
-          node - <<'NODE'
-          const fs = require('node:fs')
-          const path = require('node:path')
-          const platform = process.platform
-          const arch = process.arch
-          const ext = platform === 'win32' ? '.exe' : ''
-          const src = path.join('dist', 'bin', `${platform}-${arch}`, `kode${ext}`)
-          const dest = `kode-${platform}-${arch}${ext}`
-          fs.copyFileSync(src, dest)
-          if (platform !== 'win32') {
-            try { fs.chmodSync(dest, 0o755) } catch {}
-          }
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `asset=${dest}\n`)
-          console.log(`Prepared ${dest}`)
-          NODE
+        run: node scripts/prepare-release-asset.mjs
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
@@ -183,7 +168,7 @@ jobs:
       - name: Smoke test packaged install (no scripts)
         run: bash scripts/smoke-packaged-install.sh
 
-      - name: "Publish Kode binary platform packages (dist-tag: latest)"
+      - name: 'Publish Kode binary platform packages (dist-tag: latest)'
         run: |
           set -euo pipefail
           for dir in packages/kode-bin-*; do
@@ -193,7 +178,7 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: "Publish ripgrep platform packages (dist-tag: latest)"
+      - name: 'Publish ripgrep platform packages (dist-tag: latest)'
         run: |
           set -euo pipefail
           for dir in packages/kode-ripgrep-*; do
@@ -203,7 +188,7 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: "Publish npm (dist-tag: latest)"
+      - name: 'Publish npm (dist-tag: latest)'
         run: npm publish --access public --ignore-scripts
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
