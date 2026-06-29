@@ -63,5 +63,5 @@
 
 ## 5) 已知缺口与下一步
 
-- Linux seccomp（Unix socket blocking）：Kode 已支持 **可选启用**（当分发物包含 `apply-seccomp` + `unix-block.bpf` 时自动启用）；若资产缺失则会降级为 allowAllUnixSockets effective（见 `docs/research/claude-code/12_kode_vs_claude_full_parity_audit.md` 的 DP-015/DP-054）。
+- Linux seccomp（Unix socket blocking）：Kode 已支持 **可选启用**（当分发物包含 `apply-seccomp` + `unix-block.bpf` 时自动启用）；若资产缺失则会降级为 allowAllUnixSockets effective。该结论来自历史 Claude Code 对齐审计，原始证据快照不随仓库提交。
 - Windows：当前不提供等价系统 sandbox；建议走“Execution Kernel 外置”（WSL2/VM worker/MCP）路径实现一致的强隔离与可控网络。

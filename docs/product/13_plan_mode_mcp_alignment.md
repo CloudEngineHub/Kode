@@ -7,7 +7,7 @@ This document captures **Claude Code behaviors we observed** (with concrete code
 
 ## Evidence anchor (no-hallucination)
 
-- Claude Code artifact: `<CLAUDE_CODE_PKG_ROOT>/cli.js` (machine-specific path; example from this workstation: `/Users/baicai/Desktop/MyT/Kode/KodeOrch/other/1/claude-code/node_modules/@anthropic-ai/claude-code/cli.js`)
+- Claude Code artifact: `<CLAUDE_CODE_PKG_ROOT>/cli.js`
 - Package: `@anthropic-ai/claude-code@2.1.22`
 - Build time (string literal): `BUILD_TIME:"2026-01-28T06:33:34Z"` (cli.js contains the literal at line `408`)
 - sha256 (of `cli.js`): `da39b2c9fe9de2406e05b2f78451610416f2cba2ac624bc21d35d51a50c2d761`

@@ -184,6 +184,9 @@ apps/server/static/
 .tmp-kode-config/
 
 # Local per-project settings
+AGENTS.md
+.claude/
+.husky/pre-commit
 .kode/settings.local.json
 .claude/settings.local.json
 
@@ -203,5 +206,6 @@ source-maps/
 temp_code/
 
 # Local evidence snapshots (do not commit)
+docs/research/claude-code/
 docs/research/reference/changelog.lines.md
 docs/research/reference/package-inventory.md

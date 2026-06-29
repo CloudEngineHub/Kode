@@ -6,7 +6,7 @@ This document captures the **Claude Code behavior we observed** (with concrete c
 
 - Claude Code artifact: `<CLAUDE_CODE_PKG_ROOT>/cli.js` (`@anthropic-ai/claude-code@2.1.22`, `BUILD_TIME:"2026-01-28T06:33:34Z"`)
 - sha256: `da39b2c9fe9de2406e05b2f78451610416f2cba2ac624bc21d35d51a50c2d761`
-- Version/sha inventory: `docs/research/claude-code/01_inventory.md`
+- Version/sha inventory was captured during the local Claude Code evidence pass; raw evidence snapshots are not committed.
 
 ## 0) Problem framing (user mental model)
 

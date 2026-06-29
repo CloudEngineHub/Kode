@@ -84,13 +84,7 @@ jobs:
           if-no-files-found: error
 
       - name: Set package.json version (dev)
-        run: |
-          node - <<'NODE'
-          const fs = require('node:fs')
-          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'))
-          pkg.version = process.env.DEV_VERSION
-          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n')
-          NODE
+        run: node scripts/set-root-package-version.mjs
         env:
           DEV_VERSION: ${{ needs.compute-version.outputs.dev_version }}
 
@@ -105,22 +99,7 @@ jobs:
 
       - name: Prepare release asset
         id: asset
-        run: |
-          node - <<'NODE'
-          const fs = require('node:fs')
-          const path = require('node:path')
-          const platform = process.platform
-          const arch = process.arch
-          const ext = platform === 'win32' ? '.exe' : ''
-          const src = path.join('dist', 'bin', `${platform}-${arch}`, `kode${ext}`)
-          const dest = `kode-${platform}-${arch}${ext}`
-          fs.copyFileSync(src, dest)
-          if (platform !== 'win32') {
-            try { fs.chmodSync(dest, 0o755) } catch {}
-          }
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `asset=${dest}\n`)
-          console.log(`Prepared ${dest}`)
-          NODE
+        run: node scripts/prepare-release-asset.mjs
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
