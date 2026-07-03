@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { __installPrintModeSignalAbortForTests } from '#host-cli/entrypoints/cli/print/runSingleTurn'
+import { isPrintModeSignalAbortHandlingActive } from '#host-cli/entrypoints/cli/print/signalState'
 
 describe('print mode signal cancellation', () => {
   test('SIGINT aborts the active print turn controller', () => {
@@ -26,5 +27,19 @@ describe('print mode signal cancellation', () => {
     process.emit('SIGINT')
 
     expect(controller.signal.aborted).toBe(false)
+  })
+
+  test('tracks active print signal handling for global handler deferral', () => {
+    const controller = new AbortController()
+    expect(isPrintModeSignalAbortHandlingActive()).toBe(false)
+
+    const cleanup = __installPrintModeSignalAbortForTests(controller)
+    try {
+      expect(isPrintModeSignalAbortHandlingActive()).toBe(true)
+    } finally {
+      cleanup()
+    }
+
+    expect(isPrintModeSignalAbortHandlingActive()).toBe(false)
   })
 })

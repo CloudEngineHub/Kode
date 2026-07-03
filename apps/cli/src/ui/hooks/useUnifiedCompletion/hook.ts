@@ -25,6 +25,34 @@ export function __getCompletionContextForTests(args: {
   return getCompletionContext(args)
 }
 
+export function __computeCompletionRefreshForTests(args: {
+  isEnabled: boolean
+  state: CompletionState
+  suggestions: UnifiedSuggestion[]
+}):
+  | { action: 'none' }
+  | { action: 'reset' }
+  | {
+      action: 'refresh'
+      suggestions: UnifiedSuggestion[]
+      selectedIndex: number
+    } {
+  if (!args.isEnabled || !args.state.isActive || !args.state.context) {
+    return { action: 'none' }
+  }
+  if (args.state.preview?.isActive) return { action: 'none' }
+  if (args.suggestions.length === 0) return { action: 'reset' }
+
+  return {
+    action: 'refresh',
+    suggestions: args.suggestions,
+    selectedIndex: Math.min(
+      args.state.selectedIndex,
+      args.suggestions.length - 1,
+    ),
+  }
+}
+
 export function useUnifiedCompletion({
   input,
   cursorOffset,
@@ -109,6 +137,38 @@ export function useUnifiedCompletion({
       resetCompletion()
     }
   }, [isEnabled, resetCompletion, state.isActive])
+
+  useEffect(() => {
+    if (!state.context) return
+
+    const nextSuggestions = generateSuggestions(state.context)
+    const result = __computeCompletionRefreshForTests({
+      isEnabled,
+      state,
+      suggestions: nextSuggestions,
+    })
+
+    if (result.action === 'reset') {
+      resetCompletion()
+      return
+    }
+
+    if (result.action === 'refresh') {
+      setState(prev => ({
+        ...prev,
+        suggestions: result.suggestions,
+        selectedIndex: result.selectedIndex,
+      }))
+    }
+  }, [
+    generateSuggestions,
+    isEnabled,
+    resetCompletion,
+    state.context,
+    state.isActive,
+    state.selectedIndex,
+    state.preview?.isActive,
+  ])
 
   useUnifiedCompletionTabKey({
     input,

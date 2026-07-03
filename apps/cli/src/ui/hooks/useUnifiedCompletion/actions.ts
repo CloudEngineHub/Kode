@@ -1,8 +1,9 @@
 import { useCallback } from 'react'
 
-import type {
-  CompletionContext,
-  UnifiedSuggestion,
+import {
+  isLoadingSuggestion,
+  type CompletionContext,
+  type UnifiedSuggestion,
 } from '#cli-utils/completion/types'
 
 export function useCompletionActions(args: {
@@ -18,6 +19,8 @@ export function useCompletionActions(args: {
 } {
   const completeWith = useCallback(
     (suggestion: UnifiedSuggestion, context: CompletionContext) => {
+      if (isLoadingSuggestion(suggestion)) return
+
       let completion: string
 
       if (context.type === 'command') {

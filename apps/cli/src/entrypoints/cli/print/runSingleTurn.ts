@@ -4,6 +4,7 @@ import type { QueryToolUseContext } from '#core/engine'
 import { MaxBudgetUsdExceededError } from '#core/errors/maxBudgetUsd'
 import { MaxTurnsExceededError } from '#core/errors/maxTurns'
 import { randomUUID } from 'crypto'
+import { beginPrintModeSignalAbortHandling } from './signalState'
 
 const PRINT_MODE_ABORT_SIGNALS: NodeJS.Signals[] = [
   'SIGINT',
@@ -14,6 +15,7 @@ const PRINT_MODE_ABORT_SIGNALS: NodeJS.Signals[] = [
 function installPrintModeSignalAbort(
   abortController: AbortController,
 ): () => void {
+  const endPrintModeSignalAbortHandling = beginPrintModeSignalAbortHandling()
   const abort = () => {
     abortController.abort()
   }
@@ -26,6 +28,7 @@ function installPrintModeSignalAbort(
     for (const signal of PRINT_MODE_ABORT_SIGNALS) {
       process.removeListener(signal, abort)
     }
+    endPrintModeSignalAbortHandling()
   }
 }
 
