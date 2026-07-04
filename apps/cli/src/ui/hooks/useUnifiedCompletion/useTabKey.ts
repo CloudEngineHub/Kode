@@ -1,9 +1,10 @@
 import { useKeypress, type Key } from '#ui-ink/hooks/useKeypress'
 import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 
-import type {
-  CompletionContext,
-  UnifiedSuggestion,
+import {
+  isLoadingSuggestion,
+  type CompletionContext,
+  type UnifiedSuggestion,
 } from '#cli-utils/completion/types'
 import type { CompletionState } from './types'
 
@@ -43,6 +44,7 @@ export function useUnifiedCompletionTabKey(args: {
         const nextIndex =
           (args.state.selectedIndex + 1) % args.state.suggestions.length
         const nextSuggestion = args.state.suggestions[nextIndex]
+        if (isLoadingSuggestion(nextSuggestion)) return true
 
         if (args.state.context) {
           const currentWord = args.input.slice(args.state.context.startPos)
@@ -95,6 +97,10 @@ export function useUnifiedCompletionTabKey(args: {
         return false
       }
       if (currentSuggestions.length === 1) {
+        if (isLoadingSuggestion(currentSuggestions[0])) {
+          args.activateCompletion(currentSuggestions, context)
+          return true
+        }
         args.completeWith(currentSuggestions[0], context)
         return true
       }
@@ -102,6 +108,7 @@ export function useUnifiedCompletionTabKey(args: {
       args.activateCompletion(currentSuggestions, context)
 
       const firstSuggestion = currentSuggestions[0]
+      if (isLoadingSuggestion(firstSuggestion)) return true
       const currentWord = args.input.slice(context.startPos)
       const wordEnd = currentWord.search(/\s/)
       const actualEndPos =

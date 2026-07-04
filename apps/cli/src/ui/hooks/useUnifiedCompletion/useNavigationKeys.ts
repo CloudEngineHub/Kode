@@ -1,9 +1,10 @@
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 
-import type {
-  CompletionContext,
-  UnifiedSuggestion,
+import {
+  isLoadingSuggestion,
+  type CompletionContext,
+  type UnifiedSuggestion,
 } from '#cli-utils/completion/types'
 import type { CompletionState } from './types'
 
@@ -63,6 +64,10 @@ export function useUnifiedCompletionNavigationKeys(args: {
         args.state.context
       ) {
         const context = args.state.context
+        const selectedSuggestion =
+          args.state.suggestions[args.state.selectedIndex]
+        if (isLoadingSuggestion(selectedSuggestion)) return true
+
         const isFileCompletion = context.type === 'file'
 
         if (isFileCompletion) {
@@ -76,8 +81,6 @@ export function useUnifiedCompletionNavigationKeys(args: {
           return false
         } else {
           // Command/agent/other completion: fill the selected suggestion
-          const selectedSuggestion =
-            args.state.suggestions[args.state.selectedIndex]
           args.completeWith(selectedSuggestion, context)
           args.resetCompletion()
           return true
@@ -94,6 +97,10 @@ export function useUnifiedCompletionNavigationKeys(args: {
         }
 
         const suggestion = args.state.suggestions[newIndex]
+        if (isLoadingSuggestion(suggestion)) {
+          args.updateState({ selectedIndex: newIndex })
+          return
+        }
         const previewValue = getPreviewText(suggestion, args.state.context)
 
         if (args.state.preview?.isActive && args.state.context) {
@@ -151,6 +158,8 @@ export function useUnifiedCompletionNavigationKeys(args: {
       if (key.rightArrow) {
         const selectedSuggestion =
           args.state.suggestions[args.state.selectedIndex]
+        if (isLoadingSuggestion(selectedSuggestion)) return true
+
         const isDirectory = selectedSuggestion.value.endsWith('/')
 
         if (!args.state.context) return false

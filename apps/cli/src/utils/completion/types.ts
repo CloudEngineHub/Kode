@@ -17,3 +17,9 @@ export interface CompletionContext {
   endPos: number
   trigger?: '@' | '/' | null
 }
+
+export function isLoadingSuggestion(
+  suggestion: UnifiedSuggestion | undefined,
+): boolean {
+  return Boolean(suggestion?.metadata?.isLoading)
+}

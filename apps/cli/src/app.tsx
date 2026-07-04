@@ -23,6 +23,7 @@ import {
   writeToStderr,
   writeToStdout,
 } from '#cli-utils/stdio'
+import { isPrintModeSignalAbortHandlingActive } from '#host-cli/entrypoints/cli/print/signalState'
 
 import { cursorShow } from 'ansi-escapes'
 import { openSync } from 'fs'
@@ -204,10 +205,15 @@ async function gracefulExit(code = 0) {
   process.exit(code)
 }
 
-process.on('SIGINT', () => void gracefulExit(0))
-process.on('SIGTERM', () => void gracefulExit(0))
+function handleProcessSignalExit(code = 0): void {
+  if (isPrintModeSignalAbortHandlingActive()) return
+  void gracefulExit(code)
+}
+
+process.on('SIGINT', () => handleProcessSignalExit(0))
+process.on('SIGTERM', () => handleProcessSignalExit(0))
 // Windows CTRL+BREAK
-process.on('SIGBREAK', () => void gracefulExit(0))
+process.on('SIGBREAK', () => handleProcessSignalExit(0))
 process.on('unhandledRejection', err => {
   logError(err)
   void gracefulExit(1)
