@@ -208,15 +208,14 @@ async function* messagePipelineCore(
         if (typeof content === 'string') {
           userPromptText = content
         } else if (Array.isArray(content)) {
-          const hasToolResult = content.some(
-            (b: any) => b && typeof b === 'object' && b.type === 'tool_result',
+          const blocks = content as Array<{ type?: unknown; text?: unknown }>
+          const hasToolResult = blocks.some(
+            b => b && typeof b === 'object' && b.type === 'tool_result',
           )
           if (!hasToolResult) {
-            userPromptText = content
-              .filter(
-                (b: any) => b && typeof b === 'object' && b.type === 'text',
-              )
-              .map((b: any) => String(b.text ?? ''))
+            userPromptText = blocks
+              .filter(b => b && typeof b === 'object' && b.type === 'text')
+              .map(b => String(b.text ?? ''))
               .join('')
           }
         }

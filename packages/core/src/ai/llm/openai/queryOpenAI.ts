@@ -185,7 +185,6 @@ export async function queryOpenAI(
   type AdapterExecutionContext = {
     adapter: ReturnType<typeof ModelAdapterFactory.createAdapter>
     request: any
-    shouldUseResponses: boolean
   }
 
   type QueryResult = {
@@ -254,7 +253,6 @@ export async function queryOpenAI(
         adapterContext = {
           adapter,
           request: adapter.createRequest(unifiedParams),
-          shouldUseResponses: true,
         }
       }
     }
@@ -269,60 +267,29 @@ export async function queryOpenAI(
         start = Date.now()
 
         if (adapterContext) {
-          if (adapterContext.shouldUseResponses) {
-            const { callGPT5ResponsesAPI } = await import('#core/ai/openai')
+          const { callGPT5ResponsesAPI } = await import('#core/ai/openai')
 
-            const response = await callGPT5ResponsesAPI(
-              modelProfile,
-              adapterContext.request,
-              signal,
-              options?.requestHeadersProfile,
-            )
-
-            const unifiedResponse =
-              await adapterContext.adapter.parseResponse(response)
-
-            const assistantMessage = buildAssistantMessageFromUnifiedResponse(
-              unifiedResponse,
-              start,
-            )
-            assistantMessage.message.usage = normalizeUsage(
-              assistantMessage.message.usage,
-            )
-
-            return {
-              assistantMessage,
-              rawResponse: unifiedResponse,
-              apiFormat: 'openai',
-            }
-          }
-
-          const s = await getCompletionWithProfile(
+          const response = await callGPT5ResponsesAPI(
             modelProfile,
             adapterContext.request,
-            0,
-            providerMaxAttempts,
             signal,
             options?.requestHeadersProfile,
           )
-          let finalResponse
-          if (config.stream) {
-            finalResponse = await handleMessageStream(
-              s as ChatCompletionStream,
-              signal,
-            )
-          } else {
-            finalResponse = s
-          }
 
-          const assistantMsg = createAssistantMessageFromOpenAIResponse({
-            response: finalResponse,
-            tools,
+          const unifiedResponse =
+            await adapterContext.adapter.parseResponse(response)
+
+          const assistantMessage = buildAssistantMessageFromUnifiedResponse(
+            unifiedResponse,
             start,
-          })
+          )
+          assistantMessage.message.usage = normalizeUsage(
+            assistantMessage.message.usage,
+          )
+
           return {
-            assistantMessage: assistantMsg,
-            rawResponse: finalResponse,
+            assistantMessage,
+            rawResponse: unifiedResponse,
             apiFormat: 'openai',
           }
         }

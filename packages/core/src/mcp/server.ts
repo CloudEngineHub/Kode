@@ -29,7 +29,6 @@ const state: {
 }
 
 const MCP_COMMANDS: unknown[] = []
-const MCP_TOOLS: Tool[] = [...getAllTools()]
 
 function getMcpServerName(): string {
   const raw =
@@ -43,6 +42,7 @@ function getMcpServerName(): string {
 
 export async function startMCPServer(cwd: string): Promise<void> {
   await setCwd(cwd)
+  const MCP_TOOLS: Tool[] = [...getAllTools()]
   await Promise.all(MCP_TOOLS.map(tool => resolveToolDescription(tool)))
   const server = new Server(
     {
