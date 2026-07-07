@@ -34,7 +34,11 @@ import {
   logSystemPromptConstruction,
   logErrorWithDiagnosis,
 } from '#core/utils/debugLogger'
-import { getModelManager } from '#core/utils/model'
+import {
+  getModelManager,
+  type ModelParam,
+  type ResolvedModelInfo,
+} from '#core/utils/model'
 import { getAssistantMessageFromError } from '#core/ai/llm/errors'
 import { withRetry } from '#core/ai/llm/retry'
 import {
@@ -136,6 +140,13 @@ interface StreamResponse extends APIMessage {
   ttftMs?: number
 }
 
+type QueryLLMTestModelManager = {
+  resolveModelWithInfo(modelParam: ModelParam): ResolvedModelInfo
+  resolveModel(modelParam: ModelParam): ModelProfile | null
+}
+
+type QueryLLMWithPromptCachingFn = typeof queryLLMWithPromptCaching
+
 export {
   API_ERROR_MESSAGE_PREFIX,
   PROMPT_TOO_LONG_ERROR_MESSAGE,
@@ -165,8 +176,8 @@ export async function queryLLM(
      */
     stopSequences?: string[]
     toolUseContext?: ToolUseContext
-    __testModelManager?: any
-    __testQueryLLMWithPromptCaching?: any
+    __testModelManager?: QueryLLMTestModelManager
+    __testQueryLLMWithPromptCaching?: QueryLLMWithPromptCachingFn
   },
 ): Promise<AssistantMessage> {
   const modelManager = options.__testModelManager ?? getModelManager()

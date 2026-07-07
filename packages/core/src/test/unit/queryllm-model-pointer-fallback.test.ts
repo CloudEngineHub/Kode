@@ -20,6 +20,10 @@ describe('queryLLM model pointer fallback (compatibility)', () => {
           modelName: fallbackModelName,
           provider: 'openai',
           name: 'Fallback',
+          apiKey: 'test',
+          maxTokens: 1,
+          contextLength: 1,
+          createdAt: 0,
           isActive: true,
         }
       },
