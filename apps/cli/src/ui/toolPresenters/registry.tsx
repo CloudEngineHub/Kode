@@ -80,7 +80,7 @@ const inkPresentersByToolName: Record<string, InkToolPresenter> = {
   },
 }
 
-function normalizeInkToolRenderOutput(node: React.ReactNode): React.ReactNode {
+function normalizeInkToolRenderOutput(node: unknown): React.ReactNode {
   if (typeof node === 'string' || typeof node === 'number') {
     return <Text>{node}</Text>
   }
@@ -95,7 +95,7 @@ function normalizeInkToolRenderOutput(node: React.ReactNode): React.ReactNode {
     )
   }
 
-  return node
+  return node as React.ReactNode
 }
 
 export function renderInkToolResultMessage(

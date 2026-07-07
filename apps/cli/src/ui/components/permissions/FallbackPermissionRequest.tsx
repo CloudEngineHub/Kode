@@ -70,7 +70,7 @@ export function FallbackPermissionRequest({
               {toolUseConfirm.tool.renderToolUseMessage(
                 toolUseConfirm.input as never,
                 { verbose },
-              )}
+              ) as React.ReactNode}
               )
               {originalUserFacingName.endsWith(' (MCP)') ? (
                 <Text dimColor> (MCP)</Text>

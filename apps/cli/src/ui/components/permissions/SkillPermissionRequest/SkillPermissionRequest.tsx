@@ -51,7 +51,7 @@ export function SkillPermissionRequest({
               {toolUseConfirm.tool.userFacingName?.() || 'Skill'}(
               {toolUseConfirm.tool.renderToolUseMessage(toolUseConfirm.input, {
                 verbose,
-              })}
+              }) as React.ReactNode}
               )
             </Text>
             <Text dimColor wrap="truncate-end">

@@ -12,10 +12,10 @@ import type { CommandSource } from '#protocol/commandSource'
  * Tool-facing render output type.
  *
  * Core must stay UI-framework-agnostic, so we intentionally avoid importing
- * React/Ink types here. Hosts (Ink/Web/etc.) may treat this as a renderable
- * node and narrow as needed.
+ * React/Ink types here. Hosts (Ink/Web/etc.) must narrow this to their own
+ * renderable type at the rendering boundary.
  */
-export type ToolRenderOutput = any
+export type ToolRenderOutput = unknown
 
 export type SetToolJSXFn<TRenderable = ToolRenderOutput> = (
   jsx: {

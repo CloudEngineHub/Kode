@@ -271,7 +271,7 @@ function FilesystemPermissionRequestImpl({
               {toolUseConfirm.tool.renderToolUseMessage(
                 toolUseConfirm.input as never,
                 { verbose },
-              )}
+              ) as React.ReactNode}
               )
             </Text>
             <PermissionRequestDetails toolUseConfirm={toolUseConfirm} />
