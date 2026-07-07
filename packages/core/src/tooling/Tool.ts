@@ -190,7 +190,7 @@ export interface ValidationResult {
   meta?: any
 }
 
-export interface Tool<
+export interface ToolMetadata<
   TInput extends z.ZodTypeAny = z.ZodTypeAny,
   TOutput = any,
 > {
@@ -222,6 +222,13 @@ export interface Tool<
     context?: ToolUseContext,
   ) => Promise<ValidationResult>
   renderResultForAssistant: (output: TOutput) => string | any[]
+}
+
+export interface ToolPresenter<
+  TInput extends z.ZodTypeAny = z.ZodTypeAny,
+  TOutput = any,
+> {
+  name: string
   renderToolUseMessage: (
     input: z.infer<TInput>,
     options: { verbose: boolean },
@@ -231,6 +238,13 @@ export interface Tool<
     output: TOutput,
     options: { verbose: boolean },
   ) => ToolRenderOutput
+}
+
+export interface ToolRunner<
+  TInput extends z.ZodTypeAny = z.ZodTypeAny,
+  TOutput = any,
+> {
+  name: string
   call: (
     input: z.infer<TInput>,
     context: ToolUseContext,
@@ -254,6 +268,13 @@ export interface Tool<
     unknown
   >
 }
+
+export interface Tool<
+  TInput extends z.ZodTypeAny = z.ZodTypeAny,
+  TOutput = any,
+> extends ToolMetadata<TInput, TOutput>,
+    ToolPresenter<TInput, TOutput>,
+    ToolRunner<TInput, TOutput> {}
 
 /**
  * Resolve tool description asynchronously.

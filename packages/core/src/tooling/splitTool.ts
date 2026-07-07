@@ -1,51 +1,24 @@
 import type { z } from 'zod'
 
-import type { Tool } from './Tool'
+import type {
+  Tool,
+  ToolMetadata,
+  ToolPresenter as CoreToolPresenter,
+  ToolRunner as CoreToolRunner,
+} from './Tool'
 
 export type ToolSpec<
   TInput extends z.ZodTypeAny = z.ZodTypeAny,
   TOutput = any,
-> = Pick<
-  Tool<TInput, TOutput>,
-  | 'name'
-  | 'description'
-  | 'inputSchema'
-  | 'inputJSONSchema'
-  | 'prompt'
-  | 'userFacingName'
-  | 'cachedDescription'
-  | 'isEnabled'
-  | 'isReadOnly'
-  | 'isConcurrencySafe'
-  | 'needsPermissions'
-  | 'requiresUserInteraction'
-  | 'validateInput'
-  | 'renderResultForAssistant'
->
-
-export type ToolRunner<
-  TInput extends z.ZodTypeAny = z.ZodTypeAny,
-  TOutput = any,
-> = Pick<Tool<TInput, TOutput>, 'name' | 'call'>
-
-export type ToolPresenter<
-  TInput extends z.ZodTypeAny = z.ZodTypeAny,
-  TOutput = any,
-> = Pick<
-  Tool<TInput, TOutput>,
-  | 'name'
-  | 'renderToolUseMessage'
-  | 'renderToolUseRejectedMessage'
-  | 'renderToolResultMessage'
->
+> = ToolMetadata<TInput, TOutput>
 
 export type SplitTool<
   TInput extends z.ZodTypeAny = z.ZodTypeAny,
   TOutput = any,
 > = {
   spec: ToolSpec<TInput, TOutput>
-  runner: ToolRunner<TInput, TOutput>
-  presenter: ToolPresenter<TInput, TOutput>
+  runner: CoreToolRunner<TInput, TOutput>
+  presenter: CoreToolPresenter<TInput, TOutput>
 }
 
 export function splitLegacyTool<
@@ -73,12 +46,12 @@ export function splitLegacyTool<
     renderResultForAssistant: tool.renderResultForAssistant,
   }
 
-  const runner: ToolRunner<TInput, TOutput> = {
+  const runner: CoreToolRunner<TInput, TOutput> = {
     name: tool.name,
     call: (input, context) => tool.call(input, context),
   }
 
-  const presenter: ToolPresenter<TInput, TOutput> = {
+  const presenter: CoreToolPresenter<TInput, TOutput> = {
     name: tool.name,
     renderToolUseMessage: (input, options) =>
       tool.renderToolUseMessage(input, options),
