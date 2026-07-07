@@ -675,3 +675,7 @@ Apache 2.0 License - see [LICENSE](LICENSE) for details.
 - 📚 [Documentation](docs/)
 - 🐛 [Report Issues](https://github.com/shareAI-lab/kode/issues)
 - 💬 [Discussions](https://github.com/shareAI-lab/kode/discussions)
+
+## Maintenance Notice
+
+From July through December 2026, Kode will undergo a major maintenance and refactoring phase. The existing issue backlog has been archived so the project can reset around the upcoming architecture work. Please follow future releases and announcements for the refreshed roadmap. Stay tuned for the next phase.

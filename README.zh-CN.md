@@ -583,3 +583,7 @@ Apache 2.0 许可证 - 详见 [LICENSE](LICENSE)。
 - 📚 [文档](docs/)
 - 🐛 [报告问题](https://github.com/shareAI-lab/kode/issues)
 - 💬 [讨论](https://github.com/shareAI-lab/kode/discussions)
+
+## 维护公告
+
+Kode 将在 2026 年 7 月至 12 月进入大规模维护与重构阶段。现有 issue 已统一归档关闭，以便项目重新梳理问题队列并集中推进后续架构工作。请关注后续版本与公告，敬请期待。
