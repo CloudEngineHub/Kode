@@ -49,6 +49,47 @@ import { getModelInputTokenCostUSD, getModelOutputTokenCostUSD } from './cost'
 export { getAnthropicClient, resetAnthropicClient }
 export { assistantMessageToMessageParam, userMessageToMessageParam }
 
+type AnthropicMessageCreateParams = Anthropic.Beta.Messages.MessageCreateParams & {
+  extra_headers?: Record<string, string>
+}
+
+function traceAnthropicQuery(args: {
+  streamMode: boolean
+  modelProfile: ModelProfile | null | undefined
+  model: string
+  provider: string
+  params: AnthropicMessageCreateParams
+  temperature: number | undefined
+  toolsCount: number
+  thinkingBudgetTokens: number
+}): void {
+  const payload = {
+    endpoint: args.modelProfile?.baseURL || 'DEFAULT_ANTHROPIC',
+    model: args.model,
+    provider: args.provider,
+    apiKeyConfigured: !!args.modelProfile?.apiKey,
+    apiKeyPrefix: args.modelProfile?.apiKey
+      ? args.modelProfile.apiKey.substring(0, 8)
+      : null,
+    maxTokens: args.params.max_tokens,
+    temperature: args.temperature ?? MAIN_QUERY_TEMPERATURE,
+    messageCount: args.params.messages?.length || 0,
+    streamMode: args.streamMode,
+    toolsCount: args.toolsCount,
+    thinkingTokens: args.thinkingBudgetTokens,
+    timestamp: new Date().toISOString(),
+    modelProfileId: args.modelProfile?.modelName,
+    modelProfileName: args.modelProfile?.name,
+  }
+
+  debugLogger.api(
+    args.streamMode
+      ? 'ANTHROPIC_API_CALL_START_STREAMING'
+      : 'ANTHROPIC_API_CALL_START_NON_STREAMING',
+    args.streamMode ? { ...payload, params: args.params } : payload,
+  )
+}
+
 /**
  * Environment variables for different client types:
  *
@@ -240,9 +281,7 @@ export async function queryAnthropicNative(
             ? Math.min(maxThinkingTokens, Math.max(0, maxTokens - 1))
             : 0
 
-        const params: Anthropic.Beta.Messages.MessageCreateParams & {
-          extra_headers?: Record<string, string>
-        } = {
+        const params: AnthropicMessageCreateParams = {
           model,
           max_tokens: maxTokens,
           messages: processedMessages,
@@ -268,25 +307,15 @@ export async function queryAnthropicNative(
         }
 
         if (config.stream) {
-          // 🔥 REAL-TIME API CALL DEBUG - 使用全局日志系统 (Anthropic Streaming)
-          debugLogger.api('ANTHROPIC_API_CALL_START_STREAMING', {
-            endpoint: modelProfile?.baseURL || 'DEFAULT_ANTHROPIC',
+          traceAnthropicQuery({
+            streamMode: true,
+            modelProfile,
             model,
             provider,
-            apiKeyConfigured: !!modelProfile?.apiKey,
-            apiKeyPrefix: modelProfile?.apiKey
-              ? modelProfile.apiKey.substring(0, 8)
-              : null,
-            maxTokens: params.max_tokens,
-            temperature: options?.temperature ?? MAIN_QUERY_TEMPERATURE,
-            params: params,
-            messageCount: params.messages?.length || 0,
-            streamMode: true,
+            params,
+            temperature: options?.temperature,
             toolsCount: toolSchemas.length,
-            thinkingTokens: thinkingBudgetTokens,
-            timestamp: new Date().toISOString(),
-            modelProfileId: modelProfile?.modelName,
-            modelProfileName: modelProfile?.name,
+            thinkingBudgetTokens,
           })
 
           return await createAnthropicStreamingMessage(
@@ -301,24 +330,15 @@ export async function queryAnthropicNative(
             },
           )
         } else {
-          // 🔥 REAL-TIME API CALL DEBUG - 使用全局日志系统 (Anthropic Non-Streaming)
-          debugLogger.api('ANTHROPIC_API_CALL_START_NON_STREAMING', {
-            endpoint: modelProfile?.baseURL || 'DEFAULT_ANTHROPIC',
+          traceAnthropicQuery({
+            streamMode: false,
+            modelProfile,
             model,
             provider,
-            apiKeyConfigured: !!modelProfile?.apiKey,
-            apiKeyPrefix: modelProfile?.apiKey
-              ? modelProfile.apiKey.substring(0, 8)
-              : null,
-            maxTokens: params.max_tokens,
-            temperature: options?.temperature ?? MAIN_QUERY_TEMPERATURE,
-            messageCount: params.messages?.length || 0,
-            streamMode: false,
+            params,
+            temperature: options?.temperature,
             toolsCount: toolSchemas.length,
-            thinkingTokens: thinkingBudgetTokens,
-            timestamp: new Date().toISOString(),
-            modelProfileId: modelProfile?.modelName,
-            modelProfileName: modelProfile?.name,
+            thinkingBudgetTokens,
           })
 
           return await anthropic.beta.messages.create(params, {
