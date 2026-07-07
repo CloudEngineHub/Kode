@@ -7,7 +7,7 @@ import type { TextBlockParam } from '@anthropic-ai/sdk/resources/index.mjs'
 import type { Tool, ToolUseContext } from '#core/tooling/Tool'
 import type { AssistantMessage, UserMessage } from '#core/query'
 import type { ModelProfile } from '#core/utils/config'
-import { getGlobalConfig } from '#core/utils/config'
+import { getGlobalConfig, MODEL_COSTS } from '#core/utils/config'
 import { getModelManager } from '#core/utils/model'
 import {
   debug as debugLogger,
@@ -44,11 +44,6 @@ import { buildOpenAIChatCompletionCreateParams, isGPT5Model } from './params'
 import { handleMessageStream, isOpenAIStreamDegradedResponse } from './stream'
 import { buildAssistantMessageFromUnifiedResponse } from './unifiedResponse'
 import { getMaxTokensFromProfile, normalizeUsage } from './usage'
-
-const SONNET_COST_PER_MILLION_INPUT_TOKENS = 3
-const SONNET_COST_PER_MILLION_OUTPUT_TOKENS = 15
-const SONNET_COST_PER_MILLION_PROMPT_CACHE_WRITE_TOKENS = 3.75
-const SONNET_COST_PER_MILLION_PROMPT_CACHE_READ_TOKENS = 0.3
 
 export { buildOpenAIChatCompletionCreateParams, isGPT5Model } from './params'
 
@@ -367,13 +362,14 @@ export async function queryOpenAI(
   const cacheCreationInputTokens =
     normalizedUsage.cache_creation_input_tokens ?? 0
 
+  const sonnetCosts = MODEL_COSTS.sonnet
   const costUSD =
-    (inputTokens / 1_000_000) * SONNET_COST_PER_MILLION_INPUT_TOKENS +
-    (outputTokens / 1_000_000) * SONNET_COST_PER_MILLION_OUTPUT_TOKENS +
+    (inputTokens / 1_000_000) * sonnetCosts.inputPerMillionTokens +
+    (outputTokens / 1_000_000) * sonnetCosts.outputPerMillionTokens +
     (cacheReadInputTokens / 1_000_000) *
-      SONNET_COST_PER_MILLION_PROMPT_CACHE_READ_TOKENS +
+      sonnetCosts.promptCacheReadPerMillionTokens +
     (cacheCreationInputTokens / 1_000_000) *
-      SONNET_COST_PER_MILLION_PROMPT_CACHE_WRITE_TOKENS
+      sonnetCosts.promptCacheWritePerMillionTokens
 
   addToTotalCost(costUSD, durationMsIncludingRetries)
 

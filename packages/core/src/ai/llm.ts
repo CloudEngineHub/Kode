@@ -145,12 +145,6 @@ export {
   MAIN_QUERY_TEMPERATURE,
 }
 
-// @see https://docs.anthropic.com/en/docs/about-claude/models#model-comparison-table
-const HAIKU_COST_PER_MILLION_INPUT_TOKENS = 0.8
-const HAIKU_COST_PER_MILLION_OUTPUT_TOKENS = 4
-const HAIKU_COST_PER_MILLION_PROMPT_CACHE_WRITE_TOKENS = 1
-const HAIKU_COST_PER_MILLION_PROMPT_CACHE_READ_TOKENS = 0.08
-
 export async function queryLLM(
   messages: (UserMessage | AssistantMessage)[],
   systemPrompt: string[],
