@@ -2,11 +2,11 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import type { KodeSettingsFile } from '#core/utils/sandbox/sandboxConfig'
+import type { KodeSettingsFile } from '#core/sandbox/sandboxConfig'
 import {
   getLinuxSandboxGlobPatternWarnings,
   normalizeSandboxRuntimeConfigFromSettings,
-} from '#core/utils/sandbox/sandboxConfig'
+} from '#core/sandbox/sandboxConfig'
 
 describe('sandbox config (compatibility)', () => {
   let projectDir: string

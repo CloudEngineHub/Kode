@@ -1,7 +1,7 @@
 import {
   loadMergedSettings,
   normalizeSandboxRuntimeConfigFromSettings,
-} from '#core/utils/sandbox/sandboxConfig'
+} from '#core/sandbox/sandboxConfig'
 import { PRODUCT_NAME, PRODUCT_URL } from '#core/constants/product'
 
 export const DEFAULT_TIMEOUT_MS = 120000

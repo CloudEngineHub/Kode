@@ -6,8 +6,8 @@ import type { BunShellSandboxOptions } from '#runtime/shell'
 import {
   __resetSandboxNetworkInfrastructureForTests,
   ensureSandboxNetworkInfrastructure,
-} from '#core/utils/sandbox/sandboxNetworkInfrastructure'
-import type { SandboxRuntimeConfig } from '#core/utils/sandbox/sandboxConfig'
+} from '#core/sandbox/sandboxNetworkInfrastructure'
+import type { SandboxRuntimeConfig } from '#core/sandbox/sandboxConfig'
 
 function getBunWhich(): ((cmd: string) => unknown) | null {
   const record = globalThis as unknown as Record<string, unknown>

@@ -2,10 +2,10 @@ import * as React from 'react'
 import type { ToolUseContext } from '#core/tooling/Tool'
 import { createAssistantMessage } from '#core/utils/messages'
 import { BunShell } from '#runtime/shell'
-import { getBunShellSandboxPlan } from '#core/utils/sandbox/bunShellSandboxPlan'
+import { getBunShellSandboxPlan } from '#core/sandbox/bunShellSandboxPlan'
 import { getCwd, getOriginalCwd } from '#core/utils/state'
-import { decideSystemSandboxForBashTool } from '#core/utils/sandbox/systemSandbox'
-import { getBashDestructiveCommandBlock } from '#core/utils/sandbox/destructiveCommandGuard'
+import { decideSystemSandboxForBashTool } from '#core/sandbox/systemSandbox'
+import { getBashDestructiveCommandBlock } from '#core/sandbox/destructiveCommandGuard'
 import { getPlanConversationKey } from '#core/utils/planMode'
 import {
   formatBashLlmGateBlockMessage,

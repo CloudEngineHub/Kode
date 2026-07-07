@@ -6,8 +6,8 @@ import {
   __resetSandboxNetworkInfrastructureForTests,
   ensureSandboxNetworkInfrastructure,
   matchesSandboxDomainPattern,
-} from '#core/utils/sandbox/sandboxNetworkInfrastructure'
-import type { SandboxRuntimeConfig } from '#core/utils/sandbox/sandboxConfig'
+} from '#core/sandbox/sandboxNetworkInfrastructure'
+import type { SandboxRuntimeConfig } from '#core/sandbox/sandboxConfig'
 
 async function canListenOnLoopback(): Promise<boolean> {
   return await new Promise(resolve => {

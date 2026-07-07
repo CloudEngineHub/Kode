@@ -1,4 +1,4 @@
-import { getBunShellSandboxPlan } from '#core/utils/sandbox/bunShellSandboxPlan'
+import { getBunShellSandboxPlan } from '#core/sandbox/bunShellSandboxPlan'
 import type { Tool, ToolUseContext } from '#core/tooling/Tool'
 import type { ToolPermissionContext } from '#core/types/toolPermissionContext'
 import {

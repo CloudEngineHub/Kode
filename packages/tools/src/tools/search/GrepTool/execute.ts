@@ -2,7 +2,7 @@ import { stat as statAsync } from 'fs/promises'
 
 import { getAbsolutePath } from '#core/utils/file'
 import { ripGrep } from '#core/utils/ripgrep'
-import { getBunShellSandboxPlan } from '#core/utils/sandbox/bunShellSandboxPlan'
+import { getBunShellSandboxPlan } from '#core/sandbox/bunShellSandboxPlan'
 import { getCwd } from '#core/utils/state'
 
 import {
