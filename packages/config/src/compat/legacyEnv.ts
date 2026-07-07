@@ -1,3 +1,7 @@
+/**
+ * @deprecated Claude Code compatibility env names are retained for legacy config
+ * import only. Prefer Kode-native env names for new code.
+ */
 export const LEGACY_ENV = {
   configDir: 'CLAUDE_CONFIG_DIR',
   envFile: 'CLAUDE_ENV_FILE',
@@ -32,4 +36,8 @@ export const LEGACY_ENV = {
   codeUseFoundry: 'CLAUDE_CODE_USE_FOUNDRY',
 } as const
 
+/**
+ * @deprecated Use LEGACY_ENV only for legacy import compatibility. Prefer
+ * Kode-native env names for new code.
+ */
 export const LEGACY_CLAUDE_ENV = LEGACY_ENV
