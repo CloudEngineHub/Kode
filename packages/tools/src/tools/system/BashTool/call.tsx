@@ -10,8 +10,11 @@ import { getPlanConversationKey } from '#core/utils/planMode'
 import {
   formatBashLlmGateBlockMessage,
   runBashLlmSafetyGate,
-} from './llmSafetyGate'
-import { getBashGateFindings, shouldReviewBashCommand } from './dataLossRules'
+} from '#core/safety/bash-gate/llmSafetyGate'
+import {
+  getBashGateFindings,
+  shouldReviewBashCommand,
+} from '#core/safety/bash-gate/dataLossRules'
 import { getCommandSource } from './commandSource'
 import type { Out } from './BashTool'
 import { executeForegroundBash } from './executeForeground'

@@ -1,9 +1,13 @@
+// Re-export from new clean implementation
+// This file kept for backward compatibility
+
 export {
   getBashGateFindings,
   shouldReviewBashCommand,
   type BashGateFinding,
-} from '#core/safety/bash-gate/bashGateRules'
+} from './dataLossRules'
 
+// Legacy type exports for compatibility
 export type BashGateFindingSeverity = 'high' | 'medium'
 
 export type BashGateFindingCategory =

@@ -3,7 +3,7 @@ import {
   __setLlmModuleLoaderForTests,
   formatBashLlmGateBlockMessage,
   runBashLlmSafetyGate,
-} from '#tools/tools/system/BashTool/llmSafetyGate'
+} from '#core/safety/bash-gate/llmSafetyGate'
 
 // Use data-loss commands that actually trigger LLM Gate
 const TRIGGER_COMMAND = 'git reset --hard'
