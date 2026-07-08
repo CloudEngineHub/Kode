@@ -185,8 +185,8 @@ export const TaskOutputTool = {
       return { result: false, message: 'Task ID is required', errorCode: 1 }
     }
 
-    const task = buildTaskSummary(input.task_id)
-    if (!task) {
+    const snapshot = getBackgroundTaskSnapshot(input.task_id)
+    if (!snapshot) {
       return {
         result: false,
         message: `No task found with ID: ${input.task_id}`,
