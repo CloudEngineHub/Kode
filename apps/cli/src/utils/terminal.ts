@@ -8,6 +8,7 @@ function writeToTty(sequence: string): void {
 }
 
 let alternateScreenRefCount = 0
+let mouseEventsRefCount = 0
 
 export function setTerminalTitle(title: string): void {
   if (process.platform === 'win32') {
@@ -78,11 +79,25 @@ export function clearScrollback(): Promise<void> {
 }
 
 export function enableMouseEvents(): void {
-  writeToTty('\x1b[?1002h\x1b[?1006h')
+  if (!process.stdin?.isTTY || !process.stdout?.isTTY) return
+  mouseEventsRefCount += 1
+  if (mouseEventsRefCount !== 1) return
+
+  // SGR 1006 keeps coordinates numeric and unambiguous. Pair it with normal
+  // tracking (1000) so we receive press/release/wheel events without enabling
+  // high-volume motion tracking.
+  writeToTty('\x1b[?1006h\x1b[?1000h')
 }
 
 export function disableMouseEvents(): void {
-  writeToTty('\x1b[?1006l\x1b[?1002l')
+  if (!process.stdout?.isTTY) return
+  if (mouseEventsRefCount <= 0) return
+  mouseEventsRefCount -= 1
+  if (mouseEventsRefCount !== 0) return
+
+  // Also disable button/all-motion modes in case a previous build or terminal
+  // session left them enabled.
+  writeToTty('\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l')
 }
 
 export function enableKittyKeyboardProtocol(): void {

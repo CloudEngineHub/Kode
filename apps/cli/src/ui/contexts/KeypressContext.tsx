@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import ReactReconciler from 'react-reconciler'
 import { debug as debugLogger } from '#core/utils/debugLogger'
 import { terminalCapabilityManager } from '#ui-ink/utils/terminalCapabilityManager'
+import { disableMouseEvents, enableMouseEvents } from '#cli-utils/terminal'
 
 export const BACKSLASH_ENTER_TIMEOUT = 5
 export const ESC_TIMEOUT = 50
@@ -166,6 +167,26 @@ type KeypressHandler = (
 ) => boolean | void | Promise<void>
 type KeypressSubscribeOptions = { priority?: number }
 
+export type TerminalMouseButton =
+  'left' | 'middle' | 'right' | 'wheel-up' | 'wheel-down' | 'unknown'
+
+export type TerminalMouseEvent = {
+  type: 'press' | 'release' | 'scroll'
+  button: TerminalMouseButton
+  x: number
+  y: number
+  ctrl: boolean
+  meta: boolean
+  shift: boolean
+  rawCode: number
+  sequence: string
+}
+
+type MouseHandler = (
+  event: TerminalMouseEvent,
+) => boolean | void | Promise<void>
+type MouseSubscribeOptions = { priority?: number }
+
 function bufferBackslashEnter(keypressHandler: (key: ParsedKey) => void) {
   const bufferer = (function* (): Generator<void, void, ParsedKey | null> {
     while (true) {
@@ -271,8 +292,9 @@ function bufferPaste(keypressHandler: (key: ParsedKey) => void) {
 
 function createDataListener(
   keypressHandler: (key: ParsedKey) => void,
+  mouseHandler?: (event: TerminalMouseEvent) => void,
 ): (data: string) => void {
-  const parser = emitKeys(keypressHandler)
+  const parser = emitKeys(keypressHandler, mouseHandler)
   parser.next()
 
   let timeoutId: NodeJS.Timeout
@@ -314,8 +336,53 @@ function createDataListener(
   }
 }
 
+function parseSgrMouseEvent(
+  body: string,
+  finalChar: 'M' | 'm',
+  sequence: string,
+): TerminalMouseEvent | null {
+  const parts = body.split(';')
+  if (parts.length !== 3) return null
+
+  const rawCode = Number.parseInt(parts[0] ?? '', 10)
+  const x = Number.parseInt(parts[1] ?? '', 10)
+  const y = Number.parseInt(parts[2] ?? '', 10)
+  if (!Number.isFinite(rawCode) || !Number.isFinite(x) || !Number.isFinite(y)) {
+    return null
+  }
+
+  const isWheel = Boolean(rawCode & 64)
+  const buttonBits = rawCode & 3
+  const button: TerminalMouseButton = isWheel
+    ? buttonBits === 0
+      ? 'wheel-up'
+      : buttonBits === 1
+        ? 'wheel-down'
+        : 'unknown'
+    : buttonBits === 0
+      ? 'left'
+      : buttonBits === 1
+        ? 'middle'
+        : buttonBits === 2
+          ? 'right'
+          : 'unknown'
+
+  return {
+    type: isWheel ? 'scroll' : finalChar === 'm' ? 'release' : 'press',
+    button,
+    x,
+    y,
+    ctrl: Boolean(rawCode & 16),
+    meta: Boolean(rawCode & 8),
+    shift: Boolean(rawCode & 4),
+    rawCode,
+    sequence,
+  }
+}
+
 function* emitKeys(
   keypressHandler: (key: ParsedKey) => void,
+  mouseHandler?: (event: TerminalMouseEvent) => void,
 ): Generator<void, void, string> {
   while (true) {
     let ch = yield
@@ -384,6 +451,32 @@ function* emitKeys(
           code += ch
           ch = yield
           sequence += ch
+        }
+
+        if (ch === '<') {
+          let mouseBody = ''
+          while (true) {
+            ch = yield
+            if (ch === '') {
+              break
+            }
+            sequence += ch
+
+            if (ch === 'M' || ch === 'm') {
+              const mouseEvent = parseSgrMouseEvent(mouseBody, ch, sequence)
+              if (mouseEvent) mouseHandler?.(mouseEvent)
+              break
+            }
+
+            if ((ch >= '0' && ch <= '9') || ch === ';') {
+              mouseBody += ch
+              continue
+            }
+
+            break
+          }
+
+          continue
         }
 
         const cmdStart = sequence.length - 1
@@ -619,6 +712,11 @@ interface KeypressContextValue {
     options?: KeypressSubscribeOptions,
   ) => void
   unsubscribe: (handler: KeypressHandler) => void
+  subscribeMouse: (
+    handler: MouseHandler,
+    options?: MouseSubscribeOptions,
+  ) => void
+  unsubscribeMouse: (handler: MouseHandler) => void
 }
 
 const KeypressContext = React.createContext<KeypressContextValue | undefined>(
@@ -642,19 +740,31 @@ export function KeypressProvider({
 }) {
   const { stdin, setRawMode } = useStdin()
 
-  type Subscription = {
-    handler: KeypressHandler
+  type Subscription<THandler> = {
+    handler: THandler
     priority: number
     order: number
   }
 
-  const subscriptionsRef = useRef<Map<KeypressHandler, Subscription>>(new Map())
-  const orderedSubscriptionsRef = useRef<Subscription[]>([])
+  const subscriptionsRef = useRef<
+    Map<KeypressHandler, Subscription<KeypressHandler>>
+  >(new Map())
+  const orderedSubscriptionsRef = useRef<Subscription<KeypressHandler>[]>([])
+  const mouseSubscriptionsRef = useRef<
+    Map<MouseHandler, Subscription<MouseHandler>>
+  >(new Map())
+  const orderedMouseSubscriptionsRef = useRef<Subscription<MouseHandler>[]>([])
   const nextOrderRef = useRef(0)
 
   const rebuildOrderedSubscriptions = useCallback(() => {
     orderedSubscriptionsRef.current = [
       ...subscriptionsRef.current.values(),
+    ].sort((a, b) => b.priority - a.priority || b.order - a.order)
+  }, [])
+
+  const rebuildOrderedMouseSubscriptions = useCallback(() => {
+    orderedMouseSubscriptionsRef.current = [
+      ...mouseSubscriptionsRef.current.values(),
     ].sort((a, b) => b.priority - a.priority || b.order - a.order)
   }, [])
 
@@ -671,7 +781,7 @@ export function KeypressProvider({
         return
       }
 
-      const subscription: Subscription = {
+      const subscription: Subscription<KeypressHandler> = {
         handler,
         priority: options?.priority ?? 0,
         order: nextOrderRef.current++,
@@ -690,6 +800,46 @@ export function KeypressProvider({
       }
     },
     [rebuildOrderedSubscriptions],
+  )
+
+  const subscribeMouse = useCallback(
+    (handler: MouseHandler, options?: MouseSubscribeOptions) => {
+      if (mouseSubscriptionsRef.current.has(handler)) {
+        const current = mouseSubscriptionsRef.current.get(handler)
+        if (current) {
+          current.priority = options?.priority ?? current.priority
+          mouseSubscriptionsRef.current.set(handler, current)
+          rebuildOrderedMouseSubscriptions()
+        }
+        return
+      }
+
+      if (mouseSubscriptionsRef.current.size === 0) {
+        enableMouseEvents()
+      }
+
+      const subscription: Subscription<MouseHandler> = {
+        handler,
+        priority: options?.priority ?? 0,
+        order: nextOrderRef.current++,
+      }
+      mouseSubscriptionsRef.current.set(handler, subscription)
+      rebuildOrderedMouseSubscriptions()
+    },
+    [rebuildOrderedMouseSubscriptions],
+  )
+
+  const unsubscribeMouse = useCallback(
+    (handler: MouseHandler) => {
+      const didDelete = mouseSubscriptionsRef.current.delete(handler)
+      if (didDelete) {
+        rebuildOrderedMouseSubscriptions()
+        if (mouseSubscriptionsRef.current.size === 0) {
+          disableMouseEvents()
+        }
+      }
+    },
+    [rebuildOrderedMouseSubscriptions],
   )
 
   const broadcast = useCallback((parsed: ParsedKey) => {
@@ -732,6 +882,37 @@ export function KeypressProvider({
     })
   }, [])
 
+  const broadcastMouse = useCallback((event: TerminalMouseEvent) => {
+    if (!batchedUpdates) {
+      for (const subscription of orderedMouseSubscriptionsRef.current) {
+        const handled = subscription.handler(event)
+        if (handled && typeof (handled as Promise<void>).catch === 'function') {
+          ;(handled as Promise<void>).catch(error => {
+            debugLogger.warn('MOUSE_HANDLER_PROMISE_REJECTED', {
+              error: error instanceof Error ? error.message : String(error),
+            })
+          })
+        }
+        if (handled === true) break
+      }
+      return
+    }
+
+    batchedUpdates(() => {
+      for (const subscription of orderedMouseSubscriptionsRef.current) {
+        const handled = subscription.handler(event)
+        if (handled && typeof (handled as Promise<void>).catch === 'function') {
+          ;(handled as Promise<void>).catch(error => {
+            debugLogger.warn('MOUSE_HANDLER_PROMISE_REJECTED', {
+              error: error instanceof Error ? error.message : String(error),
+            })
+          })
+        }
+        if (handled === true) break
+      }
+    })
+  }, [])
+
   useEffect(() => {
     const wasRaw = (stdin as unknown as { isRaw?: boolean } | null)?.isRaw
     const shouldEnableRaw =
@@ -763,7 +944,7 @@ export function KeypressProvider({
     processor = bufferBackslashEnter(processor)
     processor = bufferPaste(processor)
 
-    let dataListener = createDataListener(processor)
+    let dataListener = createDataListener(processor, broadcastMouse)
 
     if (debugKeystrokeLogging) {
       const old = dataListener
@@ -786,10 +967,22 @@ export function KeypressProvider({
         }
       }
     }
-  }, [stdin, setRawMode, debugKeystrokeLogging, broadcast])
+  }, [stdin, setRawMode, debugKeystrokeLogging, broadcast, broadcastMouse])
+
+  useEffect(() => {
+    return () => {
+      if (mouseSubscriptionsRef.current.size > 0) {
+        mouseSubscriptionsRef.current.clear()
+        orderedMouseSubscriptionsRef.current = []
+        disableMouseEvents()
+      }
+    }
+  }, [])
 
   return (
-    <KeypressContext.Provider value={{ subscribe, unsubscribe }}>
+    <KeypressContext.Provider
+      value={{ subscribe, unsubscribe, subscribeMouse, unsubscribeMouse }}
+    >
       {children}
     </KeypressContext.Provider>
   )

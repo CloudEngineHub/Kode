@@ -18,6 +18,8 @@ import {
   KeypressProvider,
 } from '#ui-ink/contexts/KeypressContext'
 import { createInkHarnessManager, createInkTestHarness } from './inkTestHarness'
+import { Select } from '#ui-ink/components/CustomSelect/select'
+import { useKeypress } from '#ui-ink/hooks/useKeypress'
 
 const harnessManager = createInkHarnessManager()
 
@@ -175,6 +177,45 @@ describe('TUI E2E regression (Ink render): Misc', () => {
       toolUseConfirm.toolUseContext.options?.askUserQuestionAnswersByToolUseId
         ?.m
     expect(stored?.['剩余9个未合并的功能分支，是否也要删除？']).toBe('保留不动')
+  })
+
+  test('Select: SGR mouse click selects the clicked option without leaking key input', async () => {
+    let selected = ''
+    let leakedKeypresses = 0
+
+    function SelectHarness(): React.ReactNode {
+      useKeypress(() => {
+        leakedKeypresses += 1
+      })
+
+      return (
+        <Select
+          options={[
+            { label: 'First', value: 'first' },
+            { label: 'Second', value: 'second' },
+            { label: 'Third', value: 'third' },
+          ]}
+          onChange={value => {
+            selected = value
+          }}
+        />
+      )
+    }
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <SelectHarness />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+
+    h.stdin.write('\x1b[<0;3;2M')
+    await h.wait(25)
+
+    expect(selected).toBe('second')
+    expect(leakedKeypresses).toBe(0)
   })
 
   test('Bash overlay: ctrl+b triggers background callback', async () => {

@@ -22,6 +22,7 @@ type Action =
   | { type: 'focus-next-option' }
   | { type: 'focus-previous-option' }
   | { type: 'select-focused-option' }
+  | { type: 'select-option'; value: string }
   | { type: 'set-focus'; value: string }
   | { type: 'reset'; state: State }
 
@@ -122,6 +123,17 @@ const reducer: Reducer<State, Action> = (state, action) => {
       }
     }
 
+    case 'select-option': {
+      if (!state.optionMap.get(action.value)) return state
+
+      return {
+        ...state,
+        focusedValue: action.value,
+        previousValue: state.value,
+        value: action.value,
+      }
+    }
+
     case 'reset': {
       return action.state
     }
@@ -192,6 +204,11 @@ export type SelectState = Pick<
    * Select currently focused option.
    */
   selectFocusedOption: () => void
+
+  /**
+   * Select an option by value.
+   */
+  selectOption: (value: string) => void
 }
 
 export const useSelectState = ({
@@ -242,6 +259,13 @@ export const useSelectState = ({
     })
   }, [])
 
+  const selectOption = useCallback((value: string) => {
+    dispatch({
+      type: 'select-option',
+      value,
+    })
+  }, [])
+
   const visibleOptions = useMemo(() => {
     return flatOptions
       .map((option, index) => ({
@@ -281,5 +305,6 @@ export const useSelectState = ({
     focusNextOption,
     focusPreviousOption,
     selectFocusedOption,
+    selectOption,
   }
 }

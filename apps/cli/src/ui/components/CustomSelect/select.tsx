@@ -1,11 +1,12 @@
-import { Box, Text } from 'ink'
-import React, { type ReactNode } from 'react'
+import { Box, Text, type DOMElement } from 'ink'
+import React, { type ReactNode, useRef } from 'react'
 import { SelectOption } from './select-option'
 import { type Theme } from './theme'
 import { useSelectState } from './use-select-state'
 import { useSelect } from './use-select'
 import { Option } from '@inkjs/ui'
 import { getReadableTextColor, getTheme } from '#core/utils/theme'
+import { useMousePress, useMouseWheel } from '#ui-ink/hooks/useMouse'
 
 export type OptionSubtree = {
   /**
@@ -74,6 +75,44 @@ export type SelectProps = {
   readonly focusValue?: string
 }
 
+function SelectOptionRow({
+  isDisabled,
+  isFocused,
+  isSelected,
+  smallPointer,
+  value,
+  onSelect,
+  children,
+}: {
+  isDisabled: boolean
+  isFocused: boolean
+  isSelected: boolean
+  smallPointer: boolean
+  value?: string
+  onSelect: (value: string) => void
+  children: ReactNode
+}) {
+  const ref = useRef<DOMElement | null>(null)
+
+  useMousePress(
+    ref,
+    () => {
+      if (value) onSelect(value)
+    },
+    { isActive: !isDisabled && value !== undefined, priority: 20 },
+  )
+
+  return (
+    <SelectOption
+      ref={ref}
+      isFocused={isFocused}
+      isSelected={isSelected}
+      smallPointer={smallPointer}
+      children={children}
+    />
+  )
+}
+
 export function Select({
   isDisabled = false,
   visibleOptionCount = 5,
@@ -84,6 +123,7 @@ export function Select({
   onFocus,
   focusValue,
 }: SelectProps) {
+  const containerRef = useRef<DOMElement | null>(null)
   const state = useSelectState({
     visibleOptionCount,
     options,
@@ -94,6 +134,17 @@ export function Select({
   })
 
   useSelect({ isDisabled, state })
+  useMouseWheel(
+    containerRef,
+    direction => {
+      if (direction === 'up') {
+        state.focusPreviousOption()
+      } else {
+        state.focusNextOption()
+      }
+    },
+    { isActive: !isDisabled, priority: 10 },
+  )
 
   const appTheme = getTheme()
   const highlightedTextColor = getReadableTextColor(
@@ -111,7 +162,7 @@ export function Select({
   }
 
   return (
-    <Box {...styles.container()}>
+    <Box ref={containerRef} {...styles.container()}>
       {state.visibleOptions.map(option => {
         const key = 'value' in option ? option.value : optionHeaderKey(option)
         const isFocused =
@@ -142,11 +193,14 @@ export function Select({
         }
 
         return (
-          <SelectOption
+          <SelectOptionRow
             key={key}
+            isDisabled={isDisabled}
             isFocused={isFocused}
             isSelected={isSelected}
             smallPointer={smallPointer}
+            value={'value' in option ? option.value : undefined}
+            onSelect={state.selectOption}
             children={label}
           />
         )
