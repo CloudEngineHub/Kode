@@ -114,12 +114,13 @@ function getLegacyClaudeLocalMcpServers(projectDir: string): {
 function getLegacyClaudeProjectMcpjsonChoice(
   projectDir: string,
   serverName: string,
+  options?: { includeEnableAll?: boolean },
 ): 'approved' | 'rejected' | 'pending' {
   const entry = findLegacyClaudeProjectEntry(projectDir)
   if (!entry) return 'pending'
 
   const enableAll = Boolean(entry.entry['enableAllProjectMcpServers'])
-  if (enableAll) return 'approved'
+  if (options?.includeEnableAll !== false && enableAll) return 'approved'
 
   const enabled = parseStringArray(entry.entry['enabledMcpjsonServers'])
   if (enabled.includes(serverName)) return 'approved'
@@ -245,6 +246,15 @@ export function getMcprcServerStatus(
   const projectDefs = getProjectMcpServerDefinitions()
   if (projectDefs.sources[serverName] === '.mcp.json') {
     return getLegacyClaudeProjectMcpjsonChoice(getCwd(), serverName)
+  }
+
+  if (!projectDefs.sources[serverName]) {
+    const legacyMcpjsonChoice = getLegacyClaudeProjectMcpjsonChoice(
+      getCwd(),
+      serverName,
+      { includeEnableAll: false },
+    )
+    if (legacyMcpjsonChoice !== 'pending') return legacyMcpjsonChoice
   }
 
   return 'pending'

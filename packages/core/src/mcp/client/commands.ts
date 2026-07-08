@@ -18,6 +18,26 @@ type AnthropicImageMediaType = Extract<
   { type: 'base64' }
 >['media_type']
 
+const ANTHROPIC_IMAGE_MEDIA_TYPES = new Set<AnthropicImageMediaType>([
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+])
+
+function normalizeAnthropicImageMediaType(
+  mimeType: unknown,
+): AnthropicImageMediaType {
+  if (mimeType === 'image/jpg') return 'image/jpeg'
+  if (
+    typeof mimeType === 'string' &&
+    ANTHROPIC_IMAGE_MEDIA_TYPES.has(mimeType as AnthropicImageMediaType)
+  ) {
+    return mimeType as AnthropicImageMediaType
+  }
+  return 'image/png'
+}
+
 export type McpPromptCommand = {
   type: 'prompt'
   name: string
@@ -94,7 +114,9 @@ export async function runCommand(
                 source: {
                   type: 'base64',
                   data: content.data,
-                  media_type: content.mimeType as AnthropicImageMediaType,
+                  media_type: normalizeAnthropicImageMediaType(
+                    content.mimeType,
+                  ),
                 },
               },
             ],
