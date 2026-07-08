@@ -1,17 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Box, Text } from 'ink'
 
-import { BunShell } from '#runtime/shell'
 import {
-  getTaskOutputFilePath,
-  readTaskOutputTailLines,
-} from '#runtime/taskOutputStore'
-import {
-  killBackgroundAgentTask,
-  listBackgroundAgentTaskSnapshots,
-  type BackgroundAgentStatus,
-  type BackgroundAgentTask,
-} from '#core/utils/backgroundTasks'
+  getBackgroundTaskOutputFilePath,
+  killBackgroundTask,
+  listBackgroundTaskSnapshots,
+  readBackgroundTaskOutputTailLines,
+  type BackgroundAgentTaskSnapshot,
+  type BackgroundShellTaskSnapshot,
+  type BackgroundTaskSnapshot,
+  type BackgroundTaskStatus,
+} from '#core/tasks/backgroundRegistry'
 import { getOriginalCwd } from '#core/utils/state'
 import { getTheme } from '#core/utils/theme'
 import { getKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
@@ -26,36 +25,22 @@ const VIEWPORT_SAFE_MARGIN_ROWS = 1
 const INDICATOR_ROWS = 2
 const REFRESH_INTERVAL_MS = 1000
 
-type ShellTaskStatus = 'running' | 'completed' | 'failed' | 'killed'
-
-type ShellTaskSummary = {
-  id: string
-  command: string
-  status: ShellTaskStatus
-  exitCode: number | null
-  startedAt: number
-  completedAt?: number
-  outputFile: string
-  stdoutLineCount: number
-  stderrLineCount: number
-}
-
 type TreeNode =
   | {
       kind: 'group'
       id: string
       label: string
-      status: BackgroundAgentStatus | ShellTaskStatus | null
+      status: BackgroundTaskStatus | null
       children: TreeNode[]
     }
   | {
       kind: 'agent'
-      task: BackgroundAgentTask
+      task: BackgroundAgentTaskSnapshot
       children: TreeNode[]
     }
   | {
       kind: 'shell'
-      task: ShellTaskSummary
+      task: BackgroundShellTaskSnapshot
     }
 
 type FlatItem =
@@ -64,21 +49,21 @@ type FlatItem =
       id: string
       depth: number
       label: string
-      status: BackgroundAgentStatus | ShellTaskStatus | null
+      status: BackgroundTaskStatus | null
       hasChildren: boolean
     }
   | {
       kind: 'agent'
       id: string
       depth: number
-      task: BackgroundAgentTask
+      task: BackgroundAgentTaskSnapshot
       hasChildren: boolean
     }
   | {
       kind: 'shell'
       id: string
       depth: number
-      task: ShellTaskSummary
+      task: BackgroundShellTaskSnapshot
     }
 
 type DetailTarget = { kind: 'shell' | 'agent'; id: string }
@@ -103,7 +88,7 @@ function formatRuntime(startedAt: number, completedAt?: number): string {
   return `${hours > 0 ? `${hours}h ` : ''}${minutes > 0 || hours > 0 ? `${minutes}m ` : ''}${seconds}s`
 }
 
-function rankStatus(status: BackgroundAgentStatus | ShellTaskStatus): number {
+function rankStatus(status: BackgroundTaskStatus): number {
   switch (status) {
     case 'running':
       return 0
@@ -117,23 +102,19 @@ function rankStatus(status: BackgroundAgentStatus | ShellTaskStatus): number {
 }
 
 function aggregateStatus(
-  statuses: Array<BackgroundAgentStatus | ShellTaskStatus>,
-): BackgroundAgentStatus | ShellTaskStatus | null {
+  statuses: BackgroundTaskStatus[],
+): BackgroundTaskStatus | null {
   if (statuses.length === 0) return null
   return (
     statuses.slice().sort((a, b) => rankStatus(a) - rankStatus(b))[0] ?? null
   )
 }
 
-function statusLabel(
-  status: BackgroundAgentStatus | ShellTaskStatus | null,
-): string {
+function statusLabel(status: BackgroundTaskStatus | null): string {
   return status ?? 'idle'
 }
 
-function statusIcon(
-  status: BackgroundAgentStatus | ShellTaskStatus | null,
-): string {
+function statusIcon(status: BackgroundTaskStatus | null): string {
   switch (status) {
     case 'running':
       return '●'
@@ -148,41 +129,27 @@ function statusIcon(
   }
 }
 
-function shellStatusFromRuntime(task: {
-  code: number | null
-  killed: boolean
-  interrupted: boolean
-}): ShellTaskStatus {
-  if (task.killed) return 'killed'
-  if (task.code === null && !task.interrupted) return 'running'
-  return task.code === 0 ? 'completed' : 'failed'
+function isAgentTaskSnapshot(
+  task: BackgroundTaskSnapshot,
+): task is BackgroundAgentTaskSnapshot {
+  return task.taskType === 'local_agent'
 }
 
-function buildShellSummaries(): ShellTaskSummary[] {
-  const shell = BunShell.getInstance()
-  const tasks = shell.listBackgroundShells()
-  return tasks.map(t => ({
-    id: t.id,
-    command: t.command,
-    status: shellStatusFromRuntime(t),
-    exitCode: t.code,
-    startedAt: t.startedAt,
-    completedAt: t.completedAt,
-    outputFile: t.outputFile || getTaskOutputFilePath(t.id),
-    stdoutLineCount: t.stdoutLineCount,
-    stderrLineCount: t.stderrLineCount,
-  }))
+function isShellTaskSnapshot(
+  task: BackgroundTaskSnapshot,
+): task is BackgroundShellTaskSnapshot {
+  return task.taskType === 'local_bash'
 }
 
-function buildAgentTree(tasks: BackgroundAgentTask[]): TreeNode | null {
+function buildAgentTree(tasks: BackgroundAgentTaskSnapshot[]): TreeNode | null {
   if (tasks.length === 0) return null
 
-  const byId = new Map<string, BackgroundAgentTask>()
-  for (const task of tasks) byId.set(task.agentId, task)
+  const byId = new Map<string, BackgroundAgentTaskSnapshot>()
+  for (const task of tasks) byId.set(task.taskId, task)
 
-  const childrenByParent = new Map<string, BackgroundAgentTask[]>()
+  const childrenByParent = new Map<string, BackgroundAgentTaskSnapshot[]>()
   for (const task of tasks) {
-    const rawParent = task.parentAgentId
+    const rawParent = task.parentTaskId
     const effectiveParent =
       !rawParent || rawParent === 'main' || !byId.has(rawParent)
         ? 'main'
@@ -201,9 +168,9 @@ function buildAgentTree(tasks: BackgroundAgentTask[]): TreeNode | null {
     const children = childrenByParent.get(parentId) ?? []
     const out: TreeNode[] = []
     for (const child of children) {
-      if (visited.has(child.agentId)) continue
-      visited.add(child.agentId)
-      const grand = buildChildren(child.agentId)
+      if (visited.has(child.taskId)) continue
+      visited.add(child.taskId)
+      const grand = buildChildren(child.taskId)
       out.push({ kind: 'agent', task: child, children: grand })
     }
     return out
@@ -226,8 +193,8 @@ function buildAgentTree(tasks: BackgroundAgentTask[]): TreeNode | null {
 }
 
 function buildTasksTree(args: {
-  agentTasks: BackgroundAgentTask[]
-  shellTasks: ShellTaskSummary[]
+  agentTasks: BackgroundAgentTaskSnapshot[]
+  shellTasks: BackgroundShellTaskSnapshot[]
 }): TreeNode[] {
   const out: TreeNode[] = []
 
@@ -278,18 +245,18 @@ export function __flattenTasksTreeForTests(args: {
       const hasChildren = node.children.length > 0
       out.push({
         kind: 'agent',
-        id: node.task.agentId,
+        id: node.task.taskId,
         depth,
         task: node.task,
         hasChildren,
       })
-      if (hasChildren && !args.collapsedIds.has(node.task.agentId)) {
+      if (hasChildren && !args.collapsedIds.has(node.task.taskId)) {
         for (const child of node.children) walk(child, depth + 1)
       }
       return
     }
 
-    out.push({ kind: 'shell', id: node.task.id, depth, task: node.task })
+    out.push({ kind: 'shell', id: node.task.taskId, depth, task: node.task })
   }
 
   for (const node of args.nodes) walk(node, 0)
@@ -304,13 +271,13 @@ export function __buildFlatLinesForTests(args: {
 }): Array<{
   key: string
   isSelected: boolean
-  status: BackgroundAgentStatus | ShellTaskStatus | null
+  status: BackgroundTaskStatus | null
   text: string
 }> {
   const out: Array<{
     key: string
     isSelected: boolean
-    status: BackgroundAgentStatus | ShellTaskStatus | null
+    status: BackgroundTaskStatus | null
     text: string
   }> = []
 
@@ -339,7 +306,7 @@ export function __buildFlatLinesForTests(args: {
     if (item.kind === 'shell') {
       const label = `${statusIcon(item.task.status)} ${firstLine(item.task.command, 90)}`
       out.push({
-        key: `shell:${item.task.id}`,
+        key: `shell:${item.task.taskId}`,
         isSelected,
         status: item.task.status,
         text: `${indentFor(item.depth)}${label}`,
@@ -348,7 +315,7 @@ export function __buildFlatLinesForTests(args: {
     }
 
     const caret = item.hasChildren
-      ? args.collapsedIds.has(item.task.agentId)
+      ? args.collapsedIds.has(item.task.taskId)
         ? '▸'
         : '▾'
       : ' '
@@ -361,7 +328,7 @@ export function __buildFlatLinesForTests(args: {
     const label = `${caret} ${statusIcon(status)} ${firstLine(item.task.description, 90)}${errorHint}`
 
     out.push({
-      key: `agent:${item.task.agentId}`,
+      key: `agent:${item.task.taskId}`,
       isSelected,
       status,
       text: `${indentFor(item.depth)}${label}`,
@@ -446,9 +413,10 @@ export function TasksScreen({
   }, [])
 
   const { agentTasks, shellTasks } = useMemo(() => {
+    const tasks = listBackgroundTaskSnapshots()
     return {
-      agentTasks: listBackgroundAgentTaskSnapshots(),
-      shellTasks: buildShellSummaries(),
+      agentTasks: tasks.filter(isAgentTaskSnapshot),
+      shellTasks: tasks.filter(isShellTaskSnapshot),
     }
   }, [tick])
 
@@ -527,14 +495,14 @@ export function TasksScreen({
   const detailTask = useMemo(() => {
     if (!detailTarget) return null
     if (detailTarget.kind === 'shell') {
-      return shellTasks.find(t => t.id === detailTarget.id) ?? null
+      return shellTasks.find(t => t.taskId === detailTarget.id) ?? null
     }
-    return agentTasks.find(t => t.agentId === detailTarget.id) ?? null
+    return agentTasks.find(t => t.taskId === detailTarget.id) ?? null
   }, [agentTasks, detailTarget, shellTasks])
 
   const detailOutputLines = useMemo(() => {
     if (!detailTarget) return []
-    return readTaskOutputTailLines(detailTarget.id, 10)
+    return readBackgroundTaskOutputTailLines(detailTarget.id, 10)
   }, [detailTarget, tick])
 
   const openDetails = useCallback(() => {
@@ -545,7 +513,7 @@ export function TasksScreen({
   const openOutput = useCallback(async () => {
     if (!selected || selected.kind === 'group') return
 
-    const outputPath = getTaskOutputFilePath(selected.id)
+    const outputPath = getBackgroundTaskOutputFilePath(selected.id)
     const result = await launchExternalEditorForFilePath(outputPath)
     if (result.ok === true) {
       setStatus(`Opened output in ${result.editorLabel}`)
@@ -573,28 +541,14 @@ export function TasksScreen({
   const killSelected = useCallback(() => {
     if (!selected || selected.kind === 'group') return
 
-    if (selected.kind === 'shell') {
-      const killed = BunShell.getInstance().killBackgroundShell(selected.id)
-      setStatus(
-        killed ? `Killed shell task: ${selected.id}` : 'Task not running',
-      )
-      return
-    }
-
-    const killed = killBackgroundAgentTask(selected.id)
-    setStatus(killed ? `Killed agent task: ${selected.id}` : 'Task not running')
+    const killed = killBackgroundTask(selected.id)
+    setStatus(killed ? `Killed task: ${selected.id}` : 'Task not running')
   }, [selected])
 
   const killDetailTask = useCallback(() => {
     if (!detailTarget) return
 
-    if (detailTarget.kind === 'shell') {
-      const killed = BunShell.getInstance().killBackgroundShell(detailTarget.id)
-      setStatus(killed ? `Killed task: ${detailTarget.id}` : 'Task not running')
-      return
-    }
-
-    const killed = killBackgroundAgentTask(detailTarget.id)
+    const killed = killBackgroundTask(detailTarget.id)
     setStatus(killed ? `Killed task: ${detailTarget.id}` : 'Task not running')
   }, [detailTarget])
 
@@ -744,10 +698,10 @@ export function TasksScreen({
     detailLines.push(`${selected.label} (${statusLabel(selected.status)})`)
   } else if (selected.kind === 'shell') {
     detailLines.push(`Shell: ${selected.id} (${selected.task.status})`)
-    detailLines.push(`output: ${getTaskOutputFilePath(selected.id)}`)
+    detailLines.push(`output: ${getBackgroundTaskOutputFilePath(selected.id)}`)
   } else {
     detailLines.push(`Agent: ${selected.id} (${selected.task.status})`)
-    detailLines.push(`output: ${getTaskOutputFilePath(selected.id)}`)
+    detailLines.push(`output: ${getBackgroundTaskOutputFilePath(selected.id)}`)
     if (!layout.tightLayout) {
       detailLines.push(
         `log: ${getAgentLogFilePath({
@@ -775,42 +729,23 @@ export function TasksScreen({
 
   if (detailTarget) {
     const outputFile =
-      detailTarget.kind === 'shell' && detailTask && 'outputFile' in detailTask
-        ? (detailTask as ShellTaskSummary).outputFile
-        : getTaskOutputFilePath(detailTarget.id)
-
-    const detailStatus =
-      detailTarget.kind === 'shell'
-        ? (detailTask as ShellTaskSummary | null)?.status
-        : (detailTask as BackgroundAgentTask | null)?.status
+      detailTask?.outputFile ?? getBackgroundTaskOutputFilePath(detailTarget.id)
 
     const runtime =
-      detailTarget.kind === 'shell'
-        ? detailTask && 'startedAt' in detailTask
-          ? formatRuntime(
-              (detailTask as ShellTaskSummary).startedAt,
-              (detailTask as ShellTaskSummary).completedAt,
-            )
-          : null
-        : detailTask && 'startedAt' in detailTask
-          ? formatRuntime(
-              (detailTask as BackgroundAgentTask).startedAt,
-              (detailTask as BackgroundAgentTask).completedAt,
-            )
-          : null
+      detailTask !== null
+        ? formatRuntime(detailTask.startedAt, detailTask.completedAt)
+        : null
 
     const commandOrDescription =
-      detailTarget.kind === 'shell'
-        ? (detailTask as ShellTaskSummary | null)?.command
-        : (detailTask as BackgroundAgentTask | null)?.description
+      detailTask?.taskType === 'local_bash'
+        ? detailTask.command
+        : detailTask?.description
 
     const totalLines =
-      detailTarget.kind === 'shell'
-        ? (detailTask as ShellTaskSummary | null)
-          ? (detailTask as ShellTaskSummary).stdoutLineCount +
-            (detailTask as ShellTaskSummary).stderrLineCount +
-            (detailOutputLines.length > 0 ? 1 : 0)
-          : null
+      detailTask?.taskType === 'local_bash'
+        ? detailTask.stdoutLineCount +
+          detailTask.stderrLineCount +
+          (detailOutputLines.length > 0 ? 1 : 0)
         : null
 
     const showingLine =
@@ -825,7 +760,7 @@ export function TasksScreen({
     const footerActions = [
       '← to go back',
       'Esc/Enter/Space to close',
-      detailStatus === 'running' ? 'k to kill' : null,
+      detailTask?.status === 'running' ? 'k to kill' : null,
     ]
       .filter(Boolean)
       .join(' · ')
@@ -846,7 +781,7 @@ export function TasksScreen({
             paddingX={1}
           >
             <Text wrap="truncate-end">
-              <Text bold>Status</Text>: {detailStatus ?? '(unknown)'}
+              <Text bold>Status</Text>: {detailTask?.status ?? '(unknown)'}
             </Text>
             {runtime ? (
               <Text wrap="truncate-end">
