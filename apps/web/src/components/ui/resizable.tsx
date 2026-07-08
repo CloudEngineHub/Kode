@@ -3,35 +3,49 @@ import * as ResizablePrimitive from 'react-resizable-panels'
 
 import { cn } from '../../lib/utils'
 
+type ResizablePanelGroupProps = React.ComponentProps<
+  typeof ResizablePrimitive.Group
+> & {
+  direction?: React.ComponentProps<typeof ResizablePrimitive.Group>['orientation']
+}
+
 const ResizablePanelGroup = ({
   className,
+  direction,
+  orientation,
   ...props
-}: React.ComponentProps<typeof ResizablePrimitive.PanelGroup>) => (
-  <ResizablePrimitive.PanelGroup
-    className={cn(
-      'flex h-full w-full data-[panel-group-direction=vertical]:flex-col',
-      className,
-    )}
-    {...props}
-  />
-)
+}: ResizablePanelGroupProps) => {
+  const resolvedOrientation = orientation ?? direction
+
+  return (
+    <ResizablePrimitive.Group
+      data-orientation={resolvedOrientation ?? 'horizontal'}
+      orientation={resolvedOrientation}
+      className={cn(
+        'flex h-full w-full data-[orientation=vertical]:flex-col',
+        className,
+      )}
+      {...props}
+    />
+  )
+}
 
 const ResizablePanel = ResizablePrimitive.Panel
 
 const ResizableHandle = ({
   className,
   ...props
-}: React.ComponentProps<typeof ResizablePrimitive.PanelResizeHandle>) => (
-  <ResizablePrimitive.PanelResizeHandle
+}: React.ComponentProps<typeof ResizablePrimitive.Separator>) => (
+  <ResizablePrimitive.Separator
     className={cn(
       'relative flex w-px items-center justify-center bg-border after:absolute after:inset-y-0 after:left-1/2 after:w-2 after:-translate-x-1/2',
-      'data-[panel-group-direction=vertical]:h-px data-[panel-group-direction=vertical]:w-full',
+      'aria-[orientation=vertical]:h-px aria-[orientation=vertical]:w-full',
       className,
     )}
     {...props}
   >
     <div className="z-10 h-8 w-1 rounded-full bg-border" />
-  </ResizablePrimitive.PanelResizeHandle>
+  </ResizablePrimitive.Separator>
 )
 
 export { ResizablePanelGroup, ResizablePanel, ResizableHandle }
