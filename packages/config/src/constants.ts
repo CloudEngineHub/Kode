@@ -17,3 +17,12 @@ export const MCP_DEFAULTS = {
   healthCheckIntervalMs: 5_000,
   failedRetryIntervalMs: 30_000,
 } as const
+
+export const ENGINE_DEFAULTS = {
+  mainQueryTemperature: 1,
+  contextReserveRatio: 0.1,
+  contextReserveCapTokens: 20_000,
+  autoCompactMarginTokens: 13_000,
+  warningMarginTokens: 20_000,
+  errorMarginTokens: 20_000,
+} as const

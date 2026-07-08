@@ -1,12 +1,14 @@
 import { LEGACY_ENV } from '#config/compat/legacyEnv'
+import { ENGINE_DEFAULTS } from '#config/constants'
 
 /**
  * Reserved budget for non-message overhead (system prompt, tool schemas, etc.).
  *
  * Kode estimates this as a small percentage of the model context window with a cap.
  */
-export const CONTEXT_RESERVE_RATIO = 0.1
-export const CONTEXT_RESERVE_CAP_TOKENS = 20_000
+export const CONTEXT_RESERVE_RATIO = ENGINE_DEFAULTS.contextReserveRatio
+export const CONTEXT_RESERVE_CAP_TOKENS =
+  ENGINE_DEFAULTS.contextReserveCapTokens
 
 /**
  * Fixed-margin thresholds:
@@ -14,9 +16,10 @@ export const CONTEXT_RESERVE_CAP_TOKENS = 20_000
  *   context limit (after reserving overhead).
  * - Warnings happen when you're within a fixed margin of the auto-compact boundary.
  */
-export const AUTO_COMPACT_MARGIN_TOKENS = 13_000
-export const WARNING_MARGIN_TOKENS = 20_000
-export const ERROR_MARGIN_TOKENS = 20_000
+export const AUTO_COMPACT_MARGIN_TOKENS =
+  ENGINE_DEFAULTS.autoCompactMarginTokens
+export const WARNING_MARGIN_TOKENS = ENGINE_DEFAULTS.warningMarginTokens
+export const ERROR_MARGIN_TOKENS = ENGINE_DEFAULTS.errorMarginTokens
 
 function parseAutoCompactPctOverride(): number | null {
   const raw =
