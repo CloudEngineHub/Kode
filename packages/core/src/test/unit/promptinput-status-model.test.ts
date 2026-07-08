@@ -4,6 +4,7 @@ import {
   buildPromptStatusLineInput,
   getPromptStatusLineUsage,
 } from '#ui-ink/components/PromptInput/statusLineModel'
+import { formatPromptTokenCount } from '#ui-ink/components/PromptInput/PromptInputView'
 
 function assistantWithUsage(args: {
   input: number
@@ -58,6 +59,7 @@ describe('PromptInput status line model', () => {
           cacheCreate: 1,
         }),
       ]),
+      currentContextTokens: 960,
       totalCostUSD: 1.25,
       totalDurationMs: 100,
       totalAPIDurationMs: 80,
@@ -78,8 +80,16 @@ describe('PromptInput status line model', () => {
       forkNumber: 2,
     })
     expect(input.kode.model.provider).toBe('openai')
+    expect(input.context_window.current_context_tokens).toBe(960)
     expect(input.context_window.current_usage.input_tokens).toBe(199000)
-    expect(input.exceeds_200k_tokens).toBe(true)
+    expect(input.context_window.used_percentage).toBe(96)
+    expect(input.context_window.remaining_percentage).toBe(4)
+    expect(input.exceeds_200k_tokens).toBe(false)
     expect(input.vim.mode).toBe('NORMAL')
+  })
+
+  test('formats million-token windows without k-only labels', () => {
+    expect(formatPromptTokenCount(186000)).toBe('186k')
+    expect(formatPromptTokenCount(1048576)).toBe('1.0M')
   })
 })

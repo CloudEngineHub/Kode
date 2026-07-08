@@ -16,6 +16,13 @@ type Props = {
 
 const FALLBACK_CONTEXT_LIMIT = 190_000
 
+function formatTokenCount(tokens: number): string {
+  if (!Number.isFinite(tokens) || tokens <= 0) return '0'
+  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`
+  if (tokens >= 1_000) return `${Math.round(tokens / 1_000)}k`
+  return `${Math.round(tokens)}`
+}
+
 function getActiveContextLimit(): number {
   try {
     const profile = getModelManager().getModel('main')
@@ -63,12 +70,15 @@ export function TokenWarning({
     0,
     100 - Math.round((tokenUsage / safeThreshold) * 100),
   )
+  const warningText =
+    `Context low (${percentRemaining}% remaining, ` +
+    `${formatTokenCount(tokenUsage)}/${formatTokenCount(contextLimit)}) ` +
+    `- Run /compact to compact & continue`
 
   return (
     <Box flexDirection="row">
       <Text color={isError ? theme.error : theme.warning} wrap="truncate-end">
-        Context low ({percentRemaining}% remaining) &middot; Run /compact to
-        compact & continue
+        {warningText}
       </Text>
     </Box>
   )

@@ -29,6 +29,13 @@ type ModelInfo = {
   currentTokens: number
 } | null
 
+export function formatPromptTokenCount(tokens: number): string {
+  if (!Number.isFinite(tokens) || tokens <= 0) return '0'
+  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`
+  if (tokens >= 1_000) return `${Math.round(tokens / 1_000)}k`
+  return `${Math.round(tokens)}`
+}
+
 type ExitMessageState = { show: boolean; key?: string }
 type InlineMessageState = { show: boolean; text?: string }
 type ToastMessageState = {
@@ -155,8 +162,8 @@ export function PromptInputView({
         <Box justifyContent="flex-end" flexDirection="row">
           <Text dimColor wrap="truncate-end">
             [{modelInfo.provider}] {modelInfo.name}:{' '}
-            {Math.round(modelInfo.currentTokens / 1000)}k /{' '}
-            {Math.round(modelInfo.contextLength / 1000)}k
+            {formatPromptTokenCount(modelInfo.currentTokens)} /{' '}
+            {formatPromptTokenCount(modelInfo.contextLength)}
           </Text>
         </Box>
       )}

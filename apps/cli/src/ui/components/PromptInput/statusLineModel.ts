@@ -79,6 +79,7 @@ export function buildPromptStatusLineInput(args: {
   outputStyleName: string
   profile: PromptStatusLineProfile
   usage: PromptStatusLineUsage
+  currentContextTokens?: number
   totalCostUSD: number
   totalDurationMs: number
   totalAPIDurationMs: number
@@ -93,20 +94,30 @@ export function buildPromptStatusLineInput(args: {
     typeof args.profile?.contextLength === 'number'
       ? args.profile.contextLength
       : 0
+  const currentContextTokens =
+    typeof args.currentContextTokens === 'number' &&
+    Number.isFinite(args.currentContextTokens) &&
+    args.currentContextTokens >= 0
+      ? Math.trunc(args.currentContextTokens)
+      : null
 
   const { used_percentage, remaining_percentage } =
     computeContextWindowPercentages({
-      currentUsage: args.usage.currentUsage,
+      currentUsage:
+        currentContextTokens === null
+          ? args.usage.currentUsage
+          : { input_tokens: currentContextTokens },
       contextWindowSize,
     })
   const currentUsage = args.usage.currentUsage
-  const exceeds200kTokens = currentUsage
+  const currentUsageTokens = currentUsage
     ? currentUsage.input_tokens +
-        currentUsage.output_tokens +
-        currentUsage.cache_creation_input_tokens +
-        currentUsage.cache_read_input_tokens >
-      200000
-    : false
+      currentUsage.output_tokens +
+      currentUsage.cache_creation_input_tokens +
+      currentUsage.cache_read_input_tokens
+    : 0
+  const exceeds200kTokens =
+    (currentContextTokens ?? currentUsageTokens) > 200000
 
   return {
     session_id: args.sessionId,
@@ -131,6 +142,7 @@ export function buildPromptStatusLineInput(args: {
       total_input_tokens: args.usage.totalInputTokens,
       total_output_tokens: args.usage.totalOutputTokens,
       context_window_size: contextWindowSize,
+      current_context_tokens: currentContextTokens,
       current_usage: currentUsage,
       used_percentage,
       remaining_percentage,

@@ -164,14 +164,15 @@ When asked to convert the user's shell PS1 configuration, follow these steps:
 	       "total_input_tokens": number,       // Total input tokens used in session (cumulative)
 	       "total_output_tokens": number,      // Total output tokens used in session (cumulative)
 	       "context_window_size": number | null, // Context window size for current model
+	       "current_context_tokens": number | null, // Estimated current transcript tokens used for warnings/compaction
 	       "current_usage": {                   // Token usage from last API call (null if no messages yet)
-	         "input_tokens": number,           // Input tokens for current context
+	         "input_tokens": number,           // Input tokens reported by the API
 	         "output_tokens": number,          // Output tokens generated
 	         "cache_creation_input_tokens": number,  // Tokens written to cache
 	         "cache_read_input_tokens": number       // Tokens read from cache
 	       } | null,
-	       "used_percentage": number | null,      // Pre-calculated: % of context used (0-100), null if no messages yet
-	       "remaining_percentage": number | null  // Pre-calculated: % of context remaining (0-100), null if no messages yet
+	       "used_percentage": number | null,      // Pre-calculated from current_context_tokens when available
+	       "remaining_percentage": number | null  // Pre-calculated from current_context_tokens when available
 	     },
 	     "vim": {                     // Optional, only present when vim mode is enabled
 	       "mode": "INSERT" | "NORMAL"  // Current vim editor mode
