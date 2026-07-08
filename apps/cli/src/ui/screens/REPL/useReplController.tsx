@@ -45,6 +45,7 @@ import { ThinkingToggleScreen } from '#ui-ink/screens/overlays/ThinkingToggleScr
 import { ModelConfig } from '#ui-ink/components/ModelConfig'
 import { Doctor } from '#ui-ink/screens/Doctor'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
+import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import { submitPrompt } from '#ui-ink/components/PromptInput/submit'
 import { parsePromptHistoryDisplay } from '#ui-ink/hooks/useArrowKeyHistory'
 import { useTranscriptItems, type TranscriptItem } from './useTranscriptItems'
@@ -87,6 +88,7 @@ export function useReplController(props: REPLProps) {
   const safeMode = Boolean(props.safeMode)
   const mcpClients = props.mcpClients ?? []
   const isDefaultModel = props.isDefaultModel ?? true
+  const { rows: terminalRows, columns: terminalColumns } = useTerminalSize()
   const [updateAvailableVersion, setUpdateAvailableVersion] = useState<
     string | null
   >(() => props.initialUpdateVersion ?? null)
@@ -1101,6 +1103,8 @@ export function useReplController(props: REPLProps) {
             isDefaultModel={isDefaultModel}
             updateBannerVersion={updateAvailableVersion}
             updateBannerCommands={updateCommands}
+            terminalColumns={terminalColumns}
+            terminalRows={terminalRows}
           />
           <ProjectOnboarding workspaceDir={getOriginalCwd()} />
         </Box>
@@ -1129,6 +1133,8 @@ export function useReplController(props: REPLProps) {
     isDefaultModel,
     mcpClients,
     staticOutputEpoch,
+    terminalColumns,
+    terminalRows,
     transcript.items,
     transcript.replStaticPrefixLength,
     updateAvailableVersion,
