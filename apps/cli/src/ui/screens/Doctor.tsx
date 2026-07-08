@@ -11,7 +11,10 @@ import { describeToolPermissionRuleSource } from '#core/permissions/ruleString'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { terminalCapabilityManager } from '#ui-ink/utils/terminalCapabilityManager'
-import { formatTerminalAppearanceLines } from '#ui-ink/utils/terminalAppearance'
+import {
+  formatTerminalAppearanceLines,
+  withTerminalReadability,
+} from '#ui-ink/utils/terminalAppearance'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import {
@@ -75,12 +78,19 @@ export function Doctor({
       terminalCapabilityManager.getTerminalBackgroundColor()
     const appearanceSnapshot =
       terminalCapabilityManager.getTerminalAppearanceSnapshot()
-    const appearance = {
-      ...appearanceSnapshot,
-      terminalName: appearanceSnapshot.terminalName ?? terminalName,
-      terminalBackgroundColor:
-        appearanceSnapshot.terminalBackgroundColor ?? backgroundColor,
-    }
+    const appearance = withTerminalReadability(
+      {
+        ...appearanceSnapshot,
+        terminalName: appearanceSnapshot.terminalName ?? terminalName,
+        terminalBackgroundColor:
+          appearanceSnapshot.terminalBackgroundColor ?? backgroundColor,
+      },
+      {
+        textColor: theme.text,
+        secondaryTextColor: theme.secondaryText,
+        accentColor: theme.kode,
+      },
+    )
     const kittySupported = terminalCapabilityManager.isKittyProtocolSupported()
     const kittyEnabled = terminalCapabilityManager.isKittyProtocolEnabled()
     const mokSupported = terminalCapabilityManager.isModifyOtherKeysSupported()
@@ -229,6 +239,9 @@ export function Doctor({
     doctorMode,
     layout.columns,
     layout.rows,
+    theme.kode,
+    theme.secondaryText,
+    theme.text,
     unreachableRules.length,
   ])
 

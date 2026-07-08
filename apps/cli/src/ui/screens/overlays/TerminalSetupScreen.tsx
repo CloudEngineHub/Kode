@@ -12,6 +12,7 @@ import { terminalCapabilityManager } from '#ui-ink/utils/terminalCapabilityManag
 import {
   formatTerminalAppearanceLines,
   type TerminalAppearanceSnapshot,
+  withTerminalReadability,
 } from '#ui-ink/utils/terminalAppearance'
 
 type Props = {
@@ -64,8 +65,17 @@ function snapshotCapabilities(): TerminalCapabilities {
   }
 }
 
-function buildTerminalSetupLines(capabilities: TerminalCapabilities): string[] {
+function buildTerminalSetupLines(
+  capabilities: TerminalCapabilities,
+  theme: ReturnType<typeof getTheme>,
+): string[] {
   const lines: string[] = []
+  const appearance = withTerminalReadability(capabilities.appearance, {
+    textColor: theme.text,
+    secondaryTextColor: theme.secondaryText,
+    accentColor: theme.kode,
+  })
+
   lines.push('Terminal setup')
   lines.push(`- terminal: ${capabilities.terminalName ?? '(unknown)'}`)
   lines.push(`- tty: ${capabilities.tty ? 'yes' : 'no'}`)
@@ -82,7 +92,7 @@ function buildTerminalSetupLines(capabilities: TerminalCapabilities): string[] {
   )
 
   lines.push('')
-  lines.push(...formatTerminalAppearanceLines(capabilities.appearance))
+  lines.push(...formatTerminalAppearanceLines(appearance))
 
   lines.push('')
   lines.push('Multi-line input')
@@ -122,8 +132,8 @@ export function TerminalSetupScreen({ onDone }: Props): React.ReactNode {
   }, [])
 
   const rawLines = useMemo(
-    () => buildTerminalSetupLines(capabilities),
-    [capabilities],
+    () => buildTerminalSetupLines(capabilities, theme),
+    [capabilities, theme],
   )
   const wrapped = useMemo(() => {
     const width = Math.max(1, layout.columns - layout.paddingX * 2)

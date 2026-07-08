@@ -2,9 +2,11 @@ import { describe, expect, it } from 'bun:test'
 
 import {
   createTerminalAppearanceSnapshot,
+  createTerminalReadabilityReport,
   formatTerminalAppearanceLines,
   getWindowsTerminalFeatureSupport,
   parseWindowsTerminalVersion,
+  withTerminalReadability,
 } from './terminalAppearance'
 
 describe('terminal appearance helpers', () => {
@@ -129,6 +131,71 @@ describe('terminal appearance helpers', () => {
     )
     expect(lines).toContain(
       '- WT profile image/opacity settings are not queryable from the running app; settings.json is not inspected.',
+    )
+  })
+
+  it('computes theme contrast against the terminal background color', () => {
+    const readable = createTerminalReadabilityReport({
+      terminalBackgroundColor: '#000000',
+      textColor: '#ffffff',
+      secondaryTextColor: '#777777',
+      accentColor: '#f06060',
+    })
+
+    expect(readable.backgroundTone).toBe('dark')
+    expect(readable.text).toBe('good')
+    expect(readable.secondaryText).toBe('good')
+    expect(readable.textContrastRatio).toBeCloseTo(21, 1)
+
+    const lowContrast = createTerminalReadabilityReport({
+      terminalBackgroundColor: '#ffffff',
+      textColor: '#ffffff',
+      secondaryTextColor: '#eeeeee',
+      accentColor: '#ffff00',
+    })
+
+    expect(lowContrast.backgroundTone).toBe('light')
+    expect(lowContrast.text).toBe('low')
+    expect(lowContrast.secondaryText).toBe('low')
+    expect(lowContrast.accent).toBe('low')
+  })
+
+  it('reports unknown readability when the OSC background is unavailable', () => {
+    const report = createTerminalReadabilityReport({
+      terminalBackgroundColor: undefined,
+      textColor: '#ffffff',
+      secondaryTextColor: '#777777',
+      accentColor: '#f06060',
+    })
+
+    expect(report.backgroundTone).toBe('unknown')
+    expect(report.text).toBe('unknown')
+    expect(report.secondaryText).toBe('unknown')
+    expect(report.accent).toBe('unknown')
+  })
+
+  it('formats readability warnings when theme contrast is low', () => {
+    const snapshot = withTerminalReadability(
+      createTerminalAppearanceSnapshot({
+        terminalBackgroundColor: '#ffffff',
+        env: {
+          WT_SESSION: 'session-id',
+        },
+      }),
+      {
+        textColor: '#ffffff',
+        secondaryTextColor: '#eeeeee',
+        accentColor: '#ffff00',
+      },
+    )
+
+    const lines = formatTerminalAppearanceLines(snapshot)
+
+    expect(
+      lines.some(line => line.includes('Readability: bg=light; text=low')),
+    ).toBe(true)
+    expect(lines).toContain(
+      '- Readability note: current theme colors may be low contrast on this terminal background.',
     )
   })
 })
