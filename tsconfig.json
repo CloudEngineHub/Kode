@@ -79,7 +79,7 @@
     "types": ["bun-types", "node"],
     "allowSyntheticDefaultImports": true,
     "noEmitOnError": false,
-    "ignoreDeprecations": "5.0",
+    "ignoreDeprecations": "6.0",
     "useUnknownInCatchVariables": false,
     "noErrorTruncation": true,
     "noEmit": false,

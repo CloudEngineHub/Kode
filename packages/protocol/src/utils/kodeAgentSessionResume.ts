@@ -224,12 +224,10 @@ function readSessionListItemBestEffort(args: {
     }
   }
 
-  const summary =
-    (lastAssistantUuid
-      ? (summariesByLeaf.get(lastAssistantUuid) ?? null)
-      : null) ??
-    lastSummary ??
-    null
+  let summary = lastSummary
+  if (lastAssistantUuid) {
+    summary = summariesByLeaf.get(lastAssistantUuid) ?? lastSummary
+  }
 
   const excerptText = [...firstMessages, ...lastMessages]
     .join(' ')
