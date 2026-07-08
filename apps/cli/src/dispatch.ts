@@ -89,8 +89,11 @@ async function main(): Promise<void> {
       }
     }
 
-    const { startMCPServer } = await import('#core/mcp/server')
-    await startMCPServer(cwd)
+    const [{ startMCPServer }, { getAllTools }] = await Promise.all([
+      import('#core/mcp/server'),
+      import('#tools'),
+    ])
+    await startMCPServer(cwd, getAllTools())
     return
   }
 

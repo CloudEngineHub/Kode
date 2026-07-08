@@ -12,7 +12,6 @@ import {
   type Tool,
   type ToolUseContext,
 } from '#core/tooling/Tool'
-import { getAllTools } from '#tools'
 import { lastX } from '#core/utils/generators'
 import { MACRO } from '#core/constants/macros'
 import { splitLegacyTool } from '#core/tooling/splitTool'
@@ -40,9 +39,12 @@ function getMcpServerName(): string {
   return trimmed || 'kode/tengu'
 }
 
-export async function startMCPServer(cwd: string): Promise<void> {
+export async function startMCPServer(
+  cwd: string,
+  tools: Iterable<Tool>,
+): Promise<void> {
   await setCwd(cwd)
-  const MCP_TOOLS: Tool[] = [...getAllTools()]
+  const MCP_TOOLS: Tool[] = [...tools]
   await Promise.all(MCP_TOOLS.map(tool => resolveToolDescription(tool)))
   const server = new Server(
     {
