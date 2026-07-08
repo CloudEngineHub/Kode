@@ -268,9 +268,9 @@ export const useSelectState = ({
     () =>
       Boolean(
         focusValue &&
-          flatOptions.some(
-            option => 'value' in option && option.value === focusValue,
-          ),
+        flatOptions.some(
+          option => 'value' in option && option.value === focusValue,
+        ),
       ),
     [flatOptions, focusValue],
   )
@@ -285,11 +285,21 @@ export const useSelectState = ({
     () => optionStructureKey(flatOptions),
     [flatOptions],
   )
+  const onChangeRef = useRef(onChange)
+  const onFocusRef = useRef(onFocus)
   const lastFocusedValueRef = useRef<string | undefined>(state.focusedValue)
   const lastSyncedRef = useRef({
     structureKey,
     visibleOptionCount,
   })
+
+  useEffect(() => {
+    onChangeRef.current = onChange
+  }, [onChange])
+
+  useEffect(() => {
+    onFocusRef.current = onFocus
+  }, [onFocus])
 
   useEffect(() => {
     if (state.focusedValue) {
@@ -356,7 +366,7 @@ export const useSelectState = ({
     if (state.value && state.previousValue !== state.value) {
       const selectedValue = state.value
       try {
-        onChange?.(selectedValue)
+        onChangeRef.current?.(selectedValue)
       } finally {
         dispatch({
           type: 'clear-selected-option',
@@ -364,13 +374,13 @@ export const useSelectState = ({
         })
       }
     }
-  }, [state.previousValue, state.value, onChange])
+  }, [state.previousValue, state.value])
 
   useEffect(() => {
     if (state.focusedValue) {
-      onFocus?.(state.focusedValue)
+      onFocusRef.current?.(state.focusedValue)
     }
-  }, [state.focusedValue, onFocus])
+  }, [state.focusedValue])
 
   const appliedFocusValueRef = useRef<string | undefined>(undefined)
   useEffect(() => {

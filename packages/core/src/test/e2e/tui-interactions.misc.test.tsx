@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import React, { useEffect, useMemo, useState } from 'react'
-import { Box } from 'ink'
+import { Box, Text } from 'ink'
 import { AskUserQuestionPermissionRequest } from '#ui-ink/components/permissions/AskUserQuestionPermissionRequest/AskUserQuestionPermissionRequest'
 import { AskUserQuestionTool } from '#tools/tools/interaction/AskUserQuestionTool/AskUserQuestionTool'
 import { BashToolRunInBackgroundOverlay } from '#tools/tools/system/BashTool/BashToolRunInBackgroundOverlay'
@@ -241,6 +241,48 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     await h.wait(25)
 
     expect(selected).toBe('first')
+  })
+
+  test('Select: unstable onFocus callback does not create a parent update loop', async () => {
+    let focusCalls = 0
+
+    function SelectUnstableOnFocusHarness(): React.ReactNode {
+      const [focusMeta, setFocusMeta] = useState({ value: '' })
+
+      return (
+        <Box flexDirection="column">
+          <Text>FOCUS:{focusMeta.value}</Text>
+          <Select
+            options={[
+              { label: 'First', value: 'first' },
+              { label: 'Second', value: 'second' },
+            ]}
+            onFocus={value => {
+              focusCalls += 1
+              setFocusMeta({ value })
+            }}
+          />
+        </Box>
+      )
+    }
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <SelectUnstableOnFocusHarness />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(100)
+
+    expect(focusCalls).toBe(1)
+    expect(h.getOutput()).toContain('FOCUS:first')
+
+    h.stdin.write('\u001B[B')
+    await h.wait(100)
+
+    expect(focusCalls).toBe(2)
+    expect(h.getOutput()).toContain('FOCUS:second')
   })
 
   test('Select: selected value is consumed across keep-alive rerenders', async () => {
