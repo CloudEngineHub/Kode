@@ -41,6 +41,7 @@ type Action =
       visibleOptionCount: number
       options: (Option | OptionSubtree)[]
       defaultValue?: string
+      preserveMissingFocusedValue?: boolean
     }
 
 function getAdjacentSelectableValue(
@@ -162,18 +163,27 @@ const reducer: Reducer<State, Action> = (state, action) => {
     }
 
     case 'sync-options': {
+      const preferredFocusedValue =
+        state.focusedValue ?? state.value ?? action.defaultValue
       const nextState = createDefaultState({
         visibleOptionCount: action.visibleOptionCount,
-        defaultValue: state.focusedValue ?? state.value ?? action.defaultValue,
+        defaultValue: preferredFocusedValue,
         options: action.options,
       })
       const value =
         state.value && nextState.optionMap.get(state.value)
           ? state.value
           : undefined
+      const focusedValue =
+        action.preserveMissingFocusedValue &&
+        state.focusedValue &&
+        !nextState.optionMap.get(state.focusedValue)
+          ? state.focusedValue
+          : nextState.focusedValue
 
       return {
         ...nextState,
+        focusedValue,
         previousValue: value === state.value ? state.previousValue : undefined,
         value,
       }
@@ -351,6 +361,7 @@ export const useSelectState = ({
       visibleOptionCount,
       defaultValue: lastFocusedValueRef.current ?? focusValue ?? defaultValue,
       options,
+      preserveMissingFocusedValue: focusValue !== undefined,
     })
   }, [
     defaultValue,
@@ -379,12 +390,15 @@ export const useSelectState = ({
     })
   }, [dispatchWithFocusMirror])
 
-  const selectOption = useCallback((value: string) => {
-    dispatchWithFocusMirror({
-      type: 'select-option',
-      value,
-    })
-  }, [dispatchWithFocusMirror])
+  const selectOption = useCallback(
+    (value: string) => {
+      dispatchWithFocusMirror({
+        type: 'select-option',
+        value,
+      })
+    },
+    [dispatchWithFocusMirror],
+  )
 
   const visibleOptions = useMemo(() => {
     return flatOptions

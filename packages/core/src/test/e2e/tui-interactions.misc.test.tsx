@@ -508,6 +508,75 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     expect(focused).toBe('second')
   })
 
+  test('Select: down-arrow focus survives transient keep-alive options missing the focused value', async () => {
+    let focused = ''
+    let selected = ''
+
+    function SelectTransientMissingFocusedOptionHarness(): React.ReactNode {
+      const [mode, setMode] = useState<'full' | 'missing'>('full')
+      const [focusValue, setFocusValue] = useState<string | undefined>('first')
+
+      useEffect(() => {
+        if (focusValue !== 'second') return
+
+        const timers = [
+          setTimeout(() => setMode('missing'), 80),
+          setTimeout(() => setMode('full'), 150),
+        ]
+        return () => {
+          for (const timer of timers) clearTimeout(timer)
+        }
+      }, [focusValue])
+
+      return (
+        <Select
+          focusValue={focusValue}
+          options={
+            mode === 'full'
+              ? [
+                  { label: 'First', value: 'first' },
+                  { label: 'Second', value: 'second' },
+                  { label: 'Third', value: 'third' },
+                ]
+              : [
+                  { label: 'First', value: 'first' },
+                  { label: 'Third', value: 'third' },
+                ]
+          }
+          onFocus={value => {
+            focused = value
+            setFocusValue(value)
+          }}
+          onChange={value => {
+            selected = value
+          }}
+        />
+      )
+    }
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <SelectTransientMissingFocusedOptionHarness />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(40)
+    expect(focused).toBe('first')
+
+    h.stdin.write('\u001B[B')
+    await h.wait(60)
+    expect(focused).toBe('second')
+
+    await h.wait(180)
+    expect(focused).toBe('second')
+
+    h.stdin.write('\r')
+    await h.wait(40)
+
+    expect(selected).toBe('second')
+  })
+
   test('Select: parent-synced focus survives a keep-alive remount', async () => {
     let focused = ''
     let selected = ''
