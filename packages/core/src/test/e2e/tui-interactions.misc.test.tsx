@@ -243,6 +243,40 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     expect(selected).toBe('first')
   })
 
+  test('Select: digit key selects the matching visible option', async () => {
+    let selected = ''
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <Select
+          options={[
+            {
+              header: 'Group',
+              options: [
+                { label: 'First', value: 'first' },
+                { label: 'Second', value: 'second' },
+              ],
+            },
+            {
+              header: 'More',
+              options: [{ label: 'Third', value: 'third' }],
+            },
+          ]}
+          onChange={value => {
+            selected = value
+          }}
+        />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    h.stdin.write('2')
+    await h.wait(25)
+
+    expect(selected).toBe('second')
+  })
+
   test('Select: unstable onFocus callback does not create a parent update loop', async () => {
     let focusCalls = 0
 
@@ -527,6 +561,66 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     expect(focused).toBe('second')
 
     await h.wait(140)
+    expect(focused).toBe('second')
+
+    h.stdin.write('\r')
+    await h.wait(40)
+
+    expect(selected).toBe('second')
+  })
+
+  test('Select: parent focus is persisted before an interrupting keep-alive remount', async () => {
+    let focused = ''
+    let selected = ''
+
+    function SelectInterruptedRemountHarness(): React.ReactNode {
+      const [showSelect, setShowSelect] = useState(true)
+      const [focusValue, setFocusValue] = useState<string | undefined>('first')
+
+      useKeypress(
+        (_input, key) => {
+          if (!key.downArrow) return
+
+          setShowSelect(false)
+          setTimeout(() => setShowSelect(true), 0)
+          return false
+        },
+        { priority: 10 },
+      )
+
+      if (!showSelect) return <Text>Loading actions...</Text>
+
+      return (
+        <Select
+          focusValue={focusValue}
+          options={[
+            { label: 'First', value: 'first' },
+            { label: 'Second', value: 'second' },
+            { label: 'Third', value: 'third' },
+          ]}
+          onFocus={value => {
+            focused = value
+            setFocusValue(value)
+          }}
+          onChange={value => {
+            selected = value
+          }}
+        />
+      )
+    }
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <SelectInterruptedRemountHarness />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(40)
+    expect(focused).toBe('first')
+
+    h.stdin.write('\u001B[B')
+    await h.wait(80)
     expect(focused).toBe('second')
 
     h.stdin.write('\r')

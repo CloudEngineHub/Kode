@@ -43,28 +43,39 @@ type Action =
       defaultValue?: string
     }
 
+function getAdjacentSelectableValue(
+  state: Pick<State, 'focusedValue' | 'optionMap'>,
+  direction: 'next' | 'previous',
+): string | undefined {
+  if (!state.focusedValue) {
+    return undefined
+  }
+
+  const item = state.optionMap.get(state.focusedValue)
+
+  if (!item) {
+    return undefined
+  }
+
+  let adjacent = direction === 'next' ? item.next : item.previous
+  while (adjacent && !('value' in adjacent)) {
+    adjacent = direction === 'next' ? adjacent.next : adjacent.previous
+  }
+
+  return adjacent && 'value' in adjacent ? adjacent.value : undefined
+}
+
 const reducer: Reducer<State, Action> = (state, action) => {
   switch (action.type) {
     case 'focus-next-option': {
-      if (!state.focusedValue) {
+      const nextValue = getAdjacentSelectableValue(state, 'next')
+
+      if (!nextValue) {
         return state
       }
 
-      const item = state.optionMap.get(state.focusedValue)
-
-      if (!item) {
-        return state
-      }
-
-      let next = item.next
-      while (next && !('value' in next)) {
-        // Skip headers
-        next = next.next
-      }
-
-      if (!next || !('value' in next)) {
-        return state
-      }
+      const next = state.optionMap.get(nextValue)
+      if (!next || !('value' in next)) return state
 
       const needsToScroll = next.index >= state.visibleToIndex
 
@@ -91,25 +102,14 @@ const reducer: Reducer<State, Action> = (state, action) => {
     }
 
     case 'focus-previous-option': {
-      if (!state.focusedValue) {
+      const previousValue = getAdjacentSelectableValue(state, 'previous')
+
+      if (!previousValue) {
         return state
       }
 
-      const item = state.optionMap.get(state.focusedValue)
-
-      if (!item) {
-        return state
-      }
-
-      let previous = item.previous
-      while (previous && !('value' in previous)) {
-        // Skip headers
-        previous = previous.previous
-      }
-
-      if (!previous || !('value' in previous)) {
-        return state
-      }
+      const previous = state.optionMap.get(previousValue)
+      if (!previous || !('value' in previous)) return state
 
       const needsToScroll = previous.index <= state.visibleFromIndex
 
@@ -288,10 +288,21 @@ export const useSelectState = ({
   const onChangeRef = useRef(onChange)
   const onFocusRef = useRef(onFocus)
   const lastFocusedValueRef = useRef<string | undefined>(state.focusedValue)
+  const lastNotifiedFocusValueRef = useRef<string | undefined>(undefined)
   const lastSyncedRef = useRef({
     structureKey,
     visibleOptionCount,
   })
+
+  const notifyFocus = useCallback((value: string | undefined) => {
+    if (!value) return
+
+    lastFocusedValueRef.current = value
+
+    if (lastNotifiedFocusValueRef.current === value) return
+    lastNotifiedFocusValueRef.current = value
+    onFocusRef.current?.(value)
+  }, [])
 
   useEffect(() => {
     onChangeRef.current = onChange
@@ -302,10 +313,8 @@ export const useSelectState = ({
   }, [onFocus])
 
   useEffect(() => {
-    if (state.focusedValue) {
-      lastFocusedValueRef.current = state.focusedValue
-    }
-  }, [state.focusedValue])
+    notifyFocus(state.focusedValue)
+  }, [notifyFocus, state.focusedValue])
 
   useEffect(() => {
     const lastSynced = lastSyncedRef.current
@@ -329,16 +338,18 @@ export const useSelectState = ({
   }, [defaultValue, focusValue, options, structureKey, visibleOptionCount])
 
   const focusNextOption = useCallback(() => {
+    notifyFocus(getAdjacentSelectableValue(state, 'next'))
     dispatch({
       type: 'focus-next-option',
     })
-  }, [])
+  }, [notifyFocus, state])
 
   const focusPreviousOption = useCallback(() => {
+    notifyFocus(getAdjacentSelectableValue(state, 'previous'))
     dispatch({
       type: 'focus-previous-option',
     })
-  }, [])
+  }, [notifyFocus, state])
 
   const selectFocusedOption = useCallback(() => {
     dispatch({
@@ -347,11 +358,12 @@ export const useSelectState = ({
   }, [])
 
   const selectOption = useCallback((value: string) => {
+    if (state.optionMap.get(value)) notifyFocus(value)
     dispatch({
       type: 'select-option',
       value,
     })
-  }, [])
+  }, [notifyFocus, state.optionMap])
 
   const visibleOptions = useMemo(() => {
     return flatOptions
@@ -375,12 +387,6 @@ export const useSelectState = ({
       }
     }
   }, [state.previousValue, state.value])
-
-  useEffect(() => {
-    if (state.focusedValue) {
-      onFocusRef.current?.(state.focusedValue)
-    }
-  }, [state.focusedValue])
 
   const appliedFocusValueRef = useRef<string | undefined>(undefined)
   useEffect(() => {
