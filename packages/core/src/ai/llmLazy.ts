@@ -2,6 +2,7 @@ import type {
   queryLLM as queryLLMImpl,
   queryQuick as queryQuickImpl,
 } from '#core/ai/llm'
+import { setPromptHookQueryProvider } from '@kode/hooks/promptQuery'
 
 type QueryLLM = typeof queryLLMImpl
 type QueryQuick = typeof queryQuickImpl
@@ -36,3 +37,5 @@ export async function fetchAnthropicModels(
   const { fetchAnthropicModels: inner } = await import('#core/ai/llm')
   return inner(apiKey, baseURL)
 }
+
+setPromptHookQueryProvider(args => queryQuick(args))

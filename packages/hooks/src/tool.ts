@@ -1,8 +1,7 @@
 import { mkdirSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { logError } from '#core/utils/log'
-import { getCwd } from '#core/utils/state'
+import { getCwd } from '@kode/runtime/cwd'
 import { getKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
 import type { PreToolUseHookOutcome } from './types'
 import { getDisableAllHooksState } from './disableAllHooks'
@@ -25,6 +24,7 @@ import {
   loadSettingsMatchers,
   matcherMatchesTool,
 } from './registry'
+import { logError } from './log'
 type HookRuntimeState = {
   transcriptPath?: string
   queuedSystemMessages: string[]

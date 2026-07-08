@@ -3,7 +3,7 @@ import {
   loadSettingsWithLegacyFallback,
   saveSettingsToPrimaryAndSyncLegacy,
 } from '#config'
-import { getCwd } from '#core/utils/state'
+import { getCwd } from '@kode/runtime/cwd'
 
 type SettingsWithDisableAllHooks = SettingsFile & {
   disableAllHooks?: unknown

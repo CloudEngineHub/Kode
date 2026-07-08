@@ -5,8 +5,6 @@ import {
   loadSettingsWithLegacyFallback,
   type SettingsDestination,
 } from '#config'
-import { logError } from '#core/utils/log'
-import { getSessionPlugins } from '#core/utils/sessionPlugins'
 
 import type {
   CommandHook,
@@ -18,6 +16,8 @@ import type {
   SettingsFileWithHooks,
 } from './types'
 import { asRecord } from './types'
+import { logError } from './log'
+import { getSessionPlugins } from './sessionPlugins'
 
 type CachedHooks = {
   mtimeMs: number

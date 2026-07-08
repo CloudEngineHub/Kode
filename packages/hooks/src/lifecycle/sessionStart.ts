@@ -2,14 +2,14 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
-import { getCwd } from '#core/utils/state'
-import { getSessionPlugins } from '#core/utils/sessionPlugins'
+import { getCwd } from '@kode/runtime/cwd'
 import { getKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
-import { buildHookExecEnv } from '#core/compat/hookEnv'
 
 import type { CommandHook } from '../types'
 import { asRecord } from '../types'
 import { getDisableAllHooksState } from '../disableAllHooks'
+import { buildHookExecEnv } from '../hookEnv'
+import { getSessionPlugins } from '../sessionPlugins'
 import {
   coerceHookPermissionMode,
   extractFirstJsonObject,

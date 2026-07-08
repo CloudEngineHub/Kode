@@ -1,8 +1,8 @@
 import type { PreToolUseHookOutcome } from '../types'
-import { splitCommand } from '#core/utils/commands'
-import { workspaceSafetyService } from '#core/services/workspaceSafety'
 import { parse } from 'shell-quote'
 import { resolve as resolvePath } from 'node:path'
+import { splitCommand } from '../shell'
+import { listActiveWorkspacePeers } from '../workspaceSafety'
 
 function parseBoolLike(value: string | undefined): boolean {
   if (!value) return false
@@ -183,10 +183,10 @@ export function runBuiltinPreToolUseGuards(args: {
   // Escape hatch for intentional branch switches.
   if (parseBoolLike(process.env.KODE_ALLOW_GIT_BRANCH_SWITCH)) return null
 
-  let peers: ReturnType<typeof workspaceSafetyService.listActivePeers> = []
+  let peers: ReturnType<typeof listActiveWorkspacePeers> = []
   let peerWorkspaceCwd = args.cwd
   for (const targetCwd of targets) {
-    const found = workspaceSafetyService.listActivePeers({ cwd: targetCwd })
+    const found = listActiveWorkspacePeers({ cwd: targetCwd })
     if (found.length === 0) continue
     peers = found
     peerWorkspaceCwd = targetCwd

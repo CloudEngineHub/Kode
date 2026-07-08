@@ -1,5 +1,4 @@
-import { logError } from '#core/utils/log'
-import { getCwd } from '#core/utils/state'
+import { getCwd } from '@kode/runtime/cwd'
 import { getKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
 
 import type {
@@ -26,6 +25,7 @@ import {
   loadSettingsMatchers,
   matcherMatchesTool,
 } from '../registry'
+import { logError } from '../log'
 
 function getApplicableMatchers(
   projectDir: string,

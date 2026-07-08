@@ -4,7 +4,8 @@ import { delimiter, isAbsolute, join } from 'node:path'
 
 import type { Hook, HookEventName, HookMatcher, PromptHook } from './types'
 import { asRecord } from './types'
-import { buildHookExecEnv } from '#core/compat/hookEnv'
+import { buildHookExecEnv } from './hookEnv'
+import { getPromptHookQueryProvider } from './promptQuery'
 
 export type HookExecutionResult = {
   exitCode: number
@@ -458,7 +459,10 @@ async function runPromptHook(args: {
   })
 
   try {
-    const { queryQuick } = await import('#core/ai/llmLazy')
+    const queryQuick = getPromptHookQueryProvider()
+    if (!queryQuick) {
+      throw new Error('Prompt hook query provider is not configured')
+    }
 
     const systemPrompt = [
       'You are executing a Kode prompt hook.',

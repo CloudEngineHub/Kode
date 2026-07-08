@@ -5,7 +5,9 @@
   "type": "module",
   "dependencies": {
     "@kode/config": "workspace:*",
-    "@kode/core": "workspace:*",
-    "@kode/protocol": "workspace:*"
+    "@kode/protocol": "workspace:*",
+    "@kode/runtime": "workspace:*",
+    "minimatch": "^10.2.5",
+    "shell-quote": "^1.8.4"
   }
 }
