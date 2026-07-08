@@ -12,6 +12,7 @@ export const PASTE_TIMEOUT = 30_000
 export const FAST_RETURN_TIMEOUT = 30
 // Only protect fast Return after paste-like chunks; normal typing must submit immediately.
 const FAST_RETURN_PASTE_LIKE_CHARS = 80
+export const PASTE_PROTECTION_RETURN_KEY_NAME = 'paste-protection-return'
 
 const ESC = '\x1b'
 
@@ -248,9 +249,10 @@ function bufferFastReturn(keypressHandler: (key: ParsedKey) => void) {
     ) {
       keypressHandler({
         ...key,
-        name: '',
+        name: PASTE_PROTECTION_RETURN_KEY_NAME,
         sequence: '\r',
-        insertable: true,
+        paste: true,
+        insertable: false,
       })
     } else {
       keypressHandler(key)

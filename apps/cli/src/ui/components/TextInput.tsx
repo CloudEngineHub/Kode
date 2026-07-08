@@ -4,6 +4,7 @@ import chalk from 'chalk'
 import { useTextInput } from '#ui-ink/hooks/useTextInput'
 import { getTheme } from '#core/utils/theme'
 import { type Key, useKeypress } from '#ui-ink/hooks/useKeypress'
+import { PASTE_PROTECTION_RETURN_KEY_NAME } from '#ui-ink/contexts/KeypressContext'
 import { shouldAggregatePasteChunk } from '#core/utils/paste'
 import { terminalCapabilityManager } from '#ui-ink/utils/terminalCapabilityManager'
 import { useBracketedPasteSequences } from './TextInputBracketedPaste'
@@ -13,6 +14,8 @@ export type { Props } from './TextInput.types'
 // Character codes - use numeric comparison to survive minification
 const BACKSPACE_CODE = 8 // \x08
 const DEL_CODE = 127 // \x7f
+const PASTE_GUARD_MESSAGE =
+  'Paste detected. Press Enter again after it appears to submit.'
 
 // Helper to check if input is a backspace character
 function isBackspaceChar(input: string): boolean {
@@ -112,10 +115,7 @@ export default function TextInput({
   const showPasteWarning = React.useCallback(() => {
     const onMessage = onMessageRef.current
     if (!onMessage) return
-    onMessage(
-      true,
-      'Paste protection unavailable. Press Enter again to submit.',
-    )
+    onMessage(true, PASTE_GUARD_MESSAGE)
     if (pasteWarningTimeoutRef.current) {
       clearTimeout(pasteWarningTimeoutRef.current)
     }
@@ -134,6 +134,10 @@ export default function TextInput({
     (key: Key): boolean => {
       if (!key.return || key.shift || key.meta) return false
       if (isPasteTrusted()) return false
+      if (pasteTimeoutRef.current !== null) {
+        showPasteWarning()
+        return true
+      }
       if (!pasteGuardUntilRef.current) return false
       if (Date.now() >= pasteGuardUntilRef.current) return false
       pasteGuardUntilRef.current = 0
@@ -180,6 +184,11 @@ export default function TextInput({
   }, [flushAggregatedPaste])
 
   const wrappedOnInput = (input: string, key: Key): void => {
+    if (key.name === PASTE_PROTECTION_RETURN_KEY_NAME) {
+      showPasteWarning()
+      return
+    }
+
     // Some terminals (e.g. kitty/wezterm with CSI-u keyboard protocol) encode Enter with modifiers as CSI u sequences.
     // Example: ESC[13;3u (Alt/Option+Enter). Ink may strip the leading ESC.
     if (/^(?:\x1b)?\[13;2(?:u|~)$/.test(input)) {

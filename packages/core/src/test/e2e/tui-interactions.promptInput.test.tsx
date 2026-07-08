@@ -578,6 +578,39 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
     await h.wait(150)
   })
 
+  test('rapid Enter after a paste-sized chunk shows paste guard without inserting newline', async () => {
+    await setCwd(process.cwd())
+
+    const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
+    const h = createInkTestHarness(
+      <PromptInputHarness conversationKey={conversationKey} showRaw={true} />,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    h.clearOutput()
+
+    h.stdin.write('a'.repeat(801))
+    h.stdin.write('\r')
+    await h.wait(100)
+
+    const guardedOutput = h.getOutput()
+    expect(guardedOutput).toContain(
+      'Paste detected. Press Enter again after it appears to submit.',
+    )
+    expect(guardedOutput).not.toContain('SUBMIT_COUNT:1')
+    expect(guardedOutput).not.toContain('RAW:"\\n')
+
+    await h.wait(650)
+    expect(h.getOutput()).toContain('RAW:"[Pasted text #1]"')
+
+    h.clearOutput()
+    h.stdin.write('\r')
+    await h.wait(200)
+
+    expect(h.getOutput()).toContain('SUBMIT_COUNT:1')
+  })
+
   test('shift+tab cycles permission mode and renders CompactModeIndicator', async () => {
     const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
     const h = createInkTestHarness(
