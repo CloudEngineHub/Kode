@@ -28,7 +28,7 @@ import { getCwd } from '#core/utils/state'
 import { getEffectiveSessionId } from '#core/utils/sessionId'
 import { checkAutoCompact } from '#core/utils/autoCompactCore'
 import { checkMicroCompact } from '#core/utils/microCompactCore'
-import { asRecord } from '#core/hooks/types'
+import { asRecord } from '@kode/hooks/types'
 import {
   drainHookSystemPromptAdditions,
   getHookTranscriptPath,
@@ -37,7 +37,7 @@ import {
   runStopHooks,
   runUserPromptSubmitHooks,
   updateHookTranscriptForMessages,
-} from '#core/utils/kodeHooks'
+} from '@kode/hooks'
 import { queryWithBinaryFeedback } from './query-executor'
 import { ToolUseQueue } from './pipeline/tool-use-queue'
 import type {

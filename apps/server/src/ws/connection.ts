@@ -11,7 +11,7 @@ import { loadToolPermissionContextFromDisk } from '@kode/core/utils/permissions/
 import { setCwd, setOriginalCwd } from '@kode/core/utils/state'
 import { grantReadPermissionForOriginalDir } from '@kode/core/utils/permissions/filesystem'
 import { hasPermissionsToUseTool, savePermission } from '@kode/core/permissions'
-import { runBuiltinPreToolUseGuards } from '@kode/core/hooks/builtin/preToolUse'
+import { runBuiltinPreToolUseGuards } from '@kode/hooks/builtin/preToolUse'
 import {
   createAssistantMessage,
   REJECT_MESSAGE,

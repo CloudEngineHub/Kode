@@ -156,7 +156,7 @@ async function gracefulExit(code = 0) {
   isGracefulExitInProgress = true
 
   try {
-    const { runSessionEndHooks } = await import('#core/utils/kodeHooks')
+    const { runSessionEndHooks } = await import('@kode/hooks')
     const { getKodeAgentSessionId } =
       await import('#protocol/utils/kodeAgentSessionId')
     const { tmpdir } = await import('os')

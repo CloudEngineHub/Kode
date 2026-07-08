@@ -8,7 +8,7 @@ import { getCwd } from '#core/utils/state'
 import { release as osRelease, type as osType } from 'os'
 import { PRODUCT_NAME, PROJECT_FILE, PRODUCT_COMMAND } from './product'
 import { MACRO } from './macros'
-import { getSessionStartAdditionalContext } from '#core/utils/kodeHooks'
+import { getSessionStartAdditionalContext } from '@kode/hooks'
 import type { ToolUseContext } from '#core/tooling/Tool'
 
 const BASH_TOOL_NAME = 'Bash'

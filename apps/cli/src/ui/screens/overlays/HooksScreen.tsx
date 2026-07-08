@@ -12,8 +12,8 @@ import {
   listHookConfigurations,
   setDisableAllHooks,
   type HookConfigEntry,
-} from '#core/hooks'
-import type { Hook, HookEventName } from '#core/hooks/types'
+} from '@kode/hooks'
+import type { Hook, HookEventName } from '@kode/hooks/types'
 import type { ToolUseContext } from '#core/tooling/Tool'
 import { getTheme } from '#core/utils/theme'
 import { getCwd } from '#core/utils/state'

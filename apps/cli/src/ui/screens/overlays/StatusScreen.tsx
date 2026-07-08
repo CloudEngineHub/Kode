@@ -4,7 +4,7 @@ import figures from 'figures'
 
 import { MACRO } from '#core/constants/macros'
 import type { ToolUseContext } from '#core/tooling/Tool'
-import { getDisableAllHooksState } from '#core/hooks/disableAllHooks'
+import { getDisableAllHooksState } from '@kode/hooks/disableAllHooks'
 import { getModelManager } from '#core/utils/model'
 import { getTheme } from '#core/utils/theme'
 import { getCwd } from '#core/utils/state'

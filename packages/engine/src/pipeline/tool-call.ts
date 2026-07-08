@@ -15,8 +15,8 @@ import {
   queueHookSystemMessages,
   runPostToolUseHooks,
   runPreToolUseHooks,
-} from '#core/utils/kodeHooks'
-import { runBuiltinPreToolUseGuards } from '#core/hooks/builtin/preToolUse'
+} from '@kode/hooks'
+import { runBuiltinPreToolUseGuards } from '@kode/hooks/builtin/preToolUse'
 
 import type { AssistantMessage, Message } from './types'
 import { normalizeToolInput, preprocessToolInput } from './tool-input'

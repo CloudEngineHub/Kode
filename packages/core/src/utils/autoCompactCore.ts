@@ -15,10 +15,7 @@ import { getModelManager } from './model'
 import { debug as debugLogger } from '#core/utils/debugLogger'
 import { logError } from '#core/utils/log'
 import { createAnthropicUsage } from '#core/utils/anthropic'
-import {
-  getHookTranscriptPath,
-  runPreCompactHooks,
-} from '#core/utils/kodeHooks'
+import { getHookTranscriptPath, runPreCompactHooks } from '@kode/hooks'
 import {
   formatCompactionMcpSnapshot,
   formatCompactionSkillCommandSnapshot,
