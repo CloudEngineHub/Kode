@@ -141,4 +141,16 @@ describe('REPLView Static output epoch', () => {
     await harness.wait(20)
     expect(harness.getOutput()).toContain('static-a')
   })
+
+  test('does not reserve an empty transient viewport before controls', async () => {
+    const staticItems = [makeStaticItem('static-a')]
+    const harness = createHarness(
+      renderReplView({ staticOutputEpoch: 0, staticItems }),
+    )
+
+    await harness.wait(20)
+
+    expect(harness.getOutput()).toContain('static-a')
+    expect(harness.getOutput()).not.toMatch(/(?:\n\s*){4,}/)
+  })
 })

@@ -170,6 +170,9 @@ export function REPLView({
       messageSelectorHeight -
       VIEWPORT_SAFE_MARGIN_ROWS,
   )
+  const showTransientRegion =
+    transientItems.length > 0 ||
+    (!toolJSX && !toolUseConfirm && !binaryFeedbackContext && isLoading)
   const transientViewportValue = useMemo(
     () => ({ maxHeight: transientMaxHeight }),
     [transientMaxHeight],
@@ -191,19 +194,21 @@ export function REPLView({
               {(item: TranscriptItem) => item.jsx}
             </Static>
 
-            <Box
-              flexDirection="column"
-              height={transientMaxHeight}
-              overflow="hidden"
-              width="100%"
-            >
-              {transientItems.map(item => item.jsx)}
-              {/* Status indicator at bottom of messages, above controls */}
-              {!toolJSX &&
-                !toolUseConfirm &&
-                !binaryFeedbackContext &&
-                isLoading && <RequestStatusIndicator />}
-            </Box>
+            {showTransientRegion && (
+              <Box
+                flexDirection="column"
+                height={transientMaxHeight}
+                overflow="hidden"
+                width="100%"
+              >
+                {transientItems.map(item => item.jsx)}
+                {/* Status indicator at bottom of messages, above controls */}
+                {!toolJSX &&
+                  !toolUseConfirm &&
+                  !binaryFeedbackContext &&
+                  isLoading && <RequestStatusIndicator />}
+              </Box>
+            )}
 
             <Box
               ref={mainControlsRef}
