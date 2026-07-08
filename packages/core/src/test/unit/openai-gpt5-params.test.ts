@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { buildOpenAIChatCompletionCreateParams } from '#core/ai/llm/openai'
+import { buildOpenAIChatCompletionCreateParams } from '@kode/ai/llm/openai'
 
 describe('OpenAI Chat Completions params (GPT-5 branch)', () => {
   test('GPT-5 models use max_completion_tokens (not max_tokens)', () => {

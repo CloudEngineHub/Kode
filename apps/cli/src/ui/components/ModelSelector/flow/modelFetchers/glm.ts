@@ -1,4 +1,4 @@
-import { fetchCustomModels } from '#core/ai/openai'
+import { fetchCustomModels } from '@kode/ai/openai'
 import type { ModelInfo } from '../types'
 
 type SetModelLoadError = (message: string) => void

@@ -2,8 +2,8 @@ import { describe, expect, test } from 'bun:test'
 import {
   handleMessageStream,
   isOpenAIStreamDegradedResponse,
-} from '#core/ai/llm/openai/stream'
-import { createStreamProcessor } from '#core/ai/openai/stream'
+} from '@kode/ai/llm/openai/stream'
+import { createStreamProcessor } from '@kode/ai/openai/stream'
 
 function chunk(delta: Record<string, unknown>) {
   return {
