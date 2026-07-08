@@ -102,6 +102,8 @@
     "publish:dev": "bun run scripts/publish-dev.js",
     "publish:release": "bun run scripts/publish-release.js",
     "bench:startup": "bun run scripts/bench-startup.mjs",
+    "baseline:refactor": "bun run scripts/refactor-baseline.mjs",
+    "baseline:phase2": "bun run scripts/phase2-baseline.mjs",
     "build:npm": "bun run scripts/build.mjs",
     "postinstall": "node scripts/postinstall.js || true",
     "test:unit": "bun test packages/core/src/test/unit apps/cli/src/**/*.test.ts apps/cli/src/**/*.test.tsx packages/*/src/test/unit",
