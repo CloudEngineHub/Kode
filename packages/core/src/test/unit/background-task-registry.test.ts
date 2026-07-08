@@ -4,6 +4,7 @@ import type { BackgroundAgentTask } from '#core/utils/backgroundTasks'
 import {
   __backgroundTaskRegistryForTests,
   getBackgroundShellStatus,
+  summarizeBackgroundTaskSnapshots,
 } from '#core/tasks/backgroundRegistry'
 import { createAssistantMessage } from '#core/utils/messages'
 
@@ -101,6 +102,36 @@ describe('background task registry', () => {
       parentTaskId: 'main',
       completedAt: 300,
       resultText: 'done',
+    })
+  })
+
+  test('summarizes task totals by type and running state', () => {
+    const runningShell =
+      __backgroundTaskRegistryForTests.toShellTaskSnapshot(makeShellTask())
+    const completedShell = __backgroundTaskRegistryForTests.toShellTaskSnapshot(
+      makeShellTask({ id: 'shell-2', code: 0 }),
+    )
+    const runningAgent =
+      __backgroundTaskRegistryForTests.toAgentTaskSnapshot(makeAgentTask())
+    const failedAgent = __backgroundTaskRegistryForTests.toAgentTaskSnapshot(
+      makeAgentTask({
+        agentId: 'agent-2',
+        status: 'failed',
+      }),
+    )
+
+    expect(
+      summarizeBackgroundTaskSnapshots([
+        runningShell,
+        completedShell,
+        runningAgent,
+        failedAgent,
+      ]),
+    ).toEqual({
+      total: 4,
+      running: 2,
+      bash: { total: 2, running: 1 },
+      agents: { total: 2, running: 1 },
     })
   })
 })

@@ -50,6 +50,13 @@ export type BackgroundAgentTaskSnapshot = BackgroundTaskSnapshotBase & {
 export type BackgroundTaskSnapshot =
   BackgroundShellTaskSnapshot | BackgroundAgentTaskSnapshot
 
+export type BackgroundTaskCounts = {
+  total: number
+  running: number
+  bash: { total: number; running: number }
+  agents: { total: number; running: number }
+}
+
 export function getBackgroundShellStatus(task: {
   code: number | null
   killed: boolean
@@ -106,6 +113,26 @@ export function listBackgroundTaskSnapshots(): BackgroundTaskSnapshot[] {
     ...listBackgroundAgentTaskSnapshots().map(toAgentTaskSnapshot),
     ...shell.listBackgroundShells().map(toShellTaskSnapshot),
   ]
+}
+
+export function summarizeBackgroundTaskSnapshots(
+  tasks: readonly BackgroundTaskSnapshot[],
+): BackgroundTaskCounts {
+  const shells = tasks.filter(task => task.taskType === 'local_bash')
+  const agents = tasks.filter(task => task.taskType === 'local_agent')
+  const runningShells = shells.filter(task => task.status === 'running').length
+  const runningAgents = agents.filter(task => task.status === 'running').length
+
+  return {
+    total: tasks.length,
+    running: runningShells + runningAgents,
+    bash: { total: shells.length, running: runningShells },
+    agents: { total: agents.length, running: runningAgents },
+  }
+}
+
+export function getBackgroundTaskCounts(): BackgroundTaskCounts {
+  return summarizeBackgroundTaskSnapshots(listBackgroundTaskSnapshots())
 }
 
 export function getBackgroundTaskSnapshot(

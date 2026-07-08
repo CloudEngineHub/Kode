@@ -39,8 +39,7 @@ import { getPromptInputSpecialKeyAction } from '#ui-ink/utils/promptInputSpecial
 import { setTerminalTitle } from '#cli-utils/terminal'
 import { Cursor, countWrappedLines } from '#cli-utils/Cursor'
 import { getCurrentOutputStyle } from '#cli-services/outputStyles'
-import { BunShell } from '#runtime/shell'
-import { listBackgroundAgentTaskSnapshots } from '#core/utils/backgroundTasks'
+import { listBackgroundTaskSnapshots } from '#core/tasks/backgroundRegistry'
 import { submitPrompt } from './submit'
 import {
   usePromptPastes,
@@ -693,9 +692,7 @@ export function PromptInput({
       historyIndex === 0 &&
       input.length === 0
     ) {
-      const hasBackgroundTasks =
-        BunShell.getInstance().listBackgroundShells().length > 0 ||
-        listBackgroundAgentTaskSnapshots().length > 0
+      const hasBackgroundTasks = listBackgroundTaskSnapshots().length > 0
       if (hasBackgroundTasks) {
         onManageTasks()
         return

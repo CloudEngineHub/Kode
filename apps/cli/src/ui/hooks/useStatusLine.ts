@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { BunShell } from '#runtime/shell'
 import { getStatusLineConfig } from '#core/services/statusline'
-import { listBackgroundAgentTaskSnapshots } from '#core/utils/backgroundTasks'
+import { getBackgroundTaskCounts } from '#core/tasks/backgroundRegistry'
 
 function serializeStatusLineInput(value: unknown): string {
   try {
@@ -13,7 +13,6 @@ function serializeStatusLineInput(value: unknown): string {
 
 function buildDynamicStatusLineInput(
   baseInput: unknown,
-  shell: BunShell,
 ): Record<string, unknown> {
   const base =
     baseInput && typeof baseInput === 'object' && !Array.isArray(baseInput)
@@ -25,20 +24,7 @@ function buildDynamicStatusLineInput(
       ? (base.kode as Record<string, unknown>)
       : {}
 
-  const shells = shell.listBackgroundShells()
-  const runningShells = shells.filter(
-    proc => proc.code === null && !proc.interrupted && !proc.killed,
-  ).length
-
-  const agents = listBackgroundAgentTaskSnapshots()
-  const runningAgents = agents.filter(task => task.status === 'running').length
-
-  const tasks = {
-    total: shells.length + agents.length,
-    running: runningShells + runningAgents,
-    bash: { total: shells.length, running: runningShells },
-    agents: { total: agents.length, running: runningAgents },
-  }
+  const tasks = getBackgroundTaskCounts()
 
   return {
     ...base,
@@ -107,7 +93,7 @@ export function useStatusLine(input?: unknown): {
 
       const result = await shell.exec(command, ac.signal, 5000, {
         stdin: serializeStatusLineInput(
-          buildDynamicStatusLineInput(inputRef.current, shell),
+          buildDynamicStatusLineInput(inputRef.current),
         ),
       })
       if (!alive) return

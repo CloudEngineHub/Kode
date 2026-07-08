@@ -497,8 +497,8 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
     h.stdin.write('\u001B[Z')
     await h.wait(50)
 
-    expect(h.getOutput()).toContain('plan mode')
-    expect(h.getOutput()).toContain('(shift+tab to cycle)')
+    expect(h.getOutput()).toContain('Plan first')
+    expect(h.getOutput()).toContain('shift+tab to change')
   })
 
   test('shift+enter inserts newline (CSI-u)', async () => {
