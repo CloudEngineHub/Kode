@@ -18,10 +18,28 @@ export async function processResponsesStream(
   let responseId = fallbackResponseId
   const pendingToolCalls: any[] = []
   let hasMarkedStreaming = false
+  let streamError: string | null = null
 
   for await (const event of stream) {
     if (event.type === 'message_start') {
       responseId = event.responseId || responseId
+      continue
+    }
+
+    if (event.type === 'message_stop') {
+      const stoppedResponseId = event.message?.responseId ?? event.message?.id
+      if (typeof stoppedResponseId === 'string' && stoppedResponseId) {
+        responseId = stoppedResponseId
+      }
+      continue
+    }
+
+    if (event.type === 'error') {
+      const message = event.error || 'OpenAI stream error'
+      if (contentBlocks.length === 0 && pendingToolCalls.length === 0) {
+        throw new Error(message)
+      }
+      streamError = message
       continue
     }
 
@@ -83,7 +101,7 @@ export async function processResponsesStream(
       role: 'assistant',
       content: contentBlocks,
       stop_details: null,
-      stop_reason: 'end_turn',
+      stop_reason: streamError ? 'max_tokens' : 'end_turn',
       stop_sequence: null,
       type: 'message',
       usage: createAnthropicUsage({
@@ -109,6 +127,7 @@ export async function processResponsesStream(
       id: responseId,
       content: contentBlocks,
       usage,
+      ...(streamError ? { error: streamError } : {}),
     },
   }
 }

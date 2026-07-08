@@ -89,8 +89,18 @@ export abstract class OpenAIAdapter extends ModelAPIAdapter {
             const parsed = this.parseSSEChunk(line)
             if (parsed) {
               // Extract response ID
-              if (parsed.id) {
-                responseId = parsed.id
+              const parsedResponseId = this.extractStreamingResponseId(parsed)
+              if (parsedResponseId) {
+                responseId = parsedResponseId
+              }
+
+              const streamError = this.extractStreamingError(parsed)
+              if (streamError) {
+                yield {
+                  type: 'error',
+                  error: streamError,
+                }
+                continue
               }
 
               // Delegate to subclass for specific processing
@@ -164,6 +174,40 @@ export abstract class OpenAIAdapter extends ModelAPIAdapter {
         }
       }
     }
+    return null
+  }
+
+  private extractStreamingResponseId(parsed: any): string | null {
+    const responseId = parsed?.response?.id ?? parsed?.id
+    return typeof responseId === 'string' && responseId ? responseId : null
+  }
+
+  private extractStreamingError(parsed: any): string | null {
+    const response = parsed?.response
+    const explicitError = parsed?.error ?? response?.error
+
+    if (explicitError) {
+      if (typeof explicitError === 'string') return explicitError
+      if (typeof explicitError.message === 'string') return explicitError.message
+      if (typeof explicitError.code === 'string') return explicitError.code
+      return 'OpenAI stream error'
+    }
+
+    const isFailed =
+      parsed?.type === 'response.failed' || response?.status === 'failed'
+    if (isFailed) return 'OpenAI response failed'
+
+    const isIncomplete =
+      parsed?.type === 'response.incomplete' ||
+      response?.status === 'incomplete'
+    if (isIncomplete) {
+      const details = response?.incomplete_details ?? parsed?.incomplete_details
+      if (typeof details?.reason === 'string') {
+        return `OpenAI response incomplete: ${details.reason}`
+      }
+      return 'OpenAI response incomplete'
+    }
+
     return null
   }
 

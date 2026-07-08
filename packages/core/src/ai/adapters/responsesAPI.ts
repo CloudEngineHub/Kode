@@ -313,13 +313,14 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
     }
 
     // Handle usage information - normalize to canonical structure
-    if (parsed.usage) {
-      const normalizedUsage = normalizeTokens(parsed.usage)
+    const usage = parsed.usage ?? parsed.response?.usage
+    if (usage) {
+      const normalizedUsage = normalizeTokens(usage)
 
       // Add reasoning tokens if available in Responses API format
-      if (parsed.usage.output_tokens_details?.reasoning_tokens) {
+      if (usage.output_tokens_details?.reasoning_tokens) {
         normalizedUsage.reasoning =
-          parsed.usage.output_tokens_details.reasoning_tokens
+          usage.output_tokens_details.reasoning_tokens
       }
 
       yield {

@@ -241,8 +241,9 @@ describe('Responses API Tests', () => {
       const adapter = ModelAdapterFactory.createAdapter(testModel)
       const encoder = new TextEncoder()
       const streamChunks = [
+        'data: {"type":"response.created","response":{"id":"resp-stream-test"}}\n',
         'data: {"type":"response.output_text.delta","delta":"Hello"}\n',
-        'data: {"type":"response.completed","usage":{"input_tokens":12,"output_tokens":8,"total_tokens":20,"output_tokens_details":{"reasoning_tokens":3}}}\n',
+        'data: {"type":"response.completed","response":{"id":"resp-stream-test","usage":{"input_tokens":12,"output_tokens":8,"total_tokens":20,"output_tokens_details":{"reasoning_tokens":3}}}}\n',
         'data: [DONE]\n',
       ]
 
@@ -293,6 +294,61 @@ describe('Responses API Tests', () => {
         totalTokens: 20,
       })
       expect(rawResponse.id).toBe('resp-stream-test')
+    })
+
+    test('streaming failure before assistant output rejects', async () => {
+      const adapter = ModelAdapterFactory.createAdapter(testModel)
+      const streamData = [
+        'data: {"type":"response.created","response":{"id":"resp-failed-before-output"}}\n\n',
+        'data: {"type":"response.failed","response":{"id":"resp-failed-before-output","status":"failed","error":{"message":"quota exceeded"}}}\n\n',
+        'data: [DONE]\n\n',
+      ].join('')
+
+      await expect(
+        adapter.parseResponse(new Response(streamData)),
+      ).rejects.toThrow('quota exceeded')
+    })
+
+    test('streaming failure after assistant output marks partial response degraded', async () => {
+      const adapter = ModelAdapterFactory.createAdapter(testModel)
+      const streamData = [
+        'data: {"type":"response.created","response":{"id":"resp-partial-failed"}}\n\n',
+        'data: {"type":"response.output_text.delta","delta":"partial"}\n\n',
+        'data: {"type":"response.failed","response":{"id":"resp-partial-failed","status":"failed","error":{"message":"socket reset"}}}\n\n',
+        'data: [DONE]\n\n',
+      ].join('')
+
+      const events: any[] = []
+      if (!adapter.parseStreamingResponse) {
+        throw new Error('Adapter does not support streaming')
+      }
+      for await (const event of adapter.parseStreamingResponse(
+        new Response(streamData),
+      )) {
+        events.push(event)
+      }
+
+      async function* replayEvents(evts: any[]) {
+        for (const evt of evts) {
+          yield evt
+        }
+      }
+
+      const { assistantMessage, rawResponse } = await processResponsesStream(
+        replayEvents(events),
+        Date.now(),
+        'resp-fallback',
+      )
+
+      expect(assistantMessage.responseId).toBe('resp-partial-failed')
+      expect(assistantMessage.message.content).toEqual([
+        { type: 'text', text: 'partial', citations: [] },
+      ])
+      expect(assistantMessage.message.stop_reason).toBe('max_tokens')
+      expect(rawResponse).toMatchObject({
+        id: 'resp-partial-failed',
+        error: 'socket reset',
+      })
     })
   })
 
