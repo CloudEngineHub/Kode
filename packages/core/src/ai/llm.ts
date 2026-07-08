@@ -249,10 +249,10 @@ async function queryLLMWithPromptCaching(
   },
 ): Promise<AssistantMessage> {
   const config = getGlobalConfig()
-  const modelManager = getModelManager()
   const toolUseContext = options.toolUseContext
 
-  const modelProfile = options.modelProfile || modelManager.getModel('main')
+  const modelProfile =
+    options.modelProfile ?? getModelManager().getModel('main')
   let provider: string
 
   if (modelProfile) {
