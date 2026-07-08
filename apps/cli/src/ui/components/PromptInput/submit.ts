@@ -121,17 +121,14 @@ export async function submitPrompt(args: {
     args.exit()
   }
 
-  const isKoding = args.mode === 'koding' || args.input.startsWith('#')
+  const isKoding = args.mode === 'koding'
   const isKodingActionPrompt =
     isKoding &&
     args.input.match(/^(#\s*)?(put|create|generate|write|give|provide)/i)
 
   if (isKoding && !isKodingActionPrompt) {
     try {
-      const contentToInterpret =
-        args.mode === 'koding' && !args.input.startsWith('#')
-          ? args.input.trim()
-          : args.input.substring(1).trim()
+      const contentToInterpret = args.input.trim()
       const interpreted = await interpretHashCommand(contentToInterpret)
       handleHashCommand(interpreted)
     } catch (error) {
@@ -141,7 +138,7 @@ export async function submitPrompt(args: {
     args.onInputChange('')
     args.setCursorOffset(0)
     addPromptToHistory({
-      display: args.mode === 'koding' ? `#${args.input}` : args.input,
+      display: args.mode === 'koding' ? `/note ${args.input}` : args.input,
       pastedTexts: args.pastedTexts,
     })
     args.resetHistory()
@@ -154,9 +151,7 @@ export async function submitPrompt(args: {
 
   const finalInput = expandPastedTextPlaceholders({
     input:
-      isKodingActionPrompt && args.mode === 'koding'
-        ? args.input.trim()
-        : args.input,
+      isKodingActionPrompt && args.mode === 'koding' ? trimmed : args.input,
     pastedTexts: args.pastedTexts,
   })
 

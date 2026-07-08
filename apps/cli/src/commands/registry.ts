@@ -5,6 +5,7 @@ import config from './builtin/config'
 import cost from './builtin/cost'
 import ctx_viz from './debug/ctx_viz'
 import addDir from './builtin/add-dir'
+import bash from './builtin/bash'
 import exit from './builtin/exit'
 import doctor from './builtin/doctor'
 import gateDump from './builtin/gate-dump'
@@ -27,6 +28,7 @@ import theme from './builtin/theme'
 import vim from './builtin/vim'
 import * as model from './builtin/model'
 import modelstatus from './builtin/modelstatus'
+import note from './builtin/note'
 import onboarding from './builtin/onboarding'
 import open from './builtin/open'
 import copy from './builtin/copy'
@@ -68,6 +70,7 @@ const INTERNAL_ONLY_COMMANDS = [ctx_viz, listen, messages_debug]
 const COMMANDS = memoize((): Command[] => [
   agents,
   addDir,
+  bash,
   clear,
   compact,
   config,
@@ -92,6 +95,7 @@ const COMMANDS = memoize((): Command[] => [
   plugin,
   model,
   modelstatus,
+  note,
   onboarding,
   open,
   copy,

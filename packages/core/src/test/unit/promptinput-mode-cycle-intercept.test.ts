@@ -79,4 +79,18 @@ describe('PromptInput mode-cycle intercept', () => {
       }),
     ).toBe('modeCycle')
   })
+
+  test('Ctrl+B inserts the /bash command prefix instead of toggling Bash mode', () => {
+    const shortcut = __getPermissionModeCycleShortcutForTests({
+      platform: 'darwin',
+    })
+
+    expect(
+      __getPromptInputSpecialKeyActionForTests({
+        inputChar: String.fromCharCode(2),
+        key: makeKey({ ctrl: true }),
+        modeCycleShortcut: shortcut,
+      }),
+    ).toBe('bashCommandPrefix')
+  })
 })

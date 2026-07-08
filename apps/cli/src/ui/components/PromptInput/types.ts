@@ -7,10 +7,6 @@ import type { SetForkConvoWithMessagesOnTheNextRender } from '#ui-ink/types/conv
 
 export type PromptMode = 'bash' | 'background' | 'prompt' | 'koding'
 
-export function toggleBashMode(current: PromptMode): PromptMode {
-  return current === 'bash' ? 'prompt' : 'bash'
-}
-
 export type PromptInputProps = {
   commands: Command[]
   forkNumber: number

@@ -46,8 +46,9 @@ export function Logo({
       <Box marginTop={1}>
         <Text dimColor>
           /init{'  '}/help{'  '}
-          <Text color={theme.bashBorder}>Ctrl+B</Text> shell{'  '}
-          <Text color={theme.notingBorder}>#</Text>note{'  '}
+          <Text color={theme.bashBorder}>/bash</Text>{' '}
+          <Text color={theme.notingBorder}>/note</Text>
+          {'  '}
           @file{'  '}opt+m{'  '}opt+g
         </Text>
       </Box>

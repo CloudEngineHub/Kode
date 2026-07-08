@@ -8,7 +8,7 @@ const CTRL_B_CODE = 2 // Ctrl+B = STX (ASCII 2)
 const CTRL_G_CODE = 7 // Ctrl+G = BEL (ASCII 7)
 
 export type PromptInputSpecialKeyAction =
-  'modeCycle' | 'modelSwitch' | 'externalEditor' | 'bashModeToggle' | null
+  'modeCycle' | 'modelSwitch' | 'externalEditor' | 'bashCommandPrefix' | null
 
 export function getPromptInputSpecialKeyAction(args: {
   inputChar: string
@@ -47,7 +47,7 @@ export function getPromptInputSpecialKeyAction(args: {
     (args.key.ctrl && (args.inputChar === 'b' || args.inputChar === 'B')) ||
     (optionOrMeta && (args.inputChar === 'b' || args.inputChar === 'B'))
   ) {
-    return 'bashModeToggle'
+    return 'bashCommandPrefix'
   }
 
   return null

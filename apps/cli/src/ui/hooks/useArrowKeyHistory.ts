@@ -19,7 +19,7 @@ export function parsePromptHistoryDisplay(display: string): {
     return { mode: 'background', text: display.slice(1) }
   }
   if (display.startsWith('#')) {
-    return { mode: 'koding', text: display.slice(1) }
+    return { mode: 'prompt', text: `/note ${display.slice(1)}` }
   }
   return { mode: 'prompt', text: display }
 }

@@ -49,7 +49,7 @@ import {
   type PastedImageAttachment,
   type PastedTextSegment,
 } from './pastes'
-import { toggleBashMode, type PromptInputProps, type PromptMode } from './types'
+import type { PromptInputProps, PromptMode } from './types'
 import { PromptInputView } from './PromptInputView'
 import { useExternalEdit } from './useExternalEdit'
 import { useQuickModelSwitch } from './useQuickModelSwitch'
@@ -214,10 +214,6 @@ export function PromptInput({
       if (mode === 'prompt') {
         if (value.startsWith('&')) {
           onModeChange('background')
-          return
-        }
-        if (value.startsWith('#')) {
-          onModeChange('koding')
           return
         }
       }
@@ -824,8 +820,17 @@ export function PromptInput({
         return true
       }
 
-      if (action === 'bashModeToggle') {
-        onModeChange(toggleBashMode(mode))
+      if (action === 'bashCommandPrefix') {
+        const prefix = '/bash '
+        const nextInput =
+          input.trim().length > 0 && !input.startsWith(prefix)
+            ? `${prefix}${input}`
+            : input.startsWith(prefix)
+              ? input
+              : prefix
+        if (mode !== 'prompt') onModeChange('prompt')
+        onInputChange(nextInput)
+        setCursorOffset(nextInput.length)
         return true
       }
 

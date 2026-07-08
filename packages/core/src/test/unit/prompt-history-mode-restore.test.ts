@@ -9,14 +9,14 @@ describe('prompt history mode restore', () => {
     })
   })
 
-  test('keeps background and koding history prefixes', () => {
+  test('keeps background history prefix and migrates legacy note prefix', () => {
     expect(__parsePromptHistoryDisplayForTests('&npm test')).toEqual({
       mode: 'background',
       text: 'npm test',
     })
     expect(__parsePromptHistoryDisplayForTests('#note')).toEqual({
-      mode: 'koding',
-      text: 'note',
+      mode: 'prompt',
+      text: '/note note',
     })
   })
 })

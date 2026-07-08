@@ -27,9 +27,9 @@ export function getInputModeDisplay(mode: PromptMode): InputModeDisplay {
       }
     case 'koding':
       return {
-        label: 'Koding note',
+        label: 'Legacy note',
         prefix: '#',
-        statusText: 'Input: Koding note',
+        statusText: 'Input: Legacy note',
         helperText: 'Esc back to chat',
       }
     case 'prompt':
@@ -38,7 +38,7 @@ export function getInputModeDisplay(mode: PromptMode): InputModeDisplay {
         label: 'Chat',
         prefix: '',
         statusText: 'Input: Chat',
-        helperText: 'Ctrl+B shell · & background · # note',
+        helperText: '/bash command · /note note · & background',
       }
   }
 }
