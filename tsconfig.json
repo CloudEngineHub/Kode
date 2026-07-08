@@ -22,6 +22,8 @@
     "paths": {
       "@kode/client": ["packages/client/src/index.ts"],
       "@kode/client/*": ["packages/client/src/*"],
+      "@kode/ai": ["packages/ai/src/index.ts"],
+      "@kode/ai/*": ["packages/ai/src/*"],
       "@kode/config": ["packages/config/src/index.ts"],
       "@kode/config/*": ["packages/config/src/*"],
       "@kode/core": ["packages/core/src/index.ts"],

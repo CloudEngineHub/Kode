@@ -1,0 +1,10 @@
+{
+  "name": "@kode/ai",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "dependencies": {
+    "@kode/core": "workspace:*",
+    "@kode/tool-interface": "workspace:*"
+  }
+}
