@@ -47,6 +47,14 @@ export function countCachedTokens(messages: Message[]): number {
 const CHARS_PER_TOKEN_ESTIMATE = 4
 const IMAGE_TOKENS_ESTIMATE = 2_000
 const TOKEN_OVERHEAD_MULTIPLIER = 4 / 3
+const DEFAULT_INCREMENTAL_TOKEN_TAIL_WINDOW = 8
+
+export type IncrementalTokenEstimateCache = {
+  sourceMessages: Message[]
+  messageBaseTokens: number[]
+  cumulativeBaseTokens: number[]
+  totalTokens: number
+}
 
 function safeStringify(value: unknown): string {
   try {
@@ -117,6 +125,17 @@ function estimateTokensFromMessageContent(content: unknown): number {
   }, 0)
 }
 
+function estimateMessageBaseTokens(message: Message | undefined): number {
+  if (!message) return 0
+  if (message.type === 'progress') return 0
+  if (message.type === 'assistant' && message.isMeta === true) return 0
+  return estimateTokensFromMessageContent(message.message.content)
+}
+
+function applyTokenOverhead(baseTokens: number): number {
+  return Math.ceil(baseTokens * TOKEN_OVERHEAD_MULTIPLIER)
+}
+
 /**
  * Best-effort token estimate for the current transcript.
  *
@@ -124,12 +143,61 @@ function estimateTokensFromMessageContent(content: unknown): number {
  * missing or stale after transcript transforms like microcompaction).
  */
 export function estimateTokens(messages: Message[]): number {
-  const base = messages.reduce((sum, message) => {
-    if (!message) return sum
-    if (message.type === 'progress') return sum
-    if (message.type === 'assistant' && message.isMeta === true) return sum
-    return sum + estimateTokensFromMessageContent(message.message.content)
-  }, 0)
+  const base = messages.reduce(
+    (sum, message) => sum + estimateMessageBaseTokens(message),
+    0,
+  )
 
-  return Math.ceil(base * TOKEN_OVERHEAD_MULTIPLIER)
+  return applyTokenOverhead(base)
+}
+
+export function estimateTokensIncremental(args: {
+  messages: Message[]
+  previous: IncrementalTokenEstimateCache | null | undefined
+  tailWindow?: number
+}): IncrementalTokenEstimateCache {
+  const tailWindow = Math.max(
+    0,
+    args.tailWindow ?? DEFAULT_INCREMENTAL_TOKEN_TAIL_WINDOW,
+  )
+  const previous = args.previous
+  const maxReusablePrefixLength = Math.max(0, args.messages.length - tailWindow)
+
+  let reusablePrefixLength = 0
+  if (previous) {
+    const maxComparable = Math.min(
+      previous.sourceMessages.length,
+      args.messages.length,
+      maxReusablePrefixLength,
+    )
+    while (
+      reusablePrefixLength < maxComparable &&
+      previous.sourceMessages[reusablePrefixLength] ===
+        args.messages[reusablePrefixLength]
+    ) {
+      reusablePrefixLength++
+    }
+  }
+
+  const messageBaseTokens =
+    previous?.messageBaseTokens.slice(0, reusablePrefixLength) ?? []
+  const cumulativeBaseTokens = previous?.cumulativeBaseTokens.slice(
+    0,
+    reusablePrefixLength + 1,
+  ) ?? [0]
+  let baseTokens = cumulativeBaseTokens[reusablePrefixLength] ?? 0
+
+  for (let i = reusablePrefixLength; i < args.messages.length; i++) {
+    const messageTokens = estimateMessageBaseTokens(args.messages[i])
+    messageBaseTokens[i] = messageTokens
+    baseTokens += messageTokens
+    cumulativeBaseTokens[i + 1] = baseTokens
+  }
+
+  return {
+    sourceMessages: args.messages,
+    messageBaseTokens,
+    cumulativeBaseTokens,
+    totalTokens: applyTokenOverhead(baseTokens),
+  }
 }

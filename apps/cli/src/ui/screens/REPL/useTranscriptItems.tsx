@@ -17,8 +17,9 @@ import {
   getUnresolvedToolUseIDs,
   INTERRUPT_MESSAGE,
   isNotEmptyMessage,
-  normalizeMessages,
+  normalizeMessagesIncremental,
   reorderMessages,
+  type IncrementalNormalizeMessagesCache,
   type NormalizedMessage,
 } from '#core/utils/messages'
 import { getTheme } from '#core/utils/theme'
@@ -148,10 +149,17 @@ export function useTranscriptItems(args: {
   items: TranscriptItem[]
 } {
   const chunkStateRef = useRef<Map<string, ChunkState>>(new Map())
-  const normalizedMessages = useMemo(
-    () => normalizeMessages(args.messages).filter(isNotEmptyMessage),
-    [args.messages],
+  const normalizedCacheRef = useRef<IncrementalNormalizeMessagesCache | null>(
+    null,
   )
+  const normalizedMessages = useMemo(() => {
+    const snapshot = normalizeMessagesIncremental({
+      messages: args.messages,
+      previous: normalizedCacheRef.current,
+    })
+    normalizedCacheRef.current = snapshot
+    return snapshot.normalizedMessages.filter(isNotEmptyMessage)
+  }, [args.messages])
 
   const unresolvedToolUseIDs = useMemo(
     () => getUnresolvedToolUseIDs(normalizedMessages),

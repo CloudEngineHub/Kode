@@ -62,61 +62,114 @@ type NormalizedUserMessage = {
 export type NormalizedMessage =
   NormalizedUserMessage | AssistantMessage | ProgressMessage
 
-export function normalizeMessages(messages: Message[]): NormalizedMessage[] {
-  return messages.flatMap(message => {
-    if (message.type === 'progress') {
-      return [message] as NormalizedMessage[]
-    }
-    if (typeof message.message.content === 'string') {
-      return [message] as NormalizedMessage[]
-    }
+export type IncrementalNormalizeMessagesCache = {
+  sourceMessages: Message[]
+  normalizedBySourceIndex: NormalizedMessage[][]
+  normalizedMessages: NormalizedMessage[]
+}
 
-    if (message.type === 'user') {
-      return [message] as NormalizedMessage[]
-    }
+const DEFAULT_INCREMENTAL_NORMALIZE_TAIL_WINDOW = 8
 
-    const contentBlocks = message.message.content
-      .filter(
-        block =>
+export function normalizeMessage(message: Message): NormalizedMessage[] {
+  if (message.type === 'progress') {
+    return [message] as NormalizedMessage[]
+  }
+  if (typeof message.message.content === 'string') {
+    return [message] as NormalizedMessage[]
+  }
+
+  if (message.type === 'user') {
+    return [message] as NormalizedMessage[]
+  }
+
+  const contentBlocks = message.message.content
+    .filter(
+      block =>
+        !(
+          block.type === 'thinking' &&
           !(
-            block.type === 'thinking' &&
-            !(
-              typeof (block as { thinking?: unknown }).thinking === 'string' &&
-              (block as { thinking: string }).thinking.trim().length > 0
-            )
-          ),
-      )
-      .sort((a, b) => {
-        const order: Record<string, number> = {
-          thinking: 0,
-          redacted_thinking: 1,
-          text: 2,
-          tool_use: 3,
-          server_tool_use: 3,
-          mcp_tool_use: 3,
-        }
-        return (order[a.type] ?? 2) - (order[b.type] ?? 2)
-      })
-
-    return contentBlocks.map((block, blockIndex) => {
-      const msgRecord = message as {
-        uuid?: unknown
-        message?: { id?: unknown }
+            typeof (block as { thinking?: unknown }).thinking === 'string' &&
+            (block as { thinking: string }).thinking.trim().length > 0
+          )
+        ),
+    )
+    .sort((a, b) => {
+      const order: Record<string, number> = {
+        thinking: 0,
+        redacted_thinking: 1,
+        text: 2,
+        tool_use: 3,
+        server_tool_use: 3,
+        mcp_tool_use: 3,
       }
-      const baseSeed =
-        typeof msgRecord.uuid === 'string'
-          ? msgRecord.uuid
-          : String(msgRecord.message?.id ?? randomUUID())
-      return {
-        type: 'assistant',
-        uuid: stableUuidFromSeed(`${baseSeed}:${blockIndex}`),
-        message: {
-          ...message.message,
-          content: [block],
-        },
-        costUSD: (message as AssistantMessage).costUSD / contentBlocks.length,
-        durationMs: (message as AssistantMessage).durationMs,
-      } as NormalizedMessage
+      return (order[a.type] ?? 2) - (order[b.type] ?? 2)
     })
+
+  return contentBlocks.map((block, blockIndex) => {
+    const msgRecord = message as {
+      uuid?: unknown
+      message?: { id?: unknown }
+    }
+    const baseSeed =
+      typeof msgRecord.uuid === 'string'
+        ? msgRecord.uuid
+        : String(msgRecord.message?.id ?? randomUUID())
+    return {
+      type: 'assistant',
+      uuid: stableUuidFromSeed(`${baseSeed}:${blockIndex}`),
+      message: {
+        ...message.message,
+        content: [block],
+      },
+      costUSD: (message as AssistantMessage).costUSD / contentBlocks.length,
+      durationMs: (message as AssistantMessage).durationMs,
+    } as NormalizedMessage
   })
+}
+
+export function normalizeMessages(messages: Message[]): NormalizedMessage[] {
+  return messages.flatMap(normalizeMessage)
+}
+
+export function normalizeMessagesIncremental(args: {
+  messages: Message[]
+  previous: IncrementalNormalizeMessagesCache | null | undefined
+  tailWindow?: number
+}): IncrementalNormalizeMessagesCache {
+  const tailWindow = Math.max(
+    0,
+    args.tailWindow ?? DEFAULT_INCREMENTAL_NORMALIZE_TAIL_WINDOW,
+  )
+  const previous = args.previous
+  const maxReusablePrefixLength = Math.max(0, args.messages.length - tailWindow)
+
+  let reusablePrefixLength = 0
+  if (previous) {
+    const maxComparable = Math.min(
+      previous.sourceMessages.length,
+      args.messages.length,
+      maxReusablePrefixLength,
+    )
+    while (
+      reusablePrefixLength < maxComparable &&
+      previous.sourceMessages[reusablePrefixLength] ===
+        args.messages[reusablePrefixLength]
+    ) {
+      reusablePrefixLength++
+    }
+  }
+
+  const normalizedBySourceIndex =
+    previous?.normalizedBySourceIndex.slice(0, reusablePrefixLength) ?? []
+
+  for (let i = reusablePrefixLength; i < args.messages.length; i++) {
+    const message = args.messages[i]
+    normalizedBySourceIndex[i] = message ? normalizeMessage(message) : []
+  }
+
+  return {
+    sourceMessages: args.messages,
+    normalizedBySourceIndex,
+    normalizedMessages: normalizedBySourceIndex.flat(),
+  }
 }

@@ -8,7 +8,6 @@ import {
   useRef,
   useState,
 } from 'react'
-import { estimateTokens } from '#core/utils/tokens'
 import { getTheme } from '#core/utils/theme'
 import { getModelManager } from '#core/utils/model'
 import { logStartupProfile } from '#core/utils/startupProfile'
@@ -55,6 +54,7 @@ import { useExternalEdit } from './useExternalEdit'
 import { useQuickModelSwitch } from './useQuickModelSwitch'
 import { getKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
 import { buildPromptInputStatusLine } from './inputModeDisplay'
+import { useThrottledTokenUsage } from './useThrottledTokenUsage'
 
 const PROMPT_DRAFT_KEY = 'repl'
 
@@ -224,7 +224,7 @@ export function PromptInput({
   )
 
   const theme = getTheme()
-  const tokenUsage = useMemo(() => estimateTokens(messages), [messages])
+  const tokenUsage = useThrottledTokenUsage(messages)
   const totalCostUSD = useMemo(() => {
     let total = 0
     for (const message of messages) {
