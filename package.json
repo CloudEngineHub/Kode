@@ -133,7 +133,7 @@
     "env-paths": "4.0.0",
     "fflate": "^0.8.3",
     "figures": "^6.1.0",
-    "glob": "^11.0.3",
+    "glob": "13.0.6",
     "gray-matter": "^4.0.3",
     "highlight.js": "^11.11.1",
     "ignore": "^7.0.5",
