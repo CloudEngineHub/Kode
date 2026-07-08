@@ -111,6 +111,7 @@ const ERROR_HANDLERS: ErrorHandler[] = [
     fix: async opts => {
       const toolDescriptions: Record<string, string> = {}
       for (const tool of opts.tools || []) {
+        if (tool.type !== 'function') continue
         if (tool.function.description.length <= 1024) continue
         let str = ''
         let remainder = ''

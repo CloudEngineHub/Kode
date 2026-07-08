@@ -53,6 +53,7 @@ export function convertOpenAIResponseToAnthropic(
 
   if (message?.tool_calls) {
     for (const toolCall of message.tool_calls) {
+      if (toolCall.type !== 'function') continue
       const tool = toolCall.function
       const toolName = tool.name
       let toolArgs = {}
