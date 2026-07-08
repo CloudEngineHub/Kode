@@ -1,5 +1,4 @@
-import type { CanUseToolFn } from '#core/permissions/canUseTool'
-import type { Tool, ToolUseContext } from '#core/tooling/Tool'
+import type { Tool, ToolUseContext } from '@kode/tool-interface/Tool'
 import { getCwd } from '#core/utils/state'
 import { logError } from '#core/utils/log'
 import type { ToolResultBlockParam } from '@anthropic-ai/sdk/resources/index.mjs'
@@ -7,7 +6,7 @@ import {
   createAssistantMessage,
   createProgressMessage,
   createUserMessage,
-} from '#core/utils/messages'
+} from '../messages/create'
 import { maybePersistOversizedToolResult } from '#core/utils/toolResultPersistence'
 import {
   getHookTranscriptPath,
@@ -18,7 +17,7 @@ import {
 } from '@kode/hooks'
 import { runBuiltinPreToolUseGuards } from '@kode/hooks/builtin/preToolUse'
 
-import type { AssistantMessage, Message } from './types'
+import type { AssistantMessage, EngineCanUseToolFn, Message } from './types'
 import { normalizeToolInput, preprocessToolInput } from './tool-input'
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -48,7 +47,7 @@ export async function* checkPermissionsAndCallTool(
   siblingToolUseIDs: Set<string>,
   input: Record<string, unknown>,
   context: ToolUseContext,
-  canUseTool: CanUseToolFn,
+  canUseTool: EngineCanUseToolFn,
   assistantMessage: AssistantMessage,
   shouldSkipPermissionCheck?: boolean,
 ): AsyncGenerator<Message, void> {

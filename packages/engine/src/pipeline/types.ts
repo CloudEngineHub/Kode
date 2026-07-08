@@ -3,14 +3,16 @@ import type {
   MessageParam,
 } from '@anthropic-ai/sdk/resources/index.mjs'
 
-import type { UUID } from '#core/types/common'
-import type { Tool, ToolUseContext } from '#core/tooling/Tool'
-import type { ToolPermissionContext } from '#core/types/toolPermissionContext'
-import type { FullToolUseResult, NormalizedMessage } from '#core/utils/messages'
+import type { UUID } from 'crypto'
+import type { CanUseToolFn as InterfaceCanUseToolFn } from '@kode/tool-interface/canUseTool'
+import type { Tool, ToolUseContext } from '@kode/tool-interface/Tool'
+import type { ToolPermissionContext } from '@kode/tool-interface/permissions'
 import type {
   AnthropicUsage,
   ToolUseLikeBlockParam,
-} from '#core/utils/anthropic'
+} from '@kode/protocol/anthropic'
+import type { FullToolUseResult } from '../messages/create'
+import type { NormalizedMessage } from '../messages/normalize'
 
 // Extended ToolUseContext for query functions.
 export interface ExtendedToolUseContext extends ToolUseContext {
@@ -110,6 +112,11 @@ export type AssistantMessage = {
 export type BinaryFeedbackResult =
   | { message: AssistantMessage | null; shouldSkipPermissionCheck: false }
   | { message: AssistantMessage; shouldSkipPermissionCheck: true }
+
+export type EngineCanUseToolFn = InterfaceCanUseToolFn<
+  AssistantMessage,
+  ToolUseContext
+>
 
 export type ProgressMessage = {
   content: AssistantMessage

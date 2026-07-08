@@ -1,4 +1,4 @@
-import type { Tool } from '#core/tooling/Tool'
+import type { Tool } from '@kode/tool-interface/Tool'
 import { getCwd } from '#core/utils/state'
 
 export function normalizeToolInput(

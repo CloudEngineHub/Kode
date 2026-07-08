@@ -5,6 +5,7 @@
   "type": "module",
   "dependencies": {
     "@kode/core": "workspace:*",
+    "@kode/protocol": "workspace:*",
     "@kode/tool-interface": "workspace:*"
   }
 }

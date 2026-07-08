@@ -1,4 +1,4 @@
-import { createAnthropicUsage } from '#core/utils/anthropic'
+import { createAnthropicUsage } from '@kode/protocol/anthropic'
 
 export function getMaxTokensFromProfile(modelProfile: any): number {
   return modelProfile?.maxTokens || 8000

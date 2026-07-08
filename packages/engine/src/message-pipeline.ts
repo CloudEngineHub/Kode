@@ -1,4 +1,3 @@
-import type { CanUseToolFn } from '#core/permissions/canUseTool'
 import { queryLLM } from '#core/ai/llmLazy'
 import { getTotalCost } from '#core/cost-tracker'
 import { MaxBudgetUsdExceededError } from '#core/errors/maxBudgetUsd'
@@ -10,10 +9,14 @@ import '#core/services/workspaceSafety'
 import { markPhase } from '#core/utils/debugLogger'
 import {
   createAssistantMessage,
+} from './messages/create'
+import {
   INTERRUPT_MESSAGE,
   INTERRUPT_MESSAGE_FOR_TOOL_USE,
+} from './messages/constants'
+import {
   normalizeMessagesForAPI,
-} from '#core/utils/messages'
+} from './messages/api'
 import {
   getPlanModeSystemPromptAdditions,
   hydratePlanSlugFromMessages,
@@ -43,6 +46,7 @@ import { ToolUseQueue } from './pipeline/tool-use-queue'
 import type {
   AssistantMessage,
   BinaryFeedbackResult,
+  EngineCanUseToolFn,
   ExtendedToolUseContext,
   Message,
   UserMessage,
@@ -51,6 +55,7 @@ import { isToolUseLikeBlock } from './pipeline/types'
 export type {
   AssistantMessage,
   BinaryFeedbackResult,
+  EngineCanUseToolFn,
   ExtendedToolUseContext,
   Message,
   ProgressMessage,
@@ -66,7 +71,7 @@ export async function* messagePipeline(
   messages: Message[],
   systemPrompt: string[],
   context: { [k: string]: string },
-  canUseTool: CanUseToolFn,
+  canUseTool: EngineCanUseToolFn,
   toolUseContext: ExtendedToolUseContext,
   getBinaryFeedbackResponse?: (
     m1: AssistantMessage,
@@ -86,7 +91,7 @@ async function* messagePipelineCore(
   messages: Message[],
   systemPrompt: string[],
   context: { [k: string]: string },
-  canUseTool: CanUseToolFn,
+  canUseTool: EngineCanUseToolFn,
   toolUseContext: ExtendedToolUseContext,
   getBinaryFeedbackResponse?: (
     m1: AssistantMessage,

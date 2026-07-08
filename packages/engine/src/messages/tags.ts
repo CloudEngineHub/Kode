@@ -1,4 +1,4 @@
-import type { Message } from '#core/query'
+import type { Message } from '../pipeline/types'
 
 export function extractTagFromMessage(
   message: Message,

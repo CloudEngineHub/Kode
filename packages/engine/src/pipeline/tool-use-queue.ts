@@ -1,16 +1,16 @@
-import type { CanUseToolFn } from '#core/permissions/canUseTool'
-import type { Tool } from '#core/tooling/Tool'
-import type { ToolUseLikeBlockParam } from '#core/utils/anthropic'
+import type { Tool } from '@kode/tool-interface/Tool'
+import type { ToolUseLikeBlockParam } from '@kode/protocol/anthropic'
 import { resolveToolNameAlias } from '#core/utils/toolNameAliases'
 import {
   createAssistantMessage,
   createProgressMessage,
   createUserMessage,
-  REJECT_MESSAGE,
-} from '#core/utils/messages'
+} from '../messages/create'
+import { REJECT_MESSAGE } from '../messages/constants'
 
 import type {
   AssistantMessage,
+  EngineCanUseToolFn,
   ExtendedToolUseContext,
   Message,
   ProgressMessage,
@@ -60,7 +60,7 @@ function createSyntheticToolUseErrorMessage(
 
 export class ToolUseQueue {
   private readonly toolDefinitions: Tool[]
-  private readonly canUseTool: CanUseToolFn
+  private readonly canUseTool: EngineCanUseToolFn
   private readonly tools: ToolQueueEntry[] = []
   private toolUseContext: ExtendedToolUseContext
   private hasErrored = false
@@ -70,7 +70,7 @@ export class ToolUseQueue {
 
   constructor(options: {
     toolDefinitions: Tool[]
-    canUseTool: CanUseToolFn
+    canUseTool: EngineCanUseToolFn
     toolUseContext: ExtendedToolUseContext
     siblingToolUseIDs: Set<string>
     shouldSkipPermissionCheck?: boolean

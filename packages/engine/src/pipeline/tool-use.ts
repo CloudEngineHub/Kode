@@ -1,8 +1,7 @@
-import type { CanUseToolFn } from '#core/permissions/canUseTool'
-import type { ToolUseContext } from '#core/tooling/Tool'
-import type { ToolUseLikeBlockParam } from '#core/utils/anthropic'
+import type { ToolUseContext } from '@kode/tool-interface/Tool'
+import type { ToolUseLikeBlockParam } from '@kode/protocol/anthropic'
 import { logError } from '#core/utils/log'
-import { createUserMessage } from '#core/utils/messages'
+import { createUserMessage } from '../messages/create'
 import {
   debug as debugLogger,
   getCurrentRequest,
@@ -11,14 +10,19 @@ import {
 import { resolveToolNameAlias } from '#core/utils/toolNameAliases'
 import { setRequestStatus } from '#core/utils/requestStatus'
 
-import type { AssistantMessage, ExtendedToolUseContext, Message } from './types'
+import type {
+  AssistantMessage,
+  EngineCanUseToolFn,
+  ExtendedToolUseContext,
+  Message,
+} from './types'
 import { checkPermissionsAndCallTool } from './tool-call'
 
 export async function* runToolUse(
   toolUse: ToolUseLikeBlockParam,
   siblingToolUseIDs: Set<string>,
   assistantMessage: AssistantMessage,
-  canUseTool: CanUseToolFn,
+  canUseTool: EngineCanUseToolFn,
   toolUseContext: ExtendedToolUseContext,
   shouldSkipPermissionCheck?: boolean,
 ): AsyncGenerator<Message, void> {

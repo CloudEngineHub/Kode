@@ -5,7 +5,11 @@ import type {
   ToolUseBlockParam,
 } from '@anthropic-ai/sdk/resources/index.mjs'
 
-import type { AssistantMessage, Message, ProgressMessage } from '#core/query'
+import type {
+  AssistantMessage,
+  Message,
+  ProgressMessage,
+} from '../pipeline/types'
 
 import type { NormalizedMessage } from './normalize'
 import { extractTag } from './tags'

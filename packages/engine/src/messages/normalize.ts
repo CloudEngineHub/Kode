@@ -8,10 +8,13 @@ import type {
   ToolUseBlockParam,
 } from '@anthropic-ai/sdk/resources/index.mjs'
 
-import { NO_CONTENT_MESSAGE } from '#core/ai/constants'
-import type { AssistantMessage, Message, ProgressMessage } from '#core/query'
+import type {
+  AssistantMessage,
+  Message,
+  ProgressMessage,
+} from '../pipeline/types'
 
-import { INTERRUPT_MESSAGE_FOR_TOOL_USE } from './constants'
+import { INTERRUPT_MESSAGE_FOR_TOOL_USE, NO_CONTENT_MESSAGE } from './constants'
 
 function stableUuidFromSeed(seed: string): UUID {
   const hex = createHash('sha256').update(seed).digest('hex').slice(0, 32)

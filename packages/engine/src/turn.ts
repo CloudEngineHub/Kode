@@ -2,9 +2,9 @@ import type { AgentEvent } from '#protocol/agentEvent'
 import type {
   AssistantMessage,
   BinaryFeedbackResult,
+  EngineCanUseToolFn,
   Message,
-} from '#core/query'
-import type { CanUseToolFn } from '#core/permissions/canUseTool'
+} from './message-pipeline'
 
 import { query } from './orchestrator'
 
@@ -15,7 +15,7 @@ export type QueryToolUseContext = Parameters<typeof query>[4]
 
 export async function* runTurn(args: {
   messages: Message[]
-  canUseTool: CanUseToolFn
+  canUseTool: EngineCanUseToolFn
   toolUseContext: QueryToolUseContext
 
   disableSlashCommands?: boolean

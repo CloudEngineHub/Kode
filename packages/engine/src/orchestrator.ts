@@ -1,10 +1,10 @@
-import type { CanUseToolFn } from '#core/permissions/canUseTool'
 import { getOriginalCwd } from '#core/utils/state'
 import { appendSessionJsonlFromMessage } from '#protocol/utils/kodeAgentSessionLog'
 
 import type {
   AssistantMessage,
   BinaryFeedbackResult,
+  EngineCanUseToolFn,
   Message,
   ExtendedToolUseContext,
 } from './message-pipeline'
@@ -19,7 +19,7 @@ export async function* query(
   messages: Message[],
   systemPrompt: string[],
   context: { [k: string]: string },
-  canUseTool: CanUseToolFn,
+  canUseTool: EngineCanUseToolFn,
   toolUseContext: ExtendedToolUseContext,
   getBinaryFeedbackResponse?: (
     m1: AssistantMessage,

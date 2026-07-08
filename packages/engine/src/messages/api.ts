@@ -5,8 +5,9 @@ import type {
   Message as APIMessage,
 } from '@anthropic-ai/sdk/resources/index.mjs'
 
-import { NO_CONTENT_MESSAGE } from '#core/ai/constants'
-import type { AssistantMessage, Message, UserMessage } from '#core/query'
+import type { AssistantMessage, Message, UserMessage } from '../pipeline/types'
+
+import { NO_CONTENT_MESSAGE } from './constants'
 
 export function normalizeMessagesForAPI(
   messages: Message[],

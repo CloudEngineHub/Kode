@@ -7,17 +7,16 @@ import type {
   ToolResultBlockParam,
 } from '@anthropic-ai/sdk/resources/index.mjs'
 
-import { NO_CONTENT_MESSAGE } from '#core/ai/constants'
-import type { Tool } from '#core/tooling/Tool'
-import { createAnthropicUsage } from '#core/utils/anthropic'
+import type { Tool } from '@kode/tool-interface/Tool'
+import { createAnthropicUsage } from '@kode/protocol/anthropic'
 import type {
   AssistantMessage,
   Message,
   ProgressMessage,
   UserMessage,
-} from '#core/query'
+} from '../pipeline/types'
 
-import { CANCEL_MESSAGE } from './constants'
+import { CANCEL_MESSAGE, NO_CONTENT_MESSAGE } from './constants'
 import type { NormalizedMessage } from './normalize'
 
 function stableUuidFromSeed(seed: string): UUID {
