@@ -6,6 +6,7 @@
   "dependencies": {
     "@kode/ai": "workspace:*",
     "@kode/config": "workspace:*",
+    "@kode/engine": "workspace:*",
     "@kode/permissions": "workspace:*",
     "@kode/protocol": "workspace:*",
     "@kode/runtime": "workspace:*",

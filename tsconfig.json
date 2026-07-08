@@ -28,6 +28,8 @@
       "@kode/config/*": ["packages/config/src/*"],
       "@kode/core": ["packages/core/src/index.ts"],
       "@kode/core/*": ["packages/core/src/*"],
+      "@kode/engine": ["packages/engine/src/index.ts"],
+      "@kode/engine/*": ["packages/engine/src/*"],
       "@kode/host": ["packages/host/src/index.ts"],
       "@kode/host/*": ["packages/host/src/*"],
       "@kode/permissions": ["packages/permissions/src/index.ts"],
