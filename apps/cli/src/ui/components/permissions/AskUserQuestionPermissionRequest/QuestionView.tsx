@@ -31,6 +31,10 @@ export function AskUserQuestionView(props: {
       : props.isOtherFocused || otherSelected
         ? otherPlaceholder
         : ''
+  const optionShortcutCount = props.question.options.length + 1
+  const optionShortcutHint = props.question.multiSelect
+    ? `1-${optionShortcutCount} to toggle/focus`
+    : `1-${optionShortcutCount} to quick pick`
 
   return (
     <>
@@ -53,10 +57,11 @@ export function AskUserQuestionView(props: {
             : isSelected
               ? figures.tick
               : ' '
+
           return (
             <Box key={option.label} flexDirection="column">
               <Text color={color}>
-                {pointer} {indicator} {option.label}
+                {pointer} {indicator} {index + 1}. {option.label}
               </Text>
               <Text color={props.theme.secondaryText}>
                 {'  '}
@@ -78,14 +83,14 @@ export function AskUserQuestionView(props: {
               : otherSelected
                 ? figures.tick
                 : ' '}{' '}
-            Other
+            {props.question.options.length + 1}. Other
           </Text>
           {(props.isOtherFocused ||
             otherSelected ||
             props.otherText.trim().length > 0) && (
             <Text color={props.theme.secondaryText}>
               {otherLine}
-              {props.isOtherFocused && <Text color={props.theme.text}>▌</Text>}
+              {props.isOtherFocused && <Text color={props.theme.text}>_</Text>}
             </Text>
           )}
         </Box>
@@ -108,7 +113,7 @@ export function AskUserQuestionView(props: {
 
         <Box marginTop={1}>
           <Text color={props.theme.secondaryText} dimColor>
-            Enter to select · Tab/Arrow keys to navigate · Esc to cancel
+            {`Enter to select | ${optionShortcutHint} | Tab/Arrow keys to navigate | Esc to cancel`}
           </Text>
         </Box>
       </Box>

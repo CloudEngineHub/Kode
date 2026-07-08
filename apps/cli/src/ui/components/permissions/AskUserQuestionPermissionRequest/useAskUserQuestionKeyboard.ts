@@ -6,6 +6,7 @@ import {
   applyMultiSelectNav,
   applySingleSelectNav,
   formatMultiSelectAnswer,
+  getNumericOptionIndex,
   getTrimmedOtherAnswer,
   isTextInputChar,
 } from './utils'
@@ -226,6 +227,41 @@ export function useAskUserQuestionKeyboard(args: {
         }
       }
 
+      const numericOptionIndex = getNumericOptionIndex({
+        input,
+        key,
+        optionCount,
+      })
+      if (numericOptionIndex !== null) {
+        setFocusedOptionIndex(numericOptionIndex)
+        setIsMultiSelectSubmitFocused(false)
+
+        const isSelectingOther =
+          numericOptionIndex === currentQuestion.options.length
+        if (isSelectingOther) return
+
+        const existing = questionStatesRef.current[questionText]?.selectedValue
+        const selected = Array.isArray(existing) ? existing : []
+        const value = currentQuestion.options[numericOptionIndex]?.label
+        if (!value) return
+
+        const next = selected.includes(value)
+          ? selected.filter(v => v !== value)
+          : [...selected, value]
+
+        setQuestionState(questionText, { selectedValue: next }, true)
+
+        const otherText =
+          questionStatesRef.current[questionText]?.textInputValue ?? ''
+        const updated = {
+          ...answersRef.current,
+          [questionText]: formatMultiSelectAnswer(next, otherText),
+        }
+        answersRef.current = updated
+        args.setAnswers(updated)
+        return
+      }
+
       if (key.downArrow || key.upArrow || key.tab) {
         const next = applyMultiSelectNav({
           state: {
@@ -306,6 +342,35 @@ export function useAskUserQuestionKeyboard(args: {
         )
         return
       }
+    }
+
+    const numericOptionIndex = getNumericOptionIndex({
+      input,
+      key,
+      optionCount,
+    })
+    if (numericOptionIndex !== null) {
+      setFocusedOptionIndex(numericOptionIndex)
+
+      const isSelectingOther =
+        numericOptionIndex === currentQuestion.options.length
+      if (isSelectingOther) return
+
+      const selectedValue = currentQuestion.options[numericOptionIndex]?.label
+      if (!selectedValue) return
+
+      setQuestionState(questionText, { selectedValue }, false)
+
+      if (args.hideSubmitTab) {
+        args.onAllowWithAnswers({
+          ...answersRef.current,
+          [questionText]: selectedValue,
+        })
+        return
+      }
+
+      setAnswer(questionText, selectedValue, true)
+      return
     }
 
     if (key.downArrow || key.upArrow) {

@@ -29,6 +29,8 @@ export type TextInputKey = {
   return?: boolean
 }
 
+export type NumericOptionKey = TextInputKey
+
 export type SingleSelectNavKey = {
   downArrow?: boolean
   upArrow?: boolean

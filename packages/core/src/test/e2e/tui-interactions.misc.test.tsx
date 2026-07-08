@@ -106,6 +106,77 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     expect(stored?.['What type of Snake game would you like?']).toBe('threejs')
   })
 
+  test('AskUserQuestion: digit key selects a numbered option', async () => {
+    let allowed = false
+    let done = false
+    const input: any = {
+      questions: [
+        {
+          question: '剩余9个未合并的功能分支，是否也要删除？',
+          header: '未合并分支',
+          multiSelect: false,
+          options: [
+            {
+              label: '全部删除，只留main',
+              description: '删除所有codex/*、feat/*、guard/*、worktree/*分支',
+            },
+            {
+              label: '保留不动',
+              description: '这些未合并分支可能还有用，先保留',
+            },
+          ],
+        },
+      ],
+    }
+
+    const toolUseConfirm: any = {
+      assistantMessage: createAssistantMessage(''),
+      tool: AskUserQuestionTool,
+      description: 'Ask user question',
+      input,
+      commandPrefix: null,
+      toolUseContext: {
+        messageId: 'm',
+        abortController: new AbortController(),
+        readFileTimestamps: {},
+      },
+      riskScore: null,
+      onAbort: () => {},
+      onAllow: () => {
+        allowed = true
+      },
+      onReject: () => {},
+    }
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <AskUserQuestionPermissionRequest
+          toolUseConfirm={toolUseConfirm}
+          onDone={() => {
+            done = true
+          }}
+          verbose={false}
+        />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    expect(h.getOutput()).toContain('1. 全部删除，只留main')
+    expect(h.getOutput()).toContain('2. 保留不动')
+    expect(h.getOutput()).toContain('3. Other')
+
+    h.stdin.write('2')
+    await h.wait(25)
+
+    expect(allowed).toBe(true)
+    expect(done).toBe(true)
+    const stored =
+      toolUseConfirm.toolUseContext.options?.askUserQuestionAnswersByToolUseId
+        ?.m
+    expect(stored?.['剩余9个未合并的功能分支，是否也要删除？']).toBe('保留不动')
+  })
+
   test('Bash overlay: ctrl+b triggers background callback', async () => {
     let backgrounded = false
     const h = createInkTestHarness(

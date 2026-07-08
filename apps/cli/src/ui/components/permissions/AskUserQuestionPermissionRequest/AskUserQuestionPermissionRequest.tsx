@@ -15,6 +15,7 @@ export {
   applyMultiSelectNav as __applyMultiSelectNavForTests,
   applySingleSelectNav as __applySingleSelectNavForTests,
   formatMultiSelectAnswer as __formatMultiSelectAnswerForTests,
+  getNumericOptionIndex as __getNumericOptionIndexForTests,
   getTabHeaders as __getTabHeadersForTests,
   getTrimmedOtherAnswer as __getTrimmedOtherAnswerForTests,
   isTextInputChar as __isTextInputCharForTests,
