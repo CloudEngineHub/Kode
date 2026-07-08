@@ -1,4 +1,8 @@
 import { Box, Text } from 'ink'
+import {
+  isCompactViewportHeight,
+  normalizeTerminalDimension,
+} from '#ui-ink/primitives/layout/viewportRows'
 import * as React from 'react'
 import { CompactModeIndicator } from '#ui-ink/components/ModeIndicator'
 import { SentryErrorBoundary } from '#ui-ink/components/SentryErrorBoundary'
@@ -132,8 +136,12 @@ export function PromptInputView({
   isInFastBrowseMode: () => boolean
 }): React.ReactNode {
   const { rows, columns } = useTerminalSize()
-  const compact = rows < 16
-  const showStatusLine = rows > 8
+  const compact = isCompactViewportHeight(rows, {
+    microRows: 12,
+    tightRows: 15,
+    compactRows: 15,
+  })
+  const showStatusLine = normalizeTerminalDimension(rows, 0) > 8
 
   return (
     <Box flexDirection="column">

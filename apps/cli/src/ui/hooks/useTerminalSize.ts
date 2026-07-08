@@ -1,6 +1,7 @@
 import { useStdout } from 'ink'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Writable } from 'node:stream'
+import { normalizeTerminalDimension } from '#ui-ink/primitives/layout/viewportRows'
 
 type TerminalSize = { columns: number; rows: number }
 
@@ -15,8 +16,8 @@ const streamStates = new WeakMap<Writable, StreamState>()
 
 function readSize(stream: { columns?: number; rows?: number }): TerminalSize {
   return {
-    columns: stream.columns || 80,
-    rows: stream.rows || 24,
+    columns: normalizeTerminalDimension(stream.columns, 80),
+    rows: normalizeTerminalDimension(stream.rows, 24),
   }
 }
 

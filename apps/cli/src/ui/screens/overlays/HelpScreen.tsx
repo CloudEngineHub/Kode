@@ -18,6 +18,10 @@ import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
+import {
+  computeAvailableRows,
+  computeScreenFrameReservedRows,
+} from '#ui-ink/primitives/layout/viewportRows'
 import { wrapLines } from '#ui-ink/primitives/text/wrapLines'
 
 const VIEWPORT_SAFE_MARGIN_ROWS = 1
@@ -168,18 +172,23 @@ export function HelpScreen({
     return wrapLines(rawLines, width)
   }, [layout.columns, layout.paddingX, rawLines])
 
-  const frameHeaderRows = 1
-  const frameRows = frameHeaderRows + 1 + layout.gap * 2 + layout.paddingY * 2
+  const frameRows = computeScreenFrameReservedRows({
+    paddingY: layout.paddingY,
+    gap: layout.gap,
+    exitPromptRows: exitState.pending ? 1 : 0,
+  })
   const innerReservedRows =
     1 + // shortcut line
     1 + // status line
     INDICATOR_ROWS +
     1 // tip line
 
-  const contentRows = Math.max(
-    1,
-    layout.rows - frameRows - innerReservedRows - VIEWPORT_SAFE_MARGIN_ROWS,
-  )
+  const contentRows = computeAvailableRows({
+    rows: layout.rows,
+    reservedRows: frameRows + innerReservedRows,
+    safeMarginRows: VIEWPORT_SAFE_MARGIN_ROWS,
+    minRows: 1,
+  })
 
   const maxScrollTop = Math.max(0, wrapped.length - contentRows)
 

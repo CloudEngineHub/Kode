@@ -4,6 +4,7 @@ import { SentryErrorBoundary } from '#ui-ink/components/SentryErrorBoundary'
 import { TokenWarning } from '#ui-ink/components/TokenWarning'
 import type { Theme } from '#core/utils/theme'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
+import { computeResponsiveRows } from '#ui-ink/primitives/layout/viewportRows'
 import wrapAnsi from 'wrap-ansi'
 
 type Suggestion = {
@@ -141,11 +142,13 @@ export function __getSuggestionWindowForTests(args: {
   suggestionCount: number
   reservedRows?: number
 }) {
-  const reservedRows = Math.max(1, args.reservedRows ?? 10)
-  const panelRows = Math.min(
-    MAX_COMPLETION_PANEL_ROWS,
-    Math.max(1, args.rows - reservedRows),
-  )
+  const reservedRows = Math.max(0, args.reservedRows ?? 10)
+  const panelRows = computeResponsiveRows({
+    rows: args.rows,
+    reservedRows,
+    minRows: 1,
+    maxRows: MAX_COMPLETION_PANEL_ROWS,
+  })
   const showHelp = panelRows >= 4
   const helpRows = showHelp ? 1 : 0
   const listRows = Math.max(1, panelRows - helpRows)

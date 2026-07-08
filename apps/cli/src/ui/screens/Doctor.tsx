@@ -13,6 +13,10 @@ import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { terminalCapabilityManager } from '#ui-ink/utils/terminalCapabilityManager'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
+import {
+  computeAvailableRows,
+  computeScreenFrameReservedRows,
+} from '#ui-ink/primitives/layout/viewportRows'
 import { wrapLines } from '#ui-ink/primitives/text/wrapLines'
 
 import { isStdioPatchedForTui } from '#cli-utils/stdio'
@@ -223,11 +227,16 @@ export function Doctor({
     )
   }, [layout.columns, layout.paddingX, rawLines])
 
-  const frameRows = 1 + 1 + layout.gap * 2 + layout.paddingY * 2
-  const contentRows = Math.max(
-    1,
-    layout.rows - frameRows - (1 + INDICATOR_ROWS) - VIEWPORT_SAFE_MARGIN_ROWS,
-  )
+  const frameRows = computeScreenFrameReservedRows({
+    paddingY: layout.paddingY,
+    gap: layout.gap,
+  })
+  const contentRows = computeAvailableRows({
+    rows: layout.rows,
+    reservedRows: frameRows + 1 + INDICATOR_ROWS,
+    safeMarginRows: VIEWPORT_SAFE_MARGIN_ROWS,
+    minRows: 1,
+  })
   const maxScrollTop = Math.max(0, wrappedLines.length - contentRows)
 
   useEffect(() => {

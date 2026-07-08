@@ -26,6 +26,11 @@ import { useArrowKeyHistory } from '#ui-ink/hooks/useArrowKeyHistory'
 import { useDoublePress } from '#ui-ink/hooks/useDoublePress'
 import { useStatusLine } from '#ui-ink/hooks/useStatusLine'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
+import {
+  computeAvailableRows,
+  computeResponsiveRows,
+  isCompactViewportHeight,
+} from '#ui-ink/primitives/layout/viewportRows'
 import { useUnifiedCompletion } from '#ui-ink/hooks/useUnifiedCompletion'
 import { useKeypress, type Key } from '#ui-ink/hooks/useKeypress'
 import { useUndoBuffer } from '#ui-ink/hooks/useUndoBuffer'
@@ -186,7 +191,12 @@ export function PromptInput({
   const textInputColumns = Math.max(1, columns - 6)
   // Prevent the prompt input from growing unbounded and overflowing the viewport,
   // which can cause flicker/ghost lines on small terminals.
-  const textInputMaxHeight = Math.max(1, Math.min(8, Math.floor(rows / 3)))
+  const textInputMaxHeight = computeResponsiveRows({
+    rows,
+    minRows: 1,
+    maxRows: 8,
+    ratio: 1 / 3,
+  })
   const inputLineCount = useMemo(
     () => countWrappedLines(input, textInputColumns, textInputMaxHeight + 1),
     [input, textInputColumns, textInputMaxHeight],
@@ -411,11 +421,20 @@ export function PromptInput({
 
   const toastMessage = useMemo(() => ({ show: false as const }), [])
 
-  const compact = rows < 16
+  const compact = isCompactViewportHeight(rows, {
+    microRows: 12,
+    tightRows: 15,
+    compactRows: 15,
+  })
   const modelInfoRows = !compact && modelInfo ? 1 : 0
   const pwdRows = compact ? 0 : 1
   const completionReservedRows = inputBoxHeight + modelInfoRows + pwdRows + 1
-  const completionEnabled = rows >= 10 && rows - completionReservedRows >= 2
+  const completionAvailableRows = computeAvailableRows({
+    rows,
+    reservedRows: completionReservedRows,
+    minRows: 0,
+  })
+  const completionEnabled = rows >= 10 && completionAvailableRows >= 2
 
   const {
     suggestions,

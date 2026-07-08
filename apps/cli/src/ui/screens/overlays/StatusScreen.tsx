@@ -14,6 +14,10 @@ import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
+import {
+  computeAvailableRows,
+  computeScreenFrameReservedRows,
+} from '#ui-ink/primitives/layout/viewportRows'
 import { wrapLines } from '#ui-ink/primitives/text/wrapLines'
 import type { ConnectionTestResult } from '#ui-ink/components/ModelSelector/flow/actions/connectionTest'
 import { performConnectionTest } from '#ui-ink/components/ModelSelector/flow/actions/connectionTest'
@@ -222,9 +226,16 @@ export function StatusScreen({ context, onDone }: Props): React.ReactNode {
     return wrapLines(tabLines, width)
   }, [layout.columns, layout.paddingX, tabLines])
 
-  const frameHeaderRows = 1 + (exitState.pending ? 1 : 0)
-  const frameRows = frameHeaderRows + 1 + layout.gap * 2 + layout.paddingY * 2
-  const contentRows = Math.max(1, layout.rows - frameRows - 6)
+  const frameRows = computeScreenFrameReservedRows({
+    paddingY: layout.paddingY,
+    gap: layout.gap,
+    exitPromptRows: exitState.pending ? 1 : 0,
+  })
+  const contentRows = computeAvailableRows({
+    rows: layout.rows,
+    reservedRows: frameRows + 6,
+    minRows: 1,
+  })
   const maxScrollTop = Math.max(0, wrapped.length - contentRows)
 
   useKeypress(

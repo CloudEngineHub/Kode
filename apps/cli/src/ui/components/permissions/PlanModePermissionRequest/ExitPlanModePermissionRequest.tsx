@@ -24,6 +24,7 @@ import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
+import { computeResponsiveRows } from '#ui-ink/primitives/layout/viewportRows'
 import { getWindowedList } from '#ui-ink/primitives/list/windowedList'
 import { wrapLines } from '#ui-ink/primitives/text/wrapLines'
 import { getPermissionModeCycleShortcut } from '#ui-ink/utils/permissionModeCycleShortcut'
@@ -174,7 +175,13 @@ export function ExitPlanModePermissionRequest({
     })
   }, [planLines.length])
 
-  const planViewportRows = Math.max(6, Math.min(14, Math.floor(rows * 0.4)))
+  const planViewportRows = computeResponsiveRows({
+    rows,
+    reservedRows: 8,
+    minRows: 2,
+    maxRows: 14,
+    ratio: 0.4,
+  })
   const planWindow = useMemo(
     () =>
       getWindowedList({

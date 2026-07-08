@@ -50,4 +50,18 @@ describe('__getSuggestionWindowForTests', () => {
 
     expect(totalLines).toBeLessThanOrEqual(panelRows)
   })
+
+  it('falls back to one visible row when the terminal reports zero rows', () => {
+    const window = __getSuggestionWindowForTests({
+      rows: 0,
+      reservedRows: 10,
+      selectedIndex: 3,
+      suggestionCount: 8,
+    })
+
+    expect(window.endIndex - window.startIndex).toBe(1)
+    expect(window.showHelp).toBe(false)
+    expect(window.startIndex).toBeLessThanOrEqual(3)
+    expect(window.endIndex).toBeGreaterThan(3)
+  })
 })
