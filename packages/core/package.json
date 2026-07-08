@@ -9,6 +9,7 @@
     "@kode/config": "workspace:*",
     "@kode/context": "workspace:*",
     "@kode/engine": "workspace:*",
+    "@kode/hooks": "workspace:*",
     "@kode/permissions": "workspace:*",
     "@kode/protocol": "workspace:*",
     "@kode/runtime": "workspace:*",

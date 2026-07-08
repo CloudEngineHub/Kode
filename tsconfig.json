@@ -36,6 +36,8 @@
       "@kode/engine/*": ["packages/engine/src/*"],
       "@kode/host": ["packages/host/src/index.ts"],
       "@kode/host/*": ["packages/host/src/*"],
+      "@kode/hooks": ["packages/hooks/src/index.ts"],
+      "@kode/hooks/*": ["packages/hooks/src/*"],
       "@kode/permissions": ["packages/permissions/src/index.ts"],
       "@kode/permissions/*": ["packages/permissions/src/*"],
       "@kode/protocol": ["packages/protocol/src/index.ts"],
