@@ -5,6 +5,8 @@ import { join } from 'path'
 import {
   disableLineWrapping,
   enableLineWrapping,
+  resumeMouseEvents,
+  suspendMouseEvents,
   withEphemeralAlternateScreen,
 } from '#cli-utils/terminal'
 import { writeToStdout } from '#cli-utils/stdio'
@@ -42,6 +44,7 @@ async function withSuspendedInk<T>(fn: () => Promise<T> | T): Promise<T> {
     instance?.pause?.()
     instance?.suspendStdin?.()
     terminalCapabilityManager.disableAllModes()
+    suspendMouseEvents()
     enableLineWrapping()
     showTerminalCursor()
     return await withEphemeralAlternateScreen(fn)
@@ -53,6 +56,7 @@ async function withSuspendedInk<T>(fn: () => Promise<T> | T): Promise<T> {
       }
     }
     terminalCapabilityManager.enableSupportedModes()
+    resumeMouseEvents()
     instance?.resumeStdin?.()
     instance?.resume?.()
   }

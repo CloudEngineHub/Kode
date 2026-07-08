@@ -9,6 +9,10 @@ function writeToTty(sequence: string): void {
 
 let alternateScreenRefCount = 0
 let mouseEventsRefCount = 0
+let mouseEventsSuspended = false
+
+const ENABLE_MOUSE_EVENTS_SEQUENCE = '\x1b[?1006h\x1b[?1000h'
+const DISABLE_MOUSE_EVENTS_SEQUENCE = '\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l'
 
 export function setTerminalTitle(title: string): void {
   if (process.platform === 'win32') {
@@ -81,12 +85,12 @@ export function clearScrollback(): Promise<void> {
 export function enableMouseEvents(): void {
   if (!process.stdin?.isTTY || !process.stdout?.isTTY) return
   mouseEventsRefCount += 1
-  if (mouseEventsRefCount !== 1) return
+  if (mouseEventsRefCount !== 1 || mouseEventsSuspended) return
 
   // SGR 1006 keeps coordinates numeric and unambiguous. Pair it with normal
   // tracking (1000) so we receive press/release/wheel events without enabling
   // high-volume motion tracking.
-  writeToTty('\x1b[?1006h\x1b[?1000h')
+  writeToTty(ENABLE_MOUSE_EVENTS_SEQUENCE)
 }
 
 export function disableMouseEvents(): void {
@@ -94,10 +98,27 @@ export function disableMouseEvents(): void {
   if (mouseEventsRefCount <= 0) return
   mouseEventsRefCount -= 1
   if (mouseEventsRefCount !== 0) return
+  const wasSuspended = mouseEventsSuspended
+  mouseEventsSuspended = false
+  if (wasSuspended) return
 
   // Also disable button/all-motion modes in case a previous build or terminal
   // session left them enabled.
-  writeToTty('\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l')
+  writeToTty(DISABLE_MOUSE_EVENTS_SEQUENCE)
+}
+
+export function suspendMouseEvents(): void {
+  if (!process.stdout?.isTTY) return
+  if (mouseEventsRefCount <= 0 || mouseEventsSuspended) return
+  mouseEventsSuspended = true
+  writeToTty(DISABLE_MOUSE_EVENTS_SEQUENCE)
+}
+
+export function resumeMouseEvents(): void {
+  if (!process.stdin?.isTTY || !process.stdout?.isTTY) return
+  if (mouseEventsRefCount <= 0 || !mouseEventsSuspended) return
+  mouseEventsSuspended = false
+  writeToTty(ENABLE_MOUSE_EVENTS_SEQUENCE)
 }
 
 export function enableKittyKeyboardProtocol(): void {
