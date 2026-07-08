@@ -70,7 +70,7 @@ export function getSettingsFileCandidates(options: {
 export function readSettingsFile(filePath: string): SettingsFile | null {
   if (!existsSync(filePath)) return null
   try {
-    const raw = readFileSync(filePath, 'utf-8')
+    const raw = readFileSync(filePath, 'utf-8').replace(/^\uFEFF/, '')
     const parsed = JSON.parse(raw)
     if (!parsed || typeof parsed !== 'object') return null
     return parsed as SettingsFile
