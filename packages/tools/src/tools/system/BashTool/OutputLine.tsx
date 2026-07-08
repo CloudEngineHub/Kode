@@ -3,7 +3,7 @@ import * as React from 'react'
 import { getTheme } from '#core/utils/theme'
 import { MAX_RENDERED_LINES } from './prompt'
 import chalk from 'chalk'
-import { MaxSizedText } from '#ui-ink/components/MaxSizedText'
+import { MaxSizedText } from './MaxSizedText'
 
 function renderTruncatedContent(
   content: string,
