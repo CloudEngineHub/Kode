@@ -24,6 +24,7 @@ import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
+import { computeAvailableColumns } from '#ui-ink/primitives/layout/viewportColumns'
 import { computeResponsiveRows } from '#ui-ink/primitives/layout/viewportRows'
 import { getWindowedList } from '#ui-ink/primitives/list/windowedList'
 import { wrapLines } from '#ui-ink/primitives/text/wrapLines'
@@ -162,7 +163,10 @@ export function ExitPlanModePermissionRequest({
     )
   }, [allowedPrompts?.length])
 
-  const planViewportWidth = Math.max(20, columns - layout.paddingX * 2 - 2)
+  const planViewportWidth = computeAvailableColumns({
+    columns,
+    reservedColumns: layout.paddingX * 2 + 2,
+  })
   const planLines = useMemo(
     () => wrapLines(planText.split('\n'), planViewportWidth),
     [planText, planViewportWidth],

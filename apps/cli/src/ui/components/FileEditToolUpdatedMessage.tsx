@@ -7,6 +7,7 @@ import { getTheme } from '#core/utils/theme'
 import { getCwd } from '#core/utils/state'
 import { relative } from 'path'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
+import { computeAvailableColumns } from '#ui-ink/primitives/layout/viewportColumns'
 
 type Props = {
   filePath: string
@@ -66,6 +67,10 @@ export function FileEditToolUpdatedMessage({
   verbose,
 }: Props): React.ReactNode {
   const { columns } = useTerminalSize()
+  const diffWidth = computeAvailableColumns({
+    columns,
+    reservedColumns: 12,
+  })
   const patches = Array.isArray(structuredPatch) ? structuredPatch : []
   const numAdditions = patches.reduce(
     (count, hunk) => count + hunk.lines.filter(_ => _.startsWith('+')).length,
@@ -102,7 +107,7 @@ export function FileEditToolUpdatedMessage({
         intersperse(
           diff.hunks.map(_ => (
             <Box flexDirection="column" paddingLeft={5} key={_.newStart}>
-              <StructuredDiff patch={_} dim={false} width={columns - 12} />
+              <StructuredDiff patch={_} dim={false} width={diffWidth} />
             </Box>
           )),
           i => (

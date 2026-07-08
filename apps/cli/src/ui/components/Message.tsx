@@ -22,6 +22,7 @@ import { AssistantThinkingMessage } from './messages/AssistantThinkingMessage'
 import { AssistantRedactedThinkingMessage } from './messages/AssistantRedactedThinkingMessage'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import type { ToolUseLikeBlockParam } from '#core/utils/anthropic'
+import { computeAvailableColumns } from '#ui-ink/primitives/layout/viewportColumns'
 
 type Props = {
   message: UserMessage | AssistantMessage
@@ -139,6 +140,10 @@ function UserMessage({
   key?: React.Key
 }): React.ReactNode {
   const { columns } = useTerminalSize()
+  const toolResultWidth = computeAvailableColumns({
+    columns,
+    reservedColumns: 5,
+  })
   switch (param.type) {
     case 'text':
       return <UserTextMessage addMargin={addMargin} param={param} />
@@ -152,7 +157,7 @@ function UserMessage({
           messages={messages}
           tools={tools}
           verbose={verbose}
-          width={columns - 5}
+          width={toolResultWidth}
         />
       )
   }

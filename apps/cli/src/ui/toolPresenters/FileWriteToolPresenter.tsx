@@ -15,6 +15,7 @@ import { logError } from '#core/utils/log'
 import { getCwd } from '#core/utils/state'
 import { getTheme } from '#core/utils/theme'
 import { getPatch } from '#core/utils/diff'
+import { computeAvailableColumns } from '#ui-ink/primitives/layout/viewportColumns'
 
 const MAX_LINES_TO_RENDER = 5
 
@@ -84,6 +85,10 @@ export function renderFileWriteToolUseRejectedMessage(
   try {
     const { file_path, content } = input
     const { columns, verbose } = options
+    const diffWidth = computeAvailableColumns({
+      columns,
+      reservedColumns: 12,
+    })
 
     if (!file_path) {
       return <FallbackToolUseRejectedMessage />
@@ -117,7 +122,7 @@ export function renderFileWriteToolUseRejectedMessage(
         {intersperse(
           patch.map(_ => (
             <Box flexDirection="column" paddingLeft={5} key={_.newStart}>
-              <StructuredDiff patch={_} dim={true} width={columns - 12} />
+              <StructuredDiff patch={_} dim={true} width={diffWidth} />
             </Box>
           )),
           i => (

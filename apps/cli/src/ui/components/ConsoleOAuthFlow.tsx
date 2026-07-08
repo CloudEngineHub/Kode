@@ -11,6 +11,7 @@ import { sendNotification } from '#core/services/notifier'
 import { ConsoleOAuthStatusMessage } from './ConsoleOAuthStatusMessage'
 import { PASTE_HERE_MSG, type OAuthStatus } from './oauthTypes'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
+import { computeAvailableColumns } from '#ui-ink/primitives/layout/viewportColumns'
 
 type Props = {
   onDone(): void
@@ -32,7 +33,11 @@ export function ConsoleOAuthFlow({ onDone }: Props): React.ReactNode {
   // we need a special clearing state to correctly re-render Static elements
   const [isClearing, setIsClearing] = useState(false)
 
-  const textInputColumns = useTerminalSize().columns - PASTE_HERE_MSG.length - 1
+  const { columns } = useTerminalSize()
+  const textInputColumns = computeAvailableColumns({
+    columns,
+    reservedColumns: PASTE_HERE_MSG.length + 1,
+  })
 
   useEffect(() => {
     if (isClearing) {

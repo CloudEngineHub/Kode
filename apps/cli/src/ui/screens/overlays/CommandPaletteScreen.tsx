@@ -6,6 +6,7 @@ import TextInput from '#ui-ink/components/TextInput'
 import type { Key } from '#ui-ink/hooks/useKeypress'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
+import { computeAvailableColumns } from '#ui-ink/primitives/layout/viewportColumns'
 
 type PaletteAction = {
   id:
@@ -91,6 +92,10 @@ export function CommandPaletteScreen({
   const paddingY = layout.paddingY
   const gap = layout.gap
   const paddingX = layout.paddingX
+  const inputColumns = computeAvailableColumns({
+    columns,
+    reservedColumns: paddingX * 2 + 4,
+  })
 
   const [query, setQuery] = useState('')
   const [cursorOffset, setCursorOffset] = useState(0)
@@ -243,7 +248,7 @@ export function CommandPaletteScreen({
               }}
               onSubmit={() => runSelection()}
               onExit={() => onDone()}
-              columns={Math.max(10, columns - paddingX * 2 - 4)}
+              columns={inputColumns}
               cursorOffset={cursorOffset}
               onChangeCursorOffset={setCursorOffset}
               showCursor={true}

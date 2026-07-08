@@ -4,6 +4,7 @@ import { Box, Text } from 'ink'
 import { getTheme } from '#core/utils/theme'
 import { logError } from '#core/utils/log'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
+import { computeAvailableColumns } from '#ui-ink/primitives/layout/viewportColumns'
 
 type Props = {
   addMargin: boolean
@@ -15,6 +16,10 @@ export function UserPromptMessage({
   param: { text },
 }: Props): React.ReactNode {
   const { columns } = useTerminalSize()
+  const contentWidth = computeAvailableColumns({
+    columns,
+    reservedColumns: 4,
+  })
   if (!text) {
     logError('No content found in user prompt message')
     return null
@@ -28,7 +33,7 @@ export function UserPromptMessage({
           {'\u276F'}
         </Text>
       </Box>
-      <Box flexDirection="column" width={columns - 4}>
+      <Box flexDirection="column" width={contentWidth}>
         <Text color={theme.kode} bold wrap="wrap">
           {text}
         </Text>

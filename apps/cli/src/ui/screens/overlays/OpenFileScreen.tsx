@@ -13,6 +13,7 @@ import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import { launchExternalEditorForFilePath } from '#cli-utils/externalEditor'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
+import { computeAvailableColumns } from '#ui-ink/primitives/layout/viewportColumns'
 
 const VIEWPORT_SAFE_MARGIN_ROWS = 1
 const MAX_INDEXED_FILES = 20_000
@@ -308,7 +309,11 @@ export function OpenFileScreen({
     { priority: KEYPRESS_PRIORITY.FULLSCREEN_OVERLAY },
   )
 
-  const textInputColumns = Math.max(10, Math.min(80, columns - 10))
+  const textInputColumns = computeAvailableColumns({
+    columns,
+    reservedColumns: 10,
+    maxColumns: 80,
+  })
 
   const handleOpenFile = useCallback(
     async (relativePath: string) => {

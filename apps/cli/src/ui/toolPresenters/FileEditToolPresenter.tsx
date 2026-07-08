@@ -13,6 +13,7 @@ import { getTheme } from '#core/utils/theme'
 import { normalizeLineEndings } from '#core/utils/paste'
 import { getPatch } from '#core/utils/diff'
 import { logError } from '#core/utils/log'
+import { computeAvailableColumns } from '#ui-ink/primitives/layout/viewportColumns'
 
 export function renderFileEditToolResultMessage(
   output: { filePath: string; structuredPatch?: any[] },
@@ -44,6 +45,10 @@ export function renderFileEditToolUseRejectedMessage(
   try {
     const { file_path, old_string, new_string, replace_all } = input
     const { columns, verbose } = options
+    const diffWidth = computeAvailableColumns({
+      columns,
+      reservedColumns: 12,
+    })
 
     if (!file_path) {
       return <FallbackToolUseRejectedMessage />
@@ -103,7 +108,7 @@ export function renderFileEditToolUseRejectedMessage(
         {intersperse(
           patch.map(patch => (
             <Box flexDirection="column" paddingLeft={5} key={patch.newStart}>
-              <StructuredDiff patch={patch} dim={true} width={columns - 12} />
+              <StructuredDiff patch={patch} dim={true} width={diffWidth} />
             </Box>
           )),
           i => (

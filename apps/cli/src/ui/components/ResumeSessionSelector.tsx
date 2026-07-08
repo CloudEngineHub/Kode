@@ -35,6 +35,7 @@ import TextInput from '#ui-ink/components/TextInput'
 import { SimpleSpinner } from '#ui-ink/components/Spinner'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
+import { computeAvailableColumns } from '#ui-ink/primitives/layout/viewportColumns'
 import { getWindowedList } from '#ui-ink/primitives/list/windowedList'
 import { wrapLines } from '#ui-ink/primitives/text/wrapLines'
 import { z } from 'zod'
@@ -535,6 +536,14 @@ export function ResumeSessionSelector(props: {
   const compactVertical = layout.rows <= 26
   const frameGap = compactVertical ? 0 : layout.gap
   const framePaddingY = compactVertical ? 0 : layout.paddingY
+  const inputColumns = computeAvailableColumns({
+    columns: layout.columns,
+    reservedColumns: layout.paddingX * 2 + 4,
+  })
+  const contentColumns = computeAvailableColumns({
+    columns: layout.columns,
+    reservedColumns: layout.paddingX * 2,
+  })
   const [sessionList, setSessionList] = useState(() => sessions)
 
   useEffect(() => {
@@ -1572,7 +1581,7 @@ export function ResumeSessionSelector(props: {
               setView('list')
               setSubmitError(null)
             }}
-            columns={Math.max(10, layout.columns - layout.paddingX * 2 - 4)}
+            columns={inputColumns}
             cursorOffset={renameCursorOffset}
             onChangeCursorOffset={setRenameCursorOffset}
             showCursor={true}
@@ -1742,7 +1751,7 @@ export function ResumeSessionSelector(props: {
             isFocused={true}
             isTerminalFocused={true}
             theme={theme}
-            width={Math.max(10, layout.columns - layout.paddingX * 2)}
+            width={contentColumns}
           />
         ) : (
           <SearchBox query={query} isFocused={false} isTerminalFocused={true} />

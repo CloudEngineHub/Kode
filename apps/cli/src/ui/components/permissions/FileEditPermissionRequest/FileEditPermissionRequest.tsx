@@ -22,6 +22,7 @@ import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import { PermissionRequestDetails } from '#ui-ink/components/permissions/PermissionRequestDetails'
 import { applyToolPermissionUpdatesToLiveToolUseContext } from '../liveToolPermissionContext'
+import { computeAvailableColumns } from '#ui-ink/primitives/layout/viewportColumns'
 
 function getOptions(args: {
   path: string
@@ -69,6 +70,10 @@ export function FileEditPermissionRequest({
 }: Props): React.ReactNode {
   const { columns } = useTerminalSize()
   const layout = useScreenLayout()
+  const diffWidth = computeAvailableColumns({
+    columns,
+    reservedColumns: layout.paddingX * 2 + 2,
+  })
   const { applyToolPermissionUpdate, toolPermissionContext } =
     usePermissionContext()
   const { file_path, new_string, old_string } = toolUseConfirm.input as {
@@ -190,7 +195,7 @@ export function FileEditPermissionRequest({
             new_string={new_string}
             old_string={old_string}
             verbose={verbose}
-            width={Math.max(10, columns - layout.paddingX * 2 - 2)}
+            width={diffWidth}
             enableScrolling={true}
           />
 

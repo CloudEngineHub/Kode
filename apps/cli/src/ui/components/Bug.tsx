@@ -11,6 +11,7 @@ import { useExitOnCtrlCD } from '#ui-ink/hooks/useExitOnCtrlCD'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
+import { computeAvailableColumns } from '#ui-ink/primitives/layout/viewportColumns'
 
 import TextInput from './TextInput'
 
@@ -27,10 +28,10 @@ export function Bug({ onDone }: Props): React.ReactNode {
   const [description, setDescription] = useState('')
   const [isOpening, setIsOpening] = useState(false)
   const isOpeningRef = useRef(false)
-  const textInputColumns = Math.max(
-    10,
-    layout.columns - layout.paddingX * 2 - 10,
-  )
+  const textInputColumns = computeAvailableColumns({
+    columns: layout.columns,
+    reservedColumns: layout.paddingX * 2 + 10,
+  })
 
   const exitState = useExitOnCtrlCD(() => process.exit(0))
 
