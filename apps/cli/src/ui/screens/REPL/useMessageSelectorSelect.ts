@@ -30,39 +30,53 @@ export function useMessageSelectorSelect(args: {
   setInputValue: React.Dispatch<React.SetStateAction<string>>
   onCancel: () => void
 }) {
+  const {
+    messages,
+    onCancel,
+    setForkConvoWithMessagesOnTheNextRender,
+    setInputValue,
+    setIsMessageSelectorVisible,
+  } = args
+
   return useCallback(
     (message: MessageType) => {
-      args.setIsMessageSelectorVisible(false)
+      setIsMessageSelectorVisible(false)
 
       const selectedUuid = getMessageUuid(message)
       const selectedIndex =
         selectedUuid === undefined
-          ? args.messages.indexOf(message)
-          : args.messages.findIndex(m => getMessageUuid(m) === selectedUuid)
+          ? messages.indexOf(message)
+          : messages.findIndex(m => getMessageUuid(m) === selectedUuid)
       if (selectedIndex < 0) return
 
-      args.onCancel()
+      onCancel()
 
       // Use setImmediate to ensure the "Interrupted by user" message renders
       // before we clear and reset the conversation
       setImmediate(() => {
-        const forkMessages = args.messages
+        const forkMessages = messages
           .slice(0, selectedIndex)
           .filter(m => m.type !== 'progress')
 
         // Use clearViewport option - the fork effect will clear terminal and
         // atomically update forkNumber + messages in a single batched update.
         // This prevents intermediate renders that cause content duplication.
-        args.setForkConvoWithMessagesOnTheNextRender(forkMessages, {
+        setForkConvoWithMessagesOnTheNextRender(forkMessages, {
           clearViewport: true,
         })
 
         // Set input value to selected message content if it's a user message
         if (message.type === 'user') {
-          args.setInputValue(extractMessageText(message.message.content))
+          setInputValue(extractMessageText(message.message.content))
         }
       })
     },
-    [args],
+    [
+      messages,
+      onCancel,
+      setForkConvoWithMessagesOnTheNextRender,
+      setInputValue,
+      setIsMessageSelectorVisible,
+    ],
   )
 }

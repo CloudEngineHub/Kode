@@ -50,6 +50,15 @@ export function usePromptPastes(args: {
   onModeChange: (mode: PromptMode) => void
   terminalRows: number
 }) {
+  const {
+    cursorOffset,
+    input,
+    onInputChange,
+    onModeChange,
+    setCursorOffset,
+    terminalRows,
+  } = args
+
   const [pastedTexts, setPastedTextsState] = useState<PastedTextSegment[]>([])
   const [pastedImages, setPastedImagesState] = useState<
     PastedImageAttachment[]
@@ -107,7 +116,7 @@ export function usePromptPastes(args: {
 
   const onImagePaste = useCallback(
     (image: ClipboardImage): string => {
-      args.onModeChange('prompt')
+      onModeChange('prompt')
       const placeholder = `[Image #${pastedImageCounter.current}]`
       pastedImageCounter.current += 1
       setPastedImages(prev => [
@@ -116,7 +125,7 @@ export function usePromptPastes(args: {
       ])
       return placeholder
     },
-    [args],
+    [onModeChange, setPastedImages],
   )
 
   const onTextPaste = useCallback(
@@ -124,15 +133,11 @@ export function usePromptPastes(args: {
       const text = normalizeLineEndings(rawText)
       const newlineCount = countLineBreaks(text)
 
-      if (
-        !shouldTreatAsSpecialPaste(text, { terminalRows: args.terminalRows })
-      ) {
+      if (!shouldTreatAsSpecialPaste(text, { terminalRows })) {
         const newInput =
-          args.input.slice(0, args.cursorOffset) +
-          text +
-          args.input.slice(args.cursorOffset)
-        args.onInputChange(newInput)
-        args.setCursorOffset(args.cursorOffset + text.length)
+          input.slice(0, cursorOffset) + text + input.slice(cursorOffset)
+        onInputChange(newInput)
+        setCursorOffset(cursorOffset + text.length)
         return
       }
 
@@ -144,14 +149,19 @@ export function usePromptPastes(args: {
           : `[Pasted text #${pasteId} +${newlineCount} lines]`
 
       const newInput =
-        args.input.slice(0, args.cursorOffset) +
-        pastedPrompt +
-        args.input.slice(args.cursorOffset)
-      args.onInputChange(newInput)
-      args.setCursorOffset(args.cursorOffset + pastedPrompt.length)
+        input.slice(0, cursorOffset) + pastedPrompt + input.slice(cursorOffset)
+      onInputChange(newInput)
+      setCursorOffset(cursorOffset + pastedPrompt.length)
       setPastedTexts(prev => [...prev, { placeholder: pastedPrompt, text }])
     },
-    [args],
+    [
+      cursorOffset,
+      input,
+      onInputChange,
+      setCursorOffset,
+      setPastedTexts,
+      terminalRows,
+    ],
   )
 
   const clearPastes = useCallback(() => {
@@ -160,11 +170,9 @@ export function usePromptPastes(args: {
   }, [])
 
   useEffect(() => {
-    setPastedTexts(prev => prev.filter(p => args.input.includes(p.placeholder)))
-    setPastedImages(prev =>
-      prev.filter(p => args.input.includes(p.placeholder)),
-    )
-  }, [args.input])
+    setPastedTexts(prev => prev.filter(p => input.includes(p.placeholder)))
+    setPastedImages(prev => prev.filter(p => input.includes(p.placeholder)))
+  }, [input, setPastedImages, setPastedTexts])
 
   return {
     pastedTexts,

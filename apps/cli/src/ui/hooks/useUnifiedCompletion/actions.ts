@@ -17,6 +17,8 @@ export function useCompletionActions(args: {
   ) => void
   partialComplete: (prefix: string, context: CompletionContext) => void
 } {
+  const { input, onInputChange, setCursorOffset } = args
+
   const completeWith = useCallback(
     (suggestion: UnifiedSuggestion, context: CompletionContext) => {
       if (isLoadingSuggestion(suggestion)) return
@@ -53,30 +55,30 @@ export function useCompletionActions(args: {
       ) {
         let end = context.startPos
         while (
-          end < args.input.length &&
-          args.input[end] !== ' ' &&
-          args.input[end] !== '\n'
+          end < input.length &&
+          input[end] !== ' ' &&
+          input[end] !== '\n'
         ) {
           end++
         }
         actualEndPos = end
       } else {
-        const currentWord = args.input.slice(context.startPos)
+        const currentWord = input.slice(context.startPos)
         const nextSpaceIndex = currentWord.indexOf(' ')
         actualEndPos =
           nextSpaceIndex === -1
-            ? args.input.length
+            ? input.length
             : context.startPos + nextSpaceIndex
       }
 
       const newInput =
-        args.input.slice(0, context.startPos) +
+        input.slice(0, context.startPos) +
         completion +
-        args.input.slice(actualEndPos)
-      args.onInputChange(newInput)
-      args.setCursorOffset(context.startPos + completion.length)
+        input.slice(actualEndPos)
+      onInputChange(newInput)
+      setCursorOffset(context.startPos + completion.length)
     },
-    [args],
+    [input, onInputChange, setCursorOffset],
   )
 
   const partialComplete = useCallback(
@@ -91,13 +93,13 @@ export function useCompletionActions(args: {
               : prefix
 
       const newInput =
-        args.input.slice(0, context.startPos) +
+        input.slice(0, context.startPos) +
         completion +
-        args.input.slice(context.endPos)
-      args.onInputChange(newInput)
-      args.setCursorOffset(context.startPos + completion.length)
+        input.slice(context.endPos)
+      onInputChange(newInput)
+      setCursorOffset(context.startPos + completion.length)
     },
-    [args],
+    [input, onInputChange, setCursorOffset],
   )
 
   return { completeWith, partialComplete }

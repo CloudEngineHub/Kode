@@ -49,22 +49,22 @@ export function generateFileSuggestions(args: {
           return false
         return true
       })
+      .map(entry => {
+        const entryPath = join(searchDir, entry)
+        return {
+          entry,
+          isDir: statSync(entryPath).isDirectory(),
+        }
+      })
       .sort((a, b) => {
-        const aPath = join(searchDir, a)
-        const bPath = join(searchDir, b)
-        const aIsDir = statSync(aPath).isDirectory()
-        const bIsDir = statSync(bPath).isDirectory()
+        if (a.isDir && !b.isDir) return -1
+        if (!a.isDir && b.isDir) return 1
 
-        if (aIsDir && !bIsDir) return -1
-        if (!aIsDir && bIsDir) return 1
-
-        return a.toLowerCase().localeCompare(b.toLowerCase())
+        return a.entry.toLowerCase().localeCompare(b.entry.toLowerCase())
       })
       .slice(0, 25)
 
-    return entries.map(entry => {
-      const entryPath = join(searchDir, entry)
-      const isDir = statSync(entryPath).isDirectory()
+    return entries.map(({ entry, isDir }) => {
       const icon = isDir ? '📁' : '📄'
 
       let value: string

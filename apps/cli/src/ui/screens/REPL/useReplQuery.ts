@@ -53,6 +53,30 @@ export function useReplQuery(args: {
   newMessages: MessageType[],
   passedAbortController?: AbortController,
 ) => Promise<void> {
+  const {
+    appendSystemPrompt,
+    canUseTool,
+    checkPendingForkAndSuppressAppend,
+    commands,
+    disableSlashCommands,
+    forkNumber,
+    getBinaryFeedbackResponse,
+    mcpClients,
+    messageLogName,
+    messages,
+    readFileTimestamps,
+    requestToolUsePermission,
+    safeMode,
+    setAbortController,
+    setIsLoading,
+    setMessages,
+    setToolJSX,
+    systemPromptOverride,
+    thinkingMode,
+    tools,
+    verbose,
+  } = args
+
   return useCallback(
     async (
       newMessages: MessageType[],
@@ -60,15 +84,15 @@ export function useReplQuery(args: {
     ) => {
       const controllerToUse = passedAbortController || new AbortController()
       if (!passedAbortController) {
-        args.setAbortController(controllerToUse)
+        setAbortController(controllerToUse)
       }
 
       try {
         const shouldSuppressAppend =
-          args.checkPendingForkAndSuppressAppend?.(newMessages) ?? false
+          checkPendingForkAndSuppressAppend?.(newMessages) ?? false
         if (shouldSuppressAppend) {
-          args.setAbortController(null)
-          args.setIsLoading(false)
+          setAbortController(null)
+          setIsLoading(false)
           return
         }
 
@@ -77,73 +101,70 @@ export function useReplQuery(args: {
           newMessages[0].type === 'user' &&
           newMessages[0].options?.isKodingRequest === true
 
-        args.setMessages(oldMessages => [...oldMessages, ...newMessages])
+        setMessages(oldMessages => [...oldMessages, ...newMessages])
 
         markProjectOnboardingComplete()
 
         const lastMessage = newMessages[newMessages.length - 1]!
         if (lastMessage.type === 'assistant') {
-          args.setAbortController(null)
-          args.setIsLoading(false)
+          setAbortController(null)
+          setIsLoading(false)
           return
         }
 
         const outputStyle = getCurrentOutputStyleDefinition()
         const [systemPrompt, context, maxThinkingTokens] = await Promise.all([
           buildSystemPromptForSession({
-            disableSlashCommands: args.disableSlashCommands,
-            systemPromptOverride: args.systemPromptOverride,
-            appendSystemPrompt: args.appendSystemPrompt,
+            disableSlashCommands,
+            systemPromptOverride,
+            appendSystemPrompt,
             outputStyleActive: outputStyle !== null,
             keepCodingInstructions: outputStyle?.keepCodingInstructions,
           }),
           getContext(),
-          getMaxThinkingTokens([...args.messages, lastMessage], {
-            thinkingMode: args.thinkingMode,
+          getMaxThinkingTokens([...messages, lastMessage], {
+            thinkingMode,
           }),
         ])
 
         let lastAssistantMessage: MessageType | null = null
 
         for await (const message of runTurn({
-          messages: [...args.messages, lastMessage],
+          messages: [...messages, lastMessage],
           systemPrompt,
           context,
-          canUseTool: args.canUseTool,
+          canUseTool,
           toolUseContext: {
             agentId: 'main',
             options: {
-              commands: args.commands,
-              forkNumber: args.forkNumber,
-              messageLogName: args.messageLogName,
-              tools: args.tools,
-              mcpClients: args.mcpClients,
-              verbose: args.verbose,
-              safeMode: args.safeMode,
+              commands,
+              forkNumber,
+              messageLogName,
+              tools,
+              mcpClients,
+              verbose,
+              safeMode,
               maxThinkingTokens,
-              thinkingMode: args.thinkingMode,
-              requestToolUsePermission: args.requestToolUsePermission,
+              thinkingMode,
+              requestToolUsePermission,
               isKodingRequest: isKodingRequest || undefined,
               toolPermissionContext: getToolPermissionContextForConversationKey(
                 {
-                  conversationKey: `${args.messageLogName}:${args.forkNumber}`,
-                  isBypassPermissionsModeAvailable: !args.safeMode,
+                  conversationKey: `${messageLogName}:${forkNumber}`,
+                  isBypassPermissionsModeAvailable: !safeMode,
                 },
               ),
               getCustomSystemPromptAdditions:
                 getOutputStyleSystemPromptAdditions,
             },
-            messageId: getLastAssistantMessageId([
-              ...args.messages,
-              lastMessage,
-            ]),
-            readFileTimestamps: args.readFileTimestamps,
+            messageId: getLastAssistantMessageId([...messages, lastMessage]),
+            readFileTimestamps,
             abortController: controllerToUse,
-            setToolJSX: args.setToolJSX,
+            setToolJSX,
           },
-          getBinaryFeedbackResponse: args.getBinaryFeedbackResponse,
+          getBinaryFeedbackResponse,
         })) {
-          args.setMessages(oldMessages => [...oldMessages, message])
+          setMessages(oldMessages => [...oldMessages, message])
           if (message.type === 'assistant') {
             lastAssistantMessage = message
           }
@@ -172,15 +193,37 @@ export function useReplQuery(args: {
           }
         }
 
-        args.setIsLoading(false)
+        setIsLoading(false)
       } catch (error) {
         logError(error)
         debugLogger.error('REPL_QUERY_ERROR', { error })
       } finally {
         // Ensure the UI never gets stuck in a "loading" state when a turn fails early.
-        args.setIsLoading(false)
+        setIsLoading(false)
       }
     },
-    [args],
+    [
+      appendSystemPrompt,
+      canUseTool,
+      checkPendingForkAndSuppressAppend,
+      commands,
+      disableSlashCommands,
+      forkNumber,
+      getBinaryFeedbackResponse,
+      mcpClients,
+      messageLogName,
+      messages,
+      readFileTimestamps,
+      requestToolUsePermission,
+      safeMode,
+      setAbortController,
+      setIsLoading,
+      setMessages,
+      setToolJSX,
+      systemPromptOverride,
+      thinkingMode,
+      tools,
+      verbose,
+    ],
   )
 }

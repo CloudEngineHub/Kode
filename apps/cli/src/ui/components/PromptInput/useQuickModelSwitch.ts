@@ -11,20 +11,27 @@ export function useQuickModelSwitch(args: {
   setModelSwitchMessage: (message: InlineMessageState) => void
   onModelChange?: () => void
 }) {
+  const {
+    messages,
+    onModelChange,
+    onSubmitCountChange,
+    setModelSwitchMessage,
+  } = args
+
   return useCallback(() => {
     const modelManager = getModelManager()
-    const currentTokens = estimateTokens(args.messages)
+    const currentTokens = estimateTokens(messages)
     const debugInfo = modelManager.getModelSwitchingDebugInfo()
     const switchResult = modelManager.switchToNextModel(currentTokens)
 
     if (switchResult.success && switchResult.modelName) {
-      args.onModelChange?.()
-      args.onSubmitCountChange(prev => prev + 1)
-      args.setModelSwitchMessage({
+      onModelChange?.()
+      onSubmitCountChange(prev => prev + 1)
+      setModelSwitchMessage({
         show: true,
         text: switchResult.message || `Switched to ${switchResult.modelName}`,
       })
-      setTimeout(() => args.setModelSwitchMessage({ show: false }), 3000)
+      setTimeout(() => setModelSwitchMessage({ show: false }), 3000)
       return
     }
 
@@ -44,7 +51,7 @@ export function useQuickModelSwitch(args: {
       }
     }
 
-    args.setModelSwitchMessage({ show: true, text: errorMessage })
-    setTimeout(() => args.setModelSwitchMessage({ show: false }), 6000)
-  }, [args])
+    setModelSwitchMessage({ show: true, text: errorMessage })
+    setTimeout(() => setModelSwitchMessage({ show: false }), 6000)
+  }, [messages, onModelChange, onSubmitCountChange, setModelSwitchMessage])
 }

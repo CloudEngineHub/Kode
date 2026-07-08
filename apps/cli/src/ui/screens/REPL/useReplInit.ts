@@ -32,39 +32,59 @@ export function useReplInit(args: {
     passedAbortController?: AbortController,
   ) => Promise<void>
 }) {
+  const {
+    commands,
+    forkNumber,
+    initialPrompt,
+    mcpClients,
+    messageLogName,
+    messages,
+    onQuery,
+    readFileTimestamps,
+    reverify,
+    safeMode,
+    setAbortController,
+    setForkConvoWithMessagesOnTheNextRender,
+    setHaveShownCostDialog,
+    setIsLoading,
+    setToolJSX,
+    tools,
+    verbose,
+  } = args
+
   return useCallback(async () => {
-    args.reverify()
+    reverify()
 
-    if (!args.initialPrompt) return
+    if (!initialPrompt) return
 
-    args.setIsLoading(true)
+    setIsLoading(true)
     const controller = new AbortController()
-    args.setAbortController(controller)
+    setAbortController(controller)
 
     try {
       const newMessages = await processUserInput(
-        args.initialPrompt,
+        initialPrompt,
         'prompt',
-        args.setToolJSX,
+        setToolJSX,
         {
           abortController: controller,
           options: {
-            commands: args.commands,
-            forkNumber: args.forkNumber,
-            messageLogName: args.messageLogName,
-            tools: args.tools,
-            mcpClients: args.mcpClients,
-            verbose: args.verbose,
+            commands,
+            forkNumber,
+            messageLogName,
+            tools,
+            mcpClients,
+            verbose,
             maxThinkingTokens: 0,
             toolPermissionContext: getToolPermissionContextForConversationKey({
-              conversationKey: `${args.messageLogName}:${args.forkNumber}`,
-              isBypassPermissionsModeAvailable: !args.safeMode,
+              conversationKey: `${messageLogName}:${forkNumber}`,
+              isBypassPermissionsModeAvailable: !safeMode,
             }),
           } satisfies ToolUseContext['options'],
-          messageId: getLastAssistantMessageId(args.messages),
+          messageId: getLastAssistantMessageId(messages),
           setForkConvoWithMessagesOnTheNextRender:
-            args.setForkConvoWithMessagesOnTheNextRender,
-          readFileTimestamps: args.readFileTimestamps,
+            setForkConvoWithMessagesOnTheNextRender,
+          readFileTimestamps,
         } satisfies ToolUseContext & {
           setForkConvoWithMessagesOnTheNextRender: SetForkConvoWithMessagesOnTheNextRender
         },
@@ -73,19 +93,37 @@ export function useReplInit(args: {
 
       if (newMessages.length) {
         for (const message of newMessages) {
-          if (message.type === 'user') addToHistory(args.initialPrompt)
+          if (message.type === 'user') addToHistory(initialPrompt)
         }
-        await args.onQuery(newMessages, controller)
+        await onQuery(newMessages, controller)
       } else {
-        addToHistory(args.initialPrompt)
+        addToHistory(initialPrompt)
       }
 
-      args.setHaveShownCostDialog(
+      setHaveShownCostDialog(
         Boolean(getGlobalConfig().hasAcknowledgedCostThreshold),
       )
     } finally {
-      args.setIsLoading(false)
-      args.setAbortController(null)
+      setIsLoading(false)
+      setAbortController(null)
     }
-  }, [args])
+  }, [
+    commands,
+    forkNumber,
+    initialPrompt,
+    mcpClients,
+    messageLogName,
+    messages,
+    onQuery,
+    readFileTimestamps,
+    reverify,
+    safeMode,
+    setAbortController,
+    setForkConvoWithMessagesOnTheNextRender,
+    setHaveShownCostDialog,
+    setIsLoading,
+    setToolJSX,
+    tools,
+    verbose,
+  ])
 }
