@@ -2,7 +2,8 @@ import { nanoid } from 'nanoid'
 
 import { isAbsolute } from 'node:path'
 
-import { buildSystemPromptForSession, getSessionContext } from '#core/engine'
+import { getContext } from '@kode/context'
+import { buildSystemPromptForSession } from '#core/engine'
 import { getTools } from '#tools'
 import { grantReadPermissionForOriginalDir } from '#core/utils/permissions/filesystem'
 import { setCwd, setOriginalCwd } from '#core/utils/state'
@@ -31,7 +32,7 @@ async function loadSessionDeps(): Promise<{
 }> {
   const [tools, ctx, systemPrompt, configuredMcpClients] = await Promise.all([
     getTools(),
-    getSessionContext(),
+    getContext(),
     buildSystemPromptForSession({ disableSlashCommands: false }),
     getClients().catch(() => [] as WrappedClient[]),
   ])

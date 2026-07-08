@@ -6,17 +6,12 @@ import type {
 } from '#core/query'
 import type { CanUseToolFn } from '#core/permissions/canUseTool'
 
-import { getContext } from '@kode/context'
 import { query } from './orchestrator'
 
 import { messagesToAgentEvents } from '#core/query/agentEvents'
 import { buildSystemPromptForSession } from './systemPrompt'
 
 export type QueryToolUseContext = Parameters<typeof query>[4]
-
-export async function getSessionContext(): Promise<{ [k: string]: string }> {
-  return getContext()
-}
 
 export async function* runTurn(args: {
   messages: Message[]
@@ -29,7 +24,7 @@ export async function* runTurn(args: {
   jsonSchema?: Record<string, unknown> | null
 
   systemPrompt?: string[]
-  context?: { [k: string]: string }
+  context: { [k: string]: string }
 
   getBinaryFeedbackResponse?: (
     m1: AssistantMessage,
@@ -44,7 +39,7 @@ export async function* runTurn(args: {
         appendSystemPrompt: args.appendSystemPrompt,
         jsonSchema: args.jsonSchema,
       }),
-    args.context ?? getContext(),
+    args.context,
   ])
 
   yield* query(

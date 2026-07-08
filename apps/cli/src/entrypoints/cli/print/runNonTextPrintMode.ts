@@ -87,8 +87,9 @@ export async function runNonTextPrintMode(
   const { createUserMessage } = await import('#core/utils/messages')
   const { getTotalCost, getTotalAPIDuration } =
     await import('#core/cost-tracker')
-  const { buildSystemPromptForSession, getSessionContext, runTurn, query } =
+  const { buildSystemPromptForSession, runTurn, query } =
     await import('#core/engine')
+  const { getContext } = await import('@kode/context')
   const { getKodeAgentSessionId } =
     await import('#protocol/utils/kodeAgentSessionId')
   const { kodeMessageToSdkMessage, makeSdkInitMessage, makeSdkResultMessage } =
@@ -140,7 +141,7 @@ export async function runNonTextPrintMode(
     keepCodingInstructions: outputStyle?.keepCodingInstructions,
   })
 
-  const ctx = await getSessionContext()
+  const ctx = await getContext()
 
   const isBypassAvailable =
     !args.safe ||

@@ -6,11 +6,8 @@ import {
   REJECT_MESSAGE,
   REJECT_MESSAGE_WITH_FEEDBACK_PREFIX,
 } from '@kode/core/utils/messages'
-import {
-  buildSystemPromptForSession,
-  getSessionContext,
-  runTurn,
-} from '@kode/core/engine'
+import { buildSystemPromptForSession, runTurn } from '@kode/core/engine'
+import { getContext } from '@kode/context'
 import type { AssistantMessage, Message } from '@kode/core/query'
 import type { CanUseToolFn } from '@kode/core/permissions/canUseTool'
 import { hasPermissionsToUseTool, savePermission } from '@kode/core/permissions'
@@ -227,7 +224,7 @@ export async function handleChatPrompt(args: {
   }
 
   const [context, systemPrompt] = await Promise.all([
-    getSessionContext(),
+    getContext(),
     buildSystemPromptForSession({ disableSlashCommands: false }),
   ])
 
