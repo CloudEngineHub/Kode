@@ -348,6 +348,7 @@ export function PromptInput({
     commands,
     disableSlashCommands,
     isEnabled: completionEnabled,
+    modelReloadKey: uiRefreshCounter ?? 0,
   })
   const completionVisible =
     completionEnabled && completionActive && suggestions.length > 0

@@ -73,6 +73,7 @@ export function useUnifiedCompletion({
   commands,
   disableSlashCommands = false,
   isEnabled = true,
+  modelReloadKey = 0,
 }: UnifiedCompletionProps) {
   const [state, setState] = useState<CompletionState>(INITIAL_STATE)
 
@@ -128,7 +129,10 @@ export function useUnifiedCompletion({
   const {
     suggestions: modelSuggestions,
     isLoading: isLoadingModelSuggestions,
-  } = useModelSuggestions({ enabled: shouldLoadMentionSuggestions })
+  } = useModelSuggestions({
+    enabled: shouldLoadMentionSuggestions,
+    reloadKey: modelReloadKey,
+  })
 
   const generateSuggestions = useCallback(
     (context: CompletionContext): UnifiedSuggestion[] =>

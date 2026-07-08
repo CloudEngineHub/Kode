@@ -12,6 +12,7 @@ export interface UnifiedCompletionProps {
   commands: Command[]
   disableSlashCommands?: boolean
   isEnabled?: boolean
+  modelReloadKey?: number
   onSubmit?: (value: string, isSubmittingSlashCommand?: boolean) => void
 }
 
