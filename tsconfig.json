@@ -28,6 +28,8 @@
       "@kode/ai/*": ["packages/ai/src/*"],
       "@kode/config": ["packages/config/src/index.ts"],
       "@kode/config/*": ["packages/config/src/*"],
+      "@kode/context": ["packages/context/src/index.ts"],
+      "@kode/context/*": ["packages/context/src/*"],
       "@kode/core": ["packages/core/src/index.ts"],
       "@kode/core/*": ["packages/core/src/*"],
       "@kode/engine": ["packages/engine/src/index.ts"],
