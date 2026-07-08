@@ -1,5 +1,7 @@
 import type { ToolRenderOutput } from '@kode/tool-interface/Tool'
 
+export * from './terminal'
+
 export type HostRenderable = ToolRenderOutput
 
 export type HostDisplayMode = 'inline' | 'fullscreen'
