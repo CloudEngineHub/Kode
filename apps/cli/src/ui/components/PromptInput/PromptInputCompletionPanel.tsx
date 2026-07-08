@@ -67,10 +67,12 @@ const HelpText = React.memo(
     emptyDirMessage,
     selectedSuggestion,
     maxWidth,
+    theme,
   }: {
     emptyDirMessage: string
     selectedSuggestion?: Suggestion
     maxWidth: number
+    theme: Theme
   }) => {
     const getHelpMessage = () => {
       if (emptyDirMessage) return emptyDirMessage
@@ -115,7 +117,7 @@ const HelpText = React.memo(
     return (
       <Text
         dimColor={!emptyDirMessage}
-        color={emptyDirMessage ? 'yellow' : undefined}
+        color={emptyDirMessage ? theme.warning : undefined}
         wrap="truncate-end"
       >
         {getHelpMessage()}
@@ -129,7 +131,8 @@ const HelpText = React.memo(
         nextProps.selectedSuggestion?.value &&
       prevProps.selectedSuggestion?.description ===
         nextProps.selectedSuggestion?.description &&
-      prevProps.maxWidth === nextProps.maxWidth
+      prevProps.maxWidth === nextProps.maxWidth &&
+      prevProps.theme === nextProps.theme
     )
   },
 )
@@ -284,6 +287,7 @@ export const PromptInputCompletionPanel = React.memo(
               emptyDirMessage={emptyDirMessage}
               selectedSuggestion={selectedSuggestion}
               maxWidth={helpWidth}
+              theme={theme}
             />
           )}
         </Box>

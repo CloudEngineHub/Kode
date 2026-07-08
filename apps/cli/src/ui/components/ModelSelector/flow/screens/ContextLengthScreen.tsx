@@ -56,7 +56,7 @@ export function ContextLengthScreen({
             const isSelected = option.value === contextLength
             return (
               <Box key={option.value} flexDirection="row">
-                <Text color={isSelected ? 'blue' : undefined}>
+                <Text color={isSelected ? theme.suggestion : undefined}>
                   {isSelected ? '→ ' : '  '}
                   {option.label}
                   {option.value === DEFAULT_CONTEXT_LENGTH

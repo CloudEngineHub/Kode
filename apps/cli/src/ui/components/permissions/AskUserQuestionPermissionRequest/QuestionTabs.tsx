@@ -2,7 +2,7 @@ import React from 'react'
 import { Box, Text } from 'ink'
 import figures from 'figures'
 
-import type { Theme } from '#core/utils/theme'
+import { getReadableTextColor, type Theme } from '#core/utils/theme'
 
 import type { Question } from './types'
 
@@ -15,7 +15,10 @@ export function AskUserQuestionTabs(props: {
   tabHeaders: string[]
   answers: Record<string, string>
 }): React.ReactNode {
-  const inverseText = props.theme.text === '#fff' ? '#000' : '#fff'
+  const selectedText = getReadableTextColor(
+    props.theme.permission,
+    props.theme.text,
+  )
   const showArrows = !(props.questions.length === 1 && props.hideSubmitTab)
   const isSubmitTab = props.currentQuestionIndex === props.questions.length
   const rightArrowInactive = props.currentQuestionIndex === props.maxTabIndex
@@ -47,7 +50,7 @@ export function AskUserQuestionTabs(props: {
           <React.Fragment key={question.question || `question-${index}`}>
             <Text
               backgroundColor={isSelected ? props.theme.permission : undefined}
-              color={isSelected ? inverseText : undefined}
+              color={isSelected ? selectedText : undefined}
             >
               {tabText}
             </Text>
@@ -57,7 +60,7 @@ export function AskUserQuestionTabs(props: {
       {!props.hideSubmitTab && (
         <Text
           backgroundColor={isSubmitTab ? props.theme.permission : undefined}
-          color={isSubmitTab ? inverseText : undefined}
+          color={isSubmitTab ? selectedText : undefined}
         >
           {' '}
           {figures.tick} Submit{' '}

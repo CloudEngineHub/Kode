@@ -16,6 +16,7 @@ import { useFlickerDetector } from '#ui-ink/hooks/useFlickerDetector'
 import type { NormalizedMessage } from '#core/utils/messages'
 import type { Message as MessageType } from '#core/query'
 import type { Tool } from '#core/tooling/Tool'
+import { getTheme } from '#core/utils/theme'
 import type { TranscriptItem } from './useTranscriptItems'
 import type { BinaryFeedbackContext } from './types'
 import { TransientViewportProvider } from '#ui-ink/contexts/TransientViewportContext'
@@ -90,6 +91,7 @@ export function REPLView({
   const lastMeasureKeyRef = useRef('')
   const lastMeasureAtRef = useRef(0)
   const { rows, columns } = useTerminalSize()
+  const theme = getTheme()
   useFlickerDetector(
     rootUiRef,
     rows,
@@ -200,7 +202,7 @@ export function REPLView({
 
             <Box
               ref={mainControlsRef}
-              borderColor="red"
+              borderColor={theme.error}
               borderStyle={debug ? 'single' : undefined}
               flexDirection="column"
               width="100%"
@@ -210,7 +212,7 @@ export function REPLView({
                 !toolJSX &&
                 !binaryFeedbackContext && (
                   <Box paddingX={1} marginTop={1}>
-                    <Text color="yellow" dimColor wrap="truncate-end">
+                    <Text color={theme.warning} wrap="truncate-end">
                       {toast}
                     </Text>
                   </Box>

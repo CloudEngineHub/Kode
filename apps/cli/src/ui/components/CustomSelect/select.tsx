@@ -5,7 +5,7 @@ import { type Theme } from './theme'
 import { useSelectState } from './use-select-state'
 import { useSelect } from './use-select'
 import { Option } from '@inkjs/ui'
-import { getTheme } from '#core/utils/theme'
+import { getReadableTextColor, getTheme } from '#core/utils/theme'
 
 export type OptionSubtree = {
   /**
@@ -96,12 +96,16 @@ export function Select({
   useSelect({ isDisabled, state })
 
   const appTheme = getTheme()
+  const highlightedTextColor = getReadableTextColor(
+    appTheme.warning,
+    appTheme.text,
+  )
   const styles = {
     container: () => ({
       flexDirection: 'column' as const,
     }),
     highlightedText: () => ({
-      color: appTheme.text,
+      color: highlightedTextColor,
       backgroundColor: appTheme.warning,
     }),
   }

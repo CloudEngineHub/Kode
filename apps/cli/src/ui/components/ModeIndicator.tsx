@@ -38,7 +38,7 @@ export function ModeIndicator({
         ) : null}
       </Text>
       {showTransitionCount && (
-        <Text color="gray" dimColor>
+        <Text color={theme.secondaryText}>
           Switches: {permissionContext.metadata.transitionCount}
         </Text>
       )}

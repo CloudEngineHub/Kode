@@ -59,7 +59,7 @@ export function ToolUseLoader({
 
   return (
     <Box minWidth={2}>
-      <Text color="green">{CHECKMARK} </Text>
+      <Text color={theme.success}>{CHECKMARK} </Text>
     </Box>
   )
 }

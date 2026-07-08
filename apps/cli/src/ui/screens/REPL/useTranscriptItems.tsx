@@ -21,6 +21,7 @@ import {
   reorderMessages,
   type NormalizedMessage,
 } from '#core/utils/messages'
+import { getTheme } from '#core/utils/theme'
 import type { UUID } from '#core/types/common'
 import { getReplStaticPrefixLength } from '#cli-utils/replStaticSplit'
 import { findSafeSplitPoint } from '#cli-utils/markdownSplit'
@@ -267,6 +268,8 @@ export function useTranscriptItems(args: {
   }, [orderedMessages, replStaticPrefixLength])
 
   const items = useMemo(() => {
+    const theme = getTheme()
+
     return chunked.renderMessages.map(
       ({ message, key, isTransient }, index) => {
         const toolUseID = getToolUseID(message)
@@ -345,7 +348,7 @@ export function useTranscriptItems(args: {
             jsx: (
               <Box
                 borderStyle="single"
-                borderColor={isInStaticPrefix ? 'green' : 'red'}
+                borderColor={isInStaticPrefix ? theme.success : theme.error}
                 key={key}
                 width="100%"
               >

@@ -68,6 +68,7 @@ export function MessageSelector({
 }: Props): React.ReactNode {
   const currentUUID = useMemo(() => randomUUID(), [])
   const { rows } = useTerminalSize()
+  const theme = getTheme()
 
   function handleSelect(message: MessageType) {
     onSelect(message)
@@ -160,7 +161,7 @@ export function MessageSelector({
       <Box
         flexDirection="column"
         borderStyle="round"
-        borderColor={getTheme().secondaryBorder}
+        borderColor={theme.secondaryBorder}
         paddingX={1}
         marginTop={1}
       >
@@ -187,7 +188,7 @@ export function MessageSelector({
             <Box key={msg.uuid} flexDirection="row" height={1} minHeight={1}>
               <Box width={INDEX_WIDTH}>
                 {isSelected ? (
-                  <Text color="blue" bold>
+                  <Text color={theme.suggestion} bold>
                     {figures.pointer} {actualIndex + 1}{' '}
                   </Text>
                 ) : (

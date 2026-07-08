@@ -191,7 +191,7 @@ export function BaseUrlScreen({
 
         {modelLoadError && (
           <Box marginTop={tightLayout ? 0 : 1}>
-            <Text color="red">Error: {modelLoadError}</Text>
+            <Text color={theme.error}>Error: {modelLoadError}</Text>
           </Box>
         )}
 

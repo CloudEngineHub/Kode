@@ -1,11 +1,62 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import {
   createContrastAwareTheme,
+  getAvailableThemes,
+  getReadableTextColor,
   getTheme,
   getThemeContrastBackgroundColor,
   getThemeContrastRatio,
   setThemeContrastBackgroundColor,
 } from '#core/utils/theme'
+
+const TERMINAL_BACKGROUNDS = [
+  '#000000',
+  '#101010',
+  '#1e1e2e',
+  '#fdf6e3',
+  '#f7f7f7',
+  '#ffffff',
+] as const
+
+const CONTRAST_FIELD_GROUPS = [
+  {
+    fields: ['text', 'primary'],
+    minRatio: 4.5,
+    maxRatio: 10,
+  },
+  {
+    fields: ['permission', 'success', 'error', 'warning'],
+    minRatio: 4.5,
+    maxRatio: 9,
+  },
+  {
+    fields: [
+      'bashBorder',
+      'kode',
+      'notingBorder',
+      'autoAccept',
+      'planMode',
+      'suggestion',
+    ],
+    minRatio: 3.6,
+    maxRatio: 6.4,
+  },
+  {
+    fields: ['noting', 'secondaryText', 'secondary'],
+    minRatio: 3,
+    maxRatio: 4.2,
+  },
+  {
+    fields: ['inputBorder'],
+    minRatio: 3,
+    maxRatio: 5.5,
+  },
+  {
+    fields: ['secondaryBorder'],
+    minRatio: 2,
+    maxRatio: 3.2,
+  },
+] as const
 
 function expectContrastAtLeast(
   foreground: string,
@@ -87,5 +138,44 @@ describe('theme contrast adaptation', () => {
 
     expect(getThemeContrastBackgroundColor()).toBeUndefined()
     expect(getTheme('dark')).toBe(base)
+  })
+
+  it('keeps all theme roles inside their contrast hierarchy', () => {
+    for (const themeName of getAvailableThemes()) {
+      const base = getTheme(themeName)
+
+      for (const background of TERMINAL_BACKGROUNDS) {
+        const theme = createContrastAwareTheme(base, background)
+
+        for (const group of CONTRAST_FIELD_GROUPS) {
+          for (const field of group.fields) {
+            expectContrastBetween(
+              theme[field],
+              background,
+              group.minRatio,
+              group.maxRatio,
+            )
+          }
+        }
+      }
+    }
+  })
+
+  it('selects readable text for colored component backgrounds', () => {
+    for (const themeName of getAvailableThemes()) {
+      const base = getTheme(themeName)
+
+      for (const background of TERMINAL_BACKGROUNDS) {
+        const theme = createContrastAwareTheme(base, background)
+
+        for (const componentBackground of [theme.permission, theme.warning]) {
+          expectContrastAtLeast(
+            getReadableTextColor(componentBackground, theme.text),
+            componentBackground,
+            4.5,
+          )
+        }
+      }
+    }
   })
 })

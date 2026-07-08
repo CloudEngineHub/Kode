@@ -85,7 +85,7 @@ export function AskUserQuestionView(props: {
             props.otherText.trim().length > 0) && (
             <Text color={props.theme.secondaryText}>
               {otherLine}
-              {props.isOtherFocused && <Text color="gray">▌</Text>}
+              {props.isOtherFocused && <Text color={props.theme.text}>▌</Text>}
             </Text>
           )}
         </Box>

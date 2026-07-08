@@ -735,6 +735,26 @@ export function getThemeContrastRatio(
   return contrastRatio(foreground, background)
 }
 
+export function getReadableTextColor(
+  backgroundColor: string,
+  preferredTextColor?: string,
+  minRatio = PRIMARY_TEXT_CONTRAST.min,
+): string {
+  const background = parseHexColor(backgroundColor)
+  if (!background) return preferredTextColor ?? '#ffffff'
+
+  const preferred = parseHexColor(preferredTextColor)
+  if (preferred && contrastRatio(preferred, background) >= minRatio) {
+    return preferredTextColor!
+  }
+
+  const black: Rgb = { r: 0, g: 0, b: 0 }
+  const white: Rgb = { r: 255, g: 255, b: 255 }
+  return contrastRatio(black, background) >= contrastRatio(white, background)
+    ? '#000000'
+    : '#ffffff'
+}
+
 export function getTheme(overrideTheme?: ThemeNames): Theme {
   const config = getGlobalConfig()
   const themeName = overrideTheme ?? config.theme

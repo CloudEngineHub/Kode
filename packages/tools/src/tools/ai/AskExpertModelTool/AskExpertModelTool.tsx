@@ -131,7 +131,7 @@ export const AskExpertModelTool = {
     if (!verbose) {
       return (
         <Box flexDirection="column">
-          <Text bold color="yellow">
+          <Text bold color={theme.warning}>
             {expert_model}{' '}
           </Text>
           <Text color={theme.secondaryText} dimColor>
@@ -145,7 +145,7 @@ export const AskExpertModelTool = {
       question.length > 300 ? `${question.slice(0, 300)}…` : question
     return (
       <Box flexDirection="column">
-        <Text bold color="yellow">
+        <Text bold color={theme.warning}>
           {expert_model}
         </Text>
         <Text color={theme.secondaryText}>{sessionLabel}</Text>
