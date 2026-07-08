@@ -7,6 +7,7 @@ import {
   getFrameCell,
   renderAnsiFrameDiff,
   setFrameCell,
+  TerminalFrameRenderer,
 } from '../../terminal'
 
 describe('terminal frame', () => {
@@ -60,5 +61,35 @@ describe('terminal frame diff', () => {
       { row: 0, column: 0, text: 'abc' },
       { row: 1, column: 0, text: 'xy ' },
     ])
+  })
+})
+
+describe('terminal frame renderer', () => {
+  test('flushes full frame first, then only changed cells', () => {
+    const writes: string[] = []
+    const renderer = new TerminalFrameRenderer(chunk => {
+      writes.push(chunk)
+    })
+
+    renderer.setFrame(createFrameFromLines(['abc'], 3, 1))
+    expect(renderer.flush()).toBe('\x1b[1;1Habc')
+
+    renderer.setFrame(createFrameFromLines(['abx'], 3, 1))
+    expect(renderer.flush()).toBe('\x1b[1;3Hx')
+    expect(writes).toEqual(['\x1b[1;1Habc', '\x1b[1;3Hx'])
+  })
+
+  test('reset makes next flush a full frame', () => {
+    const writes: string[] = []
+    const renderer = new TerminalFrameRenderer(chunk => {
+      writes.push(chunk)
+    })
+
+    renderer.setFrame(createFrameFromLines(['abc'], 3, 1))
+    renderer.flush()
+    renderer.reset()
+
+    renderer.setFrame(createFrameFromLines(['abc'], 3, 1))
+    expect(renderer.flush()).toBe('\x1b[1;1Habc')
   })
 })
