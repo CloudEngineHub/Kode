@@ -1,37 +1,16 @@
-import Anthropic from '@anthropic-ai/sdk'
-import { AnthropicBedrock } from '@anthropic-ai/bedrock-sdk'
-import { AnthropicVertex } from '@anthropic-ai/vertex-sdk'
-import type { BetaUsage } from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
-import chalk from 'chalk'
-import { createHash, randomUUID } from 'crypto'
+import { randomUUID } from 'crypto'
 import type { UUID } from 'crypto'
 import 'dotenv/config'
-import { addToTotalCost } from '#core/cost-tracker'
-import models from '#core/constants/models'
 import type { AssistantMessage, UserMessage } from '#core/query'
-import {
-  Tool,
-  getToolDescription,
-  resolveToolDescription,
-} from '#core/tooling/Tool'
+import { resolveToolDescription, type Tool } from '#core/tooling/Tool'
 import { queryOpenAI } from '#core/ai/llm/openai'
 import { queryAnthropicNative } from '#core/ai/llm/anthropic'
-import {
-  getAnthropicApiKey,
-  getGlobalConfig,
-  ModelProfile,
-} from '#core/utils/config'
-import { logError } from '#core/utils/log'
-import { USER_AGENT } from '#core/utils/http'
-import { countTokens } from '#core/utils/tokens'
-import { setRequestStatus } from '#core/utils/requestStatus'
+import { getGlobalConfig, type ModelProfile } from '#core/utils/config'
 import { withVCR } from '#core/services/vcr'
 import {
   debug as debugLogger,
   markPhase,
   getCurrentRequest,
-  logLLMInteraction,
-  logSystemPromptConstruction,
   logErrorWithDiagnosis,
 } from '#core/utils/debugLogger'
 import {
@@ -39,26 +18,11 @@ import {
   type ModelParam,
   type ResolvedModelInfo,
 } from '#core/utils/model'
-import { getAssistantMessageFromError } from '#core/ai/llm/errors'
-import { withRetry } from '#core/ai/llm/retry'
-import {
-  PROMPT_CACHING_ENABLED,
-  splitSysPromptPrefix,
-} from '#core/ai/llm/systemPromptUtils'
-import { getMaxTokensFromProfile } from '#core/ai/llm/maxTokens'
-import { zodToJsonSchema } from 'zod-to-json-schema'
-import type { BetaMessageStream } from '@anthropic-ai/sdk/lib/BetaMessageStream.mjs'
 import {
   responseStateManager,
   getConversationId,
 } from '#core/services/responseStateManager'
 import type { ToolUseContext } from '#core/tooling/Tool'
-import type {
-  Message as APIMessage,
-  MessageParam,
-  TextBlockParam,
-} from '@anthropic-ai/sdk/resources/index.mjs'
-import { USE_BEDROCK, USE_VERTEX } from '#core/utils/model'
 import {
   getCLISyspromptPrefix,
   getCompatSyspromptPrefix,
@@ -69,10 +33,6 @@ import {
   filterToolsForCompatProfile,
   shouldAttemptRestrictedClientFallback,
 } from '#core/ai/llm/restrictedClientCompat'
-import { getVertexRegionForModel } from '#core/utils/model'
-import { ContentBlock } from '@anthropic-ai/sdk/resources/messages/messages'
-import { nanoid } from 'nanoid'
-import { parseToolUsePartialJsonOrThrow } from '#core/utils/toolUsePartialJson'
 import { generateKodeContext, refreshKodeContext } from './llm/kodeContext'
 import {
   API_ERROR_MESSAGE_PREFIX,
@@ -83,50 +43,7 @@ import {
   PROMPT_TOO_LONG_ERROR_MESSAGE,
 } from './constants'
 export { fetchAnthropicModels, verifyApiKey } from './llm/apiKey'
-// Helper function to extract model configuration for debug logging
-function getModelConfigForDebug(model: string): {
-  modelName: string
-  provider: string
-  apiKeyStatus: 'configured' | 'missing' | 'invalid'
-  baseURL?: string
-  maxTokens?: number
-  reasoningEffort?: string
-  isStream?: boolean
-  temperature?: number
-} {
-  const config = getGlobalConfig()
-  const modelManager = getModelManager()
 
-  const modelProfile = modelManager.getModel('main')
-
-  let apiKeyStatus: 'configured' | 'missing' | 'invalid' = 'missing'
-  let baseURL: string | undefined
-  let maxTokens: number | undefined
-  let reasoningEffort: string | undefined
-
-  if (modelProfile) {
-    apiKeyStatus = modelProfile.apiKey ? 'configured' : 'missing'
-    baseURL = modelProfile.baseURL
-    maxTokens = modelProfile.maxTokens
-    reasoningEffort = modelProfile.reasoningEffort
-  } else {
-    // 🚨 No ModelProfile available - this should not happen in modern system
-    apiKeyStatus = 'missing'
-    maxTokens = undefined
-    reasoningEffort = undefined
-  }
-
-  return {
-    modelName: model,
-    provider: modelProfile?.provider || config.primaryProvider || 'anthropic',
-    apiKeyStatus,
-    baseURL,
-    maxTokens,
-    reasoningEffort,
-    isStream: config.stream || false,
-    temperature: MAIN_QUERY_TEMPERATURE,
-  }
-}
 // KodeContext helpers are implemented in `./kodeContext` to keep this module lean.
 export { generateKodeContext, refreshKodeContext }
 export {
@@ -135,10 +52,6 @@ export {
   userMessageToMessageParam,
   assistantMessageToMessageParam,
 } from '#core/ai/llm/anthropic'
-
-interface StreamResponse extends APIMessage {
-  ttftMs?: number
-}
 
 type QueryLLMTestModelManager = {
   resolveModelWithInfo(modelParam: ModelParam): ResolvedModelInfo
