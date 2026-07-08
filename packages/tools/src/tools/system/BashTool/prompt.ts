@@ -3,6 +3,7 @@ import {
   normalizeSandboxRuntimeConfigFromSettings,
 } from '#core/sandbox/sandboxConfig'
 import { PRODUCT_NAME, PRODUCT_URL } from '#core/constants/product'
+import { getPlatformLabel } from '#core/utils/runtimeEnvironment'
 
 export const DEFAULT_TIMEOUT_MS = 120000
 export const MAX_TIMEOUT_MS = 600000
@@ -107,8 +108,71 @@ ${overridePolicy}
     - Most programs that respect TMPDIR will automatically use it`
 }
 
+export function getGitCommitMessageFormattingPrompt(
+  commit: string,
+  platform: NodeJS.Platform = process.platform,
+): string {
+  if (platform === 'win32') {
+    return `- In order to ensure good formatting on ${getPlatformLabel(platform)}, avoid Bash heredocs and fragile multiline inline arguments. ALWAYS write the commit message to a temporary UTF-8 file and pass it with \`git commit --file\`, a la this example:
+<example>
+$msg = Join-Path $env:TEMP "kode-commit-message.txt"
+$commitMessage = @'
+Commit message here.${commit ? `\n\n${commit}` : ''}
+'@
+Set-Content -LiteralPath $msg -Value $commitMessage -Encoding UTF8
+git commit --file $msg
+Remove-Item -LiteralPath $msg -Force
+</example>`
+  }
+
+  return `- In order to ensure good formatting, ALWAYS pass the commit message via a HEREDOC, a la this example:
+<example>
+git commit -m "$(cat <<'EOF'
+   Commit message here.${commit ? `\n\n   ${commit}` : ''}
+   EOF
+   )"
+</example>`
+}
+
+export function getPullRequestBodyFormattingPrompt(
+  pr: string,
+  platform: NodeJS.Platform = process.platform,
+): string {
+  if (platform === 'win32') {
+    return `   - Create PR using gh pr create with the format below. On ${getPlatformLabel(platform)}, avoid Bash heredocs and fragile multiline inline arguments. Write the body to a temporary UTF-8 file and pass it with \`--body-file\`.
+<example>
+$body = Join-Path $env:TEMP "kode-pr-body.md"
+$prBody = @'
+## Summary
+<1-3 bullet points>
+
+## Test plan
+[Bulleted markdown checklist of TODOs for testing the pull request...]${pr ? `\n\n${pr}` : ''}
+'@
+Set-Content -LiteralPath $body -Value $prBody -Encoding UTF8
+gh pr create --title "the pr title" --body-file $body
+Remove-Item -LiteralPath $body -Force
+</example>`
+  }
+
+  return `   - Create PR using gh pr create with the format below. Use a HEREDOC to pass the body to ensure correct formatting.
+<example>
+gh pr create --title "the pr title" --body "$(cat <<'EOF'
+## Summary
+<1-3 bullet points>
+
+## Test plan
+[Bulleted markdown checklist of TODOs for testing the pull request...]${pr ? `\n\n${pr}` : ''}
+EOF
+)"
+</example>`
+}
+
 function getBashGitPrompt(): string {
   const { commit, pr } = getAttribution()
+  const commitMessageFormattingPrompt =
+    getGitCommitMessageFormattingPrompt(commit)
+  const pullRequestBodyFormattingPrompt = getPullRequestBodyFormattingPrompt(pr)
   return `# Committing changes with git
 
 Only create commits when requested by the user. If unclear, ask first. When the user asks you to create a new git commit, follow these steps carefully:
@@ -147,13 +211,7 @@ Important notes:
 - DO NOT push to the remote repository unless the user explicitly asks you to do so
 - IMPORTANT: Never use git commands with the -i flag (like git rebase -i or git add -i) since they require interactive input which is not supported.
 - If there are no changes to commit (i.e., no untracked files and no modifications), do not create an empty commit
-- In order to ensure good formatting, ALWAYS pass the commit message via a HEREDOC, a la this example:
-<example>
-git commit -m "$(cat <<'EOF'
-   Commit message here.${commit ? `\n\n   ${commit}` : ''}
-   EOF
-   )"
-</example>
+${commitMessageFormattingPrompt}
 
 # Creating pull requests
 Use the gh command via the Bash tool for ALL GitHub-related tasks including working with issues, pull requests, checks, and releases. If given a Github URL use the gh command to get the information needed.
@@ -169,17 +227,7 @@ IMPORTANT: When the user asks you to create a pull request, follow these steps c
 3. You can call multiple tools in a single response. When multiple independent pieces of information are requested and all commands are likely to succeed, run multiple tool calls in parallel for optimal performance. run the following commands in parallel:
    - Create new branch if needed
    - Push to remote with -u flag if needed
-   - Create PR using gh pr create with the format below. Use a HEREDOC to pass the body to ensure correct formatting.
-<example>
-gh pr create --title "the pr title" --body "$(cat <<'EOF'
-## Summary
-<1-3 bullet points>
-
-## Test plan
-[Bulleted markdown checklist of TODOs for testing the pull request...]${pr ? `\n\n${pr}` : ''}
-EOF
-)"
-</example>
+${pullRequestBodyFormattingPrompt}
 
 Important:
 - DO NOT use the ${TOOL_NAME_WRITE} or ${TOOL_NAME_TASK} tools

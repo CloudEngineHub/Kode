@@ -4,6 +4,7 @@ import {
   INTERRUPT_MESSAGE,
   INTERRUPT_MESSAGE_FOR_TOOL_USE,
 } from '#core/utils/messages'
+import { buildRuntimeEnvironmentPrompt } from '#core/utils/runtimeEnvironment'
 import { getCwd } from '#core/utils/state'
 import { release as osRelease, type as osType } from 'os'
 import { PRODUCT_NAME, PROJECT_FILE, PRODUCT_COMMAND } from './product'
@@ -242,6 +243,7 @@ export async function getCompatSystemPrompt(options?: {
     model,
     toolUseContext: options?.toolUseContext,
   })
+  const runtimeEnvironmentPrompt = buildRuntimeEnvironmentPrompt()
 
   // Constant/tool names referenced in the prompt template.
   const TASK_TOOL = 'Task'
@@ -400,6 +402,7 @@ assistant: Clients are marked as failed in the \`connectToServer\` function in s
 </example>
 `,
     '',
+    `\n${runtimeEnvironmentPrompt}`,
     `\n${envInfo}`,
     ...(outputStyleBlock ? [outputStyleBlock] : []),
     scratchpadDirectoryBlock,
@@ -420,6 +423,7 @@ export async function getSystemPrompt(options?: {
   const isOutputStyleActive = options?.outputStyleActive === true
   const includeCodingInstructions =
     !isOutputStyleActive || options?.keepCodingInstructions === true
+  const runtimeEnvironmentPrompt = buildRuntimeEnvironmentPrompt()
   return [
     `
 You are an interactive CLI tool that helps users ${
@@ -440,6 +444,8 @@ ${
 There are additional slash commands and flags available to the user. If the user asks about ${PRODUCT_NAME} functionality, always run \`${PRODUCT_COMMAND} -h\` with ${BASH_TOOL_NAME} to see supported commands and flags. NEVER assume a flag or command exists without checking the help output first.`
 }
 To give feedback, users should ${MACRO.ISSUES_EXPLAINER}.
+
+${runtimeEnvironmentPrompt}
 
 # Task Management
 Use TaskCreate/TaskUpdate to maintain a small, linear task list that survives long sessions and agent switches.
