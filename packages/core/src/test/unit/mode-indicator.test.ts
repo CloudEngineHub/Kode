@@ -12,8 +12,10 @@ describe('ModeIndicator', () => {
     })
 
     expect(indicator.shouldRender).toBe(true)
-    expect(indicator.mainText).toBe('?? ask mode')
-    expect(indicator.shortcutHintText).toBe(' (shift+tab to cycle)')
+    expect(indicator.mainText).toBe('Tool permissions: Ask before tools')
+    expect(indicator.shortcutHintText).toBe(
+      ' (shift+tab to change · ask before tool use)',
+    )
   })
 
   test('yolo mode matches expected format', () => {
@@ -26,8 +28,10 @@ describe('ModeIndicator', () => {
 
     expect(indicator.shouldRender).toBe(true)
     expect(indicator.color).toBe(theme.secondaryText)
-    expect(indicator.mainText).toBe('yolo mode')
-    expect(indicator.shortcutHintText).toBe(' (shift+tab to cycle)')
+    expect(indicator.mainText).toBe('Tool permissions: Auto-run safe tools')
+    expect(indicator.shortcutHintText).toBe(
+      ' (shift+tab to change · safe tools can run without prompts)',
+    )
   })
 
   test('cautious mode matches expected format', () => {
@@ -40,8 +44,10 @@ describe('ModeIndicator', () => {
 
     expect(indicator.shouldRender).toBe(true)
     expect(indicator.color).toBe(theme.warning)
-    expect(indicator.mainText).toBe('?? ask mode')
-    expect(indicator.shortcutHintText).toBe(' (shift+tab to cycle)')
+    expect(indicator.mainText).toBe('Tool permissions: Ask before tools')
+    expect(indicator.shortcutHintText).toBe(
+      ' (shift+tab to change · ask before tool use)',
+    )
   })
 
   test('acceptEdits matches expected format', () => {
@@ -54,8 +60,10 @@ describe('ModeIndicator', () => {
 
     expect(indicator.shouldRender).toBe(true)
     expect(indicator.color).toBe(theme.autoAccept)
-    expect(indicator.mainText).toBe('>> accept edits mode')
-    expect(indicator.shortcutHintText).toBe(' (shift+tab to cycle)')
+    expect(indicator.mainText).toBe('Tool permissions: Auto-accept edits')
+    expect(indicator.shortcutHintText).toBe(
+      ' (shift+tab to change · edits accepted automatically)',
+    )
   })
 
   test('plan matches expected format', () => {
@@ -68,8 +76,10 @@ describe('ModeIndicator', () => {
 
     expect(indicator.shouldRender).toBe(true)
     expect(indicator.color).toBe(theme.success)
-    expect(indicator.mainText).toBe('|| plan mode')
-    expect(indicator.shortcutHintText).toBe(' (shift+tab to cycle)')
+    expect(indicator.mainText).toBe('Tool permissions: Plan first')
+    expect(indicator.shortcutHintText).toBe(
+      ' (shift+tab to change · review plans before implementation)',
+    )
   })
 
   test('bypassPermissions matches expected format', () => {
@@ -82,8 +92,10 @@ describe('ModeIndicator', () => {
 
     expect(indicator.shouldRender).toBe(true)
     expect(indicator.color).toBe(theme.error)
-    expect(indicator.mainText).toBe('🚀 bypass mode')
-    expect(indicator.shortcutHintText).toBe(' (alt+m to cycle)')
+    expect(indicator.mainText).toBe('Tool permissions: Bypass permissions')
+    expect(indicator.shortcutHintText).toBe(
+      ' (alt+m to change · tool prompts bypassed)',
+    )
   })
 
   test('dontAsk matches expected format', () => {
@@ -96,7 +108,9 @@ describe('ModeIndicator', () => {
 
     expect(indicator.shouldRender).toBe(true)
     expect(indicator.color).toBe(theme.error)
-    expect(indicator.mainText).toBe("X don't ask mode")
-    expect(indicator.shortcutHintText).toBe(' (shift+tab to cycle)')
+    expect(indicator.mainText).toBe('Tool permissions: Deny new tools')
+    expect(indicator.shortcutHintText).toBe(
+      ' (shift+tab to change · new tool requests denied)',
+    )
   })
 })

@@ -54,6 +54,7 @@ import { PromptInputView } from './PromptInputView'
 import { useExternalEdit } from './useExternalEdit'
 import { useQuickModelSwitch } from './useQuickModelSwitch'
 import { getKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
+import { buildPromptInputStatusLine } from './inputModeDisplay'
 
 const PROMPT_DRAFT_KEY = 'repl'
 
@@ -360,6 +361,7 @@ export function PromptInput({
       ...(editorMode === 'vim' ? { vim: { mode: vimMode } } : {}),
       kode: {
         conversation: { messageLogName, forkNumber },
+        input_mode: mode,
         permission_mode: toolPermissionContext.mode,
         model: {
           provider: profile?.provider ?? null,
@@ -373,6 +375,7 @@ export function PromptInput({
     messageLogName,
     statusLineUsage,
     submitCount,
+    mode,
     toolPermissionContext.mode,
     totalCostUSD,
     uiRefreshCounter,
@@ -383,35 +386,22 @@ export function PromptInput({
     useStatusLine(statusLineInput)
 
   const defaultStatusLine = useMemo(() => {
-    const parts: string[] = []
-    if (editorMode === 'vim' && vimMode === 'INSERT') {
-      parts.push('-- INSERT --')
-    } else if (mode === 'bash') {
-      parts.push('$ bash')
-    } else if (mode === 'background') {
-      parts.push('& background')
-    } else if (mode === 'koding') {
-      parts.push('# koding')
-    } else {
-      parts.push('? shortcuts')
-    }
-
-    parts.push(isLoading ? 'Enter send · Tab queue' : 'Enter send')
-
-    if (pendingPrompts.length > 0) {
-      parts.push(`pending ${pendingPrompts.length}`)
-    }
-
-    if (queuedPrompts.length > 0) {
-      parts.push(`queued ${queuedPrompts.length}`)
-      parts.push('Alt+↑ edit')
-    }
-
-    return parts.join(' · ')
+    return buildPromptInputStatusLine({
+      mode,
+      permissionMode: currentMode,
+      modeCycleShortcutText: modeCycleShortcut.displayText,
+      isLoading,
+      pendingPromptCount: pendingPrompts.length,
+      queuedPromptCount: queuedPrompts.length,
+      editorMode,
+      vimMode,
+    })
   }, [
+    currentMode,
     editorMode,
     isLoading,
     mode,
+    modeCycleShortcut.displayText,
     pendingPrompts.length,
     queuedPrompts.length,
     vimMode,
