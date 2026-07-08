@@ -4,7 +4,7 @@ import type { ToolPermissionContext } from '#core/types/toolPermissionContext'
 import {
   checkBashPermissions,
   checkBashPermissionsAutoAllowedBySandbox,
-} from '#core/utils/permissions/bashToolPermissionEngine'
+} from '@kode/permissions/bash'
 
 import type { PermissionResult } from '../types'
 import { SAFE_COMMANDS } from './bash'

@@ -1,4 +1,5 @@
-import { splitBashCommandIntoSubcommands, xi } from './bashToolPermissionEngine'
+import { splitBashCommandIntoSubcommands } from './shellTokens'
+import { xi } from './xi'
 
 // Compatibility: read-only allowlist (reduced, conservative subset).
 // Goal: classify truly read-only commands as concurrency-safe and plan-mode-safe.

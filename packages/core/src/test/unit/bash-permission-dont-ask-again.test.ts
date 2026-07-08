@@ -5,7 +5,7 @@ import { join } from 'path'
 import { createDefaultToolPermissionContext } from '#core/types/toolPermissionContext'
 import { hasPermissionsToUseTool, savePermission } from '#core/permissions'
 import { BashTool } from '#tools/tools/system/BashTool/BashTool'
-import { checkBashPermissions } from '#core/utils/permissions/bashToolPermissionEngine'
+import { checkBashPermissions } from '@kode/permissions/bash'
 import {
   __resetToolPermissionContextStateForTests,
   setToolPermissionContextForConversationKey,

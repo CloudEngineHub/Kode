@@ -14,6 +14,7 @@ export { checkSedCommandSafety } from './sed'
 export { xi } from './xi'
 export { checkBashCommandSyntax } from './validators'
 export { formatBashPromptRule } from './rules'
+export { isBashCommandReadOnly } from './readOnly'
 export {
   checkBashPermissions,
   checkBashPermissionsAutoAllowedBySandbox,
