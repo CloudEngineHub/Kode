@@ -1,4 +1,4 @@
-import { PRODUCT_NAME } from '#core/constants/product'
+import { PRODUCT_NAME } from '#config/constants'
 import type { BashPermissionDecision, DecisionReason } from './types'
 import { parseShellTokens } from './shellTokens'
 

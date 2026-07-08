@@ -1,7 +1,7 @@
 import type { ToolUseContext } from '@kode/tool-interface/Tool'
 import type { ToolPermissionContext } from '@kode/tool-interface/permissions'
-import { getCwd } from '#core/utils/state'
-import { PRODUCT_NAME } from '#core/constants/product'
+import { getCwd } from '#runtime/cwd'
+import { PRODUCT_NAME } from '#config/constants'
 import type {
   BashPermissionDecision,
   BashPermissionResult,
@@ -23,7 +23,7 @@ import {
 } from './rules'
 import { xi } from './xi'
 import { checkBashCommandSyntax } from './validators'
-import { LEGACY_ENV } from '#core/compat/legacyEnv'
+import { LEGACY_ENV } from '#config/compat/legacyEnv'
 
 function formatDecisionReason(
   reason: DecisionReason | undefined,

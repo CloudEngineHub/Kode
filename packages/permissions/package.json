@@ -4,7 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "dependencies": {
-    "@kode/core": "workspace:*",
+    "@kode/config": "workspace:*",
+    "@kode/runtime": "workspace:*",
     "@kode/tool-interface": "workspace:*"
   }
 }

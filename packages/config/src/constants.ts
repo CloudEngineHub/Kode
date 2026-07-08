@@ -26,3 +26,5 @@ export const ENGINE_DEFAULTS = {
   warningMarginTokens: 20_000,
   errorMarginTokens: 20_000,
 } as const
+
+export const PRODUCT_NAME = 'Kode'

@@ -2,7 +2,7 @@ import type {
   ToolPermissionContext,
   ToolPermissionContextUpdate,
 } from '@kode/tool-interface/permissions'
-import { PRODUCT_NAME } from '#core/constants/product'
+import { PRODUCT_NAME } from '#config/constants'
 import type { BashPermissionDecision } from './types'
 import { stripOutputRedirections } from './redirections'
 

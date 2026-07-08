@@ -1,15 +1,15 @@
 import { homedir } from 'os'
 import path from 'path'
 import type { ToolPermissionContext } from '@kode/tool-interface/permissions'
-import { getOriginalCwd } from '#core/utils/state'
-import { PRODUCT_NAME } from '#core/constants/product'
+import { getOriginalCwd } from '#runtime/cwd'
+import { PRODUCT_NAME } from '#config/constants'
 import {
-  getWriteSafetyCheckForPath,
   isPathInWorkingDirectories,
   matchPermissionRuleForPath,
   resolveLikeCliPath,
   suggestFilePermissionUpdates,
-} from '#core/permissions/fileToolPermissionEngine'
+} from '../fileToolPermissionEngine'
+import { getWriteSafetyCheckForPath } from '../fileToolPermissionEngine/writeSafety'
 import type {
   BashPathOp,
   BashPermissionDecision,

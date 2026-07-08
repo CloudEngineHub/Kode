@@ -15,3 +15,4 @@ export type {
   SpawnSpec,
   SpawnStdio,
 } from './types'
+export * from './cwd'
