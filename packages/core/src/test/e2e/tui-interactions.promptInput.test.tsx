@@ -553,6 +553,31 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
     await h.wait(150)
   })
 
+  test('medium single-line paste folds before rendering full text', async () => {
+    await setCwd(process.cwd())
+
+    const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
+    const h = createInkTestHarness(
+      <PromptInputHarness conversationKey={conversationKey} showRaw={true} />,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    h.clearOutput()
+
+    h.stdin.write('hi')
+    await h.wait(75)
+    h.stdin.write('a'.repeat(200))
+    await h.wait(650)
+
+    const output = h.getOutput()
+    expect(output).toContain('RAW:"hi[Pasted text #1]"')
+    expect(output).not.toContain(`RAW:"hi${'a'.repeat(200)}"`)
+
+    h.stdin.write('\r')
+    await h.wait(150)
+  })
+
   test('shift+tab cycles permission mode and renders CompactModeIndicator', async () => {
     const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
     const h = createInkTestHarness(

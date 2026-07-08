@@ -371,6 +371,7 @@ export function PromptInput({
     setCursorOffset,
     onModeChange,
     terminalRows: rows,
+    terminalColumns: textInputColumns,
   })
 
   // Codex-style prompt queue shortcuts:

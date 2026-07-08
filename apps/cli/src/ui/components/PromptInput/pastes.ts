@@ -79,6 +79,7 @@ export function usePromptPastes(args: {
   setCursorOffset: (value: number) => void
   onModeChange: (mode: PromptMode) => void
   terminalRows: number
+  terminalColumns: number
 }) {
   const {
     cursorOffset,
@@ -87,6 +88,7 @@ export function usePromptPastes(args: {
     onModeChange,
     setCursorOffset,
     terminalRows,
+    terminalColumns,
   } = args
 
   const [pastedTexts, setPastedTextsState] = useState<PastedTextSegment[]>([])
@@ -177,7 +179,7 @@ export function usePromptPastes(args: {
       const currentInput = inputRef.current
       const currentCursorOffset = cursorOffsetRef.current
 
-      if (!shouldTreatAsSpecialPaste(text, { terminalRows })) {
+      if (!shouldTreatAsSpecialPaste(text, { terminalRows, terminalColumns })) {
         const newInput =
           currentInput.slice(0, currentCursorOffset) +
           text +
@@ -202,7 +204,13 @@ export function usePromptPastes(args: {
       setCursorOffset(currentCursorOffset + pastedPrompt.length)
       setPastedTexts(prev => [...prev, { placeholder: pastedPrompt, text }])
     },
-    [onInputChange, setCursorOffset, setPastedTexts, terminalRows],
+    [
+      onInputChange,
+      setCursorOffset,
+      setPastedTexts,
+      terminalRows,
+      terminalColumns,
+    ],
   )
 
   const clearPastes = useCallback(() => {

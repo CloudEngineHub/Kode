@@ -103,7 +103,7 @@ export type Props = {
   readonly onImagePaste?: (image: ClipboardImage) => string | void
 
   /**
-   * Optional callback when a large text (over 800 chars) is pasted
+   * Optional callback when pasted text should be folded out of the live input.
    */
   readonly onPaste?: (text: string) => void
 

@@ -158,6 +158,7 @@ export default function TextInput({
   const handleBracketedPasteSequences = useBracketedPasteSequences({
     insertText: (text: string) => onInput(text, {} as Key),
     onPaste,
+    terminalColumns: columns,
   })
 
   const flushAggregatedPaste = React.useCallback(() => {
@@ -256,16 +257,18 @@ export default function TextInput({
       return
     }
 
-    // Handle pastes (>800 chars)
+    // Handle paste-sized chunks before they enter React-rendered input.
     // Usually we get one or two input characters at a time. If we
-    // get a bunch, the user has probably pasted.
+    // get enough content to wrap across multiple prompt rows, the user has probably pasted.
     // Unfortunately node batches long pastes, so it's possible
     // that we would see e.g. 1024 characters and then just a few
     // more in the next frame that belong with the original paste.
     // This batching number is not consistent.
     if (
       onPaste &&
-      shouldAggregatePasteChunk(input, pasteTimeoutRef.current !== null)
+      shouldAggregatePasteChunk(input, pasteTimeoutRef.current !== null, {
+        terminalColumns: columns,
+      })
     ) {
       armPasteGuard()
       pasteChunksRef.current.push(input)

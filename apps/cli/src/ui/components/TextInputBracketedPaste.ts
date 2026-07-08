@@ -84,11 +84,13 @@ function getSuffixKeepLength(haystack: string, markers: string[]): number {
 export type BracketedPasteHandlerOptions = {
   insertText: (text: string) => void
   onPaste?: (text: string) => void
+  terminalColumns?: number
 }
 
 export function useBracketedPasteSequences({
   insertText,
   onPaste,
+  terminalColumns,
 }: BracketedPasteHandlerOptions): (input: string) => boolean {
   const stateRef = React.useRef<BracketedPasteState>({
     mode: 'normal',
@@ -99,7 +101,10 @@ export function useBracketedPasteSequences({
   const flushBracketedPasteBuffer = React.useCallback(
     (rawText: string) => {
       const normalized = normalizeLineEndings(rawText)
-      if (onPaste && shouldTreatAsSpecialPaste(normalized)) {
+      if (
+        onPaste &&
+        shouldTreatAsSpecialPaste(normalized, { terminalColumns })
+      ) {
         // Schedule callback outside the keypress frame so large paste handling
         // doesn't block cursor updates.
         setTimeout(() => onPaste(normalized), 0)
@@ -109,7 +114,7 @@ export function useBracketedPasteSequences({
       // Normal paste: insert directly into input.
       insertText(normalized)
     },
-    [insertText, onPaste],
+    [insertText, onPaste, terminalColumns],
   )
 
   return React.useCallback(
