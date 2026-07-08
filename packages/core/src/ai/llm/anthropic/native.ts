@@ -137,10 +137,10 @@ export async function queryAnthropicNative(
   },
 ): Promise<AssistantMessage> {
   const config = getGlobalConfig()
-  const modelManager = getModelManager()
   const toolUseContext = options?.toolUseContext
 
-  const modelProfile = options?.modelProfile || modelManager.getModel('main')
+  const modelProfile =
+    options?.modelProfile ?? getModelManager().getModel('main')
   let anthropic: Anthropic | AnthropicBedrock | AnthropicVertex
   let model: string
   let provider: string
