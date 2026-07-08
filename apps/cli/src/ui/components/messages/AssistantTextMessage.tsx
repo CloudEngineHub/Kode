@@ -158,7 +158,11 @@ export function AssistantTextMessage({
   // Show background task output
   if (text.startsWith('<background-task-output')) {
     return (
-      <AssistantBackgroundTaskOutputMessage content={text} verbose={verbose} />
+      <AssistantBackgroundTaskOutputMessage
+        content={text}
+        verbose={verbose}
+        maxHeight={maxHeight}
+      />
     )
   }
 
