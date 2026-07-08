@@ -25,6 +25,7 @@ export type BashPermissionResult =
       result: false
       message: string
       shouldPromptUser?: boolean
+      requiresExplicitApproval?: boolean
       suggestions?: ToolPermissionContextUpdate[]
       blockedPath?: string
       decisionReason?: string

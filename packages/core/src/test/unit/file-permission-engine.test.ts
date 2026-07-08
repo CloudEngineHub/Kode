@@ -211,7 +211,8 @@ describe('Compatibility: filesystem permission engine', () => {
       )
       expect(result.result).toBe(true)
     } finally {
-      process.env.KODE_CONFIG_DIR = previousConfigDir
+      if (previousConfigDir === undefined) delete process.env.KODE_CONFIG_DIR
+      else process.env.KODE_CONFIG_DIR = previousConfigDir
       rmSync(tmpConfig, { recursive: true, force: true })
     }
   })
@@ -287,8 +288,11 @@ describe('Compatibility: filesystem permission engine', () => {
       expect(kodeWriteDenied.result).toBe(false)
     } finally {
       setKodeAgentSessionId(previousSessionId)
-      process.env.KODE_CONFIG_DIR = previousKodeConfigDir
-      process.env.CLAUDE_CONFIG_DIR = previousClaudeConfigDir
+      if (previousKodeConfigDir === undefined) delete process.env.KODE_CONFIG_DIR
+      else process.env.KODE_CONFIG_DIR = previousKodeConfigDir
+      if (previousClaudeConfigDir === undefined)
+        delete process.env.CLAUDE_CONFIG_DIR
+      else process.env.CLAUDE_CONFIG_DIR = previousClaudeConfigDir
       rmSync(tmpRoots, { recursive: true, force: true })
     }
   })
