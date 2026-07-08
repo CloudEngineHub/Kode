@@ -11,6 +11,7 @@ import { describeToolPermissionRuleSource } from '#core/permissions/ruleString'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { terminalCapabilityManager } from '#ui-ink/utils/terminalCapabilityManager'
+import { formatTerminalAppearanceLines } from '#ui-ink/utils/terminalAppearance'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import {
@@ -72,6 +73,14 @@ export function Doctor({
     const terminalName = terminalCapabilityManager.getTerminalName()
     const backgroundColor =
       terminalCapabilityManager.getTerminalBackgroundColor()
+    const appearanceSnapshot =
+      terminalCapabilityManager.getTerminalAppearanceSnapshot()
+    const appearance = {
+      ...appearanceSnapshot,
+      terminalName: appearanceSnapshot.terminalName ?? terminalName,
+      terminalBackgroundColor:
+        appearanceSnapshot.terminalBackgroundColor ?? backgroundColor,
+    }
     const kittySupported = terminalCapabilityManager.isKittyProtocolSupported()
     const kittyEnabled = terminalCapabilityManager.isKittyProtocolEnabled()
     const mokSupported = terminalCapabilityManager.isModifyOtherKeysSupported()
@@ -91,6 +100,7 @@ export function Doctor({
         ['TERM_PROGRAM', process.env.TERM_PROGRAM],
         ['TERM_PROGRAM_VERSION', process.env.TERM_PROGRAM_VERSION],
         ['WT_SESSION', process.env.WT_SESSION],
+        ['WT_PROFILE_ID', process.env.WT_PROFILE_ID],
         ['VTE_VERSION', process.env.VTE_VERSION],
         ['KITTY_WINDOW_ID', process.env.KITTY_WINDOW_ID],
         ['WEZTERM_EXECUTABLE', process.env.WEZTERM_EXECUTABLE],
@@ -123,6 +133,8 @@ export function Doctor({
       `- detected: ${terminalName ?? '(unknown)'} · bg: ${backgroundColor ?? '(unknown)'}`,
     )
     if (envSummary) lines.push(`- env: ${envSummary}`)
+    lines.push('')
+    lines.push(...formatTerminalAppearanceLines(appearance))
     lines.push('')
     lines.push('Capabilities')
     lines.push(

@@ -1,5 +1,9 @@
 import * as fs from 'node:fs'
 import {
+  createTerminalAppearanceSnapshot,
+  type TerminalAppearanceSnapshot,
+} from './terminalAppearance'
+import {
   disableBracketedPasteMode,
   disableKittyKeyboardProtocol,
   disableModifyOtherKeys,
@@ -236,6 +240,13 @@ export class TerminalCapabilityManager {
 
   getTerminalName(): string | undefined {
     return this.terminalName
+  }
+
+  getTerminalAppearanceSnapshot(): TerminalAppearanceSnapshot {
+    return createTerminalAppearanceSnapshot({
+      terminalName: this.terminalName,
+      terminalBackgroundColor: this.terminalBackgroundColor,
+    })
   }
 
   isKittyProtocolEnabled(): boolean {

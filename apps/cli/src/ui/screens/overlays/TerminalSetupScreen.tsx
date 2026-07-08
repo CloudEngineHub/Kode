@@ -9,6 +9,10 @@ import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import { wrapLines } from '#ui-ink/primitives/text/wrapLines'
 import { terminalCapabilityManager } from '#ui-ink/utils/terminalCapabilityManager'
+import {
+  formatTerminalAppearanceLines,
+  type TerminalAppearanceSnapshot,
+} from '#ui-ink/utils/terminalAppearance'
 
 type Props = {
   onDone: (result?: string) => void
@@ -31,14 +35,18 @@ type TerminalCapabilities = {
   modifyOtherKeysEnabled: boolean
   bracketedPasteSupported: boolean
   bracketedPasteEnabled: boolean
+  appearance: TerminalAppearanceSnapshot
 }
 
 function snapshotCapabilities(): TerminalCapabilities {
+  const terminalName =
+    terminalCapabilityManager.getTerminalName() ??
+    detectTerminalName() ??
+    undefined
+  const appearance = terminalCapabilityManager.getTerminalAppearanceSnapshot()
+
   return {
-    terminalName:
-      terminalCapabilityManager.getTerminalName() ??
-      detectTerminalName() ??
-      undefined,
+    terminalName,
     tty: Boolean(process.stdin.isTTY && process.stdout.isTTY),
     kittySupported: terminalCapabilityManager.isKittyProtocolSupported(),
     kittyEnabled: terminalCapabilityManager.isKittyProtocolEnabled(),
@@ -49,6 +57,10 @@ function snapshotCapabilities(): TerminalCapabilities {
     bracketedPasteSupported:
       terminalCapabilityManager.isBracketedPasteSupported(),
     bracketedPasteEnabled: terminalCapabilityManager.isBracketedPasteEnabled(),
+    appearance: {
+      ...appearance,
+      terminalName: appearance.terminalName ?? terminalName,
+    },
   }
 }
 
@@ -68,6 +80,9 @@ function buildTerminalSetupLines(capabilities: TerminalCapabilities): string[] {
   lines.push(
     `- bracketed paste: ${capabilities.bracketedPasteSupported ? 'supported' : 'no'} (${capabilities.bracketedPasteEnabled ? 'enabled' : 'disabled'})`,
   )
+
+  lines.push('')
+  lines.push(...formatTerminalAppearanceLines(capabilities.appearance))
 
   lines.push('')
   lines.push('Multi-line input')
