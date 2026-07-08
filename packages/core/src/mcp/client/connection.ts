@@ -21,6 +21,10 @@ import { notifyMcpListChanged } from './listChanged'
 import { getMcpOAuthProvider } from './oauth'
 import { getMcpServer } from './config'
 import { getMcpServerConnectionBatchSize } from './settings'
+import {
+  getMcpClientCapabilities,
+  registerMcpClientRequestHandlers,
+} from './roots'
 import type { WrappedClient } from './types'
 
 type GlobalWithWebSocket = { WebSocket?: unknown }
@@ -357,7 +361,7 @@ export async function connectToServer(
     const client = new Client(
       { name: PRODUCT_COMMAND, version: '0.1.0' },
       {
-        capabilities: {},
+        capabilities: getMcpClientCapabilities(),
         listChanged: {
           tools: {
             onChanged: (error: Error | null) => {
@@ -398,6 +402,7 @@ export async function connectToServer(
         },
       },
     )
+    registerMcpClientRequestHandlers(client)
 
     try {
       const connectPromise = client.connect(candidate.transport)

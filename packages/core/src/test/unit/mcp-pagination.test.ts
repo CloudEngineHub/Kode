@@ -1,0 +1,165 @@
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+
+import {
+  __setMcpClientsForTests,
+  getMCPCommands,
+  getMCPTools,
+} from '#core/mcp/client'
+import { ListMcpResourcesTool } from '#tools/tools/mcp/ListMcpResourcesTool/ListMcpResourcesTool'
+import type { ToolUseContext } from '#core/tooling/Tool'
+
+function makeContext(mcpClients: unknown[]): ToolUseContext {
+  return {
+    abortController: new AbortController(),
+    messageId: 'test',
+    readFileTimestamps: {},
+    options: {
+      commands: [],
+      tools: [],
+      verbose: false,
+      safeMode: false,
+      forkNumber: 0,
+      messageLogName: 'test',
+      maxThinkingTokens: 0,
+      mcpClients,
+    },
+  }
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object') return null
+  return value as Record<string, unknown>
+}
+
+describe('MCP paginated list requests', () => {
+  beforeEach(() => {
+    __setMcpClientsForTests(null)
+    getMCPTools.cache.clear?.()
+    getMCPCommands.cache.clear?.()
+  })
+
+  afterEach(() => {
+    __setMcpClientsForTests(null)
+    getMCPTools.cache.clear?.()
+    getMCPCommands.cache.clear?.()
+  })
+
+  test('getMCPTools follows tools/list nextCursor pages', async () => {
+    const requests: unknown[] = []
+    const client: any = {
+      request: async (req: any) => {
+        requests.push(req)
+        const cursor = req.params?.cursor
+        if (!cursor) {
+          return {
+            tools: [
+              {
+                name: 'first',
+                inputSchema: { type: 'object', properties: {} },
+              },
+            ],
+            nextCursor: 'page-2',
+          }
+        }
+        return {
+          tools: [
+            {
+              name: 'second',
+              inputSchema: { type: 'object', properties: {} },
+            },
+          ],
+        }
+      },
+    }
+
+    __setMcpClientsForTests([
+      {
+        type: 'connected',
+        name: 'srv',
+        client,
+        capabilities: { tools: {} },
+      } as any,
+    ])
+
+    const tools = await getMCPTools()
+
+    expect(tools.map(tool => tool.name)).toEqual([
+      'mcp__srv__first',
+      'mcp__srv__second',
+    ])
+    expect(requests).toEqual([
+      { method: 'tools/list' },
+      { method: 'tools/list', params: { cursor: 'page-2' } },
+    ])
+  })
+
+  test('getMCPCommands follows prompts/list nextCursor pages', async () => {
+    const client: any = {
+      request: async (req: any) => {
+        const cursor = req.params?.cursor
+        if (!cursor) {
+          return {
+            prompts: [{ name: 'first', description: 'first prompt' }],
+            nextCursor: 'page-2',
+          }
+        }
+        return {
+          prompts: [{ name: 'second', description: 'second prompt' }],
+        }
+      },
+    }
+
+    __setMcpClientsForTests([
+      {
+        type: 'connected',
+        name: 'srv',
+        client,
+        capabilities: { prompts: {} },
+      } as any,
+    ])
+
+    const commands = await getMCPCommands()
+
+    expect(commands.map(command => command.name)).toEqual([
+      'mcp__srv__first',
+      'mcp__srv__second',
+    ])
+  })
+
+  test('ListMcpResourcesTool follows resources/list nextCursor pages', async () => {
+    const client: any = {
+      request: async (req: any) => {
+        const cursor = req.params?.cursor
+        if (!cursor) {
+          return {
+            resources: [{ uri: 'file:///first', name: 'first' }],
+            nextCursor: 'page-2',
+          }
+        }
+        return {
+          resources: [{ uri: 'file:///second', name: 'second' }],
+        }
+      },
+      getServerCapabilities: () => ({ resources: {} }),
+    }
+
+    const ctx = makeContext([
+      {
+        type: 'connected',
+        name: 'srv',
+        client,
+        capabilities: { resources: {} },
+      },
+    ])
+
+    const gen = ListMcpResourcesTool.call({}, ctx)
+    const first = await gen.next()
+    const firstValue = asRecord(first.value)
+
+    expect(firstValue?.type).toBe('result')
+    expect(firstValue?.data).toEqual([
+      { uri: 'file:///first', name: 'first', server: 'srv' },
+      { uri: 'file:///second', name: 'second', server: 'srv' },
+    ])
+  })
+})

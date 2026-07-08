@@ -2,9 +2,12 @@ import { Command } from 'commander'
 import chalk from 'chalk'
 import { setCwd } from '#core/utils/state'
 import { getClients, type WrappedClient } from '#core/mcp/client'
+import { requestClientPages } from '#core/mcp/client/request'
 import {
   CallToolResultSchema,
+  type ListResourcesResult,
   ListResourcesResultSchema,
+  type ListToolsResult,
   ListToolsResultSchema,
   ReadResourceResultSchema,
 } from '@modelcontextprotocol/sdk/types.js'
@@ -104,11 +107,11 @@ async function listTools(options: {
       wrapped.capabilities = capabilities
     }
     if (!capabilities?.tools) continue
-    const result = await wrapped.client.request(
-      { method: 'tools/list' },
-      ListToolsResultSchema,
-    )
-    for (const tool of result.tools ?? []) {
+    const results = await requestClientPages<
+      ListToolsResult,
+      typeof ListToolsResultSchema
+    >(wrapped, { method: 'tools/list' }, ListToolsResultSchema)
+    for (const tool of results.flatMap(result => result.tools ?? [])) {
       out.push({
         server: wrapped.name,
         name: tool.name,
@@ -146,11 +149,11 @@ async function listResources(options: {
       wrapped.capabilities = capabilities
     }
     if (!capabilities?.resources) continue
-    const result = await wrapped.client.request(
-      { method: 'resources/list' },
-      ListResourcesResultSchema,
-    )
-    for (const resource of result.resources ?? []) {
+    const results = await requestClientPages<
+      ListResourcesResult,
+      typeof ListResourcesResultSchema
+    >(wrapped, { method: 'resources/list' }, ListResourcesResultSchema)
+    for (const resource of results.flatMap(result => result.resources ?? [])) {
       out.push({
         server: wrapped.name,
         uri: resource.uri,
@@ -252,11 +255,13 @@ export async function runMcpCli(args: {
       const { server, tool } = parseServerTool(toolId)
       const clients = await getClients()
       const client = getConnectedClient(clients, server)
-      const result = await client.client.request(
-        { method: 'tools/list' },
-        ListToolsResultSchema,
-      )
-      const found = (result.tools ?? []).find(t => t.name === tool)
+      const results = await requestClientPages<
+        ListToolsResult,
+        typeof ListToolsResultSchema
+      >(client, { method: 'tools/list' }, ListToolsResultSchema)
+      const found = results
+        .flatMap(result => result.tools ?? [])
+        .find(t => t.name === tool)
       if (!found) {
         throw new Error(`Tool '${tool}' not found on server '${server}'`)
       }

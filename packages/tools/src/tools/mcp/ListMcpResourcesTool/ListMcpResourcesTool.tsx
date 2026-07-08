@@ -3,8 +3,10 @@ import React from 'react'
 import { z } from 'zod'
 import type { Tool, ToolUseContext } from '@kode/tool-interface/Tool'
 import { getClients, type WrappedClient } from '#core/mcp/client'
+import { requestClientPages } from '#core/mcp/client/request'
 import { logMCPError } from '#core/utils/log'
 import { ListResourcesResultSchema } from '@modelcontextprotocol/sdk/types.js'
+import type { ListResourcesResult } from '@modelcontextprotocol/sdk/types.js'
 import { DESCRIPTION, PROMPT, TOOL_NAME } from './prompt'
 
 const inputSchema = z.strictObject({
@@ -124,17 +126,16 @@ export const ListMcpResourcesTool = {
           }
         }
         if (!capabilities?.resources) continue
-        const result = await wrapped.client.request(
-          { method: 'resources/list' },
-          ListResourcesResultSchema,
-        )
-        if (!result.resources) continue
+        const results = await requestClientPages<
+          ListResourcesResult,
+          typeof ListResourcesResultSchema
+        >(wrapped, { method: 'resources/list' }, ListResourcesResultSchema)
         resources.push(
-          ...(result.resources as ListedResource[]).map(
-            (r: ListedResource) => ({
+          ...results.flatMap(result =>
+            ((result.resources ?? []) as ListedResource[]).map(r => ({
               ...r,
               server: wrapped.name,
-            }),
+            })),
           ),
         )
       } catch (error) {

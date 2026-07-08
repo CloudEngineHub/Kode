@@ -19,7 +19,7 @@ import {
   getMcpToolTimeoutMs,
   sanitizeMcpIdentifierPart,
 } from './settings'
-import { requestAll } from './request'
+import { requestAllPages } from './request'
 import { createTimeoutSignal, mergeAbortSignals } from './timeouts'
 import type { ConnectedClient } from './types'
 import { isRecord } from './utils'
@@ -75,15 +75,16 @@ function renderResultForAssistant(content: unknown): string | unknown[] {
 
 export const getMCPTools = memoize(
   async (): Promise<Tool[]> => {
-    const toolsList = await requestAll<
+    const toolsList = await requestAllPages<
       ListToolsResult,
       typeof ListToolsResultSchema
     >({ method: 'tools/list' }, ListToolsResultSchema, 'tools')
 
     const inputSchema = z.object({}).passthrough()
 
-    return toolsList.flatMap(({ client, result: { tools } }) => {
+    return toolsList.flatMap(({ client, results }) => {
       const serverPart = sanitizeMcpIdentifierPart(client.name)
+      const tools = results.flatMap(result => result.tools ?? [])
 
       return tools
         .map((tool): Tool | null => {
@@ -137,6 +138,15 @@ export const getMCPTools = memoize(
                 args,
                 toolUseId: context.toolUseId,
                 signal: context.abortController.signal,
+                onProgress: progress => {
+                  context.options?.onStreamEvent?.({
+                    type: 'mcp_progress',
+                    server: client.name,
+                    tool: tool.name,
+                    toolUseId: context.toolUseId,
+                    progress,
+                  })
+                },
               })
               yield {
                 type: 'result' as const,
@@ -162,12 +172,14 @@ async function callMcpTool({
   args,
   toolUseId,
   signal,
+  onProgress,
 }: {
   client: ConnectedClient
   tool: string
   args: Record<string, unknown>
   toolUseId?: string
   signal?: AbortSignal
+  onProgress?: (progress: unknown) => void
 }): Promise<ToolResultBlockParam['content']> {
   const timeoutMs = getMcpToolTimeoutMs()
   const timeoutSignal = timeoutMs ? createTimeoutSignal(timeoutMs) : null
@@ -179,9 +191,13 @@ async function callMcpTool({
       : undefined
 
   try {
-    const options: RequestOptions | undefined = merged?.signal
-      ? { signal: merged.signal }
-      : undefined
+    const options: RequestOptions | undefined =
+      merged?.signal || onProgress
+        ? {
+            ...(merged?.signal ? { signal: merged.signal } : {}),
+            onprogress: onProgress,
+          }
+        : undefined
 
     const rawResult = await client.callTool(
       {

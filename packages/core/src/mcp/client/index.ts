@@ -25,6 +25,12 @@ export {
   getMcpAuthSnapshot,
 } from './oauth'
 export { resetMcpConnections } from './reset'
+export {
+  createMcpRootsForCwd,
+  getMcpClientCapabilities,
+  getMcpRoots,
+  shouldExposeMcpRoots,
+} from './roots'
 
 export {
   __resetMcpListChangedForTests,
