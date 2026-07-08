@@ -291,17 +291,61 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
       h.stdin.write('\x1b')
       await h.wait(80)
       h.stdin.write('\x1b')
-      await h.wait(300)
       h.clearOutput()
-      h.stdin.write('\x1B[B')
-      await h.wait(50)
-      h.stdin.write('\r')
-      await h.wait(80)
-      h.stdin.write('\r')
-      await h.wait(300)
+
+      async function waitForStableReconnectAction(): Promise<string> {
+        let lastOutput = ''
+        for (let attempt = 0; attempt < 12; attempt += 1) {
+          await h.wait(100)
+          const output = h.getOutput()
+          lastOutput = output
+
+          if (output.includes('Loading actions...')) {
+            h.clearOutput()
+            continue
+          }
+
+          if (output.includes('Reconnect')) {
+            h.clearOutput()
+            await h.wait(100)
+            const quietOutput = h.getOutput()
+            if (quietOutput.includes('Loading actions...')) {
+              h.clearOutput()
+              continue
+            }
+            return output + quietOutput
+          }
+        }
+        return lastOutput
+      }
+
+      async function reconnectOnce(): Promise<void> {
+        const serverActionsOutput = await waitForStableReconnectAction()
+        expect(serverActionsOutput).toContain('Reconnect')
+
+        h.clearOutput()
+        if (serverActionsOutput.includes('1. Reconnect')) {
+          h.stdin.write('\r')
+        } else {
+          h.stdin.write('\x1B[B')
+          await h.wait(80)
+          expect(h.getOutput()).toContain('❯2. Reconnect')
+          h.stdin.write('\r')
+        }
+
+        h.clearOutput()
+        await h.wait(300)
+      }
+
+      await reconnectOnce()
+      await reconnectOnce()
+
       const refreshedOutput = h.getOutput()
-      expect(refreshedOutput).toContain('connected')
-      expect(refreshedOutput).not.toContain('failed')
+      const latestFrame = refreshedOutput.slice(
+        refreshedOutput.lastIndexOf('Manage MCP servers'),
+      )
+      expect(latestFrame).toContain('connected')
+      expect(latestFrame).not.toContain('failed')
       expect(reconnectCount).toBe(2)
     } finally {
       mock.restore()

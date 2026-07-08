@@ -431,6 +431,68 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     expect(focused).toBe('second')
   })
 
+  test('Select: parent-synced focus survives a keep-alive remount', async () => {
+    let focused = ''
+    let selected = ''
+
+    function SelectRemountHarness(): React.ReactNode {
+      const [showSelect, setShowSelect] = useState(true)
+      const [focusValue, setFocusValue] = useState<string | undefined>('first')
+
+      useEffect(() => {
+        const timers = [
+          setTimeout(() => setShowSelect(false), 90),
+          setTimeout(() => setShowSelect(true), 140),
+        ]
+        return () => {
+          for (const timer of timers) clearTimeout(timer)
+        }
+      }, [])
+
+      if (!showSelect) return <Box />
+
+      return (
+        <Select
+          focusValue={focusValue}
+          options={[
+            { label: 'First', value: 'first' },
+            { label: 'Second', value: 'second' },
+            { label: 'Third', value: 'third' },
+          ]}
+          onFocus={value => {
+            focused = value
+            setFocusValue(value)
+          }}
+          onChange={value => {
+            selected = value
+          }}
+        />
+      )
+    }
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <SelectRemountHarness />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(40)
+    expect(focused).toBe('first')
+
+    h.stdin.write('\u001B[B')
+    await h.wait(40)
+    expect(focused).toBe('second')
+
+    await h.wait(140)
+    expect(focused).toBe('second')
+
+    h.stdin.write('\r')
+    await h.wait(40)
+
+    expect(selected).toBe('second')
+  })
+
   test('Select: focusValue is applied after options arrive from keep-alive loading', async () => {
     let focused = ''
 

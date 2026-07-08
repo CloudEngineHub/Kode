@@ -531,6 +531,13 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
     servers.some(s => s.status === 'failed') ||
     servers.some(s => s.status === 'needs-auth')
 
+  const rememberListFocus = useCallback((focusValue: string) => {
+    setRoute(prev => {
+      if (prev.kind !== 'list' || prev.focusValue === focusValue) return prev
+      return { kind: 'list', focusValue }
+    })
+  }, [])
+
   useKeypress((input, key) => {
     if (!key.escape) return
 
@@ -816,6 +823,7 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
             options={listOptions}
             visibleOptionCount={visibleOptionCount}
             focusValue={route.kind === 'list' ? route.focusValue : undefined}
+            onFocus={rememberListFocus}
             onChange={value => setRoute({ kind: 'server', serverName: value })}
           />
         )}
