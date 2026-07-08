@@ -729,6 +729,60 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     expect(output).not.toContain('Delta')
   })
 
+  test('KeypressProvider: priority can fall back to default on rerender', async () => {
+    const handledBy: string[] = []
+
+    function PriorityFallbackHarness(): React.ReactNode {
+      const [isElevated, setIsElevated] = useState(true)
+
+      useEffect(() => {
+        const timer = setTimeout(() => setIsElevated(false), 50)
+        return () => clearTimeout(timer)
+      }, [])
+
+      useKeypress(
+        input => {
+          if (input !== 'x') return
+          handledBy.push('dynamic')
+          return true
+        },
+        { priority: isElevated ? 50 : undefined },
+      )
+
+      useKeypress(
+        input => {
+          if (input !== 'x') return
+          handledBy.push('fallback')
+          return true
+        },
+        { priority: 0 },
+      )
+
+      return <Text>{isElevated ? 'elevated' : 'default'}</Text>
+    }
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <PriorityFallbackHarness />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    h.stdin.write('x')
+    await h.wait(25)
+
+    expect(handledBy).toEqual(['dynamic'])
+
+    await h.wait(80)
+    expect(h.getOutput()).toContain('default')
+
+    h.stdin.write('x')
+    await h.wait(25)
+
+    expect(handledBy).toEqual(['dynamic', 'fallback'])
+  })
+
   test('Bash overlay: ctrl+b triggers background callback', async () => {
     let backgrounded = false
     const h = createInkTestHarness(

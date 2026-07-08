@@ -790,7 +790,7 @@ export function KeypressProvider({
         // Defensive: if a handler re-subscribes, update its priority.
         const current = subscriptionsRef.current.get(handler)
         if (current) {
-          current.priority = options?.priority ?? current.priority
+          current.priority = options?.priority ?? 0
           subscriptionsRef.current.set(handler, current)
           rebuildOrderedSubscriptions()
         }
@@ -823,7 +823,7 @@ export function KeypressProvider({
       if (mouseSubscriptionsRef.current.has(handler)) {
         const current = mouseSubscriptionsRef.current.get(handler)
         if (current) {
-          current.priority = options?.priority ?? current.priority
+          current.priority = options?.priority ?? 0
           mouseSubscriptionsRef.current.set(handler, current)
           rebuildOrderedMouseSubscriptions()
         }
