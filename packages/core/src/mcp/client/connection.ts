@@ -3,7 +3,10 @@ import { spawn } from 'node:child_process'
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { UnauthorizedError } from '@modelcontextprotocol/sdk/client/auth.js'
-import type { ServerCapabilities } from '@modelcontextprotocol/sdk/types.js'
+import {
+  ResourceUpdatedNotificationSchema,
+  type ServerCapabilities,
+} from '@modelcontextprotocol/sdk/types.js'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
@@ -18,6 +21,7 @@ import { logMCPError } from '#core/utils/log'
 import { getCwd } from '#core/utils/state'
 
 import { notifyMcpListChanged } from './listChanged'
+import { notifyMcpResourceUpdated } from './resourceUpdates'
 import { getMcpOAuthProvider } from './oauth'
 import { getMcpServer } from './config'
 import { getMcpServerConnectionBatchSize } from './settings'
@@ -403,6 +407,15 @@ export async function connectToServer(
       },
     )
     registerMcpClientRequestHandlers(client)
+    client.setNotificationHandler(
+      ResourceUpdatedNotificationSchema,
+      notification => {
+        notifyMcpResourceUpdated({
+          server: name,
+          uri: notification.params.uri,
+        })
+      },
+    )
 
     try {
       const connectPromise = client.connect(candidate.transport)

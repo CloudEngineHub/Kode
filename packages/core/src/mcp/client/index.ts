@@ -22,9 +22,17 @@ export { getMCPCommands, runCommand } from './commands'
 export {
   getMCPResources,
   getMCPResourceTemplates,
+  subscribeMCPResource,
+  unsubscribeMCPResource,
   type McpResource,
   type McpResourceTemplate,
 } from './resources'
+export {
+  __resetMcpResourceUpdatesForTests,
+  notifyMcpResourceUpdated,
+  subscribeMcpResourceUpdated,
+  type McpResourceUpdatedEvent,
+} from './resourceUpdates'
 export {
   authenticateMcpServer,
   clearMcpAuth,
