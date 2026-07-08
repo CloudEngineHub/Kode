@@ -52,8 +52,12 @@ export async function setup(cwd: string, safeMode?: boolean): Promise<void> {
     return
   }
 
-  const { startCustomCommandWatcher } =
+  const { loadCustomCommands, startCustomCommandWatcher } =
     await import('#cli-services/customCommands')
+  const { setSkillCommandProvider } =
+    await import('#tools/tools/interaction/SkillTool/skillCommandProvider')
+  setSkillCommandProvider(loadCustomCommands)
+
   await startCustomCommandWatcher(() => {
     debugLogger.info('CUSTOM_COMMANDS_HOT_RELOADED', { ok: true })
   })

@@ -2,8 +2,12 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { reloadCustomCommands } from '#cli-services/customCommands'
+import {
+  loadCustomCommands,
+  reloadCustomCommands,
+} from '#cli-services/customCommands'
 import { SkillTool } from '#tools/tools/interaction/SkillTool/SkillTool'
+import { setSkillCommandProvider } from '#tools/tools/interaction/SkillTool/skillCommandProvider'
 import { setCwd } from '#core/utils/state'
 
 describe('SkillTool prompt parity (official sections)', () => {
@@ -17,6 +21,7 @@ describe('SkillTool prompt parity (official sections)', () => {
     configDir = mkdtempSync(join(tmpdir(), 'kode-skilltool-prompt-cfg-'))
     projectDir = mkdtempSync(join(tmpdir(), 'kode-skilltool-prompt-proj-'))
     process.env.KODE_CONFIG_DIR = configDir
+    setSkillCommandProvider(loadCustomCommands)
     await setCwd(projectDir)
   })
 
@@ -43,6 +48,7 @@ describe('SkillTool prompt parity (official sections)', () => {
 
   afterEach(async () => {
     await setCwd(runnerCwd)
+    setSkillCommandProvider(null)
     if (originalConfigDir === undefined) delete process.env.KODE_CONFIG_DIR
     else process.env.KODE_CONFIG_DIR = originalConfigDir
     rmSync(configDir, { recursive: true, force: true })

@@ -8,6 +8,7 @@ import type {
   Output as TaskToolOutput,
 } from '#tools/tools/ai/TaskTool/schema'
 import { TOOL_NAME_FOR_PROMPT } from './prompt'
+import { loadSkillCommandsFromProvider } from './skillCommandProvider'
 const inputSchema = z.object({
   skill: z
     .string()
@@ -192,26 +193,19 @@ export const SkillTool = {
     const MAX_AVAILABLE_SKILLS_CHARS = 8000
 
     async function loadCommands(): Promise<CustomCommand[]> {
-      try {
-        const mod = await import('#cli-services/customCommands')
-        if (typeof mod.loadCustomCommands !== 'function') return []
-        const cmds = (await mod.loadCustomCommands()) as unknown
-        if (!Array.isArray(cmds)) return []
-        return cmds.filter((cmd): cmd is CustomCommand => {
-          if (!cmd || typeof cmd !== 'object') return false
-          const record = cmd as Record<string, unknown>
-          return (
-            record.type === 'prompt' &&
-            typeof record.name === 'string' &&
-            typeof record.description === 'string' &&
-            typeof record.isEnabled === 'boolean' &&
-            typeof record.isHidden === 'boolean' &&
-            typeof record.userFacingName === 'function'
-          )
-        })
-      } catch {
-        return []
-      }
+      const cmds = await loadSkillCommandsFromProvider()
+      return cmds.filter((cmd): cmd is CustomCommand => {
+        if (!cmd || typeof cmd !== 'object') return false
+        const record = cmd as Record<string, unknown>
+        return (
+          record.type === 'prompt' &&
+          typeof record.name === 'string' &&
+          typeof record.description === 'string' &&
+          typeof record.isEnabled === 'boolean' &&
+          typeof record.isHidden === 'boolean' &&
+          typeof record.userFacingName === 'function'
+        )
+      })
     }
 
     function formatSkillBlock(cmd: CustomCommand): string {
