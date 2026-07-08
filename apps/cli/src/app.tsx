@@ -10,7 +10,6 @@ import {
 } from '#config'
 import { showInvalidConfigDialog } from '#ui-ink/screens/setup/InvalidConfigScreen'
 import { ensurePackagedRuntimeEnv, ensureYogaWasmPath } from './bootstrapEnv'
-import { parseArgs } from '#host-cli'
 import { terminalCapabilityManager } from '#ui-ink/utils/terminalCapabilityManager'
 import {
   enableLineWrapping,
@@ -118,6 +117,7 @@ export async function runCli(): Promise<void> {
     await terminalCapabilityManager.detectCapabilities()
     terminalCapabilityManager.enableSupportedModes()
   }
+  const { parseArgs } = await import('#host-cli')
   await parseArgs(inputPrompt, renderContext)
 }
 

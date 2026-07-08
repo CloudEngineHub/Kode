@@ -13,7 +13,6 @@ import {
   setEnabledSettingSourcesFromCli,
   getCurrentProjectConfig,
 } from '#config'
-import { getClients, getClientsForCliMcpConfig } from '#core/mcp/client'
 
 import {
   renderRepl,
@@ -292,22 +291,24 @@ export function createRootAction(args: {
       }
     }
 
-    const [{ ask }, { getTools }, { getCommands }] = await Promise.all([
-      import('#cli-utils/ask'),
-      import('#tools'),
-      import('#cli-commands'),
-    ])
+    const [{ ask }, { getTools }, { getCommands }, mcpClientModule] =
+      await Promise.all([
+        import('#cli-utils/ask'),
+        import('#tools'),
+        import('#cli-commands'),
+        import('#core/mcp/client'),
+      ])
     const commands = await getCommands()
 
     const mcpClientsPromise =
       (Array.isArray(mcpConfig) && mcpConfig.length > 0) ||
       strictMcpConfig === true
-        ? getClientsForCliMcpConfig({
+        ? mcpClientModule.getClientsForCliMcpConfig({
             mcpConfig: Array.isArray(mcpConfig) ? mcpConfig : [],
             strictMcpConfig: strictMcpConfig === true,
             projectDir: cwd,
           })
-        : getClients()
+        : mcpClientModule.getClients()
 
     const [allTools, mcpClients] = await Promise.all([
       getTools(
