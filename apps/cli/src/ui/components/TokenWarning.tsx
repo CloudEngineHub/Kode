@@ -8,35 +8,26 @@ import {
 } from '#core/utils/autoCompactThreshold'
 import { getModelManager } from '#core/utils/model'
 import { getTheme } from '#core/utils/theme'
+import {
+  formatTokenCount,
+  isRenderableContextLimit,
+} from '#ui-ink/utils/tokenDisplay'
 
 type Props = {
   tokenUsage: number
   contextLimit?: number
 }
 
-const FALLBACK_CONTEXT_LIMIT = 190_000
-
-function formatTokenCount(tokens: number): string {
-  if (!Number.isFinite(tokens) || tokens <= 0) return '0'
-  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`
-  if (tokens >= 1_000) return `${Math.round(tokens / 1_000)}k`
-  return `${Math.round(tokens)}`
-}
-
-function getActiveContextLimit(): number {
+function getActiveContextLimit(): number | null {
   try {
     const profile = getModelManager().getModel('main')
-    if (
-      typeof profile?.contextLength === 'number' &&
-      Number.isFinite(profile.contextLength) &&
-      profile.contextLength > 0
-    ) {
+    if (isRenderableContextLimit(profile?.contextLength)) {
       return profile.contextLength
     }
   } catch {
     // fall through
   }
-  return FALLBACK_CONTEXT_LIMIT
+  return null
 }
 
 export function TokenWarning({
@@ -45,11 +36,13 @@ export function TokenWarning({
 }: Props): React.ReactNode {
   const theme = getTheme()
   const contextLimit =
-    typeof contextLimitProp === 'number' &&
-    Number.isFinite(contextLimitProp) &&
-    contextLimitProp > 0
-      ? contextLimitProp
-      : getActiveContextLimit()
+    contextLimitProp === undefined
+      ? getActiveContextLimit()
+      : isRenderableContextLimit(contextLimitProp)
+        ? contextLimitProp
+        : null
+  if (contextLimit === null) return null
+
   const effectiveContextLimit =
     getEffectiveConversationContextLimit(contextLimit)
   const { autoCompactThreshold } = calculateAutoCompactThresholds(

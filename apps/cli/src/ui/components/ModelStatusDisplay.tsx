@@ -10,6 +10,7 @@ import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import { wrapLines } from '#ui-ink/primitives/text/wrapLines'
+import { formatContextLimit } from '#ui-ink/utils/tokenDisplay'
 
 const VIEWPORT_SAFE_MARGIN_ROWS = 1
 const INDICATOR_ROWS = 2
@@ -23,8 +24,7 @@ type Props = {
 }
 
 function formatContextLength(contextLength: number | undefined): string {
-  if (!contextLength || !Number.isFinite(contextLength)) return 'unknown'
-  return `${Math.round(contextLength / 1000)}k`
+  return formatContextLimit(contextLength) ?? 'unknown'
 }
 
 function safeDateTime(value: number | undefined): string | null {

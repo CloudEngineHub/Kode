@@ -10,6 +10,10 @@ import TextInput from '#ui-ink/components/TextInput'
 import { TokenWarning } from '#ui-ink/components/TokenWarning'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import type { Key } from '#ui-ink/hooks/useKeypress'
+import {
+  formatContextLimit,
+  formatTokenCount,
+} from '#ui-ink/utils/tokenDisplay'
 import type { PermissionMode } from '#core/types/PermissionMode'
 import type { Theme } from '#core/utils/theme'
 import type { ClipboardImage } from '#core/utils/image/media'
@@ -29,12 +33,7 @@ type ModelInfo = {
   currentTokens: number
 } | null
 
-export function formatPromptTokenCount(tokens: number): string {
-  if (!Number.isFinite(tokens) || tokens <= 0) return '0'
-  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`
-  if (tokens >= 1_000) return `${Math.round(tokens / 1_000)}k`
-  return `${Math.round(tokens)}`
-}
+export { formatTokenCount as formatPromptTokenCount }
 
 type ExitMessageState = { show: boolean; key?: string }
 type InlineMessageState = { show: boolean; text?: string }
@@ -154,6 +153,7 @@ export function PromptInputView({
   })
   const showStatusLine = normalizeTerminalDimension(rows, 0) > 8
   const modePrefix = getPromptModePrefix({ mode, theme, isLoading })
+  const contextLimitLabel = formatContextLimit(modelInfo?.contextLength)
 
   return (
     <Box flexDirection="column">
@@ -161,9 +161,10 @@ export function PromptInputView({
       {modelInfo && !compact && (
         <Box justifyContent="flex-end" flexDirection="row">
           <Text dimColor wrap="truncate-end">
-            [{modelInfo.provider}] {modelInfo.name}:{' '}
-            {formatPromptTokenCount(modelInfo.currentTokens)} /{' '}
-            {formatPromptTokenCount(modelInfo.contextLength)}
+            [{modelInfo.provider}] {modelInfo.name}
+            {contextLimitLabel
+              ? `: ${formatTokenCount(modelInfo.currentTokens)} / ${contextLimitLabel}`
+              : ''}
           </Text>
         </Box>
       )}

@@ -21,6 +21,7 @@ import {
 import { wrapLines } from '#ui-ink/primitives/text/wrapLines'
 import type { ConnectionTestResult } from '#ui-ink/components/ModelSelector/flow/actions/connectionTest'
 import { performConnectionTest } from '#ui-ink/components/ModelSelector/flow/actions/connectionTest'
+import { formatContextLimit } from '#ui-ink/utils/tokenDisplay'
 
 type Props = {
   context: ToolUseContext
@@ -106,9 +107,7 @@ function buildModelsLines(): string[] {
       continue
     }
     const provider = profile.provider ? ` (${profile.provider})` : ''
-    const ctx = profile.contextLength
-      ? `${Math.round(profile.contextLength / 1000)}k`
-      : 'unknown'
+    const ctx = formatContextLimit(profile.contextLength) ?? 'unknown'
     const status = profile.isActive ? 'active' : 'inactive'
     lines.push(
       `- ${pointer}: ${profile.name}${provider} · ${profile.modelName} · ctx ${ctx} · ${status}`,

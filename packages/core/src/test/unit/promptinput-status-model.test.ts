@@ -5,6 +5,10 @@ import {
   getPromptStatusLineUsage,
 } from '#ui-ink/components/PromptInput/statusLineModel'
 import { formatPromptTokenCount } from '#ui-ink/components/PromptInput/PromptInputView'
+import {
+  formatContextLimit,
+  isRenderableContextLimit,
+} from '#ui-ink/utils/tokenDisplay'
 
 function assistantWithUsage(args: {
   input: number
@@ -91,5 +95,12 @@ describe('PromptInput status line model', () => {
   test('formats million-token windows without k-only labels', () => {
     expect(formatPromptTokenCount(186000)).toBe('186k')
     expect(formatPromptTokenCount(1048576)).toBe('1.0M')
+  })
+
+  test('does not render implausible context limits as prompt windows', () => {
+    expect(isRenderableContextLimit(1)).toBe(false)
+    expect(formatContextLimit(1049)).toBeNull()
+    expect(formatContextLimit(8000)).toBe('8k')
+    expect(formatContextLimit(1048576)).toBe('1.0M')
   })
 })
