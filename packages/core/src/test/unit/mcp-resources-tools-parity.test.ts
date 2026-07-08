@@ -27,9 +27,18 @@ const makeContext = (mcpClients: unknown[]): ToolUseContext => ({
 describe('MCP resource tools parity: use context.options.mcpClients', () => {
   test('ListMcpResourcesTool lists resources from connected clients in context', async () => {
     const fakeClient = {
-      request: async () => ({
-        resources: [{ uri: 'uri://one', name: 'one' }],
-      }),
+      request: async (req: { method?: string }) => {
+        if (req.method === 'resources/templates/list') {
+          return {
+            resourceTemplates: [
+              { uriTemplate: 'uri://items/{id}', name: 'items' },
+            ],
+          }
+        }
+        return {
+          resources: [{ uri: 'uri://one', name: 'one' }],
+        }
+      },
       getServerCapabilities: () => ({ resources: { listChanged: true } }),
     }
 
@@ -47,10 +56,17 @@ describe('MCP resource tools parity: use context.options.mcpClients', () => {
     const firstValue = asRecord(first.value)
     expect(firstValue?.type).toBe('result')
     const data = Array.isArray(firstValue?.data) ? firstValue?.data : []
-    expect(data).toHaveLength(1)
+    expect(data).toHaveLength(2)
     expect(data[0]).toMatchObject({
+      type: 'resource',
       uri: 'uri://one',
       name: 'one',
+      server: 'srv',
+    })
+    expect(data[1]).toMatchObject({
+      type: 'resource_template',
+      uriTemplate: 'uri://items/{id}',
+      name: 'items',
       server: 'srv',
     })
   })

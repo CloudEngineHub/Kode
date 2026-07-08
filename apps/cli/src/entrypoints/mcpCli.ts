@@ -5,6 +5,8 @@ import { getClients, type WrappedClient } from '#core/mcp/client'
 import { requestClientPages } from '#core/mcp/client/request'
 import {
   CallToolResultSchema,
+  type ListResourceTemplatesResult,
+  ListResourceTemplatesResultSchema,
   type ListResourcesResult,
   ListResourcesResultSchema,
   type ListToolsResult,
@@ -22,6 +24,14 @@ type McpCliToolSummary = {
 type McpCliResourceSummary = {
   server: string
   uri: string
+  name: string
+  description?: string
+  mimeType?: string
+}
+
+type McpCliResourceTemplateSummary = {
+  server: string
+  uriTemplate: string
   name: string
   description?: string
   mimeType?: string
@@ -160,6 +170,55 @@ async function listResources(options: {
         name: resource.name,
         description: resource.description ?? undefined,
         mimeType: resource.mimeType ?? undefined,
+      })
+    }
+  }
+  return out
+}
+
+async function listResourceTemplates(options: {
+  server?: string
+}): Promise<McpCliResourceTemplateSummary[]> {
+  const clients = await getClients()
+  const selected = options.server
+    ? clients.filter(c => c.name === options.server)
+    : clients
+  if (options.server && selected.length === 0) {
+    throw new Error(
+      `Server '${options.server}' not found. Available servers: ${clients.map(c => c.name).join(', ')}`,
+    )
+  }
+
+  const out: McpCliResourceTemplateSummary[] = []
+  for (const wrapped of selected) {
+    if (wrapped.type !== 'connected') continue
+    let capabilities = wrapped.capabilities ?? null
+    if (!capabilities) {
+      try {
+        capabilities = wrapped.client.getServerCapabilities() ?? null
+      } catch {
+        capabilities = null
+      }
+      wrapped.capabilities = capabilities
+    }
+    if (!capabilities?.resources) continue
+    const results = await requestClientPages<
+      ListResourceTemplatesResult,
+      typeof ListResourceTemplatesResultSchema
+    >(
+      wrapped,
+      { method: 'resources/templates/list' },
+      ListResourceTemplatesResultSchema,
+    )
+    for (const template of results.flatMap(
+      result => result.resourceTemplates ?? [],
+    )) {
+      out.push({
+        server: wrapped.name,
+        uriTemplate: template.uriTemplate,
+        name: template.name,
+        description: template.description ?? undefined,
+        mimeType: template.mimeType ?? undefined,
       })
     }
   }
@@ -386,6 +445,24 @@ export async function runMcpCli(args: {
       }
       for (const resource of resources) {
         console.log(`${resource.server}/${resource.uri}`)
+      }
+    })
+
+  program
+    .command('resource-templates')
+    .description('List MCP resource templates')
+    .argument('[server]', 'Filter by server name')
+    .option('--json', 'Output in JSON format')
+    .action(async (server, options) => {
+      const templates = await listResourceTemplates({
+        server: server || undefined,
+      })
+      if (options.json) {
+        console.log(toJson(templates))
+        return
+      }
+      for (const template of templates) {
+        console.log(`${template.server}/${template.uriTemplate}`)
       }
     })
 

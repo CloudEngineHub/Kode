@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import {
   __setMcpClientsForTests,
   getMCPCommands,
+  getMCPResourceTemplates,
   getMCPResources,
   getMCPTools,
 } from '#core/mcp/client'
@@ -38,6 +39,7 @@ describe('MCP paginated list requests', () => {
     getMCPTools.cache.clear?.()
     getMCPCommands.cache.clear?.()
     getMCPResources.cache.clear?.()
+    getMCPResourceTemplates.cache.clear?.()
   })
 
   afterEach(() => {
@@ -45,6 +47,7 @@ describe('MCP paginated list requests', () => {
     getMCPTools.cache.clear?.()
     getMCPCommands.cache.clear?.()
     getMCPResources.cache.clear?.()
+    getMCPResourceTemplates.cache.clear?.()
   })
 
   test('getMCPTools follows tools/list nextCursor pages', async () => {
@@ -138,6 +141,9 @@ describe('MCP paginated list requests', () => {
   test('ListMcpResourcesTool follows resources/list nextCursor pages', async () => {
     const client: any = {
       request: async (req: any) => {
+        if (req.method === 'resources/templates/list') {
+          return { resourceTemplates: [] }
+        }
         const cursor = req.params?.cursor
         if (!cursor) {
           return {
@@ -167,8 +173,13 @@ describe('MCP paginated list requests', () => {
 
     expect(firstValue?.type).toBe('result')
     expect(firstValue?.data).toEqual([
-      { uri: 'file:///first', name: 'first', server: 'srv' },
-      { uri: 'file:///second', name: 'second', server: 'srv' },
+      { uri: 'file:///first', name: 'first', type: 'resource', server: 'srv' },
+      {
+        uri: 'file:///second',
+        name: 'second',
+        type: 'resource',
+        server: 'srv',
+      },
     ])
   })
 
@@ -203,6 +214,50 @@ describe('MCP paginated list requests', () => {
     expect(resources).toEqual([
       { uri: 'file:///first', name: 'first', server: 'srv' },
       { uri: 'file:///second', name: 'second', server: 'srv' },
+    ])
+  })
+
+  test('getMCPResourceTemplates follows resources/templates/list nextCursor pages', async () => {
+    const requests: unknown[] = []
+    const client: any = {
+      request: async (req: any) => {
+        requests.push(req)
+        const cursor = req.params?.cursor
+        if (!cursor) {
+          return {
+            resourceTemplates: [
+              { uriTemplate: 'file:///{first}', name: 'first' },
+            ],
+            nextCursor: 'page-2',
+          }
+        }
+        return {
+          resourceTemplates: [
+            { uriTemplate: 'file:///{second}', name: 'second' },
+          ],
+        }
+      },
+      getServerCapabilities: () => ({ resources: {} }),
+    }
+
+    __setMcpClientsForTests([
+      {
+        type: 'connected',
+        name: 'srv',
+        client,
+        capabilities: { resources: {} },
+      } as any,
+    ])
+
+    const templates = await getMCPResourceTemplates()
+
+    expect(templates).toEqual([
+      { uriTemplate: 'file:///{first}', name: 'first', server: 'srv' },
+      { uriTemplate: 'file:///{second}', name: 'second', server: 'srv' },
+    ])
+    expect(requests).toEqual([
+      { method: 'resources/templates/list' },
+      { method: 'resources/templates/list', params: { cursor: 'page-2' } },
     ])
   })
 })

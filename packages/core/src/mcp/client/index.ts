@@ -19,7 +19,12 @@ export { MCPClientManager } from './manager'
 
 export { getMCPTools } from './tools'
 export { getMCPCommands, runCommand } from './commands'
-export { getMCPResources, type McpResource } from './resources'
+export {
+  getMCPResources,
+  getMCPResourceTemplates,
+  type McpResource,
+  type McpResourceTemplate,
+} from './resources'
 export {
   authenticateMcpServer,
   clearMcpAuth,

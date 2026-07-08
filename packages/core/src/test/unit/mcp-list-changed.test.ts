@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import {
   __resetMcpListChangedForTests,
   __setMcpClientsForTests,
+  getMCPResourceTemplates,
   getMCPResources,
   getMCPTools,
   notifyMcpListChanged,
@@ -12,6 +13,7 @@ describe('MCP list_changed cache invalidation', () => {
   beforeEach(() => {
     getMCPTools.cache.clear?.()
     getMCPResources.cache.clear?.()
+    getMCPResourceTemplates.cache.clear?.()
     __resetMcpListChangedForTests()
   })
 
@@ -19,6 +21,7 @@ describe('MCP list_changed cache invalidation', () => {
     __setMcpClientsForTests(null)
     getMCPTools.cache.clear?.()
     getMCPResources.cache.clear?.()
+    getMCPResourceTemplates.cache.clear?.()
     __resetMcpListChangedForTests()
   })
 
@@ -103,5 +106,46 @@ describe('MCP list_changed cache invalidation', () => {
     const refreshed = await getMCPResources()
     expect(refreshed.map(resource => resource.name)).toContain('beta')
     expect(refreshed.map(resource => resource.name)).not.toContain('alpha')
+  })
+
+  test('getMCPResourceTemplates refreshes after notifications/resources/list_changed', async () => {
+    let templateNames = ['alpha']
+
+    const client: any = {
+      request: async (req: any) => {
+        if (req?.method === 'resources/templates/list') {
+          return {
+            resourceTemplates: templateNames.map(name => ({
+              uriTemplate: `file:///{${name}}`,
+              name,
+            })),
+          }
+        }
+        throw new Error(`Unexpected method: ${String(req?.method)}`)
+      },
+    }
+
+    __setMcpClientsForTests([
+      {
+        type: 'connected',
+        name: 'test',
+        client,
+        capabilities: { resources: { listChanged: true } },
+      } as any,
+    ])
+
+    const first = await getMCPResourceTemplates()
+    expect(first.map(template => template.name)).toContain('alpha')
+
+    templateNames = ['beta']
+    const stillCached = await getMCPResourceTemplates()
+    expect(stillCached.map(template => template.name)).toContain('alpha')
+    expect(stillCached.map(template => template.name)).not.toContain('beta')
+
+    notifyMcpListChanged({ kind: 'resources', server: 'test' })
+
+    const refreshed = await getMCPResourceTemplates()
+    expect(refreshed.map(template => template.name)).toContain('beta')
+    expect(refreshed.map(template => template.name)).not.toContain('alpha')
   })
 })
