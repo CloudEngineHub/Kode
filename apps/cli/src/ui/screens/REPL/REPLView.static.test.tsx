@@ -36,6 +36,7 @@ function makeStaticItem(key: string, label = key): TranscriptItem {
 function renderReplView(args: {
   staticOutputEpoch: number
   staticItems: TranscriptItem[]
+  isLoading?: boolean
 }) {
   return (
     <REPLView
@@ -51,7 +52,7 @@ function renderReplView(args: {
       toast={null}
       binaryFeedbackContext={null}
       setBinaryFeedbackContext={() => {}}
-      isLoading={false}
+      isLoading={args.isLoading ?? false}
       verbose={false}
       normalizedMessages={[]}
       tools={[]}
@@ -145,7 +146,7 @@ describe('REPLView Static output epoch', () => {
   test('does not reserve an empty transient viewport before controls', async () => {
     const staticItems = [makeStaticItem('static-a')]
     const harness = createHarness(
-      renderReplView({ staticOutputEpoch: 0, staticItems }),
+      renderReplView({ staticOutputEpoch: 0, staticItems, isLoading: true }),
     )
 
     await harness.wait(20)

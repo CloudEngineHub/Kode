@@ -121,6 +121,7 @@ export function REPLView({
       shouldShowPromptInput ? 1 : 0,
       hasToast ? 1 : 0,
       isLoading ? 1 : 0,
+      transientItems.length,
       messageSelectorMessages.length,
     ].join(':')
 
@@ -160,6 +161,7 @@ export function REPLView({
     shouldShowPromptInput,
     hasToast,
     isLoading,
+    transientItems.length,
     messageSelectorMessages.length,
   ])
 
@@ -170,9 +172,19 @@ export function REPLView({
       messageSelectorHeight -
       VIEWPORT_SAFE_MARGIN_ROWS,
   )
-  const showTransientRegion =
-    transientItems.length > 0 ||
-    (!toolJSX && !toolUseConfirm && !binaryFeedbackContext && isLoading)
+  const showTransientRegion = transientItems.length > 0
+  const showInlineRequestStatus =
+    !showTransientRegion &&
+    !toolJSX &&
+    !toolUseConfirm &&
+    !binaryFeedbackContext &&
+    isLoading
+  const showTransientRequestStatus =
+    showTransientRegion &&
+    !toolJSX &&
+    !toolUseConfirm &&
+    !binaryFeedbackContext &&
+    isLoading
   const transientViewportValue = useMemo(
     () => ({ maxHeight: transientMaxHeight }),
     [transientMaxHeight],
@@ -204,10 +216,7 @@ export function REPLView({
               >
                 {transientItems.map(item => item.jsx)}
                 {/* Status indicator at bottom of messages, above controls */}
-                {!toolJSX &&
-                  !toolUseConfirm &&
-                  !binaryFeedbackContext &&
-                  isLoading && <RequestStatusIndicator />}
+                {showTransientRequestStatus && <RequestStatusIndicator />}
               </Box>
             )}
 
@@ -218,6 +227,12 @@ export function REPLView({
               flexDirection="column"
               width="100%"
             >
+              {showInlineRequestStatus && (
+                <Box paddingX={1}>
+                  <RequestStatusIndicator />
+                </Box>
+              )}
+
               {toast &&
                 !toolUseConfirm &&
                 !toolJSX &&
