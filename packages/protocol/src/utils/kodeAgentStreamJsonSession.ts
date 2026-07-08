@@ -5,7 +5,7 @@ import {
 } from './kodeAgentStreamJson'
 import type { KodeAgentStructuredStdio } from './kodeAgentStructuredStdio'
 import { randomUUID } from 'node:crypto'
-import { MaxTurnsExceededError } from '#core/errors/maxTurns'
+import { MaxTurnsExceededError } from '../maxTurns'
 
 type MessageWithUuid = { type: string; uuid: string }
 
