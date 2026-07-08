@@ -68,7 +68,7 @@ type ServerCounts = {
 
 type Route =
   | { kind: 'list'; focusValue?: string }
-  | { kind: 'server'; serverName: string }
+  | { kind: 'server'; serverName: string; actionFocusValue?: string }
   | { kind: 'tools'; serverName: string }
   | { kind: 'tool'; serverName: string; tool: Tool }
   | { kind: 'resources'; serverName: string }
@@ -535,6 +535,14 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
     setRoute(prev => {
       if (prev.kind !== 'list' || prev.focusValue === focusValue) return prev
       return { kind: 'list', focusValue }
+    })
+  }, [])
+
+  const rememberServerActionFocus = useCallback((focusValue: string) => {
+    setRoute(prev => {
+      if (prev.kind !== 'server' || prev.actionFocusValue === focusValue)
+        return prev
+      return { ...prev, actionFocusValue: focusValue }
     })
   }, [])
 
@@ -1031,6 +1039,10 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
             <Select
               options={actionOptions}
               visibleOptionCount={Math.min(10, actionOptions.length || 1)}
+              focusValue={
+                route.kind === 'server' ? route.actionFocusValue : undefined
+              }
+              onFocus={rememberServerActionFocus}
               onChange={async value => {
                 if (value === 'tools') {
                   setRoute({ kind: 'tools', serverName: activeServer.name })

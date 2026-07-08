@@ -233,9 +233,8 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
         }
       })
 
-      const { McpServersScreen } = await import(
-        '#ui-ink/screens/overlays/McpServersScreen'
-      )
+      const { McpServersScreen } =
+        await import('#ui-ink/screens/overlays/McpServersScreen')
 
       const h = createInkTestHarness(
         <KeypressProvider>
@@ -346,6 +345,7 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
       )
       expect(latestFrame).toContain('connected')
       expect(latestFrame).not.toContain('failed')
+      expect(latestFrame).toContain('❯2. Reconnect')
       expect(reconnectCount).toBe(2)
     } finally {
       mock.restore()
