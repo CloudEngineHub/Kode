@@ -57,7 +57,10 @@ export class TerminalCapabilityManager {
   private bracketedPasteSupported = false
   private bracketedPasteEnabled = false
 
-  async detectCapabilities(timeoutMs = 1000): Promise<void> {
+  async detectCapabilities(
+    timeoutMs = 1000,
+    settleAfterDeviceAttributesMs = 50,
+  ): Promise<void> {
     if (this.detectionComplete) return
     this.detectionComplete = true
 
@@ -80,8 +83,14 @@ export class TerminalCapabilityManager {
       let osc11Received = false
       let deviceAttributesReceived = false
       let modifyOtherKeysReceived = false
+      let settled = false
+      let settleTimeoutId: ReturnType<typeof setTimeout> | undefined
 
       const cleanup = () => {
+        if (settled) return
+        settled = true
+        clearTimeout(timeoutId)
+        if (settleTimeoutId) clearTimeout(settleTimeoutId)
         stdin.removeListener('data', onData)
         if (stdin.isTTY && !wasRaw) {
           try {
@@ -94,6 +103,14 @@ export class TerminalCapabilityManager {
       }
 
       const timeoutId = setTimeout(cleanup, timeoutMs)
+      const scheduleSettleAfterDeviceAttributes = () => {
+        if (settleTimeoutId) return
+        const settleMs = Math.max(
+          0,
+          Math.min(settleAfterDeviceAttributesMs, timeoutMs),
+        )
+        settleTimeoutId = setTimeout(cleanup, settleMs)
+      }
 
       const onData = (data: string) => {
         buffer += data
@@ -156,8 +173,7 @@ export class TerminalCapabilityManager {
           )
           if (match) {
             deviceAttributesReceived = true
-            clearTimeout(timeoutId)
-            cleanup()
+            scheduleSettleAfterDeviceAttributes()
           }
         }
       }
