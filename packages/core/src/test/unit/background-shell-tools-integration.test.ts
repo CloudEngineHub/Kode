@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { __ToolUseQueueForTests } from '#core/query'
+import { __ToolUseQueueForTests } from '@kode/engine/pipeline/tool-use-queue'
 import { createAssistantMessage } from '#core/utils/messages'
 import { BunShell } from '#runtime/shell'
 import { BashTool } from '#tools/tools/system/BashTool/BashTool'

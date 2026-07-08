@@ -1,6 +1,6 @@
 import { getAgentPrompt } from '#core/constants/prompts'
 import { getContext } from '@kode/context'
-import { query } from '#core/query'
+import { query } from '@kode/engine/orchestrator'
 import type { ToolUseContext } from '@kode/tool-interface/Tool'
 import { getAvailableAgentTypes, getAgentByType } from '@kode/agent'
 import { generateAgentId } from '#core/utils/agentStorage'

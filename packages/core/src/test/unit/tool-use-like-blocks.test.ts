@@ -1,8 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import {
-  __ToolUseQueueForTests,
-  __isToolUseLikeBlockForTests,
-} from '#core/query'
+import { __ToolUseQueueForTests } from '@kode/engine/pipeline/tool-use-queue'
+import { __isToolUseLikeBlockForTests } from '#core/query'
 import { z } from 'zod'
 import type { Tool } from '#core/tooling/Tool'
 import {

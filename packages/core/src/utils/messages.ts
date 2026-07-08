@@ -1,5 +1,6 @@
-// IMPORTANT:
-// `@kode/engine/messages` is ambiguous because both `messages.ts` and
-// `messages/` exist. Use the file specifier to ensure Bun/Node ESM
-// resolution picks the intended module.
-export * from '@kode/engine/messages.ts'
+export * from '#core/message-utils/constants'
+export * from '#core/message-utils/create'
+export * from '#core/message-utils/tags'
+export * from '#core/message-utils/normalize'
+export * from '#core/message-utils/toolUse'
+export * from '#core/message-utils/api'

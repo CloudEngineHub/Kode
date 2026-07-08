@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "dependencies": {
+    "@kode/engine": "workspace:*",
     "@kode/tool-interface": "workspace:*"
   }
 }
