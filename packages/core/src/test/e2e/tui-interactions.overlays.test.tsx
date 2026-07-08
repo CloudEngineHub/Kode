@@ -155,6 +155,8 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
   })
 
   test('McpServersScreen: resources can be opened from a connected server', async () => {
+    let reconnectCount = 0
+
     try {
       mock.module('#core/mcp/client', () => {
         return {
@@ -163,22 +165,25 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
           getClients: async () => [{ type: 'connected', name: 'srv' }],
           getMcpAuthSnapshot: () => ({ isAuthenticated: false }),
           getMCPCommands: async () => [],
-          getMCPResources: async () => [
-            {
-              server: 'srv',
-              uri: 'file:///project/README.md',
-              name: 'README.md',
-              title: 'Project README',
-              description: 'Primary project documentation',
-              mimeType: 'text/markdown',
-              size: 2048,
-              annotations: {
-                audience: ['user'],
-                priority: 0.7,
-                lastModified: '2026-07-08T00:00:00Z',
+          getMCPResources: async () => {
+            await new Promise(resolve => setTimeout(resolve, 220))
+            return [
+              {
+                server: 'srv',
+                uri: 'file:///project/README.md',
+                name: 'README.md',
+                title: 'Project README',
+                description: 'Primary project documentation',
+                mimeType: 'text/markdown',
+                size: 2048,
+                annotations: {
+                  audience: ['user'],
+                  priority: 0.7,
+                  lastModified: '2026-07-08T00:00:00Z',
+                },
               },
-            },
-          ],
+            ]
+          },
           getMCPTools: async () => [],
           getMcprcServerStatus: () => 'approved',
           getMcpServer: () => ({
@@ -188,7 +193,9 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
           listMCPServers: () => ({
             srv: { type: 'stdio', command: 'node', args: ['server.js'] },
           }),
-          resetMcpConnections: async () => {},
+          resetMcpConnections: async () => {
+            reconnectCount += 1
+          },
         }
       })
       mock.module('#core/utils/config', () => {
@@ -229,15 +236,19 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
       expect(h.getOutput()).toContain('srv')
 
       h.stdin.write('\r')
-      await h.wait(80)
+      await h.wait(100)
+
+      expect(h.getOutput()).toContain('Loading actions...')
+
+      h.stdin.write('\r')
+      await h.wait(150)
 
       expect(h.getOutput()).toContain('Resources: 1 resources')
       expect(h.getOutput()).toContain('1. View resources')
+      expect(reconnectCount).toBe(0)
 
-      h.stdin.write('\u001B[A')
-      await h.wait(80)
       h.stdin.write('\r')
-      await h.wait(150)
+      await h.wait(300)
       expect(h.getOutput()).toContain('Resources for srv')
       expect(h.getOutput()).toContain('Project README')
 

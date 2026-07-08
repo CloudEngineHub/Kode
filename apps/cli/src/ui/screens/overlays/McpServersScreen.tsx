@@ -811,6 +811,10 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
     const statusTextColor = statusColor(theme, activeServer.status)
 
     const counts = activeServerCounts
+    const capabilitiesPending =
+      activeServer.status === 'connected' &&
+      activeServerCountsError === null &&
+      (activeServerCountsLoading || counts === null)
     const capabilities: string[] = []
     if (counts?.tools) capabilities.push('tools')
     if (counts?.resources) capabilities.push('resources')
@@ -911,15 +915,13 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
             {activeServer.status === 'connected' ? (
               <Text wrap="truncate-end">
                 <Text bold>Capabilities: </Text>
-                <Text color={theme.text}>
-                  {capabilities.length ? capabilities.join(', ') : 'none'}
-                </Text>
-              </Text>
-            ) : null}
-
-            {activeServerCountsLoading ? (
-              <Text dimColor wrap="truncate-end">
-                Loading capabilities...
+                {capabilitiesPending ? (
+                  <Text dimColor>loading...</Text>
+                ) : (
+                  <Text color={theme.text}>
+                    {capabilities.length ? capabilities.join(', ') : 'none'}
+                  </Text>
+                )}
               </Text>
             ) : null}
 
@@ -956,41 +958,47 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
         </Box>
 
         <Box flexDirection="column" borderStyle="round" paddingX={1}>
-          <Select
-            options={actionOptions}
-            visibleOptionCount={Math.min(10, actionOptions.length || 1)}
-            onChange={async value => {
-              if (value === 'tools') {
-                setRoute({ kind: 'tools', serverName: activeServer.name })
-                return
-              }
-              if (value === 'resources') {
-                setRoute({ kind: 'resources', serverName: activeServer.name })
-                return
-              }
-              if (value === 'auth' || value === 'reauth') {
-                setRoute({ kind: 'auth', serverName: activeServer.name })
-                await startAuth(activeServer)
-                return
-              }
-              if (value === 'clear-auth') {
-                await runAction(async () => clearAuth(activeServer.name))
-                return
-              }
-              if (value === 'reconnect') {
-                await runAction(async () => reconnect())
-                return
-              }
-              if (value === 'toggle-enabled') {
-                await runAction(async () => toggleDisabled(activeServer))
-                return
-              }
-              if (value === 'back') {
-                setRoute({ kind: 'list', focusValue: activeServer.name })
-                return
-              }
-            }}
-          />
+          {capabilitiesPending ? (
+            <Text dimColor wrap="truncate-end">
+              Loading actions...
+            </Text>
+          ) : (
+            <Select
+              options={actionOptions}
+              visibleOptionCount={Math.min(10, actionOptions.length || 1)}
+              onChange={async value => {
+                if (value === 'tools') {
+                  setRoute({ kind: 'tools', serverName: activeServer.name })
+                  return
+                }
+                if (value === 'resources') {
+                  setRoute({ kind: 'resources', serverName: activeServer.name })
+                  return
+                }
+                if (value === 'auth' || value === 'reauth') {
+                  setRoute({ kind: 'auth', serverName: activeServer.name })
+                  await startAuth(activeServer)
+                  return
+                }
+                if (value === 'clear-auth') {
+                  await runAction(async () => clearAuth(activeServer.name))
+                  return
+                }
+                if (value === 'reconnect') {
+                  await runAction(async () => reconnect())
+                  return
+                }
+                if (value === 'toggle-enabled') {
+                  await runAction(async () => toggleDisabled(activeServer))
+                  return
+                }
+                if (value === 'back') {
+                  setRoute({ kind: 'list', focusValue: activeServer.name })
+                  return
+                }
+              }}
+            />
+          )}
         </Box>
 
         <Box marginTop={tightLayout ? 0 : 1}>
