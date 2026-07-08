@@ -11,6 +11,15 @@ function serializeStatusLineInput(value: unknown): string {
   }
 }
 
+export function normalizeStatusLineOutput(raw: string): string | null {
+  const firstLine = raw
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .find(line => line.length > 0)
+
+  return firstLine ?? null
+}
+
 function buildDynamicStatusLineInput(
   baseInput: unknown,
 ): Record<string, unknown> {
@@ -110,16 +119,7 @@ export function useStatusLine(input?: unknown): {
       if (result.interrupted) return
 
       const raw = result.code === 0 ? result.stdout : ''
-      const next = raw
-        ? raw
-            .trim()
-            .split(/\r?\n/)
-            .flatMap(line => {
-              const trimmed = line.trim()
-              return trimmed ? [trimmed] : []
-            })
-            .join('\n')
-        : ''
+      const next = normalizeStatusLineOutput(raw)
       if (alive) {
         const text = next || null
         setState(prev =>

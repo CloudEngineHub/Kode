@@ -294,6 +294,7 @@ export function PromptInput({
 
   const { text: statusLineText, padding: statusLinePadding } =
     useStatusLine(statusLineInput)
+  const hasCustomStatusLine = statusLineText !== null
 
   const defaultStatusLine = useMemo(() => {
     return buildPromptInputStatusLine({
@@ -326,7 +327,7 @@ export function PromptInput({
     tightRows: 15,
     compactRows: 15,
   })
-  const modelInfoRows = !compact && modelInfo ? 1 : 0
+  const modelInfoRows = !compact && !hasCustomStatusLine && modelInfo ? 1 : 0
   const pwdRows = compact ? 0 : 1
   const completionReservedRows = inputBoxHeight + modelInfoRows + pwdRows + 1
   const completionAvailableRows = computeAvailableRows({
@@ -1187,6 +1188,7 @@ export function PromptInput({
       modelSwitchMessage={modelSwitchMessage}
       toastMessage={toastMessage}
       statusLine={effectiveStatusLine}
+      customStatusLineActive={hasCustomStatusLine}
       statusLinePadding={statusLinePadding}
       currentMode={currentMode}
       modeCycleShortcutText={modeCycleShortcut.displayText}

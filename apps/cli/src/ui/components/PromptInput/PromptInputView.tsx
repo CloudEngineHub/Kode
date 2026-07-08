@@ -88,6 +88,7 @@ export function PromptInputView({
   modelSwitchMessage,
   toastMessage,
   statusLine,
+  customStatusLineActive,
   statusLinePadding,
   currentMode,
   modeCycleShortcutText,
@@ -135,6 +136,7 @@ export function PromptInputView({
   modelSwitchMessage: InlineMessageState
   toastMessage: ToastMessageState
   statusLine: string | null
+  customStatusLineActive: boolean
   statusLinePadding: number
   currentMode: PermissionMode
   modeCycleShortcutText: string
@@ -154,11 +156,13 @@ export function PromptInputView({
   const showStatusLine = normalizeTerminalDimension(rows, 0) > 8
   const modePrefix = getPromptModePrefix({ mode, theme, isLoading })
   const contextLimitLabel = formatContextLimit(modelInfo?.contextLength)
+  const showModelInfo =
+    Boolean(modelInfo) && !compact && !customStatusLineActive
 
   return (
     <Box flexDirection="column">
       {/* Model info - top right of input */}
-      {modelInfo && !compact && (
+      {showModelInfo && modelInfo && (
         <Box justifyContent="flex-end" flexDirection="row">
           <Text dimColor wrap="truncate-end">
             [{modelInfo.provider}] {modelInfo.name}
