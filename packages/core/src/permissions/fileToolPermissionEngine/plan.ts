@@ -1,5 +1,4 @@
 import path from 'path'
-import { tmpdir } from 'os'
 
 import type { ToolUseContext } from '#core/tooling/Tool'
 import { PRODUCT_NAME } from '#core/constants/product'
@@ -8,8 +7,8 @@ import { getPlanConversationKey, getPlanFilePath } from '#core/utils/planMode'
 import { getOriginalCwd } from '#core/utils/state'
 import { getKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
 import { getClaudeCompatRoots } from '#config/dataRoots'
-import { LEGACY_ENV } from '#config/compat/legacyEnv'
 import { resolveSandboxTmpDir } from '#runtime/shell/sandboxEnv'
+import { getBackgroundTaskOutputDirCandidates } from '#core/tasks/outputPaths'
 
 import {
   expandSymlinkPaths,
@@ -68,27 +67,6 @@ function isPathWithinAnyAllowedDir(args: {
 
 function getProjectKeyFromCwd(): string {
   return getOriginalCwd().replace(/[^a-zA-Z0-9]/g, '-')
-}
-
-function getLegacyTmpBaseDir(): string {
-  const override = process.env[LEGACY_ENV.codeTmpDir]
-  if (typeof override === 'string') {
-    const trimmed = override.trim()
-    if (trimmed) return trimmed
-  }
-  if (process.platform === 'win32') {
-    return process.env.TEMP?.trim() || tmpdir()
-  }
-  return '/tmp'
-}
-
-function getLegacyClaudeTmpDir(): string {
-  const override = process.env[LEGACY_ENV.tmpDir]
-  if (typeof override === 'string') {
-    const trimmed = override.trim().replace(/[\\/]+$/, '')
-    if (trimmed) return trimmed
-  }
-  return path.join(getLegacyTmpBaseDir(), 'claude')
 }
 
 function getScratchpadDirForCurrentSession(args: {
@@ -284,34 +262,13 @@ export function getSpecialAllowedReadReason(args: {
     return 'Scratchpad files for current session are allowed for reading'
   }
 
-  const tasksDir = resolveLikeCliPath(
-    path.join(baseDirResolved, projectDir, 'tasks'),
-  )
-  if (
-    isPathWithinAnyAllowedDir({ inputPath: absolute, allowedDirs: [tasksDir] })
-  ) {
-    return 'Project temp directory files are allowed for reading'
-  }
-
-  const kodeTmpTasksDir = resolveLikeCliPath(
-    path.join(resolveSandboxTmpDir(), projectDir, 'tasks'),
+  const taskOutputDirs = getBackgroundTaskOutputDirCandidates().map(dir =>
+    resolveLikeCliPath(dir),
   )
   if (
     isPathWithinAnyAllowedDir({
       inputPath: absolute,
-      allowedDirs: [kodeTmpTasksDir],
-    })
-  ) {
-    return 'Project temp directory files are allowed for reading'
-  }
-
-  const legacyTasksDir = resolveLikeCliPath(
-    path.join(getLegacyClaudeTmpDir(), projectDir, 'tasks'),
-  )
-  if (
-    isPathWithinAnyAllowedDir({
-      inputPath: absolute,
-      allowedDirs: [legacyTasksDir],
+      allowedDirs: taskOutputDirs,
     })
   ) {
     return 'Project temp directory files are allowed for reading'
