@@ -3,7 +3,7 @@ import { readFile } from 'fs/promises'
 import { basename } from 'path'
 
 import matter from 'gray-matter'
-import yaml from 'js-yaml'
+import { JSON_SCHEMA, load } from 'js-yaml'
 import { z } from 'zod'
 
 import { debug as debugLogger } from '#core/utils/debugLogger'
@@ -22,8 +22,6 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>
 }
 
-const yamlSchema = (yaml as unknown as { JSON_SCHEMA?: unknown }).JSON_SCHEMA
-
 function readMarkdownFile(
   filePath: string,
 ): { frontmatter: Record<string, unknown>; content: string } | null {
@@ -33,10 +31,8 @@ function readMarkdownFile(
       engines: {
         yaml: {
           parse: (input: string) => {
-            const loaded = yaml.load(
-              input,
-              yamlSchema ? { schema: yamlSchema as never } : undefined,
-            )
+            if (input.trim() === '') return {}
+            const loaded = load(input, { schema: JSON_SCHEMA })
             return asRecord(loaded) ?? {}
           },
         },
@@ -61,10 +57,8 @@ async function readMarkdownFileAsync(
       engines: {
         yaml: {
           parse: (input: string) => {
-            const loaded = yaml.load(
-              input,
-              yamlSchema ? { schema: yamlSchema as never } : undefined,
-            )
+            if (input.trim() === '') return {}
+            const loaded = load(input, { schema: JSON_SCHEMA })
             return asRecord(loaded) ?? {}
           },
         },
