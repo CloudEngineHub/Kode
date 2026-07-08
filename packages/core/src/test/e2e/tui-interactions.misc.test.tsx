@@ -577,6 +577,80 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     expect(selected).toBe('second')
   })
 
+  test('Select: uncontrolled focus survives transient keep-alive options missing the focused value', async () => {
+    let focused = ''
+    let selected = ''
+
+    function SelectUncontrolledTransientMissingOptionHarness(): React.ReactNode {
+      const [mode, setMode] = useState<'full' | 'missing'>('full')
+      const [focusedValue, setFocusedValue] = useState('')
+
+      useEffect(() => {
+        if (focusedValue !== 'second') return
+
+        setMode('missing')
+        const timers = [setTimeout(() => setMode('full'), 120)]
+        return () => {
+          for (const timer of timers) clearTimeout(timer)
+        }
+      }, [focusedValue])
+
+      return (
+        <Select
+          options={
+            mode === 'full'
+              ? [
+                  { label: 'First', value: 'first' },
+                  { label: 'Second', value: 'second' },
+                  { label: 'Third', value: 'third' },
+                ]
+              : [
+                  { label: 'First', value: 'first' },
+                  { label: 'Third', value: 'third' },
+                ]
+          }
+          onFocus={value => {
+            focused = value
+            setFocusedValue(value)
+          }}
+          onChange={value => {
+            selected = value
+          }}
+        />
+      )
+    }
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <SelectUncontrolledTransientMissingOptionHarness />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(40)
+    expect(focused).toBe('first')
+
+    h.stdin.write('\u001B[B')
+    await h.wait(30)
+    expect(focused).toBe('second')
+
+    h.clearOutput()
+    await h.wait(60)
+    expect(h.getOutput()).not.toContain('Second')
+
+    h.stdin.write('\r')
+    await h.wait(30)
+    expect(selected).toBe('')
+
+    await h.wait(120)
+    expect(focused).toBe('second')
+
+    h.stdin.write('\r')
+    await h.wait(40)
+
+    expect(selected).toBe('second')
+  })
+
   test('Select: parent-synced focus survives a keep-alive remount', async () => {
     let focused = ''
     let selected = ''

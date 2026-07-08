@@ -41,8 +41,21 @@ type Action =
       visibleOptionCount: number
       options: (Option | OptionSubtree)[]
       defaultValue?: string
-      preserveMissingFocusedValue?: boolean
     }
+
+function getBoundarySelectableValue(
+  optionMap: OptionMap,
+  direction: 'next' | 'previous',
+): string | undefined {
+  const values = Array.from(optionMap.values())
+  const items = direction === 'next' ? values : values.reverse()
+
+  for (const item of items) {
+    if ('value' in item) return item.value
+  }
+
+  return undefined
+}
 
 function getAdjacentSelectableValue(
   state: Pick<State, 'focusedValue' | 'optionMap'>,
@@ -55,7 +68,7 @@ function getAdjacentSelectableValue(
   const item = state.optionMap.get(state.focusedValue)
 
   if (!item) {
-    return undefined
+    return getBoundarySelectableValue(state.optionMap, direction)
   }
 
   let adjacent = direction === 'next' ? item.next : item.previous
@@ -134,6 +147,10 @@ const reducer: Reducer<State, Action> = (state, action) => {
     }
 
     case 'select-focused-option': {
+      if (!state.focusedValue || !state.optionMap.get(state.focusedValue)) {
+        return state
+      }
+
       return {
         ...state,
         previousValue: state.value,
@@ -175,9 +192,7 @@ const reducer: Reducer<State, Action> = (state, action) => {
           ? state.value
           : undefined
       const focusedValue =
-        action.preserveMissingFocusedValue &&
-        state.focusedValue &&
-        !nextState.optionMap.get(state.focusedValue)
+        state.focusedValue && !nextState.optionMap.get(state.focusedValue)
           ? state.focusedValue
           : nextState.focusedValue
 
@@ -361,7 +376,6 @@ export const useSelectState = ({
       visibleOptionCount,
       defaultValue: lastFocusedValueRef.current ?? focusValue ?? defaultValue,
       options,
-      preserveMissingFocusedValue: focusValue !== undefined,
     })
   }, [
     defaultValue,
