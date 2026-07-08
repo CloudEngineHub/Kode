@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { estimateTokens } from '#core/utils/tokens'
 import { getModelManager } from '#core/utils/model'
 import type { Message } from '#core/query'
@@ -17,6 +17,29 @@ export function useQuickModelSwitch(args: {
     onSubmitCountChange,
     setModelSwitchMessage,
   } = args
+  const dismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const clearDismissTimeout = useCallback(() => {
+    if (!dismissTimeoutRef.current) return
+    clearTimeout(dismissTimeoutRef.current)
+    dismissTimeoutRef.current = null
+  }, [])
+
+  const showTimedModelSwitchMessage = useCallback(
+    (message: InlineMessageState, delayMs: number) => {
+      clearDismissTimeout()
+      setModelSwitchMessage(message)
+      dismissTimeoutRef.current = setTimeout(() => {
+        dismissTimeoutRef.current = null
+        setModelSwitchMessage({ show: false })
+      }, delayMs)
+    },
+    [clearDismissTimeout, setModelSwitchMessage],
+  )
+
+  useEffect(() => {
+    return () => clearDismissTimeout()
+  }, [clearDismissTimeout])
 
   return useCallback(() => {
     const modelManager = getModelManager()
@@ -27,11 +50,13 @@ export function useQuickModelSwitch(args: {
     if (switchResult.success && switchResult.modelName) {
       onModelChange?.()
       onSubmitCountChange(prev => prev + 1)
-      setModelSwitchMessage({
-        show: true,
-        text: switchResult.message || `Switched to ${switchResult.modelName}`,
-      })
-      setTimeout(() => setModelSwitchMessage({ show: false }), 3000)
+      showTimedModelSwitchMessage(
+        {
+          show: true,
+          text: switchResult.message || `Switched to ${switchResult.modelName}`,
+        },
+        3000,
+      )
       return
     }
 
@@ -51,7 +76,6 @@ export function useQuickModelSwitch(args: {
       }
     }
 
-    setModelSwitchMessage({ show: true, text: errorMessage })
-    setTimeout(() => setModelSwitchMessage({ show: false }), 6000)
-  }, [messages, onModelChange, onSubmitCountChange, setModelSwitchMessage])
+    showTimedModelSwitchMessage({ show: true, text: errorMessage }, 6000)
+  }, [messages, onModelChange, onSubmitCountChange, showTimedModelSwitchMessage])
 }
