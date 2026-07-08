@@ -332,7 +332,9 @@ describe('Responses API Tests', () => {
       const streamData = [
         'data: {"type":"response.created","response":{"id":"resp-tool-stream"}}\n\n',
         'data: {"type":"response.output_item.added","output_index":0,"item":{"id":"fc_123","type":"function_call","status":"in_progress","name":"read_file","arguments":"","call_id":"call_123"}}\n\n',
-        'data: {"type":"response.function_call_arguments.done","item":{"id":"fc_123","type":"function_call","status":"completed","name":"read_file","arguments":"{\\"path\\":\\"README.md\\"}","call_id":"call_123"}}\n\n',
+        'data: {"type":"response.function_call_arguments.delta","item_id":"fc_123","output_index":0,"delta":"{\\"path\\":"}\n\n',
+        'data: {"type":"response.function_call_arguments.delta","item_id":"fc_123","output_index":0,"delta":"\\"README.md\\"}"}\n\n',
+        'data: {"type":"response.function_call_arguments.done","item_id":"fc_123","output_index":0,"arguments":"{\\"path\\":\\"README.md\\"}"}\n\n',
         'data: {"type":"response.output_item.done","output_index":0,"item":{"id":"fc_123","type":"function_call","status":"completed","name":"read_file","arguments":"{\\"path\\":\\"README.md\\"}","call_id":"call_123"}}\n\n',
         'data: {"type":"response.completed","response":{"id":"resp-tool-stream"}}\n\n',
         'data: [DONE]\n\n',

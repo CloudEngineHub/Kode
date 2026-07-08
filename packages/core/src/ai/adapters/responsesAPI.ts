@@ -15,6 +15,13 @@ import {
 } from './responsesAPI/messageInput'
 import { parseNonStreamingResponse as parseResponsesApiNonStreamingResponse } from './responsesAPI/nonStreaming'
 
+type StreamingFunctionCallState = {
+  id?: string
+  callId?: string
+  name?: string
+  arguments: string
+}
+
 export class ResponsesAPIAdapter extends OpenAIAdapter {
   createRequest(params: UnifiedRequestParams): any {
     const {
@@ -168,39 +175,130 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
     })
   }
 
-  private getFunctionCallFromStreamingEvent(parsed: any): {
+  private getFunctionCallKey(parsed: any, item?: any): string | null {
+    const outputIndex = parsed.output_index
+    if (typeof outputIndex === 'number' || typeof outputIndex === 'string') {
+      return `output:${outputIndex}`
+    }
+
+    const itemId = parsed.item_id || item?.id || item?.call_id
+    if (typeof itemId === 'string' && itemId) {
+      return `item:${itemId}`
+    }
+
+    return null
+  }
+
+  private getFunctionCallMap(
+    reasoningContext?: ReasoningStreamingContext,
+  ): Map<string, StreamingFunctionCallState> | undefined {
+    if (!reasoningContext) return undefined
+    if (!reasoningContext.responseFunctionCalls) {
+      reasoningContext.responseFunctionCalls = new Map()
+    }
+    return reasoningContext.responseFunctionCalls
+  }
+
+  private updateFunctionCallStateFromItem(
+    state: StreamingFunctionCallState,
+    item: any,
+  ): StreamingFunctionCallState {
+    if (typeof item?.id === 'string') state.id = item.id
+    if (typeof item?.call_id === 'string') state.callId = item.call_id
+    if (typeof item?.name === 'string') state.name = item.name
+    if (typeof item?.arguments === 'string') state.arguments = item.arguments
+    return state
+  }
+
+  private toFunctionCallTool(state: StreamingFunctionCallState): {
     id: string
     name: string
     input: string
   } | null {
-    const item =
-      parsed.type === 'response.function_call_arguments.done'
-        ? parsed.item
-        : parsed.type === 'response.output_item.done'
-          ? parsed.item
-          : null
-
-    if (!item || item.type !== 'function_call') {
-      return null
-    }
-
-    const callId = item.call_id || item.id
-    const name = item.name
-    const args = item.arguments
-
+    const callId = state.callId || state.id
     if (
       typeof callId !== 'string' ||
-      typeof name !== 'string' ||
-      typeof args !== 'string'
+      typeof state.name !== 'string' ||
+      typeof state.arguments !== 'string'
     ) {
       return null
     }
 
     return {
       id: callId,
-      name,
-      input: args,
+      name: state.name,
+      input: state.arguments,
     }
+  }
+
+  private getFunctionCallFromStreamingEvent(
+    parsed: any,
+    reasoningContext?: ReasoningStreamingContext,
+  ): {
+    id: string
+    name: string
+    input: string
+  } | null {
+    const map = this.getFunctionCallMap(reasoningContext)
+
+    if (parsed.type === 'response.output_item.added') {
+      const item = parsed.item || {}
+      if (item.type !== 'function_call') return null
+
+      const key = this.getFunctionCallKey(parsed, item)
+      if (!key || !map) return null
+
+      const state = map.get(key) ?? { arguments: '' }
+      map.set(key, this.updateFunctionCallStateFromItem(state, item))
+      return null
+    }
+
+    if (parsed.type === 'response.function_call_arguments.delta') {
+      const key = this.getFunctionCallKey(parsed)
+      if (!key || !map || typeof parsed.delta !== 'string') return null
+
+      const state = map.get(key) ?? { arguments: '' }
+      state.arguments += parsed.delta
+      map.set(key, state)
+      return null
+    }
+
+    if (parsed.type === 'response.function_call_arguments.done') {
+      const item = parsed.item || {}
+      const key = this.getFunctionCallKey(parsed, item)
+      const state =
+        (key && map?.get(key)) ??
+        (item.type === 'function_call' ? { arguments: '' } : null)
+
+      if (!state) return null
+
+      if (item.type === 'function_call') {
+        this.updateFunctionCallStateFromItem(state, item)
+      }
+      if (typeof parsed.arguments === 'string') {
+        state.arguments = parsed.arguments
+      }
+      if (key && map) map.set(key, state)
+
+      return this.toFunctionCallTool(state)
+    }
+
+    const item =
+      parsed.type === 'response.output_item.done' ? parsed.item : null
+
+    if (!item || item.type !== 'function_call') {
+      return null
+    }
+
+    const key = this.getFunctionCallKey(parsed, item)
+    const state =
+      (key && map?.get(key)) ??
+      ({ arguments: '' } satisfies StreamingFunctionCallState)
+
+    this.updateFunctionCallStateFromItem(state, item)
+    if (key && map) map.set(key, state)
+
+    return this.toFunctionCallTool(state)
   }
 
   // Override parseResponse to handle Response API directly without double conversion
@@ -323,7 +421,10 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
     }
 
     // Handle tool calls (Responses API streaming format)
-    const functionCall = this.getFunctionCallFromStreamingEvent(parsed)
+    const functionCall = this.getFunctionCallFromStreamingEvent(
+      parsed,
+      reasoningContext,
+    )
     if (functionCall) {
       const seenToolCallIds =
         reasoningContext?.seenToolCallIds ??

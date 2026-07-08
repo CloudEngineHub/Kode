@@ -51,6 +51,15 @@ export interface ReasoningStreamingContext {
   thinkingContent?: string
   currentPartIndex?: number
   seenToolCallIds?: Set<string>
+  responseFunctionCalls?: Map<
+    string,
+    {
+      id?: string
+      callId?: string
+      name?: string
+      arguments: string
+    }
+  >
 }
 
 // Unified request parameters
