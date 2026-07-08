@@ -14,6 +14,36 @@ export type PastedImageAttachment = {
   mediaType: string
 }
 
+function arePastedTextSegmentsEqual(
+  a: PastedTextSegment[],
+  b: PastedTextSegment[],
+): boolean {
+  if (a === b) return true
+  if (a.length !== b.length) return false
+
+  return a.every((item, index) => {
+    const other = b[index]
+    return other?.placeholder === item.placeholder && other.text === item.text
+  })
+}
+
+function arePastedImageAttachmentsEqual(
+  a: PastedImageAttachment[],
+  b: PastedImageAttachment[],
+): boolean {
+  if (a === b) return true
+  if (a.length !== b.length) return false
+
+  return a.every((item, index) => {
+    const other = b[index]
+    return (
+      other?.placeholder === item.placeholder &&
+      other.data === item.data &&
+      other.mediaType === item.mediaType
+    )
+  })
+}
+
 function extractPastedTextId(placeholder: string): number | null {
   const match = placeholder.match(/\[Pasted text #(\d+)(?: \+\d+ lines)?\]/)
   if (!match?.[1]) return null
@@ -94,6 +124,7 @@ export function usePromptPastes(args: {
           pastedTextCounter.current = maxId + 1
         }
 
+        if (arePastedTextSegmentsEqual(prev, resolved)) return prev
         return resolved
       })
     },
@@ -118,6 +149,7 @@ export function usePromptPastes(args: {
           pastedImageCounter.current = maxId + 1
         }
 
+        if (arePastedImageAttachmentsEqual(prev, resolved)) return prev
         return resolved
       })
     },

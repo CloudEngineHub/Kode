@@ -46,11 +46,15 @@ export function useStatusLine(input?: unknown): {
   const lastCommandRef = useRef<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const inputRef = useRef<unknown>(input)
+  const inputSignatureRef = useRef<string | null>(null)
   const tickRef = useRef<(() => void) | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
+    const nextSignature = serializeStatusLineInput(input)
     inputRef.current = input
+    if (inputSignatureRef.current === nextSignature) return
+    inputSignatureRef.current = nextSignature
 
     if (!tickRef.current) return
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -82,7 +86,13 @@ export function useStatusLine(input?: unknown): {
         lastCommandRef.current = null
         abortRef.current?.abort()
         abortRef.current = null
-        if (alive) setState({ text: null, padding: 0 })
+        if (alive) {
+          setState(prev =>
+            prev.text === null && prev.padding === 0
+              ? prev
+              : { text: null, padding: 0 },
+          )
+        }
         return
       }
 
@@ -110,7 +120,14 @@ export function useStatusLine(input?: unknown): {
             })
             .join('\n')
         : ''
-      if (alive) setState({ text: next || null, padding })
+      if (alive) {
+        const text = next || null
+        setState(prev =>
+          prev.text === text && prev.padding === padding
+            ? prev
+            : { text, padding },
+        )
+      }
     }
 
     tickRef.current = () => {
