@@ -11,6 +11,7 @@ import {
   getClients,
   getMcpAuthSnapshot,
   getMCPCommands,
+  getMCPResources,
   getMCPTools,
   getMcprcServerStatus,
   getMcpServer,
@@ -532,9 +533,10 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
 
     ;(async () => {
       try {
-        const [allTools, allPrompts] = await Promise.all([
+        const [allTools, allPrompts, allResources] = await Promise.all([
           getMCPTools(),
           getMCPCommands(),
+          getMCPResources(),
         ])
         const toolsForServer = allTools.filter(t =>
           t.userFacingName().startsWith(`${activeServer.name} - `),
@@ -542,13 +544,14 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
         const promptsForServer = allPrompts.filter(p =>
           p.userFacingName().startsWith(`${activeServer.name}:`),
         )
+        const resourcesForServer = allResources.filter(
+          resource => resource.server === activeServer.name,
+        )
 
-        // Prompts/resources are not yet first-class in Kode's UI. Keep parity by
-        // computing tool counts and displaying capabilities conservatively.
         setActiveServerCounts({
           tools: toolsForServer.length,
           prompts: promptsForServer.length,
-          resources: 0,
+          resources: resourcesForServer.length,
         })
       } catch (err) {
         setActiveServerCountsError(
@@ -862,6 +865,13 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
               <Text wrap="truncate-end">
                 <Text bold>Tools: </Text>
                 <Text dimColor>{counts.tools} tools</Text>
+              </Text>
+            ) : null}
+
+            {counts?.resources && counts.resources > 0 ? (
+              <Text wrap="truncate-end">
+                <Text bold>Resources: </Text>
+                <Text dimColor>{counts.resources} resources</Text>
               </Text>
             ) : null}
           </Box>

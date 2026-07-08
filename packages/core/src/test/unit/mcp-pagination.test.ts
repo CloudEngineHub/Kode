@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import {
   __setMcpClientsForTests,
   getMCPCommands,
+  getMCPResources,
   getMCPTools,
 } from '#core/mcp/client'
 import { ListMcpResourcesTool } from '#tools/tools/mcp/ListMcpResourcesTool/ListMcpResourcesTool'
@@ -36,12 +37,14 @@ describe('MCP paginated list requests', () => {
     __setMcpClientsForTests(null)
     getMCPTools.cache.clear?.()
     getMCPCommands.cache.clear?.()
+    getMCPResources.cache.clear?.()
   })
 
   afterEach(() => {
     __setMcpClientsForTests(null)
     getMCPTools.cache.clear?.()
     getMCPCommands.cache.clear?.()
+    getMCPResources.cache.clear?.()
   })
 
   test('getMCPTools follows tools/list nextCursor pages', async () => {
@@ -164,6 +167,40 @@ describe('MCP paginated list requests', () => {
 
     expect(firstValue?.type).toBe('result')
     expect(firstValue?.data).toEqual([
+      { uri: 'file:///first', name: 'first', server: 'srv' },
+      { uri: 'file:///second', name: 'second', server: 'srv' },
+    ])
+  })
+
+  test('getMCPResources follows resources/list nextCursor pages', async () => {
+    const client: any = {
+      request: async (req: any) => {
+        const cursor = req.params?.cursor
+        if (!cursor) {
+          return {
+            resources: [{ uri: 'file:///first', name: 'first' }],
+            nextCursor: 'page-2',
+          }
+        }
+        return {
+          resources: [{ uri: 'file:///second', name: 'second' }],
+        }
+      },
+      getServerCapabilities: () => ({ resources: {} }),
+    }
+
+    __setMcpClientsForTests([
+      {
+        type: 'connected',
+        name: 'srv',
+        client,
+        capabilities: { resources: {} },
+      } as any,
+    ])
+
+    const resources = await getMCPResources()
+
+    expect(resources).toEqual([
       { uri: 'file:///first', name: 'first', server: 'srv' },
       { uri: 'file:///second', name: 'second', server: 'srv' },
     ])

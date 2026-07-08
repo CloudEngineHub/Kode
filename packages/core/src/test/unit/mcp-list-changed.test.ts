@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import {
   __resetMcpListChangedForTests,
   __setMcpClientsForTests,
+  getMCPResources,
   getMCPTools,
   notifyMcpListChanged,
 } from '#core/mcp/client'
@@ -10,12 +11,14 @@ import {
 describe('MCP list_changed cache invalidation', () => {
   beforeEach(() => {
     getMCPTools.cache.clear?.()
+    getMCPResources.cache.clear?.()
     __resetMcpListChangedForTests()
   })
 
   afterEach(() => {
     __setMcpClientsForTests(null)
     getMCPTools.cache.clear?.()
+    getMCPResources.cache.clear?.()
     __resetMcpListChangedForTests()
   })
 
@@ -59,5 +62,46 @@ describe('MCP list_changed cache invalidation', () => {
     const refreshed = await getMCPTools()
     expect(refreshed.map(t => t.name)).toContain('mcp__test__beta')
     expect(refreshed.map(t => t.name)).not.toContain('mcp__test__alpha')
+  })
+
+  test('getMCPResources refreshes after notifications/resources/list_changed', async () => {
+    let resourceNames = ['alpha']
+
+    const client: any = {
+      request: async (req: any) => {
+        if (req?.method === 'resources/list') {
+          return {
+            resources: resourceNames.map(name => ({
+              uri: `file:///${name}`,
+              name,
+            })),
+          }
+        }
+        throw new Error(`Unexpected method: ${String(req?.method)}`)
+      },
+    }
+
+    __setMcpClientsForTests([
+      {
+        type: 'connected',
+        name: 'test',
+        client,
+        capabilities: { resources: { listChanged: true } },
+      } as any,
+    ])
+
+    const first = await getMCPResources()
+    expect(first.map(resource => resource.name)).toContain('alpha')
+
+    resourceNames = ['beta']
+    const stillCached = await getMCPResources()
+    expect(stillCached.map(resource => resource.name)).toContain('alpha')
+    expect(stillCached.map(resource => resource.name)).not.toContain('beta')
+
+    notifyMcpListChanged({ kind: 'resources', server: 'test' })
+
+    const refreshed = await getMCPResources()
+    expect(refreshed.map(resource => resource.name)).toContain('beta')
+    expect(refreshed.map(resource => resource.name)).not.toContain('alpha')
   })
 })
