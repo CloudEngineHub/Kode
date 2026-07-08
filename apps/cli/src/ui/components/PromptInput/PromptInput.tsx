@@ -890,25 +890,18 @@ export function PromptInput({
     }
   }, [])
 
-  async function onSubmit(value: string, isSubmittingSlashCommand = false) {
+  async function onSubmit(value: string) {
     if (isEditingExternally) return
-
-    if (
-      !isSubmittingSlashCommand &&
-      completionVisible &&
-      suggestions.length > 0
-    ) {
-      return
-    }
 
     if (!value) return
     if (isDisabled) return
     if (!value.trim()) return
 
+    if (completionActive) resetCompletion()
+
     if (isLoading) {
       // Enter always "sends". While a turn is running, treat it as a pending submission
       // (distinct from Tab-queued tasks) and auto-run it when the current turn completes.
-      if (completionActive) resetCompletion()
       clearSavedPromptDraftBestEffort()
       clearUndoBuffer()
       setPendingPrompts(prev => [
@@ -933,9 +926,6 @@ export function PromptInput({
     await submitPrompt({
       input: value,
       mode,
-      completionActive: completionVisible,
-      suggestionCount: completionVisible ? suggestions.length : 0,
-      isSubmittingSlashCommand,
       isDisabled,
       isLoading,
       isEditingExternally,
@@ -990,9 +980,6 @@ export function PromptInput({
         await submitPrompt({
           input: next.input,
           mode: next.mode,
-          completionActive: false,
-          suggestionCount: 0,
-          isSubmittingSlashCommand: false,
           isDisabled,
           isLoading: false,
           isEditingExternally,

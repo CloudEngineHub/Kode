@@ -106,7 +106,7 @@ export function PromptInputView({
   input: string
   cursorOffset: number
   setCursorOffset: (offset: number) => void
-  onSubmit: (value: string, isSubmittingSlashCommand?: boolean) => void
+  onSubmit: (value: string) => void
   onChange: (value: string) => void
   isEditingExternally: boolean
   isDisabled: boolean

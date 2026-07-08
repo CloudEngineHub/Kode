@@ -463,6 +463,29 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
     expect(out).not.toContain('RAW:\"loading...')
   })
 
+  test('Completion: Enter submits the current input on the first press', async () => {
+    await setCwd(process.cwd())
+
+    const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
+    const h = createInkTestHarness(
+      <PromptInputHarness conversationKey={conversationKey} showRaw={true} />,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    h.clearOutput()
+
+    h.stdin.write('./d')
+    await h.wait(75)
+    expect(h.getOutput()).toContain('RAW:\"./d\"')
+
+    h.clearOutput()
+    h.stdin.write('\r')
+    await h.wait(200)
+
+    expect(h.getOutput()).toContain('RAW:\"\"')
+  })
+
   test('submit clears the input value', async () => {
     const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
     const h = createInkTestHarness(

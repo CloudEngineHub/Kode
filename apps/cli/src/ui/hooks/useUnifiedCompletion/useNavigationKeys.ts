@@ -54,37 +54,17 @@ export function useUnifiedCompletionNavigationKeys(args: {
         return false
       }
 
-      // Enter key behavior depends on completion type
+      // Plain Enter keeps chat semantics: close completions and let TextInput
+      // submit the current value on the same keypress.
       if (
         key.return &&
         !key.shift &&
         !key.meta &&
         args.state.isActive &&
-        args.state.suggestions.length > 0 &&
-        args.state.context
+        args.state.suggestions.length > 0
       ) {
-        const context = args.state.context
-        const selectedSuggestion =
-          args.state.suggestions[args.state.selectedIndex]
-        if (isLoadingSuggestion(selectedSuggestion)) return true
-
-        const isFileCompletion = context.type === 'file'
-
-        if (isFileCompletion) {
-          // File completion: close panel without filling, let normal submit handle it
-          if (args.state.preview?.isActive) {
-            args.onInputChange(args.state.preview.originalInput)
-            args.setCursorOffset(context.startPos + context.prefix.length)
-          }
-          args.resetCompletion()
-          // Return false to let normal Enter/submit behavior take over
-          return false
-        } else {
-          // Command/agent/other completion: fill the selected suggestion
-          args.completeWith(selectedSuggestion, context)
-          args.resetCompletion()
-          return true
-        }
+        args.resetCompletion()
+        return false
       }
 
       if (!args.state.isActive || args.state.suggestions.length === 0)

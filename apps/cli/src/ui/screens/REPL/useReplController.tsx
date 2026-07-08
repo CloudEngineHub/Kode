@@ -464,9 +464,6 @@ export function useReplController(props: REPLProps) {
               await submitPrompt({
                 input: text,
                 mode,
-                completionActive: false,
-                suggestionCount: 0,
-                isSubmittingSlashCommand: false,
                 isDisabled: apiKeyStatusRef.current !== 'valid',
                 isLoading: false,
                 isEditingExternally: false,

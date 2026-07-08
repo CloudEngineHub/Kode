@@ -68,9 +68,6 @@ function getKodingContext(): string {
 export async function submitPrompt(args: {
   input: string
   mode: PromptMode
-  completionActive: boolean
-  suggestionCount: number
-  isSubmittingSlashCommand?: boolean
   isDisabled: boolean
   isLoading: boolean
   isEditingExternally: boolean
@@ -105,14 +102,6 @@ export async function submitPrompt(args: {
   exit: () => never
 }): Promise<void> {
   if (args.isEditingExternally) return
-
-  if (
-    !args.isSubmittingSlashCommand &&
-    args.completionActive &&
-    args.suggestionCount > 0
-  ) {
-    return
-  }
 
   if (!args.input) return
   if (args.isDisabled) return

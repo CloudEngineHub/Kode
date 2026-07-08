@@ -198,6 +198,7 @@ export function REPLView({
               <Box
                 flexDirection="column"
                 height={transientMaxHeight}
+                justifyContent="flex-end"
                 overflow="hidden"
                 width="100%"
               >

@@ -17,6 +17,59 @@ import { useUnifiedCompletionAutoTrigger } from './useAutoTrigger'
 import { useUnifiedCompletionTabKey } from './useTabKey'
 import { useUnifiedCompletionNavigationKeys } from './useNavigationKeys'
 
+function areCompletionContextsEqual(
+  a: CompletionContext | null,
+  b: CompletionContext | null,
+): boolean {
+  if (a === b) return true
+  if (!a || !b) return false
+  return (
+    a.type === b.type &&
+    a.prefix === b.prefix &&
+    a.startPos === b.startPos &&
+    a.endPos === b.endPos &&
+    a.trigger === b.trigger
+  )
+}
+
+function getSuggestionMetadataKey(suggestion: UnifiedSuggestion): string {
+  const metadata = suggestion.metadata
+  if (!metadata || typeof metadata !== 'object') return ''
+  return [
+    metadata.isLoading ? 'loading' : '',
+    metadata.isUnixCommand ? 'unix' : '',
+    typeof metadata.color === 'string' ? metadata.color : '',
+    typeof metadata.modelId === 'string' ? metadata.modelId : '',
+  ].join('|')
+}
+
+function areSuggestionsEqual(
+  a: UnifiedSuggestion[],
+  b: UnifiedSuggestion[],
+): boolean {
+  if (a === b) return true
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    const left = a[i]
+    const right = b[i]
+    if (!left || !right) return false
+    if (
+      left.value !== right.value ||
+      left.displayValue !== right.displayValue ||
+      left.type !== right.type ||
+      left.description !== right.description ||
+      left.icon !== right.icon ||
+      left.score !== right.score ||
+      left.isSmartMatch !== right.isSmartMatch ||
+      left.originalContext !== right.originalContext ||
+      getSuggestionMetadataKey(left) !== getSuggestionMetadataKey(right)
+    ) {
+      return false
+    }
+  }
+  return true
+}
+
 export function __getCompletionContextForTests(args: {
   input: string
   cursorOffset: number
@@ -78,31 +131,78 @@ export function useUnifiedCompletion({
   const [state, setState] = useState<CompletionState>(INITIAL_STATE)
 
   const updateState = useCallback((updates: Partial<CompletionState>) => {
-    setState(prev => ({ ...prev, ...updates }))
+    setState(prev => {
+      const next = { ...prev, ...updates }
+      const suggestionsUnchanged =
+        updates.suggestions === undefined ||
+        areSuggestionsEqual(prev.suggestions, next.suggestions)
+      const contextUnchanged =
+        updates.context === undefined ||
+        areCompletionContextsEqual(prev.context, next.context)
+
+      if (
+        suggestionsUnchanged &&
+        contextUnchanged &&
+        prev.selectedIndex === next.selectedIndex &&
+        prev.isActive === next.isActive &&
+        prev.preview === next.preview &&
+        prev.emptyDirMessage === next.emptyDirMessage &&
+        prev.suppressUntil === next.suppressUntil
+      ) {
+        return prev
+      }
+
+      return next
+    })
   }, [])
 
   const resetCompletion = useCallback(() => {
-    setState(prev => ({
-      ...prev,
-      suggestions: [],
-      selectedIndex: 0,
-      isActive: false,
-      context: null,
-      preview: null,
-      emptyDirMessage: '',
-    }))
+    setState(prev => {
+      if (
+        prev.suggestions.length === 0 &&
+        prev.selectedIndex === 0 &&
+        !prev.isActive &&
+        prev.context === null &&
+        prev.preview === null &&
+        prev.emptyDirMessage === ''
+      ) {
+        return prev
+      }
+
+      return {
+        ...prev,
+        suggestions: [],
+        selectedIndex: 0,
+        isActive: false,
+        context: null,
+        preview: null,
+        emptyDirMessage: '',
+      }
+    })
   }, [])
 
   const activateCompletion = useCallback(
     (suggestions: UnifiedSuggestion[], context: CompletionContext) => {
-      setState(prev => ({
-        ...prev,
-        suggestions,
-        selectedIndex: 0,
-        isActive: true,
-        context,
-        preview: null,
-      }))
+      setState(prev => {
+        if (
+          prev.isActive &&
+          prev.selectedIndex === 0 &&
+          prev.preview === null &&
+          areCompletionContextsEqual(prev.context, context) &&
+          areSuggestionsEqual(prev.suggestions, suggestions)
+        ) {
+          return prev
+        }
+
+        return {
+          ...prev,
+          suggestions,
+          selectedIndex: 0,
+          isActive: true,
+          context,
+          preview: null,
+        }
+      })
     },
     [],
   )
@@ -186,11 +286,20 @@ export function useUnifiedCompletion({
     }
 
     if (result.action === 'refresh') {
-      setState(prev => ({
-        ...prev,
-        suggestions: result.suggestions,
-        selectedIndex: result.selectedIndex,
-      }))
+      setState(prev => {
+        if (
+          prev.selectedIndex === result.selectedIndex &&
+          areSuggestionsEqual(prev.suggestions, result.suggestions)
+        ) {
+          return prev
+        }
+
+        return {
+          ...prev,
+          suggestions: result.suggestions,
+          selectedIndex: result.selectedIndex,
+        }
+      })
     }
   }, [
     generateSuggestions,
