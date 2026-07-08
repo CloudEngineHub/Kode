@@ -30,6 +30,8 @@
       "@kode/core/*": ["packages/core/src/*"],
       "@kode/host": ["packages/host/src/index.ts"],
       "@kode/host/*": ["packages/host/src/*"],
+      "@kode/permissions": ["packages/permissions/src/index.ts"],
+      "@kode/permissions/*": ["packages/permissions/src/*"],
       "@kode/protocol": ["packages/protocol/src/index.ts"],
       "@kode/protocol/*": ["packages/protocol/src/*"],
       "@kode/runtime": ["packages/runtime/src/index.ts"],

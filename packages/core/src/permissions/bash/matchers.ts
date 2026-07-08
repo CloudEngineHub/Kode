@@ -1,2 +1,1 @@
-export { splitBashCommandIntoSubcommands } from './shellTokens'
-export { stripOutputRedirections } from './redirections'
+export * from '@kode/permissions/bash/matchers'
