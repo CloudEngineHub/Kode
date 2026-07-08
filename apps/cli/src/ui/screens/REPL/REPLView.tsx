@@ -28,7 +28,7 @@ export function REPLView({
   conversationKey,
   safeMode,
   debug,
-  forkNumber,
+  staticOutputEpoch,
   staticItems,
   transientItems,
   toolJSX,
@@ -56,7 +56,7 @@ export function REPLView({
   conversationKey: string
   safeMode: boolean
   debug: boolean
-  forkNumber: number
+  staticOutputEpoch: number
   staticItems: TranscriptItem[]
   transientItems: TranscriptItem[]
   toolJSX: {
@@ -187,7 +187,7 @@ export function REPLView({
           </Box>
         ) : (
           <Box ref={rootUiRef} flexDirection="column" width="100%">
-            <Static key={`static-${forkNumber}`} items={staticItems}>
+            <Static key={`static-${staticOutputEpoch}`} items={staticItems}>
               {(item: TranscriptItem) => item.jsx}
             </Static>
 

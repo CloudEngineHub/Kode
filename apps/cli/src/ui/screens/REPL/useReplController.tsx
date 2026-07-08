@@ -148,6 +148,7 @@ export function useReplController(props: REPLProps) {
     ),
   )
   const initialForkNumberRef = useRef(forkNumber)
+  const [staticOutputEpoch, setStaticOutputEpoch] = useState(0)
   const [uiRefreshCounter, setUiRefreshCounter] = useState(0)
 
   const [pendingForkConvoWithMessages, setPendingForkConvoWithMessages] =
@@ -244,6 +245,7 @@ export function useReplController(props: REPLProps) {
         const applyStateUpdates = () => {
           setPendingForkConvoWithMessages(null)
           setForkNumber(prev => prev + 1)
+          setStaticOutputEpoch(prev => prev + 1)
           setMessages(request.messages)
 
           if (request.options?.resetInput) {
@@ -872,6 +874,7 @@ export function useReplController(props: REPLProps) {
     // This matches the old pattern where clearTerminal was called before state updates
     const applyStateUpdates = () => {
       setForkNumber(prev => prev + 1)
+      setStaticOutputEpoch(prev => prev + 1)
       setMessages(request.messages)
 
       if (request.options?.resetInput) {
@@ -1049,10 +1052,19 @@ export function useReplController(props: REPLProps) {
 
   useCostSummary()
 
+  const setMessagesFromExternalStore = useCallback<
+    React.Dispatch<React.SetStateAction<MessageType[]>>
+  >(update => {
+    if (typeof update !== 'function') {
+      setStaticOutputEpoch(prev => prev + 1)
+    }
+    setMessages(update)
+  }, [])
+
   useEffect(() => {
     setMessagesGetter(() => messages)
-    setMessagesSetter(setMessages)
-  }, [messages])
+    setMessagesSetter(setMessagesFromExternalStore)
+  }, [messages, setMessagesFromExternalStore])
 
   useEffect(() => {
     setModelConfigChangeHandler(() => setUiRefreshCounter(prev => prev + 1))
@@ -1079,12 +1091,11 @@ export function useReplController(props: REPLProps) {
 
   const staticItemsRef = useRef<TranscriptItem[]>([])
   const printedKeysRef = useRef<Set<string>>(new Set())
-  const lastForkNumberRef = useRef<number>(forkNumber)
+  const lastStaticOutputEpochRef = useRef<number>(staticOutputEpoch)
 
   const staticItems = useMemo(() => {
-    // Reset when forkNumber changes (conversation fork)
-    if (lastForkNumberRef.current !== forkNumber) {
-      lastForkNumberRef.current = forkNumber
+    if (lastStaticOutputEpochRef.current !== staticOutputEpoch) {
+      lastStaticOutputEpochRef.current = staticOutputEpoch
       staticItemsRef.current = []
       printedKeysRef.current = new Set()
     }
@@ -1129,6 +1140,7 @@ export function useReplController(props: REPLProps) {
     forkNumber,
     isDefaultModel,
     mcpClients,
+    staticOutputEpoch,
     transcript.items,
     transcript.replStaticPrefixLength,
     updateAvailableVersion,
@@ -1202,7 +1214,7 @@ export function useReplController(props: REPLProps) {
     conversationKey,
     safeMode,
     debug,
-    forkNumber,
+    staticOutputEpoch,
     staticItems,
     transientItems,
     toolJSX,
