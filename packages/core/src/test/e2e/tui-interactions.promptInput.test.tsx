@@ -64,6 +64,7 @@ function PromptInputHarness({
         {showRaw ? (
           <Box flexDirection="column">
             <Text>RAW:{JSON.stringify(input)}</Text>
+            <Text>SUBMIT_COUNT:{submitCount}</Text>
             {prompt}
           </Box>
         ) : (
@@ -505,6 +506,23 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
     await h.wait(200)
 
     expect(h.getOutput()).toContain('RAW:\"\"')
+  })
+
+  test('rapid Enter after typing submits without requiring a second press', async () => {
+    const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
+    const h = createInkTestHarness(
+      <PromptInputHarness conversationKey={conversationKey} showRaw={true} />,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    h.clearOutput()
+
+    h.stdin.write('x')
+    h.stdin.write('\r')
+    await h.wait(200)
+
+    expect(h.getOutput()).toContain('SUBMIT_COUNT:1')
   })
 
   test('delayed paste placeholder uses latest cursor position', async () => {

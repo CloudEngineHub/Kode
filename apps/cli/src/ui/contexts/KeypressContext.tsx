@@ -10,6 +10,8 @@ export const BACKSLASH_ENTER_TIMEOUT = 5
 export const ESC_TIMEOUT = 50
 export const PASTE_TIMEOUT = 30_000
 export const FAST_RETURN_TIMEOUT = 30
+// Only protect fast Return after paste-like chunks; normal typing must submit immediately.
+const FAST_RETURN_PASTE_LIKE_CHARS = 80
 
 const ESC = '\x1b'
 
@@ -228,9 +230,22 @@ function bufferBackslashEnter(keypressHandler: (key: ParsedKey) => void) {
 
 function bufferFastReturn(keypressHandler: (key: ParsedKey) => void) {
   let lastKeyTime = 0
+  let lastKey: ParsedKey | null = null
   return (key: ParsedKey) => {
     const now = Date.now()
-    if (key.name === 'return' && now - lastKeyTime <= FAST_RETURN_TIMEOUT) {
+    const previousLooksLikePaste =
+      lastKey?.insertable === true &&
+      !lastKey.ctrl &&
+      !lastKey.meta &&
+      (lastKey.sequence.includes('\n') ||
+        lastKey.sequence.includes('\r') ||
+        lastKey.sequence.length >= FAST_RETURN_PASTE_LIKE_CHARS)
+
+    if (
+      key.name === 'return' &&
+      previousLooksLikePaste &&
+      now - lastKeyTime <= FAST_RETURN_TIMEOUT
+    ) {
       keypressHandler({
         ...key,
         name: '',
@@ -240,6 +255,7 @@ function bufferFastReturn(keypressHandler: (key: ParsedKey) => void) {
     } else {
       keypressHandler(key)
     }
+    lastKey = key
     lastKeyTime = now
   }
 }

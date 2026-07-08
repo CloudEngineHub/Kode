@@ -234,7 +234,7 @@ export function useTextInput({
 
   function handleEnter(key: Key) {
     if (!multiline) {
-      onSubmit?.(originalValue)
+      onSubmit?.(getCursor().text)
       return
     }
 
@@ -283,7 +283,7 @@ export function useTextInput({
       return
     }
 
-    onSubmit?.(originalValue)
+    onSubmit?.(getCursor().text)
   }
 
   function shouldDisableCursorMovement(): boolean {

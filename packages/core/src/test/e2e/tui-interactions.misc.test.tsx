@@ -13,10 +13,7 @@ import {
 import type { Message as KodeMessage } from '#core/query'
 import { Message } from '#ui-ink/components/Message'
 import { MessageResponse } from '#ui-ink/components/MessageResponse'
-import {
-  FAST_RETURN_TIMEOUT,
-  KeypressProvider,
-} from '#ui-ink/contexts/KeypressContext'
+import { KeypressProvider } from '#ui-ink/contexts/KeypressContext'
 import { createInkHarnessManager, createInkTestHarness } from './inkTestHarness'
 import { Select } from '#ui-ink/components/CustomSelect/select'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
@@ -95,8 +92,6 @@ describe('TUI E2E regression (Ink render): Misc', () => {
       await h.wait(5)
     }
 
-    // Avoid KeypressProvider's "fast return" heuristic (treats rapid enter after typing as insertable).
-    await h.wait(FAST_RETURN_TIMEOUT + 10)
     h.stdin.write('\r')
     await h.wait(25)
 
