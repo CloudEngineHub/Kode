@@ -327,6 +327,60 @@ describe('Responses API Tests', () => {
       expect(rawResponse.id).toBe('resp-stream-test')
     })
 
+    test('streams function call arguments done events as tool requests', async () => {
+      const adapter = ModelAdapterFactory.createAdapter(testModel)
+      const streamData = [
+        'data: {"type":"response.created","response":{"id":"resp-tool-stream"}}\n\n',
+        'data: {"type":"response.output_item.added","output_index":0,"item":{"id":"fc_123","type":"function_call","status":"in_progress","name":"read_file","arguments":"","call_id":"call_123"}}\n\n',
+        'data: {"type":"response.function_call_arguments.done","item":{"id":"fc_123","type":"function_call","status":"completed","name":"read_file","arguments":"{\\"path\\":\\"README.md\\"}","call_id":"call_123"}}\n\n',
+        'data: {"type":"response.output_item.done","output_index":0,"item":{"id":"fc_123","type":"function_call","status":"completed","name":"read_file","arguments":"{\\"path\\":\\"README.md\\"}","call_id":"call_123"}}\n\n',
+        'data: {"type":"response.completed","response":{"id":"resp-tool-stream"}}\n\n',
+        'data: [DONE]\n\n',
+      ].join('')
+
+      const events: any[] = []
+      if (!adapter.parseStreamingResponse) {
+        throw new Error('Adapter does not support streaming')
+      }
+      for await (const event of adapter.parseStreamingResponse(
+        new Response(streamData),
+      )) {
+        events.push(event)
+      }
+
+      const toolRequests = events.filter(event => event.type === 'tool_request')
+      expect(toolRequests).toEqual([
+        {
+          type: 'tool_request',
+          tool: {
+            id: 'call_123',
+            name: 'read_file',
+            input: '{"path":"README.md"}',
+          },
+        },
+      ])
+
+      async function* replayEvents(evts: any[]) {
+        for (const evt of evts) {
+          yield evt
+        }
+      }
+
+      const { assistantMessage } = await processResponsesStream(
+        replayEvents(events),
+        Date.now(),
+        'resp-tool-stream-fallback',
+      )
+
+      expect(assistantMessage.message.content).toContainEqual({
+        type: 'tool_use',
+        id: 'call_123',
+        name: 'read_file',
+        input: { path: 'README.md' },
+      })
+      expect(assistantMessage.responseId).toBe('resp-tool-stream')
+    })
+
     test('streaming failure before assistant output rejects', async () => {
       const adapter = ModelAdapterFactory.createAdapter(testModel)
       const streamData = [

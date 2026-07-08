@@ -50,6 +50,7 @@ export interface ReasoningStreamingContext {
   pendingSummaryParagraph: boolean
   thinkingContent?: string
   currentPartIndex?: number
+  seenToolCallIds?: Set<string>
 }
 
 // Unified request parameters

@@ -9,10 +9,11 @@ import { getModelFeatures } from './modelFeatures'
 import { getCompletionWithProfile } from './completion'
 
 /**
- * Enhanced getCompletionWithProfile that supports GPT-5 Responses API.
+ * Legacy Chat Completions fallback for GPT-5-compatible profiles.
  *
- * Today we route GPT-5 requests through Chat Completions, with additional
- * compatibility adjustments for third-party providers.
+ * Official OpenAI GPT-5 requests are routed through the Responses adapter
+ * before reaching this helper. Third-party providers can still use this path
+ * when they expose OpenAI-compatible Chat Completions only.
  */
 export async function getGPT5CompletionWithProfile(
   modelProfile: unknown,
@@ -54,13 +55,13 @@ export async function getGPT5CompletionWithProfile(
     debugLogger.api('GPT5_STREAMING_MODE', {
       model: opts.model,
       baseURL: profile?.baseURL || 'official',
-      reason: 'responses_api_no_streaming',
+      reason: 'legacy_chat_completions_fallback',
       requestId: getCurrentRequest()?.id,
     })
 
     debugLogger.api('GPT5_STREAMING_FALLBACK_TO_CHAT_COMPLETIONS', {
       model: opts.model,
-      reason: 'responses_api_no_streaming',
+      reason: 'legacy_chat_completions_fallback',
     })
   }
 
@@ -68,7 +69,9 @@ export async function getGPT5CompletionWithProfile(
     model: opts.model,
     baseURL: profile?.baseURL || 'official',
     provider: profile?.provider,
-    reason: isOfficialOpenAI ? 'streaming_or_fallback' : 'third_party_provider',
+    reason: isOfficialOpenAI
+      ? 'legacy_chat_completions_fallback'
+      : 'third_party_provider',
     requestId: getCurrentRequest()?.id,
   })
 

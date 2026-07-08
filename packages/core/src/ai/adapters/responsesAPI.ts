@@ -168,6 +168,41 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
     })
   }
 
+  private getFunctionCallFromStreamingEvent(parsed: any): {
+    id: string
+    name: string
+    input: string
+  } | null {
+    const item =
+      parsed.type === 'response.function_call_arguments.done'
+        ? parsed.item
+        : parsed.type === 'response.output_item.done'
+          ? parsed.item
+          : null
+
+    if (!item || item.type !== 'function_call') {
+      return null
+    }
+
+    const callId = item.call_id || item.id
+    const name = item.name
+    const args = item.arguments
+
+    if (
+      typeof callId !== 'string' ||
+      typeof name !== 'string' ||
+      typeof args !== 'string'
+    ) {
+      return null
+    }
+
+    return {
+      id: callId,
+      name,
+      input: args,
+    }
+  }
+
   // Override parseResponse to handle Response API directly without double conversion
   async parseResponse(response: any): Promise<UnifiedResponse> {
     // Check if this is a streaming response (has ReadableStream body)
@@ -287,27 +322,20 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
       }
     }
 
-    // Handle tool calls (Responses API format)
-    if (parsed.type === 'response.output_item.done') {
-      const item = parsed.item || {}
-      if (item.type === 'function_call') {
-        const callId = item.call_id || item.id
-        const name = item.name
-        const args = item.arguments
+    // Handle tool calls (Responses API streaming format)
+    const functionCall = this.getFunctionCallFromStreamingEvent(parsed)
+    if (functionCall) {
+      const seenToolCallIds =
+        reasoningContext?.seenToolCallIds ??
+        (reasoningContext
+          ? (reasoningContext.seenToolCallIds = new Set<string>())
+          : undefined)
 
-        if (
-          typeof callId === 'string' &&
-          typeof name === 'string' &&
-          typeof args === 'string'
-        ) {
-          yield {
-            type: 'tool_request',
-            tool: {
-              id: callId,
-              name: name,
-              input: args,
-            },
-          }
+      if (!seenToolCallIds?.has(functionCall.id)) {
+        seenToolCallIds?.add(functionCall.id)
+        yield {
+          type: 'tool_request',
+          tool: functionCall,
         }
       }
     }
@@ -319,8 +347,7 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
 
       // Add reasoning tokens if available in Responses API format
       if (usage.output_tokens_details?.reasoning_tokens) {
-        normalizedUsage.reasoning =
-          usage.output_tokens_details.reasoning_tokens
+        normalizedUsage.reasoning = usage.output_tokens_details.reasoning_tokens
       }
 
       yield {
