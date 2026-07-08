@@ -347,6 +347,7 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
   >(null)
 
   const [toolsLoading, setToolsLoading] = useState(false)
+  const [toolsError, setToolsError] = useState<string | null>(null)
   const [tools, setTools] = useState<Tool[]>([])
   const [toolDetailDescription, setToolDetailDescription] = useState<
     string | null
@@ -495,6 +496,8 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
     route.kind === 'auth'
       ? (servers.find(s => s.name === route.serverName) ?? null)
       : null
+  const activeServerName = activeServer?.name ?? null
+  const activeServerStatus = activeServer?.status ?? null
 
   const visibleOptionCount = (() => {
     if (route.kind === 'list') {
@@ -547,15 +550,19 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
 
   useEffect(() => {
     if (route.kind !== 'server') return
-    if (!activeServer) return
+    if (activeServerName === null) return
+
+    let didCancel = false
 
     setActiveServerCounts(null)
     setActiveServerCountsLoading(true)
     setActiveServerCountsError(null)
 
-    if (activeServer.status !== 'connected') {
+    if (activeServerStatus !== 'connected') {
       setActiveServerCountsLoading(false)
-      return
+      return () => {
+        didCancel = true
+      }
     }
 
     ;(async () => {
@@ -566,60 +573,80 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
           getMCPResources(),
         ])
         const toolsForServer = allTools.filter(t =>
-          t.userFacingName().startsWith(`${activeServer.name} - `),
+          t.userFacingName().startsWith(`${activeServerName} - `),
         )
         const promptsForServer = allPrompts.filter(p =>
-          p.userFacingName().startsWith(`${activeServer.name}:`),
+          p.userFacingName().startsWith(`${activeServerName}:`),
         )
         const resourcesForServer = allResources.filter(
-          resource => resource.server === activeServer.name,
+          resource => resource.server === activeServerName,
         )
 
+        if (didCancel) return
         setActiveServerCounts({
           tools: toolsForServer.length,
           prompts: promptsForServer.length,
           resources: resourcesForServer.length,
         })
       } catch (err) {
+        if (didCancel) return
         setActiveServerCountsError(
           err instanceof Error ? err.message : String(err),
         )
       } finally {
-        setActiveServerCountsLoading(false)
+        if (!didCancel) setActiveServerCountsLoading(false)
       }
     })()
+
+    return () => {
+      didCancel = true
+    }
   }, [
     route.kind,
     route.kind === 'server' ? route.serverName : null,
-    activeServer,
+    activeServerName,
+    activeServerStatus,
   ])
 
   useEffect(() => {
     if (route.kind !== 'tools') return
-    if (!activeServer) return
+    if (activeServerName === null) return
+
+    let didCancel = false
 
     setTools([])
     setToolsLoading(true)
+    setToolsError(null)
     ;(async () => {
       try {
         const allTools = await getMCPTools()
         const toolsForServer = allTools.filter(t =>
-          t.userFacingName().startsWith(`${activeServer.name} - `),
+          t.userFacingName().startsWith(`${activeServerName} - `),
         )
+        if (didCancel) return
         setTools(toolsForServer)
+      } catch (err) {
+        if (didCancel) return
+        setToolsError(err instanceof Error ? err.message : String(err))
       } finally {
-        setToolsLoading(false)
+        if (!didCancel) setToolsLoading(false)
       }
     })()
+
+    return () => {
+      didCancel = true
+    }
   }, [
     route.kind,
     route.kind === 'tools' ? route.serverName : null,
-    activeServer,
+    activeServerName,
   ])
 
   useEffect(() => {
     if (route.kind !== 'resources') return
-    if (!activeServer) return
+    if (activeServerName === null) return
+
+    let didCancel = false
 
     setResources([])
     setResourcesLoading(true)
@@ -628,23 +655,30 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
       try {
         const allResources = await getMCPResources()
         const resourcesForServer = allResources.filter(
-          resource => resource.server === activeServer.name,
+          resource => resource.server === activeServerName,
         )
+        if (didCancel) return
         setResources(resourcesForServer)
       } catch (err) {
+        if (didCancel) return
         setResourcesError(err instanceof Error ? err.message : String(err))
       } finally {
-        setResourcesLoading(false)
+        if (!didCancel) setResourcesLoading(false)
       }
     })()
+
+    return () => {
+      didCancel = true
+    }
   }, [
     route.kind,
     route.kind === 'resources' ? route.serverName : null,
-    activeServer,
+    activeServerName,
   ])
 
   useEffect(() => {
     if (route.kind !== 'tool') return
+    let didCancel = false
     setToolDetailDescription(null)
     ;(async () => {
       try {
@@ -652,11 +686,17 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
           typeof route.tool.description === 'function'
             ? await route.tool.description()
             : (route.tool.cachedDescription ?? '')
+        if (didCancel) return
         setToolDetailDescription(desc)
       } catch {
+        if (didCancel) return
         setToolDetailDescription('Failed to load description')
       }
     })()
+
+    return () => {
+      didCancel = true
+    }
   }, [route.kind, route.kind === 'tool' ? route.tool.name : null])
 
   const toggleDisabled = useCallback(
@@ -1033,6 +1073,10 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
           {toolsLoading ? (
             <Text dimColor wrap="truncate-end">
               Loading tools…
+            </Text>
+          ) : toolsError ? (
+            <Text color={theme.error} wrap="wrap">
+              Error: {toolsError}
             </Text>
           ) : tools.length === 0 ? (
             <Text dimColor wrap="truncate-end">

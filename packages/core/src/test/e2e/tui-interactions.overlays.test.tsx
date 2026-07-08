@@ -240,6 +240,20 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
 
       expect(h.getOutput()).toContain('Loading actions...')
 
+      h.stdin.write('\x1b')
+      await h.wait(250)
+      expect(h.getOutput()).toContain('srv')
+
+      h.clearOutput()
+      h.stdin.write('\r')
+      await h.wait(100)
+      const reenteredLoadingOutput = h.getOutput()
+      expect(reenteredLoadingOutput).toContain('Loading actions...')
+      expect(reenteredLoadingOutput).toContain('Capabilities:')
+      expect(reenteredLoadingOutput).toContain('loading...')
+      expect(reenteredLoadingOutput).not.toContain('Resources: 1 resources')
+      expect(reenteredLoadingOutput).not.toContain('1. View resources')
+
       h.stdin.write('\r')
       await h.wait(150)
 
