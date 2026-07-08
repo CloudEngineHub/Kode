@@ -18,6 +18,19 @@ function expectContrastAtLeast(
   expect(ratio ?? 0).toBeGreaterThanOrEqual(minRatio)
 }
 
+function expectContrastBetween(
+  foreground: string,
+  background: string,
+  minRatio: number,
+  maxRatio: number,
+): void {
+  const ratio = getThemeContrastRatio(foreground, background)
+
+  expect(ratio).toBeNumber()
+  expect(ratio ?? 0).toBeGreaterThanOrEqual(minRatio)
+  expect(ratio ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(maxRatio)
+}
+
 describe('theme contrast adaptation', () => {
   beforeEach(() => {
     setThemeContrastBackgroundColor(undefined)
@@ -27,27 +40,28 @@ describe('theme contrast adaptation', () => {
     setThemeContrastBackgroundColor(undefined)
   })
 
-  it('raises text and border contrast against dark terminal backgrounds', () => {
+  it('keeps visual hierarchy against dark terminal backgrounds', () => {
     const base = getTheme('dark')
     const theme = createContrastAwareTheme(base, '#000000')
 
-    expect(theme.secondaryText).not.toBe(base.secondaryText)
     expect(theme.noting).not.toBe(base.noting)
     expect(theme.diff).toEqual(base.diff)
     expectContrastAtLeast(theme.text, '#000000', 4.5)
-    expectContrastAtLeast(theme.secondaryText, '#000000', 4.5)
-    expectContrastAtLeast(theme.noting, '#000000', 4.5)
-    expectContrastAtLeast(theme.secondaryBorder, '#000000', 3)
+    expectContrastBetween(theme.kode, '#000000', 3.6, 6.4)
+    expectContrastBetween(theme.secondaryText, '#000000', 3, 4.2)
+    expectContrastBetween(theme.noting, '#000000', 3, 4.2)
+    expectContrastBetween(theme.secondaryBorder, '#000000', 2, 3.2)
   })
 
-  it('darkens low contrast theme colors against light terminal backgrounds', () => {
+  it('preserves primary and muted levels against light terminal backgrounds', () => {
     const base = getTheme('dark')
     const theme = createContrastAwareTheme(base, '#ffffff')
 
     expect(theme.text).not.toBe(base.text)
     expect(theme.kode).not.toBe(base.kode)
     expectContrastAtLeast(theme.text, '#ffffff', 4.5)
-    expectContrastAtLeast(theme.kode, '#ffffff', 4.5)
+    expectContrastBetween(theme.kode, '#ffffff', 3.6, 6.4)
+    expectContrastBetween(theme.secondaryText, '#ffffff', 3, 4.2)
     expectContrastAtLeast(theme.inputBorder, '#ffffff', 3)
   })
 
@@ -58,7 +72,7 @@ describe('theme contrast adaptation', () => {
 
     expect(getThemeContrastBackgroundColor()).toBe('#ffffff')
     expectContrastAtLeast(theme.text, '#ffffff', 4.5)
-    expectContrastAtLeast(theme.secondaryText, '#ffffff', 4.5)
+    expectContrastBetween(theme.secondaryText, '#ffffff', 3, 4.2)
 
     setThemeContrastBackgroundColor(undefined)
     expect(getTheme('dark').secondaryText).toBe('#606060')

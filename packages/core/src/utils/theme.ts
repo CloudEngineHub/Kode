@@ -35,30 +35,51 @@ type Rgb = {
 
 type ThemeColorKey = Exclude<keyof Theme, 'diff'>
 
-const MIN_TEXT_CONTRAST_RATIO = 4.5
-const MIN_UI_CONTRAST_RATIO = 3
+type ContrastRange = {
+  min: number
+  max?: number
+}
 
-const TEXT_CONTRAST_FIELDS = [
-  'bashBorder',
-  'kode',
-  'noting',
-  'notingBorder',
-  'permission',
-  'autoAccept',
-  'planMode',
+const PRIMARY_TEXT_CONTRAST: ContrastRange = { min: 4.5, max: 10 }
+const STATUS_TEXT_CONTRAST: ContrastRange = { min: 4.5, max: 9 }
+const ACCENT_TEXT_CONTRAST: ContrastRange = { min: 3.6, max: 6.4 }
+const MUTED_TEXT_CONTRAST: ContrastRange = { min: 3, max: 4.2 }
+const CONTROL_BORDER_CONTRAST: ContrastRange = { min: 3, max: 5.5 }
+const SUBTLE_BORDER_CONTRAST: ContrastRange = { min: 2, max: 3.2 }
+
+const PRIMARY_TEXT_FIELDS = [
   'text',
-  'secondaryText',
-  'suggestion',
+  'primary',
+] as const satisfies readonly ThemeColorKey[]
+
+const STATUS_TEXT_FIELDS = [
+  'permission',
   'success',
   'error',
   'warning',
-  'primary',
+] as const satisfies readonly ThemeColorKey[]
+
+const ACCENT_TEXT_FIELDS = [
+  'bashBorder',
+  'kode',
+  'notingBorder',
+  'autoAccept',
+  'planMode',
+  'suggestion',
+] as const satisfies readonly ThemeColorKey[]
+
+const MUTED_TEXT_FIELDS = [
+  'noting',
+  'secondaryText',
   'secondary',
 ] as const satisfies readonly ThemeColorKey[]
 
-const UI_CONTRAST_FIELDS = [
-  'secondaryBorder',
+const CONTROL_BORDER_FIELDS = [
   'inputBorder',
+] as const satisfies readonly ThemeColorKey[]
+
+const SUBTLE_BORDER_FIELDS = [
+  'secondaryBorder',
 ] as const satisfies readonly ThemeColorKey[]
 
 // ============================================================================
@@ -551,7 +572,7 @@ function mixColor(from: Rgb, to: Rgb, amount: number): Rgb {
   }
 }
 
-function ensureContrast(
+function increaseContrast(
   foregroundValue: string,
   background: Rgb,
   minRatio: number,
@@ -588,6 +609,60 @@ function ensureContrast(
   return toHexColor(best)
 }
 
+function reduceContrast(
+  foregroundValue: string,
+  background: Rgb,
+  minRatio: number,
+  maxRatio: number,
+): string {
+  const foreground = parseHexColor(foregroundValue)
+  if (!foreground) return foregroundValue
+  if (contrastRatio(foreground, background) <= maxRatio) return foregroundValue
+
+  let low = 0
+  let high = 1
+  let best = foreground
+
+  for (let i = 0; i < 24; i += 1) {
+    const mid = (low + high) / 2
+    const candidate = mixColor(foreground, background, mid)
+    const rounded = parseHexColor(toHexColor(candidate)) ?? candidate
+    const ratio = contrastRatio(rounded, background)
+
+    if (ratio > maxRatio) {
+      low = mid
+    } else if (ratio >= minRatio) {
+      best = rounded
+      high = mid
+    } else {
+      high = mid
+    }
+  }
+
+  return toHexColor(best)
+}
+
+function adjustContrast(
+  foregroundValue: string,
+  background: Rgb,
+  range: ContrastRange,
+): string {
+  const raised = increaseContrast(foregroundValue, background, range.min)
+  if (!range.max) return raised
+  return reduceContrast(raised, background, range.min, range.max)
+}
+
+function adjustThemeFields(
+  theme: Theme,
+  background: Rgb,
+  fields: readonly ThemeColorKey[],
+  range: ContrastRange,
+): void {
+  for (const field of fields) {
+    theme[field] = adjustContrast(theme[field], background, range)
+  }
+}
+
 export function setThemeContrastBackgroundColor(
   backgroundColor: string | undefined,
 ): void {
@@ -610,20 +685,42 @@ export function createContrastAwareTheme(
   if (!background) return theme
 
   const adjusted: Theme = { ...theme }
-  for (const field of TEXT_CONTRAST_FIELDS) {
-    adjusted[field] = ensureContrast(
-      adjusted[field],
-      background,
-      MIN_TEXT_CONTRAST_RATIO,
-    )
-  }
-  for (const field of UI_CONTRAST_FIELDS) {
-    adjusted[field] = ensureContrast(
-      adjusted[field],
-      background,
-      MIN_UI_CONTRAST_RATIO,
-    )
-  }
+  adjustThemeFields(
+    adjusted,
+    background,
+    PRIMARY_TEXT_FIELDS,
+    PRIMARY_TEXT_CONTRAST,
+  )
+  adjustThemeFields(
+    adjusted,
+    background,
+    STATUS_TEXT_FIELDS,
+    STATUS_TEXT_CONTRAST,
+  )
+  adjustThemeFields(
+    adjusted,
+    background,
+    ACCENT_TEXT_FIELDS,
+    ACCENT_TEXT_CONTRAST,
+  )
+  adjustThemeFields(
+    adjusted,
+    background,
+    MUTED_TEXT_FIELDS,
+    MUTED_TEXT_CONTRAST,
+  )
+  adjustThemeFields(
+    adjusted,
+    background,
+    CONTROL_BORDER_FIELDS,
+    CONTROL_BORDER_CONTRAST,
+  )
+  adjustThemeFields(
+    adjusted,
+    background,
+    SUBTLE_BORDER_FIELDS,
+    SUBTLE_BORDER_CONTRAST,
+  )
 
   return adjusted
 }
