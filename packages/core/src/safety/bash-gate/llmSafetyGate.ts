@@ -1,6 +1,6 @@
 import { logError } from '#core/utils/log'
 import { createUserMessage } from '#core/utils/messages'
-import type { CommandSource } from '#tools/tools/system/BashTool/commandSource'
+import type { CommandSource } from '#protocol/commandSource'
 import {
   getBashGateFindings,
   shouldReviewBashCommand,

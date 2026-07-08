@@ -1,4 +1,4 @@
-import type { CommandSource } from '#tools/tools/system/BashTool/commandSource'
+import type { CommandSource } from '#protocol/commandSource'
 import type { BashGateFinding } from './bashGateRules'
 
 export function buildGateSystemPrompt(): string[] {
