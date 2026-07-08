@@ -22,6 +22,9 @@ const disabledRules = {
   'no-case-declarations': 'off',
   'no-useless-escape': 'off',
   'no-prototype-builtins': 'off',
+  'no-unassigned-vars': 'off',
+  'no-useless-assignment': 'off',
+  'preserve-caught-error': 'off',
   'require-yield': 'off',
   '@typescript-eslint/no-unused-vars': 'off',
   '@typescript-eslint/no-explicit-any': 'off',
@@ -30,10 +33,11 @@ const disabledRules = {
 export default [
   {
     ignores: [
-      'dist/**',
+      '**/dist/**',
       'node_modules/**',
       'vendor/**',
       'coverage/**',
+      'apps/server/static/**',
       '.tmp/**',
       '.tmp-*/**',
       '.tmp-kode-config/**',

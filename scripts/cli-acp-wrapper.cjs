@@ -16,7 +16,6 @@ function tryResolveNativeBinaryFromOptionalDeps() {
 
   for (const pkgName of candidates) {
     try {
-      // eslint-disable-next-line import/no-dynamic-require
       const mod = require(pkgName)
       const binPath = mod?.kodePath
       if (typeof binPath === 'string' && fs.existsSync(binPath)) {

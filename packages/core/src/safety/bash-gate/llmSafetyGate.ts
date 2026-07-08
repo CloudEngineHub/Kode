@@ -26,10 +26,7 @@ const DEFAULT_GATE_TIMEOUT_MS = 300_000
 const DEFAULT_GATE_STOP_SEQUENCES = ['</final>']
 
 export type BashLlmGateErrorType =
-  | 'api'
-  | 'timeout'
-  | 'invalid_output'
-  | 'unknown'
+  'api' | 'timeout' | 'invalid_output' | 'unknown'
 
 type GateQueryFn = (args: {
   systemPrompt: string[]

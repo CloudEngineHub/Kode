@@ -268,10 +268,12 @@ function FilesystemPermissionRequestImpl({
           <Box flexDirection="column">
             <Text wrap="truncate-end">
               {userFacingName}(
-              {toolUseConfirm.tool.renderToolUseMessage(
-                toolUseConfirm.input as never,
-                { verbose },
-              ) as React.ReactNode}
+              {
+                toolUseConfirm.tool.renderToolUseMessage(
+                  toolUseConfirm.input as never,
+                  { verbose },
+                ) as React.ReactNode
+              }
               )
             </Text>
             <PermissionRequestDetails toolUseConfirm={toolUseConfirm} />

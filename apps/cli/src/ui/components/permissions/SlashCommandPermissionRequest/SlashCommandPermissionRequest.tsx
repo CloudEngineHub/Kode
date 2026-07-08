@@ -64,9 +64,11 @@ export function SlashCommandPermissionRequest({
           <Box flexDirection="column">
             <Text wrap="truncate-end">
               {toolUseConfirm.tool.userFacingName?.() || 'SlashCommand'}(
-              {toolUseConfirm.tool.renderToolUseMessage(toolUseConfirm.input, {
-                verbose,
-              }) as React.ReactNode}
+              {
+                toolUseConfirm.tool.renderToolUseMessage(toolUseConfirm.input, {
+                  verbose,
+                }) as React.ReactNode
+              }
               )
             </Text>
             <Text dimColor wrap="truncate-end">

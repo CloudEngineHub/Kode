@@ -21,10 +21,7 @@ export type HistoryEndEvent = {
 }
 
 export type AgentEvent =
-  | SdkMessage
-  | PermissionRequestEvent
-  | HistoryBeginEvent
-  | HistoryEndEvent
+  SdkMessage | PermissionRequestEvent | HistoryBeginEvent | HistoryEndEvent
 
 const ContentBlockSchema = z
   .object({

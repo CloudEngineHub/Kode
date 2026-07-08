@@ -49,9 +49,11 @@ export function SkillPermissionRequest({
           <Box flexDirection="column">
             <Text wrap="truncate-end">
               {toolUseConfirm.tool.userFacingName?.() || 'Skill'}(
-              {toolUseConfirm.tool.renderToolUseMessage(toolUseConfirm.input, {
-                verbose,
-              }) as React.ReactNode}
+              {
+                toolUseConfirm.tool.renderToolUseMessage(toolUseConfirm.input, {
+                  verbose,
+                }) as React.ReactNode
+              }
               )
             </Text>
             <Text dimColor wrap="truncate-end">

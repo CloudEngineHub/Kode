@@ -90,10 +90,7 @@ export type ToolCallUpdatePermissionRequest = Omit<
 >
 
 export type PermissionOptionKind =
-  | 'allow_once'
-  | 'allow_always'
-  | 'reject_once'
-  | 'reject_always'
+  'allow_once' | 'allow_always' | 'reject_once' | 'reject_always'
 
 export type PermissionOption = {
   optionId: string

@@ -24,8 +24,7 @@ function mapFinishReasonToStopReason(
 export function convertAnthropicMessagesToOpenAIMessages(
   messages: (UserMessage | AssistantMessage)[],
 ): (
-  | OpenAI.ChatCompletionMessageParam
-  | OpenAI.ChatCompletionToolMessageParam
+  OpenAI.ChatCompletionMessageParam | OpenAI.ChatCompletionToolMessageParam
 )[] {
   return convertAnthropicMessagesToOpenAIMessagesUtil(messages as any)
 }

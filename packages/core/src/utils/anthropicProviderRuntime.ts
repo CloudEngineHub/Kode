@@ -8,10 +8,7 @@ function isTruthyEnv(value: string | undefined): boolean {
 }
 
 export type AnthropicProviderRuntime =
-  | 'bedrock'
-  | 'vertex'
-  | 'foundry'
-  | 'firstParty'
+  'bedrock' | 'vertex' | 'foundry' | 'firstParty'
 
 export function getAnthropicProviderRuntime(): AnthropicProviderRuntime {
   if (

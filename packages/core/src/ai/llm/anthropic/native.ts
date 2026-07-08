@@ -49,9 +49,10 @@ import { getModelInputTokenCostUSD, getModelOutputTokenCostUSD } from './cost'
 export { getAnthropicClient, resetAnthropicClient }
 export { assistantMessageToMessageParam, userMessageToMessageParam }
 
-type AnthropicMessageCreateParams = Anthropic.Beta.Messages.MessageCreateParams & {
-  extra_headers?: Record<string, string>
-}
+type AnthropicMessageCreateParams =
+  Anthropic.Beta.Messages.MessageCreateParams & {
+    extra_headers?: Record<string, string>
+  }
 
 function traceAnthropicQuery(args: {
   streamMode: boolean

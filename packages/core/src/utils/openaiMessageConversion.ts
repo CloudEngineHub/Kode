@@ -135,8 +135,7 @@ function formatHistoricalToolResult(toolUseId: string, text: string): string {
 export function convertAnthropicMessagesToOpenAIMessages(
   messages: AnthropicLikeMessage[],
 ): (
-  | OpenAI.ChatCompletionMessageParam
-  | OpenAI.ChatCompletionToolMessageParam
+  OpenAI.ChatCompletionMessageParam | OpenAI.ChatCompletionToolMessageParam
 )[] {
   const parsedMessages = parseMessages(messages)
   const activeNativeToolResultIds = getActiveNativeToolResultIds(parsedMessages)

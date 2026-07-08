@@ -17,9 +17,7 @@ import { resolveDataRoots } from './dataRoots'
 import { legacyConfigPathInProject } from './compat/legacyPaths'
 
 export type SettingsDestination =
-  | 'localSettings'
-  | 'projectSettings'
-  | 'userSettings'
+  'localSettings' | 'projectSettings' | 'userSettings'
 
 export type SettingsFile = {
   [key: string]: unknown

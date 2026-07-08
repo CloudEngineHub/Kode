@@ -25,8 +25,7 @@ import {
 } from './kodeAgentSessionLog/slug'
 
 type PersistTarget =
-  | { kind: 'session'; sessionId: string }
-  | { kind: 'agent'; agentId: string }
+  { kind: 'session'; sessionId: string } | { kind: 'agent'; agentId: string }
 
 type PersistableUserMessage = {
   type: 'user'

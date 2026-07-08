@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto'
 import type { UUID } from 'crypto'
-import 'dotenv/config'
+import { config as loadDotenv } from 'dotenv'
 import type { AssistantMessage, UserMessage } from '#core/query'
 import { resolveToolDescription, type Tool } from '#core/tooling/Tool'
 import { queryOpenAI } from '#core/ai/llm/openai'
@@ -43,6 +43,8 @@ import {
   PROMPT_TOO_LONG_ERROR_MESSAGE,
 } from './constants'
 export { fetchAnthropicModels, verifyApiKey } from './llm/apiKey'
+
+loadDotenv({ quiet: true })
 
 // KodeContext helpers are implemented in `./kodeContext` to keep this module lean.
 export { generateKodeContext, refreshKodeContext }

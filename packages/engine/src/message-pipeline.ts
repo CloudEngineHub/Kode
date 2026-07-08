@@ -7,16 +7,12 @@ import { emitReminderEvent } from '#core/services/systemReminder'
 import { addNotification } from '#core/services/notificationCenter'
 import '#core/services/workspaceSafety'
 import { markPhase } from '#core/utils/debugLogger'
-import {
-  createAssistantMessage,
-} from './messages/create'
+import { createAssistantMessage } from './messages/create'
 import {
   INTERRUPT_MESSAGE,
   INTERRUPT_MESSAGE_FOR_TOOL_USE,
 } from './messages/constants'
-import {
-  normalizeMessagesForAPI,
-} from './messages/api'
+import { normalizeMessagesForAPI } from './messages/api'
 import {
   getPlanModeSystemPromptAdditions,
   hydratePlanSlugFromMessages,

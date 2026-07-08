@@ -16,8 +16,7 @@ export const SAFE_SHELL_SEPARATORS = new Set([
 ])
 
 export type ParsedShellTokens =
-  | { success: true; tokens: ParseEntry[] }
-  | { success: false; error: string }
+  { success: true; tokens: ParseEntry[] } | { success: false; error: string }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object'

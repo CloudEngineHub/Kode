@@ -67,10 +67,12 @@ export function FallbackPermissionRequest({
           <Box flexDirection="column">
             <Text wrap="truncate-end">
               {userFacingName}(
-              {toolUseConfirm.tool.renderToolUseMessage(
-                toolUseConfirm.input as never,
-                { verbose },
-              ) as React.ReactNode}
+              {
+                toolUseConfirm.tool.renderToolUseMessage(
+                  toolUseConfirm.input as never,
+                  { verbose },
+                ) as React.ReactNode
+              }
               )
               {originalUserFacingName.endsWith(' (MCP)') ? (
                 <Text dimColor> (MCP)</Text>

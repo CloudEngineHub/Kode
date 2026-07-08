@@ -7,10 +7,7 @@ import type { AssistantMessage, BinaryFeedbackResult } from '#core/query'
 import { isEqual, zip } from 'lodash-es'
 
 export type BinaryFeedbackChoice =
-  | 'prefer-left'
-  | 'prefer-right'
-  | 'neither'
-  | 'no-preference'
+  'prefer-left' | 'prefer-right' | 'neither' | 'no-preference'
 
 export type BinaryFeedbackChoose = (choice: BinaryFeedbackChoice) => void
 

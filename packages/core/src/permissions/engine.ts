@@ -144,7 +144,8 @@ function buildEffectiveContext(args: {
   // Per-command allowedTools (e.g. `Read(~/**)`) must participate in the same
   // rule engine as persisted permission rules.
   if (args.commandAllowedTools.length > 0) {
-    const existing = effectiveToolPermissionContext.alwaysAllowRules.command ?? []
+    const existing =
+      effectiveToolPermissionContext.alwaysAllowRules.command ?? []
     effectiveToolPermissionContext.alwaysAllowRules.command = [
       ...new Set([...existing, ...args.commandAllowedTools]),
     ]

@@ -124,9 +124,7 @@ export function normalizeImageMediaType(
 }
 
 export type AnthropicContentBlockLike =
-  | ContentBlock
-  | ContentBlockParam
-  | ToolUseLikeBlockParam
+  ContentBlock | ContentBlockParam | ToolUseLikeBlockParam
 
 function objectValue(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object'

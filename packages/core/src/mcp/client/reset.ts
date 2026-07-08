@@ -14,8 +14,7 @@ async function closeClient(client: WrappedClient): Promise<void> {
 
 export async function resetMcpConnections(): Promise<void> {
   const cached = (getClients as any).cache?.get?.(undefined) as
-    | Promise<WrappedClient[]>
-    | undefined
+    Promise<WrappedClient[]> | undefined
 
   if (cached) {
     try {

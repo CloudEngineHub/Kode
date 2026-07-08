@@ -1,1 +1,4 @@
-export { buildGateSystemPrompt, buildGateUserInput } from '#core/safety/bash-gate/llmSafetyGatePrompt'
+export {
+  buildGateSystemPrompt,
+  buildGateUserInput,
+} from '#core/safety/bash-gate/llmSafetyGatePrompt'

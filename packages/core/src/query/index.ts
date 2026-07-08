@@ -111,7 +111,10 @@ export type EngineCanUseToolFn = InterfaceCanUseToolFn<
 type NormalizedUserMessage = {
   message: {
     content: [
-      TextBlockParam | ImageBlockParam | ToolUseBlockParam | ToolResultBlockParam,
+      | TextBlockParam
+      | ImageBlockParam
+      | ToolUseBlockParam
+      | ToolResultBlockParam,
     ]
     role: 'user'
   }
@@ -120,9 +123,7 @@ type NormalizedUserMessage = {
 }
 
 export type NormalizedMessage =
-  | NormalizedUserMessage
-  | AssistantMessage
-  | ProgressMessage
+  NormalizedUserMessage | AssistantMessage | ProgressMessage
 
 export type ProgressMessage = {
   content: AssistantMessage
