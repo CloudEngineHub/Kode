@@ -31,7 +31,13 @@ export function useMouse(
     return () => {
       unsubscribeMouse(stableHandler)
     }
-  }, [active, priority, stableHandler, subscribeMouse, unsubscribeMouse])
+  }, [active, stableHandler, subscribeMouse, unsubscribeMouse])
+
+  useEffect(() => {
+    if (!active) return
+    // Update priority without toggling terminal mouse tracking.
+    subscribeMouse(stableHandler, { priority })
+  }, [active, priority, stableHandler, subscribeMouse])
 }
 
 function getNodeOffset(node: DOMElement): { left: number; top: number } {

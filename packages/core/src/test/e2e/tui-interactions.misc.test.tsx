@@ -17,6 +17,7 @@ import { KeypressProvider } from '#ui-ink/contexts/KeypressContext'
 import { createInkHarnessManager, createInkTestHarness } from './inkTestHarness'
 import { Select } from '#ui-ink/components/CustomSelect/select'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
+import { useMouse } from '#ui-ink/hooks/useMouse'
 
 const harnessManager = createInkHarnessManager()
 
@@ -778,6 +779,60 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     expect(h.getOutput()).toContain('default')
 
     h.stdin.write('x')
+    await h.wait(25)
+
+    expect(handledBy).toEqual(['dynamic', 'fallback'])
+  })
+
+  test('KeypressProvider: mouse priority can fall back to default on rerender', async () => {
+    const handledBy: string[] = []
+
+    function MousePriorityFallbackHarness(): React.ReactNode {
+      const [isElevated, setIsElevated] = useState(true)
+
+      useEffect(() => {
+        const timer = setTimeout(() => setIsElevated(false), 50)
+        return () => clearTimeout(timer)
+      }, [])
+
+      useMouse(
+        event => {
+          if (event.type !== 'press') return
+          handledBy.push('dynamic')
+          return true
+        },
+        { priority: isElevated ? 50 : undefined },
+      )
+
+      useMouse(
+        event => {
+          if (event.type !== 'press') return
+          handledBy.push('fallback')
+          return true
+        },
+        { priority: 0 },
+      )
+
+      return <Text>{isElevated ? 'elevated' : 'default'}</Text>
+    }
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <MousePriorityFallbackHarness />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    h.stdin.write('\x1b[<0;1;1M')
+    await h.wait(25)
+
+    expect(handledBy).toEqual(['dynamic'])
+
+    await h.wait(80)
+    expect(h.getOutput()).toContain('default')
+
+    h.stdin.write('\x1b[<0;1;1M')
     await h.wait(25)
 
     expect(handledBy).toEqual(['dynamic', 'fallback'])
