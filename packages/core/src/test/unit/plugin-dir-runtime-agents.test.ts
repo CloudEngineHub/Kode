@@ -8,7 +8,7 @@ import {
   clearAgentCache,
   getAgentByType,
   getAvailableAgentTypes,
-} from '#core/utils/agentLoader'
+} from '@kode/agent'
 import { __resetSessionPluginsForTests } from '#core/utils/sessionPlugins'
 import { setCwd } from '#core/utils/state'
 

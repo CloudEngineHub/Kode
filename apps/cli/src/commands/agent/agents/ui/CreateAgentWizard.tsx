@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react'
 import chalk from 'chalk'
-import type { AgentConfig } from '#core/utils/agentLoader'
+import type { AgentConfig } from '@kode/agent'
 import type { Tool } from '../tooling'
 import { getPrimaryAgentFilePath, saveAgent } from '../storage'
 import { openInEditor } from './utils'

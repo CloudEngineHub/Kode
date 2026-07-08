@@ -1,6 +1,6 @@
 import type { PermissionMode } from '#core/types/PermissionMode'
 import type { ToolPermissionContext } from '#core/types/toolPermissionContext'
-import type { AgentPermissionMode } from '#core/utils/agentLoader'
+import type { AgentPermissionMode } from '@kode/agent'
 
 export function normalizeAgentPermissionMode(
   mode: AgentPermissionMode | undefined,

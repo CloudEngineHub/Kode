@@ -1,4 +1,4 @@
-import type { AgentConfig, AgentSource } from '#core/utils/agentLoader'
+import type { AgentConfig, AgentSource } from '@kode/agent'
 
 export type AgentSourceFilter =
   | 'all'

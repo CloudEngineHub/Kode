@@ -3,12 +3,12 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-import { subscribeAgentReloads } from '#core/agent/events'
+import { subscribeAgentReloads } from '@kode/agent/events'
 import {
   clearAgentCache,
   startAgentWatcher,
   stopAgentWatcher,
-} from '#core/agent/loader'
+} from '@kode/agent/loader'
 import { getCwd, setCwd } from '#core/utils/state'
 
 function writeAgentFile(args: {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-import { getActiveAgents, type AgentConfig } from '#core/utils/agentLoader'
+import { getActiveAgents, type AgentConfig } from '@kode/agent'
 import { debug as debugLogger } from '#core/utils/debugLogger'
 import { logError } from '#core/utils/log'
 import type { UnifiedSuggestion } from '#cli-utils/completion/types'

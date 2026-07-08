@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-import { clearAgentCache, getAgentByType } from '#core/agent/loader'
+import { clearAgentCache, getAgentByType } from '@kode/agent/loader'
 import { getCwd, setCwd } from '#core/utils/state'
 
 function writeAgentFile(args: {

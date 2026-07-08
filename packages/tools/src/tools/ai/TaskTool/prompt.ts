@@ -3,7 +3,7 @@ import { getTools, getReadOnlyTools } from '#tools'
 import { FileWriteTool } from '#tools/tools/filesystem/FileWriteTool/FileWriteTool'
 import { GlobTool } from '#tools/tools/filesystem/GlobTool/GlobTool'
 import { FileReadTool } from '#tools/tools/filesystem/FileReadTool/FileReadTool'
-import { getActiveAgents } from '#core/utils/agentLoader'
+import { getActiveAgents } from '@kode/agent'
 
 const TASK_TOOL_NAME = 'Task'
 const TASK_OUTPUT_TOOL_NAME = 'TaskOutput'

@@ -20,14 +20,7 @@ export async function setup(cwd: string, safeMode?: boolean): Promise<void> {
   grantReadPermissionForOriginalDir()
 
   // Start watching agent configuration files for changes
-  // Try ESM-friendly path first (compiled dist), then fall back to extensionless (dev/tsx)
-  let agentLoader: any
-  try {
-    agentLoader = await import('#core/utils/agentLoader')
-  } catch {
-    agentLoader = await import('#core/utils/agentLoader')
-  }
-  const { startAgentWatcher } = agentLoader
+  const { startAgentWatcher } = await import('@kode/agent')
   await startAgentWatcher(() => {
     // Cache is already cleared in the watcher, just log
     debugLogger.info('AGENTS_HOT_RELOADED', { ok: true })

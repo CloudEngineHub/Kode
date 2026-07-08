@@ -5,7 +5,7 @@
  */
 
 import { emitReminderEvent } from '#core/services/systemReminder'
-import { getAvailableAgentTypes } from '#core/utils/agentLoader'
+import { getAvailableAgentTypes } from '@kode/agent'
 import { existsSync } from 'fs'
 import { resolve } from 'path'
 import { getCwd } from '#core/utils/state'

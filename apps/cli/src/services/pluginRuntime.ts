@@ -240,7 +240,7 @@ export async function configureSessionPlugins(args: {
   setSessionPlugins(plugins)
 
   // Ensure agents pick up plugin changes.
-  const { clearAgentCache } = await import('#core/utils/agentLoader')
+  const { clearAgentCache } = await import('@kode/agent')
   clearAgentCache()
 
   // Ensure commands pick up plugin changes without requiring /refresh-commands.

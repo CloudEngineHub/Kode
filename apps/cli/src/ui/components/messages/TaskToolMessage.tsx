@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react'
 import { Text } from 'ink'
-import { getAgentByType } from '#core/utils/agentLoader'
+import { getAgentByType } from '@kode/agent'
 import { getTheme } from '#core/utils/theme'
 
 interface Props {

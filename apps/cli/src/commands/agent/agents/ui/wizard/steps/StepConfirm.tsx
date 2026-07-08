@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react'
 import { Box, Text } from 'ink'
-import type { AgentConfig } from '#core/utils/agentLoader'
+import type { AgentConfig } from '@kode/agent'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import type { Tool } from '../../../tooling'
 import { validateAgentConfig, validateAgentType } from '../../../generation'

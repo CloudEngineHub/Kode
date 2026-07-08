@@ -6,7 +6,7 @@ import {
   getActiveAgents,
   getAllAgents,
   type AgentConfig,
-} from '#core/utils/agentLoader'
+} from '@kode/agent'
 import { getAvailableTools, type Tool } from '../tooling'
 import { deleteAgent } from '../storage'
 import { AgentMenu } from './AgentMenu'

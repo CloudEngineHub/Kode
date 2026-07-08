@@ -8,10 +8,7 @@ import { isDefaultSlowAndCapableModel } from '#core/utils/model'
 import { dateToFilename } from '#core/utils/log'
 import { assertMinVersion } from '#core/utils/autoUpdater'
 import { LEGACY_ENV } from '#core/compat/legacyEnv'
-import {
-  clearAgentCache,
-  setFlagAgentsFromCliJson,
-} from '#core/utils/agentLoader'
+import { clearAgentCache, setFlagAgentsFromCliJson } from '@kode/agent'
 import {
   setEnabledSettingSourcesFromCli,
   getCurrentProjectConfig,

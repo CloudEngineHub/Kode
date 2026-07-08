@@ -8,7 +8,7 @@ import {
   __resetAgentFileCacheStatsForTests,
   clearAgentCache,
   getAgentByType,
-} from '#core/agent/loader'
+} from '@kode/agent/loader'
 import { getCwd, setCwd } from '#core/utils/state'
 
 function writeAgentFile(args: {

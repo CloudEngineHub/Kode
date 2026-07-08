@@ -2,7 +2,7 @@ import { getAgentPrompt } from '#core/constants/prompts'
 import { getContext } from '#core/context'
 import { query } from '#core/query'
 import type { ToolUseContext } from '@kode/tool-interface/Tool'
-import { getAvailableAgentTypes, getAgentByType } from '#core/utils/agentLoader'
+import { getAvailableAgentTypes, getAgentByType } from '@kode/agent'
 import { generateAgentId } from '#core/utils/agentStorage'
 import {
   getAgentTranscript,

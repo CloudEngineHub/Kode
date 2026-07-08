@@ -4,7 +4,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import statusline from '#cli-commands/builtin/statusline'
 import { SlashCommandTool } from '#tools/tools/interaction/SlashCommandTool/SlashCommandTool'
-import { clearAgentCache, getAgentByType } from '#core/utils/agentLoader'
+import { clearAgentCache, getAgentByType } from '@kode/agent'
 import { setCwd } from '#core/utils/state'
 import type { ToolUseContext } from '#core/tooling/Tool'
 

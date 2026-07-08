@@ -9,7 +9,7 @@ import { join } from 'path'
 import { homedir } from 'os'
 
 import { getCwd } from '#core/utils/state'
-import type { AgentConfig } from '#core/utils/agentLoader'
+import type { AgentConfig } from '@kode/agent'
 import { debug as debugLogger } from '#core/utils/debugLogger'
 import { logError } from '#core/utils/log'
 import { LEGACY_CONFIG_DIRNAME } from '#core/compat/legacyPaths'

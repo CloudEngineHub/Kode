@@ -4,7 +4,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 
 import capabilities from '#cli-commands/builtin/capabilities'
-import { clearAgentCache, getAgentByType } from '#core/utils/agentLoader'
+import { clearAgentCache, getAgentByType } from '@kode/agent'
 import { setCwd } from '#core/utils/state'
 
 function extractFirstPromptText(prompt: any[]): string {
