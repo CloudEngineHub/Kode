@@ -56,7 +56,7 @@
         "undici": "^7.27.2",
         "which": "^6.0.0",
         "wrap-ansi": "^9.0.0",
-        "ws": "^8.18.3",
+        "ws": "8.21.0",
         "zod": "^3.25.76",
         "zod-to-json-schema": "^3.25.2",
       },
@@ -150,6 +150,23 @@
         "@kode/protocol": "workspace:*",
       },
     },
+    "packages/agent": {
+      "name": "@kode/agent",
+      "version": "0.0.0",
+      "dependencies": {
+        "@kode/config": "workspace:*",
+        "@kode/core": "workspace:*",
+      },
+    },
+    "packages/ai": {
+      "name": "@kode/ai",
+      "version": "0.0.0",
+      "dependencies": {
+        "@kode/core": "workspace:*",
+        "@kode/protocol": "workspace:*",
+        "@kode/tool-interface": "workspace:*",
+      },
+    },
     "packages/builtin-skills": {
       "name": "@kode/builtin-skills",
       "version": "0.0.0",
@@ -165,14 +182,55 @@
       "name": "@kode/config",
       "version": "0.0.0",
     },
+    "packages/context": {
+      "name": "@kode/context",
+      "version": "0.0.0",
+      "dependencies": {
+        "@kode/config": "workspace:*",
+        "@kode/runtime": "workspace:*",
+      },
+    },
     "packages/core": {
       "name": "@kode/core",
+      "version": "0.0.0",
+      "dependencies": {
+        "@kode/agent": "workspace:*",
+        "@kode/config": "workspace:*",
+        "@kode/context": "workspace:*",
+        "@kode/engine": "workspace:*",
+        "@kode/hooks": "workspace:*",
+        "@kode/permissions": "workspace:*",
+        "@kode/protocol": "workspace:*",
+        "@kode/runtime": "workspace:*",
+        "@kode/tool-interface": "workspace:*",
+        "@kode/tools": "workspace:*",
+      },
+    },
+    "packages/engine": {
+      "name": "@kode/engine",
+      "version": "0.0.0",
+      "dependencies": {
+        "@kode/core": "workspace:*",
+        "@kode/protocol": "workspace:*",
+        "@kode/tool-interface": "workspace:*",
+      },
+    },
+    "packages/hooks": {
+      "name": "@kode/hooks",
       "version": "0.0.0",
       "dependencies": {
         "@kode/config": "workspace:*",
         "@kode/protocol": "workspace:*",
         "@kode/runtime": "workspace:*",
-        "@kode/tools": "workspace:*",
+        "minimatch": "^10.2.5",
+        "shell-quote": "^1.8.4",
+      },
+    },
+    "packages/host": {
+      "name": "@kode/host",
+      "version": "0.0.0",
+      "dependencies": {
+        "@kode/tool-interface": "workspace:*",
       },
     },
     "packages/kode-bin-darwin-arm64": {
@@ -223,6 +281,15 @@
       "name": "@shareai-lab/kode-ripgrep-win32-x64",
       "version": "2.2.1",
     },
+    "packages/permissions": {
+      "name": "@kode/permissions",
+      "version": "0.0.0",
+      "dependencies": {
+        "@kode/config": "workspace:*",
+        "@kode/runtime": "workspace:*",
+        "@kode/tool-interface": "workspace:*",
+      },
+    },
     "packages/protocol": {
       "name": "@kode/protocol",
       "version": "0.0.0",
@@ -231,9 +298,17 @@
       "name": "@kode/runtime",
       "version": "0.0.0",
     },
+    "packages/tool-interface": {
+      "name": "@kode/tool-interface",
+      "version": "0.0.0",
+    },
     "packages/tools": {
       "name": "@kode/tools",
       "version": "0.0.0",
+      "dependencies": {
+        "@kode/engine": "workspace:*",
+        "@kode/tool-interface": "workspace:*",
+      },
     },
   },
   "overrides": {
@@ -549,6 +624,10 @@
 
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
 
+    "@kode/agent": ["@kode/agent@workspace:packages/agent"],
+
+    "@kode/ai": ["@kode/ai@workspace:packages/ai"],
+
     "@kode/builtin-skills": ["@kode/builtin-skills@workspace:packages/builtin-skills"],
 
     "@kode/cli": ["@kode/cli@workspace:apps/cli"],
@@ -557,15 +636,27 @@
 
     "@kode/config": ["@kode/config@workspace:packages/config"],
 
+    "@kode/context": ["@kode/context@workspace:packages/context"],
+
     "@kode/core": ["@kode/core@workspace:packages/core"],
 
     "@kode/desktop": ["@kode/desktop@workspace:apps/desktop"],
+
+    "@kode/engine": ["@kode/engine@workspace:packages/engine"],
+
+    "@kode/hooks": ["@kode/hooks@workspace:packages/hooks"],
+
+    "@kode/host": ["@kode/host@workspace:packages/host"],
+
+    "@kode/permissions": ["@kode/permissions@workspace:packages/permissions"],
 
     "@kode/protocol": ["@kode/protocol@workspace:packages/protocol"],
 
     "@kode/runtime": ["@kode/runtime@workspace:packages/runtime"],
 
     "@kode/server": ["@kode/server@workspace:apps/server"],
+
+    "@kode/tool-interface": ["@kode/tool-interface@workspace:packages/tool-interface"],
 
     "@kode/tools": ["@kode/tools@workspace:packages/tools"],
 
