@@ -248,6 +248,51 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     expect(selected).toBe('first')
   })
 
+  test('Select: selected value is consumed across keep-alive rerenders', async () => {
+    let selectedCount = 0
+
+    function SelectActionHarness(): React.ReactNode {
+      const [tick, setTick] = useState(0)
+
+      useEffect(() => {
+        const intervalId = setInterval(() => {
+          setTick(prev => prev + 1)
+        }, 30)
+        return () => clearInterval(intervalId)
+      }, [])
+
+      return (
+        <Select
+          options={[
+            { label: `Reconnect ${tick}`, value: 'reconnect' },
+            { label: `Disable ${tick}`, value: 'disable' },
+          ]}
+          onChange={() => {
+            selectedCount += 1
+          }}
+        />
+      )
+    }
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <SelectActionHarness />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(60)
+    h.stdin.write('\r')
+    await h.wait(150)
+
+    expect(selectedCount).toBe(1)
+
+    h.stdin.write('\r')
+    await h.wait(120)
+
+    expect(selectedCount).toBe(2)
+  })
+
   test('Select: down-arrow focus survives keep-alive style rerenders', async () => {
     let focused = ''
 

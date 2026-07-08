@@ -34,6 +34,7 @@ type Action =
   | { type: 'focus-previous-option' }
   | { type: 'select-focused-option' }
   | { type: 'select-option'; value: string }
+  | { type: 'clear-selected-option'; value: string }
   | { type: 'set-focus'; value: string }
   | {
       type: 'sync-options'
@@ -147,6 +148,16 @@ const reducer: Reducer<State, Action> = (state, action) => {
         focusedValue: action.value,
         previousValue: state.value,
         value: action.value,
+      }
+    }
+
+    case 'clear-selected-option': {
+      if (state.value !== action.value) return state
+
+      return {
+        ...state,
+        previousValue: action.value,
+        value: undefined,
       }
     }
 
@@ -326,9 +337,17 @@ export const useSelectState = ({
 
   useEffect(() => {
     if (state.value && state.previousValue !== state.value) {
-      onChange?.(state.value)
+      const selectedValue = state.value
+      try {
+        onChange?.(selectedValue)
+      } finally {
+        dispatch({
+          type: 'clear-selected-option',
+          value: selectedValue,
+        })
+      }
     }
-  }, [state.previousValue, state.value, options, onChange])
+  }, [state.previousValue, state.value, onChange])
 
   useEffect(() => {
     if (state.focusedValue) {
