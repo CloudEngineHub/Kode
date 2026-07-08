@@ -1,4 +1,3 @@
-import { isDeepStrictEqual } from 'node:util'
 import {
   useReducer,
   type Reducer,
@@ -17,6 +16,18 @@ import {
 } from './select-state'
 
 type State = DefaultSelectState
+
+function optionStructureKey(
+  options: ReturnType<typeof flattenOptions>,
+): string {
+  return JSON.stringify(
+    options.map(option =>
+      'value' in option
+        ? ['option', option.value]
+        : ['header', option.optionValues],
+    ),
+  )
+}
 
 type Action =
   | { type: 'focus-next-option' }
@@ -158,6 +169,9 @@ const reducer: Reducer<State, Action> = (state, action) => {
     }
 
     case 'set-focus': {
+      if (!state.optionMap.get(action.value)) return state
+      if (state.focusedValue === action.value) return state
+
       return {
         ...state,
         focusedValue: action.value,
@@ -246,18 +260,35 @@ export const useSelectState = ({
     createDefaultState,
   )
 
-  const lastOptionsRef = useRef(flatOptions)
+  const structureKey = useMemo(
+    () => optionStructureKey(flatOptions),
+    [flatOptions],
+  )
+  const lastSyncedRef = useRef({
+    structureKey,
+    visibleOptionCount,
+  })
 
   useEffect(() => {
-    if (isDeepStrictEqual(flatOptions, lastOptionsRef.current)) return
-    lastOptionsRef.current = flatOptions
+    const lastSynced = lastSyncedRef.current
+    if (
+      lastSynced.structureKey === structureKey &&
+      lastSynced.visibleOptionCount === visibleOptionCount
+    ) {
+      return
+    }
+
+    lastSyncedRef.current = {
+      structureKey,
+      visibleOptionCount,
+    }
     dispatch({
       type: 'sync-options',
       visibleOptionCount,
       defaultValue,
       options,
     })
-  }, [defaultValue, flatOptions, options, visibleOptionCount])
+  }, [defaultValue, options, structureKey, visibleOptionCount])
 
   const focusNextOption = useCallback(() => {
     dispatch({

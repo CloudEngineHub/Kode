@@ -261,6 +261,61 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     expect(focused).toBe('second')
   })
 
+  test('Select: keep-alive label rerenders do not recenter the visible window', async () => {
+    let focused = ''
+
+    function SelectKeepAliveWindowHarness(): React.ReactNode {
+      const [tick, setTick] = useState(0)
+
+      useEffect(() => {
+        const intervalId = setInterval(() => {
+          setTick(prev => prev + 1)
+        }, 30)
+        return () => clearInterval(intervalId)
+      }, [])
+
+      return (
+        <Select
+          visibleOptionCount={3}
+          options={[
+            { label: `Alpha ${tick}`, value: 'alpha' },
+            { label: `Beta ${tick}`, value: 'beta' },
+            { label: `Gamma ${tick}`, value: 'gamma' },
+            { label: `Delta ${tick}`, value: 'delta' },
+            { label: `Epsilon ${tick}`, value: 'epsilon' },
+          ]}
+          onFocus={value => {
+            focused = value
+          }}
+        />
+      )
+    }
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <SelectKeepAliveWindowHarness />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(60)
+    h.stdin.write('\u001B[B')
+    await h.wait(10)
+    h.stdin.write('\u001B[B')
+    await h.wait(10)
+
+    expect(focused).toBe('gamma')
+
+    h.clearOutput()
+    await h.wait(80)
+
+    const output = h.getOutput()
+    expect(focused).toBe('gamma')
+    expect(output).toContain('Alpha')
+    expect(output).toContain('Gamma')
+    expect(output).not.toContain('Delta')
+  })
+
   test('Bash overlay: ctrl+b triggers background callback', async () => {
     let backgrounded = false
     const h = createInkTestHarness(
