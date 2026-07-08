@@ -15,7 +15,9 @@ import {
   type DefaultSelectState,
 } from './select-state'
 
-type State = DefaultSelectState
+type State = DefaultSelectState & {
+  staleFocusedIndex?: number
+}
 
 function optionStructureKey(
   options: ReturnType<typeof flattenOptions>,
@@ -43,20 +45,6 @@ type Action =
       defaultValue?: string
     }
 
-function getBoundarySelectableValue(
-  optionMap: OptionMap,
-  direction: 'next' | 'previous',
-): string | undefined {
-  const values = Array.from(optionMap.values())
-  const items = direction === 'next' ? values : values.reverse()
-
-  for (const item of items) {
-    if ('value' in item) return item.value
-  }
-
-  return undefined
-}
-
 function getAdjacentSelectableValue(
   state: Pick<State, 'focusedValue' | 'optionMap'>,
   direction: 'next' | 'previous',
@@ -68,7 +56,7 @@ function getAdjacentSelectableValue(
   const item = state.optionMap.get(state.focusedValue)
 
   if (!item) {
-    return getBoundarySelectableValue(state.optionMap, direction)
+    return undefined
   }
 
   let adjacent = direction === 'next' ? item.next : item.previous
@@ -79,10 +67,32 @@ function getAdjacentSelectableValue(
   return adjacent && 'value' in adjacent ? adjacent.value : undefined
 }
 
+function getAdjacentSelectableValueFromStaleIndex(
+  state: Pick<State, 'optionMap' | 'staleFocusedIndex'>,
+  direction: 'next' | 'previous',
+): string | undefined {
+  if (state.staleFocusedIndex === undefined) return undefined
+
+  const values: Array<{ value: string; index: number }> = []
+  for (const option of state.optionMap.values()) {
+    if ('value' in option)
+      values.push({ value: option.value, index: option.index })
+  }
+
+  if (direction === 'next') {
+    return values.find(option => option.index >= state.staleFocusedIndex)?.value
+  }
+
+  return values.reverse().find(option => option.index < state.staleFocusedIndex)
+    ?.value
+}
+
 const reducer: Reducer<State, Action> = (state, action) => {
   switch (action.type) {
     case 'focus-next-option': {
-      const nextValue = getAdjacentSelectableValue(state, 'next')
+      const nextValue =
+        getAdjacentSelectableValue(state, 'next') ??
+        getAdjacentSelectableValueFromStaleIndex(state, 'next')
 
       if (!nextValue) {
         return state
@@ -97,6 +107,7 @@ const reducer: Reducer<State, Action> = (state, action) => {
         return {
           ...state,
           focusedValue: next.value,
+          staleFocusedIndex: undefined,
         }
       }
 
@@ -112,11 +123,14 @@ const reducer: Reducer<State, Action> = (state, action) => {
         focusedValue: next.value,
         visibleFromIndex: nextVisibleFromIndex,
         visibleToIndex: nextVisibleToIndex,
+        staleFocusedIndex: undefined,
       }
     }
 
     case 'focus-previous-option': {
-      const previousValue = getAdjacentSelectableValue(state, 'previous')
+      const previousValue =
+        getAdjacentSelectableValue(state, 'previous') ??
+        getAdjacentSelectableValueFromStaleIndex(state, 'previous')
 
       if (!previousValue) {
         return state
@@ -131,6 +145,7 @@ const reducer: Reducer<State, Action> = (state, action) => {
         return {
           ...state,
           focusedValue: previous.value,
+          staleFocusedIndex: undefined,
         }
       }
 
@@ -143,6 +158,7 @@ const reducer: Reducer<State, Action> = (state, action) => {
         focusedValue: previous.value,
         visibleFromIndex: nextVisibleFromIndex,
         visibleToIndex: nextVisibleToIndex,
+        staleFocusedIndex: undefined,
       }
     }
 
@@ -166,6 +182,7 @@ const reducer: Reducer<State, Action> = (state, action) => {
         focusedValue: action.value,
         previousValue: state.value,
         value: action.value,
+        staleFocusedIndex: undefined,
       }
     }
 
@@ -182,23 +199,32 @@ const reducer: Reducer<State, Action> = (state, action) => {
     case 'sync-options': {
       const preferredFocusedValue =
         state.focusedValue ?? state.value ?? action.defaultValue
+      const previousFocusedIndex = state.focusedValue
+        ? (state.optionMap.get(state.focusedValue)?.index ??
+          state.staleFocusedIndex)
+        : undefined
       const nextState = createDefaultState({
         visibleOptionCount: action.visibleOptionCount,
         defaultValue: preferredFocusedValue,
         options: action.options,
       })
+      const focusedValueMissing =
+        state.focusedValue !== undefined &&
+        !nextState.optionMap.get(state.focusedValue)
       const value =
         state.value && nextState.optionMap.get(state.value)
           ? state.value
           : undefined
-      const focusedValue =
-        state.focusedValue && !nextState.optionMap.get(state.focusedValue)
-          ? state.focusedValue
-          : nextState.focusedValue
+      const focusedValue = focusedValueMissing
+        ? state.focusedValue
+        : nextState.focusedValue
 
       return {
         ...nextState,
         focusedValue,
+        staleFocusedIndex: focusedValueMissing
+          ? previousFocusedIndex
+          : undefined,
         previousValue: value === state.value ? state.previousValue : undefined,
         value,
       }
@@ -211,6 +237,7 @@ const reducer: Reducer<State, Action> = (state, action) => {
       return {
         ...state,
         focusedValue: action.value,
+        staleFocusedIndex: undefined,
       }
     }
   }

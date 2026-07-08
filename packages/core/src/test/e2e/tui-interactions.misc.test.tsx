@@ -651,6 +651,78 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     expect(selected).toBe('second')
   })
 
+  test('Select: down-arrow during transient keep-alive removal advances from the stale focus position', async () => {
+    let focused = ''
+    let selected = ''
+
+    function SelectNavigateDuringMissingOptionHarness(): React.ReactNode {
+      const [mode, setMode] = useState<'full' | 'missing'>('full')
+      const [focusedValue, setFocusedValue] = useState('')
+
+      useEffect(() => {
+        if (focusedValue !== 'second') return
+
+        setMode('missing')
+        const timer = setTimeout(() => setMode('full'), 120)
+        return () => clearTimeout(timer)
+      }, [focusedValue])
+
+      return (
+        <Select
+          options={
+            mode === 'full'
+              ? [
+                  { label: 'First', value: 'first' },
+                  { label: 'Second', value: 'second' },
+                  { label: 'Third', value: 'third' },
+                ]
+              : [
+                  { label: 'First', value: 'first' },
+                  { label: 'Third', value: 'third' },
+                ]
+          }
+          onFocus={value => {
+            focused = value
+            setFocusedValue(value)
+          }}
+          onChange={value => {
+            selected = value
+          }}
+        />
+      )
+    }
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <SelectNavigateDuringMissingOptionHarness />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(40)
+    expect(focused).toBe('first')
+
+    h.stdin.write('\u001B[B')
+    await h.wait(30)
+    expect(focused).toBe('second')
+
+    h.clearOutput()
+    await h.wait(30)
+    expect(h.getOutput()).not.toContain('Second')
+
+    h.stdin.write('\u001B[B')
+    await h.wait(40)
+    expect(focused).toBe('third')
+
+    await h.wait(130)
+    expect(focused).toBe('third')
+
+    h.stdin.write('\r')
+    await h.wait(40)
+
+    expect(selected).toBe('third')
+  })
+
   test('Select: parent-synced focus survives a keep-alive remount', async () => {
     let focused = ''
     let selected = ''
