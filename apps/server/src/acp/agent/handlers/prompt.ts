@@ -1,6 +1,6 @@
 import { isAbsolute } from 'node:path'
 
-import { buildSystemPromptForSession, runTurn } from '#core/engine'
+import { buildSystemPromptForSession, runTurn } from '@kode/engine'
 import type { Message } from '#core/query'
 import { createAssistantMessage, createUserMessage } from '#core/utils/messages'
 import { grantReadPermissionForOriginalDir } from '#core/utils/permissions/filesystem'

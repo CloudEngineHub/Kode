@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 
 import { MaxTurnsExceededError } from '#core/errors/maxTurns'
-import { messagePipeline } from '#core/engine/message-pipeline'
+import { messagePipeline } from '@kode/engine/message-pipeline'
 
 describe('maxTurns', () => {
   test('throws before starting a new model call when maxTurns is reached', async () => {

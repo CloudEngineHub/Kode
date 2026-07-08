@@ -88,7 +88,7 @@ export async function runNonTextPrintMode(
   const { getTotalCost, getTotalAPIDuration } =
     await import('#core/cost-tracker')
   const { buildSystemPromptForSession, runTurn, query } =
-    await import('#core/engine')
+    await import('@kode/engine')
   const { getContext } = await import('@kode/context')
   const { getKodeAgentSessionId } =
     await import('#protocol/utils/kodeAgentSessionId')

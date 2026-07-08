@@ -1,6 +1,6 @@
 import type { CanUseToolFn } from '#core/permissions/canUseTool'
 import type { Message } from '#core/query'
-import type { QueryToolUseContext } from '#core/engine'
+import type { QueryToolUseContext } from '@kode/engine'
 import { MaxBudgetUsdExceededError } from '#core/errors/maxBudgetUsd'
 import { MaxTurnsExceededError } from '#core/errors/maxTurns'
 import { randomUUID } from 'crypto'

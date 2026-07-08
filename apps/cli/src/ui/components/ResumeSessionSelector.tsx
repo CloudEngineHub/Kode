@@ -14,7 +14,7 @@ import { quote } from 'shell-quote'
 
 import { PRODUCT_COMMAND } from '#core/constants/product'
 import { queryLLM } from '#core/ai/llmLazy'
-import { createUserMessage } from '#core/engine/messages/create'
+import { createUserMessage } from '@kode/engine/messages/create'
 import { getTheme, type Theme } from '#core/utils/theme'
 import { formatDate, logError } from '#core/utils/log'
 import { getBranch } from '#core/utils/git'

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 
 import { addToTotalCost, resetStateForTests } from '#core/cost-tracker'
 import { MaxBudgetUsdExceededError } from '#core/errors/maxBudgetUsd'
-import { messagePipeline } from '#core/engine/message-pipeline'
+import { messagePipeline } from '@kode/engine/message-pipeline'
 
 describe('maxBudgetUsd', () => {
   test('throws before starting a new model call when budget is already exceeded', async () => {

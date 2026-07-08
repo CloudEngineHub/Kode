@@ -1,2 +1,2 @@
-export * from '../engine/orchestrator'
-export * from '../engine/message-pipeline'
+export * from '@kode/engine/orchestrator'
+export * from '@kode/engine/message-pipeline'

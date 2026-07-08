@@ -3,7 +3,7 @@ import { nanoid } from 'nanoid'
 import { isAbsolute } from 'node:path'
 
 import { getContext } from '@kode/context'
-import { buildSystemPromptForSession } from '#core/engine'
+import { buildSystemPromptForSession } from '@kode/engine'
 import { getTools } from '#tools'
 import { grantReadPermissionForOriginalDir } from '#core/utils/permissions/filesystem'
 import { setCwd, setOriginalCwd } from '#core/utils/state'
