@@ -6,9 +6,9 @@ This document is the migration order for the remaining major dependency upgrades
 
 ## Current Constraints
 
-- Runtime floor is `node >=20.18.1` in `package.json`.
-- GitHub workflows pin Node `20.18.1` in release, dev release, npm publish, and version bump jobs.
-- The Web UI uses Vite 7 with `@vitejs/plugin-react` 4 and a simple `apps/web/vite.config.ts`.
+- Runtime floor is `node >=20.19.0` in `package.json`.
+- GitHub workflows pin Node `20.19.0` in release, dev release, npm publish, and version bump jobs.
+- The Web UI uses Vite 8 with `@vitejs/plugin-react` 6 and a simple `apps/web/vite.config.ts`.
 - Build scripts still use `esbuild` directly for CLI, server, reachability, and binary builds.
 - Zod schemas are part of public/internal contracts for protocol events, plugin validation, marketplace metadata, MCP tools, and tool inputs.
 - OpenAI and Anthropic adapters rely on `zod-to-json-schema` and custom compatibility helpers.
@@ -46,6 +46,7 @@ Scope:
 Official change points:
 
 - Vite 8 switches to Rolldown and Oxc instead of Rollup and esbuild for the main Vite pipeline.
+- Vite 8 requires Node `20.19+` or `22.12+`.
 - Vite 8 deprecates esbuild-oriented options in favor of Oxc and Rolldown options.
 - Vite 8 changes CJS default import interop and may expose affected package imports.
 - `@vitejs/plugin-react` 6 removes Babel-related features and requires Vite 8.
@@ -54,6 +55,7 @@ Official change points:
 Local notes:
 
 - `apps/web/vite.config.ts` is simple and does not currently use `rollupOptions`, `manualChunks`, or custom esbuild options.
+- This wave raises the repo Node floor from `20.18.1` to `20.19.0` because release builds execute Vite.
 - `scripts/build.mjs` invokes Vite for the web build but still uses direct esbuild elsewhere. Do not remove the direct `esbuild` dependency in this wave.
 - `react-resizable-panels` is wrapped in `apps/web/src/components/ui/resizable.tsx`; compile this wrapper before assuming v4 is compatible.
 
@@ -86,8 +88,7 @@ Official change points:
 
 Local notes:
 
-- This wave must bump the Node floor from `>=20.18.1` to at least `>=20.19.0` if ESLint 10 is included.
-- Update every GitHub workflow that currently pins `20.18.1` if the Node floor is changed.
+- The Node `20.19.0` floor was already introduced by Wave 1 for Vite 8. Re-check workflow pins if this floor changes again.
 - `packages/core/src/ai/llm.ts` imports `dotenv/config`; add an explicit quiet-loading path before moving to Dotenv 17 if startup logs are unacceptable.
 - Sharp is dynamically imported in image helpers and has a local type shim in `packages/core/src/types/sharp.d.ts`.
 
@@ -216,4 +217,4 @@ Validation:
 
 ## Recommended Next Step
 
-Start with Wave 1 only: Vite 8 plus `@vitejs/plugin-react` 6. The local Vite config is small, the official migration guide is explicit, and this keeps runtime Node and CLI behavior unchanged. If Wave 1 exposes CJS interop or React plugin issues, fix those before touching schema, AI SDK, or CLI runtime packages.
+After Wave 1, continue with Wave 2 only: Node 20-compatible tooling. Do not start Zod, AI SDK, Commander, Undici, or Ink major migrations until the tooling wave is validated and committed.
