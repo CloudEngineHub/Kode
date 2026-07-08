@@ -1,20 +1,21 @@
 import { getCurrentProjectConfig, saveCurrentProjectConfig } from '#config'
-import { logError } from '#core/utils/log'
-import { getCodeStyle } from '#core/utils/style'
-import { getCwd } from '#core/utils/state'
 import { memoize, omit } from 'lodash-es'
-import { getIsGit } from '#core/utils/git'
-import { execFileNoThrow } from '#core/utils/execFileNoThrow'
 import { join } from 'path'
 import { readFile } from 'fs/promises'
 import { existsSync, readdirSync } from 'fs'
-import { getModelManager } from '#core/utils/model'
-import { lastX } from '#core/utils/generators'
-import { getGitEmail } from '#core/utils/user'
+import { execFileNoThrow } from '@kode/context/execFileNoThrow'
+import { getGitEmail, getIsGit } from '@kode/context/git'
 import {
   getProjectInstructionFiles,
   readAndConcatProjectInstructionFiles,
-} from '#core/utils/projectInstructions'
+} from '@kode/context/projectInstructions'
+import { getCwd } from '@kode/context/runtimeState'
+import { getCodeStyle } from '@kode/context/style'
+
+function logError(_error: unknown): void {
+  // Context gathering is best-effort. Avoid emitting noisy diagnostics while
+  // preserving the legacy failure behavior of returning partial context.
+}
 /**
  * Locate project instruction files.
  */

@@ -5,6 +5,6 @@
   "type": "module",
   "dependencies": {
     "@kode/config": "workspace:*",
-    "@kode/core": "workspace:*"
+    "@kode/runtime": "workspace:*"
   }
 }

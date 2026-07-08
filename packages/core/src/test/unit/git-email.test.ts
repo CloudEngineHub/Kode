@@ -16,6 +16,13 @@ mock.module('#core/utils/execFileNoThrow', () => ({
   },
 }))
 
+mock.module('@kode/context/execFileNoThrow', () => ({
+  execFileNoThrow: async (...args: ExecArgs): Promise<ExecResult> => {
+    execCalls.push(args)
+    return execImpl(...args)
+  },
+}))
+
 mock.module('#core/utils/log', () => ({
   SESSION_ID: 'test-session',
   logError: (error: unknown) => {
@@ -26,6 +33,8 @@ mock.module('#core/utils/log', () => ({
 const { getGitEmail } = await import('#core/utils/user')
 const { getGitStatus } = await import('@kode/context')
 const { getIsGit } = await import('#core/utils/git')
+const { getGitEmail: getContextGitEmail, getIsGit: getContextIsGit } =
+  await import('@kode/context/git')
 
 describe('getGitEmail', () => {
   beforeEach(() => {
@@ -34,8 +43,10 @@ describe('getGitEmail', () => {
     logErrorCalls = []
     execImpl = async () => execResult
     ;(getGitEmail as any).cache?.clear?.()
+    ;(getContextGitEmail as any).cache?.clear?.()
     ;(getGitStatus as any).cache?.clear?.()
     ;(getIsGit as any).cache?.clear?.()
+    ;(getContextIsGit as any).cache?.clear?.()
   })
 
   test('returns trimmed configured git email', async () => {
