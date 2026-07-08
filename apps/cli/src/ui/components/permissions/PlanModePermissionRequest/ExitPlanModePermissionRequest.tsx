@@ -34,7 +34,7 @@ import { getContext } from '@kode/context'
 import { getCodeStyle } from '#core/utils/style'
 import { resetReminderSession } from '#core/services/systemReminder'
 import { resetFileFreshnessSession } from '#core/services/fileFreshness'
-import { formatBashPromptRule } from '#core/permissions/bash'
+import { formatBashPromptRule } from '@kode/permissions/bash'
 import { LEGACY_ENV } from '#core/compat/legacyEnv'
 
 type Props = {

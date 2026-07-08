@@ -1,1 +1,1 @@
-export * from './bash'
+export * from '@kode/permissions/bash'
