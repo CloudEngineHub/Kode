@@ -1,4 +1,7 @@
+import wrapAnsi from 'wrap-ansi'
 import { getCachedStringWidth } from '#cli-utils/textWidth'
+
+const ANSI_PATTERN = /\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/
 
 export function wrapLines(lines: string[], width: number): string[] {
   const safeWidth = Math.max(1, width)
@@ -7,6 +10,15 @@ export function wrapLines(lines: string[], width: number): string[] {
   for (const rawLine of lines) {
     if (rawLine.length === 0) {
       result.push('')
+      continue
+    }
+
+    if (ANSI_PATTERN.test(rawLine)) {
+      result.push(
+        ...wrapAnsi(rawLine, safeWidth, { hard: true, trim: false }).split(
+          '\n',
+        ),
+      )
       continue
     }
 

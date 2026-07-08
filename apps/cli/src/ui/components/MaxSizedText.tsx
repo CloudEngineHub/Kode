@@ -1,42 +1,13 @@
 import React from 'react'
 import { Text } from 'ink'
-import wrapAnsi from 'wrap-ansi'
 import chalk from 'chalk'
-import { getCachedStringWidth } from '#cli-utils/textWidth'
+import { wrapLines } from '#ui-ink/primitives/text/wrapLines'
 
 type Props = {
   text: string
   maxHeight?: number
   maxWidth: number
   overflowDirection?: 'top' | 'bottom'
-}
-
-function wrapPlainText(text: string, width: number): string[] {
-  const lines: string[] = []
-  const rawLines = text.split('\n')
-
-  for (const rawLine of rawLines) {
-    if (rawLine.length === 0) {
-      lines.push('')
-      continue
-    }
-
-    let current = ''
-    let currentWidth = 0
-    for (const char of rawLine) {
-      const charWidth = getCachedStringWidth(char)
-      if (currentWidth + charWidth > width && current.length > 0) {
-        lines.push(current)
-        current = ''
-        currentWidth = 0
-      }
-      current += char
-      currentWidth += charWidth
-    }
-    lines.push(current)
-  }
-
-  return lines
 }
 
 export function MaxSizedText({
@@ -52,14 +23,11 @@ export function MaxSizedText({
     return <Text>{text}</Text>
   }
 
-  const hasAnsi = /\x1b\[[0-9;]*m/.test(text)
-  const wrapped = hasAnsi
-    ? wrapAnsi(text, width, { hard: true, trim: false })
-    : null
-  const lines = wrapped ? wrapped.split('\n') : wrapPlainText(text, width)
+  const lines = wrapLines(text.split('\n'), width)
+  const wrapped = lines.join('\n')
 
   if (lines.length <= height) {
-    return <Text>{wrapped ?? lines.join('\n')}</Text>
+    return <Text>{wrapped}</Text>
   }
 
   const indicatorLines = height > 1 ? 1 : 0
