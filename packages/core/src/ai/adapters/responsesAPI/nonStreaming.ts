@@ -46,6 +46,34 @@ function parseToolCalls(response: any): any[] {
   return toolCalls
 }
 
+function getOutputText(content: any): string {
+  if (typeof content === 'string') return content
+  if (!content || typeof content !== 'object') return ''
+
+  if (
+    content.type === 'text' ||
+    content.type === 'output_text' ||
+    content.type === 'input_text'
+  ) {
+    return typeof content.text === 'string' ? content.text : ''
+  }
+
+  if (content.type === 'refusal') {
+    if (typeof content.refusal === 'string') return content.refusal
+    return typeof content.text === 'string' ? content.text : ''
+  }
+
+  return ''
+}
+
+function getMessageText(item: any): string {
+  if (!item || typeof item !== 'object') return ''
+  if (Array.isArray(item.content)) {
+    return item.content.map(getOutputText).filter(Boolean).join('\n')
+  }
+  return getOutputText(item.content)
+}
+
 export function parseNonStreamingResponse(response: any): UnifiedResponse {
   // Process basic text output
   let content = response.output_text || ''
@@ -58,15 +86,7 @@ export function parseNonStreamingResponse(response: any): UnifiedResponse {
     )
     if (messageItems.length > 0) {
       content = messageItems
-        .map((item: any) => {
-          if (item.content && Array.isArray(item.content)) {
-            return item.content
-              .filter((c: any) => c.type === 'text')
-              .map((c: any) => c.text)
-              .join('\n')
-          }
-          return item.content || ''
-        })
+        .map(getMessageText)
         .filter(Boolean)
         .join('\n\n')
     }

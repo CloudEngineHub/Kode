@@ -82,6 +82,37 @@ describe('Responses API Tests', () => {
       expect(unifiedResponse.toolCalls.length).toBe(0)
     })
 
+    test('parses nested output_text and refusal content parts', async () => {
+      const adapter = ModelAdapterFactory.createAdapter(testModel)
+
+      const unifiedResponse = await adapter.parseResponse({
+        id: 'resp-nested-output-text',
+        output: [
+          {
+            type: 'message',
+            role: 'assistant',
+            content: [
+              { type: 'output_text', text: 'Visible answer' },
+              { type: 'refusal', refusal: 'Cannot provide that detail' },
+            ],
+          },
+        ],
+        usage: {
+          input_tokens: 3,
+          output_tokens: 7,
+          total_tokens: 10,
+        },
+      })
+
+      const text = Array.isArray(unifiedResponse.content)
+        ? unifiedResponse.content.map((item: any) => item.text).join('\n')
+        : String(unifiedResponse.content)
+
+      expect(text).toContain('Visible answer')
+      expect(text).toContain('Cannot provide that detail')
+      expect(unifiedResponse.responseId).toBe('resp-nested-output-text')
+    })
+
     test('includes reasoning and verbosity parameters when provided', () => {
       const adapter = ModelAdapterFactory.createAdapter(testModel)
 

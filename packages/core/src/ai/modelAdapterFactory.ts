@@ -45,7 +45,7 @@ export class ModelAdapterFactory {
     if (!isOfficialOpenAI) {
       // If there's a fallback option, use fallback
       if (capabilities.apiArchitecture.fallback === 'chat_completions') {
-        return capabilities.apiArchitecture.primary // ← FIXED: Use primary instead of fallback
+        return capabilities.apiArchitecture.fallback
       }
       // Otherwise use primary (might fail, but let it try)
       return capabilities.apiArchitecture.primary

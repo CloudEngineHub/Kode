@@ -43,6 +43,25 @@ describe('Model Adapter Tests', () => {
         expect(adapter.constructor.name).toBe('ResponsesAPIAdapter')
       })
     })
+
+    test('GPT-5-compatible third-party endpoints use Chat Completions fallback', () => {
+      const model = {
+        name: 'OpenRouter GPT-5',
+        modelName: 'openai/gpt-5',
+        provider: 'openrouter',
+        apiKey: 'test-key',
+        baseURL: 'https://openrouter.ai/api/v1',
+        maxTokens: 8192,
+        contextLength: 128000,
+        isActive: true,
+        createdAt: Date.now(),
+      }
+
+      expect(ModelAdapterFactory.shouldUseResponsesAPI(model)).toBe(false)
+      expect(ModelAdapterFactory.createAdapter(model).constructor.name).toBe(
+        'ChatCompletionsAdapter',
+      )
+    })
   })
 
   test('model capabilities are correctly identified', () => {
