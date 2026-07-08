@@ -80,15 +80,16 @@ export const createDefaultState = ({
       : flatOptions.length
 
   const optionMap = new OptionMap(flatOptions)
-  const firstOption = optionMap.first
+  const firstOption = flatOptions.find(
+    (option): option is Option => 'value' in option,
+  )
 
   // Use defaultValue for focusedValue if it exists and is valid, otherwise use first option
   let focusedValue: string | undefined
   if (defaultValue && optionMap.get(defaultValue)) {
     focusedValue = defaultValue
   } else {
-    focusedValue =
-      firstOption && 'value' in firstOption ? firstOption.value : undefined
+    focusedValue = firstOption?.value
   }
 
   // Calculate visible range based on focused value

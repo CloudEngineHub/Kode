@@ -218,6 +218,36 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     expect(leakedKeypresses).toBe(0)
   })
 
+  test('Select: grouped options focus the first selectable option', async () => {
+    let selected = ''
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <Select
+          options={[
+            {
+              header: 'Group',
+              options: [
+                { label: 'First', value: 'first' },
+                { label: 'Second', value: 'second' },
+              ],
+            },
+          ]}
+          onChange={value => {
+            selected = value
+          }}
+        />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    h.stdin.write('\r')
+    await h.wait(25)
+
+    expect(selected).toBe('first')
+  })
+
   test('Select: down-arrow focus survives keep-alive style rerenders', async () => {
     let focused = ''
 

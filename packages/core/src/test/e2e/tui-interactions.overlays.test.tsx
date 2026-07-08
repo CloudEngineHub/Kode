@@ -153,4 +153,105 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
       mock.restore()
     }
   })
+
+  test('McpServersScreen: resources can be opened from a connected server', async () => {
+    try {
+      mock.module('#core/mcp/client', () => {
+        return {
+          authenticateMcpServer: async () => {},
+          clearMcpAuth: async () => {},
+          getClients: async () => [{ type: 'connected', name: 'srv' }],
+          getMcpAuthSnapshot: () => ({ isAuthenticated: false }),
+          getMCPCommands: async () => [],
+          getMCPResources: async () => [
+            {
+              server: 'srv',
+              uri: 'file:///project/README.md',
+              name: 'README.md',
+              title: 'Project README',
+              description: 'Primary project documentation',
+              mimeType: 'text/markdown',
+              size: 2048,
+              annotations: {
+                audience: ['user'],
+                priority: 0.7,
+                lastModified: '2026-07-08T00:00:00Z',
+              },
+            },
+          ],
+          getMCPTools: async () => [],
+          getMcprcServerStatus: () => 'approved',
+          getMcpServer: () => ({
+            scope: 'global',
+            configLocation: 'test-config.json',
+          }),
+          listMCPServers: () => ({
+            srv: { type: 'stdio', command: 'node', args: ['server.js'] },
+          }),
+          resetMcpConnections: async () => {},
+        }
+      })
+      mock.module('#core/utils/config', () => {
+        return {
+          getCurrentProjectConfig: () => ({ disabledMcpServers: [] }),
+          getGlobalConfig: () => ({ disabledMcpServers: [] }),
+          getProjectMcpServerDefinitions: () => ({
+            mcprcPath: 'test-mcprc.json',
+            mcpJsonPath: 'test-mcp.json',
+          }),
+          saveCurrentProjectConfig: () => {},
+          saveGlobalConfig: () => {},
+        }
+      })
+      mock.module('#core/utils/env', () => {
+        return {
+          getGlobalConfigFilePath: () => 'test-global-config.json',
+        }
+      })
+      mock.module('#core/utils/state', () => {
+        return {
+          getCwd: () => 'C:\\test',
+        }
+      })
+
+      const { McpServersScreen } = await import(
+        '#ui-ink/screens/overlays/McpServersScreen'
+      )
+
+      const h = createInkTestHarness(
+        <KeypressProvider>
+          <McpServersScreen onDone={() => {}} />
+        </KeypressProvider>,
+      )
+      harnessManager.track(h)
+
+      await h.wait(250)
+      expect(h.getOutput()).toContain('srv')
+
+      h.stdin.write('\r')
+      await h.wait(80)
+
+      expect(h.getOutput()).toContain('Resources: 1 resources')
+      expect(h.getOutput()).toContain('1. View resources')
+
+      h.stdin.write('\u001B[A')
+      await h.wait(80)
+      h.stdin.write('\r')
+      await h.wait(150)
+      expect(h.getOutput()).toContain('Resources for srv')
+      expect(h.getOutput()).toContain('Project README')
+
+      h.stdin.write('\r')
+      await h.wait(80)
+      const output = h.getOutput()
+      expect(output).toContain('Resource name: README.md')
+      expect(output).toContain('URI: file:///project/README.md')
+      expect(output).toContain('MIME type: text/markdown')
+      expect(output).toContain('Size: 2.0 KiB')
+      expect(output).toContain('Primary project documentation')
+      expect(output).toContain('audience: user')
+    } finally {
+      mock.restore()
+    }
+  })
 })

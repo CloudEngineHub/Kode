@@ -17,6 +17,7 @@ import {
   getMcpServer,
   listMCPServers,
   resetMcpConnections,
+  type McpResource,
 } from '#core/mcp/client'
 import {
   getCurrentProjectConfig,
@@ -70,6 +71,8 @@ type Route =
   | { kind: 'server'; serverName: string }
   | { kind: 'tools'; serverName: string }
   | { kind: 'tool'; serverName: string; tool: Tool }
+  | { kind: 'resources'; serverName: string }
+  | { kind: 'resource'; serverName: string; resource: McpResource }
   | { kind: 'auth'; serverName: string }
 
 function getScopeLabel(scope: McpUiScope): string {
@@ -255,6 +258,18 @@ function toolTitleForList(serverName: string, tool: Tool): string {
   return full
 }
 
+function resourceTitleForList(resource: McpResource): string {
+  return resource.title?.trim() || resource.name || resource.uri
+}
+
+function formatResourceSize(size: unknown): string | null {
+  if (typeof size !== 'number' || !Number.isFinite(size)) return null
+  if (size < 1024) return `${size} B`
+  const kib = size / 1024
+  if (kib < 1024) return `${kib.toFixed(1)} KiB`
+  return `${(kib / 1024).toFixed(1)} MiB`
+}
+
 function getRequiredKeys(schema: unknown): Set<string> {
   if (!schema || typeof schema !== 'object') return new Set()
   const record = schema as Record<string, unknown>
@@ -325,7 +340,8 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
 
   const [activeServerCounts, setActiveServerCounts] =
     useState<ServerCounts | null>(null)
-  const [, setActiveServerCountsLoading] = useState(false)
+  const [activeServerCountsLoading, setActiveServerCountsLoading] =
+    useState(false)
   const [activeServerCountsError, setActiveServerCountsError] = useState<
     string | null
   >(null)
@@ -335,6 +351,9 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
   const [toolDetailDescription, setToolDetailDescription] = useState<
     string | null
   >(null)
+  const [resourcesLoading, setResourcesLoading] = useState(false)
+  const [resources, setResources] = useState<McpResource[]>([])
+  const [resourcesError, setResourcesError] = useState<string | null>(null)
 
   const [authInProgress, setAuthInProgress] = useState(false)
   const [authUrl, setAuthUrl] = useState<string | null>(null)
@@ -471,6 +490,8 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
     route.kind === 'server' ||
     route.kind === 'tools' ||
     route.kind === 'tool' ||
+    route.kind === 'resources' ||
+    route.kind === 'resource' ||
     route.kind === 'auth'
       ? (servers.find(s => s.name === route.serverName) ?? null)
       : null
@@ -506,6 +527,12 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
         return
       case 'tool':
         setRoute({ kind: 'tools', serverName: route.serverName })
+        return
+      case 'resources':
+        setRoute({ kind: 'server', serverName: route.serverName })
+        return
+      case 'resource':
+        setRoute({ kind: 'resources', serverName: route.serverName })
         return
       case 'auth':
         authAbortControllerRef.current?.abort()
@@ -587,6 +614,32 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
   }, [
     route.kind,
     route.kind === 'tools' ? route.serverName : null,
+    activeServer,
+  ])
+
+  useEffect(() => {
+    if (route.kind !== 'resources') return
+    if (!activeServer) return
+
+    setResources([])
+    setResourcesLoading(true)
+    setResourcesError(null)
+    ;(async () => {
+      try {
+        const allResources = await getMCPResources()
+        const resourcesForServer = allResources.filter(
+          resource => resource.server === activeServer.name,
+        )
+        setResources(resourcesForServer)
+      } catch (err) {
+        setResourcesError(err instanceof Error ? err.message : String(err))
+      } finally {
+        setResourcesLoading(false)
+      }
+    })()
+  }, [
+    route.kind,
+    route.kind === 'resources' ? route.serverName : null,
     activeServer,
   ])
 
@@ -776,6 +829,9 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
       if (counts?.tools && counts.tools > 0) {
         actions.push({ label: 'View tools', value: 'tools' })
       }
+      if (counts?.resources && counts.resources > 0) {
+        actions.push({ label: 'View resources', value: 'resources' })
+      }
 
       if (isRemoteConfig(activeServer.config)) {
         if (authenticated) {
@@ -861,6 +917,12 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
               </Text>
             ) : null}
 
+            {activeServerCountsLoading ? (
+              <Text dimColor wrap="truncate-end">
+                Loading capabilities...
+              </Text>
+            ) : null}
+
             {counts?.tools && counts.tools > 0 ? (
               <Text wrap="truncate-end">
                 <Text bold>Tools: </Text>
@@ -900,6 +962,10 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
             onChange={async value => {
               if (value === 'tools') {
                 setRoute({ kind: 'tools', serverName: activeServer.name })
+                return
+              }
+              if (value === 'resources') {
+                setRoute({ kind: 'resources', serverName: activeServer.name })
                 return
               }
               if (value === 'auth' || value === 'reauth') {
@@ -980,6 +1046,165 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
               }}
             />
           )}
+        </Box>
+
+        <Box marginTop={tightLayout ? 0 : 1}>
+          <Text dimColor wrap="truncate-end">
+            {exitState.pending
+              ? `Press ${exitState.keyName} again to exit`
+              : 'Esc to go back'}
+          </Text>
+        </Box>
+      </Box>
+    )
+  })()
+
+  const resourcesView = (() => {
+    if (!activeServer) return null
+
+    const options: Option[] = resources.map((resource, idx) => ({
+      label: resourceTitleForList(resource),
+      value: String(idx),
+    }))
+
+    return (
+      <Box flexDirection="column" gap={gap}>
+        <Box flexDirection="column" borderStyle="round" paddingX={1}>
+          <Box marginBottom={1}>
+            <Text bold wrap="truncate-end">
+              Resources for {activeServer.name}{' '}
+              <Text dimColor>({resources.length} resources)</Text>
+            </Text>
+          </Box>
+
+          {resourcesLoading ? (
+            <Text dimColor wrap="truncate-end">
+              Loading resources...
+            </Text>
+          ) : resourcesError ? (
+            <Text color={theme.error} wrap="wrap">
+              Error: {resourcesError}
+            </Text>
+          ) : resources.length === 0 ? (
+            <Text dimColor wrap="truncate-end">
+              No resources available
+            </Text>
+          ) : (
+            <Select
+              options={options}
+              visibleOptionCount={Math.min(12, Math.max(3, options.length))}
+              onChange={value => {
+                const idx = Number.parseInt(value, 10)
+                const resource = resources[idx]
+                if (resource)
+                  setRoute({
+                    kind: 'resource',
+                    serverName: activeServer.name,
+                    resource,
+                  })
+              }}
+            />
+          )}
+        </Box>
+
+        <Box marginTop={tightLayout ? 0 : 1}>
+          <Text dimColor wrap="truncate-end">
+            {exitState.pending
+              ? `Press ${exitState.keyName} again to exit`
+              : 'Esc to go back'}
+          </Text>
+        </Box>
+      </Box>
+    )
+  })()
+
+  const resourceView = (() => {
+    if (route.kind !== 'resource') return null
+    const resource = route.resource
+    const title = resourceTitleForList(resource)
+    const size = formatResourceSize(resource.size)
+    const annotationRecord =
+      resource.annotations &&
+      typeof resource.annotations === 'object' &&
+      !Array.isArray(resource.annotations)
+        ? (resource.annotations as Record<string, unknown>)
+        : null
+    const lastModified =
+      typeof annotationRecord?.lastModified === 'string'
+        ? annotationRecord.lastModified
+        : null
+    const priority =
+      typeof annotationRecord?.priority === 'number'
+        ? annotationRecord.priority
+        : null
+    const audience = Array.isArray(annotationRecord?.audience)
+      ? annotationRecord.audience.filter(
+          (value): value is string => typeof value === 'string',
+        )
+      : []
+
+    return (
+      <Box flexDirection="column" gap={gap}>
+        <Box flexDirection="column" borderStyle="round" paddingX={1}>
+          <Box marginBottom={1}>
+            <Text bold wrap="truncate-end">
+              {title} <Text dimColor>({route.serverName})</Text>
+            </Text>
+          </Box>
+
+          <Text wrap="truncate-end">
+            <Text bold>Resource name: </Text>
+            <Text dimColor>{resource.name}</Text>
+          </Text>
+
+          <Text wrap="wrap">
+            <Text bold>URI: </Text>
+            <Text dimColor>{resource.uri}</Text>
+          </Text>
+
+          {resource.mimeType ? (
+            <Text wrap="truncate-end">
+              <Text bold>MIME type: </Text>
+              <Text dimColor>{resource.mimeType}</Text>
+            </Text>
+          ) : null}
+
+          {size ? (
+            <Text wrap="truncate-end">
+              <Text bold>Size: </Text>
+              <Text dimColor>{size}</Text>
+            </Text>
+          ) : null}
+
+          {resource.description ? (
+            <Box flexDirection="column" marginTop={1}>
+              <Text bold>Description:</Text>
+              <Text wrap="wrap">{resource.description}</Text>
+            </Box>
+          ) : null}
+
+          {audience.length || priority !== null || lastModified ? (
+            <Box flexDirection="column" marginTop={1}>
+              <Text bold>Annotations:</Text>
+              <Box flexDirection="column" paddingLeft={2}>
+                {audience.length ? (
+                  <Text wrap="truncate-end">
+                    <Text dimColor>audience: {audience.join(', ')}</Text>
+                  </Text>
+                ) : null}
+                {priority !== null ? (
+                  <Text wrap="truncate-end">
+                    <Text dimColor>priority: {priority}</Text>
+                  </Text>
+                ) : null}
+                {lastModified ? (
+                  <Text wrap="truncate-end">
+                    <Text dimColor>last modified: {lastModified}</Text>
+                  </Text>
+                ) : null}
+              </Box>
+            </Box>
+          ) : null}
         </Box>
 
         <Box marginTop={tightLayout ? 0 : 1}>
@@ -1136,9 +1361,13 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
             ? toolsView
             : route.kind === 'tool'
               ? toolView
-              : route.kind === 'auth'
-                ? authView
-                : null}
+              : route.kind === 'resources'
+                ? resourcesView
+                : route.kind === 'resource'
+                  ? resourceView
+                  : route.kind === 'auth'
+                    ? authView
+                    : null}
     </ScreenFrame>
   )
 }
