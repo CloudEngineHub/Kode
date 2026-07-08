@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 
-import { __computeCompletionRefreshForTests } from './hook'
+import {
+  __computeCompletionRefreshForTests,
+  __shouldLoadMentionSuggestionsForTests,
+} from './hook'
 import type { CompletionState } from './types'
 
 function makeState(overrides: Partial<CompletionState>): CompletionState {
@@ -84,5 +87,71 @@ describe('__computeCompletionRefreshForTests', () => {
     })
 
     expect(result.action).toBe('none')
+  })
+})
+
+describe('__shouldLoadMentionSuggestionsForTests', () => {
+  test('does not load mention providers for ordinary prompt text', () => {
+    expect(
+      __shouldLoadMentionSuggestionsForTests({
+        isEnabled: true,
+        currentContext: {
+          type: 'file',
+          prefix: 'hello',
+          startPos: 0,
+          endPos: 5,
+          trigger: null,
+        },
+        activeContext: null,
+      }),
+    ).toBe(false)
+  })
+
+  test('loads mention providers only after agent mention context appears', () => {
+    expect(
+      __shouldLoadMentionSuggestionsForTests({
+        isEnabled: true,
+        currentContext: {
+          type: 'agent',
+          prefix: 'run-agent',
+          startPos: 0,
+          endPos: 10,
+          trigger: '@',
+        },
+        activeContext: null,
+      }),
+    ).toBe(true)
+  })
+
+  test('keeps mention providers enabled while an agent completion panel is active', () => {
+    expect(
+      __shouldLoadMentionSuggestionsForTests({
+        isEnabled: true,
+        currentContext: null,
+        activeContext: {
+          type: 'agent',
+          prefix: '',
+          startPos: 0,
+          endPos: 1,
+          trigger: '@',
+        },
+      }),
+    ).toBe(true)
+  })
+
+  test('does not load mention providers when completion is disabled', () => {
+    expect(
+      __shouldLoadMentionSuggestionsForTests({
+        isEnabled: false,
+        currentContext: {
+          type: 'agent',
+          prefix: '',
+          startPos: 0,
+          endPos: 1,
+          trigger: '@',
+        },
+        activeContext: null,
+      }),
+    ).toBe(false)
   })
 })

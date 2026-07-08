@@ -53,6 +53,18 @@ export function __computeCompletionRefreshForTests(args: {
   }
 }
 
+export function __shouldLoadMentionSuggestionsForTests(args: {
+  isEnabled: boolean
+  currentContext: CompletionContext | null
+  activeContext: CompletionContext | null
+}): boolean {
+  if (!args.isEnabled) return false
+  return (
+    args.currentContext?.type === 'agent' ||
+    args.activeContext?.type === 'agent'
+  )
+}
+
 export function useUnifiedCompletion({
   input,
   cursorOffset,
@@ -103,8 +115,20 @@ export function useUnifiedCompletion({
   }, [input, cursorOffset, disableSlashCommands])
 
   const { systemCommands, isLoadingCommands } = useSystemCommands()
-  const agentSuggestions = useAgentSuggestions()
-  const modelSuggestions = useModelSuggestions()
+  const currentCompletionContext = getWordAtCursor()
+  const shouldLoadMentionSuggestions = __shouldLoadMentionSuggestionsForTests({
+    isEnabled,
+    currentContext: currentCompletionContext,
+    activeContext: state.context,
+  })
+  const {
+    suggestions: agentSuggestions,
+    isLoading: isLoadingAgentSuggestions,
+  } = useAgentSuggestions({ enabled: shouldLoadMentionSuggestions })
+  const {
+    suggestions: modelSuggestions,
+    isLoading: isLoadingModelSuggestions,
+  } = useModelSuggestions({ enabled: shouldLoadMentionSuggestions })
 
   const generateSuggestions = useCallback(
     (context: CompletionContext): UnifiedSuggestion[] =>
@@ -113,6 +137,8 @@ export function useUnifiedCompletion({
         commands,
         agentSuggestions,
         modelSuggestions,
+        isLoadingMentionSuggestions:
+          isLoadingAgentSuggestions || isLoadingModelSuggestions,
         systemCommands,
         isLoadingCommands,
         cwd: getCwd(),
@@ -121,6 +147,8 @@ export function useUnifiedCompletion({
       commands,
       agentSuggestions,
       modelSuggestions,
+      isLoadingAgentSuggestions,
+      isLoadingModelSuggestions,
       systemCommands,
       isLoadingCommands,
     ],

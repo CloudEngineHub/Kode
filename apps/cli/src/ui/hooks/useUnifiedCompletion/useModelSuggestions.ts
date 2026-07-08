@@ -5,12 +5,20 @@ import { logError } from '#core/utils/log'
 import { getModelManager } from '#core/utils/model'
 import type { UnifiedSuggestion } from '#cli-utils/completion/types'
 
-export function useModelSuggestions(): UnifiedSuggestion[] {
+export function useModelSuggestions(args: { enabled: boolean }): {
+  suggestions: UnifiedSuggestion[]
+  isLoading: boolean
+} {
   const [modelSuggestions, setModelSuggestions] = useState<UnifiedSuggestion[]>(
     [],
   )
+  const [hasLoaded, setHasLoaded] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
+    if (!args.enabled || hasLoaded || isLoading) return
+
+    setIsLoading(true)
     try {
       const modelManager = getModelManager()
       const allModels = modelManager.getAllAvailableModelNames()
@@ -30,8 +38,18 @@ export function useModelSuggestions(): UnifiedSuggestion[] {
         error: error instanceof Error ? error.message : String(error),
       })
       setModelSuggestions([])
+    } finally {
+      setHasLoaded(true)
+      setIsLoading(false)
     }
-  }, [])
+  }, [args.enabled, hasLoaded, isLoading])
 
-  return modelSuggestions
+  if (!args.enabled) {
+    return { suggestions: [], isLoading: false }
+  }
+
+  return {
+    suggestions: modelSuggestions,
+    isLoading: !hasLoaded || isLoading,
+  }
 }

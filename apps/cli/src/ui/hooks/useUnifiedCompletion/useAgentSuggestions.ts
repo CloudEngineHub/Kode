@@ -59,12 +59,20 @@ function compactWhenToUse(whenToUse: string): string {
   return shortDesc
 }
 
-export function useAgentSuggestions(): UnifiedSuggestion[] {
+export function useAgentSuggestions(args: { enabled: boolean }): {
+  suggestions: UnifiedSuggestion[]
+  isLoading: boolean
+} {
   const [agentSuggestions, setAgentSuggestions] = useState<UnifiedSuggestion[]>(
     [],
   )
+  const [hasLoaded, setHasLoaded] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
+    if (!args.enabled || hasLoaded || isLoading) return
+
+    setIsLoading(true)
     getActiveAgents()
       .then((agents: AgentConfig[]) => {
         const suggestions: UnifiedSuggestion[] = agents.map(config => ({
@@ -85,7 +93,18 @@ export function useAgentSuggestions(): UnifiedSuggestion[] {
         })
         setAgentSuggestions([])
       })
-  }, [])
+      .finally(() => {
+        setHasLoaded(true)
+        setIsLoading(false)
+      })
+  }, [args.enabled, hasLoaded, isLoading])
 
-  return agentSuggestions
+  if (!args.enabled) {
+    return { suggestions: [], isLoading: false }
+  }
+
+  return {
+    suggestions: agentSuggestions,
+    isLoading: !hasLoaded || isLoading,
+  }
 }
