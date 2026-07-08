@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { Tool } from '#core/tooling/Tool'
+import { Tool } from '@kode/tool-interface/Tool'
 import { getCwd } from '#core/utils/state'
 import { ripGrep } from '#core/utils/ripgrep'
 import { DESCRIPTION, TOOL_NAME_FOR_PROMPT } from './prompt'

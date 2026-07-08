@@ -2,7 +2,7 @@ import { Box, Text } from 'ink'
 import React from 'react'
 import { z } from 'zod'
 import { randomUUID } from 'node:crypto'
-import { Tool } from '#core/tooling/Tool'
+import { Tool } from '@kode/tool-interface/Tool'
 import {
   exitPlanMode,
   getPlanConversationKey,

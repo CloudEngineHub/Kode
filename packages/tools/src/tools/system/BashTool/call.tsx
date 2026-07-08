@@ -1,5 +1,5 @@
 import * as React from 'react'
-import type { ToolUseContext } from '#core/tooling/Tool'
+import type { ToolUseContext } from '@kode/tool-interface/Tool'
 import { createAssistantMessage } from '#core/utils/messages'
 import { BunShell } from '#runtime/shell'
 import { getBunShellSandboxPlan } from '#core/sandbox/bunShellSandboxPlan'

@@ -26,10 +26,14 @@
       "@kode/config/*": ["packages/config/src/*"],
       "@kode/core": ["packages/core/src/index.ts"],
       "@kode/core/*": ["packages/core/src/*"],
+      "@kode/host": ["packages/host/src/index.ts"],
+      "@kode/host/*": ["packages/host/src/*"],
       "@kode/protocol": ["packages/protocol/src/index.ts"],
       "@kode/protocol/*": ["packages/protocol/src/*"],
       "@kode/runtime": ["packages/runtime/src/index.ts"],
       "@kode/runtime/*": ["packages/runtime/src/*"],
+      "@kode/tool-interface": ["packages/tool-interface/src/index.ts"],
+      "@kode/tool-interface/*": ["packages/tool-interface/src/*"],
       "@kode/tools": ["packages/tools/src/index.ts"],
       "@kode/tools/*": ["packages/tools/src/*"],
       "#config": ["packages/config/src/index.ts"],
@@ -54,6 +58,8 @@
       "#protocol/*": ["packages/protocol/src/*"],
       "#runtime": ["packages/runtime/src/index.ts"],
       "#runtime/*": ["packages/runtime/src/*"],
+      "#tool-interface": ["packages/tool-interface/src/index.ts"],
+      "#tool-interface/*": ["packages/tool-interface/src/*"],
       "#tools": ["packages/tools/src/index.ts"],
       "#tools/*": ["packages/tools/src/*"],
       "#ui-ink/*": ["apps/cli/src/ui/*"]
@@ -95,4 +101,4 @@
       "module": "NodeNext"
     }
   }
-} 
+}

@@ -1,7 +1,7 @@
 import { Box, Text } from 'ink'
 import * as React from 'react'
 import { z } from 'zod'
-import { type Tool } from '#core/tooling/Tool'
+import { type Tool } from '@kode/tool-interface/Tool'
 import { getTheme } from '#core/utils/theme'
 import { DESCRIPTION, PROMPT } from './prompt'
 import { OutputLine } from '#tools/tools/system/BashTool/OutputLine'

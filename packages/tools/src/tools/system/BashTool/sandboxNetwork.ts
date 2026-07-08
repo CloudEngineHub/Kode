@@ -1,4 +1,4 @@
-import type { ToolUseContext } from '#core/tooling/Tool'
+import type { ToolUseContext } from '@kode/tool-interface/Tool'
 import type { BunShellSandboxPlan } from '#core/sandbox/bunShellSandboxPlan'
 import { ensureSandboxNetworkInfrastructure } from '#core/sandbox/sandboxNetworkInfrastructure'
 import type { BunShellSandboxOptions } from '#runtime/shell'

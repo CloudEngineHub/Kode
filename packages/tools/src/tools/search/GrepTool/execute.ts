@@ -12,7 +12,7 @@ import {
   toProjectRelativeIfPossible,
 } from './helpers'
 import type { GrepToolCallInput, GrepToolOutput } from './types'
-import type { ToolUseContext } from '#core/tooling/Tool'
+import type { ToolUseContext } from '@kode/tool-interface/Tool'
 
 export async function runGrepTool(args: {
   input: GrepToolCallInput

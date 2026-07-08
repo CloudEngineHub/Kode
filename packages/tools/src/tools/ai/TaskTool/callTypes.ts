@@ -6,7 +6,7 @@ import type {
   Message as ConversationMessage,
 } from '#core/query'
 import type { PermissionMode } from '#core/types/PermissionMode'
-import type { Tool } from '#core/tooling/Tool'
+import type { Tool } from '@kode/tool-interface/Tool'
 
 export type QueryFn = (
   messages: ConversationMessage[],

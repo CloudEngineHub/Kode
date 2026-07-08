@@ -1,8 +1,11 @@
 import { Box, Text } from 'ink'
 import React from 'react'
 import { z } from 'zod'
-import type { ToolUseContext, ValidationResult } from '#core/tooling/Tool'
-import { Tool } from '#core/tooling/Tool'
+import type {
+  ToolUseContext,
+  ValidationResult,
+} from '@kode/tool-interface/Tool'
+import { Tool } from '@kode/tool-interface/Tool'
 import { applyMarkdown } from '#core/utils/markdown'
 import { getModelManager } from '#core/utils/model'
 import { getTheme } from '#core/utils/theme'

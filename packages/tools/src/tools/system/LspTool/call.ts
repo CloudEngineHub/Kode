@@ -1,4 +1,4 @@
-import type { ToolUseContext } from '#core/tooling/Tool'
+import type { ToolUseContext } from '@kode/tool-interface/Tool'
 import { getAbsolutePath } from '#core/utils/file'
 import { extname } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'

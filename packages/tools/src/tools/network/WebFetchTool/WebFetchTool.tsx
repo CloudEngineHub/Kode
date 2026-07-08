@@ -1,7 +1,7 @@
 import { Box, Text } from 'ink'
 import React from 'react'
 import { z } from 'zod'
-import { Tool, ToolUseContext } from '#core/tooling/Tool'
+import { Tool, ToolUseContext } from '@kode/tool-interface/Tool'
 import type { AssistantMessage, UserMessage } from '#core/query'
 import { queryLLM } from '#core/ai/llmLazy'
 import { randomUUID } from 'crypto'

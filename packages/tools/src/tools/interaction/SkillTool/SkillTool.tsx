@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { Tool } from '#core/tooling/Tool'
+import { Tool } from '@kode/tool-interface/Tool'
 import type { Message } from '#core/query'
 import { createUserMessage } from '#core/utils/messages'
 import { callTaskTool } from '#tools/tools/ai/TaskTool/call'

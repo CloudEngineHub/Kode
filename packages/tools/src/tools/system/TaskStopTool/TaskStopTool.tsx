@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { Tool } from '#core/tooling/Tool'
+import { Tool } from '@kode/tool-interface/Tool'
 import { BunShell } from '#runtime/shell'
 import { DESCRIPTION, PROMPT, TOOL_NAME_FOR_PROMPT } from './prompt'
 import {

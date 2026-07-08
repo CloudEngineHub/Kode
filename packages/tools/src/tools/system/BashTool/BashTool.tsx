@@ -4,7 +4,11 @@ import * as React from 'react'
 import { z } from 'zod'
 import { PRODUCT_NAME } from '#core/constants/product'
 import { LEGACY_ENV } from '#core/compat/legacyEnv'
-import { Tool, ValidationResult, ToolUseContext } from '#core/tooling/Tool'
+import {
+  Tool,
+  ValidationResult,
+  ToolUseContext,
+} from '@kode/tool-interface/Tool'
 import { splitCommand } from '#core/utils/commands'
 import { isInDirectory } from '#core/utils/file'
 import { getBunShellSandboxPlan } from '#core/sandbox/bunShellSandboxPlan'

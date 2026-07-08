@@ -3,7 +3,7 @@ import React from 'react'
 import { z } from 'zod'
 import { BULLET } from '#core/constants/figures'
 import { PRODUCT_NAME } from '#core/constants/product'
-import { Tool, ToolUseContext } from '#core/tooling/Tool'
+import { Tool, ToolUseContext } from '@kode/tool-interface/Tool'
 import { getTheme } from '#core/utils/theme'
 import { DESCRIPTION, PROMPT, TOOL_NAME_FOR_PROMPT } from './prompt'
 

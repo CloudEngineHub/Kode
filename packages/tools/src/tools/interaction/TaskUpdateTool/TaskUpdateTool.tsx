@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { Tool, ToolUseContext } from '#core/tooling/Tool'
+import type { Tool, ToolUseContext } from '@kode/tool-interface/Tool'
 import { emitReminderEvent } from '#core/services/systemReminder'
 import {
   addDependency,

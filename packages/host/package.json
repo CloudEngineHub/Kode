@@ -1,5 +1,5 @@
 {
-  "name": "@kode/tools",
+  "name": "@kode/host",
   "private": true,
   "version": "0.0.0",
   "type": "module",

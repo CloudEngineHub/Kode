@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { Tool } from '#core/tooling/Tool'
+import { Tool } from '@kode/tool-interface/Tool'
 import { getCwd } from '#core/utils/state'
 import { readdir } from 'fs/promises'
 import { existsSync, statSync } from 'fs'

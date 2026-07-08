@@ -6,7 +6,7 @@ import React from 'react'
 
 import type { Message as ConversationMessage } from '#core/query'
 import { hasPermissionsToUseTool } from '#core/permissions'
-import type { SetToolJSXFn } from '#core/tooling/Tool'
+import type { SetToolJSXFn } from '@kode/tool-interface/Tool'
 import { saveAgentTranscript } from '#core/utils/agentTranscripts'
 import {
   upsertBackgroundAgentTask,
@@ -331,22 +331,21 @@ export async function* callTaskToolForeground(
     }
   }
 
-  const queryIterator = prepared
-    .queryFn(
-      prepared.messagesForQuery,
-      prepared.systemPrompt,
-      prepared.context,
-      hasPermissionsToUseTool,
-      {
-        abortController: runAbortController,
-        options: prepared.queryOptions,
-        messageId: getLastAssistantMessageId(prepared.messagesForQuery),
-        agentId: prepared.agentId,
-        readFileTimestamps: prepared.readFileTimestamps,
-        setToolJSX: () => {},
-      },
-    )
-    [Symbol.asyncIterator]()
+  const queryStream = prepared.queryFn(
+    prepared.messagesForQuery,
+    prepared.systemPrompt,
+    prepared.context,
+    hasPermissionsToUseTool,
+    {
+      abortController: runAbortController,
+      options: prepared.queryOptions,
+      messageId: getLastAssistantMessageId(prepared.messagesForQuery),
+      agentId: prepared.agentId,
+      readFileTimestamps: prepared.readFileTimestamps,
+      setToolJSX: () => {},
+    },
+  )
+  const queryIterator = queryStream[Symbol.asyncIterator]()
 
   let nextPromise = queryIterator.next()
 

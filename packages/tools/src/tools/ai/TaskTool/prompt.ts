@@ -1,4 +1,4 @@
-import { type Tool } from '#core/tooling/Tool'
+import { type Tool } from '@kode/tool-interface/Tool'
 import { getTools, getReadOnlyTools } from '#tools'
 import { FileWriteTool } from '#tools/tools/filesystem/FileWriteTool/FileWriteTool'
 import { GlobTool } from '#tools/tools/filesystem/GlobTool/GlobTool'

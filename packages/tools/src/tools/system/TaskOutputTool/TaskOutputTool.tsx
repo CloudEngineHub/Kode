@@ -1,5 +1,9 @@
 import { z } from 'zod'
-import type { Tool, ToolUseContext, ValidationResult } from '#core/tooling/Tool'
+import type {
+  Tool,
+  ToolUseContext,
+  ValidationResult,
+} from '@kode/tool-interface/Tool'
 import { BunShell } from '#runtime/shell'
 import {
   getBackgroundAgentTaskSnapshot,

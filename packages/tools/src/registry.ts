@@ -1,5 +1,5 @@
 import { memoize } from 'lodash-es'
-import { resolveToolDescription, type Tool } from '#core/tooling/Tool'
+import { resolveToolDescription, type Tool } from '@kode/tool-interface/Tool'
 
 import { AskExpertModelTool } from '#tools/tools/ai/AskExpertModelTool/AskExpertModelTool'
 import { AskUserQuestionTool } from '#tools/tools/interaction/AskUserQuestionTool/AskUserQuestionTool'

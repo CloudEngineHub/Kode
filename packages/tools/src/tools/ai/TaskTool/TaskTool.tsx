@@ -1,4 +1,4 @@
-import type { Tool } from '#core/tooling/Tool'
+import type { Tool } from '@kode/tool-interface/Tool'
 import { getAvailableAgentTypes } from '#core/utils/agentLoader'
 import { getAgentTranscript } from '#core/utils/agentTranscripts'
 import { getCwd } from '#core/utils/state'

@@ -1,4 +1,4 @@
-import type { Tool, ToolUseContext } from '#core/tooling/Tool'
+import type { Tool, ToolUseContext } from '@kode/tool-interface/Tool'
 import { getAbsolutePath } from '#core/utils/file'
 import { hasReadPermission } from '#core/utils/permissions/filesystem'
 import { getCwd } from '#core/utils/state'

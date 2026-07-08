@@ -1,7 +1,7 @@
 import { Box, Text } from 'ink'
 import React from 'react'
 import { z } from 'zod'
-import type { Tool, ToolUseContext } from '#core/tooling/Tool'
+import type { Tool, ToolUseContext } from '@kode/tool-interface/Tool'
 import { getClients, type WrappedClient } from '#core/mcp/client'
 import { logMCPError } from '#core/utils/log'
 import { ListResourcesResultSchema } from '@modelcontextprotocol/sdk/types.js'
