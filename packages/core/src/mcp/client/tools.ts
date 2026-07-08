@@ -155,7 +155,7 @@ export const getMCPTools = memoize(
               }
             },
             userFacingName() {
-              const title = tool.annotations?.title || tool.name
+              const title = tool.title?.trim() || tool.name
               return `${client.name} - ${title} (MCP)`
             },
           }

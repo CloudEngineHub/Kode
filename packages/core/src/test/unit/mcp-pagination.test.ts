@@ -55,7 +55,9 @@ describe('MCP paginated list requests', () => {
             tools: [
               {
                 name: 'first',
+                title: 'First Tool',
                 inputSchema: { type: 'object', properties: {} },
+                annotations: { title: 'Annotation Title' },
               },
             ],
             nextCursor: 'page-2',
@@ -86,6 +88,10 @@ describe('MCP paginated list requests', () => {
     expect(tools.map(tool => tool.name)).toEqual([
       'mcp__srv__first',
       'mcp__srv__second',
+    ])
+    expect(tools.map(tool => tool.userFacingName())).toEqual([
+      'srv - First Tool (MCP)',
+      'srv - second (MCP)',
     ])
     expect(requests).toEqual([
       { method: 'tools/list' },
