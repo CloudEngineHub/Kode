@@ -7,7 +7,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { ModelAdapterFactory } from '#core/ai/modelAdapterFactory'
-import { callGPT5ResponsesAPI } from '@kode/ai/openai'
+import { callGPT5ResponsesAPI } from '#core/ai/openai'
 import {
   ACTIVE_PRODUCTION_MODELS,
   TEST_MODEL,

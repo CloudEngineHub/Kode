@@ -12,7 +12,7 @@
 
 import { test, expect, describe } from 'bun:test'
 import { ModelAdapterFactory } from '#core/ai/modelAdapterFactory'
-import { callGPT5ResponsesAPI } from '@kode/ai/openai'
+import { callGPT5ResponsesAPI } from '#core/ai/openai'
 
 const MOCK_SERVER_TEST_MODE = process.env.MOCK_SERVER_TEST_MODE === 'true'
 
