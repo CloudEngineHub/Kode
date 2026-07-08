@@ -6,6 +6,11 @@ export type PermissionResult =
       result: false
       message: string
       shouldPromptUser?: boolean
+      /**
+       * True when a denial is still promptable, but must not be auto-approved
+       * by permissive modes such as yolo.
+       */
+      requiresExplicitApproval?: boolean
       suggestions?: ToolPermissionContextUpdate[]
       /**
        * Optional path that drove the permission decision (e.g. file path / directory).

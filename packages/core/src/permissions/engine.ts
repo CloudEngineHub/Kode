@@ -86,6 +86,7 @@ function checkBypassSafetyFloor(args: {
         result: false,
         message: safety.message,
         shouldPromptUser: false,
+        requiresExplicitApproval: true,
       }
     }
     return null
@@ -286,6 +287,7 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
         message: safety.message,
         blockedPath: toolPath,
         decisionReason: safety.message,
+        requiresExplicitApproval: true,
       }
     }
 
@@ -302,6 +304,7 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
           message: `${PRODUCT_NAME} requested permissions to write to ${toolPath}, but you haven't granted it yet.`,
           blockedPath: toolPath,
           decisionReason: askedRule,
+          requiresExplicitApproval: true,
         }
       }
     }
@@ -330,6 +333,7 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
       message: `${PRODUCT_NAME} requested permissions to write to ${toolPath}, but you haven't granted it yet.`,
       blockedPath: toolPath,
       decisionReason: 'No allow rule matched (outside working directories)',
+      requiresExplicitApproval: true,
       suggestions: suggestFilePermissionUpdates({
         inputPath: toolPath,
         operation: 'write',
@@ -372,7 +376,8 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
     isYoloMode &&
     !requiresUserInteraction &&
     permissionResult.result === false &&
-    permissionResult.shouldPromptUser !== false
+    permissionResult.shouldPromptUser !== false &&
+    permissionResult.requiresExplicitApproval !== true
   ) {
     return { result: true }
   }
