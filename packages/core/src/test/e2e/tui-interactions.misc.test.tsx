@@ -336,6 +336,95 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     expect(focused).toBe('second')
   })
 
+  test('Select: down-arrow focus is not pulled back by stale focusValue during keep-alive rerenders', async () => {
+    let focused = ''
+
+    function SelectControlledKeepAliveHarness(): React.ReactNode {
+      const [tick, setTick] = useState(0)
+
+      useEffect(() => {
+        const intervalId = setInterval(() => {
+          setTick(prev => prev + 1)
+        }, 30)
+        return () => clearInterval(intervalId)
+      }, [])
+
+      return (
+        <Select
+          focusValue="first"
+          options={[
+            { label: `First ${tick}`, value: 'first' },
+            { label: `Second ${tick}`, value: 'second' },
+            { label: `Third ${tick}`, value: 'third' },
+          ]}
+          onFocus={value => {
+            focused = value
+          }}
+        />
+      )
+    }
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <SelectControlledKeepAliveHarness />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(60)
+    expect(focused).toBe('first')
+
+    h.stdin.write('\u001B[B')
+    await h.wait(150)
+
+    expect(focused).toBe('second')
+  })
+
+  test('Select: focusValue is applied after options arrive from keep-alive loading', async () => {
+    let focused = ''
+
+    function SelectDeferredOptionsHarness(): React.ReactNode {
+      const [tick, setTick] = useState(0)
+
+      useEffect(() => {
+        const intervalId = setInterval(() => {
+          setTick(prev => prev + 1)
+        }, 30)
+        return () => clearInterval(intervalId)
+      }, [])
+
+      const options =
+        tick < 2
+          ? []
+          : [
+              { label: `First ${tick}`, value: 'first' },
+              { label: `Second ${tick}`, value: 'second' },
+              { label: `Third ${tick}`, value: 'third' },
+            ]
+
+      return (
+        <Select
+          focusValue="second"
+          options={options}
+          onFocus={value => {
+            focused = value
+          }}
+        />
+      )
+    }
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <SelectDeferredOptionsHarness />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(150)
+
+    expect(focused).toBe('second')
+  })
+
   test('Select: keep-alive label rerenders do not recenter the visible window', async () => {
     let focused = ''
 

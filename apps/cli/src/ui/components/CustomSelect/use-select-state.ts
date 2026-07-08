@@ -264,10 +264,20 @@ export const useSelectState = ({
   focusValue,
 }: UseSelectStateProps) => {
   const flatOptions = useMemo(() => flattenOptions(options), [options])
+  const focusValueExists = useMemo(
+    () =>
+      Boolean(
+        focusValue &&
+          flatOptions.some(
+            option => 'value' in option && option.value === focusValue,
+          ),
+      ),
+    [flatOptions, focusValue],
+  )
 
   const [state, dispatch] = useReducer(
     reducer,
-    { visibleOptionCount, defaultValue, options },
+    { visibleOptionCount, defaultValue: focusValue ?? defaultValue, options },
     createDefaultState,
   )
 
@@ -296,10 +306,10 @@ export const useSelectState = ({
     dispatch({
       type: 'sync-options',
       visibleOptionCount,
-      defaultValue,
+      defaultValue: focusValue ?? defaultValue,
       options,
     })
-  }, [defaultValue, options, structureKey, visibleOptionCount])
+  }, [defaultValue, focusValue, options, structureKey, visibleOptionCount])
 
   const focusNextOption = useCallback(() => {
     dispatch({
@@ -355,14 +365,27 @@ export const useSelectState = ({
     }
   }, [state.focusedValue, onFocus])
 
+  const appliedFocusValueRef = useRef<string | undefined>(undefined)
   useEffect(() => {
-    if (focusValue) {
-      dispatch({
-        type: 'set-focus',
-        value: focusValue,
-      })
+    if (!focusValue) {
+      appliedFocusValueRef.current = undefined
+      return
     }
-  }, [focusValue])
+
+    if (!focusValueExists) {
+      if (appliedFocusValueRef.current === focusValue) {
+        appliedFocusValueRef.current = undefined
+      }
+      return
+    }
+
+    if (appliedFocusValueRef.current === focusValue) return
+    appliedFocusValueRef.current = focusValue
+    dispatch({
+      type: 'set-focus',
+      value: focusValue,
+    })
+  }, [focusValue, focusValueExists])
 
   return {
     focusedValue: state.focusedValue,
