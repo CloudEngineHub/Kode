@@ -1,9 +1,11 @@
 import { BunShell } from '#runtime/shell'
 import type { BackgroundProcess } from '#runtime/shell/types'
 import {
+  appendTaskOutput,
   getTaskOutputFilePath,
   readTaskOutput,
   readTaskOutputTailLines,
+  touchTaskOutputFile,
 } from '#runtime/taskOutputStore'
 import {
   getBackgroundAgentTaskSnapshot,
@@ -135,6 +137,10 @@ export function getBackgroundTaskCounts(): BackgroundTaskCounts {
   return summarizeBackgroundTaskSnapshots(listBackgroundTaskSnapshots())
 }
 
+export function hasBackgroundTasks(): boolean {
+  return getBackgroundTaskCounts().total > 0
+}
+
 export function getBackgroundTaskSnapshot(
   taskId: string,
 ): BackgroundTaskSnapshot | null {
@@ -162,6 +168,17 @@ export function killBackgroundTask(taskId: string): boolean {
 
 export function getBackgroundTaskOutputFilePath(taskId: string): string {
   return getTaskOutputFilePath(taskId)
+}
+
+export function touchBackgroundTaskOutputFile(taskId: string): string {
+  return touchTaskOutputFile(taskId)
+}
+
+export function appendBackgroundTaskOutput(
+  taskId: string,
+  chunk: string,
+): void {
+  appendTaskOutput(taskId, chunk)
 }
 
 export function readBackgroundTaskOutput(taskId: string): string {

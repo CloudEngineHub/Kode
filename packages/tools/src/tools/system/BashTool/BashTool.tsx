@@ -14,7 +14,7 @@ import { isInDirectory } from '#core/utils/file'
 import { getBunShellSandboxPlan } from '#core/sandbox/bunShellSandboxPlan'
 import { getCwd, getOriginalCwd } from '#core/utils/state'
 import { isBashCommandReadOnly } from '@kode/permissions/bash'
-import { getTaskOutputFilePath } from '#runtime/taskOutputStore'
+import { getBackgroundTaskOutputFilePath } from '#core/tasks/backgroundRegistry'
 import BashToolResultMessage from './BashToolResultMessage'
 import { DEFAULT_TIMEOUT_MS, getBashToolPrompt } from './prompt'
 import { formatDuration } from './text'
@@ -282,7 +282,7 @@ export const BashTool = {
 
     const id = backgroundTaskId ?? bashId
     const backgroundLine = id
-      ? `Command running in background with ID: ${id}. Output is being written to: ${getTaskOutputFilePath(id)}`
+      ? `Command running in background with ID: ${id}. Output is being written to: ${getBackgroundTaskOutputFilePath(id)}`
       : ''
 
     return [trimmedStdout, trimmedStderr, backgroundLine]

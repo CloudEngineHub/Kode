@@ -39,7 +39,7 @@ import { getPromptInputSpecialKeyAction } from '#ui-ink/utils/promptInputSpecial
 import { setTerminalTitle } from '#cli-utils/terminal'
 import { Cursor, countWrappedLines } from '#cli-utils/Cursor'
 import { getCurrentOutputStyle } from '#cli-services/outputStyles'
-import { listBackgroundTaskSnapshots } from '#core/tasks/backgroundRegistry'
+import { hasBackgroundTasks } from '#core/tasks/backgroundRegistry'
 import { submitPrompt } from './submit'
 import {
   usePromptPastes,
@@ -693,8 +693,7 @@ export function PromptInput({
       historyIndex === 0 &&
       input.length === 0
     ) {
-      const hasBackgroundTasks = listBackgroundTaskSnapshots().length > 0
-      if (hasBackgroundTasks) {
+      if (hasBackgroundTasks()) {
         onManageTasks()
         return
       }

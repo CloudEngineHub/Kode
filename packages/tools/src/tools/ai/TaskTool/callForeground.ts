@@ -22,7 +22,10 @@ import {
   createAssistantMessage,
   getLastAssistantMessageId,
 } from '#core/utils/messages'
-import { appendTaskOutput, touchTaskOutputFile } from '#runtime/taskOutputStore'
+import {
+  appendBackgroundTaskOutput,
+  touchBackgroundTaskOutputFile,
+} from '#core/tasks/backgroundRegistry'
 import { BashToolRunInBackgroundOverlay } from '#tools/tools/system/BashTool/BashToolRunInBackgroundOverlay'
 
 import { asyncLaunchMessage } from './assistantText'
@@ -272,7 +275,7 @@ export async function* callTaskToolForeground(
     overlayTimeout.unref?.()
   }
 
-  touchTaskOutputFile(prepared.agentId)
+  touchBackgroundTaskOutputFile(prepared.agentId)
 
   const addRecentAction = (action: string) => {
     const trimmed = action.trim()
@@ -320,7 +323,10 @@ export async function* callTaskToolForeground(
     if (message.type === 'assistant') {
       const assistantText = getAssistantText(message)
       if (assistantText) {
-        appendTaskOutput(prepared.agentId, assistantText.trimEnd() + '\n')
+        appendBackgroundTaskOutput(
+          prepared.agentId,
+          assistantText.trimEnd() + '\n',
+        )
       }
 
       for (const block of message.message.content) {
@@ -394,7 +400,7 @@ export async function* callTaskToolForeground(
         } else {
           taskRecord.completedAt = taskRecord.completedAt ?? Date.now()
           if (resultText) taskRecord.resultText = resultText
-          appendTaskOutput(
+          appendBackgroundTaskOutput(
             prepared.agentId,
             '\n[task killed]\n'.replace(/^\n+/, ''),
           )
@@ -413,7 +419,7 @@ export async function* callTaskToolForeground(
           taskRecord.status = 'killed'
           taskRecord.completedAt = taskRecord.completedAt ?? Date.now()
           taskRecord.error = taskRecord.error ?? (message || 'Killed by user')
-          appendTaskOutput(
+          appendBackgroundTaskOutput(
             prepared.agentId,
             '\n[task killed]\n'.replace(/^\n+/, ''),
           )
@@ -421,7 +427,7 @@ export async function* callTaskToolForeground(
           taskRecord.status = 'failed'
           taskRecord.completedAt = Date.now()
           taskRecord.error = message
-          appendTaskOutput(
+          appendBackgroundTaskOutput(
             prepared.agentId,
             `\n[error] ${message}\n`.replace(/^\n+/, ''),
           )
