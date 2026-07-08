@@ -1,6 +1,6 @@
 import { resolve as resolvePath } from 'node:path'
 
-import { clearContextCache, getContext } from '#core/context'
+import { clearContextCache, getContext } from '@kode/context'
 import { logError } from '#core/utils/log'
 import { getCwd, setCwd, setOriginalCwd } from '#core/utils/state'
 import { LEGACY_ENV } from '#config/compat/legacyEnv'

@@ -1,4 +1,4 @@
-import { getProjectDocs } from '#core/context'
+import { getProjectDocs } from '@kode/context'
 import { debug as debugLogger } from '#core/utils/debugLogger'
 import { logError } from '#core/utils/log'
 

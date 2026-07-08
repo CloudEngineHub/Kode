@@ -1,7 +1,7 @@
 import { Message } from '#core/query'
 import { estimateTokens } from './tokens'
 import { getMessagesSetter } from '#core/messages'
-import { getContext } from '#core/context'
+import { getContext } from '@kode/context'
 import { getCodeStyle } from '#core/utils/style'
 import { resetFileFreshnessSession } from '#core/services/fileFreshness'
 import {

@@ -6,7 +6,7 @@ import type {
 } from '#core/query'
 import type { CanUseToolFn } from '#core/permissions/canUseTool'
 
-import { getContext } from '#core/context'
+import { getContext } from '@kode/context'
 import { query } from './orchestrator'
 
 import { messagesToAgentEvents } from '#core/query/agentEvents'

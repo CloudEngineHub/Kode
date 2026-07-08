@@ -1,4 +1,4 @@
-import { getContext } from '#core/context'
+import { getContext } from '@kode/context'
 import { getCurrentProjectConfig } from '#core/utils/config'
 import { cleanupOldMessageFilesInBackground } from '#core/utils/cleanup'
 import { grantReadPermissionForOriginalDir } from '#core/utils/permissions/filesystem'

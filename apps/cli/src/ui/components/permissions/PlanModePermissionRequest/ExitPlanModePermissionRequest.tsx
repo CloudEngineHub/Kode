@@ -30,7 +30,7 @@ import { getPermissionModeCycleShortcut } from '#ui-ink/utils/permissionModeCycl
 import type { PermissionMode } from '#core/types/PermissionMode'
 import { applyToolPermissionContextUpdateForConversationKey } from '#core/utils/toolPermissionContextState'
 import { getMessagesSetter } from '#core/messages'
-import { getContext } from '#core/context'
+import { getContext } from '@kode/context'
 import { getCodeStyle } from '#core/utils/style'
 import { resetReminderSession } from '#core/services/systemReminder'
 import { resetFileFreshnessSession } from '#core/services/fileFreshness'

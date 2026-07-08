@@ -1,5 +1,5 @@
 import type { Command } from '../types'
-import { getContext } from '#core/context'
+import { getContext } from '@kode/context'
 import { getMessagesGetter, getMessagesSetter } from '#core/messages'
 import { API_ERROR_MESSAGE_PREFIX } from '#core/ai/constants'
 import { queryLLM } from '#core/ai/llmLazy'

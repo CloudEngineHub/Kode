@@ -2,7 +2,7 @@ import { cwd } from 'process'
 import type { Command } from '@commander-js/extra-typings'
 
 import { PRODUCT_COMMAND } from '#core/constants/product'
-import { getContext, removeContext, setContext } from '#core/context'
+import { getContext, removeContext, setContext } from '@kode/context'
 import { setup } from '../setup'
 
 function omitKeys<T extends Record<string, unknown>, K extends keyof T>(

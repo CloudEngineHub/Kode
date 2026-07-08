@@ -1,5 +1,5 @@
 import { useCallback, type ReactNode } from 'react'
-import { getContext } from '#core/context'
+import { getContext } from '@kode/context'
 import { getMaxThinkingTokens } from '#core/utils/thinking'
 import { getLastAssistantMessageId } from '#core/utils/messages'
 import { buildSystemPromptForSession, runTurn } from '#core/engine'

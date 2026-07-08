@@ -24,7 +24,7 @@ mock.module('#core/utils/log', () => ({
 }))
 
 const { getGitEmail } = await import('#core/utils/user')
-const { getGitStatus } = await import('#core/context')
+const { getGitStatus } = await import('@kode/context')
 const { getIsGit } = await import('#core/utils/git')
 
 describe('getGitEmail', () => {

@@ -1,6 +1,6 @@
 import type { Command } from '../types'
 import { getMessagesSetter } from '#core/messages'
-import { getContext } from '#core/context'
+import { getContext } from '@kode/context'
 import { getCodeStyle } from '#core/utils/style'
 import { clearScrollback, clearTerminal } from '#cli-utils/terminal'
 import { getGlobalConfig } from '#core/utils/config'

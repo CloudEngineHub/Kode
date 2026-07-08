@@ -7,7 +7,7 @@ import {
   getProjectInstructionFiles,
   readAndConcatProjectInstructionFiles,
 } from '#core/utils/projectInstructions'
-import { getProjectDocsForCwd } from '#core/context'
+import { getProjectDocsForCwd } from '@kode/context'
 
 function normalizePath(p: string): string {
   return p.replaceAll('\\', '/')

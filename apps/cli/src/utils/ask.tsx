@@ -1,6 +1,6 @@
 import { last } from 'lodash-es'
 import type { Command } from '#cli-commands'
-import { getContext } from '#core/context'
+import { getContext } from '@kode/context'
 import { getTotalCost } from '#core/cost-tracker'
 import type { Message } from '#core/query'
 import { query } from '#core/query'
