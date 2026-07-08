@@ -99,4 +99,46 @@ describe('MCP resource tools parity: use context.options.mcpClients', () => {
       contents: [{ uri: 'uri://one', text: 'hello' }],
     })
   })
+
+  test('ReadMcpResourceTool preserves binary resource blobs', async () => {
+    const fakeClient = {
+      request: async () => ({
+        contents: [
+          {
+            uri: 'uri://image',
+            mimeType: 'image/png',
+            blob: 'aGVsbG8=',
+          },
+        ],
+      }),
+      getServerCapabilities: () => ({ resources: {} }),
+    }
+
+    const ctx = makeContext([
+      {
+        type: 'connected',
+        name: 'srv',
+        capabilities: { resources: {} },
+        client: fakeClient,
+      },
+    ])
+
+    const gen = ReadMcpResourceTool.call(
+      { server: 'srv', uri: 'uri://image' },
+      ctx,
+    )
+    const first = await gen.next()
+    const firstValue = asRecord(first.value)
+    expect(firstValue?.type).toBe('result')
+    expect(firstValue?.data).toMatchObject({
+      contents: [
+        {
+          uri: 'uri://image',
+          mimeType: 'image/png',
+          blob: 'aGVsbG8=',
+        },
+      ],
+    })
+    expect(firstValue?.resultForAssistant).toContain('"blob":"aGVsbG8="')
+  })
 })

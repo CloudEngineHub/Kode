@@ -18,6 +18,7 @@ type Output = {
     uri: string
     mimeType?: string
     text?: string
+    blob?: string
   }>
 }
 
