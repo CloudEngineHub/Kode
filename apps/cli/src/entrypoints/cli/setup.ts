@@ -2,9 +2,10 @@ import { getContext } from '@kode/context'
 import { getCurrentProjectConfig } from '#core/utils/config'
 import { cleanupOldMessageFilesInBackground } from '#core/utils/cleanup'
 import { grantReadPermissionForOriginalDir } from '#core/utils/permissions/filesystem'
-import { setCwd, setOriginalCwd } from '#core/utils/state'
+import { getCwd, setCwd, setOriginalCwd } from '#core/utils/state'
 import { debug as debugLogger } from '#core/utils/debugLogger'
 import { LEGACY_ENV } from '#config/compat/legacyEnv'
+import { setCwdProvider } from '#config/cwd'
 
 export async function setup(cwd: string, safeMode?: boolean): Promise<void> {
   process.env.KODE_PROJECT_DIR = cwd
@@ -15,6 +16,7 @@ export async function setup(cwd: string, safeMode?: boolean): Promise<void> {
     setOriginalCwd(cwd)
   }
   await setCwd(cwd)
+  setCwdProvider(getCwd)
 
   // Always grant read permissions for original working dir
   grantReadPermissionForOriginalDir()
