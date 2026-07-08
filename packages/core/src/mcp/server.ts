@@ -29,6 +29,32 @@ const state: {
 
 const MCP_COMMANDS: unknown[] = []
 
+function createLinkedMcpAbortController(signal: AbortSignal): {
+  abortController: AbortController
+  cleanup(): void
+} {
+  const abortController = new AbortController()
+  const abort = () => {
+    abortController.abort(signal.reason ?? new Error('MCP request cancelled'))
+  }
+
+  if (signal.aborted) {
+    abort()
+  } else {
+    signal.addEventListener('abort', abort, { once: true })
+  }
+
+  return {
+    abortController,
+    cleanup() {
+      signal.removeEventListener('abort', abort)
+    },
+  }
+}
+
+export const __createLinkedMcpAbortControllerForTests =
+  createLinkedMcpAbortController
+
 function getMcpServerName(): string {
   const raw =
     process.env.KODE_MCP_SERVER_NAME ??
@@ -72,7 +98,7 @@ export async function startMCPServer(
     ),
   }))
 
-  server.setRequestHandler(CallToolRequestSchema, async request => {
+  server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     const { name, arguments: args } = request.params
     const tool = MCP_TOOLS.find(_ => _.name === name)
     if (!tool) {
@@ -84,17 +110,22 @@ export async function startMCPServer(
       }
     }
 
+    const linkedAbort = createLinkedMcpAbortController(extra.signal)
+
     try {
       const toolInput: Record<string, unknown> =
         args && typeof args === 'object'
           ? (args as Record<string, unknown>)
           : {}
+      if (linkedAbort.abortController.signal.aborted) {
+        throw new Error('Tool request cancelled')
+      }
       if (!(await tool.isEnabled())) {
         throw new Error(`Tool ${name} is not enabled`)
       }
 
       const toolUseContext: ToolUseContext = {
-        abortController: new AbortController(),
+        abortController: linkedAbort.abortController,
         options: {
           commands: MCP_COMMANDS,
           tools: MCP_TOOLS,
@@ -172,6 +203,8 @@ export async function startMCPServer(
           },
         ],
       }
+    } finally {
+      linkedAbort.cleanup()
     }
   })
 
