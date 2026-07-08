@@ -1,5 +1,5 @@
-import { BunShell } from '#runtime/shell'
+import { cwd } from 'node:process'
 
 export function getCwd(): string {
-  return BunShell.getInstance().pwd()
+  return cwd()
 }
