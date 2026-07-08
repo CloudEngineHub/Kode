@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useRef } from 'react'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 
@@ -39,6 +40,54 @@ export function useUnifiedCompletionNavigationKeys(args: {
   setCursorOffset: (offset: number) => void
   isEnabled: boolean
 }): void {
+  const mountedRef = useRef(true)
+  const directoryFollowupTimeoutRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null)
+  const emptyDirMessageTimeoutRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null)
+
+  const clearDirectoryFollowupTimeout = useCallback(() => {
+    if (directoryFollowupTimeoutRef.current === null) return
+    clearTimeout(directoryFollowupTimeoutRef.current)
+    directoryFollowupTimeoutRef.current = null
+  }, [])
+
+  const clearEmptyDirMessageTimeout = useCallback(() => {
+    if (emptyDirMessageTimeoutRef.current === null) return
+    clearTimeout(emptyDirMessageTimeoutRef.current)
+    emptyDirMessageTimeoutRef.current = null
+  }, [])
+
+  const clearCompletionTimers = useCallback(() => {
+    clearDirectoryFollowupTimeout()
+    clearEmptyDirMessageTimeout()
+  }, [clearDirectoryFollowupTimeout, clearEmptyDirMessageTimeout])
+
+  const scheduleEmptyDirMessageClear = useCallback(() => {
+    clearEmptyDirMessageTimeout()
+    emptyDirMessageTimeoutRef.current = setTimeout(() => {
+      emptyDirMessageTimeoutRef.current = null
+      if (!mountedRef.current) return
+      args.updateState({ emptyDirMessage: '' })
+    }, 3000)
+  }, [args.updateState, clearEmptyDirMessageTimeout])
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      clearCompletionTimers()
+    }
+  }, [clearCompletionTimers])
+
+  useEffect(() => {
+    if (!args.isEnabled) {
+      clearCompletionTimers()
+    }
+  }, [args.isEnabled, clearCompletionTimers])
+
   useKeypress(
     (inputChar, key) => {
       if (!args.isEnabled) return false
@@ -63,6 +112,7 @@ export function useUnifiedCompletionNavigationKeys(args: {
         args.state.isActive &&
         args.state.suggestions.length > 0
       ) {
+        clearCompletionTimers()
         args.resetCompletion()
         return false
       }
@@ -71,6 +121,8 @@ export function useUnifiedCompletionNavigationKeys(args: {
         return false
 
       const handleNavigation = (newIndex: number) => {
+        clearDirectoryFollowupTimeout()
+
         if (!args.state.context) {
           args.updateState({ selectedIndex: newIndex })
           return
@@ -131,6 +183,7 @@ export function useUnifiedCompletionNavigationKeys(args: {
       }
 
       if (inputChar === ' ') {
+        clearCompletionTimers()
         args.resetCompletion()
         return false
       }
@@ -141,23 +194,25 @@ export function useUnifiedCompletionNavigationKeys(args: {
         if (isLoadingSuggestion(selectedSuggestion)) return true
 
         const isDirectory = selectedSuggestion.value.endsWith('/')
+        const context = args.state.context
 
-        if (!args.state.context) return false
+        if (!context) return false
 
-        args.completeWith(selectedSuggestion, args.state.context)
+        clearCompletionTimers()
+
+        args.completeWith(selectedSuggestion, context)
 
         args.resetCompletion()
 
         if (isDirectory) {
-          setTimeout(() => {
-            if (!args.state.context) return
-            const inserted = getPreviewText(
-              selectedSuggestion,
-              args.state.context,
-            )
-            const nextEndPos = args.state.context.startPos + inserted.length
+          directoryFollowupTimeoutRef.current = setTimeout(() => {
+            directoryFollowupTimeoutRef.current = null
+            if (!mountedRef.current) return
+
+            const inserted = getPreviewText(selectedSuggestion, context)
+            const nextEndPos = context.startPos + inserted.length
             const newContext: CompletionContext = {
-              ...args.state.context,
+              ...context,
               prefix: selectedSuggestion.value,
               endPos: nextEndPos,
             }
@@ -170,7 +225,7 @@ export function useUnifiedCompletionNavigationKeys(args: {
               args.updateState({
                 emptyDirMessage: `Directory is empty: ${selectedSuggestion.value}`,
               })
-              setTimeout(() => args.updateState({ emptyDirMessage: '' }), 3000)
+              scheduleEmptyDirMessageClear()
             }
           }, 50)
         }
@@ -179,6 +234,8 @@ export function useUnifiedCompletionNavigationKeys(args: {
       }
 
       if (key.escape) {
+        clearCompletionTimers()
+
         if (args.state.preview?.isActive && args.state.context) {
           args.onInputChange(args.state.preview.originalInput)
           args.setCursorOffset(
@@ -200,6 +257,7 @@ export function useUnifiedCompletionNavigationKeys(args: {
       if (!args.isEnabled) return false
       if (key.backspace || key.delete) {
         if (args.state.isActive) {
+          clearCompletionTimers()
           args.resetCompletion()
           const suppressionTime = args.input.length > 10 ? 200 : 100
           args.updateState({
