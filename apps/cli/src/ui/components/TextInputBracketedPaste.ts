@@ -100,8 +100,9 @@ export function useBracketedPasteSequences({
     (rawText: string) => {
       const normalized = normalizeLineEndings(rawText)
       if (onPaste && shouldTreatAsSpecialPaste(normalized)) {
-        // Schedule callback after current render to avoid state updates during render
-        Promise.resolve().then(() => onPaste(normalized))
+        // Schedule callback outside the keypress frame so large paste handling
+        // doesn't block cursor updates.
+        setTimeout(() => onPaste(normalized), 0)
         return
       }
 

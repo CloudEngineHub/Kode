@@ -65,6 +65,16 @@ export function usePromptPastes(args: {
   >([])
   const pastedTextCounter = useRef(1)
   const pastedImageCounter = useRef(1)
+  const inputRef = useRef(input)
+  const cursorOffsetRef = useRef(cursorOffset)
+
+  useEffect(() => {
+    inputRef.current = input
+  }, [input])
+
+  useEffect(() => {
+    cursorOffsetRef.current = cursorOffset
+  }, [cursorOffset])
 
   const setPastedTexts = useCallback(
     (
@@ -132,12 +142,16 @@ export function usePromptPastes(args: {
     (rawText: string) => {
       const text = normalizeLineEndings(rawText)
       const newlineCount = countLineBreaks(text)
+      const currentInput = inputRef.current
+      const currentCursorOffset = cursorOffsetRef.current
 
       if (!shouldTreatAsSpecialPaste(text, { terminalRows })) {
         const newInput =
-          input.slice(0, cursorOffset) + text + input.slice(cursorOffset)
+          currentInput.slice(0, currentCursorOffset) +
+          text +
+          currentInput.slice(currentCursorOffset)
         onInputChange(newInput)
-        setCursorOffset(cursorOffset + text.length)
+        setCursorOffset(currentCursorOffset + text.length)
         return
       }
 
@@ -149,19 +163,14 @@ export function usePromptPastes(args: {
           : `[Pasted text #${pasteId} +${newlineCount} lines]`
 
       const newInput =
-        input.slice(0, cursorOffset) + pastedPrompt + input.slice(cursorOffset)
+        currentInput.slice(0, currentCursorOffset) +
+        pastedPrompt +
+        currentInput.slice(currentCursorOffset)
       onInputChange(newInput)
-      setCursorOffset(cursorOffset + pastedPrompt.length)
+      setCursorOffset(currentCursorOffset + pastedPrompt.length)
       setPastedTexts(prev => [...prev, { placeholder: pastedPrompt, text }])
     },
-    [
-      cursorOffset,
-      input,
-      onInputChange,
-      setCursorOffset,
-      setPastedTexts,
-      terminalRows,
-    ],
+    [onInputChange, setCursorOffset, setPastedTexts, terminalRows],
   )
 
   const clearPastes = useCallback(() => {

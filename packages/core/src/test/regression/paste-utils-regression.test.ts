@@ -35,6 +35,11 @@ describe('Regression: paste/newline heuristics', () => {
     expect(shouldAggregatePasteChunk('x', false)).toBe(false)
   })
 
+  test('pending paste aggregation keeps single keypresses responsive', () => {
+    expect(shouldAggregatePasteChunk('x', true)).toBe(false)
+    expect(shouldAggregatePasteChunk('xy', true)).toBe(true)
+  })
+
   test('special paste is gated by length or newline threshold', () => {
     expect(getSpecialPasteNewlineThreshold(24)).toBe(2)
     expect(shouldTreatAsSpecialPaste('\n')).toBe(false)

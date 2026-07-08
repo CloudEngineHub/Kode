@@ -73,20 +73,26 @@ export default function TextInput({
     onOffsetChange: onChangeCursorOffset,
   })
 
-  // Paste detection state
-  const [pasteState, setPasteState] = React.useState<{
-    chunks: string[]
-    timeoutId: ReturnType<typeof setTimeout> | null
-  }>({ chunks: [], timeoutId: null })
+  // Paste aggregation stays out of React state so large paste bursts don't
+  // trigger a render per chunk.
+  const pasteChunksRef = React.useRef<string[]>([])
+  const pasteTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  )
   const pasteGuardUntilRef = React.useRef<number>(0)
   const pasteWarningTimeoutRef = React.useRef<ReturnType<
     typeof setTimeout
   > | null>(null)
   const onMessageRef = React.useRef<Props['onMessage']>(onMessage)
+  const onPasteRef = React.useRef<Props['onPaste']>(onPaste)
 
   React.useEffect(() => {
     onMessageRef.current = onMessage
   }, [onMessage])
+
+  React.useEffect(() => {
+    onPasteRef.current = onPaste
+  }, [onPaste])
 
   const isPasteTrusted = React.useCallback(() => {
     return (
@@ -140,6 +146,11 @@ export default function TextInput({
   React.useEffect(
     () => () => {
       clearPasteWarning()
+      if (pasteTimeoutRef.current) {
+        clearTimeout(pasteTimeoutRef.current)
+        pasteTimeoutRef.current = null
+      }
+      pasteChunksRef.current = []
     },
     [clearPasteWarning],
   )
@@ -149,21 +160,23 @@ export default function TextInput({
     onPaste,
   })
 
-  const resetPasteTimeout = (
-    currentTimeoutId: ReturnType<typeof setTimeout> | null,
-  ) => {
-    if (currentTimeoutId) {
-      clearTimeout(currentTimeoutId)
+  const flushAggregatedPaste = React.useCallback(() => {
+    const pastedText = pasteChunksRef.current.join('')
+    pasteChunksRef.current = []
+    pasteTimeoutRef.current = null
+    if (!pastedText) return
+
+    setTimeout(() => {
+      onPasteRef.current?.(pastedText)
+    }, 0)
+  }, [])
+
+  const resetPasteTimeout = React.useCallback(() => {
+    if (pasteTimeoutRef.current) {
+      clearTimeout(pasteTimeoutRef.current)
     }
-    return setTimeout(() => {
-      setPasteState(({ chunks }) => {
-        const pastedText = chunks.join('')
-        // Schedule callback after current render to avoid state updates during render
-        Promise.resolve().then(() => onPaste!(pastedText))
-        return { chunks: [], timeoutId: null }
-      })
-    }, 500)
-  }
+    pasteTimeoutRef.current = setTimeout(flushAggregatedPaste, 500)
+  }, [flushAggregatedPaste])
 
   const wrappedOnInput = (input: string, key: Key): void => {
     // Some terminals (e.g. kitty/wezterm with CSI-u keyboard protocol) encode Enter with modifiers as CSI u sequences.
@@ -252,15 +265,11 @@ export default function TextInput({
     // This batching number is not consistent.
     if (
       onPaste &&
-      shouldAggregatePasteChunk(input, pasteState.timeoutId !== null)
+      shouldAggregatePasteChunk(input, pasteTimeoutRef.current !== null)
     ) {
       armPasteGuard()
-      setPasteState(({ chunks, timeoutId }) => {
-        return {
-          chunks: [...chunks, input],
-          timeoutId: resetPasteTimeout(timeoutId),
-        }
-      })
+      pasteChunksRef.current.push(input)
+      resetPasteTimeout()
       return
     }
 

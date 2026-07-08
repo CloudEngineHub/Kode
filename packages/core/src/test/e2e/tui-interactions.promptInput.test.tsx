@@ -484,6 +484,34 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
     expect(h.getOutput()).toContain('RAW:\"\"')
   })
 
+  test('delayed paste placeholder uses latest cursor position', async () => {
+    await setCwd(process.cwd())
+
+    const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
+    const h = createInkTestHarness(
+      <PromptInputHarness conversationKey={conversationKey} showRaw={true} />,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    h.clearOutput()
+
+    h.stdin.write('hi')
+    await h.wait(75)
+
+    // Long paste chunks are aggregated on a timer; typing during that window
+    // should not be lost or inserted relative to a stale render closure.
+    h.stdin.write('a'.repeat(801))
+    await h.wait(100)
+    h.stdin.write('!')
+    await h.wait(650)
+
+    expect(h.getOutput()).toContain('RAW:\"hi![Pasted text #1]\"')
+
+    h.stdin.write('\r')
+    await h.wait(150)
+  })
+
   test('shift+tab cycles permission mode and renders CompactModeIndicator', async () => {
     const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
     const h = createInkTestHarness(

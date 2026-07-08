@@ -35,7 +35,6 @@ export function shouldAggregatePasteChunk(
   input: string,
   hasPendingTimeout: boolean,
 ): boolean {
-  if (hasPendingTimeout) return true
   if (input.length > SPECIAL_PASTE_CHAR_THRESHOLD) return true
 
   // Avoid misclassifying escape-prefixed newline insert sequences from terminal keybindings (e.g. Option+Enter).
@@ -44,6 +43,8 @@ export function shouldAggregatePasteChunk(
   // Multi-line chunks (or CRLF bursts) are usually paste, but may be delivered in smaller batches.
   if (input.length > 1 && (input.includes('\n') || input.includes('\r')))
     return true
+
+  if (hasPendingTimeout && input.length > 1) return true
 
   return false
 }

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { type Key } from '#ui-ink/hooks/useKeypress'
 import { useDoublePress } from './useDoublePress'
 import { Cursor } from '#cli-utils/Cursor'
@@ -8,7 +8,7 @@ import type {
   UseTextInputResult,
 } from './useTextInput.types'
 import { mapInput } from './useTextInputMapping'
-import { tryImagePaste } from './useTextInputTryImagePaste'
+import { resolveImagePastePlaceholder } from './useTextInputTryImagePaste'
 
 type MaybeCursor = void | Cursor
 
@@ -54,8 +54,17 @@ export function useTextInput({
   const cursorRef = useRef(Cursor.fromText(originalValue, columns, offset))
   const lastComplexInsertRef = useRef(0)
   const lastNonAsciiInsertRef = useRef(0)
+  const imagePasteInFlightRef = useRef(false)
+  const isMountedRef = useRef(true)
   const [imagePasteErrorTimeout, setImagePasteErrorTimeout] =
     useState<NodeJS.Timeout | null>(null)
+
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
 
   // Keep the cursor model in sync with external value/offset/columns updates.
   // Important: avoid recomputing wrapped layout unless the text or column count changed.
@@ -138,15 +147,29 @@ export function useTextInput({
     return currentCursor.del()
   }
 
-  function handleImagePaste() {
-    return tryImagePaste({
-      cursor: cursorRef.current,
+  function handleImagePaste(): MaybeCursor {
+    if (imagePasteInFlightRef.current) {
+      return cursorRef.current
+    }
+
+    imagePasteInFlightRef.current = true
+    void resolveImagePastePlaceholder({
       mask,
       onImagePaste,
       onMessage,
       setImagePasteErrorTimeout,
       clearImagePasteErrorTimeout: maybeClearImagePasteErrorTimeout,
     })
+      .then(placeholder => {
+        imagePasteInFlightRef.current = false
+        if (!isMountedRef.current || !placeholder) return
+        applyCursor(cursorRef.current.insert(placeholder))
+      })
+      .catch(() => {
+        imagePasteInFlightRef.current = false
+      })
+
+    return cursorRef.current
   }
 
   function getCursor(): Cursor {
