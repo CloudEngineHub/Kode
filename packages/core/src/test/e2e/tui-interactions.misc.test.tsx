@@ -375,6 +375,62 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     expect(focused).toBe('second')
   })
 
+  test('Select: down-arrow focus survives transient empty keep-alive options', async () => {
+    let focused = ''
+
+    function SelectTransientOptionsHarness(): React.ReactNode {
+      const [showOptions, setShowOptions] = useState(true)
+
+      useEffect(() => {
+        const timers = [
+          setTimeout(() => setShowOptions(false), 80),
+          setTimeout(() => setShowOptions(true), 130),
+          setTimeout(() => setShowOptions(false), 180),
+          setTimeout(() => setShowOptions(true), 230),
+        ]
+        return () => {
+          for (const timer of timers) clearTimeout(timer)
+        }
+      }, [])
+
+      return (
+        <Select
+          focusValue="first"
+          options={
+            showOptions
+              ? [
+                  { label: 'First', value: 'first' },
+                  { label: 'Second', value: 'second' },
+                  { label: 'Third', value: 'third' },
+                ]
+              : []
+          }
+          onFocus={value => {
+            focused = value
+          }}
+        />
+      )
+    }
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <SelectTransientOptionsHarness />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(40)
+    expect(focused).toBe('first')
+
+    h.stdin.write('\u001B[B')
+    await h.wait(30)
+    expect(focused).toBe('second')
+
+    await h.wait(240)
+
+    expect(focused).toBe('second')
+  })
+
   test('Select: focusValue is applied after options arrive from keep-alive loading', async () => {
     let focused = ''
 

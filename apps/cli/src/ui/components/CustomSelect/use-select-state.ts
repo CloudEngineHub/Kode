@@ -285,10 +285,17 @@ export const useSelectState = ({
     () => optionStructureKey(flatOptions),
     [flatOptions],
   )
+  const lastFocusedValueRef = useRef<string | undefined>(state.focusedValue)
   const lastSyncedRef = useRef({
     structureKey,
     visibleOptionCount,
   })
+
+  useEffect(() => {
+    if (state.focusedValue) {
+      lastFocusedValueRef.current = state.focusedValue
+    }
+  }, [state.focusedValue])
 
   useEffect(() => {
     const lastSynced = lastSyncedRef.current
@@ -306,7 +313,7 @@ export const useSelectState = ({
     dispatch({
       type: 'sync-options',
       visibleOptionCount,
-      defaultValue: focusValue ?? defaultValue,
+      defaultValue: lastFocusedValueRef.current ?? focusValue ?? defaultValue,
       options,
     })
   }, [defaultValue, focusValue, options, structureKey, visibleOptionCount])
@@ -373,9 +380,6 @@ export const useSelectState = ({
     }
 
     if (!focusValueExists) {
-      if (appliedFocusValueRef.current === focusValue) {
-        appliedFocusValueRef.current = undefined
-      }
       return
     }
 
