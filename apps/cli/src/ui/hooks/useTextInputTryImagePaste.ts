@@ -13,15 +13,15 @@ export function tryImagePaste({
   mask,
   onImagePaste,
   onMessage,
-  setImagePasteErrorTimeout,
   clearImagePasteErrorTimeout,
+  scheduleImagePasteErrorClear,
 }: {
   cursor: Cursor
   mask: string
   onImagePaste?: (image: ClipboardImage) => string | void
   onMessage?: (show: boolean, message?: string) => void
-  setImagePasteErrorTimeout: (timeout: NodeJS.Timeout | null) => void
   clearImagePasteErrorTimeout: () => void
+  scheduleImagePasteErrorClear: () => void
 }): Cursor {
   if (mask) {
     return cursor
@@ -31,11 +31,7 @@ export function tryImagePaste({
   if (image === null) {
     onMessage?.(true, CLIPBOARD_ERROR_MESSAGE)
     clearImagePasteErrorTimeout()
-    setImagePasteErrorTimeout(
-      setTimeout(() => {
-        onMessage?.(false)
-      }, 4000),
-    )
+    scheduleImagePasteErrorClear()
     return cursor
   }
 
@@ -49,14 +45,14 @@ export async function resolveImagePastePlaceholder({
   mask,
   onImagePaste,
   onMessage,
-  setImagePasteErrorTimeout,
   clearImagePasteErrorTimeout,
+  scheduleImagePasteErrorClear,
 }: {
   mask: string
   onImagePaste?: (image: ClipboardImage) => string | void
   onMessage?: (show: boolean, message?: string) => void
-  setImagePasteErrorTimeout: (timeout: NodeJS.Timeout | null) => void
   clearImagePasteErrorTimeout: () => void
+  scheduleImagePasteErrorClear: () => void
 }): Promise<string | null> {
   if (mask) {
     return null
@@ -67,11 +63,7 @@ export async function resolveImagePastePlaceholder({
   if (image === null) {
     onMessage?.(true, CLIPBOARD_ERROR_MESSAGE)
     clearImagePasteErrorTimeout()
-    setImagePasteErrorTimeout(
-      setTimeout(() => {
-        onMessage?.(false)
-      }, 4000),
-    )
+    scheduleImagePasteErrorClear()
     return null
   }
 

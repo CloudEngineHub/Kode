@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { type Key } from '#ui-ink/hooks/useKeypress'
 import { useDoublePress } from './useDoublePress'
 import { Cursor } from '#cli-utils/Cursor'
@@ -56,13 +56,15 @@ export function useTextInput({
   const lastNonAsciiInsertRef = useRef(0)
   const imagePasteInFlightRef = useRef(false)
   const isMountedRef = useRef(true)
-  const [imagePasteErrorTimeout, setImagePasteErrorTimeout] =
-    useState<NodeJS.Timeout | null>(null)
+  const imagePasteErrorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  )
 
   useEffect(() => {
     isMountedRef.current = true
     return () => {
       isMountedRef.current = false
+      maybeClearImagePasteErrorTimeout({ hideMessage: false })
     }
   }, [])
 
@@ -79,13 +81,25 @@ export function useTextInput({
     cursorRef.current = new Cursor(currentCursor.measuredText, offset)
   }
 
-  function maybeClearImagePasteErrorTimeout() {
-    if (!imagePasteErrorTimeout) {
+  function maybeClearImagePasteErrorTimeout(
+    options: { hideMessage?: boolean } = {},
+  ) {
+    if (!imagePasteErrorTimeoutRef.current) {
       return
     }
-    clearTimeout(imagePasteErrorTimeout)
-    setImagePasteErrorTimeout(null)
-    onMessage?.(false)
+    clearTimeout(imagePasteErrorTimeoutRef.current)
+    imagePasteErrorTimeoutRef.current = null
+    if (options.hideMessage !== false && isMountedRef.current) {
+      onMessage?.(false)
+    }
+  }
+
+  function scheduleImagePasteErrorClear() {
+    maybeClearImagePasteErrorTimeout({ hideMessage: false })
+    imagePasteErrorTimeoutRef.current = setTimeout(() => {
+      imagePasteErrorTimeoutRef.current = null
+      if (isMountedRef.current) onMessage?.(false)
+    }, 4000)
   }
 
   function applyCursor(nextCursor: Cursor) {
@@ -157,8 +171,8 @@ export function useTextInput({
       mask,
       onImagePaste,
       onMessage,
-      setImagePasteErrorTimeout,
       clearImagePasteErrorTimeout: maybeClearImagePasteErrorTimeout,
+      scheduleImagePasteErrorClear,
     })
       .then(placeholder => {
         imagePasteInFlightRef.current = false
