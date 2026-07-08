@@ -28,7 +28,9 @@ describe('MCP client roots', () => {
     expect(getMcpClientCapabilities()).toEqual({})
 
     __setMcpRootsTrustOverrideForTests(true)
-    expect(getMcpClientCapabilities()).toEqual({ roots: {} })
+    expect(getMcpClientCapabilities()).toEqual({
+      roots: { listChanged: false },
+    })
   })
 
   test('registers roots/list handler when roots are exposed', async () => {

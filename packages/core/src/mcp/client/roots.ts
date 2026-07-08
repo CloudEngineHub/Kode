@@ -37,7 +37,7 @@ export function shouldExposeMcpRoots(): boolean {
 export function getMcpClientCapabilities(): ClientCapabilities {
   if (!shouldExposeMcpRoots()) return {}
   return {
-    roots: {},
+    roots: { listChanged: false },
   }
 }
 
