@@ -360,6 +360,8 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
   const [authUrl, setAuthUrl] = useState<string | null>(null)
   const [authError, setAuthError] = useState<string | null>(null)
   const authAbortControllerRef = useRef<AbortController | null>(null)
+  const mountedRef = useRef(true)
+  const serverRefreshGenerationRef = useRef(0)
 
   const [actionError, setActionError] = useState<string | null>(null)
 
@@ -373,6 +375,14 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
   }, [])
 
   const refreshServers = useCallback(async () => {
+    if (!mountedRef.current) return
+
+    const requestGeneration = serverRefreshGenerationRef.current + 1
+    serverRefreshGenerationRef.current = requestGeneration
+    const isCurrentRefresh = () =>
+      mountedRef.current &&
+      serverRefreshGenerationRef.current === requestGeneration
+
     setLoadingServers(true)
     setServersError(null)
     try {
@@ -437,17 +447,24 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
           return { name, config, scope, configLocation, status: 'disconnected' }
         })
 
+      if (!isCurrentRefresh()) return
       setServers(items)
     } catch (err) {
+      if (!isCurrentRefresh()) return
       setServers([])
       setServersError(err instanceof Error ? err.message : String(err))
     } finally {
-      setLoadingServers(false)
+      if (isCurrentRefresh()) setLoadingServers(false)
     }
   }, [])
 
   useEffect(() => {
+    mountedRef.current = true
     refreshServers().catch(() => {})
+    return () => {
+      mountedRef.current = false
+      serverRefreshGenerationRef.current += 1
+    }
   }, [refreshServers])
 
   const serversByScope = useMemo(() => {

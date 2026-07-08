@@ -156,13 +156,25 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
 
   test('McpServersScreen: resources can be opened from a connected server', async () => {
     let reconnectCount = 0
+    let getClientsCallCount = 0
 
     try {
       mock.module('#core/mcp/client', () => {
         return {
           authenticateMcpServer: async () => {},
           clearMcpAuth: async () => {},
-          getClients: async () => [{ type: 'connected', name: 'srv' }],
+          getClients: async () => {
+            getClientsCallCount += 1
+            if (getClientsCallCount === 2) {
+              await new Promise(resolve => setTimeout(resolve, 220))
+              return [{ type: 'failed', name: 'srv' }]
+            }
+            if (getClientsCallCount === 3) {
+              await new Promise(resolve => setTimeout(resolve, 20))
+              return [{ type: 'connected', name: 'srv' }]
+            }
+            return [{ type: 'connected', name: 'srv' }]
+          },
           getMcpAuthSnapshot: () => ({ isAuthenticated: false }),
           getMCPCommands: async () => [],
           getMCPResources: async () => {
@@ -275,6 +287,22 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
       expect(output).toContain('Size: 2.0 KiB')
       expect(output).toContain('Primary project documentation')
       expect(output).toContain('audience: user')
+
+      h.stdin.write('\x1b')
+      await h.wait(80)
+      h.stdin.write('\x1b')
+      await h.wait(300)
+      h.clearOutput()
+      h.stdin.write('\x1B[B')
+      await h.wait(50)
+      h.stdin.write('\r')
+      await h.wait(80)
+      h.stdin.write('\r')
+      await h.wait(300)
+      const refreshedOutput = h.getOutput()
+      expect(refreshedOutput).toContain('connected')
+      expect(refreshedOutput).not.toContain('failed')
+      expect(reconnectCount).toBe(2)
     } finally {
       mock.restore()
     }
