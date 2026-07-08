@@ -4,7 +4,7 @@ import {
   type Reducer,
   useCallback,
   useMemo,
-  useState,
+  useRef,
   useEffect,
 } from 'react'
 import OptionMap from './option-map'
@@ -24,7 +24,12 @@ type Action =
   | { type: 'select-focused-option' }
   | { type: 'select-option'; value: string }
   | { type: 'set-focus'; value: string }
-  | { type: 'reset'; state: State }
+  | {
+      type: 'sync-options'
+      visibleOptionCount: number
+      options: (Option | OptionSubtree)[]
+      defaultValue?: string
+    }
 
 const reducer: Reducer<State, Action> = (state, action) => {
   switch (action.type) {
@@ -134,8 +139,22 @@ const reducer: Reducer<State, Action> = (state, action) => {
       }
     }
 
-    case 'reset': {
-      return action.state
+    case 'sync-options': {
+      const nextState = createDefaultState({
+        visibleOptionCount: action.visibleOptionCount,
+        defaultValue: state.focusedValue ?? state.value ?? action.defaultValue,
+        options: action.options,
+      })
+      const value =
+        state.value && nextState.optionMap.get(state.value)
+          ? state.value
+          : undefined
+
+      return {
+        ...nextState,
+        previousValue: value === state.value ? state.previousValue : undefined,
+        value,
+      }
     }
 
     case 'set-focus': {
@@ -227,19 +246,18 @@ export const useSelectState = ({
     createDefaultState,
   )
 
-  const [lastOptions, setLastOptions] = useState(flatOptions)
+  const lastOptionsRef = useRef(flatOptions)
 
-  if (
-    flatOptions !== lastOptions &&
-    !isDeepStrictEqual(flatOptions, lastOptions)
-  ) {
+  useEffect(() => {
+    if (isDeepStrictEqual(flatOptions, lastOptionsRef.current)) return
+    lastOptionsRef.current = flatOptions
     dispatch({
-      type: 'reset',
-      state: createDefaultState({ visibleOptionCount, defaultValue, options }),
+      type: 'sync-options',
+      visibleOptionCount,
+      defaultValue,
+      options,
     })
-
-    setLastOptions(flatOptions)
-  }
+  }, [defaultValue, flatOptions, options, visibleOptionCount])
 
   const focusNextOption = useCallback(() => {
     dispatch({

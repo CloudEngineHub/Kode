@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Box } from 'ink'
 import { AskUserQuestionPermissionRequest } from '#ui-ink/components/permissions/AskUserQuestionPermissionRequest/AskUserQuestionPermissionRequest'
 import { AskUserQuestionTool } from '#tools/tools/interaction/AskUserQuestionTool/AskUserQuestionTool'
@@ -216,6 +216,49 @@ describe('TUI E2E regression (Ink render): Misc', () => {
 
     expect(selected).toBe('second')
     expect(leakedKeypresses).toBe(0)
+  })
+
+  test('Select: down-arrow focus survives keep-alive style rerenders', async () => {
+    let focused = ''
+
+    function SelectKeepAliveHarness(): React.ReactNode {
+      const [tick, setTick] = useState(0)
+
+      useEffect(() => {
+        const intervalId = setInterval(() => {
+          setTick(prev => prev + 1)
+        }, 30)
+        return () => clearInterval(intervalId)
+      }, [])
+
+      return (
+        <Select
+          options={[
+            { label: `First ${tick}`, value: 'first' },
+            { label: `Second ${tick}`, value: 'second' },
+            { label: `Third ${tick}`, value: 'third' },
+          ]}
+          onFocus={value => {
+            focused = value
+          }}
+        />
+      )
+    }
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <SelectKeepAliveHarness />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(60)
+    expect(focused).toBe('first')
+
+    h.stdin.write('\u001B[B')
+    await h.wait(150)
+
+    expect(focused).toBe('second')
   })
 
   test('Bash overlay: ctrl+b triggers background callback', async () => {
