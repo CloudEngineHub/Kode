@@ -139,6 +139,7 @@ describe('protocol contracts (compat + stability)', () => {
           durationMs: 1,
           durationApiMs: 1,
           isError: false,
+          uuid: 'r1',
         }),
       ),
     ).not.toThrow()

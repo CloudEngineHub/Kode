@@ -91,6 +91,7 @@ const ResultEventSchema = z
     duration_api_ms: z.number(),
     is_error: z.boolean(),
     session_id: z.string(),
+    uuid: z.string().optional(),
   })
   .strict()
 
