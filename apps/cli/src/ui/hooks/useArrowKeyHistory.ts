@@ -11,6 +11,19 @@ export type ArrowKeyHistorySnapshot<Extra> = {
   extra: Extra
 }
 
+export function parsePromptHistoryDisplay(display: string): {
+  text: string
+  mode: PromptMode
+} {
+  if (display.startsWith('&')) {
+    return { mode: 'background', text: display.slice(1) }
+  }
+  if (display.startsWith('#')) {
+    return { mode: 'koding', text: display.slice(1) }
+  }
+  return { mode: 'prompt', text: display }
+}
+
 export function useArrowKeyHistory<Extra>(args: {
   current: ArrowKeyHistorySnapshot<Extra>
   emptyExtra: Extra
@@ -57,18 +70,7 @@ export function useArrowKeyHistory<Extra>(args: {
     cursor: 'start' | 'end',
   ) => {
     if (entry === undefined) return
-    let mode: PromptMode = 'prompt'
-    let text = entry.display
-    if (entry.display.startsWith('!')) {
-      mode = 'bash'
-      text = entry.display.slice(1)
-    } else if (entry.display.startsWith('&')) {
-      mode = 'background'
-      text = entry.display.slice(1)
-    } else if (entry.display.startsWith('#')) {
-      mode = 'koding'
-      text = entry.display.slice(1)
-    }
+    const { mode, text } = parsePromptHistoryDisplay(entry.display)
     onRestore({
       text,
       mode,
@@ -143,4 +145,10 @@ export function useArrowKeyHistory<Extra>(args: {
     resetHistory,
     isInFastBrowseMode,
   }
+}
+
+export function __parsePromptHistoryDisplayForTests(
+  display: string,
+): ReturnType<typeof parsePromptHistoryDisplay> {
+  return parsePromptHistoryDisplay(display)
 }

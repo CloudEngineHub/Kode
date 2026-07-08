@@ -46,6 +46,7 @@ import { ModelConfig } from '#ui-ink/components/ModelConfig'
 import { Doctor } from '#ui-ink/screens/Doctor'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { submitPrompt } from '#ui-ink/components/PromptInput/submit'
+import { parsePromptHistoryDisplay } from '#ui-ink/hooks/useArrowKeyHistory'
 import { useTranscriptItems, type TranscriptItem } from './useTranscriptItems'
 import { useRequestToolUsePermission } from './useRequestToolUsePermission'
 import { useReplQuery } from './useReplQuery'
@@ -424,17 +425,7 @@ export function useReplController(props: REPLProps) {
 
             const selected = result.value
             const pastedTexts = result.pastedTexts
-            const mode: PromptMode = selected.startsWith('!')
-              ? 'bash'
-              : selected.startsWith('&')
-                ? 'background'
-                : selected.startsWith('#')
-                  ? 'koding'
-                  : 'prompt'
-            const text =
-              mode === 'bash' || mode === 'background' || mode === 'koding'
-                ? selected.slice(1)
-                : selected
+            const { mode, text } = parsePromptHistoryDisplay(selected)
 
             if (result.action === 'accept') {
               setInputMode(mode)

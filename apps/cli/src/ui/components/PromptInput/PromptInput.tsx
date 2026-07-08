@@ -208,13 +208,10 @@ export function PromptInput({
     (value: string) => {
       onHistoryUserInputRef.current()
 
-      // Only check for mode prefix when in 'prompt' mode
-      // In other modes (bash/koding/background), just update the input directly
+      // Only check background/note prefixes when in prompt mode.
+      // Bash uses the explicit shortcut toggle instead of a typed prefix.
+      // In other modes (bash/koding/background), just update the input directly.
       if (mode === 'prompt') {
-        if (value.startsWith('!') || value.startsWith('$')) {
-          onModeChange('bash')
-          return
-        }
         if (value.startsWith('&')) {
           onModeChange('background')
           return

@@ -14,7 +14,7 @@ export function getInputModeDisplay(mode: PromptMode): InputModeDisplay {
     case 'bash':
       return {
         label: 'Shell',
-        prefix: '$',
+        prefix: '',
         statusText: 'Input: Shell',
         helperText: 'Esc back to chat',
       }
@@ -38,7 +38,7 @@ export function getInputModeDisplay(mode: PromptMode): InputModeDisplay {
         label: 'Chat',
         prefix: '',
         statusText: 'Input: Chat',
-        helperText: '! shell · & background · # note',
+        helperText: 'Ctrl+B shell · & background · # note',
       }
   }
 }

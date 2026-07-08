@@ -227,7 +227,7 @@ export async function submitPrompt(args: {
   // This ensures history is preserved even if the query is aborted (e.g. Escape) or errors mid-flight.
   const inputToAdd =
     effectiveMode === 'bash'
-      ? `!${args.input}`
+      ? args.input
       : effectiveMode === 'background'
         ? `&${args.input}`
         : args.input

@@ -22,9 +22,9 @@ export function UserBashInputMessage({
     <Box flexDirection="column" marginTop={addMargin ? 1 : 0} width="100%">
       <Box>
         <Text color={theme.bashBorder} bold>
-          $
+          Shell
         </Text>
-        <Text bold> {input}</Text>
+        <Text bold>: {input}</Text>
       </Box>
     </Box>
   )

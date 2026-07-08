@@ -190,14 +190,20 @@ export function PromptInputView({
           justifyContent="flex-start"
           width={2}
         >
-          {mode === 'bash' ? (
-            <Text color={theme.bashBorder}>$&nbsp;</Text>
-          ) : mode === 'background' ? (
+          {mode === 'background' ? (
             <Text color={theme.bashBorder}>&amp;&nbsp;</Text>
           ) : mode === 'koding' ? (
             <Text color={theme.noting}>#&nbsp;</Text>
           ) : (
-            <Text color={isLoading ? theme.secondaryText : undefined}>
+            <Text
+              color={
+                mode === 'bash'
+                  ? theme.bashBorder
+                  : isLoading
+                    ? theme.secondaryText
+                    : undefined
+              }
+            >
               {'\u276F'}&nbsp;
             </Text>
           )}

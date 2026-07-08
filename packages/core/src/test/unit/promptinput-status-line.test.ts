@@ -9,11 +9,12 @@ describe('PromptInput status line', () => {
     const display = getInputModeDisplay('prompt')
 
     expect(display.statusText).toBe('Input: Chat')
-    expect(display.helperText).toBe('! shell · & background · # note')
+    expect(display.helperText).toBe('Ctrl+B shell · & background · # note')
   })
 
   test('shell-like modes explain how to return to chat', () => {
     expect(getInputModeDisplay('bash')).toMatchObject({
+      prefix: '',
       statusText: 'Input: Shell',
       helperText: 'Esc back to chat',
     })
@@ -34,7 +35,7 @@ describe('PromptInput status line', () => {
     })
 
     expect(text).toContain('Input: Chat')
-    expect(text).toContain('! shell · & background · # note')
+    expect(text).toContain('Ctrl+B shell · & background · # note')
     expect(text).toContain('Tools: Auto-accept edits (shift+tab)')
     expect(text).toContain('Enter send · Tab queue')
     expect(text).toContain('pending 1')
