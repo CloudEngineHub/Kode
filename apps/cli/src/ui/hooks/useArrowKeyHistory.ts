@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { getHistoryWithPastes } from '#core/history'
 import type { PromptMode } from '#ui-ink/components/PromptInput/types'
 
@@ -37,9 +37,7 @@ export function useArrowKeyHistory<Extra>(args: {
 
   const [historyIndex, setHistoryIndex] = useState(0)
   const historyIndexRef = useRef(0)
-  useEffect(() => {
-    historyIndexRef.current = historyIndex
-  }, [historyIndex])
+  historyIndexRef.current = historyIndex
 
   const draftSnapshotRef = useRef<ArrowKeyHistorySnapshot<Extra> | null>(null)
   const historySnapshotRef = useRef<Array<{
@@ -49,9 +47,7 @@ export function useArrowKeyHistory<Extra>(args: {
   const lastHistoryNavTimeRef = useRef(0)
 
   const currentRef = useRef(current)
-  useEffect(() => {
-    currentRef.current = current
-  }, [current])
+  currentRef.current = current
 
   const getHistorySnapshot = () => {
     if (!historySnapshotRef.current) {

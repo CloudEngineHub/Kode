@@ -280,6 +280,8 @@ export const useSelectState = ({
     { visibleOptionCount, defaultValue: focusValue ?? defaultValue, options },
     createDefaultState,
   )
+  const stateRef = useRef<State>(state)
+  stateRef.current = state
 
   const structureKey = useMemo(
     () => optionStructureKey(flatOptions),
@@ -303,6 +305,21 @@ export const useSelectState = ({
     lastNotifiedFocusValueRef.current = value
     onFocusRef.current?.(value)
   }, [])
+
+  const dispatchWithFocusMirror = useCallback(
+    (action: Action) => {
+      const previousState = stateRef.current
+      const nextState = reducer(previousState, action)
+      stateRef.current = nextState
+
+      if (nextState.focusedValue !== previousState.focusedValue) {
+        notifyFocus(nextState.focusedValue)
+      }
+
+      dispatch(action)
+    },
+    [notifyFocus],
+  )
 
   useEffect(() => {
     onChangeRef.current = onChange
@@ -329,41 +346,45 @@ export const useSelectState = ({
       structureKey,
       visibleOptionCount,
     }
-    dispatch({
+    dispatchWithFocusMirror({
       type: 'sync-options',
       visibleOptionCount,
       defaultValue: lastFocusedValueRef.current ?? focusValue ?? defaultValue,
       options,
     })
-  }, [defaultValue, focusValue, options, structureKey, visibleOptionCount])
+  }, [
+    defaultValue,
+    dispatchWithFocusMirror,
+    focusValue,
+    options,
+    structureKey,
+    visibleOptionCount,
+  ])
 
   const focusNextOption = useCallback(() => {
-    notifyFocus(getAdjacentSelectableValue(state, 'next'))
-    dispatch({
+    dispatchWithFocusMirror({
       type: 'focus-next-option',
     })
-  }, [notifyFocus, state])
+  }, [dispatchWithFocusMirror])
 
   const focusPreviousOption = useCallback(() => {
-    notifyFocus(getAdjacentSelectableValue(state, 'previous'))
-    dispatch({
+    dispatchWithFocusMirror({
       type: 'focus-previous-option',
     })
-  }, [notifyFocus, state])
+  }, [dispatchWithFocusMirror])
 
   const selectFocusedOption = useCallback(() => {
-    dispatch({
+    dispatchWithFocusMirror({
       type: 'select-focused-option',
     })
-  }, [])
+  }, [dispatchWithFocusMirror])
 
   const selectOption = useCallback((value: string) => {
-    if (state.optionMap.get(value)) notifyFocus(value)
-    dispatch({
+    dispatchWithFocusMirror({
       type: 'select-option',
       value,
     })
-  }, [notifyFocus, state.optionMap])
+  }, [dispatchWithFocusMirror])
 
   const visibleOptions = useMemo(() => {
     return flatOptions
@@ -380,13 +401,13 @@ export const useSelectState = ({
       try {
         onChangeRef.current?.(selectedValue)
       } finally {
-        dispatch({
+        dispatchWithFocusMirror({
           type: 'clear-selected-option',
           value: selectedValue,
         })
       }
     }
-  }, [state.previousValue, state.value])
+  }, [dispatchWithFocusMirror, state.previousValue, state.value])
 
   const appliedFocusValueRef = useRef<string | undefined>(undefined)
   useEffect(() => {
@@ -401,11 +422,11 @@ export const useSelectState = ({
 
     if (appliedFocusValueRef.current === focusValue) return
     appliedFocusValueRef.current = focusValue
-    dispatch({
+    dispatchWithFocusMirror({
       type: 'set-focus',
       value: focusValue,
     })
-  }, [focusValue, focusValueExists])
+  }, [dispatchWithFocusMirror, focusValue, focusValueExists])
 
   return {
     focusedValue: state.focusedValue,

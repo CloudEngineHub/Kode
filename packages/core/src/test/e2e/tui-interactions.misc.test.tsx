@@ -630,6 +630,68 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     expect(selected).toBe('second')
   })
 
+  test('Select: repeated down-arrow focus is persisted before a keep-alive remount', async () => {
+    let focused = ''
+    let selected = ''
+
+    function SelectRepeatedKeyRemountHarness(): React.ReactNode {
+      const [showSelect, setShowSelect] = useState(true)
+      const [focusValue, setFocusValue] = useState<string | undefined>('first')
+
+      useKeypress(
+        (_input, key) => {
+          if (!key.downArrow) return
+
+          setTimeout(() => {
+            setShowSelect(false)
+            setTimeout(() => setShowSelect(true), 0)
+          }, 0)
+          return false
+        },
+        { priority: 10 },
+      )
+
+      if (!showSelect) return <Text>Loading actions...</Text>
+
+      return (
+        <Select
+          focusValue={focusValue}
+          options={[
+            { label: 'First', value: 'first' },
+            { label: 'Second', value: 'second' },
+            { label: 'Third', value: 'third' },
+          ]}
+          onFocus={value => {
+            focused = value
+            setFocusValue(value)
+          }}
+          onChange={value => {
+            selected = value
+          }}
+        />
+      )
+    }
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <SelectRepeatedKeyRemountHarness />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(40)
+    expect(focused).toBe('first')
+
+    h.stdin.write('\u001B[B\u001B[B')
+    await h.wait(100)
+    expect(focused).toBe('third')
+
+    h.stdin.write('\r')
+    await h.wait(40)
+
+    expect(selected).toBe('third')
+  })
+
   test('Select: focusValue is applied after options arrive from keep-alive loading', async () => {
     let focused = ''
 
