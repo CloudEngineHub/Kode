@@ -7,7 +7,7 @@ import {
 } from '#config'
 
 import { getModelConfig } from './defaults'
-import { USE_BEDROCK, USE_VERTEX } from './flags'
+import { isBedrockRuntimeEnabled, isVertexRuntimeEnabled } from './flags'
 import {
   analyzeContextCompatibility,
   canModelHandleContext,
@@ -389,8 +389,8 @@ export class ModelManager {
 
   async getFallbackModel(): Promise<string> {
     const modelConfig = await getModelConfig()
-    if (USE_BEDROCK) return modelConfig.bedrock
-    if (USE_VERTEX) return modelConfig.vertex
+    if (isBedrockRuntimeEnabled()) return modelConfig.bedrock
+    if (isVertexRuntimeEnabled()) return modelConfig.vertex
     return modelConfig.firstParty
   }
 

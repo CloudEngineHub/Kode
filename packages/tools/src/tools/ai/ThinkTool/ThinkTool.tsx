@@ -4,7 +4,6 @@ import { Text } from 'ink'
 import { Tool } from '@kode/tool-interface/Tool'
 import { DESCRIPTION, PROMPT } from './prompt'
 import { getTheme } from '#core/utils/theme'
-import { USE_BEDROCK, USE_VERTEX } from '#core/utils/model'
 
 const thinkToolSchema = z.object({
   thought: z.string().describe('Your thoughts.'),

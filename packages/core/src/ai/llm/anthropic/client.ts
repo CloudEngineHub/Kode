@@ -13,8 +13,8 @@ import {
 import {
   getModelManager,
   getVertexRegionForModel,
-  USE_BEDROCK,
-  USE_VERTEX,
+  isBedrockRuntimeEnabled,
+  isVertexRuntimeEnabled,
 } from '#core/utils/model'
 
 let anthropicClient: Anthropic | AnthropicBedrock | AnthropicVertex | null =
@@ -67,12 +67,12 @@ export function getAnthropicClient(
       10,
     ),
   }
-  if (USE_BEDROCK) {
+  if (isBedrockRuntimeEnabled()) {
     const client = new AnthropicBedrock(ARGS)
     anthropicClient = client
     return client
   }
-  if (USE_VERTEX) {
+  if (isVertexRuntimeEnabled()) {
     const vertexArgs = {
       ...ARGS,
       region: region || process.env.CLOUD_ML_REGION || 'us-east5',

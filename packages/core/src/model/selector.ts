@@ -10,7 +10,7 @@ import { debug as debugLogger } from '#core/logging'
 import { logError } from '#core/utils/log'
 
 import { getModelConfig } from './defaults'
-import { USE_BEDROCK, USE_VERTEX } from './flags'
+import { isBedrockRuntimeEnabled, isVertexRuntimeEnabled } from './flags'
 import { ModelManager } from './manager'
 
 const DEFAULT_MODEL_POINTERS: ModelPointers = {
@@ -28,8 +28,8 @@ export const getSlowAndCapableModel = memoize(async (): Promise<string> => {
   if (model) return model
 
   const modelConfig = await getModelConfig()
-  if (USE_BEDROCK) return modelConfig.bedrock
-  if (USE_VERTEX) return modelConfig.vertex
+  if (isBedrockRuntimeEnabled()) return modelConfig.bedrock
+  if (isVertexRuntimeEnabled()) return modelConfig.vertex
   return modelConfig.firstParty
 })
 
