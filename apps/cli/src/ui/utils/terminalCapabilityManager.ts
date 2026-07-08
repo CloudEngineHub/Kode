@@ -12,6 +12,7 @@ import {
   enableModifyOtherKeys,
 } from '#cli-utils/terminal'
 import { debug as debugLogger } from '#core/utils/debugLogger'
+import { setThemeContrastBackgroundColor } from '#core/utils/theme'
 
 export type TerminalBackgroundColor = string | undefined
 
@@ -145,6 +146,7 @@ export class TerminalCapabilityManager {
               match[2] ?? '0',
               match[3] ?? '0',
             )
+            setThemeContrastBackgroundColor(this.terminalBackgroundColor)
           }
         }
 

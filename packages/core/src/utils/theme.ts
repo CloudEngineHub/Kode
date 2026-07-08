@@ -27,6 +27,40 @@ export interface Theme {
   }
 }
 
+type Rgb = {
+  r: number
+  g: number
+  b: number
+}
+
+type ThemeColorKey = Exclude<keyof Theme, 'diff'>
+
+const MIN_TEXT_CONTRAST_RATIO = 4.5
+const MIN_UI_CONTRAST_RATIO = 3
+
+const TEXT_CONTRAST_FIELDS = [
+  'bashBorder',
+  'kode',
+  'noting',
+  'notingBorder',
+  'permission',
+  'autoAccept',
+  'planMode',
+  'text',
+  'secondaryText',
+  'suggestion',
+  'success',
+  'error',
+  'warning',
+  'primary',
+  'secondary',
+] as const satisfies readonly ThemeColorKey[]
+
+const UI_CONTRAST_FIELDS = [
+  'secondaryBorder',
+  'inputBorder',
+] as const satisfies readonly ThemeColorKey[]
+
 // ============================================================================
 // DARK THEMES
 // ============================================================================
@@ -445,10 +479,178 @@ const themes: Record<ThemeNames, Theme> = {
 
 export type { ThemeNames } from '#config'
 
+let themeContrastBackgroundColor: string | undefined
+const contrastAwareThemeCache = new Map<string, Theme>()
+
+function parseHexColor(value: string | undefined): Rgb | undefined {
+  if (!value) return undefined
+  const match = value.trim().match(/^#([0-9a-fA-F]{3,8})$/)
+  if (!match) return undefined
+
+  const hex = match[1] ?? ''
+  if (hex.length === 3 || hex.length === 4) {
+    return {
+      r: Number.parseInt(hex[0] + hex[0], 16),
+      g: Number.parseInt(hex[1] + hex[1], 16),
+      b: Number.parseInt(hex[2] + hex[2], 16),
+    }
+  }
+
+  if (hex.length === 6 || hex.length === 8) {
+    return {
+      r: Number.parseInt(hex.slice(0, 2), 16),
+      g: Number.parseInt(hex.slice(2, 4), 16),
+      b: Number.parseInt(hex.slice(4, 6), 16),
+    }
+  }
+
+  return undefined
+}
+
+function toHexColor(color: Rgb): string {
+  const toHex = (value: number) =>
+    Math.round(Math.max(0, Math.min(255, value)))
+      .toString(16)
+      .padStart(2, '0')
+
+  return `#${toHex(color.r)}${toHex(color.g)}${toHex(color.b)}`
+}
+
+function normalizeHexColor(value: string | undefined): string | undefined {
+  const color = parseHexColor(value)
+  return color ? toHexColor(color) : undefined
+}
+
+function colorChannelToLinear(value: number): number {
+  const normalized = value / 255
+  if (normalized <= 0.04045) return normalized / 12.92
+  return ((normalized + 0.055) / 1.055) ** 2.4
+}
+
+function relativeLuminance(color: Rgb): number {
+  return (
+    0.2126 * colorChannelToLinear(color.r) +
+    0.7152 * colorChannelToLinear(color.g) +
+    0.0722 * colorChannelToLinear(color.b)
+  )
+}
+
+function contrastRatio(left: Rgb, right: Rgb): number {
+  const leftLuminance = relativeLuminance(left)
+  const rightLuminance = relativeLuminance(right)
+  const lighter = Math.max(leftLuminance, rightLuminance)
+  const darker = Math.min(leftLuminance, rightLuminance)
+  return (lighter + 0.05) / (darker + 0.05)
+}
+
+function mixColor(from: Rgb, to: Rgb, amount: number): Rgb {
+  return {
+    r: from.r + (to.r - from.r) * amount,
+    g: from.g + (to.g - from.g) * amount,
+    b: from.b + (to.b - from.b) * amount,
+  }
+}
+
+function ensureContrast(
+  foregroundValue: string,
+  background: Rgb,
+  minRatio: number,
+): string {
+  const foreground = parseHexColor(foregroundValue)
+  if (!foreground) return foregroundValue
+  if (contrastRatio(foreground, background) >= minRatio) return foregroundValue
+
+  const black: Rgb = { r: 0, g: 0, b: 0 }
+  const white: Rgb = { r: 255, g: 255, b: 255 }
+  const target =
+    contrastRatio(white, background) >= contrastRatio(black, background)
+      ? white
+      : black
+
+  if (contrastRatio(target, background) < minRatio) return toHexColor(target)
+
+  let low = 0
+  let high = 1
+  let best = target
+
+  for (let i = 0; i < 24; i += 1) {
+    const mid = (low + high) / 2
+    const candidate = mixColor(foreground, target, mid)
+    const rounded = parseHexColor(toHexColor(candidate)) ?? candidate
+    if (contrastRatio(rounded, background) >= minRatio) {
+      best = rounded
+      high = mid
+    } else {
+      low = mid
+    }
+  }
+
+  return toHexColor(best)
+}
+
+export function setThemeContrastBackgroundColor(
+  backgroundColor: string | undefined,
+): void {
+  const normalized = normalizeHexColor(backgroundColor)
+  if (themeContrastBackgroundColor === normalized) return
+
+  themeContrastBackgroundColor = normalized
+  contrastAwareThemeCache.clear()
+}
+
+export function getThemeContrastBackgroundColor(): string | undefined {
+  return themeContrastBackgroundColor
+}
+
+export function createContrastAwareTheme(
+  theme: Theme,
+  backgroundColor: string | undefined,
+): Theme {
+  const background = parseHexColor(backgroundColor)
+  if (!background) return theme
+
+  const adjusted: Theme = { ...theme }
+  for (const field of TEXT_CONTRAST_FIELDS) {
+    adjusted[field] = ensureContrast(
+      adjusted[field],
+      background,
+      MIN_TEXT_CONTRAST_RATIO,
+    )
+  }
+  for (const field of UI_CONTRAST_FIELDS) {
+    adjusted[field] = ensureContrast(
+      adjusted[field],
+      background,
+      MIN_UI_CONTRAST_RATIO,
+    )
+  }
+
+  return adjusted
+}
+
+export function getThemeContrastRatio(
+  foregroundColor: string,
+  backgroundColor: string,
+): number | undefined {
+  const foreground = parseHexColor(foregroundColor)
+  const background = parseHexColor(backgroundColor)
+  if (!foreground || !background) return undefined
+  return contrastRatio(foreground, background)
+}
+
 export function getTheme(overrideTheme?: ThemeNames): Theme {
   const config = getGlobalConfig()
   const themeName = overrideTheme ?? config.theme
-  return themes[themeName] ?? darkTheme
+  const theme = themes[themeName] ?? darkTheme
+  if (!themeContrastBackgroundColor) return theme
+
+  const cacheKey = `${themeName}:${themeContrastBackgroundColor}`
+  const cached = contrastAwareThemeCache.get(cacheKey)
+  if (cached) return cached
+
+  const adjusted = createContrastAwareTheme(theme, themeContrastBackgroundColor)
+  contrastAwareThemeCache.set(cacheKey, adjusted)
+  return adjusted
 }
 
 export function getAvailableThemes(): ThemeNames[] {
