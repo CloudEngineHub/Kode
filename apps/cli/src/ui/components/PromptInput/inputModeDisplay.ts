@@ -1,6 +1,7 @@
 import type { PermissionMode } from '#core/types/PermissionMode'
 import type { PromptMode } from './types'
 import { getPermissionModeStatusLabel } from '#ui-ink/utils/permissionModeDisplay'
+import { getPromptModeSpec } from './promptModeSpecs'
 
 export type InputModeDisplay = {
   label: string
@@ -10,36 +11,12 @@ export type InputModeDisplay = {
 }
 
 export function getInputModeDisplay(mode: PromptMode): InputModeDisplay {
-  switch (mode) {
-    case 'bash':
-      return {
-        label: 'Shell',
-        prefix: '',
-        statusText: 'Input: Shell',
-        helperText: 'Esc back to chat',
-      }
-    case 'background':
-      return {
-        label: 'Background shell',
-        prefix: '&',
-        statusText: 'Input: Background shell',
-        helperText: 'Esc back to chat',
-      }
-    case 'koding':
-      return {
-        label: 'Legacy note',
-        prefix: '#',
-        statusText: 'Input: Legacy note',
-        helperText: 'Esc back to chat',
-      }
-    case 'prompt':
-    default:
-      return {
-        label: 'Chat',
-        prefix: '',
-        statusText: 'Input: Chat',
-        helperText: '/bash command · /note note · & background',
-      }
+  const spec = getPromptModeSpec(mode)
+  return {
+    label: spec.label,
+    prefix: spec.prefix,
+    statusText: spec.statusText,
+    helperText: spec.helperText,
   }
 }
 
@@ -64,7 +41,7 @@ export function buildPromptInputStatusLine(args: {
     parts.unshift('-- INSERT --')
   }
 
-  parts.push(args.isLoading ? 'Enter send · Tab queue' : 'Enter send')
+  parts.push(args.isLoading ? 'Enter send \u00b7 Tab queue' : 'Enter send')
 
   if (args.pendingPromptCount > 0) {
     parts.push(`pending ${args.pendingPromptCount}`)
@@ -75,5 +52,5 @@ export function buildPromptInputStatusLine(args: {
     parts.push('Alt+Up edit')
   }
 
-  return parts.join(' · ')
+  return parts.join(' \u00b7 ')
 }

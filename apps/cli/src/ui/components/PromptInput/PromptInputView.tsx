@@ -17,6 +17,10 @@ import type { PromptMode } from './types'
 import { PromptInputCompletionPanel } from './PromptInputCompletionPanel'
 import { PendingPrompts } from './PendingPrompts'
 import { QueuedPrompts } from './QueuedPrompts'
+import {
+  getPromptModeBorderColor,
+  getPromptModePrefix,
+} from './promptModeSpecs'
 
 type ModelInfo = {
   name: string
@@ -142,6 +146,7 @@ export function PromptInputView({
     compactRows: 15,
   })
   const showStatusLine = normalizeTerminalDimension(rows, 0) > 8
+  const modePrefix = getPromptModePrefix({ mode, theme, isLoading })
 
   return (
     <Box flexDirection="column">
@@ -172,13 +177,7 @@ export function PromptInputView({
         borderBottom={true}
         borderLeft={false}
         borderRight={false}
-        borderColor={
-          mode === 'bash' || mode === 'background'
-            ? theme.bashBorder
-            : mode === 'koding'
-              ? theme.notingBorder
-              : theme.inputBorder
-        }
+        borderColor={getPromptModeBorderColor(mode, theme)}
         borderDimColor={false}
         borderStyle="single"
         width="100%"
@@ -190,23 +189,7 @@ export function PromptInputView({
           justifyContent="flex-start"
           width={2}
         >
-          {mode === 'background' ? (
-            <Text color={theme.bashBorder}>&amp;&nbsp;</Text>
-          ) : mode === 'koding' ? (
-            <Text color={theme.noting}>#&nbsp;</Text>
-          ) : (
-            <Text
-              color={
-                mode === 'bash'
-                  ? theme.bashBorder
-                  : isLoading
-                    ? theme.secondaryText
-                    : undefined
-              }
-            >
-              {'\u276F'}&nbsp;
-            </Text>
-          )}
+          <Text color={modePrefix.color}>{modePrefix.text}</Text>
         </Box>
         <Box paddingRight={1}>
           <TextInput

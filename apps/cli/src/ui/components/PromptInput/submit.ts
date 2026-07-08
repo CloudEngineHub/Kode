@@ -14,6 +14,10 @@ import { expandPastedTextPlaceholders } from './pastes'
 import { interpretHashCommand } from './hashCommand'
 import { getCwd } from '#core/utils/state'
 import type { SetForkConvoWithMessagesOnTheNextRender } from '#ui-ink/types/conversationReset'
+import {
+  isShellPromptMode,
+  shouldPromptModeReturnToPrompt,
+} from './promptModeSpecs'
 
 const EXIT_COMMANDS = new Set(['exit', 'quit', ':q', ':q!', ':wq', ':wq!'])
 
@@ -162,7 +166,7 @@ export async function submitPrompt(args: {
   args.setCursorOffset(0)
   args.onSubmitCountChange(prev => prev + 1)
 
-  if (effectiveMode !== 'bash' && effectiveMode !== 'background') {
+  if (shouldPromptModeReturnToPrompt(effectiveMode)) {
     args.onModeChange('prompt')
   }
 
@@ -215,8 +219,7 @@ export async function submitPrompt(args: {
     return
   }
 
-  const shouldUpdatePwdAfterBash =
-    effectiveMode === 'bash' || effectiveMode === 'background'
+  const shouldUpdatePwdAfterBash = isShellPromptMode(effectiveMode)
 
   // Save prompt to history immediately after we successfully construct the user messages.
   // This ensures history is preserved even if the query is aborted (e.g. Escape) or errors mid-flight.

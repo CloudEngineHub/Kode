@@ -41,7 +41,6 @@ import { Cursor, countWrappedLines } from '#cli-utils/Cursor'
 import { getCurrentOutputStyle } from '#cli-services/outputStyles'
 import { BunShell } from '#runtime/shell'
 import { listBackgroundAgentTaskSnapshots } from '#core/utils/backgroundTasks'
-import { computeContextWindowPercentages } from '#core/utils/contextWindowPercentages'
 import { submitPrompt } from './submit'
 import {
   usePromptPastes,
@@ -55,6 +54,14 @@ import { useQuickModelSwitch } from './useQuickModelSwitch'
 import { getKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
 import { buildPromptInputStatusLine } from './inputModeDisplay'
 import { useThrottledTokenUsage } from './useThrottledTokenUsage'
+import {
+  buildPromptStatusLineInput,
+  getPromptStatusLineUsage,
+} from './statusLineModel'
+import {
+  getPromptModeForTypedPrefix,
+  shouldEmptyPromptModeExitToPrompt,
+} from './promptModeSpecs'
 
 const PROMPT_DRAFT_KEY = 'repl'
 
@@ -208,14 +215,10 @@ export function PromptInput({
     (value: string) => {
       onHistoryUserInputRef.current()
 
-      // Only check background/note prefixes when in prompt mode.
-      // Bash uses the explicit shortcut toggle instead of a typed prefix.
-      // In other modes (bash/koding/background), just update the input directly.
-      if (mode === 'prompt') {
-        if (value.startsWith('&')) {
-          onModeChange('background')
-          return
-        }
+      const nextMode = getPromptModeForTypedPrefix({ mode, value })
+      if (nextMode) {
+        onModeChange(nextMode)
+        return
       }
 
       onInputChange(value)
@@ -245,122 +248,35 @@ export function PromptInput({
       : null
   }, [submitCount, tokenUsage, uiRefreshCounter])
 
-  const statusLineUsage = useMemo(() => {
-    let totalInputTokens = 0
-    let totalOutputTokens = 0
-
-    let currentUsage: null | {
-      input_tokens: number
-      output_tokens: number
-      cache_creation_input_tokens: number
-      cache_read_input_tokens: number
-    } = null
-
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const message = messages[i]
-      if (!message || message.type !== 'assistant') continue
-      const usage = (message.message as unknown as { usage?: unknown }).usage
-      if (!usage || typeof usage !== 'object') continue
-
-      const rec = usage as Record<string, unknown>
-      const inputTokens = rec.input_tokens
-      const outputTokens = rec.output_tokens
-      if (typeof inputTokens !== 'number' || typeof outputTokens !== 'number') {
-        continue
-      }
-
-      currentUsage = {
-        input_tokens: inputTokens,
-        output_tokens: outputTokens,
-        cache_creation_input_tokens:
-          typeof rec.cache_creation_input_tokens === 'number'
-            ? rec.cache_creation_input_tokens
-            : 0,
-        cache_read_input_tokens:
-          typeof rec.cache_read_input_tokens === 'number'
-            ? rec.cache_read_input_tokens
-            : 0,
-      }
-      break
-    }
-
-    for (const message of messages) {
-      if (!message || message.type !== 'assistant') continue
-      const usage = (message.message as unknown as { usage?: unknown }).usage
-      if (!usage || typeof usage !== 'object') continue
-      const rec = usage as Record<string, unknown>
-      const inputTokens = rec.input_tokens
-      const outputTokens = rec.output_tokens
-      if (typeof inputTokens !== 'number' || typeof outputTokens !== 'number') {
-        continue
-      }
-      totalInputTokens += inputTokens
-      totalOutputTokens += outputTokens
-    }
-
-    return { totalInputTokens, totalOutputTokens, currentUsage }
-  }, [messages])
+  const statusLineUsage = useMemo(
+    () => getPromptStatusLineUsage(messages),
+    [messages],
+  )
 
   const statusLineInput = useMemo(() => {
     const profile = getModelManager().getModel('main')
     const outputStyleName = getCurrentOutputStyle()
     const transcriptPath = getMessagesPath(messageLogName, forkNumber, 0)
 
-    const currentUsage = statusLineUsage.currentUsage
-    const contextWindowSize =
-      typeof profile?.contextLength === 'number' ? profile.contextLength : 0
-
-    const { used_percentage, remaining_percentage } =
-      computeContextWindowPercentages({
-        currentUsage,
-        contextWindowSize,
-      })
-    const exceeds200kTokens = currentUsage
-      ? currentUsage.input_tokens +
-          currentUsage.output_tokens +
-          currentUsage.cache_creation_input_tokens +
-          currentUsage.cache_read_input_tokens >
-        200000
-      : false
-
-    return {
-      session_id: getKodeAgentSessionId(),
-      transcript_path: transcriptPath,
-      cwd: currentPwd,
-      model: {
-        id: profile?.modelName ?? '',
-        display_name: profile?.name ?? profile?.modelName ?? '',
-      },
-      workspace: {
-        current_dir: currentPwd,
-        project_dir: getOriginalCwd(),
-      },
+    return buildPromptStatusLineInput({
+      sessionId: getKodeAgentSessionId(),
+      transcriptPath,
+      currentPwd,
+      originalCwd: getOriginalCwd(),
       version: MACRO.VERSION,
-      output_style: { name: outputStyleName },
-      cost: {
-        total_cost_usd: totalCostUSD,
-        total_duration_ms: getTotalDuration(),
-        total_api_duration_ms: getTotalAPIDuration(),
-      },
-      context_window: {
-        total_input_tokens: statusLineUsage.totalInputTokens,
-        total_output_tokens: statusLineUsage.totalOutputTokens,
-        context_window_size: contextWindowSize,
-        current_usage: currentUsage,
-        used_percentage,
-        remaining_percentage,
-      },
-      exceeds_200k_tokens: exceeds200kTokens,
-      ...(editorMode === 'vim' ? { vim: { mode: vimMode } } : {}),
-      kode: {
-        conversation: { messageLogName, forkNumber },
-        input_mode: mode,
-        permission_mode: toolPermissionContext.mode,
-        model: {
-          provider: profile?.provider ?? null,
-        },
-      },
-    }
+      outputStyleName,
+      profile,
+      usage: statusLineUsage,
+      totalCostUSD,
+      totalDurationMs: getTotalDuration(),
+      totalAPIDurationMs: getTotalAPIDuration(),
+      messageLogName,
+      forkNumber,
+      mode,
+      permissionMode: toolPermissionContext.mode,
+      editorMode,
+      vimMode,
+    })
   }, [
     currentPwd,
     editorMode,
@@ -1210,7 +1126,7 @@ export function PromptInput({
 
       // Handle mode exit when input is empty and user presses backspace/delete/escape
       if (
-        (mode === 'bash' || mode === 'background' || mode === 'koding') &&
+        shouldEmptyPromptModeExitToPrompt(mode) &&
         input === '' &&
         (key.backspace || key.delete || key.escape)
       ) {
