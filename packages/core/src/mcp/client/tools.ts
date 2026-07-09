@@ -133,11 +133,12 @@ export const getMCPTools = memoize(
             async isEnabled() {
               return true
             },
+            // MCP annotations are untrusted server hints, not local safety facts.
             isConcurrencySafe() {
-              return tool.annotations?.readOnlyHint ?? false
+              return false
             },
             isReadOnly() {
-              return tool.annotations?.readOnlyHint ?? false
+              return false
             },
             async description() {
               return tool.description ?? ''
