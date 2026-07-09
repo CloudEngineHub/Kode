@@ -37,6 +37,7 @@ export type PromptInputProps = {
   setForkConvoWithMessagesOnTheNextRender: SetForkConvoWithMessagesOnTheNextRender
   readFileTimestamps: { [filename: string]: number }
   abortController: AbortController | null
+  cancelRequestKey?: number
   onModelChange?: () => void
   uiRefreshCounter?: number
   shortcutsOpen?: boolean

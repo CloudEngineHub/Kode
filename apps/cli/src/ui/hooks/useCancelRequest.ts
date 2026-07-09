@@ -15,8 +15,10 @@ export function useCancelRequest(
   abortSignal?: AbortSignal,
 ) {
   useKeypress(
-    (_, key) => {
-      if (!key.escape) {
+    (input, key) => {
+      const wantsCancel =
+        key.escape || (key.ctrl && input.toLowerCase() === 'c')
+      if (!wantsCancel) {
         return
       }
       if (abortSignal?.aborted) {

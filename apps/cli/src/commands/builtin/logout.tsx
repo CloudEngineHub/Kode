@@ -2,6 +2,7 @@ import * as React from 'react'
 import type { Command } from '../types'
 import { getGlobalConfig, saveGlobalConfig } from '#core/utils/config'
 import { clearTerminal } from '#cli-utils/terminal'
+import { requestCliExit } from '#cli-utils/exit'
 import { Text } from 'ink'
 
 export default {
@@ -29,7 +30,7 @@ export default {
     )
 
     setTimeout(() => {
-      process.exit(0)
+      requestCliExit(0)
     }, 200)
 
     return message

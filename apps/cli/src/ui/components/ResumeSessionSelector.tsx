@@ -28,6 +28,7 @@ import { loadKodeAgentSessionMessages } from '#protocol/utils/kodeAgentSessionLo
 import { buildTranscriptLines } from '#cli-utils/transcriptText'
 import { copyTextToClipboard } from '#cli-utils/clipboard'
 import { useExitOnCtrlCD } from '#ui-ink/hooks/useExitOnCtrlCD'
+import { useCliExit } from '#ui-ink/hooks/useCliExit'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { SearchBox } from '#ui-ink/components/SearchBox'
@@ -533,7 +534,8 @@ export function ResumeSessionSelector(props: {
   const { cwd, sessions, onCancel, onSelect } = props
   const theme = getTheme()
   const layout = useScreenLayout()
-  const exitState = useExitOnCtrlCD(() => process.exit(0))
+  const requestExit = useCliExit()
+  const exitState = useExitOnCtrlCD(() => requestExit(0))
   const compactVertical = layout.rows <= 26
   const frameGap = compactVertical ? 0 : layout.gap
   const framePaddingY = compactVertical ? 0 : layout.paddingY

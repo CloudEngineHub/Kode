@@ -18,6 +18,7 @@ import {
   resetMouseEvents,
   shouldEnterAlternateScreen,
 } from '#cli-utils/terminal'
+import { setCliExitHandler } from '#cli-utils/exit'
 import {
   restoreTuiStdioPatch,
   writeToStderr,
@@ -235,6 +236,8 @@ async function gracefulExit(code = 0) {
   } catch {}
   process.exit(code)
 }
+
+setCliExitHandler(gracefulExit)
 
 function handleProcessSignalExit(code = 0): void {
   if (isPrintModeSignalAbortHandlingActive()) return

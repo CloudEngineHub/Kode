@@ -64,6 +64,7 @@ import {
   enterAlternateScreen,
   exitAlternateScreen,
 } from '#cli-utils/terminal'
+import { requestCliExit } from '#cli-utils/exit'
 import { getModelManager } from '#core/utils/model'
 import { getToolPermissionContextForConversationKey } from '#core/utils/toolPermissionContextState'
 import type { PromptMode } from '#ui-ink/components/PromptInput/types'
@@ -208,6 +209,7 @@ export function useReplController(props: REPLProps) {
   const [abortController, setAbortController] =
     useState<AbortController | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [cancelRequestKey, setCancelRequestKey] = useState(0)
   type ToolView = {
     jsx: React.ReactNode | null
     shouldHidePromptInput: boolean
@@ -409,6 +411,14 @@ export function useReplController(props: REPLProps) {
   const [toast, setToast] = useState<string | null>(null)
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const showToast = useCallback((text: string) => {
+    setToast(text)
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current)
+    }
+    toastTimeoutRef.current = setTimeout(() => setToast(null), 6000)
+  }, [])
+
   const dismissToolView = useCallback(() => {
     const current = toolViewStackRef.current
     if (current.length === 0) return
@@ -489,9 +499,7 @@ export function useReplController(props: REPLProps) {
                   isBypassPermissionsModeAvailable: !safeMode,
                 })
 
-              const exit = (): never => {
-                process.exit(0)
-              }
+              const exit = () => requestCliExit(0)
 
               await submitPrompt({
                 input: text,
@@ -858,15 +866,20 @@ export function useReplController(props: REPLProps) {
 
   const onCancel = useCallback(() => {
     if (!isLoading) return
+    setCancelRequestKey(prev => prev + 1)
     setIsLoading(false)
     if (toolUseConfirm) {
       toolUseConfirm.onAbort()
+      setAbortController(null)
+      showToast('Interrupted')
       return
     }
     if (abortController && !abortController.signal.aborted) {
       abortController.abort()
     }
-  }, [abortController, isLoading, toolUseConfirm])
+    setAbortController(null)
+    showToast('Interrupted')
+  }, [abortController, isLoading, showToast, toolUseConfirm])
 
   useCancelRequest(
     setToolJSXWithClear,
@@ -933,14 +946,6 @@ export function useReplController(props: REPLProps) {
       setShowCostDialog(true)
     }
   }, [messages, showCostDialog, haveShownCostDialog])
-
-  const showToast = useCallback((text: string) => {
-    setToast(text)
-    if (toastTimeoutRef.current) {
-      clearTimeout(toastTimeoutRef.current)
-    }
-    toastTimeoutRef.current = setTimeout(() => setToast(null), 6000)
-  }, [])
 
   const ultrathinkToastActiveRef = useRef(false)
   useEffect(() => {
@@ -1246,6 +1251,7 @@ export function useReplController(props: REPLProps) {
         onSubmitCountChange: setSubmitCount,
         setIsLoading,
         setAbortController,
+        cancelRequestKey,
         uiRefreshCounter,
         onShowMessageSelector: handleShowMessageSelector,
         setForkConvoWithMessagesOnTheNextRender,
@@ -1259,6 +1265,7 @@ export function useReplController(props: REPLProps) {
     [
       abortController,
       apiKeyStatus,
+      cancelRequestKey,
       commands,
       debug,
       disableSlashCommands,

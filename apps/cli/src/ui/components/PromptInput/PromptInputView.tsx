@@ -119,7 +119,7 @@ export function PromptInputView({
   resetHistory: () => void
   placeholder: string
   submitCount: number
-  onExit: () => never
+  onExit: () => void
   onExitMessage: (show: boolean, key?: string) => void
   onMessage: (show: boolean, text?: string) => void
   onImagePaste: (image: ClipboardImage) => string | void

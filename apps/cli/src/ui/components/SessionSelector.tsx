@@ -10,6 +10,7 @@ import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import { getWindowedList } from '#ui-ink/primitives/list/windowedList'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { useExitOnCtrlCD } from '#ui-ink/hooks/useExitOnCtrlCD'
+import { useCliExit } from '#ui-ink/hooks/useCliExit'
 import { useScopedIndexState } from '#ui-ink/hooks/useScopedIndexState'
 
 type SessionSelectorProps = {
@@ -36,8 +37,9 @@ export function SessionSelector({
   const { rows } = useTerminalSize()
   if (sessions.length === 0) return null
 
-  const close = onClose ?? (() => process.exit(0))
-  const exitState = useExitOnCtrlCD(() => process.exit(0))
+  const requestExit = useCliExit()
+  const close = onClose ?? (() => requestExit(0))
+  const exitState = useExitOnCtrlCD(() => requestExit(0))
 
   const [selectedIndex, setSelectedIndex] = useScopedIndexState({
     scope: `session-selector:${title}`,

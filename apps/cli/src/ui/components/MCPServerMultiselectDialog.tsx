@@ -8,6 +8,7 @@ import {
 import { partition } from 'lodash-es'
 import { MCPServerDialogCopy } from './MCPServerDialogCopy'
 import { useExitOnCtrlCD } from '#ui-ink/hooks/useExitOnCtrlCD'
+import { useCliExit } from '#ui-ink/hooks/useCliExit'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
@@ -54,7 +55,8 @@ export function MCPServerMultiselectDialog({
     onDone()
   }
 
-  const exitState = useExitOnCtrlCD(() => process.exit())
+  const requestExit = useCliExit()
+  const exitState = useExitOnCtrlCD(() => requestExit(0))
 
   useKeypress((_input, key) => {
     if (key.escape) {

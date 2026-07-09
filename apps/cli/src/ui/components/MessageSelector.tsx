@@ -8,6 +8,7 @@ import type { Tool } from '#core/tooling/Tool'
 import { createUserMessage, stripSystemMessages } from '#core/utils/messages'
 import type { Message as MessageType, UserMessage } from '#core/query'
 import { useExitOnCtrlCD } from '#ui-ink/hooks/useExitOnCtrlCD'
+import { useCliExit } from '#ui-ink/hooks/useCliExit'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import { useScopedIndexState } from '#ui-ink/hooks/useScopedIndexState'
@@ -96,7 +97,8 @@ export function MessageSelector({
     initialIndex: allItems.length - 1,
   })
 
-  const exitState = useExitOnCtrlCD(() => process.exit(0))
+  const requestExit = useCliExit()
+  const exitState = useExitOnCtrlCD(() => requestExit(0))
 
   useKeypress((input, key) => {
     if (key.tab || key.escape) {

@@ -7,7 +7,9 @@ import { renderWithTuiStdio } from '#ui-ink/utils/inkRender'
 import { writeFileSync } from 'fs'
 import { ConfigParseError } from '#core/utils/errors'
 import { useExitOnCtrlCD } from '#ui-ink/hooks/useExitOnCtrlCD'
+import { useCliExit } from '#ui-ink/hooks/useCliExit'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
+import { requestCliExit } from '#cli-utils/exit'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 interface InvalidConfigHandlerProps {
@@ -32,6 +34,7 @@ function InvalidConfigScreen({
 }: InvalidConfigDialogProps): React.ReactNode {
   const theme = getTheme()
   const layout = useScreenLayout()
+  const requestExit = useCliExit()
 
   // Handle escape key
   useKeypress((_, key) => {
@@ -40,7 +43,7 @@ function InvalidConfigScreen({
     }
   })
 
-  const exitState = useExitOnCtrlCD(() => process.exit(0))
+  const exitState = useExitOnCtrlCD(() => requestExit(0))
 
   // Handler for Select onChange
   const handleSelect = (value: string) => {
@@ -111,7 +114,7 @@ export function showInvalidConfigDialog({
         errorDescription={error.message}
         onExit={() => {
           resolve()
-          process.exit(1)
+          requestCliExit(1)
         }}
         onReset={() => {
           writeFileSync(
@@ -119,7 +122,7 @@ export function showInvalidConfigDialog({
             JSON.stringify(error.defaultConfig, null, 2),
           )
           resolve()
-          process.exit(0)
+          requestCliExit(0)
         }}
       />,
       { exitOnCtrlC: false },

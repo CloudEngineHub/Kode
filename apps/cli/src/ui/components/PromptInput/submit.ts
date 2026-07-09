@@ -103,7 +103,7 @@ export async function submitPrompt(args: {
   clearPastes: () => void
   resetHistory: () => void
   setCurrentPwd: (pwd: string) => void
-  exit: () => never
+  exit: () => void
 }): Promise<void> {
   if (args.isEditingExternally) return
 
@@ -116,6 +116,7 @@ export async function submitPrompt(args: {
 
   if (EXIT_COMMANDS.has(trimmed)) {
     args.exit()
+    return
   }
 
   const isKoding = args.mode === 'koding'

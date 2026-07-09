@@ -2,6 +2,7 @@ import type { Command } from '../types'
 
 import { Text } from 'ink'
 import React from 'react'
+import { requestCliExit } from '#cli-utils/exit'
 
 const exit = {
   type: 'local-jsx',
@@ -11,7 +12,7 @@ const exit = {
   isHidden: false,
   async call() {
     setTimeout(() => {
-      process.exit(0)
+      requestCliExit(0)
     }, 150)
 
     return <Text>Exiting…</Text>

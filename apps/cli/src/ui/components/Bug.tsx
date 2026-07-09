@@ -8,6 +8,7 @@ import { getGlobalConfig } from '#core/utils/config'
 import { env } from '#core/utils/env'
 import { openBrowser } from '#core/utils/browser'
 import { useExitOnCtrlCD } from '#ui-ink/hooks/useExitOnCtrlCD'
+import { useCliExit } from '#ui-ink/hooks/useCliExit'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
@@ -33,7 +34,8 @@ export function Bug({ onDone }: Props): React.ReactNode {
     reservedColumns: layout.paddingX * 2 + 10,
   })
 
-  const exitState = useExitOnCtrlCD(() => process.exit(0))
+  const requestExit = useCliExit()
+  const exitState = useExitOnCtrlCD(() => requestExit(0))
 
   const canContinue = description.trim().length > 0
   const footerText = getBugFooterText({

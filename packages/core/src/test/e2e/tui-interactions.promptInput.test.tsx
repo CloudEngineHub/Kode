@@ -108,6 +108,8 @@ function PromptInputCancelHarnessInner({
     useState<AbortController | null>(() => new AbortController())
   const [isLoading, setIsLoading] = useState(initialIsLoading)
   const [cancelled, setCancelled] = useState(false)
+  const [queryCount, setQueryCount] = useState(0)
+  const [cancelRequestKey, setCancelRequestKey] = useState(0)
 
   useCancelRequest(
     () => {},
@@ -115,6 +117,7 @@ function PromptInputCancelHarnessInner({
     () => {},
     () => {
       abortController?.abort()
+      setCancelRequestKey(prev => prev + 1)
       setCancelled(true)
       setIsLoading(false)
     },
@@ -129,13 +132,17 @@ function PromptInputCancelHarnessInner({
       <Text>LOADING:{String(isLoading)}</Text>
       <Text>ABORTED:{String(abortController?.signal.aborted ?? false)}</Text>
       <Text>CANCELLED:{String(cancelled)}</Text>
+      <Text>QUERY_COUNT:{queryCount}</Text>
       <PromptInput
         commands={[]}
         forkNumber={0}
         messageLogName="tui"
         isDisabled={false}
         isLoading={isLoading}
-        onQuery={async () => {}}
+        onQuery={async () => {
+          setQueryCount(prev => prev + 1)
+          setIsLoading(false)
+        }}
         debug={false}
         verbose={false}
         messages={[]}
@@ -153,6 +160,7 @@ function PromptInputCancelHarnessInner({
         setForkConvoWithMessagesOnTheNextRender={() => {}}
         readFileTimestamps={{}}
         abortController={abortController}
+        cancelRequestKey={cancelRequestKey}
       />
     </Box>
   )
@@ -889,7 +897,7 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
   test('Ctrl+C cancels running task', async () => {
     const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
     const h = createInkTestHarness(
-      <PromptInputCtrlCCancelHarness
+      <PromptInputCancelHarness
         conversationKey={conversationKey}
         initialIsLoading={true}
       />,
@@ -906,6 +914,7 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
     expect(out).toContain('LOADING:false')
     expect(out).toContain('ABORTED:true')
     expect(out).toContain('CANCELLED:true')
+    expect(out).toContain('QUERY_COUNT:0')
   })
 
   test('alt+up recalls queued/pending prompt for editing', async () => {
@@ -971,6 +980,43 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
     expect(out).toContain('LOADING:false')
     expect(out).toContain('ABORTED:true')
     expect(out).toContain('CANCELLED:true')
+    expect(out).toContain('QUERY_COUNT:0')
+
+    await h.wait(700)
+    expect(h.getOutput()).toContain('QUERY_COUNT:0')
+  })
+
+  test('Ctrl+C cancels running task and discards queued prompts', async () => {
+    const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
+    const h = createInkTestHarness(
+      <PromptInputCancelHarness
+        conversationKey={conversationKey}
+        initialIsLoading={true}
+      />,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    h.clearOutput()
+
+    h.stdin.write('hello')
+    await h.wait(75)
+
+    h.stdin.write('\r')
+    await h.wait(75)
+
+    h.stdin.write('\u0003')
+    await h.wait(100)
+
+    const out = h.getOutput()
+    expect(out).toContain('RAW:\"\"')
+    expect(out).toContain('LOADING:false')
+    expect(out).toContain('ABORTED:true')
+    expect(out).toContain('CANCELLED:true')
+    expect(out).toContain('QUERY_COUNT:0')
+
+    await h.wait(700)
+    expect(h.getOutput()).toContain('QUERY_COUNT:0')
   })
 
   test('Esc cancels running task when no queued prompt exists', async () => {

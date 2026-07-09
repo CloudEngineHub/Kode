@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import { getTheme } from '#core/utils/theme'
 import { useExitOnCtrlCD } from '#ui-ink/hooks/useExitOnCtrlCD'
+import { useCliExit } from '#ui-ink/hooks/useCliExit'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import { printModelConfig } from './flow/printModelConfig'
 import type { ModelSelectorProps } from './types'
@@ -56,7 +57,8 @@ export function useModelSelectorController(
   const containerPaddingY = layout.paddingY
   const containerGap = layout.gap
 
-  const exitState = useExitOnCtrlCD(() => process.exit(0))
+  const requestExit = useCliExit()
+  const exitState = useExitOnCtrlCD(() => requestExit(0))
   const exitStateForScreens = useMemo(
     () => ({ pending: exitState.pending, keyName: exitState.keyName ?? '' }),
     [exitState.pending, exitState.keyName],

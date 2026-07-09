@@ -52,6 +52,7 @@ import { useQuickModelSwitch } from './useQuickModelSwitch'
 import { getKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
 import { buildPromptInputStatusLine } from './inputModeDisplay'
 import { useThrottledTokenUsage } from './useThrottledTokenUsage'
+import { useCliExit } from '#ui-ink/hooks/useCliExit'
 import {
   buildPromptStatusLineInput,
   getPromptStatusLineUsage,
@@ -76,11 +77,6 @@ function getDraftPastesSignature(args: {
         `image:${item.id}:${item.placeholder}:${item.mediaType}:${item.byteLength}`,
     ),
   ].join('\n')
-}
-
-function exit(): never {
-  setTerminalTitle('')
-  process.exit(0)
 }
 
 export function PromptInput({
@@ -114,6 +110,7 @@ export function PromptInput({
   onRestorePastesApplied,
   draftPastes,
   onDraftPastesChange,
+  cancelRequestKey,
   suppressStatusLine = false,
 }: PromptInputProps): React.ReactNode {
   type QueuedPrompt = {
@@ -161,6 +158,11 @@ export function PromptInput({
   const onHistoryUserInputRef = useRef<() => void>(() => {})
   const editorMode = getGlobalConfigCached().editorMode ?? 'normal'
   const [vimMode, setVimMode] = useState<'INSERT' | 'NORMAL'>('INSERT')
+  const requestExit = useCliExit()
+  const exit = useCallback(() => {
+    setTerminalTitle('')
+    requestExit(0)
+  }, [requestExit])
 
   useEffect(() => {
     if (editorMode !== 'vim') return
@@ -972,7 +974,16 @@ export function PromptInput({
   }
 
   const [isQueueDrainInFlight, setIsQueueDrainInFlight] = useState(false)
+  const lastCancelRequestKeyRef = useRef(cancelRequestKey)
   useEffect(() => {
+    if (lastCancelRequestKeyRef.current !== cancelRequestKey) {
+      lastCancelRequestKeyRef.current = cancelRequestKey
+      setPendingPrompts(prev => (prev.length === 0 ? prev : []))
+      setQueuedPrompts(prev => (prev.length === 0 ? prev : []))
+      setIsQueueDrainInFlight(false)
+      return
+    }
+
     if (isQueueDrainInFlight) return
     if (isLoading) return
     if (isDisabled) return
@@ -1030,6 +1041,7 @@ export function PromptInput({
     })()
   }, [
     abortController,
+    cancelRequestKey,
     commands,
     currentMode,
     disableSlashCommands,
