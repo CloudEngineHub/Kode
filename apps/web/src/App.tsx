@@ -13,6 +13,7 @@ import { useWorkspaces } from './hooks/useWorkspaces'
 import { Sidebar } from './components/Sidebar'
 import { ThemeToggle } from './components/ThemeToggle'
 import { PermissionModal } from './components/PermissionModal'
+import { RuntimeStatusBar } from './components/RuntimeStatusBar'
 import { Button } from './components/ui/button'
 import { Sheet, SheetContent, SheetTrigger } from './components/ui/sheet'
 import { Tabs, TabsList, TabsTrigger } from './components/ui/tabs'
@@ -178,9 +179,16 @@ export default function App() {
               </TabsList>
             </Tabs>
 
+            <RuntimeStatusBar
+              connected={connected}
+              running={chat.sending}
+              selectedSessionId={chat.selectedSessionId}
+              eventCount={chat.events.length}
+            />
+
             <div
               className={cn(
-                'h-2 w-2 rounded-full',
+                'h-2 w-2 shrink-0 rounded-full xl:hidden',
                 connected ? 'bg-emerald-500' : 'bg-muted-foreground/40',
               )}
               aria-label="Connection status"
