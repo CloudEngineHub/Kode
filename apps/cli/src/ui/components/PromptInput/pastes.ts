@@ -171,7 +171,7 @@ export function expandPastedTextPlaceholders(args: {
   let next = args.input
   for (const { placeholder, text } of args.pastedTexts) {
     if (!next.includes(placeholder)) continue
-    next = next.replace(placeholder, text)
+    next = next.replaceAll(placeholder, text)
   }
   return next
 }
