@@ -23,6 +23,14 @@ function mapFinishReasonToStopReason(
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function getToolCalls(message: OpenAI.ChatCompletionMessage): unknown[] {
+  return Array.isArray(message.tool_calls) ? message.tool_calls : []
+}
+
 export function convertAnthropicMessagesToOpenAIMessages(
   messages: (UserMessage | AssistantMessage)[],
 ): (
@@ -61,19 +69,23 @@ export function convertOpenAIResponseToAnthropic(
     }
   }
 
+  const toolCalls = getToolCalls(message)
   const droppedToolCalls =
-    streamDegraded && Array.isArray(message.tool_calls)
-      ? message.tool_calls.length
-      : 0
+    streamDegraded && toolCalls.length > 0 ? toolCalls.length : 0
 
-  if (!streamDegraded && message?.tool_calls) {
-    for (const toolCall of message.tool_calls) {
+  if (!streamDegraded) {
+    for (const toolCall of toolCalls) {
+      if (!isRecord(toolCall)) continue
       if (toolCall.type !== 'function') continue
       const tool = toolCall.function
-      const toolName = tool.name
+      if (!isRecord(tool)) continue
+      const toolName = typeof tool.name === 'string' ? tool.name : ''
+      if (!toolName) continue
+      const toolArguments =
+        typeof tool.arguments === 'string' ? tool.arguments : ''
       let toolArgs = {}
       try {
-        toolArgs = tool.arguments ? JSON.parse(tool.arguments) : {}
+        toolArgs = toolArguments ? JSON.parse(toolArguments) : {}
       } catch (e) {
         // Invalid JSON in tool arguments
       }
@@ -82,7 +94,10 @@ export function convertOpenAIResponseToAnthropic(
         type: 'tool_use',
         input: toolArgs,
         name: toolName,
-        id: toolCall.id?.length > 0 ? toolCall.id : nanoid(),
+        id:
+          typeof toolCall.id === 'string' && toolCall.id.length > 0
+            ? toolCall.id
+            : nanoid(),
       })
     }
   }

@@ -243,4 +243,102 @@ describe('OpenAI stream degradation', () => {
       ),
     ).toBe(false)
   })
+
+  test('handles null and missing-index tool call deltas without degrading complete calls', async () => {
+    const nullToolCallsChunk = JSON.stringify(chunk({ tool_calls: null }))
+    const toolStartChunk = JSON.stringify(
+      chunk({
+        tool_calls: [
+          {
+            id: 'call_1',
+            type: 'function',
+            function: {
+              name: 'Task',
+              arguments: '',
+            },
+          },
+        ],
+      }),
+    )
+    const toolArgsChunk = JSON.stringify(
+      chunk({
+        tool_calls: [
+          {
+            function: {
+              arguments: '{"description":"test"}',
+            },
+          },
+        ],
+      }),
+    )
+    const body = sseBody([
+      `data: ${nullToolCallsChunk}`,
+      `data: ${toolStartChunk}`,
+      `data: ${toolArgsChunk}`,
+      `data: ${JSON.stringify(rawChunk({ finish_reason: 'tool_calls' }))}`,
+      'data: [DONE]',
+    ])
+
+    const result = await handleMessageStream(
+      createStreamProcessor(body as any) as any,
+      undefined,
+    )
+    const message = convertOpenAIResponseToAnthropic(result, [])
+    const toolUse = message.content.find(block => block.type === 'tool_use')
+
+    expect(isOpenAIStreamDegradedResponse(result)).toBe(false)
+    expect(message.stop_reason).toBe('tool_use')
+    expect(toolUse).toMatchObject({
+      type: 'tool_use',
+      name: 'Task',
+      input: { description: 'test' },
+      id: 'call_1',
+    })
+  })
+
+  test('marks non-array tool call deltas as degraded without crashing conversion', async () => {
+    async function* stream() {
+      yield chunk({ content: 'partial' })
+      yield chunk({ tool_calls: { id: 'call_1' } })
+    }
+
+    const result = await handleMessageStream(stream() as any, undefined)
+    const message = convertOpenAIResponseToAnthropic(result, [])
+    const textBlocks = message.content.filter(block => block.type === 'text')
+
+    expect(result.choices[0]?.message.content).toBe('partial')
+    expect(isOpenAIStreamDegradedResponse(result)).toBe(true)
+    expect(message.content.some(block => block.type === 'tool_use')).toBe(false)
+    expect(
+      textBlocks.some(block => block.text.startsWith(API_ERROR_MESSAGE_PREFIX)),
+    ).toBe(true)
+  })
+})
+
+describe('OpenAI response conversion', () => {
+  test('ignores non-array tool calls instead of iterating them', () => {
+    const message = convertOpenAIResponseToAnthropic(
+      {
+        id: 'chatcmpl_test',
+        model: 'gpt-4',
+        created: 1,
+        object: 'chat.completion',
+        choices: [
+          {
+            index: 0,
+            finish_reason: 'stop',
+            logprobs: null,
+            message: {
+              role: 'assistant',
+              content: '',
+              tool_calls: { id: 'not-an-array' },
+            },
+          },
+        ],
+      } as any,
+      [],
+    )
+
+    expect(message.content.some(block => block.type === 'tool_use')).toBe(false)
+  })
 })

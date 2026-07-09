@@ -14,6 +14,10 @@ import { logError } from '#core/utils/log'
 // Re-export normalizeTokens and StreamingEvent for subclasses
 export { normalizeTokens, type StreamingEvent }
 
+function trimForLog(value: string): string {
+  return value.length <= 500 ? value : `${value.slice(0, 500)}...`
+}
+
 /**
  * Base adapter for all OpenAI-compatible APIs (Chat Completions and Responses API)
  * Handles common streaming logic, SSE parsing, and usage normalization
@@ -166,11 +170,15 @@ export abstract class OpenAIAdapter extends ModelAPIAdapter {
         try {
           return JSON.parse(data)
         } catch (error) {
+          const trimmedData = trimForLog(data)
           logError(error)
           debugLogger.warn('OPENAI_ADAPTER_SSE_PARSE_ERROR', {
+            data: trimmedData,
             error: error instanceof Error ? error.message : String(error),
           })
-          return null
+          throw new Error(
+            `OpenAI stream emitted malformed JSON: ${trimmedData}`,
+          )
         }
       }
     }
@@ -188,7 +196,8 @@ export abstract class OpenAIAdapter extends ModelAPIAdapter {
 
     if (explicitError) {
       if (typeof explicitError === 'string') return explicitError
-      if (typeof explicitError.message === 'string') return explicitError.message
+      if (typeof explicitError.message === 'string')
+        return explicitError.message
       if (typeof explicitError.code === 'string') return explicitError.code
       return 'OpenAI stream error'
     }

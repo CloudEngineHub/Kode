@@ -17,6 +17,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
+function getToolCallDeltaIndex(
+  toolCall: Record<string, unknown>,
+  fallbackIndex: number,
+): number {
+  const index = toolCall.index
+  if (index === undefined || index === null) return fallbackIndex
+  if (typeof index === 'number' && Number.isInteger(index) && index >= 0) {
+    return index
+  }
+  throw new Error('OpenAI stream tool_calls delta index must be a number')
+}
+
 function messageReducer(
   previous: OpenAI.ChatCompletionMessage,
   item: OpenAI.ChatCompletionChunk,
@@ -26,6 +38,35 @@ function messageReducer(
     if (!isRecord(delta)) return acc
 
     for (const [key, value] of Object.entries(delta)) {
+      if (key === 'tool_calls') {
+        if (value === null || value === undefined) continue
+        if (!Array.isArray(value)) {
+          throw new Error('OpenAI stream tool_calls delta must be an array')
+        }
+
+        const accArray = Array.isArray(acc[key]) ? [...acc[key]] : []
+        for (let i = 0; i < value.length; i++) {
+          const toolCall = value[i]
+          if (!isRecord(toolCall)) {
+            throw new Error(
+              'OpenAI stream tool_calls delta entries must be objects',
+            )
+          }
+
+          const index = getToolCallDeltaIndex(toolCall, i)
+          if (index > accArray.length) {
+            throw new Error(
+              `Error: An array has an empty value when tool_calls are constructed. tool_calls: ${accArray}; tool: ${value}`,
+            )
+          }
+
+          const { index: _index, ...chunkTool } = toolCall
+          accArray[index] = reduce(accArray[index], chunkTool)
+        }
+        acc[key] = accArray
+        continue
+      }
+
       if (acc[key] === undefined || acc[key] === null) {
         acc[key] = value
         //  OpenAI.Chat.Completions.ChatCompletionMessageToolCall does not have a key, .index
@@ -71,9 +112,7 @@ function throwIfAborted(signal?: AbortSignal): void {
   }
 }
 
-function hasAnyAssistantOutput(
-  message: OpenAI.ChatCompletionMessage,
-): boolean {
+function hasAnyAssistantOutput(message: OpenAI.ChatCompletionMessage): boolean {
   const record = message as unknown as Record<string, unknown>
   return (
     (typeof message.content === 'string' && message.content.length > 0) ||
