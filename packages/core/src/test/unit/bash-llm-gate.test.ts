@@ -167,6 +167,34 @@ describe('Bash LLM intent gate', () => {
     }
   })
 
+  test('fails closed without retrying after raw provider auth errors', async () => {
+    let calls = 0
+    const result = await runBashLlmSafetyGate({
+      command: TRIGGER_COMMAND,
+      userPrompt: TRIGGER_PROMPT,
+      description: '',
+      platform: process.platform,
+      commandSource: 'agent_call',
+      safeMode: false,
+      runInBackground: false,
+      willSandbox: false,
+      sandboxRequired: false,
+      cwd: process.cwd(),
+      originalCwd: process.cwd(),
+      query: async () => {
+        calls++
+        throw new Error('Invalid API key')
+      },
+    })
+
+    expect(result.decision).toBe('error')
+    expect(calls).toBe(1)
+    if (result.decision === 'error') {
+      expect(result.errorType).toBe('api')
+      expect(result.canFailOpen).toBe(false)
+    }
+  })
+
   test('formats non-Zod errors in error path (Error instance)', async () => {
     const result = await runBashLlmSafetyGate({
       command: TRIGGER_COMMAND,
@@ -251,13 +279,17 @@ describe('Bash LLM intent gate', () => {
 
   test('defaultGateQuery surfaces API error messages as gate errors', async () => {
     try {
+      let calls = 0
       __setLlmModuleLoaderForTests(async () => ({
-        queryLLM: async () => ({
-          isApiErrorMessage: true,
-          message: {
-            content: [{ type: 'text', text: 'API_ERROR: Invalid API key' }],
-          },
-        }),
+        queryLLM: async () => {
+          calls++
+          return {
+            isApiErrorMessage: true,
+            message: {
+              content: [{ type: 'text', text: 'API_ERROR: Invalid API key' }],
+            },
+          }
+        },
         API_ERROR_MESSAGE_PREFIX: 'API_ERROR: ',
       }))
 
@@ -275,8 +307,10 @@ describe('Bash LLM intent gate', () => {
         originalCwd: process.cwd(),
       })
       expect(result.decision).toBe('error')
+      expect(calls).toBe(1)
       if (result.decision === 'error') {
         expect(result.error).toContain('LLM gate model error:')
+        expect(result.errorType).toBe('api')
       }
     } finally {
       __setLlmModuleLoaderForTests(null)

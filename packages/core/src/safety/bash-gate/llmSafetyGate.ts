@@ -86,7 +86,6 @@ function formatParseError(error: unknown): string {
 
 function isUnrecoverableAuthError(error: unknown): boolean {
   const errorStr = formatParseError(error).toLowerCase()
-  if (!errorStr.startsWith('llm gate model error:')) return false
   return (
     errorStr.includes('invalid api key') ||
     errorStr.includes('incorrect api key') ||
@@ -245,7 +244,8 @@ export async function runBashLlmSafetyGate(params: {
     const errorStr = formatParseError(error)
     const errorType: BashLlmGateErrorType = abortController.signal.aborted
       ? 'timeout'
-      : errorStr.startsWith('LLM gate model error:')
+      : errorStr.startsWith('LLM gate model error:') ||
+          isUnrecoverableAuthError(error)
         ? 'api'
         : errorStr.startsWith('LLM gate produced empty output') ||
             errorStr.startsWith('Unable to parse LLM gate verdict')
