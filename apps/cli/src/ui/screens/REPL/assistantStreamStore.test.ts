@@ -112,7 +112,8 @@ describe('assistantStreamStore', () => {
   })
 
   test('does not mix concurrent request streams in the same turn', () => {
-    const store = createAssistantStreamStore()
+    const fake = createFakeScheduler()
+    const store = createAssistantStreamStore({ scheduler: fake.scheduler })
     const turn = new AbortController()
     store.beginTurn(turn)
 
@@ -124,6 +125,8 @@ describe('assistantStreamStore', () => {
     store.handleUpdate(turn, update('text_delta', 'A2', 'main', 'request-a'))
 
     expect(store.getSnapshot().text).toBe('A1')
+    fake.advance(33)
+    expect(store.getSnapshot().text).toBe('A1A2')
 
     store.clearPreview(turn)
     store.handleUpdate(turn, update('start', undefined, 'main', 'request-b'))
