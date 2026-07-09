@@ -4,6 +4,8 @@ import { Box, Text } from 'ink'
 import figures from 'figures'
 import { AskUserQuestionPermissionRequest } from '#ui-ink/components/permissions/AskUserQuestionPermissionRequest/AskUserQuestionPermissionRequest'
 import { AskUserQuestionTool } from '#tools/tools/interaction/AskUserQuestionTool/AskUserQuestionTool'
+import { ExitPlanModePermissionRequest } from '#ui-ink/components/permissions/PlanModePermissionRequest/ExitPlanModePermissionRequest'
+import { ExitPlanModeTool } from '#tools/tools/interaction/PlanModeTool/ExitPlanModeTool'
 import { BashToolRunInBackgroundOverlay } from '#tools/tools/system/BashTool/BashToolRunInBackgroundOverlay'
 import {
   createAssistantMessage,
@@ -20,6 +22,10 @@ import { Select } from '#ui-ink/components/CustomSelect/select'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { useMouse } from '#ui-ink/hooks/useMouse'
 import { useScopedIndexState } from '#ui-ink/hooks/useScopedIndexState'
+import { PermissionProvider } from '#ui-ink/contexts/PermissionContext'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 const harnessManager = createInkHarnessManager()
 
@@ -268,6 +274,100 @@ describe('TUI E2E regression (Ink render): Misc', () => {
       toolUseConfirm.toolUseContext.options?.askUserQuestionAnswersByToolUseId
         ?.m
     expect(stored?.['Pick one']).toBe('Second')
+  })
+
+  test('ExitPlanMode: down-arrow focus survives keep-alive remount without a plan', async () => {
+    const previousConfigDir = process.env.KODE_CONFIG_DIR
+    const configDir = mkdtempSync(join(tmpdir(), 'kode-plan-keepalive-'))
+    process.env.KODE_CONFIG_DIR = configDir
+
+    try {
+      let allowed = false
+      let rejected = false
+      let done = false
+      const conversationKey = `plan-keepalive-${Date.now()}-${Math.random()}`
+      const toolUseConfirm: any = {
+        assistantMessage: createAssistantMessage(''),
+        tool: ExitPlanModeTool,
+        description: 'Exit plan mode',
+        input: {},
+        commandPrefix: null,
+        toolUseContext: {
+          messageId: conversationKey,
+          abortController: new AbortController(),
+          readFileTimestamps: {},
+          options: {
+            messageLogName: 'plan',
+            forkNumber: 1,
+            safeMode: false,
+          },
+        },
+        riskScore: null,
+        onAbort: () => {},
+        onAllow: () => {
+          allowed = true
+        },
+        onReject: () => {
+          rejected = true
+        },
+      }
+
+      function KeepAliveExitPlanHarness(): React.ReactNode {
+        const [showRequest, setShowRequest] = useState(true)
+
+        useKeypress(
+          (_input, key) => {
+            if (!key.downArrow) return
+
+            setTimeout(() => {
+              setShowRequest(false)
+              setTimeout(() => setShowRequest(true), 0)
+            }, 0)
+            return false
+          },
+          { priority: 10 },
+        )
+
+        if (!showRequest) return <Text>Loading plan approval...</Text>
+
+        return (
+          <PermissionProvider
+            conversationKey={conversationKey}
+            isBypassPermissionsModeAvailable
+          >
+            <ExitPlanModePermissionRequest
+              toolUseConfirm={toolUseConfirm}
+              onDone={() => {
+                done = true
+              }}
+              verbose={false}
+            />
+          </PermissionProvider>
+        )
+      }
+
+      const h = createInkTestHarness(
+        <KeypressProvider>
+          <KeepAliveExitPlanHarness />
+        </KeypressProvider>,
+      )
+      harnessManager.track(h)
+
+      await h.wait(25)
+
+      h.stdin.write('\u001B[B')
+      await h.wait(100)
+      h.stdin.write('\r')
+      await h.wait(25)
+
+      expect(allowed).toBe(false)
+      expect(rejected).toBe(true)
+      expect(done).toBe(true)
+    } finally {
+      if (previousConfigDir === undefined) delete process.env.KODE_CONFIG_DIR
+      else process.env.KODE_CONFIG_DIR = previousConfigDir
+      rmSync(configDir, { recursive: true, force: true })
+    }
   })
 
   test('Select: SGR mouse click selects the clicked option without leaking key input', async () => {

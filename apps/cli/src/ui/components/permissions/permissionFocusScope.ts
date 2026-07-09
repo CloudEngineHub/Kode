@@ -17,7 +17,7 @@ export function permissionSelectFocusScope(
     toolUseConfirm.toolUseContext.messageId ??
     toolUseConfirm.assistantMessage.message.id ??
     safeInputKey(toolUseConfirm.input)
-  const toolName = toolUseConfirm.tool.name ?? 'tool'
+  const toolName = toolUseConfirm.tool?.name ?? 'tool'
 
   return `permission:${toolName}:${contextId}:${area}`
 }
