@@ -177,6 +177,99 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     expect(stored?.['剩余9个未合并的功能分支，是否也要删除？']).toBe('保留不动')
   })
 
+  test('AskUserQuestion: down-arrow focus survives keep-alive remount', async () => {
+    let allowed = false
+    let done = false
+    const input: any = {
+      questions: [
+        {
+          question: 'Pick one',
+          header: 'Pick',
+          multiSelect: false,
+          options: [
+            {
+              label: 'First',
+              description: 'First option',
+            },
+            {
+              label: 'Second',
+              description: 'Second option',
+            },
+          ],
+        },
+      ],
+    }
+
+    const toolUseConfirm: any = {
+      assistantMessage: createAssistantMessage(''),
+      tool: AskUserQuestionTool,
+      description: 'Ask user question',
+      input,
+      commandPrefix: null,
+      toolUseContext: {
+        messageId: 'm',
+        abortController: new AbortController(),
+        readFileTimestamps: {},
+      },
+      riskScore: null,
+      onAbort: () => {},
+      onAllow: () => {
+        allowed = true
+      },
+      onReject: () => {},
+    }
+
+    function KeepAliveQuestionHarness(): React.ReactNode {
+      const [showQuestion, setShowQuestion] = useState(true)
+
+      useKeypress(
+        (_input, key) => {
+          if (!key.downArrow) return
+
+          setTimeout(() => {
+            setShowQuestion(false)
+            setTimeout(() => setShowQuestion(true), 0)
+          }, 0)
+          return false
+        },
+        { priority: 10 },
+      )
+
+      if (!showQuestion) return <Text>Loading question...</Text>
+
+      return (
+        <AskUserQuestionPermissionRequest
+          toolUseConfirm={toolUseConfirm}
+          onDone={() => {
+            done = true
+          }}
+          verbose={false}
+        />
+      )
+    }
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <KeepAliveQuestionHarness />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+
+    h.stdin.write('\u001B[B')
+    await h.wait(100)
+    h.stdin.write('\r')
+    await h.wait(25)
+
+    expect(allowed).toBe(true)
+    expect(done).toBe(true)
+    const stored =
+      toolUseConfirm.toolUseContext.options?.askUserQuestionAnswersByToolUseId
+        ?.m
+    expect(stored?.['Pick one']).toBe('Second')
+  })
+
   test('Select: SGR mouse click selects the clicked option without leaking key input', async () => {
     let selected = ''
     let leakedKeypresses = 0
