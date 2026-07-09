@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test'
+import React from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import type { AgentEvent } from '@kode/protocol'
 
-import { __chatPageForTests } from './Chat'
+import { ChatPage, __chatPageForTests } from './Chat'
 
 function mcpProgressEvent(args: {
   uuid: string
@@ -70,6 +72,41 @@ describe('ChatPage event normalization', () => {
     )
   })
 
+  test('includes system and permission events in terminal render order', () => {
+    const events: AgentEvent[] = [
+      {
+        type: 'system',
+        subtype: 'init',
+        session_id: 'session',
+        cwd: 'C:\\repo',
+      },
+    ]
+    const permission = {
+      type: 'permission_request' as const,
+      request_id: 'perm-1',
+      tool_name: 'Shell',
+      tool_description: 'Run command',
+      input: {},
+    }
+
+    const normalized = __chatPageForTests.getChatEventsForRender(events)
+    const visible = __chatPageForTests.appendPermissionRequestEvent(
+      normalized,
+      permission,
+    )
+
+    expect(visible.map(event => event.type)).toEqual([
+      'system',
+      'permission_request',
+    ])
+    expect(__chatPageForTests.getEventKey(visible[1]!, 1)).toBe(
+      'permission_request-perm-1',
+    )
+    expect(
+      __chatPageForTests.appendPermissionRequestEvent(visible, permission),
+    ).toHaveLength(2)
+  })
+
   test('detects sticky bottom scroll state with a small threshold', () => {
     expect(
       __chatPageForTests.isNearScrollBottom({
@@ -86,5 +123,41 @@ describe('ChatPage event normalization', () => {
         scrollHeight: 1400,
       }),
     ).toBe(false)
+  })
+
+  test('renders a terminal transcript controlled by the prompt input', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(ChatPage, {
+        events: [],
+        input: '',
+        onInputChange: () => {},
+        onSend: () => {},
+        runtimeAttached: true,
+        permissionRequest: {
+          type: 'permission_request',
+          request_id: 'perm-1',
+          tool_name: 'Shell',
+          tool_description: 'Run command',
+          input: {},
+        },
+        sessionTitle: 'New session',
+        workspacePath: 'C:\\repo',
+      }),
+    )
+    const controlsMatch = html.match(/<textarea[^>]+aria-controls="([^"]+)"/)
+
+    expect(controlsMatch?.[1]).toBeTruthy()
+    expect(html).toContain(`id="${controlsMatch?.[1]}"`)
+    expect(html).toContain('role="log"')
+    expect(html).toContain('Permission pending')
+    expect(html).toContain('Enter')
+    expect(html).toContain('/help')
+    expect(__chatPageForTests.chatTerminalHints.map(hint => hint.key)).toEqual([
+      'Enter',
+      'Shift+Enter',
+      '/help',
+      '@file',
+      'Scroll',
+    ])
   })
 })

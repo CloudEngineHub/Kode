@@ -12,6 +12,7 @@ describe('InputArea accessibility', () => {
         onChange={() => {}}
         onSubmit={() => {}}
         isSending={false}
+        controlsId="terminal-log"
       />,
     )
 
@@ -20,10 +21,12 @@ describe('InputArea accessibility', () => {
     const describedByMatch = html.match(
       /<textarea[^>]+aria-describedby="([^"]+)"/,
     )
+    const controlsMatch = html.match(/<textarea[^>]+aria-controls="([^"]+)"/)
 
     expect(labelMatch?.[1]).toBeTruthy()
     expect(textareaMatch?.[1]).toBe(labelMatch?.[1])
     expect(describedByMatch?.[1]).toBeTruthy()
+    expect(controlsMatch?.[1]).toBe('terminal-log')
     expect(html).toContain('Press Enter to send.')
     expect(html).toContain('aria-hidden="true"')
   })

@@ -21,7 +21,8 @@ import {
 } from './ui/accordion'
 
 type Role = 'user' | 'assistant'
-type MessageKind = 'user' | 'assistant' | 'tool' | 'result' | 'error' | 'log'
+type MessageKind =
+  'user' | 'assistant' | 'system' | 'tool' | 'result' | 'error' | 'log'
 
 type BubbleMessage = {
   role: Role
@@ -51,9 +52,14 @@ function extractTextFromBlocks(blocks: SdkContentBlock[]): string {
 }
 
 function formatStreamEvent(event: unknown): string | null {
-  if (!event || typeof event !== 'object' || Array.isArray(event)) return null
+  if (!event || typeof event !== 'object' || Array.isArray(event)) {
+    return '**Stream event**: `event`'
+  }
   const record = event as Record<string, unknown>
-  if (record.type !== 'mcp_progress') return null
+  if (record.type !== 'mcp_progress') {
+    const type = sanitizeMcpProgressLabel(record.type, 'event')
+    return `**Stream event**: \`${type}\``
+  }
 
   const server = sanitizeMcpProgressLabel(record.server, 'MCP')
   const tool = sanitizeMcpProgressLabel(record.tool, 'tool')
@@ -75,9 +81,36 @@ function formatStreamEvent(event: unknown): string | null {
 }
 
 function toBubbleMessage(event: AgentEvent): BubbleMessage | null {
+  if (event.type === 'system') {
+    const details = [
+      event.cwd ? `- cwd: \`${event.cwd}\`` : null,
+      event.model ? `- model: \`${event.model}\`` : null,
+      event.tools?.length ? `- tools: ${event.tools.length}` : null,
+      event.slash_commands?.length
+        ? `- slash commands: ${event.slash_commands.length}`
+        : null,
+      event.status ? `- status: ${event.status}` : null,
+    ]
+      .filter(Boolean)
+      .join('\n')
+    return {
+      role: 'assistant',
+      kind: 'system',
+      text: `**System**: ${event.subtype}${details ? `\n${details}` : ''}`,
+    }
+  }
+
   if (event.type === 'stream_event') {
     const text = formatStreamEvent(event.event)
     return text ? { role: 'assistant', kind: 'tool', text } : null
+  }
+
+  if (event.type === 'permission_request') {
+    return {
+      role: 'assistant',
+      kind: 'tool',
+      text: `**Permission pending**: \`${event.tool_name}\`\n${event.tool_description}`,
+    }
   }
 
   if (event.type === 'log') {
@@ -163,6 +196,13 @@ function terminalKindMeta(kind: MessageKind): {
       label: 'tool',
       marker: '>',
       className: 'text-[hsl(var(--kode-terminal-tool))]',
+    }
+  }
+  if (kind === 'system') {
+    return {
+      label: 'system',
+      marker: '*',
+      className: 'text-[hsl(var(--kode-terminal-muted))]',
     }
   }
   if (kind === 'result') {
@@ -372,4 +412,5 @@ export const MessageBubble = React.memo(function MessageBubble(props: {
 
 export const __messageBubbleForTests = {
   terminalKindMeta,
+  toBubbleMessage,
 }

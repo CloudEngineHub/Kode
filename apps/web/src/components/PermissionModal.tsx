@@ -61,7 +61,7 @@ export function PermissionModal(props: {
               <Textarea
                 value={denyReason}
                 onChange={e => setDenyReason(e.target.value)}
-                placeholder="Explain why you deny this tool use…"
+                placeholder="Explain why you deny this tool use..."
               />
             </div>
           </div>

@@ -70,6 +70,18 @@
     overflow: hidden;
   }
 
+  .kode-web-root {
+    height: 100vh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  @supports (height: 100dvh) {
+    .kode-web-root {
+      height: 100dvh;
+    }
+  }
+
   ::selection {
     background: hsl(var(--primary) / 0.25);
   }
@@ -105,7 +117,13 @@
   }
 
   .kode-terminal-scroll [data-radix-scroll-area-viewport] {
+    overscroll-behavior: contain;
     scroll-behavior: smooth;
+    scrollbar-gutter: stable;
+  }
+
+  .kode-terminal-viewport {
+    contain: layout paint;
   }
 
   .kode-terminal-message pre,
@@ -116,6 +134,20 @@
   .kode-terminal-message pre {
     scrollbar-color: hsl(var(--kode-terminal-border))
       hsl(var(--kode-terminal-bg));
+  }
+
+  .kode-terminal-scroll [data-radix-scroll-area-viewport]::-webkit-scrollbar,
+  .kode-terminal-message pre::-webkit-scrollbar {
+    height: 10px;
+    width: 10px;
+  }
+
+  .kode-terminal-scroll
+    [data-radix-scroll-area-viewport]::-webkit-scrollbar-thumb,
+  .kode-terminal-message pre::-webkit-scrollbar-thumb {
+    background: hsl(var(--kode-terminal-border));
+    border: 2px solid hsl(var(--kode-terminal-bg));
+    border-radius: 999px;
   }
 
   .kode-terminal-caret {

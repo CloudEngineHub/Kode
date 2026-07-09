@@ -1,20 +1,26 @@
 import React from 'react'
 
-import type { AgentEvent } from '@kode/protocol'
+import type { AgentEvent, PermissionRequestEvent } from '@kode/protocol'
 
 import { ScrollArea } from '../components/ui/scroll-area'
 import { MessageBubble } from '../components/MessageBubble'
 import { InputArea } from '../components/InputArea'
-import { TerminalFrame } from '../components/TerminalFrame'
+import {
+  TerminalFrame,
+  TerminalStatusLine,
+  type TerminalStatusHint,
+} from '../components/TerminalFrame'
 import { cn } from '../lib/utils'
 
 function isChatEvent(event: AgentEvent): boolean {
   return (
     event.type === 'user' ||
     event.type === 'assistant' ||
+    event.type === 'system' ||
     event.type === 'result' ||
     event.type === 'log' ||
-    event.type === 'stream_event'
+    event.type === 'stream_event' ||
+    event.type === 'permission_request'
   )
 }
 
@@ -66,9 +72,26 @@ function getChatEventsForRender(events: AgentEvent[]): AgentEvent[] {
   return out
 }
 
+function appendPermissionRequestEvent(
+  events: AgentEvent[],
+  request?: PermissionRequestEvent | null,
+): AgentEvent[] {
+  if (!request) return events
+  const alreadyRendered = events.some(
+    event =>
+      event.type === 'permission_request' &&
+      event.request_id === request.request_id,
+  )
+  return alreadyRendered ? events : [...events, request]
+}
+
 function getEventKey(event: AgentEvent, index: number): string {
   const mcpProgressKey = getMcpProgressEventKey(event)
   if (mcpProgressKey) return `stream_event-mcp_progress-${mcpProgressKey}`
+
+  if (event.type === 'permission_request') {
+    return `permission_request-${event.request_id}`
+  }
 
   const record = event as Record<string, unknown>
   const uuid = typeof record.uuid === 'string' ? record.uuid : ''
@@ -86,6 +109,14 @@ function getEventKey(event: AgentEvent, index: number): string {
 }
 
 const AUTO_FOLLOW_BOTTOM_THRESHOLD_PX = 72
+
+const CHAT_TERMINAL_HINTS: readonly TerminalStatusHint[] = [
+  { key: 'Enter', label: 'send' },
+  { key: 'Shift+Enter', label: 'newline' },
+  { key: '/help', label: 'commands' },
+  { key: '@file', label: 'attach' },
+  { key: 'Scroll', label: 'review output' },
+]
 
 type ScrollMetrics = {
   scrollTop: number
@@ -157,10 +188,12 @@ export function ChatPage(props: {
   onSend: () => void
   disabled?: boolean
   sending?: boolean
+  permissionRequest?: PermissionRequestEvent | null
   runtimeAttached?: boolean
   sessionTitle?: string
   workspacePath?: string | null
 }) {
+  const transcriptId = React.useId()
   const bottomRef = React.useRef<HTMLDivElement | null>(null)
   const scrollViewportRef = React.useRef<HTMLDivElement | null>(null)
   const shouldAutoFollowRef = React.useRef(true)
@@ -169,9 +202,16 @@ export function ChatPage(props: {
     () => getChatEventsForRender(props.events),
     [props.events],
   )
+  const visibleEvents = React.useMemo(
+    () => appendPermissionRequestEvent(chatEvents, props.permissionRequest),
+    [chatEvents, props.permissionRequest],
+  )
   const lastEventKey =
-    chatEvents.length > 0
-      ? getEventKey(chatEvents[chatEvents.length - 1]!, chatEvents.length - 1)
+    visibleEvents.length > 0
+      ? getEventKey(
+          visibleEvents[visibleEvents.length - 1]!,
+          visibleEvents.length - 1,
+        )
       : 'empty'
 
   React.useEffect(() => {
@@ -193,7 +233,7 @@ export function ChatPage(props: {
       behavior: props.sending ? 'auto' : 'smooth',
     })
     shouldAutoFollowRef.current = true
-  }, [chatEvents.length, lastEventKey, props.events.length, props.sending])
+  }, [lastEventKey, props.events.length, props.sending, visibleEvents.length])
 
   return (
     <TerminalFrame
@@ -209,17 +249,26 @@ export function ChatPage(props: {
             onSubmit={props.onSend}
             disabled={props.disabled}
             isSending={props.sending}
+            controlsId={transcriptId}
           />
         </div>
       }
       footerClassName="p-2 md:p-3"
+      statusLine={
+        <TerminalStatusLine
+          hints={CHAT_TERMINAL_HINTS}
+          leading={props.sending ? 'running' : 'ready'}
+        />
+      }
     >
       <ScrollArea
         className="kode-terminal-scroll flex-1"
+        viewportClassName="kode-terminal-viewport"
         viewportRef={scrollViewportRef}
         onViewportScroll={handleViewportScroll}
       >
         <div
+          id={transcriptId}
           className={cn(
             'mx-auto flex min-h-full w-full max-w-6xl flex-col justify-end gap-2 px-3 py-4 font-mono text-[13px] leading-6 md:px-5',
           )}
@@ -228,12 +277,12 @@ export function ChatPage(props: {
           aria-relevant="additions text"
           role="log"
         >
-          {chatEvents.length === 0 ? (
+          {visibleEvents.length === 0 ? (
             <div className="flex flex-1 items-end pb-2">
               <TerminalEmptyState workspacePath={props.workspacePath} />
             </div>
           ) : (
-            chatEvents.map((event, idx) => (
+            visibleEvents.map((event, idx) => (
               <MessageBubble key={getEventKey(event, idx)} event={event} />
             ))
           )}
@@ -247,6 +296,8 @@ export function ChatPage(props: {
 
 export const __chatPageForTests = {
   getChatEventsForRender,
+  appendPermissionRequestEvent,
   getEventKey,
   isNearScrollBottom,
+  chatTerminalHints: CHAT_TERMINAL_HINTS,
 }

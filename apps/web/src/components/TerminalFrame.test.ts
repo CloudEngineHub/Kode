@@ -14,4 +14,13 @@ describe('TerminalFrame helpers', () => {
       'detached',
     )
   })
+
+  test('formats terminal shortcut hints for the status line', () => {
+    expect(
+      __terminalFrameForTests.terminalStatusHintText([
+        { key: 'Enter', label: 'send' },
+        { key: '/help', label: 'commands' },
+      ]),
+    ).toBe('Enter send | /help commands')
+  })
 })

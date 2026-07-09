@@ -32,6 +32,12 @@ import { SettingsPage } from './pages/Settings'
 
 type View = 'chat' | 'shell' | 'files' | 'settings'
 
+const terminalTabsListClass =
+  'rounded-md border border-[hsl(var(--kode-terminal-border))] bg-[hsl(var(--kode-terminal-bg))] p-1 text-[hsl(var(--kode-terminal-muted))]'
+
+const terminalTabTriggerClass =
+  'rounded-[4px] data-[state=active]:bg-[hsl(var(--kode-terminal-elevated))] data-[state=active]:text-[hsl(var(--kode-terminal-text))] data-[state=active]:shadow-none'
+
 function getInitialToken(): string {
   return consumeTokenFromUrl() || loadTokenFromStorage()
 }
@@ -120,19 +126,19 @@ export default function App() {
   )
 
   return (
-    <div className="h-screen bg-background text-foreground">
-      <div className="grid h-full grid-cols-1 md:grid-cols-[304px_minmax(0,1fr)] 2xl:grid-cols-[304px_minmax(0,1fr)_320px]">
-        <div className="hidden md:block">{sidebar}</div>
+    <div className="kode-web-root bg-background text-foreground">
+      <div className="grid h-full grid-cols-1 lg:grid-cols-[304px_minmax(0,1fr)] 2xl:grid-cols-[304px_minmax(0,1fr)_320px]">
+        <div className="hidden lg:block">{sidebar}</div>
 
-        <div className="flex h-full min-h-0 flex-col">
-          <div className="flex min-h-14 items-center gap-2 border-b border-border bg-card/95 px-3 py-2 shadow-sm shadow-black/5 backdrop-blur">
+        <div className="flex h-full min-h-0 flex-col overflow-hidden">
+          <div className="flex min-h-14 items-center gap-2 border-b border-[hsl(var(--kode-terminal-border))] bg-[hsl(var(--kode-terminal-panel))] px-3 py-2 font-mono text-[hsl(var(--kode-terminal-text))] shadow-sm shadow-black/20">
             <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
-              <SheetTrigger asChild className="md:hidden">
+              <SheetTrigger asChild className="lg:hidden">
                 <Button variant="ghost" size="icon" aria-label="Open sidebar">
                   <Menu className="h-4 w-4" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="w-[304px] p-0">
+              <SheetContent side="left" className="w-[min(304px,100vw)] p-0">
                 {sidebar}
               </SheetContent>
             </Sheet>
@@ -141,7 +147,7 @@ export default function App() {
               <div className="truncate text-sm font-semibold">
                 {selectedSessionTitle}
               </div>
-              <div className="truncate text-xs text-muted-foreground">
+              <div className="truncate text-xs text-[hsl(var(--kode-terminal-muted))]">
                 {workspacesLoading
                   ? 'Loading workspaces...'
                   : (currentWorkspace?.path ?? 'No workspace')}
@@ -161,35 +167,56 @@ export default function App() {
                 }
               }}
             >
-              <TabsList className="hidden sm:inline-flex">
-                <TabsTrigger value="chat">
+              <TabsList
+                className={cn('hidden sm:inline-flex', terminalTabsListClass)}
+              >
+                <TabsTrigger className={terminalTabTriggerClass} value="chat">
                   <MessagesSquare className="h-4 w-4" />
                   Chat
                 </TabsTrigger>
-                <TabsTrigger value="shell">
+                <TabsTrigger className={terminalTabTriggerClass} value="shell">
                   <Terminal className="h-4 w-4" />
                   Shell
                 </TabsTrigger>
-                <TabsTrigger value="files">
+                <TabsTrigger className={terminalTabTriggerClass} value="files">
                   <FileText className="h-4 w-4" />
                   Files
                 </TabsTrigger>
-                <TabsTrigger value="settings">
+                <TabsTrigger
+                  className={terminalTabTriggerClass}
+                  value="settings"
+                >
                   <Settings className="h-4 w-4" />
                   Settings
                 </TabsTrigger>
               </TabsList>
-              <TabsList className="sm:hidden">
-                <TabsTrigger value="chat" aria-label="Chat">
+              <TabsList className={cn('sm:hidden', terminalTabsListClass)}>
+                <TabsTrigger
+                  className={terminalTabTriggerClass}
+                  value="chat"
+                  aria-label="Chat"
+                >
                   <MessagesSquare className="h-4 w-4" />
                 </TabsTrigger>
-                <TabsTrigger value="shell" aria-label="Shell">
+                <TabsTrigger
+                  className={terminalTabTriggerClass}
+                  value="shell"
+                  aria-label="Shell"
+                >
                   <Terminal className="h-4 w-4" />
                 </TabsTrigger>
-                <TabsTrigger value="files" aria-label="Files">
+                <TabsTrigger
+                  className={terminalTabTriggerClass}
+                  value="files"
+                  aria-label="Files"
+                >
                   <FileText className="h-4 w-4" />
                 </TabsTrigger>
-                <TabsTrigger value="settings" aria-label="Settings">
+                <TabsTrigger
+                  className={terminalTabTriggerClass}
+                  value="settings"
+                  aria-label="Settings"
+                >
                   <Settings className="h-4 w-4" />
                 </TabsTrigger>
               </TabsList>
@@ -238,6 +265,7 @@ export default function App() {
                 onSend={() => void chat.send()}
                 disabled={!client}
                 sending={chat.sending}
+                permissionRequest={chat.permissionRequest}
                 runtimeAttached={runtimeAttached}
                 sessionTitle={selectedSessionTitle}
                 workspacePath={currentWorkspace?.path ?? null}

@@ -3,8 +3,17 @@ import { CircleDot, Terminal } from 'lucide-react'
 
 import { cn } from '../lib/utils'
 
+export type TerminalStatusHint = {
+  key: string
+  label: string
+}
+
 function terminalAttachmentLabel(runtimeAttached?: boolean): string {
   return runtimeAttached ? 'attached' : 'detached'
+}
+
+function terminalStatusHintText(hints: readonly TerminalStatusHint[]): string {
+  return hints.map(hint => `${hint.key} ${hint.label}`).join(' | ')
 }
 
 function TerminalTitleBar(props: {
@@ -54,6 +63,37 @@ function TerminalTitleBar(props: {
   )
 }
 
+export function TerminalStatusLine(props: {
+  hints: readonly TerminalStatusHint[]
+  leading?: string
+}) {
+  return (
+    <div
+      className="flex min-h-8 items-center gap-3 border-t border-[hsl(var(--kode-terminal-border))] bg-[hsl(var(--kode-terminal-panel))] px-3 py-1 font-mono text-[11px] text-[hsl(var(--kode-terminal-muted))]"
+      role="status"
+      aria-label={terminalStatusHintText(props.hints)}
+    >
+      <div className="hidden shrink-0 items-center gap-2 sm:flex">
+        <span className="text-[hsl(var(--kode-terminal-prompt))]">$</span>
+        <span>{props.leading ?? 'ready'}</span>
+      </div>
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
+        {props.hints.map(hint => (
+          <span
+            key={`${hint.key}:${hint.label}`}
+            className="inline-flex min-w-0 items-center gap-1.5"
+          >
+            <kbd className="rounded-[4px] border border-[hsl(var(--kode-terminal-border))] bg-[hsl(var(--kode-terminal-bg))] px-1.5 py-0.5 text-[10px] font-normal text-[hsl(var(--kode-terminal-text))]">
+              {hint.key}
+            </kbd>
+            <span className="truncate">{hint.label}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function TerminalFrame(props: {
   title: string
   context?: string | null
@@ -61,16 +101,19 @@ export function TerminalFrame(props: {
   runtimeAttached?: boolean
   children: React.ReactNode
   footer?: React.ReactNode
+  statusLine?: React.ReactNode
   className?: string
   contentClassName?: string
   footerClassName?: string
 }) {
   return (
     <div
+      aria-label={`${props.title} terminal`}
       className={cn(
-        'flex h-full min-h-0 flex-col bg-[hsl(var(--kode-terminal-bg))] text-[hsl(var(--kode-terminal-text))]',
+        'flex h-full min-h-0 flex-col overflow-hidden bg-[hsl(var(--kode-terminal-bg))] text-[hsl(var(--kode-terminal-text))]',
         props.className,
       )}
+      role="region"
     >
       <TerminalTitleBar
         title={props.title}
@@ -96,6 +139,7 @@ export function TerminalFrame(props: {
           {props.footer}
         </div>
       ) : null}
+      {props.statusLine ? props.statusLine : null}
     </div>
   )
 }
@@ -168,4 +212,5 @@ export function TerminalPlaceholder(props: {
 
 export const __terminalFrameForTests = {
   terminalAttachmentLabel,
+  terminalStatusHintText,
 }

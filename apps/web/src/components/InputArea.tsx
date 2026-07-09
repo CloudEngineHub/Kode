@@ -11,6 +11,7 @@ export function InputArea(props: {
   onSubmit: () => void
   disabled?: boolean
   isSending?: boolean
+  controlsId?: string
 }) {
   const inputId = React.useId()
   const hintId = React.useId()
@@ -54,6 +55,7 @@ export function InputArea(props: {
         value={props.value}
         onChange={e => props.onChange(e.target.value)}
         onKeyDown={onKeyDown}
+        aria-controls={props.controlsId}
         aria-describedby={hintId}
         placeholder={isBusy ? 'compose next prompt...' : 'type prompt...'}
         className="max-h-40 min-h-[48px] resize-none border-0 bg-transparent px-1 py-2 font-mono text-[13px] leading-6 text-[hsl(var(--kode-terminal-text))] shadow-none placeholder:text-[hsl(var(--kode-terminal-muted))] focus-visible:ring-0"
