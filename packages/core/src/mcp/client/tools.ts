@@ -303,6 +303,19 @@ export const getMCPTools = memoize(
   () => `tools@${getMcpListChangedVersion('tools')}`,
 )
 
+function createMcpToolMeta(
+  toolUseId: string | undefined,
+): Record<string, string> | undefined {
+  const progressToken = toolUseId?.trim()
+  if (!progressToken) return undefined
+
+  return {
+    progressToken,
+    'kode/toolUseId': progressToken,
+    'claudecode/toolUseId': progressToken,
+  }
+}
+
 async function callMcpTool({
   client: { client, name },
   tool,
@@ -321,11 +334,7 @@ async function callMcpTool({
   const timeoutMs = getMcpToolTimeoutMs()
   const timeoutSignal = timeoutMs ? createTimeoutSignal(timeoutMs) : null
   const merged = mergeAbortSignals([signal, timeoutSignal?.signal])
-
-  const meta =
-    toolUseId && toolUseId.trim()
-      ? { 'kode/toolUseId': toolUseId, 'claudecode/toolUseId': toolUseId }
-      : undefined
+  const meta = createMcpToolMeta(toolUseId)
 
   try {
     const options: RequestOptions | undefined =

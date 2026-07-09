@@ -16,6 +16,7 @@ describe('MCP progress notifications', () => {
 
   test('bridges SDK tool progress callbacks to UI progress and stream events', async () => {
     const events: unknown[] = []
+    const callToolRequests: unknown[] = []
     const client: any = {
       request: async (req: any) => {
         if (req.method === 'tools/list') {
@@ -30,7 +31,8 @@ describe('MCP progress notifications', () => {
         }
         throw new Error(`Unexpected method: ${String(req.method)}`)
       },
-      callTool: async (_request: unknown, _schema: unknown, options: any) => {
+      callTool: async (request: unknown, _schema: unknown, options: any) => {
+        callToolRequests.push(request)
         options?.onprogress?.({ progress: 1, total: 2, message: 'halfway' })
         return { content: [{ type: 'text', text: 'done' }] }
       },
@@ -81,6 +83,17 @@ describe('MCP progress notifications', () => {
     }
 
     expect(progressValue.type).toBe('progress')
+    expect(callToolRequests).toEqual([
+      {
+        name: 'slow',
+        arguments: {},
+        _meta: {
+          progressToken: 'tool-use',
+          'kode/toolUseId': 'tool-use',
+          'claudecode/toolUseId': 'tool-use',
+        },
+      },
+    ])
     const progressText =
       progressValue.content?.message?.content?.[0]?.type === 'text'
         ? progressValue.content.message.content[0].text
