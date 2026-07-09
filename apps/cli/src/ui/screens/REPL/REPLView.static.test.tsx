@@ -172,6 +172,11 @@ function createHarness(
   return harness
 }
 
+function countOccurrences(text: string, needle: string): number {
+  if (needle.length === 0) return 0
+  return text.split(needle).length - 1
+}
+
 describe('REPLView Static output epoch', () => {
   test('keeps Static mounted during ordinary rerenders and resets it only when epoch changes', async () => {
     const staticItems = [makeStaticItem('static-a')]
@@ -432,6 +437,41 @@ describe('REPLView Static output epoch', () => {
     harness.resize(100, 24)
     await harness.wait(220)
     expect(harness.getOutput()).not.toContain('static-a')
+  })
+
+  test('does not duplicate prompt controls after normal to micro to normal resize', async () => {
+    const renderWithPrompt = () => (
+      <KeypressProvider>
+        {renderReplView({
+          staticOutputEpoch: 0,
+          staticItems: [],
+          shouldShowPromptInput: true,
+          promptInputProps: makePromptInputProps({ input: 'hello' }),
+        })}
+      </KeypressProvider>
+    )
+
+    const harness = createHarness(renderWithPrompt(), {
+      columns: 100,
+      rows: 24,
+    })
+
+    await harness.wait(120)
+    expect(countOccurrences(harness.getOutput(), 'Input:')).toBeLessThanOrEqual(
+      1,
+    )
+
+    harness.clearOutput()
+    harness.resize(100, 4)
+    await harness.wait(120)
+
+    harness.clearOutput()
+    harness.resize(100, 24)
+    await harness.wait(520)
+
+    const output = harness.getOutput()
+    expect(output).toContain('Input:')
+    expect(countOccurrences(output, 'Input:')).toBeLessThanOrEqual(1)
   })
 
   test('does not print static history when first rendered in a micro viewport', async () => {
