@@ -1,12 +1,12 @@
 import { Box, Text } from 'ink'
 import * as React from 'react'
 import { getTheme } from '#core/utils/theme'
-import { ASCII_LOGO, PRODUCT_NAME } from '#core/constants/product'
+import { ASCII_LOGO } from '#core/constants/product'
 
 export const MIN_LOGO_WIDTH = 70
 const DEFAULT_TERMINAL_COLUMNS = 80
 const DEFAULT_TERMINAL_ROWS = 24
-const FULL_LOGO_MIN_ROWS = 18
+const FULL_LOGO_MIN_ROWS = 10
 const DISPLAY_ASCII_LOGO = ASCII_LOGO.trimStart()
 
 function normalizeDimension(value: number | undefined, fallback: number) {
@@ -57,13 +57,7 @@ export function Logo({
 
       {/* ASCII Logo */}
       <Box flexDirection="column">
-        {isCompact ? (
-          <Text bold color={theme.kode}>
-            {PRODUCT_NAME.toUpperCase()} CLI
-          </Text>
-        ) : (
-          <Text color={theme.kode}>{DISPLAY_ASCII_LOGO}</Text>
-        )}
+        <Text color={theme.kode}>{DISPLAY_ASCII_LOGO}</Text>
       </Box>
 
       {/* Quick tips - single line */}

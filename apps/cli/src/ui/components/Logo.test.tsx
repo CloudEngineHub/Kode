@@ -3,16 +3,19 @@ import { render } from 'ink'
 import React from 'react'
 import { PassThrough } from 'node:stream'
 import stripAnsi from 'strip-ansi'
-import { ASCII_LOGO } from '#core/constants/product'
+import { ASCII_LOGO, PRODUCT_NAME } from '#core/constants/product'
 import { Logo } from './Logo'
 
 type TestHarness = {
   unmount: () => void
+  rerender: (element: React.ReactElement) => void
   getOutput: () => string
   wait: (ms: number) => Promise<void>
 }
 
 const mounted: TestHarness[] = []
+const firstLogoLine = ASCII_LOGO.trim().split(/\r?\n/)[0]
+const productNameFallback = `${PRODUCT_NAME.toUpperCase()} CLI`
 
 afterEach(() => {
   while (mounted.length > 0) {
@@ -42,6 +45,7 @@ function createHarness(element: React.ReactElement): TestHarness {
 
   const harness: TestHarness = {
     unmount: () => instance.unmount(),
+    rerender: element => instance.rerender(element),
     getOutput: () => stripAnsi(rawOutput),
     wait: async ms => new Promise(resolve => setTimeout(resolve, ms)),
   }
@@ -50,7 +54,7 @@ function createHarness(element: React.ReactElement): TestHarness {
 }
 
 describe('Logo', () => {
-  test('uses compact layout for narrow or short terminals', async () => {
+  test('uses compact surrounding layout while keeping the configured logo', async () => {
     const harness = createHarness(
       <Logo
         mcpClients={[{ type: 'connected', name: 'codegraph' }]}
@@ -62,7 +66,8 @@ describe('Logo', () => {
     await harness.wait(20)
     const output = harness.getOutput().trimEnd()
 
-    expect(output).toContain('KODE CLI')
+    expect(output).toContain(firstLogoLine)
+    expect(output).not.toContain(productNameFallback)
     expect(output).toContain('/help')
     expect(output).toContain('MCP Servers')
     expect(output).toContain('codegraph')
@@ -80,11 +85,10 @@ describe('Logo', () => {
 
     await harness.wait(20)
     const output = harness.getOutput().trimEnd()
-    const firstLogoLine = ASCII_LOGO.trim().split(/\r?\n/)[0]
 
     expect(output).toContain(firstLogoLine)
     expect(output).toContain('codegraph')
-    expect(output).not.toContain('KODE CLI')
+    expect(output).not.toContain(productNameFallback)
     expect(output).not.toMatch(/(?:\n\s*){4,}/)
   })
 
@@ -95,10 +99,9 @@ describe('Logo', () => {
 
     await harness.wait(20)
     const output = harness.getOutput()
-    const firstLogoLine = ASCII_LOGO.trim().split(/\r?\n/)[0]
 
     expect(output).toContain(firstLogoLine)
-    expect(output).not.toContain('KODE CLI')
+    expect(output).not.toContain(productNameFallback)
     expect(output).not.toMatch(/(?:\n\s*){4,}/)
   })
 
@@ -109,10 +112,27 @@ describe('Logo', () => {
 
     await harness.wait(20)
     const output = harness.getOutput()
-    const firstLogoLine = ASCII_LOGO.trim().split(/\r?\n/)[0]
 
     expect(output.trimEnd().startsWith(firstLogoLine)).toBe(true)
     expect(output).toContain(firstLogoLine)
-    expect(output).not.toContain('KODE CLI')
+    expect(output).not.toContain(productNameFallback)
+  })
+
+  test('keeps the configured logo when dimensions cross the compact threshold', async () => {
+    const harness = createHarness(
+      <Logo mcpClients={[]} terminalColumns={40} terminalRows={12} />,
+    )
+
+    await harness.wait(20)
+    expect(harness.getOutput()).toContain(firstLogoLine)
+
+    harness.rerender(
+      <Logo mcpClients={[]} terminalColumns={100} terminalRows={30} />,
+    )
+    await harness.wait(20)
+
+    const output = harness.getOutput()
+    expect(output).toContain(firstLogoLine)
+    expect(output).not.toContain(productNameFallback)
   })
 })

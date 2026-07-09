@@ -14,6 +14,7 @@ type TestHarness = {
   rerender: (element: React.ReactElement) => void
   clearOutput: () => void
   getOutput: () => string
+  resize: (columns: number, rows: number) => void
   wait: (ms: number) => Promise<void>
 }
 
@@ -156,6 +157,11 @@ function createHarness(element: React.ReactElement): TestHarness {
       rawOutput = ''
     },
     getOutput: () => stripAnsi(rawOutput),
+    resize: (columns, rows) => {
+      stdout.columns = columns
+      stdout.rows = rows
+      stdout.emit('resize')
+    },
     wait: async ms => new Promise(resolve => setTimeout(resolve, ms)),
   }
   mounted.push(harness)
@@ -226,6 +232,107 @@ describe('REPLView Static output epoch', () => {
     const output = harness.getOutput()
     expect(output).not.toContain('static-a')
     expect(output).toContain('Header B')
+  })
+
+  test('does not reprint the same startup header during ordinary rerenders', async () => {
+    const harness = createHarness(
+      renderReplView({
+        staticOutputEpoch: 0,
+        staticItems: [],
+        startupHeader: <Text>KODE CLI</Text>,
+        startupHeaderKey: 'startup-kode',
+        showStartupHeader: true,
+      }),
+    )
+
+    await harness.wait(20)
+    expect(harness.getOutput()).toContain('KODE CLI')
+
+    harness.clearOutput()
+    harness.rerender(
+      renderReplView({
+        staticOutputEpoch: 0,
+        staticItems: [],
+        startupHeader: <Text>KODE CLI</Text>,
+        startupHeaderKey: 'startup-kode',
+        showStartupHeader: true,
+      }),
+    )
+    await harness.wait(20)
+
+    expect(harness.getOutput()).not.toContain('KODE CLI')
+  })
+
+  test('does not reprint the same startup header when the terminal resizes', async () => {
+    const harness = createHarness(
+      renderReplView({
+        staticOutputEpoch: 0,
+        staticItems: [],
+        startupHeader: <Text>KODE CLI</Text>,
+        startupHeaderKey: 'startup-kode',
+        showStartupHeader: true,
+      }),
+    )
+
+    await harness.wait(20)
+    expect(harness.getOutput()).toContain('KODE CLI')
+
+    harness.clearOutput()
+    harness.resize(88, 26)
+    await harness.wait(220)
+
+    const output = harness.getOutput()
+    expect(output).not.toContain('KODE CLI')
+  })
+
+  test('does not reprint static history when the terminal resizes', async () => {
+    const staticItems = [makeStaticItem('static-a')]
+    const harness = createHarness(
+      renderReplView({
+        staticOutputEpoch: 0,
+        staticItems,
+      }),
+    )
+
+    await harness.wait(20)
+    expect(harness.getOutput()).toContain('static-a')
+
+    harness.clearOutput()
+    harness.resize(88, 26)
+    await harness.wait(220)
+
+    expect(harness.getOutput()).not.toContain('static-a')
+  })
+
+  test('does not carry a startup header across static output epoch resets', async () => {
+    const harness = createHarness(
+      renderReplView({
+        staticOutputEpoch: 0,
+        staticItems: [],
+        startupHeader: <Text>KODE CLI</Text>,
+        startupHeaderKey: 'startup-kode',
+        showStartupHeader: true,
+      }),
+    )
+
+    await harness.wait(20)
+    expect(harness.getOutput()).toContain('KODE CLI')
+
+    harness.clearOutput()
+    harness.rerender(
+      renderReplView({
+        staticOutputEpoch: 1,
+        staticItems: [makeStaticItem('static-a')],
+        startupHeader: <Text>KODE CLI</Text>,
+        startupHeaderKey: 'startup-kode',
+        showStartupHeader: false,
+      }),
+    )
+    await harness.wait(20)
+
+    const output = harness.getOutput()
+    expect(output).toContain('static-a')
+    expect(output).not.toContain('KODE CLI')
   })
 
   test('does not insert a large blank gap between startup header and prompt controls', async () => {

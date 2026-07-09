@@ -117,9 +117,47 @@ export function REPLView({
     !isMessageSelectorVisible &&
     !binaryFeedbackContext &&
     !showingCostDialog
-  const startupHeaderMeasureKey = shouldRenderStartupHeader
-    ? (startupHeaderKey ?? 'startup')
-    : ''
+  const startupHeaderStaticItemRef = useRef<{
+    epoch: number
+    item: TranscriptItem
+  } | null>(null)
+  const shouldPrintStartupHeaderStatically =
+    shouldRenderStartupHeader && staticItems.length === 0
+
+  if (shouldPrintStartupHeaderStatically && startupHeader) {
+    const key = `startup:${startupHeaderKey ?? 'startup'}`
+    const current = startupHeaderStaticItemRef.current
+    if (current?.epoch !== staticOutputEpoch || current.item.key !== key) {
+      startupHeaderStaticItemRef.current = {
+        epoch: staticOutputEpoch,
+        item: {
+          key,
+          jsx: (
+            <Box key={key} flexDirection="column" width="100%">
+              {startupHeader}
+            </Box>
+          ),
+        },
+      }
+    }
+  }
+
+  const startupHeaderStaticItem =
+    startupHeaderStaticItemRef.current?.epoch === staticOutputEpoch
+      ? startupHeaderStaticItemRef.current.item
+      : null
+  const staticItemsWithStartupHeader = useMemo(
+    () =>
+      startupHeaderStaticItem
+        ? [startupHeaderStaticItem, ...staticItems]
+        : staticItems,
+    [staticItems, startupHeaderStaticItem],
+  )
+  const staticOutputKey = startupHeaderStaticItem
+    ? `static-${staticOutputEpoch}-${startupHeaderStaticItem.key}`
+    : `static-${staticOutputEpoch}`
+  const shouldRenderStartupHeaderInControls =
+    shouldRenderStartupHeader && !startupHeaderStaticItem
 
   const [mainControlsHeight, setMainControlsHeight] = useState(0)
   const [messageSelectorHeight, setMessageSelectorHeight] = useState(0)
@@ -137,7 +175,6 @@ export function REPLView({
       showingCostDialog ? 1 : 0,
       shouldShowPromptInput ? 1 : 0,
       hasToast ? 1 : 0,
-      startupHeaderMeasureKey,
       isLoading ? 1 : 0,
       transientItems.length,
       messageSelectorMessages.length,
@@ -178,7 +215,6 @@ export function REPLView({
     showingCostDialog,
     shouldShowPromptInput,
     hasToast,
-    startupHeaderMeasureKey,
     isLoading,
     transientItems.length,
     messageSelectorMessages.length,
@@ -221,7 +257,7 @@ export function REPLView({
           </Box>
         ) : (
           <Box ref={rootUiRef} flexDirection="column" width="100%">
-            <Static key={`static-${staticOutputEpoch}`} items={staticItems}>
+            <Static key={staticOutputKey} items={staticItemsWithStartupHeader}>
               {(item: TranscriptItem) => item.jsx}
             </Static>
 
@@ -246,7 +282,7 @@ export function REPLView({
               flexDirection="column"
               width="100%"
             >
-              {shouldRenderStartupHeader && (
+              {shouldRenderStartupHeaderInControls && (
                 <Box flexDirection="column" width="100%">
                   {startupHeader}
                 </Box>
