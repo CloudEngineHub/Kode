@@ -13,6 +13,7 @@ import {
   getMCPCommands,
   getMCPResources,
   getMCPTools,
+  MCP_LOGGING_LEVELS,
   getMcprcServerStatus,
   getMcpServer,
   listMCPServers,
@@ -1209,8 +1210,19 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
       }
 
       if (loggingSupported) {
-        actions.push({ label: 'Set log level: warning', value: 'log:warning' })
-        actions.push({ label: 'Set log level: info', value: 'log:info' })
+        const loggingLevels: McpLoggingLevel[] = [
+          'warning',
+          'info',
+          ...MCP_LOGGING_LEVELS.filter(
+            level => level !== 'warning' && level !== 'info',
+          ),
+        ]
+        for (const level of loggingLevels) {
+          actions.push({
+            label: `Set log level: ${level}`,
+            value: `log:${level}`,
+          })
+        }
       }
 
       actions.push({ label: 'Disable', value: 'toggle-enabled' })
@@ -1223,6 +1235,10 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
             value: action.value,
           }))
         : [{ label: 'Back', value: 'back' }]
+    const actionVisibleOptionCount = Math.min(
+      actionOptions.length || 1,
+      compactLayout ? 4 : 5,
+    )
 
     return (
       <Box flexDirection="column" gap={gap}>
@@ -1343,7 +1359,7 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
           ) : (
             <Select
               options={actionOptions}
-              visibleOptionCount={Math.min(10, actionOptions.length || 1)}
+              visibleOptionCount={actionVisibleOptionCount}
               focusScope={`mcp:server:${activeServer.name}:actions`}
               focusValue={
                 route.kind === 'server' ? route.actionFocusValue : undefined
