@@ -8,8 +8,10 @@ import type { Tool } from '#core/tooling/Tool'
 import {
   authenticateMcpServer,
   clearMcpAuth,
+  formatMcpClientCapabilitySummary,
   getClients,
   getMcpAuthSnapshot,
+  getMcpClientCapabilitySummary,
   getMCPCommands,
   getMCPResources,
   getMCPResourceTemplates,
@@ -295,9 +297,7 @@ function resourceTitleForList(resource: McpResource): string {
   return resource.title?.trim() || resource.name || resource.uri
 }
 
-function resourceTemplateTitleForList(
-  template: McpResourceTemplate,
-): string {
+function resourceTemplateTitleForList(template: McpResourceTemplate): string {
   return template.title?.trim() || template.name || template.uriTemplate
 }
 
@@ -311,7 +311,9 @@ function getResourceAnnotationDisplay(
   annotations: unknown,
 ): ResourceAnnotationDisplay {
   const annotationRecord =
-    annotations && typeof annotations === 'object' && !Array.isArray(annotations)
+    annotations &&
+    typeof annotations === 'object' &&
+    !Array.isArray(annotations)
       ? (annotations as Record<string, unknown>)
       : null
 
@@ -528,6 +530,13 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
 
   const [actionError, setActionError] = useState<string | null>(null)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
+  const clientCapabilityLine = useMemo(
+    () =>
+      formatMcpClientCapabilitySummary(getMcpClientCapabilitySummary()).join(
+        ' | ',
+      ),
+    [mcpListChangedTick],
+  )
 
   const closeScreen = useCallback(() => {
     authAbortControllerRef.current?.abort()
@@ -845,24 +854,14 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
       const isSubscribed = resourceSubscriptions[keyValue] === true
       const isPending = resourceSubscriptionPendingKey === keyValue
 
-      if (
-        input === 's' &&
-        canSubscribe &&
-        !isSubscribed &&
-        !isPending
-      ) {
+      if (input === 's' && canSubscribe && !isSubscribed && !isPending) {
         void runAction(() =>
           subscribeToResource(route.serverName, route.resource),
         )
         return true
       }
 
-      if (
-        input === 'u' &&
-        canSubscribe &&
-        isSubscribed &&
-        !isPending
-      ) {
+      if (input === 'u' && canSubscribe && isSubscribed && !isPending) {
         void runAction(() =>
           unsubscribeFromResource(route.serverName, route.resource),
         )
@@ -1255,6 +1254,9 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
       <Text wrap="truncate-end">
         {loadingServers ? 'Loading MCP servers…' : `${servers.length} servers`}
       </Text>
+      <Text dimColor wrap="truncate-end">
+        Client capabilities: {clientCapabilityLine}
+      </Text>
 
       <Box flexDirection="column" borderStyle="round" paddingX={1}>
         {listOptions.length === 0 && !loadingServers ? (
@@ -1468,6 +1470,11 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
                 )}
               </Text>
             ) : null}
+
+            <Text wrap="truncate-end">
+              <Text bold>Kode client: </Text>
+              <Text dimColor>{clientCapabilityLine}</Text>
+            </Text>
 
             {counts?.tools && counts.tools > 0 ? (
               <Text wrap="truncate-end">
@@ -1923,9 +1930,7 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
               </Text>
               {updateCount > 0 ? (
                 <Text wrap="truncate-end">
-                  <Text dimColor>
-                    received updates: {updateCount}
-                  </Text>
+                  <Text dimColor>received updates: {updateCount}</Text>
                 </Text>
               ) : null}
               {subscriptionSupported ? (
@@ -1996,10 +2001,7 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
           ) : (
             <Select
               options={options}
-              visibleOptionCount={Math.min(
-                12,
-                Math.max(3, options.length),
-              )}
+              visibleOptionCount={Math.min(12, Math.max(3, options.length))}
               focusScope={`mcp:server:${activeServer.name}:resourceTemplates`}
               focusValue={
                 route.kind === 'resourceTemplates'

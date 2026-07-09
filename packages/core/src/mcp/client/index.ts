@@ -51,6 +51,13 @@ export {
   getMcpRoots,
   shouldExposeMcpRoots,
 } from './roots'
+export {
+  formatMcpClientCapabilityLine,
+  formatMcpClientCapabilitySummary,
+  getMcpClientCapabilitySummary,
+  summarizeMcpClientCapabilities,
+  type McpClientCapabilitySummary,
+} from './clientCapabilities'
 
 export {
   __resetMcpListChangedForTests,

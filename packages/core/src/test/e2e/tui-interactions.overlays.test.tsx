@@ -518,6 +518,11 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
         return {
           authenticateMcpServer: async () => {},
           clearMcpAuth: async () => {},
+          formatMcpClientCapabilitySummary: () => [
+            'roots: enabled (listChanged)',
+            'sampling: disabled',
+            'elicitation: disabled',
+          ],
           getClients: async () => {
             getClientsCallCount += 1
             const connectedClient = {
@@ -540,6 +545,11 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
             return [connectedClient]
           },
           getMcpAuthSnapshot: () => ({ isAuthenticated: false }),
+          getMcpClientCapabilitySummary: () => ({
+            roots: { enabled: true, listChanged: true },
+            sampling: { enabled: false },
+            elicitation: { enabled: false },
+          }),
           getMcpListChangedVersion: () => 0,
           getMCPCommands: async () =>
             !promptsEnabled
@@ -697,6 +707,8 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
 
       await h.wait(250)
       expect(h.getOutput()).toContain('srv')
+      expect(h.getOutput()).toContain('Client capabilities:')
+      expect(h.getOutput()).toContain('roots: enabled')
 
       h.stdin.write('\r')
       await h.wait(100)
@@ -714,6 +726,7 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
       const reenteredLoadingOutput = h.getOutput()
       expect(reenteredLoadingOutput).toContain('Loading actions...')
       expect(reenteredLoadingOutput).toContain('Capabilities:')
+      expect(reenteredLoadingOutput).toContain('Kode client:')
       expect(reenteredLoadingOutput).toContain('loading...')
       expect(reenteredLoadingOutput).not.toContain('Resources: 1 resources')
       expect(reenteredLoadingOutput).not.toContain('Prompts: 1 prompts')

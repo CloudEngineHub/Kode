@@ -3,8 +3,9 @@ import chalk from 'chalk'
 import { setCwd } from '#core/utils/state'
 import {
   completeMCPArgument,
+  formatMcpClientCapabilitySummary,
   getClients,
-  getMcpClientCapabilities,
+  getMcpClientCapabilitySummary,
   type McpCompletionRef,
   type WrappedClient,
 } from '#core/mcp/client'
@@ -43,53 +44,12 @@ type McpCliResourceTemplateSummary = {
   mimeType?: string
 }
 
-type McpCliClientCapabilitySummary = {
-  roots: { enabled: boolean; listChanged: boolean }
-  sampling: { enabled: boolean }
-  elicitation: { enabled: boolean }
-}
-
 function toJson(value: unknown): string {
   return JSON.stringify(value)
 }
 
 function toPrettyJson(value: unknown): string {
   return JSON.stringify(value, null, 2)
-}
-
-function getMcpClientCapabilitySummary(): McpCliClientCapabilitySummary {
-  const capabilities = getMcpClientCapabilities()
-  return {
-    roots: {
-      enabled: Boolean(capabilities.roots),
-      listChanged: Boolean(capabilities.roots?.listChanged),
-    },
-    sampling: { enabled: Boolean(capabilities.sampling) },
-    elicitation: { enabled: Boolean(capabilities.elicitation) },
-  }
-}
-
-function formatCapabilityLine(
-  name: string,
-  enabled: boolean,
-  detail?: string,
-): string {
-  if (!enabled) return `${name}: disabled`
-  return `${name}: enabled${detail ? ` (${detail})` : ''}`
-}
-
-function formatMcpClientCapabilitySummary(
-  summary: McpCliClientCapabilitySummary,
-): string[] {
-  return [
-    formatCapabilityLine(
-      'roots',
-      summary.roots.enabled,
-      summary.roots.listChanged ? 'listChanged' : undefined,
-    ),
-    formatCapabilityLine('sampling', summary.sampling.enabled),
-    formatCapabilityLine('elicitation', summary.elicitation.enabled),
-  ]
 }
 
 function parseServerTool(input: string): { server: string; tool: string } {
