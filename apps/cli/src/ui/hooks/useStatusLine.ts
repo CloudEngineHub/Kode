@@ -3,6 +3,12 @@ import { BunShell } from '#runtime/shell'
 import { getStatusLineConfig } from '#core/services/statusline'
 import { getBackgroundTaskCounts } from '#core/tasks/backgroundRegistry'
 
+type StatusLineState = {
+  text: string | null
+  padding: number
+  isConfigured: boolean
+}
+
 function serializeStatusLineInput(value: unknown): string {
   try {
     return JSON.stringify(value ?? {}, null, 0) + '\n'
@@ -44,14 +50,36 @@ function buildDynamicStatusLineInput(
   }
 }
 
+function isStatusLineRuntimeEnabled(): boolean {
+  return (
+    process.env.KODE_STATUSLINE_ENABLED === '1' ||
+    process.env.NODE_ENV !== 'test'
+  )
+}
+
+function getInitialStatusLineState(): StatusLineState {
+  if (!isStatusLineRuntimeEnabled()) {
+    return { text: null, padding: 0, isConfigured: false }
+  }
+
+  try {
+    const config = getStatusLineConfig()
+    return {
+      text: null,
+      padding: config?.padding ?? 0,
+      isConfigured: Boolean(config?.command),
+    }
+  } catch {
+    return { text: null, padding: 0, isConfigured: false }
+  }
+}
+
 export function useStatusLine(input?: unknown): {
   text: string | null
   padding: number
+  isConfigured: boolean
 } {
-  const [state, setState] = useState<{ text: string | null; padding: number }>({
-    text: null,
-    padding: 0,
-  })
+  const [state, setState] = useState<StatusLineState>(getInitialStatusLineState)
   const lastCommandRef = useRef<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const inputRef = useRef<unknown>(input)
@@ -78,9 +106,7 @@ export function useStatusLine(input?: unknown): {
   }, [input])
 
   useEffect(() => {
-    const enabled =
-      process.env.KODE_STATUSLINE_ENABLED === '1' ||
-      process.env.NODE_ENV !== 'test'
+    const enabled = isStatusLineRuntimeEnabled()
     if (!enabled) return
 
     const shell = BunShell.getInstance()
@@ -97,18 +123,30 @@ export function useStatusLine(input?: unknown): {
         abortRef.current = null
         if (alive) {
           setState(prev =>
-            prev.text === null && prev.padding === 0
+            prev.text === null && prev.padding === 0 && !prev.isConfigured
               ? prev
-              : { text: null, padding: 0 },
+              : { text: null, padding: 0, isConfigured: false },
           )
         }
         return
       }
 
+      const commandChanged = lastCommandRef.current !== command
       lastCommandRef.current = command
       abortRef.current?.abort()
       const ac = new AbortController()
       abortRef.current = ac
+
+      if (alive) {
+        setState(prev => {
+          const nextText = commandChanged ? null : prev.text
+          return prev.text === nextText &&
+            prev.padding === padding &&
+            prev.isConfigured
+            ? prev
+            : { text: nextText, padding, isConfigured: true }
+        })
+      }
 
       const result = await shell.exec(command, ac.signal, 5000, {
         stdin: serializeStatusLineInput(
@@ -123,9 +161,9 @@ export function useStatusLine(input?: unknown): {
       if (alive) {
         const text = next || null
         setState(prev =>
-          prev.text === text && prev.padding === padding
+          prev.text === text && prev.padding === padding && prev.isConfigured
             ? prev
-            : { text, padding },
+            : { text, padding, isConfigured: true },
         )
       }
     }

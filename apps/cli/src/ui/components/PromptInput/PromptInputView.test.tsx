@@ -162,4 +162,20 @@ describe('PromptInputView status line layout', () => {
     expect(output).toContain('[custom-openai] mimo-v2.5-pro: 0 / 1.0')
     expect(output).not.toContain('0 / 1.0M')
   })
+
+  test('hides built-in model info while a configured status line is pending', async () => {
+    const harness = createHarness(
+      renderPromptInputView({
+        customStatusLineActive: true,
+        statusLine: 'Input: Chat',
+      }),
+    )
+
+    await harness.wait(20)
+    const output = harness.getOutput()
+
+    expect(output).toContain('Input: Chat')
+    expect(output).not.toContain('[custom-openai] mimo-v2.5-pro')
+    expect(output).not.toContain('0 / 1.0M')
+  })
 })
