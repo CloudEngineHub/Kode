@@ -266,7 +266,7 @@ export async function handleMessageStream(
       {
         index: 0,
         message,
-        finish_reason: finishReason ?? (degradationReason ? 'length' : 'stop'),
+        finish_reason: finishReason ?? 'stop',
         logprobs: undefined,
       },
     ],

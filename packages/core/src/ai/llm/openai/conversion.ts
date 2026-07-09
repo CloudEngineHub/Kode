@@ -3,6 +3,8 @@ import { nanoid } from 'nanoid'
 import type { Tool } from '@kode/tool-interface/Tool'
 import type { AssistantMessage, UserMessage } from '#core/query'
 import { convertAnthropicMessagesToOpenAIMessages as convertAnthropicMessagesToOpenAIMessagesUtil } from '#core/utils/openaiMessageConversion'
+import { API_ERROR_MESSAGE_PREFIX } from '#core/ai/llm/constants'
+import { isOpenAIStreamDegradedResponse } from './stream'
 import { normalizeUsage } from './usage'
 
 function mapFinishReasonToStopReason(
@@ -35,13 +37,21 @@ export function convertOpenAIResponseToAnthropic(
 ): AssistantMessage['message'] {
   const normalizedUsage = normalizeUsage(response.usage)
   const contentBlocks: AssistantMessage['message']['content'] = []
+  const streamDegraded = isOpenAIStreamDegradedResponse(response)
   const message = response.choices?.[0]?.message
   if (!message) {
+    if (streamDegraded) {
+      contentBlocks.push({
+        type: 'text',
+        text: formatOpenAIStreamDegradedError(response),
+        citations: [],
+      })
+    }
     return {
       id: nanoid(),
       model: response.model ?? '<openai>',
       role: 'assistant',
-      content: [],
+      content: contentBlocks,
       stop_reason: mapFinishReasonToStopReason(
         response.choices?.[0]?.finish_reason,
       ),
@@ -51,7 +61,12 @@ export function convertOpenAIResponseToAnthropic(
     }
   }
 
-  if (message?.tool_calls) {
+  const droppedToolCalls =
+    streamDegraded && Array.isArray(message.tool_calls)
+      ? message.tool_calls.length
+      : 0
+
+  if (!streamDegraded && message?.tool_calls) {
     for (const toolCall of message.tool_calls) {
       if (toolCall.type !== 'function') continue
       const tool = toolCall.function
@@ -101,6 +116,14 @@ export function convertOpenAIResponseToAnthropic(
     })
   }
 
+  if (streamDegraded) {
+    contentBlocks.push({
+      type: 'text',
+      text: formatOpenAIStreamDegradedError(response, droppedToolCalls),
+      citations: [],
+    })
+  }
+
   const finalMessage: AssistantMessage['message'] = {
     id: nanoid(),
     model: response.model ?? '<openai>',
@@ -115,4 +138,20 @@ export function convertOpenAIResponseToAnthropic(
   }
 
   return finalMessage
+}
+
+function formatOpenAIStreamDegradedError(
+  response: OpenAI.ChatCompletion,
+  droppedToolCalls = 0,
+): string {
+  const reason = isOpenAIStreamDegradedResponse(response)
+    ? response.__streamDegradationReason
+    : undefined
+  const reasonText =
+    typeof reason === 'string' && reason.length > 0 ? ` (${reason})` : ''
+  const toolText =
+    droppedToolCalls > 0
+      ? ' Partial tool calls were discarded and were not executed.'
+      : ''
+  return `${API_ERROR_MESSAGE_PREFIX}: OpenAI-compatible stream ended before a complete response${reasonText}.${toolText} Please retry.`
 }

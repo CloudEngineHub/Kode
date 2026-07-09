@@ -3,6 +3,8 @@ import {
   handleMessageStream,
   isOpenAIStreamDegradedResponse,
 } from '#core/ai/llm/openai/stream'
+import { convertOpenAIResponseToAnthropic } from '#core/ai/llm/openai/conversion'
+import { API_ERROR_MESSAGE_PREFIX } from '#core/ai/llm/constants'
 import { createStreamProcessor } from '#core/ai/openai/stream'
 
 function chunk(delta: Record<string, unknown>) {
@@ -94,7 +96,7 @@ describe('OpenAI stream degradation', () => {
     )
 
     expect(result.choices[0]?.message.content).toBe('partial')
-    expect(result.choices[0]?.finish_reason).toBe('length')
+    expect(result.choices[0]?.finish_reason).toBe('stop')
     expect(isOpenAIStreamDegradedResponse(result)).toBe(true)
   })
 
@@ -119,7 +121,56 @@ describe('OpenAI stream degradation', () => {
     )
 
     expect(result.choices[0]?.message.content).toBe('partial')
-    expect(result.choices[0]?.finish_reason).toBe('length')
+    expect(result.choices[0]?.finish_reason).toBe('stop')
     expect(isOpenAIStreamDegradedResponse(result)).toBe(true)
+  })
+
+  test('converts thinking-only degraded streams into a visible API error', async () => {
+    const validChunk = JSON.stringify(
+      chunk({ reasoning_content: 'planning next steps' }),
+    )
+    const body = sseBody([`data: ${validChunk}`, 'data: {bad json}'])
+
+    const result = await handleMessageStream(
+      createStreamProcessor(body as any) as any,
+      undefined,
+    )
+    const message = convertOpenAIResponseToAnthropic(result, [])
+    const textBlocks = message.content.filter(block => block.type === 'text')
+
+    expect(message.content.some(block => block.type === 'thinking')).toBe(true)
+    expect(
+      textBlocks.some(block => block.text.startsWith(API_ERROR_MESSAGE_PREFIX)),
+    ).toBe(true)
+    expect(textBlocks[0]?.text).toContain('json_parse_error')
+  })
+
+  test('drops partial tool calls from degraded streams', async () => {
+    const validChunk = JSON.stringify(
+      chunk({
+        tool_calls: [
+          {
+            index: 0,
+            id: 'call_1',
+            type: 'function',
+            function: {
+              name: 'Task',
+              arguments: '{"description":"test"}',
+            },
+          },
+        ],
+      }),
+    )
+    const body = sseBody([`data: ${validChunk}`, 'data: {bad json}'])
+
+    const result = await handleMessageStream(
+      createStreamProcessor(body as any) as any,
+      undefined,
+    )
+    const message = convertOpenAIResponseToAnthropic(result, [])
+    const textBlocks = message.content.filter(block => block.type === 'text')
+
+    expect(message.content.some(block => block.type === 'tool_use')).toBe(false)
+    expect(textBlocks[0]?.text).toContain('Partial tool calls were discarded')
   })
 })
