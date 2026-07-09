@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 
-import { __computeAutoTriggerActionForTests } from './useAutoTrigger'
+import {
+  __computeAutoTriggerActionForTests,
+  __getSuppressWakeDelayForTests,
+} from './useAutoTrigger'
 
 import type {
   CompletionContext,
@@ -121,5 +124,94 @@ describe('__computeAutoTriggerActionForTests', () => {
     })
 
     expect(result.action).toBe('reset')
+  })
+
+  test('does not auto-trigger while suppression is still active', () => {
+    const context: CompletionContext = {
+      type: 'command',
+      prefix: '/h',
+      startPos: 0,
+      endPos: 2,
+    }
+
+    const result = __computeAutoTriggerActionForTests({
+      previousInput: '/h',
+      input: '/h',
+      now: 1000,
+      lastInputTime: 900,
+      forceRefresh: true,
+      isEnabled: true,
+      state: makeState({ suppressUntil: 1100 }),
+      context,
+      generateSuggestions: () => [
+        { type: 'command', value: 'help', displayValue: 'help', score: 1 },
+      ],
+    })
+
+    expect(result.action).toBe('none')
+  })
+
+  test('can refresh the same input after suppression expires', () => {
+    const context: CompletionContext = {
+      type: 'command',
+      prefix: '/h',
+      startPos: 0,
+      endPos: 2,
+    }
+
+    const result = __computeAutoTriggerActionForTests({
+      previousInput: '/h',
+      input: '/h',
+      now: 1200,
+      lastInputTime: 900,
+      forceRefresh: true,
+      isEnabled: true,
+      state: makeState({ suppressUntil: 1100 }),
+      context,
+      generateSuggestions: () => [
+        { type: 'command', value: 'help', displayValue: 'help', score: 1 },
+        {
+          type: 'command',
+          value: 'history',
+          displayValue: 'history',
+          score: 1,
+        },
+      ],
+    })
+
+    expect(result.action).toBe('activate')
+    expect(result.suggestions?.map(suggestion => suggestion.value)).toEqual([
+      'help',
+      'history',
+    ])
+  })
+})
+
+describe('__getSuppressWakeDelayForTests', () => {
+  test('returns the remaining suppression delay when enabled', () => {
+    expect(
+      __getSuppressWakeDelayForTests({
+        isEnabled: true,
+        now: 1000,
+        suppressUntil: 1125,
+      }),
+    ).toBe(125)
+  })
+
+  test('does not schedule when disabled or already expired', () => {
+    expect(
+      __getSuppressWakeDelayForTests({
+        isEnabled: false,
+        now: 1000,
+        suppressUntil: 1125,
+      }),
+    ).toBeNull()
+    expect(
+      __getSuppressWakeDelayForTests({
+        isEnabled: true,
+        now: 1200,
+        suppressUntil: 1125,
+      }),
+    ).toBeNull()
   })
 })

@@ -29,6 +29,27 @@ function isBackspaceChar(input: string): boolean {
   return code === BACKSPACE_CODE || code === DEL_CODE
 }
 
+function isOptionKeyPressed(key: Key): boolean {
+  const optionValue = (key as unknown as Record<string, unknown>).option
+  return optionValue === true
+}
+
+export function __getLineFeedInputActionForTests(args: {
+  multiline: boolean
+  key: Key
+}): 'newline' | 'submit' {
+  if (!args.multiline) return 'submit'
+  if (
+    args.key.shift ||
+    args.key.meta ||
+    args.key.ctrl ||
+    isOptionKeyPressed(args.key)
+  ) {
+    return 'newline'
+  }
+  return 'submit'
+}
+
 export default function TextInput({
   value: originalValue,
   placeholder = '',
@@ -219,10 +240,10 @@ export default function TextInput({
       return
     }
 
-    // Some terminals/keybindings emit LF ("\n") for modified Enter. In multiline inputs, insert a newline.
-    // In single-line inputs, treat it as Enter for compatibility.
+    // Some terminals emit LF ("\n") for Enter. Plain LF submits; modified LF
+    // keeps the multiline-newline affordance.
     if (input === '\n') {
-      if (multiline) {
+      if (__getLineFeedInputActionForTests({ multiline, key }) === 'newline') {
         if (shouldBlockEnter({ ...key, return: true } as Key)) return
         onInput('\n', key)
         return
