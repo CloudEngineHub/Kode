@@ -14,7 +14,7 @@ describe('MCP progress notifications', () => {
     getMCPTools.cache.clear?.()
   })
 
-  test('bridges SDK tool progress callbacks to stream events', async () => {
+  test('bridges SDK tool progress callbacks to UI progress and stream events', async () => {
     const events: unknown[] = []
     const client: any = {
       request: async (req: any) => {
@@ -61,8 +61,35 @@ describe('MCP progress notifications', () => {
     }
 
     const gen = tool!.call({}, ctx)
-    await gen.next()
+    const progress = await gen.next()
+    const result = await gen.next()
 
+    if (progress.done || (progress.value as any)?.type !== 'progress') {
+      throw new Error('Expected first MCP tool update to be progress')
+    }
+    if (result.done || (result.value as any)?.type !== 'result') {
+      throw new Error('Expected second MCP tool update to be result')
+    }
+
+    const progressValue = progress.value as {
+      type: 'progress'
+      content: any
+    }
+    const resultValue = result.value as {
+      type: 'result'
+      data: unknown
+    }
+
+    expect(progressValue.type).toBe('progress')
+    const progressText =
+      progressValue.content?.message?.content?.[0]?.type === 'text'
+        ? progressValue.content.message.content[0].text
+        : ''
+    expect(progressText).toBe(
+      '<tool-progress>MCP srv/slow: halfway (1/2)</tool-progress>',
+    )
+    expect(resultValue.type).toBe('result')
+    expect(resultValue.data).toEqual([{ type: 'text', text: 'done' }])
     expect(events).toEqual([
       {
         type: 'mcp_progress',

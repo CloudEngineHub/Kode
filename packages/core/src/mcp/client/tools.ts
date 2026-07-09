@@ -13,6 +13,7 @@ import { z } from 'zod'
 
 import type { Tool } from '#core/tooling/Tool'
 import { logMCPError } from '#core/utils/log'
+import { createAssistantMessage } from '#core/utils/messages'
 
 import {
   IDE_MCP_TOOL_ALLOWLIST,
@@ -71,6 +72,33 @@ function renderResultForAssistant(content: unknown): string | unknown[] {
   } catch {
     return String(content)
   }
+}
+
+function formatProgressNumber(value: unknown): string | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null
+  return Number.isInteger(value)
+    ? String(value)
+    : String(Number(value.toFixed(2)))
+}
+
+function formatMcpToolProgress(args: {
+  server: string
+  tool: string
+  progress: unknown
+}): string {
+  const record = isRecord(args.progress) ? args.progress : null
+  const message =
+    typeof record?.message === 'string' && record.message.trim()
+      ? record.message.trim()
+      : ''
+  const current = formatProgressNumber(record?.progress)
+  const total = formatProgressNumber(record?.total)
+  const ratio = current && total ? `${current}/${total}` : current
+  const detail = [message, ratio ? `(${ratio})` : ''].filter(Boolean).join(' ')
+
+  return detail
+    ? `MCP ${args.server}/${args.tool}: ${detail}`
+    : `MCP ${args.server}/${args.tool}: progress update`
 }
 
 export const getMCPTools = memoize(
@@ -132,7 +160,21 @@ export const getMCPTools = memoize(
             renderToolResultMessage,
             renderResultForAssistant,
             async *call(args: Record<string, unknown>, context) {
-              const data = await callMcpTool({
+              let pendingProgressText: string | null = null
+              let lastProgressText: string | null = null
+              let progressAvailableResolve: (() => void) | null = null
+              let data: ToolResultBlockParam['content'] | undefined
+              let callError: unknown
+              let callDone = false
+
+              const wakeProgressLoop = () => {
+                const resolve = progressAvailableResolve
+                if (!resolve) return
+                progressAvailableResolve = null
+                resolve()
+              }
+
+              const callPromise = callMcpTool({
                 client,
                 tool: tool.name,
                 args,
@@ -146,8 +188,52 @@ export const getMCPTools = memoize(
                     toolUseId: context.toolUseId,
                     progress,
                   })
+
+                  const progressText = formatMcpToolProgress({
+                    server: client.name,
+                    tool: tool.name,
+                    progress,
+                  })
+                  if (progressText === lastProgressText) return
+                  lastProgressText = progressText
+                  pendingProgressText = progressText
+                  wakeProgressLoop()
                 },
               })
+                .then(result => {
+                  data = result
+                })
+                .catch(error => {
+                  callError = error
+                })
+                .finally(() => {
+                  callDone = true
+                  wakeProgressLoop()
+                })
+
+              while (!callDone || pendingProgressText) {
+                while (pendingProgressText) {
+                  const progressText = pendingProgressText
+                  pendingProgressText = null
+                  yield {
+                    type: 'progress' as const,
+                    content: createAssistantMessage(
+                      `<tool-progress>${progressText}</tool-progress>`,
+                    ),
+                  }
+                }
+
+                if (callDone) break
+
+                await new Promise<void>(resolve => {
+                  progressAvailableResolve = resolve
+                })
+              }
+
+              await callPromise
+
+              if (callError) throw callError
+
               yield {
                 type: 'result' as const,
                 data,
