@@ -72,12 +72,17 @@ type PipelineRetryState = {
   thinkingOnlyAttempts?: number
 }
 
-const MAX_THINKING_ONLY_ATTEMPTS = 1
-const THINKING_ONLY_RETRY_PROMPT = [
-  'The previous model response contained internal reasoning only, with no final assistant text and no tool call.',
-  'Continue the same user request now. Either call the appropriate tool or provide the final user-facing response.',
-  'Do not repeat the internal reasoning block.',
-].join(' ')
+const MAX_THINKING_ONLY_RETRIES = 3
+
+function createThinkingOnlyRetryPrompt(retryNumber: number): string {
+  return [
+    'The previous model response contained internal reasoning only, with no final assistant text and no tool call.',
+    `Recovery attempt ${retryNumber} of ${MAX_THINKING_ONLY_RETRIES}.`,
+    'Continue the same user request now with either the tool call needed to make progress or a user-facing assistant response.',
+    'Do not emit another reasoning-only response, and do not repeat or expose internal reasoning.',
+    'If you cannot continue, state the blocker or ask the user one concise question.',
+  ].join(' ')
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -417,7 +422,6 @@ async function* messagePipelineCore(
     }
 
     const assistantMessage = result.message
-    toolUseContext.turnCount = turnsUsed + 1
     const shouldSkipPermissionCheck = result.shouldSkipPermissionCheck
 
     // @see https://docs.anthropic.com/en/docs/build-with-claude/tool-use
@@ -430,27 +434,31 @@ async function* messagePipelineCore(
       if (isThinkingOnlyAssistantMessage(assistantMessage)) {
         yield assistantMessage
 
-        if (thinkingOnlyAttempts < MAX_THINKING_ONLY_ATTEMPTS) {
+        if (thinkingOnlyAttempts < MAX_THINKING_ONLY_RETRIES) {
+          const retryNumber = thinkingOnlyAttempts + 1
           yield* await messagePipelineCore(
             [...messages, createThinkingOnlyRetryMetaMessage()],
-            [...systemPrompt, THINKING_ONLY_RETRY_PROMPT],
+            [...systemPrompt, createThinkingOnlyRetryPrompt(retryNumber)],
             context,
             canUseTool,
             toolUseContext,
             getBinaryFeedbackResponse,
             {
               ...hookState,
-              thinkingOnlyAttempts: thinkingOnlyAttempts + 1,
+              thinkingOnlyAttempts: retryNumber,
             },
           )
           return
         }
 
+        toolUseContext.turnCount = turnsUsed + 1
         yield createAssistantAPIErrorMessage(
-          'API_ERROR: Model returned internal reasoning only without a final response or tool call. Please retry.',
+          `API_ERROR: Model returned internal reasoning only for ${MAX_THINKING_ONLY_RETRIES + 1} consecutive attempts without a final response or tool call. Please retry or switch models.`,
         )
         return
       }
+
+      toolUseContext.turnCount = turnsUsed + 1
 
       const stopHookEvent =
         toolUseContext.agentId && toolUseContext.agentId !== 'main'
@@ -512,6 +520,7 @@ async function* messagePipelineCore(
       return
     }
 
+    toolUseContext.turnCount = turnsUsed + 1
     yield assistantMessage
     const siblingToolUseIDs = new Set<string>(toolUseMessages.map(_ => _.id))
     const toolQueue = new ToolUseQueue({
@@ -551,7 +560,10 @@ async function* messagePipelineCore(
         canUseTool,
         toolUseContext,
         getBinaryFeedbackResponse,
-        hookState,
+        {
+          ...hookState,
+          thinkingOnlyAttempts: 0,
+        },
       )
     } catch (error) {
       // Re-throw the error to maintain the original behavior
