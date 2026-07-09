@@ -5,6 +5,7 @@ import {
   shouldTreatAsSpecialPaste,
 } from '#core/utils/paste'
 import type { ClipboardImage } from '#core/utils/image/media'
+import { logError } from '#core/utils/log'
 import type { PromptMode } from './types'
 import type {
   PastedImageAttachment,
@@ -22,9 +23,20 @@ const PASTED_TEXT_PLACEHOLDER_PATTERN = /\[Pasted text #\d+(?: \+\d+ lines)?\]/g
 const IMAGE_PLACEHOLDER_PATTERN = /\[Image #\d+\]/g
 const pastedImageDataStore = new Map<
   string,
-  { data: string; mediaType: string; byteLength: number }
+  Readonly<{ data: string; mediaType: string; byteLength: number }>
 >()
 let pastedImageStoreId = 1
+
+export class MissingPastedImageDataError extends Error {
+  readonly attachmentIds: string[]
+
+  constructor(images: PastedImageAttachment[]) {
+    const labels = images.map(image => `${image.placeholder} (${image.id})`)
+    super(`Pasted image data is unavailable: ${labels.join(', ')}`)
+    this.name = 'MissingPastedImageDataError'
+    this.attachmentIds = images.map(image => image.id)
+  }
+}
 
 function estimateBase64ByteLength(data: string): number {
   const normalized = data.replace(/\s/g, '')
@@ -41,27 +53,47 @@ export function storePastedImageAttachment(args: {
   image: ClipboardImage
   placeholder: string
 }): PastedImageAttachment {
-  const id = `pasted-image-${pastedImageStoreId++}`
-  const byteLength = estimateBase64ByteLength(args.image.data)
-
-  pastedImageDataStore.set(id, {
+  return storePastedImageData({
     data: args.image.data,
     mediaType: args.image.mediaType,
-    byteLength,
-  })
-
-  return {
-    id,
     placeholder: args.placeholder,
-    mediaType: args.image.mediaType,
-    byteLength,
-  }
+  })
 }
 
-export function resolvePastedImageAttachments(
+function storePastedImageData(args: {
+  data: string
+  mediaType: string
+  placeholder: string
+  byteLength?: number
+}): PastedImageAttachment {
+  const id = `pasted-image-${pastedImageStoreId++}`
+  const byteLength = args.byteLength ?? estimateBase64ByteLength(args.data)
+
+  pastedImageDataStore.set(
+    id,
+    Object.freeze({
+      data: args.data,
+      mediaType: args.mediaType,
+      byteLength,
+    }),
+  )
+
+  return Object.freeze({
+    id,
+    placeholder: args.placeholder,
+    mediaType: args.mediaType,
+    byteLength,
+  })
+}
+
+function resolveAvailablePastedImageAttachments(
   images: PastedImageAttachment[],
-): ResolvedPastedImageAttachment[] {
+): {
+  resolved: ResolvedPastedImageAttachment[]
+  missing: PastedImageAttachment[]
+} {
   const resolved: ResolvedPastedImageAttachment[] = []
+  const missing: PastedImageAttachment[] = []
 
   for (const image of images) {
     const stored = pastedImageDataStore.get(image.id)
@@ -69,7 +101,10 @@ export function resolvePastedImageAttachments(
     const data =
       stored?.data ?? (typeof legacyData === 'string' ? legacyData : null)
 
-    if (!data) continue
+    if (!data) {
+      missing.push(image)
+      continue
+    }
 
     resolved.push({
       ...image,
@@ -79,7 +114,52 @@ export function resolvePastedImageAttachments(
     })
   }
 
+  return { resolved, missing }
+}
+
+export function materializePastedImageAttachments(
+  images: PastedImageAttachment[],
+): ResolvedPastedImageAttachment[] {
+  const { resolved, missing } = resolveAvailablePastedImageAttachments(images)
+  if (missing.length > 0) {
+    throw new MissingPastedImageDataError(missing)
+  }
   return resolved
+}
+
+export function resolvePastedImageAttachments(
+  images: PastedImageAttachment[],
+): ResolvedPastedImageAttachment[] {
+  try {
+    return materializePastedImageAttachments(images)
+  } catch (error) {
+    logError(error)
+    return []
+  }
+}
+
+export function snapshotPastedImageAttachments(
+  images: PastedImageAttachment[],
+): PastedImageAttachment[] {
+  const resolved = materializePastedImageAttachments(images)
+  const snapshot: PastedImageAttachment[] = []
+
+  try {
+    for (const image of resolved) {
+      snapshot.push(
+        storePastedImageData({
+          data: image.data,
+          mediaType: image.mediaType,
+          placeholder: image.placeholder,
+          byteLength: image.byteLength,
+        }),
+      )
+    }
+    return snapshot
+  } catch (error) {
+    releasePastedImageAttachments(snapshot)
+    throw error
+  }
 }
 
 export function releasePastedImageAttachments(
@@ -104,6 +184,10 @@ export function releaseStalePastedImageAttachments(args: {
 export function __clearPastedImageDataForTests(): void {
   pastedImageDataStore.clear()
   pastedImageStoreId = 1
+}
+
+export function __getPastedImageDataStoreSizeForTests(): number {
+  return pastedImageDataStore.size
 }
 
 function collectPlaceholderMatches(

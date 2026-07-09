@@ -13,7 +13,7 @@ import { getModelManager } from '#core/utils/model'
 import { logStartupProfile } from '#core/utils/startupProfile'
 import { MACRO } from '#core/constants/macros'
 import { getCwd, getOriginalCwd } from '#core/utils/state'
-import { getMessagesPath } from '#core/utils/log'
+import { getMessagesPath, logError } from '#core/utils/log'
 import { getTotalAPIDuration, getTotalDuration } from '#core/cost-tracker'
 import {
   getCurrentProjectConfig,
@@ -41,6 +41,9 @@ import { Cursor, countWrappedLines } from '#cli-utils/Cursor'
 import { getCurrentOutputStyle } from '#cli-services/outputStyles'
 import { submitPrompt } from './submit'
 import {
+  materializePastedImageAttachments,
+  releasePastedImageAttachments,
+  snapshotPastedImageAttachments,
   usePromptPastes,
   type PastedImageAttachment,
   type PastedTextSegment,
@@ -63,6 +66,8 @@ import {
 } from './promptModeSpecs'
 
 const PROMPT_DRAFT_KEY = 'repl'
+const MISSING_IMAGE_MESSAGE =
+  'Image attachment data is unavailable. Paste the image again; the prompt was not sent.'
 
 function getDraftPastesSignature(args: {
   pastedTexts: PastedTextSegment[]
@@ -391,6 +396,52 @@ export function PromptInput({
     terminalColumns: textInputColumns,
   })
 
+  const reportMissingImageData = useCallback(
+    (error: unknown) => {
+      logError(error)
+      handleInlineMessage(true, MISSING_IMAGE_MESSAGE)
+    },
+    [handleInlineMessage],
+  )
+
+  const snapshotImagesForDeferredPrompt = useCallback(
+    (images: PastedImageAttachment[]): PastedImageAttachment[] | null => {
+      try {
+        return snapshotPastedImageAttachments(images)
+      } catch (error) {
+        reportMissingImageData(error)
+        return null
+      }
+    },
+    [reportMissingImageData],
+  )
+
+  const deferredImageOwnersRef = useRef({
+    pendingPrompts,
+    queuedPrompts,
+    promptStash,
+  })
+  deferredImageOwnersRef.current = {
+    pendingPrompts,
+    queuedPrompts,
+    promptStash,
+  }
+
+  useEffect(() => {
+    return () => {
+      const owners = deferredImageOwnersRef.current
+      for (const prompt of [
+        ...owners.pendingPrompts,
+        ...owners.queuedPrompts,
+      ]) {
+        releasePastedImageAttachments(prompt.pastedImages)
+      }
+      if (owners.promptStash) {
+        releasePastedImageAttachments(owners.promptStash.pastedImages)
+      }
+    }
+  }, [])
+
   // Codex-style prompt queue shortcuts:
   // - Tab queues while a turn is running (and does not send immediately)
   // - Alt+Up pops the most recent queued/pending message for editing
@@ -400,19 +451,6 @@ export function PromptInput({
       if (isDisabled) return
 
       if (key.meta && key.upArrow && !key.shift && !key.ctrl) {
-        const draftForQueue: QueuedPrompt | null =
-          input.trim().length > 0 ||
-          pastedTexts.length > 0 ||
-          pastedImages.length > 0
-            ? {
-                seq: nextQueuedPromptSeqRef.current++,
-                input,
-                mode,
-                pastedTexts: [...pastedTexts],
-                pastedImages: [...pastedImages],
-              }
-            : null
-
         const latest =
           queuedPrompts.length > 0
             ? queuedPrompts.reduce((best, item) =>
@@ -420,6 +458,23 @@ export function PromptInput({
               )
             : null
         if (!latest) return
+
+        let draftForQueue: QueuedPrompt | null = null
+        if (
+          input.trim().length > 0 ||
+          pastedTexts.length > 0 ||
+          pastedImages.length > 0
+        ) {
+          const queuedImages = snapshotImagesForDeferredPrompt(pastedImages)
+          if (!queuedImages) return true
+          draftForQueue = {
+            seq: nextQueuedPromptSeqRef.current++,
+            input,
+            mode,
+            pastedTexts: [...pastedTexts],
+            pastedImages: queuedImages,
+          }
+        }
 
         if (completionActive) resetCompletion()
         clearSavedPromptDraftBestEffort()
@@ -444,6 +499,9 @@ export function PromptInput({
           pastedTexts.length > 0 ||
           pastedImages.length > 0)
       ) {
+        const queuedImages = snapshotImagesForDeferredPrompt(pastedImages)
+        if (!queuedImages) return true
+
         if (completionActive) resetCompletion()
         clearSavedPromptDraftBestEffort()
         clearUndoBuffer()
@@ -454,7 +512,7 @@ export function PromptInput({
             input,
             mode,
             pastedTexts: [...pastedTexts],
-            pastedImages: [...pastedImages],
+            pastedImages: queuedImages,
           },
         ])
         clearPastes()
@@ -915,6 +973,9 @@ export function PromptInput({
     if (completionActive) resetCompletion()
 
     if (isLoading) {
+      const queuedImages = snapshotImagesForDeferredPrompt(pastedImages)
+      if (!queuedImages) return
+
       // Enter always "sends". While a turn is running, treat it as a pending submission
       // (distinct from Tab-queued tasks) and auto-run it when the current turn completes.
       clearSavedPromptDraftBestEffort()
@@ -926,12 +987,20 @@ export function PromptInput({
           input: value,
           mode,
           pastedTexts: [...pastedTexts],
-          pastedImages: [...pastedImages],
+          pastedImages: queuedImages,
         },
       ])
       clearPastes()
       onInputChange('')
       setCursorOffset(0)
+      return
+    }
+
+    let imagesForSubmit: PastedImageAttachment[]
+    try {
+      imagesForSubmit = materializePastedImageAttachments(pastedImages)
+    } catch (error) {
+      reportMissingImageData(error)
       return
     }
 
@@ -965,7 +1034,7 @@ export function PromptInput({
       onShowMessageSelector,
       readFileTimestamps,
       pastedTexts,
-      pastedImages,
+      pastedImages: imagesForSubmit,
       clearPastes,
       resetHistory,
       setCurrentPwd,
@@ -978,8 +1047,20 @@ export function PromptInput({
   useEffect(() => {
     if (lastCancelRequestKeyRef.current !== cancelRequestKey) {
       lastCancelRequestKeyRef.current = cancelRequestKey
-      setPendingPrompts(prev => (prev.length === 0 ? prev : []))
-      setQueuedPrompts(prev => (prev.length === 0 ? prev : []))
+      setPendingPrompts(prev => {
+        if (prev.length === 0) return prev
+        for (const prompt of prev) {
+          releasePastedImageAttachments(prompt.pastedImages)
+        }
+        return []
+      })
+      setQueuedPrompts(prev => {
+        if (prev.length === 0) return prev
+        for (const prompt of prev) {
+          releasePastedImageAttachments(prompt.pastedImages)
+        }
+        return []
+      })
       setIsQueueDrainInFlight(false)
       return
     }
@@ -1001,6 +1082,14 @@ export function PromptInput({
 
     void (async () => {
       try {
+        let imagesForSubmit: PastedImageAttachment[]
+        try {
+          imagesForSubmit = materializePastedImageAttachments(next.pastedImages)
+        } catch (error) {
+          reportMissingImageData(error)
+          return
+        }
+
         await submitPrompt({
           input: next.input,
           mode: next.mode,
@@ -1029,13 +1118,16 @@ export function PromptInput({
           onShowMessageSelector,
           readFileTimestamps,
           pastedTexts: next.pastedTexts,
-          pastedImages: next.pastedImages,
+          pastedImages: imagesForSubmit,
           clearPastes: () => {},
           resetHistory: () => {},
           setCurrentPwd,
           exit,
         })
+      } catch (error) {
+        logError(error)
       } finally {
+        releasePastedImageAttachments(next.pastedImages)
         setIsQueueDrainInFlight(false)
       }
     })()
@@ -1056,6 +1148,7 @@ export function PromptInput({
     pendingPrompts,
     queuedPrompts,
     readFileTimestamps,
+    reportMissingImageData,
     isQueueDrainInFlight,
     setAbortController,
     setCurrentPwd,
@@ -1104,12 +1197,20 @@ export function PromptInput({
           pastedTexts.length > 0 ||
           pastedImages.length > 0
         ) {
-          setPromptStash({
-            input,
-            mode,
-            cursorOffset,
-            pastedTexts: [...pastedTexts],
-            pastedImages: [...pastedImages],
+          const stashedImages = snapshotImagesForDeferredPrompt(pastedImages)
+          if (!stashedImages) return true
+
+          setPromptStash(previous => {
+            if (previous) {
+              releasePastedImageAttachments(previous.pastedImages)
+            }
+            return {
+              input,
+              mode,
+              cursorOffset,
+              pastedTexts: [...pastedTexts],
+              pastedImages: stashedImages,
+            }
           })
           clearPastes()
           onInputChange('')
