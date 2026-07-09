@@ -722,6 +722,12 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
     [],
   )
 
+  const clearResourceSubscriptionState = useCallback(() => {
+    setResourceSubscriptions({})
+    setResourceUpdateCounts({})
+    setResourceSubscriptionPendingKey(null)
+  }, [])
+
   useKeypress((input, key) => {
     if (route.kind === 'resource') {
       const keyValue = resourceSubscriptionKey(
@@ -1025,23 +1031,26 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
       saveCurrentProjectConfig(projectConfig)
 
       await resetMcpConnections()
+      clearResourceSubscriptionState()
       await refreshServers()
     },
-    [refreshServers],
+    [clearResourceSubscriptionState, refreshServers],
   )
 
   const reconnect = useCallback(async () => {
     await resetMcpConnections()
+    clearResourceSubscriptionState()
     await refreshServers()
-  }, [refreshServers])
+  }, [clearResourceSubscriptionState, refreshServers])
 
   const clearAuth = useCallback(
     async (serverName: string) => {
       await clearMcpAuth(serverName)
       await resetMcpConnections()
+      clearResourceSubscriptionState()
       await refreshServers()
     },
-    [refreshServers],
+    [clearResourceSubscriptionState, refreshServers],
   )
 
   const startAuth = useCallback(
@@ -1066,6 +1075,7 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
 
         if (controller.signal.aborted) return
         await resetMcpConnections()
+        clearResourceSubscriptionState()
         await refreshServers()
         setRoute({ kind: 'server', serverName: server.name })
       } catch (err) {
@@ -1078,7 +1088,7 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
         setAuthInProgress(false)
       }
     },
-    [refreshServers],
+    [clearResourceSubscriptionState, refreshServers],
   )
 
   const listView = (

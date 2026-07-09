@@ -543,7 +543,7 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
       expect(reenteredLoadingOutput).not.toContain('1. View prompts')
 
       h.stdin.write('\r')
-      await h.wait(150)
+      await h.wait(350)
 
       expect(h.getOutput()).toContain('Resources: 1 resources')
       expect(h.getOutput()).toContain(
@@ -593,6 +593,14 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
       await h.wait(120)
       expect(unsubscribedResources).toEqual(['srv:file:///project/README.md'])
       expect(h.getOutput()).toContain('subscription: available')
+
+      h.stdin.write('s')
+      await h.wait(120)
+      expect(subscribedResources).toEqual([
+        'srv:file:///project/README.md',
+        'srv:file:///project/README.md',
+      ])
+      expect(h.getOutput()).toContain('subscription: subscribed')
 
       h.stdin.write('\x1b')
       await h.wait(80)
@@ -652,9 +660,23 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
       )
       expect(latestFrame).toContain('connected')
       expect(latestFrame).not.toContain('failed')
+      expect(latestFrame).toContain('1. View resources')
       expect(latestFrame).toContain('❯2. Reconnect')
       expect(reconnectCount).toBe(2)
       expect(leakedEscapes).toBe(0)
+
+      h.clearOutput()
+      h.stdin.write('1')
+      await h.wait(300)
+      expect(h.getOutput()).toContain('Resources for srv')
+
+      h.stdin.write('1')
+      await h.wait(120)
+      const resourceAfterReconnect = h.getOutput()
+      expect(resourceAfterReconnect).toContain('Resource name: README.md')
+      expect(resourceAfterReconnect).toContain('subscription: available')
+      expect(resourceAfterReconnect).not.toContain('subscription: subscribed')
+      expect(resourceAfterReconnect).not.toContain('received updates: 1')
 
       h.unmount()
       promptsEnabled = true
@@ -696,5 +718,5 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
     } finally {
       mock.restore()
     }
-  })
+  }, 10000)
 })
