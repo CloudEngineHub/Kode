@@ -4,6 +4,7 @@ import {
   type ModelProfile,
   type ProviderType,
 } from '#core/utils/config'
+import { useScopedIndexState } from '#ui-ink/hooks/useScopedIndexState'
 import type { ConnectionTestResult } from './flow/actions/connectionTest'
 import {
   CONTEXT_LENGTH_OPTIONS,
@@ -24,6 +25,10 @@ import type { ModelInfo } from './flow/types'
 export function useModelSelectorState(opts: {
   skipModelType: boolean
   initialModelProfile?: ModelProfile
+  focusScope?: string
+  providerOptionCount?: number
+  partnerProviderOptionCount?: number
+  codingPlanOptionCount?: number
 }) {
   const config = getGlobalConfig()
   const initialModelProfile = opts.initialModelProfile
@@ -115,9 +120,22 @@ export function useModelSelectorState(opts: {
     Boolean(initialModelProfile),
   )
 
-  const [providerFocusIndex, setProviderFocusIndex] = useState(0)
-  const [partnerProviderFocusIndex, setPartnerProviderFocusIndex] = useState(0)
-  const [codingPlanFocusIndex, setCodingPlanFocusIndex] = useState(0)
+  const focusScope =
+    opts.focusScope ??
+    `model-selector:${initialModelProfile?.provider ?? 'new'}:${initialModelProfile?.modelName ?? 'new'}`
+  const [providerFocusIndex, setProviderFocusIndex] = useScopedIndexState({
+    scope: `${focusScope}:provider`,
+    itemCount: Math.max(1, opts.providerOptionCount ?? 1),
+  })
+  const [partnerProviderFocusIndex, setPartnerProviderFocusIndex] =
+    useScopedIndexState({
+      scope: `${focusScope}:partner-provider`,
+      itemCount: Math.max(1, opts.partnerProviderOptionCount ?? 1),
+    })
+  const [codingPlanFocusIndex, setCodingPlanFocusIndex] = useScopedIndexState({
+    scope: `${focusScope}:coding-plan`,
+    itemCount: Math.max(1, opts.codingPlanOptionCount ?? 1),
+  })
 
   const [fetchRetryCount, setFetchRetryCount] = useState<number>(0)
   const [isRetrying, setIsRetrying] = useState<boolean>(false)

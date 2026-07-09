@@ -24,6 +24,7 @@ import { createInkHarnessManager, createInkTestHarness } from './inkTestHarness'
 import { Select } from '#ui-ink/components/CustomSelect/select'
 import { ScopedMultiSelect } from '#ui-ink/components/CustomSelect/multi-select'
 import { useModelSelectorInput } from '#ui-ink/components/ModelSelector/useModelSelectorInput'
+import { useModelSelectorState } from '#ui-ink/components/ModelSelector/useModelSelectorState'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { useMouse } from '#ui-ink/hooks/useMouse'
 import { useScopedIndexState } from '#ui-ink/hooks/useScopedIndexState'
@@ -2112,6 +2113,103 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     h.stdin.write('\r')
     await h.wait(40)
     expect(submitted).toBe(true)
+  })
+
+  test('ModelSelector: provider focus survives keep-alive remount', async () => {
+    let focusedIndex = -1
+    const focusScope = `test-model-selector-provider-${Date.now()}`
+    const mainMenuOptions = [
+      { value: 'partnerProviders', label: 'Other Providers ->' },
+      { value: 'custom-openai', label: 'Custom OpenAI API' },
+      { value: 'ollama', label: 'Ollama' },
+    ]
+
+    function ProviderFocusChild(): React.ReactNode {
+      const state = useModelSelectorState({
+        skipModelType: false,
+        focusScope,
+        providerOptionCount: mainMenuOptions.length,
+      })
+
+      useEffect(() => {
+        focusedIndex = state.providerFocusIndex
+      }, [state.providerFocusIndex])
+
+      useModelSelectorInput({
+        currentScreen: 'provider',
+        mainMenuOptions,
+        providerFocusIndex: state.providerFocusIndex,
+        setProviderFocusIndex: state.setProviderFocusIndex,
+        partnerProviderOptions: [],
+        partnerProviderFocusIndex: 0,
+        setPartnerProviderFocusIndex: () => {},
+        codingPlanOptions: [],
+        codingPlanFocusIndex: 0,
+        setCodingPlanFocusIndex: () => {},
+        selectedProvider: 'custom-openai',
+        apiKey: '',
+        resourceName: '',
+        providerBaseUrl: '',
+        customBaseUrl: '',
+        customModelName: '',
+        contextLength: 128000,
+        contextLengthOptions: [],
+        setContextLength: () => {},
+        isTestingConnection: false,
+        connectionTestResult: null,
+        activeFieldIndex: 0,
+        setActiveFieldIndex: () => {},
+        handleProviderSelection: () => {},
+        handleApiKeySubmit: () => {},
+        fetchModelsWithRetry: async () => [],
+        navigateTo: () => {},
+        handleResourceNameSubmit: () => {},
+        handleCustomBaseUrlSubmit: () => {},
+        handleProviderBaseUrlSubmit: () => {},
+        handleCustomModelSubmit: () => {},
+        handleConfirmation: async () => {},
+        setValidationError: () => {},
+        handleConnectionTest: () => {},
+        handleContextLengthSubmit: () => {},
+        setModelLoadError: () => {},
+        getFormFieldsForModelParams: () => [],
+        handleModelParamsSubmit: () => {},
+      })
+
+      return <Text>provider:{state.providerFocusIndex}</Text>
+    }
+
+    function ProviderFocusHarness({
+      mounted,
+    }: {
+      mounted: boolean
+    }): React.ReactNode {
+      return mounted ? <ProviderFocusChild /> : <Text>hidden</Text>
+    }
+
+    const renderHarness = (mounted: boolean) => (
+      <KeypressProvider>
+        <ProviderFocusHarness mounted={mounted} />
+      </KeypressProvider>
+    )
+
+    const h = createInkTestHarness(renderHarness(true))
+    harnessManager.track(h)
+
+    await h.wait(30)
+    expect(focusedIndex).toBe(0)
+
+    h.stdin.write('\u001B[B')
+    await h.wait(40)
+    expect(focusedIndex).toBe(1)
+
+    h.rerender(renderHarness(false))
+    await h.wait(20)
+    h.rerender(renderHarness(true))
+    await h.wait(40)
+
+    expect(focusedIndex).toBe(1)
+    expect(h.getOutput()).toContain('provider:1')
   })
 
   test('KeypressProvider: priority can fall back to default on rerender', async () => {

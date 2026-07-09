@@ -58,17 +58,17 @@ export function useModelSelectorController(
     props.onDone()
   }
 
-  const state = useModelSelectorState({
-    skipModelType: props.skipModelType ?? false,
-    initialModelProfile: props.initialModelProfile,
-  })
-
   const menus = useModelSelectorMenus({
     containerPaddingY,
     containerGap,
-    setProviderFocusIndex: state.setProviderFocusIndex,
-    setPartnerProviderFocusIndex: state.setPartnerProviderFocusIndex,
-    setCodingPlanFocusIndex: state.setCodingPlanFocusIndex,
+  })
+
+  const state = useModelSelectorState({
+    skipModelType: props.skipModelType ?? false,
+    initialModelProfile: props.initialModelProfile,
+    providerOptionCount: menus.mainMenuOptions.length,
+    partnerProviderOptionCount: menus.partnerProviderOptions.length,
+    codingPlanOptionCount: menus.codingPlanOptions.length,
   })
 
   const { modelOptions } = useModelSelectorModelOptions({
