@@ -12,10 +12,6 @@ export function compactId(
   return trimmed.length > 8 ? trimmed.slice(0, 8) : trimmed
 }
 
-export function compactSessionId(sessionId: string | null | undefined): string {
-  return compactId(sessionId, 'new')
-}
-
 export function getRuntimePhase(args: {
   runtimeAttached: boolean
   running: boolean

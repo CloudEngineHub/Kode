@@ -1,11 +1,5 @@
 import React from 'react'
-import {
-  FileText,
-  Menu,
-  MessagesSquare,
-  Settings,
-  Terminal,
-} from 'lucide-react'
+import { Menu, MessagesSquare, Settings } from 'lucide-react'
 
 import { useChat } from './hooks/useChat'
 import { useRuntimeClient } from './hooks/useRuntimeClient'
@@ -13,12 +7,10 @@ import { useWorkspaces } from './hooks/useWorkspaces'
 import { Sidebar } from './components/Sidebar'
 import { ThemeToggle } from './components/ThemeToggle'
 import { PermissionModal } from './components/PermissionModal'
-import { RuntimeStatusBar } from './components/RuntimeStatusBar'
-import { TerminalPlaceholder } from './components/TerminalFrame'
 import { Button } from './components/ui/button'
 import { Sheet, SheetContent, SheetTrigger } from './components/ui/sheet'
-import { Tabs, TabsList, TabsTrigger } from './components/ui/tabs'
 import { cn } from './lib/utils'
+import { runtimeStatusCompactLabel } from './lib/runtimePresentation'
 import {
   clearToken,
   consumeTokenFromUrl,
@@ -29,13 +21,28 @@ import { ChatPage } from './pages/Chat'
 import { ConnectPage } from './pages/Connect'
 import { SettingsPage } from './pages/Settings'
 
-type View = 'chat' | 'shell' | 'files' | 'settings'
+type View = 'chat' | 'settings'
 
-const terminalTabsListClass =
-  'rounded-md border border-[hsl(var(--kode-terminal-border))] bg-[hsl(var(--kode-terminal-bg))] p-1 text-[hsl(var(--kode-terminal-muted))]'
+const TERMINAL_VIEWS: readonly {
+  value: View
+  label: string
+  icon: typeof MessagesSquare
+}[] = [
+  { value: 'chat', label: 'Chat', icon: MessagesSquare },
+  { value: 'settings', label: 'Settings', icon: Settings },
+]
 
-const terminalTabTriggerClass =
-  'rounded-[4px] data-[state=active]:bg-[hsl(var(--kode-terminal-elevated))] data-[state=active]:text-[hsl(var(--kode-terminal-text))] data-[state=active]:shadow-none'
+function runtimeStatusDotLabel(args: {
+  runtimeAttached: boolean
+  runtimeStatus: string
+  running: boolean
+}): string {
+  return [
+    args.runtimeStatus,
+    args.runtimeAttached ? 'runtime attached' : 'runtime detached',
+    args.running ? 'agent running' : 'agent idle',
+  ].join(' | ')
+}
 
 function getInitialToken(): string {
   return consumeTokenFromUrl() || loadTokenFromStorage()
@@ -123,6 +130,11 @@ export default function App() {
       }}
     />
   )
+  const runtimeDotLabel = runtimeStatusDotLabel({
+    runtimeAttached,
+    runtimeStatus: runtimeStatusCompactLabel(runtimeStatus),
+    running: chat.sending,
+  })
 
   return (
     <div className="kode-web-root bg-background text-foreground">
@@ -153,92 +165,44 @@ export default function App() {
               </div>
             </div>
 
-            <Tabs
-              value={view}
-              onValueChange={v => {
-                if (
-                  v === 'chat' ||
-                  v === 'shell' ||
-                  v === 'files' ||
-                  v === 'settings'
-                ) {
-                  setView(v)
-                }
-              }}
+            <div
+              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[hsl(var(--kode-terminal-border))] bg-[hsl(var(--kode-terminal-bg))] p-1 text-[hsl(var(--kode-terminal-muted))]"
+              role="group"
+              aria-label="View"
             >
-              <TabsList
-                className={cn('hidden sm:inline-flex', terminalTabsListClass)}
-              >
-                <TabsTrigger className={terminalTabTriggerClass} value="chat">
-                  <MessagesSquare className="h-4 w-4" />
-                  Chat
-                </TabsTrigger>
-                <TabsTrigger className={terminalTabTriggerClass} value="shell">
-                  <Terminal className="h-4 w-4" />
-                  Shell
-                </TabsTrigger>
-                <TabsTrigger className={terminalTabTriggerClass} value="files">
-                  <FileText className="h-4 w-4" />
-                  Files
-                </TabsTrigger>
-                <TabsTrigger
-                  className={terminalTabTriggerClass}
-                  value="settings"
-                >
-                  <Settings className="h-4 w-4" />
-                  Settings
-                </TabsTrigger>
-              </TabsList>
-              <TabsList className={cn('sm:hidden', terminalTabsListClass)}>
-                <TabsTrigger
-                  className={terminalTabTriggerClass}
-                  value="chat"
-                  aria-label="Chat"
-                >
-                  <MessagesSquare className="h-4 w-4" />
-                </TabsTrigger>
-                <TabsTrigger
-                  className={terminalTabTriggerClass}
-                  value="shell"
-                  aria-label="Shell"
-                >
-                  <Terminal className="h-4 w-4" />
-                </TabsTrigger>
-                <TabsTrigger
-                  className={terminalTabTriggerClass}
-                  value="files"
-                  aria-label="Files"
-                >
-                  <FileText className="h-4 w-4" />
-                </TabsTrigger>
-                <TabsTrigger
-                  className={terminalTabTriggerClass}
-                  value="settings"
-                  aria-label="Settings"
-                >
-                  <Settings className="h-4 w-4" />
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
+              {TERMINAL_VIEWS.map(item => {
+                const active = view === item.value
+                const Icon = item.icon
 
-            <RuntimeStatusBar
-              runtimeStatus={runtimeStatus}
-              runtimeAttached={runtimeAttached}
-              running={chat.sending}
-              selectedSessionId={chat.selectedSessionId}
-              eventCount={chat.events.length}
-            />
+                return (
+                  <button
+                    key={item.value}
+                    type="button"
+                    className={cn(
+                      'inline-flex h-8 min-w-8 items-center justify-center gap-2 rounded-[4px] px-2 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/20 sm:px-3',
+                      active
+                        ? 'bg-[hsl(var(--kode-terminal-elevated))] text-[hsl(var(--kode-terminal-text))]'
+                        : 'text-[hsl(var(--kode-terminal-muted))] hover:bg-[hsl(var(--kode-terminal-elevated))] hover:text-[hsl(var(--kode-terminal-text))]',
+                    )}
+                    aria-pressed={active}
+                    aria-label={item.label}
+                    onClick={() => setView(item.value)}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span className="hidden sm:inline">{item.label}</span>
+                  </button>
+                )
+              })}
+            </div>
 
             <div
               className={cn(
-                'h-2 w-2 shrink-0 rounded-full xl:hidden',
+                'h-2 w-2 shrink-0 rounded-full',
                 runtimeAttached ? 'bg-emerald-500' : 'bg-muted-foreground/40',
               )}
-              aria-label={
-                runtimeAttached ? 'Runtime attached' : 'Runtime detached'
-              }
+              aria-label={runtimeDotLabel}
               role="status"
-              title={runtimeAttached ? 'Runtime attached' : 'Runtime detached'}
+              title={runtimeDotLabel}
             />
             <ThemeToggle />
           </div>
@@ -256,7 +220,7 @@ export default function App() {
                   setToken('')
                 }}
               />
-            ) : view === 'chat' ? (
+            ) : (
               <ChatPage
                 events={chat.events}
                 input={chat.input}
@@ -270,12 +234,6 @@ export default function App() {
                 runtimeStatus={runtimeStatus}
                 sessionTitle={selectedSessionTitle}
                 workspacePath={currentWorkspace?.path ?? null}
-              />
-            ) : (
-              <TerminalPlaceholder
-                command={view}
-                workspacePath={currentWorkspace?.path ?? null}
-                runtimeAttached={runtimeAttached}
               />
             )}
           </div>
@@ -302,4 +260,9 @@ export default function App() {
       />
     </div>
   )
+}
+
+export const __appForTests = {
+  terminalViews: TERMINAL_VIEWS.map(({ value, label }) => ({ value, label })),
+  runtimeStatusDotLabel,
 }

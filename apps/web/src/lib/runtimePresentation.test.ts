@@ -2,7 +2,6 @@ import { describe, expect, test } from 'bun:test'
 
 import {
   compactId,
-  compactSessionId,
   getRuntimePhase,
   phaseLabel,
   phaseTone,
@@ -14,11 +13,8 @@ import {
 describe('runtime presentation helpers', () => {
   test('uses compact stable ids for runtime chrome', () => {
     expect(compactId(null)).toBe('none')
-    expect(compactSessionId(null)).toBe('new')
-    expect(compactSessionId('abc')).toBe('abc')
-    expect(compactSessionId('12345678-1234-1234-1234-123456789abc')).toBe(
-      '12345678',
-    )
+    expect(compactId('abc')).toBe('abc')
+    expect(compactId('12345678-1234-1234-1234-123456789abc')).toBe('12345678')
   })
 
   test('prioritizes runtime phase by user actionability', () => {
