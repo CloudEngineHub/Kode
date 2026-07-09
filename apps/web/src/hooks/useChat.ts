@@ -1,6 +1,6 @@
 import React from 'react'
 
-import type { HttpClient } from '@kode/client'
+import type { KodeClient } from '@kode/client'
 import type {
   AgentEvent,
   PermissionRequestEvent,
@@ -30,7 +30,7 @@ function createErrorLogEvent(error: unknown): AgentEvent {
 const EVENT_FLUSH_DELAY_MS = 50
 
 export function useChat(args: {
-  client: HttpClient | null
+  client: KodeClient | null
   resetKey: string
   onNewSession: () => void
 }): {

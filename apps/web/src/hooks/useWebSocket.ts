@@ -1,13 +1,14 @@
 import React from 'react'
 
 import { HttpClient } from '@kode/client'
+import type { KodeClient } from '@kode/client'
 
 export function useWebSocket(args: {
   baseUrl: string
   token: string
   workspaceId: string | null
 }): {
-  client: HttpClient | null
+  client: KodeClient | null
   connected: boolean
   restartClient: () => void
 } {
