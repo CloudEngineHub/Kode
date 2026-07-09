@@ -1,11 +1,11 @@
 import React from 'react'
-import { CircleDot, Terminal } from 'lucide-react'
 
 import type { AgentEvent } from '@kode/protocol'
 
 import { ScrollArea } from '../components/ui/scroll-area'
 import { MessageBubble } from '../components/MessageBubble'
 import { InputArea } from '../components/InputArea'
+import { TerminalFrame } from '../components/TerminalFrame'
 import { cn } from '../lib/utils'
 
 function isChatEvent(event: AgentEvent): boolean {
@@ -111,35 +111,23 @@ export function ChatPage(props: {
   )
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[hsl(var(--kode-terminal-bg))] text-[hsl(var(--kode-terminal-text))]">
-      <div className="flex min-h-10 items-center gap-3 border-b border-[hsl(var(--kode-terminal-border))] bg-[hsl(var(--kode-terminal-elevated))] px-3 font-mono text-xs">
-        <div className="flex shrink-0 items-center gap-1.5" aria-hidden="true">
-          <span className="h-2.5 w-2.5 rounded-full bg-rose-400/90" />
-          <span className="h-2.5 w-2.5 rounded-full bg-amber-300/90" />
-          <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/90" />
-        </div>
-        <Terminal className="h-4 w-4 shrink-0 text-[hsl(var(--kode-terminal-prompt))]" />
-        <div className="min-w-0 flex-1 truncate">
-          <span className="text-[hsl(var(--kode-terminal-text))]">kode</span>
-          <span className="px-2 text-[hsl(var(--kode-terminal-muted))]">/</span>
-          <span className="text-[hsl(var(--kode-terminal-muted))]">
-            {props.sessionTitle ?? 'new-session'}
-          </span>
-        </div>
-        <div className="hidden min-w-0 max-w-[38%] truncate text-[hsl(var(--kode-terminal-muted))] lg:block">
-          {props.workspacePath ?? '~'}
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5 text-[hsl(var(--kode-terminal-muted))]">
-          <CircleDot
-            className={cn(
-              'h-3.5 w-3.5',
-              props.runtimeAttached && 'text-[hsl(var(--kode-terminal-user))]',
-            )}
+    <TerminalFrame
+      title="kode"
+      context={props.sessionTitle ?? 'new-session'}
+      detail={props.workspacePath ?? '~'}
+      runtimeAttached={props.runtimeAttached}
+      footer={
+        <div className="mx-auto w-full max-w-6xl">
+          <InputArea
+            value={props.input}
+            onChange={props.onInputChange}
+            onSubmit={props.onSend}
+            disabled={props.disabled}
+            isSending={props.sending}
           />
-          {props.runtimeAttached ? 'attached' : 'detached'}
         </div>
-      </div>
-
+      }
+    >
       <ScrollArea className="flex-1">
         <div
           className={cn(
@@ -159,19 +147,7 @@ export function ChatPage(props: {
           <div ref={bottomRef} />
         </div>
       </ScrollArea>
-
-      <div className="border-t border-[hsl(var(--kode-terminal-border))] bg-[hsl(var(--kode-terminal-bg))] p-3 md:p-4">
-        <div className="mx-auto w-full max-w-6xl">
-          <InputArea
-            value={props.input}
-            onChange={props.onInputChange}
-            onSubmit={props.onSend}
-            disabled={props.disabled}
-            isSending={props.sending}
-          />
-        </div>
-      </div>
-    </div>
+    </TerminalFrame>
   )
 }
 

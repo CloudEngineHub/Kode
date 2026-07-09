@@ -1,0 +1,125 @@
+import React from 'react'
+import { CircleDot, Terminal } from 'lucide-react'
+
+import { cn } from '../lib/utils'
+
+function terminalAttachmentLabel(runtimeAttached?: boolean): string {
+  return runtimeAttached ? 'attached' : 'detached'
+}
+
+function TerminalTitleBar(props: {
+  title: string
+  context?: string | null
+  detail?: string | null
+  runtimeAttached?: boolean
+}) {
+  return (
+    <div className="flex min-h-10 items-center gap-3 border-b border-[hsl(var(--kode-terminal-border))] bg-[hsl(var(--kode-terminal-elevated))] px-3 font-mono text-xs">
+      <div className="flex shrink-0 items-center gap-1.5" aria-hidden="true">
+        <span className="h-2.5 w-2.5 rounded-full bg-rose-400/90" />
+        <span className="h-2.5 w-2.5 rounded-full bg-amber-300/90" />
+        <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/90" />
+      </div>
+      <Terminal className="h-4 w-4 shrink-0 text-[hsl(var(--kode-terminal-prompt))]" />
+      <div className="min-w-0 flex-1 truncate">
+        <span className="text-[hsl(var(--kode-terminal-text))]">
+          {props.title}
+        </span>
+        {props.context ? (
+          <>
+            <span className="px-2 text-[hsl(var(--kode-terminal-muted))]">
+              /
+            </span>
+            <span className="text-[hsl(var(--kode-terminal-muted))]">
+              {props.context}
+            </span>
+          </>
+        ) : null}
+      </div>
+      {props.detail ? (
+        <div className="hidden min-w-0 max-w-[38%] truncate text-[hsl(var(--kode-terminal-muted))] lg:block">
+          {props.detail}
+        </div>
+      ) : null}
+      <div className="flex shrink-0 items-center gap-1.5 text-[hsl(var(--kode-terminal-muted))]">
+        <CircleDot
+          className={cn(
+            'h-3.5 w-3.5',
+            props.runtimeAttached && 'text-[hsl(var(--kode-terminal-user))]',
+          )}
+        />
+        {terminalAttachmentLabel(props.runtimeAttached)}
+      </div>
+    </div>
+  )
+}
+
+export function TerminalFrame(props: {
+  title: string
+  context?: string | null
+  detail?: string | null
+  runtimeAttached?: boolean
+  children: React.ReactNode
+  footer?: React.ReactNode
+}) {
+  return (
+    <div className="flex h-full min-h-0 flex-col bg-[hsl(var(--kode-terminal-bg))] text-[hsl(var(--kode-terminal-text))]">
+      <TerminalTitleBar
+        title={props.title}
+        context={props.context}
+        detail={props.detail}
+        runtimeAttached={props.runtimeAttached}
+      />
+      <div className="flex min-h-0 flex-1 flex-col">{props.children}</div>
+      {props.footer ? (
+        <div className="border-t border-[hsl(var(--kode-terminal-border))] bg-[hsl(var(--kode-terminal-bg))] p-3 md:p-4">
+          {props.footer}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+export function TerminalPlaceholder(props: {
+  command: 'shell' | 'files'
+  workspacePath: string | null
+  runtimeAttached: boolean
+}) {
+  return (
+    <TerminalFrame
+      title="kode"
+      context={props.command}
+      detail={props.workspacePath ?? '~'}
+      runtimeAttached={props.runtimeAttached}
+    >
+      <div className="flex h-full min-h-0 items-end p-4 font-mono text-[13px] leading-6 md:p-6">
+        <div className="grid w-full gap-2">
+          <div className="flex min-w-0 gap-3">
+            <span className="shrink-0 text-[hsl(var(--kode-terminal-prompt))]">
+              kode $
+            </span>
+            <span className="min-w-0 truncate">{props.command}</span>
+          </div>
+          <div className="flex min-w-0 gap-3 text-[hsl(var(--kode-terminal-muted))]">
+            <span className="shrink-0">cwd</span>
+            <span className="min-w-0 truncate">
+              {props.workspacePath ?? '~'}
+            </span>
+          </div>
+          <div className="flex min-w-0 gap-3 text-[hsl(var(--kode-terminal-tool))]">
+            <span className="shrink-0">status</span>
+            <span className="min-w-0 truncate">
+              {props.command === 'shell'
+                ? 'shell transport pending'
+                : 'workspace file bridge pending'}
+            </span>
+          </div>
+        </div>
+      </div>
+    </TerminalFrame>
+  )
+}
+
+export const __terminalFrameForTests = {
+  terminalAttachmentLabel,
+}

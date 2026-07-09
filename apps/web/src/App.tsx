@@ -14,6 +14,7 @@ import { Sidebar } from './components/Sidebar'
 import { ThemeToggle } from './components/ThemeToggle'
 import { PermissionModal } from './components/PermissionModal'
 import { RuntimeStatusBar } from './components/RuntimeStatusBar'
+import { TerminalPlaceholder } from './components/TerminalFrame'
 import { WorkspaceDashboard } from './components/WorkspaceDashboard'
 import { Button } from './components/ui/button'
 import { Sheet, SheetContent, SheetTrigger } from './components/ui/sheet'
@@ -30,55 +31,6 @@ import { ConnectPage } from './pages/Connect'
 import { SettingsPage } from './pages/Settings'
 
 type View = 'chat' | 'shell' | 'files' | 'settings'
-
-function TerminalPlaceholder(props: {
-  view: Exclude<View, 'chat' | 'settings'>
-  workspacePath: string | null
-  runtimeAttached: boolean
-}) {
-  const command = props.view === 'shell' ? 'shell' : 'files'
-
-  return (
-    <div className="flex h-full min-h-0 flex-col bg-[hsl(var(--kode-terminal-bg))] font-mono text-[hsl(var(--kode-terminal-text))]">
-      <div className="flex min-h-10 items-center gap-3 border-b border-[hsl(var(--kode-terminal-border))] bg-[hsl(var(--kode-terminal-elevated))] px-3 text-xs">
-        <div className="flex shrink-0 items-center gap-1.5" aria-hidden="true">
-          <span className="h-2.5 w-2.5 rounded-full bg-rose-400/90" />
-          <span className="h-2.5 w-2.5 rounded-full bg-amber-300/90" />
-          <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/90" />
-        </div>
-        <Terminal className="h-4 w-4 shrink-0 text-[hsl(var(--kode-terminal-prompt))]" />
-        <span className="truncate">kode://{command}</span>
-        <span className="ml-auto text-[hsl(var(--kode-terminal-muted))]">
-          {props.runtimeAttached ? 'attached' : 'detached'}
-        </span>
-      </div>
-      <div className="flex min-h-0 flex-1 items-end p-4 text-[13px] leading-6 md:p-6">
-        <div className="grid w-full gap-2">
-          <div className="flex min-w-0 gap-3">
-            <span className="shrink-0 text-[hsl(var(--kode-terminal-prompt))]">
-              kode $
-            </span>
-            <span className="min-w-0 truncate">{command}</span>
-          </div>
-          <div className="flex min-w-0 gap-3 text-[hsl(var(--kode-terminal-muted))]">
-            <span className="shrink-0">cwd</span>
-            <span className="min-w-0 truncate">
-              {props.workspacePath ?? '~'}
-            </span>
-          </div>
-          <div className="flex min-w-0 gap-3 text-[hsl(var(--kode-terminal-tool))]">
-            <span className="shrink-0">status</span>
-            <span className="min-w-0 truncate">
-              {props.view === 'shell'
-                ? 'shell transport pending'
-                : 'workspace file bridge pending'}
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
 
 function getInitialToken(): string {
   return consumeTokenFromUrl() || loadTokenFromStorage()
@@ -292,7 +244,7 @@ export default function App() {
               />
             ) : (
               <TerminalPlaceholder
-                view={view}
+                command={view}
                 workspacePath={currentWorkspace?.path ?? null}
                 runtimeAttached={runtimeAttached}
               />
