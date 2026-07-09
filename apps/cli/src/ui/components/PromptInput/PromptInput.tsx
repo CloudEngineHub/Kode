@@ -64,6 +64,20 @@ import {
 
 const PROMPT_DRAFT_KEY = 'repl'
 
+function getDraftPastesSignature(args: {
+  pastedTexts: PastedTextSegment[]
+  pastedImages: PastedImageAttachment[]
+}): string {
+  return [
+    ...args.pastedTexts.map(
+      item => `text:${item.placeholder}:${item.text.length}`,
+    ),
+    ...args.pastedImages.map(
+      item => `image:${item.placeholder}:${item.mediaType}:${item.data.length}`,
+    ),
+  ].join('\n')
+}
+
 function exit(): never {
   setTerminalTitle('')
   process.exit(0)
@@ -452,6 +466,7 @@ export function PromptInput({
   )
 
   const lastRestorePastesIdRef = useRef<number | null>(null)
+  const lastDraftPastesSignatureRef = useRef<string | null>(null)
   useLayoutEffect(() => {
     if (!restorePastes) return
     if (lastRestorePastesIdRef.current === restorePastes.id) return
@@ -459,10 +474,14 @@ export function PromptInput({
 
     setPastedTexts(restorePastes.pastedTexts)
     setPastedImages(restorePastes.pastedImages)
-    onDraftPastesChange?.({
-      pastedTexts: restorePastes.pastedTexts,
-      pastedImages: restorePastes.pastedImages,
-    })
+    const signature = getDraftPastesSignature(restorePastes)
+    if (lastDraftPastesSignatureRef.current !== signature) {
+      lastDraftPastesSignatureRef.current = signature
+      onDraftPastesChange?.({
+        pastedTexts: restorePastes.pastedTexts,
+        pastedImages: restorePastes.pastedImages,
+      })
+    }
     onRestorePastesApplied?.(restorePastes.id)
   }, [
     onDraftPastesChange,
@@ -491,6 +510,7 @@ export function PromptInput({
 
     setPastedTexts(draftPastes.pastedTexts)
     setPastedImages(draftPastes.pastedImages)
+    lastDraftPastesSignatureRef.current = getDraftPastesSignature(draftPastes)
     didRestoreDraftPastesRef.current = true
   }, [
     draftPastes,
@@ -508,6 +528,9 @@ export function PromptInput({
       didSkipDraftPastesSyncRef.current = true
       return
     }
+    const signature = getDraftPastesSignature({ pastedTexts, pastedImages })
+    if (lastDraftPastesSignatureRef.current === signature) return
+    lastDraftPastesSignatureRef.current = signature
     onDraftPastesChange({ pastedTexts, pastedImages })
   }, [onDraftPastesChange, pastedImages, pastedTexts])
 
