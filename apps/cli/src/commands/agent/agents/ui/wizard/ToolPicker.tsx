@@ -7,6 +7,7 @@ import { parseMcpToolName } from '../utils'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import { getWindowedList } from '#ui-ink/primitives/list/windowedList'
+import { useScopedIndexState } from '#ui-ink/hooks/useScopedIndexState'
 
 const MIN_VISIBLE_TOOL_ITEMS = 5
 const MAX_VISIBLE_TOOL_ITEMS = 14
@@ -68,10 +69,11 @@ export const __getFocusableToolPickerIndexForTests = getFocusableToolPickerIndex
 export function ToolPicker(props: {
   tools: Tool[]
   initialTools: string[] | undefined
+  focusScope?: string
   onComplete: (tools: string[] | undefined) => void
   onCancel: () => void
 }) {
-  const { tools, initialTools, onComplete, onCancel } = props
+  const { tools, initialTools, focusScope, onComplete, onCancel } = props
   const terminalSize = useTerminalSize()
   const normalizedTools = useMemo(() => {
     const unique = new Map<string, Tool>()
@@ -97,7 +99,6 @@ export function ToolPicker(props: {
   }, [initialTools, allToolNames])
 
   const [selected, setSelected] = useState<string[]>(initialSelectedNames)
-  const [cursorIndex, setCursorIndex] = useState(0)
   const [showAdvanced, setShowAdvanced] = useState(false)
 
   const selectedSet = useMemo(() => new Set(selected), [selected])
@@ -260,12 +261,20 @@ export function ToolPicker(props: {
     toggleMany,
     toggleOne,
   ])
+  const scopedFocusItemCount = Math.max(1, items.length)
+  const [scopedCursorIndex, setScopedCursorIndex] = useScopedIndexState({
+    scope: focusScope ?? 'agent-tool-picker',
+    itemCount: scopedFocusItemCount,
+  })
+  const [localCursorIndex, setLocalCursorIndex] = useState(0)
+  const cursorIndex = focusScope ? scopedCursorIndex : localCursorIndex
+  const setCursorIndex = focusScope ? setScopedCursorIndex : setLocalCursorIndex
 
   useEffect(() => {
     setCursorIndex(prev =>
       getFocusableToolPickerIndex(items, Math.min(prev, items.length - 1), -1),
     )
-  }, [items])
+  }, [items, setCursorIndex])
 
   const maxVisibleItems = getToolPickerMaxVisibleItems(terminalSize.rows)
   const window = useMemo(

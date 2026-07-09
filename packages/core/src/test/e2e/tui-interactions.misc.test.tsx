@@ -25,6 +25,7 @@ import { Select } from '#ui-ink/components/CustomSelect/select'
 import { ScopedMultiSelect } from '#ui-ink/components/CustomSelect/multi-select'
 import { useModelSelectorInput } from '#ui-ink/components/ModelSelector/useModelSelectorInput'
 import { useModelSelectorState } from '#ui-ink/components/ModelSelector/useModelSelectorState'
+import { ToolPicker } from '#host-cli/commands/agent/agents/ui/wizard/ToolPicker'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { useMouse } from '#ui-ink/hooks/useMouse'
 import { useScopedIndexState } from '#ui-ink/hooks/useScopedIndexState'
@@ -2210,6 +2211,57 @@ describe('TUI E2E regression (Ink render): Misc', () => {
 
     expect(focusedIndex).toBe(1)
     expect(h.getOutput()).toContain('provider:1')
+  })
+
+  test('ToolPicker: cursor focus survives keep-alive remount', async () => {
+    const focusScope = `test-tool-picker-${Date.now()}`
+    const tools = [
+      { name: 'Read' },
+      { name: 'Write' },
+      { name: 'Bash' },
+      { name: 'mcp__codegraph__search' },
+    ]
+
+    function ToolPickerHarness({
+      mounted,
+    }: {
+      mounted: boolean
+    }): React.ReactNode {
+      return mounted ? (
+        <ToolPicker
+          tools={tools}
+          initialTools={undefined}
+          focusScope={focusScope}
+          onComplete={() => {}}
+          onCancel={() => {}}
+        />
+      ) : (
+        <Text>hidden</Text>
+      )
+    }
+
+    const renderHarness = (mounted: boolean) => (
+      <KeypressProvider>
+        <ToolPickerHarness mounted={mounted} />
+      </KeypressProvider>
+    )
+
+    const h = createInkTestHarness(renderHarness(true))
+    harnessManager.track(h)
+
+    await h.wait(30)
+    h.stdin.write('\u001B[B')
+    await h.wait(40)
+
+    h.clearOutput()
+    h.rerender(renderHarness(false))
+    await h.wait(20)
+    h.rerender(renderHarness(true))
+    await h.wait(40)
+
+    expect(h.getOutput()).toContain(
+      `${figures.pointer} ${figures.checkboxOn} All tools`,
+    )
   })
 
   test('KeypressProvider: priority can fall back to default on rerender', async () => {

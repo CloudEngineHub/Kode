@@ -25,6 +25,7 @@ export function StepSelectTools(props: {
           <ToolPicker
             tools={props.tools}
             initialTools={initialTools}
+            focusScope={`agent-wizard:tools:${ctx.wizardData.method ?? 'new'}:${ctx.wizardData.agentType ?? 'draft'}`}
             onComplete={selected => {
               ctx.updateWizardData({ selectedTools: selected })
               ctx.goNext()
