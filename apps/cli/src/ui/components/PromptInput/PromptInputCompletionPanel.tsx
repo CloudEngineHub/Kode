@@ -23,10 +23,12 @@ const SuggestionItem = React.memo(
     suggestion,
     isSelected,
     theme,
+    maxWidth,
   }: {
     suggestion: Suggestion
     isSelected: boolean
     theme: Theme
+    maxWidth: number
   }) => {
     const isAgent = suggestion.type === 'agent'
     const displayColor = isSelected
@@ -36,7 +38,7 @@ const SuggestionItem = React.memo(
         : undefined
 
     return (
-      <Box flexDirection="row">
+      <Box flexDirection="row" width={maxWidth} overflow="hidden">
         <Text
           bold
           color={displayColor}
@@ -54,7 +56,8 @@ const SuggestionItem = React.memo(
     return (
       prevProps.isSelected === nextProps.isSelected &&
       prevProps.suggestion.value === nextProps.suggestion.value &&
-      prevProps.suggestion.displayValue === nextProps.suggestion.displayValue
+      prevProps.suggestion.displayValue === nextProps.suggestion.displayValue &&
+      prevProps.maxWidth === nextProps.maxWidth
     )
   },
 )
@@ -245,7 +248,17 @@ export const PromptInputCompletionPanel = React.memo(
     reservedRows?: number
   }): React.ReactNode {
     const { rows, columns } = useTerminalSize()
-    const helpWidth = Math.max(1, columns - 6)
+    const panelWidth = Math.max(1, columns)
+    const horizontalPadding = panelWidth >= 8 ? 2 : panelWidth >= 4 ? 1 : 0
+    const innerWidth = Math.max(1, panelWidth - horizontalPadding * 2)
+    const showTokenWarning = innerWidth >= 20
+    const tokenWarningWidth = showTokenWarning
+      ? Math.min(32, Math.max(16, Math.floor(innerWidth * 0.42)))
+      : 0
+    const leftWidth = Math.max(
+      1,
+      showTokenWarning ? innerWidth - tokenWarningWidth - 1 : innerWidth,
+    )
     const window = __getSuggestionWindowForTests({
       rows,
       selectedIndex,
@@ -260,8 +273,13 @@ export const PromptInputCompletionPanel = React.memo(
     const selectedSuggestion = suggestions[selectedIndex]
 
     return (
-      <Box flexDirection="row" justifyContent="space-between" paddingX={2}>
-        <Box flexDirection="column">
+      <Box
+        width={panelWidth}
+        overflow="hidden"
+        flexDirection="row"
+        paddingX={horizontalPadding}
+      >
+        <Box flexDirection="column" width={leftWidth} overflow="hidden">
           {window.showTopEllipsis && window.hiddenAbove > 0 && (
             <Text
               dimColor
@@ -274,6 +292,7 @@ export const PromptInputCompletionPanel = React.memo(
               suggestion={suggestion}
               isSelected={window.startIndex + index === selectedIndex}
               theme={theme}
+              maxWidth={leftWidth}
             />
           ))}
           {window.showBottomEllipsis && window.hiddenBelow > 0 && (
@@ -286,21 +305,29 @@ export const PromptInputCompletionPanel = React.memo(
             <HelpText
               emptyDirMessage={emptyDirMessage}
               selectedSuggestion={selectedSuggestion}
-              maxWidth={helpWidth}
+              maxWidth={leftWidth}
               theme={theme}
             />
           )}
         </Box>
-        <SentryErrorBoundary
-          children={
-            <Box justifyContent="flex-end" gap={1}>
-              <TokenWarning
-                tokenUsage={tokenUsage}
-                contextLimit={contextLimit}
-              />
-            </Box>
-          }
-        />
+        {showTokenWarning && (
+          <Box
+            width={tokenWarningWidth}
+            overflow="hidden"
+            justifyContent="flex-end"
+            marginLeft={1}
+            flexShrink={0}
+          >
+            <SentryErrorBoundary
+              children={
+                <TokenWarning
+                  tokenUsage={tokenUsage}
+                  contextLimit={contextLimit}
+                />
+              }
+            />
+          </Box>
+        )}
       </Box>
     )
   },
