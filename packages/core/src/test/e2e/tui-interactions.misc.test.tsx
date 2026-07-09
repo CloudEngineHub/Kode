@@ -1067,6 +1067,67 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     expect(selected).toBe('third')
   })
 
+  test('Select: scoped focus survives keep-alive remount with stale focusValue', async () => {
+    let focused = ''
+    let selected = ''
+
+    function SelectScopedStaleFocusRemountHarness(): React.ReactNode {
+      const [showSelect, setShowSelect] = useState(true)
+
+      useKeypress(
+        (_input, key) => {
+          if (!key.downArrow) return
+
+          setTimeout(() => {
+            setShowSelect(false)
+            setTimeout(() => setShowSelect(true), 0)
+          }, 0)
+          return false
+        },
+        { priority: 10 },
+      )
+
+      if (!showSelect) return <Text>Loading actions...</Text>
+
+      return (
+        <Select
+          focusScope="test:scoped-stale-focus-remount"
+          focusValue="first"
+          options={[
+            { label: 'First', value: 'first' },
+            { label: 'Second', value: 'second' },
+            { label: 'Third', value: 'third' },
+          ]}
+          onFocus={value => {
+            focused = value
+          }}
+          onChange={value => {
+            selected = value
+          }}
+        />
+      )
+    }
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <SelectScopedStaleFocusRemountHarness />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(40)
+    expect(focused).toBe('first')
+
+    h.stdin.write('\u001B[B\u001B[B')
+    await h.wait(120)
+    expect(focused).toBe('third')
+
+    h.stdin.write('\r')
+    await h.wait(40)
+
+    expect(selected).toBe('third')
+  })
+
   test('Select: lagging focusValue echo does not pull down-arrow focus backward', async () => {
     let focused = ''
     let selected = ''

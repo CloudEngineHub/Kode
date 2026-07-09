@@ -31,6 +31,61 @@ function optionStructureKey(
   )
 }
 
+type ScopedFocusSnapshot = {
+  value: string
+  structureKey: string
+  updatedAt: number
+}
+
+const SCOPED_FOCUS_TTL_MS = 5_000
+const scopedFocusSnapshots = new Map<string, ScopedFocusSnapshot>()
+
+function hasSelectableValue(
+  options: ReturnType<typeof flattenOptions>,
+  value: string | undefined,
+): value is string {
+  return Boolean(
+    value &&
+    options.some(option => 'value' in option && option.value === value),
+  )
+}
+
+function getInitialFocusValue(args: {
+  focusScope?: string
+  structureKey: string
+  flatOptions: ReturnType<typeof flattenOptions>
+  requestedValue?: string
+}): { value?: string; usedScopedSnapshot: boolean } {
+  if (!args.focusScope) {
+    return { value: args.requestedValue, usedScopedSnapshot: false }
+  }
+
+  const snapshot = scopedFocusSnapshots.get(args.focusScope)
+  if (
+    snapshot &&
+    snapshot.structureKey === args.structureKey &&
+    Date.now() - snapshot.updatedAt <= SCOPED_FOCUS_TTL_MS &&
+    hasSelectableValue(args.flatOptions, snapshot.value)
+  ) {
+    return { value: snapshot.value, usedScopedSnapshot: true }
+  }
+
+  return { value: args.requestedValue, usedScopedSnapshot: false }
+}
+
+function rememberScopedFocus(args: {
+  focusScope?: string
+  structureKey: string
+  value?: string
+}): void {
+  if (!args.focusScope || !args.value) return
+  scopedFocusSnapshots.set(args.focusScope, {
+    value: args.value,
+    structureKey: args.structureKey,
+    updatedAt: Date.now(),
+  })
+}
+
 type Action =
   | { type: 'focus-next-option' }
   | { type: 'focus-previous-option' }
@@ -275,6 +330,11 @@ export type UseSelectStateProps = {
    * Value to focus
    */
   focusValue?: string
+
+  /**
+   * Stable scope used to preserve focus across short keep-alive remounts.
+   */
+  focusScope?: string
 }
 
 export type SelectState = Pick<
@@ -314,31 +374,44 @@ export const useSelectState = ({
   onChange,
   onFocus,
   focusValue,
+  focusScope,
 }: UseSelectStateProps) => {
   const flatOptions = useMemo(() => flattenOptions(options), [options])
+  const structureKey = useMemo(
+    () => optionStructureKey(flatOptions),
+    [flatOptions],
+  )
   const focusValueExists = useMemo(
-    () =>
-      Boolean(
-        focusValue &&
-        flatOptions.some(
-          option => 'value' in option && option.value === focusValue,
-        ),
-      ),
+    () => hasSelectableValue(flatOptions, focusValue),
     [flatOptions, focusValue],
+  )
+  const requestedInitialFocusValue = focusValue ?? defaultValue
+  const initialFocusValue = useMemo(
+    () =>
+      getInitialFocusValue({
+        focusScope,
+        structureKey,
+        flatOptions,
+        requestedValue: requestedInitialFocusValue,
+      }),
+    // This is intentionally an initializer snapshot. Later focus changes are
+    // reducer-driven; prop changes are handled by the focusValue effect below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
   )
 
   const [state, dispatch] = useReducer(
     reducer,
-    { visibleOptionCount, defaultValue: focusValue ?? defaultValue, options },
+    {
+      visibleOptionCount,
+      defaultValue: initialFocusValue.value,
+      options,
+    },
     createDefaultState,
   )
   const stateRef = useRef<State>(state)
   stateRef.current = state
 
-  const structureKey = useMemo(
-    () => optionStructureKey(flatOptions),
-    [flatOptions],
-  )
   const onChangeRef = useRef(onChange)
   const onFocusRef = useRef(onFocus)
   const lastFocusedValueRef = useRef<string | undefined>(state.focusedValue)
@@ -351,18 +424,22 @@ export const useSelectState = ({
     visibleOptionCount,
   })
 
-  const notifyFocus = useCallback((value: string | undefined) => {
-    if (!value) return
+  const notifyFocus = useCallback(
+    (value: string | undefined) => {
+      if (!value) return
 
-    lastFocusedValueRef.current = value
+      lastFocusedValueRef.current = value
+      rememberScopedFocus({ focusScope, structureKey, value })
 
-    if (lastNotifiedFocusValueRef.current === value) return
-    lastNotifiedFocusValueRef.current = value
-    const sequence = ++focusNotificationSequenceRef.current
-    latestFocusNotificationSequenceRef.current = sequence
-    pendingFocusEchoesRef.current.set(value, sequence)
-    onFocusRef.current?.(value)
-  }, [])
+      if (lastNotifiedFocusValueRef.current === value) return
+      lastNotifiedFocusValueRef.current = value
+      const sequence = ++focusNotificationSequenceRef.current
+      latestFocusNotificationSequenceRef.current = sequence
+      pendingFocusEchoesRef.current.set(value, sequence)
+      onFocusRef.current?.(value)
+    },
+    [focusScope, structureKey],
+  )
 
   const dispatchWithFocusMirror = useCallback(
     (action: Action) => {
@@ -470,7 +547,9 @@ export const useSelectState = ({
     }
   }, [dispatchWithFocusMirror, state.previousValue, state.value])
 
-  const appliedFocusValueRef = useRef<string | undefined>(undefined)
+  const appliedFocusValueRef = useRef<string | undefined>(
+    initialFocusValue.usedScopedSnapshot ? focusValue : undefined,
+  )
   const ignoredFocusEchoRef = useRef<string | undefined>(undefined)
   const previousFocusValuePropRef = useRef<string | undefined>(focusValue)
   useEffect(() => {

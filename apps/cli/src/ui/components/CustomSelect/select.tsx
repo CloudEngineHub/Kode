@@ -75,6 +75,11 @@ export type SelectProps = {
   readonly focusValue?: string
 
   /**
+   * Stable scope used to preserve focus across short keep-alive remounts.
+   */
+  readonly focusScope?: string
+
+  /**
    * Enable mouse wheel navigation for this select.
    *
    * @default false
@@ -129,6 +134,7 @@ export function Select({
   onChange,
   onFocus,
   focusValue,
+  focusScope,
   enableMouseWheel = false,
 }: SelectProps) {
   const containerRef = useRef<DOMElement | null>(null)
@@ -139,6 +145,7 @@ export function Select({
     onChange,
     onFocus,
     focusValue,
+    focusScope,
   })
 
   useSelect({ isDisabled, state })

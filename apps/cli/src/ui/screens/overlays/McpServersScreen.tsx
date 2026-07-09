@@ -938,6 +938,7 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
           <Select
             options={listOptions}
             visibleOptionCount={visibleOptionCount}
+            focusScope="mcp:list"
             focusValue={route.kind === 'list' ? route.focusValue : undefined}
             onFocus={rememberListFocus}
             onChange={value => setRoute({ kind: 'server', serverName: value })}
@@ -1157,6 +1158,7 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
             <Select
               options={actionOptions}
               visibleOptionCount={Math.min(10, actionOptions.length || 1)}
+              focusScope={`mcp:server:${activeServer.name}:actions`}
               focusValue={
                 route.kind === 'server' ? route.actionFocusValue : undefined
               }
@@ -1245,6 +1247,7 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
             <Select
               options={options}
               visibleOptionCount={Math.min(12, Math.max(3, options.length))}
+              focusScope={`mcp:server:${activeServer.name}:tools`}
               focusValue={route.kind === 'tools' ? route.focusValue : undefined}
               onFocus={rememberToolsFocus}
               onChange={value => {
@@ -1305,6 +1308,7 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
             <Select
               options={options}
               visibleOptionCount={Math.min(12, Math.max(3, options.length))}
+              focusScope={`mcp:server:${activeServer.name}:prompts`}
               focusValue={
                 route.kind === 'prompts' ? route.focusValue : undefined
               }
@@ -1423,6 +1427,7 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
             <Select
               options={options}
               visibleOptionCount={Math.min(12, Math.max(3, options.length))}
+              focusScope={`mcp:server:${activeServer.name}:resources`}
               focusValue={
                 route.kind === 'resources' ? route.focusValue : undefined
               }
