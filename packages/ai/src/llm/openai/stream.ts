@@ -64,7 +64,7 @@ function throwIfAborted(signal?: AbortSignal): void {
   }
 }
 
-function hasUsableAssistantOutput(
+function hasAnyAssistantOutput(
   message: OpenAI.ChatCompletionMessage,
 ): boolean {
   const record = message as unknown as Record<string, unknown>
@@ -74,6 +74,15 @@ function hasUsableAssistantOutput(
     (typeof record.reasoning === 'string' && record.reasoning.length > 0) ||
     (typeof record.reasoning_content === 'string' &&
       record.reasoning_content.length > 0)
+  )
+}
+
+function hasFinalAssistantOutput(
+  message: OpenAI.ChatCompletionMessage,
+): boolean {
+  return (
+    (typeof message.content === 'string' && message.content.length > 0) ||
+    (Array.isArray(message.tool_calls) && message.tool_calls.length > 0)
   )
 }
 
@@ -190,7 +199,7 @@ export async function handleMessageStream(
 
     throwIfAborted(signal)
 
-    if (errorCount > 0 && !hasUsableAssistantOutput(message)) {
+    if (errorCount > 0 && !hasAnyAssistantOutput(message)) {
       throw new OpenAIStreamError(
         'unexpected_error',
         `OpenAI stream chunk processing failed before any assistant content: ${
@@ -201,10 +210,17 @@ export async function handleMessageStream(
       )
     }
 
-    if (chunkCount === 0 || !hasUsableAssistantOutput(message)) {
+    if (chunkCount === 0 || !hasAnyAssistantOutput(message)) {
       throw new OpenAIStreamError(
         'empty_response',
         'OpenAI stream completed without assistant content or tool calls',
+      )
+    }
+
+    if (!hasFinalAssistantOutput(message)) {
+      throw new OpenAIStreamError(
+        'empty_response',
+        'OpenAI stream completed with reasoning only and no assistant content or tool calls',
       )
     }
 
@@ -221,7 +237,7 @@ export async function handleMessageStream(
         streamError instanceof Error &&
         streamError.message === 'Request was cancelled'
       ) &&
-      hasUsableAssistantOutput(message)
+      hasAnyAssistantOutput(message)
     ) {
       degradationReason =
         streamError instanceof OpenAIStreamError

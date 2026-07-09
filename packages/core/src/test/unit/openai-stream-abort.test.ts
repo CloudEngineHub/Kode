@@ -145,6 +145,27 @@ describe('OpenAI stream degradation', () => {
     expect(textBlocks[0]?.text).toContain('json_parse_error')
   })
 
+  test('converts reasoning-only completed streams into a visible API error', async () => {
+    const validChunk = JSON.stringify(
+      chunk({ reasoning_content: 'planning tool calls' }),
+    )
+    const body = sseBody([`data: ${validChunk}`, 'data: [DONE]'])
+
+    const result = await handleMessageStream(
+      createStreamProcessor(body as any) as any,
+      undefined,
+    )
+    const message = convertOpenAIResponseToAnthropic(result, [])
+    const textBlocks = message.content.filter(block => block.type === 'text')
+
+    expect(isOpenAIStreamDegradedResponse(result)).toBe(true)
+    expect(message.content.some(block => block.type === 'thinking')).toBe(true)
+    expect(textBlocks[0]?.text).toContain(
+      'OpenAI-compatible stream ended before a complete response',
+    )
+    expect(textBlocks[0]?.text).toContain('empty_response')
+  })
+
   test('drops partial tool calls from degraded streams', async () => {
     const validChunk = JSON.stringify(
       chunk({
