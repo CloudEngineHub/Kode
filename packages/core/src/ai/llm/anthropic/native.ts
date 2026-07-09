@@ -138,6 +138,8 @@ export async function queryAnthropicNative(
 ): Promise<AssistantMessage> {
   const config = getGlobalConfig()
   const toolUseContext = options?.toolUseContext
+  const assistantStreamRequestId =
+    toolUseContext?.requestId ?? getCurrentRequest()?.id ?? nanoid()
 
   const modelProfile =
     options?.modelProfile ?? getModelManager().getModel('main')
@@ -331,7 +333,7 @@ export async function queryAnthropicNative(
               onAssistantStreamUpdate:
                 toolUseContext?.options?.onAssistantStreamUpdate,
               agentId: toolUseContext?.agentId,
-              requestId: toolUseContext?.requestId ?? getCurrentRequest()?.id,
+              requestId: assistantStreamRequestId,
             },
           )
         } else {

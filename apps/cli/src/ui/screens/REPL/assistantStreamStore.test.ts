@@ -43,10 +43,11 @@ function update(
   type: AssistantStreamUpdateEvent['type'],
   delta?: string,
   agentId?: string,
+  requestId?: string,
 ): AssistantStreamUpdateEvent {
   return type === 'start'
-    ? { type, agentId }
-    : { type, delta: delta ?? '', agentId }
+    ? { type, agentId, requestId }
+    : { type, delta: delta ?? '', agentId, requestId }
 }
 
 describe('assistantStreamStore', () => {
@@ -108,6 +109,27 @@ describe('assistantStreamStore', () => {
     expect(store.getSnapshot().text).toBe('abcdef')
     expect(publishes).toBe(2)
     expect(fake.pendingCount()).toBe(0)
+  })
+
+  test('does not mix concurrent request streams in the same turn', () => {
+    const store = createAssistantStreamStore()
+    const turn = new AbortController()
+    store.beginTurn(turn)
+
+    store.handleUpdate(turn, update('start', undefined, 'main', 'request-a'))
+    store.handleUpdate(turn, update('text_delta', 'A1', 'main', 'request-a'))
+    store.handleUpdate(turn, update('text_delta', 'legacy-without-id', 'main'))
+    store.handleUpdate(turn, update('start', undefined, 'main', 'request-b'))
+    store.handleUpdate(turn, update('text_delta', 'B1', 'main', 'request-b'))
+    store.handleUpdate(turn, update('text_delta', 'A2', 'main', 'request-a'))
+
+    expect(store.getSnapshot().text).toBe('A1')
+
+    store.clearPreview(turn)
+    store.handleUpdate(turn, update('start', undefined, 'main', 'request-b'))
+    store.handleUpdate(turn, update('text_delta', 'B2', 'main', 'request-b'))
+
+    expect(store.getSnapshot().text).toBe('B2')
   })
 
   test('retains and publishes only the bounded stream tail', () => {

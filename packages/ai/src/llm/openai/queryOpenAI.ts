@@ -35,7 +35,7 @@ import {
 } from '@kode/ai/openai'
 import type { UnifiedRequestParams } from '#core/types/modelCapabilities'
 import type { RequestHeadersProfile } from '#core/ai/llm/restrictedClientCompat'
-import type { AssistantStreamUpdateOptions } from '#core/ai/adapters/assistantStreamUpdate'
+import type { AssistantStreamUpdateOptions } from '@kode/tool-interface/assistantStreamUpdate'
 
 import {
   convertAnthropicMessagesToOpenAIMessages,
@@ -104,7 +104,7 @@ export async function queryOpenAI(
   const assistantStreamUpdateOptions = {
     onAssistantStreamUpdate: toolUseContext?.options?.onAssistantStreamUpdate,
     agentId: toolUseContext?.agentId,
-    requestId: toolUseContext?.requestId ?? currentRequest?.id,
+    requestId: toolUseContext?.requestId ?? currentRequest?.id ?? randomUUID(),
   } satisfies AssistantStreamUpdateOptions
   debugLogger.api('MODEL_CONFIG_OPENAI', {
     modelProfileFound: !!modelProfile,

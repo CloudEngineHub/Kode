@@ -1,4 +1,4 @@
-import type { AssistantStreamUpdate } from '#core/tooling/Tool'
+import type { AssistantStreamUpdate } from '@kode/tool-interface/Tool'
 
 export const ASSISTANT_STREAM_FRAME_INTERVAL_MS = 33
 export const ASSISTANT_STREAM_MAX_TAIL_CHARS = 32 * 1024
@@ -92,6 +92,8 @@ export function createAssistantStreamStore(
   const listeners = new Set<() => void>()
   let snapshot = EMPTY_SNAPSHOT
   let activeTurn: AbortController | null = null
+  // undefined: no stream selected; null: selected legacy stream without an id.
+  let activeRequestId: string | null | undefined
   let retainedText = ''
   let hasPublishedFirstToken = false
   let lastPublishAt = 0
@@ -111,12 +113,13 @@ export function createAssistantStreamStore(
     cancelScheduledPublish = null
   }
 
-  const resetPreview = () => {
+  const resetPreview = (resetRequest = false) => {
     generation += 1
     cancelPendingPublish()
     retainedText = ''
     hasPublishedFirstToken = false
     lastPublishAt = 0
+    if (resetRequest) activeRequestId = undefined
     publishSnapshot('')
   }
 
@@ -163,7 +166,7 @@ export function createAssistantStreamStore(
     beginTurn(turn) {
       if (destroyed) return
       activeTurn = turn
-      resetPreview()
+      resetPreview(true)
     },
 
     handleUpdate(turn, event) {
@@ -172,9 +175,17 @@ export function createAssistantStreamStore(
       }
 
       if (event.type === 'start') {
+        const requestId = event.requestId ?? null
+        if (activeRequestId !== undefined && requestId !== activeRequestId)
+          return
+        activeRequestId = requestId
         resetPreview()
         return
       }
+
+      const requestId = event.requestId ?? null
+      if (activeRequestId !== undefined && requestId !== activeRequestId) return
+      activeRequestId = requestId
 
       if (event.delta.length === 0) return
       retainedText = appendBoundedTail(retainedText, event.delta, maxTailChars)
@@ -191,19 +202,20 @@ export function createAssistantStreamStore(
 
     clearPreview(turn) {
       if (destroyed || activeTurn !== turn) return
-      resetPreview()
+      resetPreview(true)
     },
 
     endTurn(turn) {
       if (destroyed || activeTurn !== turn) return
       activeTurn = null
-      resetPreview()
+      resetPreview(true)
     },
 
     destroy() {
       if (destroyed) return
       destroyed = true
       activeTurn = null
+      activeRequestId = undefined
       generation += 1
       cancelPendingPublish()
       retainedText = ''

@@ -14,7 +14,7 @@ import {
   convertMessagesToInput,
 } from './responsesAPI/messageInput'
 import { parseNonStreamingResponse as parseResponsesApiNonStreamingResponse } from './responsesAPI/nonStreaming'
-import type { AssistantStreamUpdateOptions } from './assistantStreamUpdate'
+import type { AssistantStreamUpdateOptions } from '@kode/tool-interface/assistantStreamUpdate'
 
 type StreamingFunctionCallState = {
   id?: string

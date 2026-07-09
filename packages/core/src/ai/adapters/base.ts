@@ -5,7 +5,7 @@ import {
 } from '#core/types/modelCapabilities'
 import { ModelProfile } from '#core/utils/config'
 import { Tool } from '#core/tooling/Tool'
-import type { AssistantStreamUpdateOptions } from './assistantStreamUpdate'
+import type { AssistantStreamUpdateOptions } from '@kode/tool-interface/assistantStreamUpdate'
 
 // Canonical token representation - normalize once at the boundary
 interface TokenUsage {

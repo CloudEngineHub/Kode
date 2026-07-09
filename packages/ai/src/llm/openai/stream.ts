@@ -4,7 +4,7 @@ import { OpenAIStreamError } from '@kode/ai/openai/stream'
 import {
   emitAssistantStreamUpdate,
   type AssistantStreamUpdateOptions,
-} from '#core/ai/adapters/assistantStreamUpdate'
+} from '@kode/tool-interface/assistantStreamUpdate'
 import { debug as debugLogger } from '#core/utils/debugLogger'
 import {
   setRequestStatus,

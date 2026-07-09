@@ -6,7 +6,7 @@ import { createAnthropicUsage } from '#core/utils/anthropic'
 import {
   emitAssistantStreamUpdate,
   type AssistantStreamUpdateOptions,
-} from './assistantStreamUpdate'
+} from '@kode/tool-interface/assistantStreamUpdate'
 
 export async function processResponsesStream(
   stream: AsyncGenerator<StreamingEvent>,

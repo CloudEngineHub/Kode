@@ -1,7 +1,4 @@
-import type {
-  AssistantStreamUpdate,
-  ToolUseContext,
-} from '@kode/tool-interface/Tool'
+import type { AssistantStreamUpdate, ToolUseContext } from './Tool'
 
 export type AssistantStreamUpdateOptions = {
   onAssistantStreamUpdate?: NonNullable<

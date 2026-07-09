@@ -11,7 +11,7 @@ import { parseToolUsePartialJsonOrThrow } from '#core/utils/toolUsePartialJson'
 import {
   emitAssistantStreamUpdate,
   type AssistantStreamUpdateOptions,
-} from '#core/ai/adapters/assistantStreamUpdate'
+} from '@kode/tool-interface/assistantStreamUpdate'
 
 type AnthropicClient = Anthropic | AnthropicBedrock | AnthropicVertex
 
