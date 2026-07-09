@@ -22,6 +22,7 @@ import {
   responseStateManager,
   getConversationId,
 } from '#core/services/responseStateManager'
+import { addNotification } from '#core/services/notificationCenter'
 import type { ToolUseContext } from '#core/tooling/Tool'
 import {
   getCLISyspromptPrefix,
@@ -61,6 +62,148 @@ type QueryLLMTestModelManager = {
 }
 
 type QueryLLMWithPromptCachingFn = typeof queryLLMWithPromptCaching
+
+const MODEL_POINTERS = new Set(['main', 'task', 'compact', 'quick'])
+const AUXILIARY_MODEL_POINTERS = new Set(['task', 'compact', 'quick'])
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  if (typeof error === 'string') return error
+  if (isRecord(error)) {
+    const message = error.message
+    if (typeof message === 'string') return message
+    const nestedError = error.error
+    if (isRecord(nestedError) && typeof nestedError.message === 'string') {
+      return nestedError.message
+    }
+  }
+  return String(error)
+}
+
+function getErrorStatus(error: unknown): number | undefined {
+  if (!isRecord(error)) return undefined
+  const candidates = [
+    error.status,
+    error.statusCode,
+    error.code,
+    isRecord(error.response) ? error.response.status : undefined,
+    isRecord(error.error) ? error.error.status : undefined,
+  ]
+
+  for (const candidate of candidates) {
+    if (typeof candidate === 'number' && Number.isFinite(candidate)) {
+      return candidate
+    }
+    if (typeof candidate === 'string' && /^\d+$/.test(candidate)) {
+      return Number(candidate)
+    }
+  }
+  return undefined
+}
+
+function isAbortLikeError(error: unknown, signal: AbortSignal): boolean {
+  if (signal.aborted) return true
+  if (!(error instanceof Error)) return false
+  const message = error.message.toLowerCase()
+  return (
+    error.name === 'AbortError' ||
+    message.includes('request was cancelled') ||
+    message.includes('operation was aborted')
+  )
+}
+
+function isPromptSizeError(error: unknown): boolean {
+  const message = getErrorMessage(error).toLowerCase()
+  return (
+    message.includes(PROMPT_TOO_LONG_ERROR_MESSAGE.toLowerCase()) ||
+    message.includes('prompt is too long') ||
+    message.includes('context_length_exceeded') ||
+    message.includes('maximum context length') ||
+    message.includes('context window') ||
+    message.includes('too many tokens')
+  )
+}
+
+function isRuntimeFallbackError(error: unknown, signal: AbortSignal): boolean {
+  if (isAbortLikeError(error, signal) || isPromptSizeError(error)) return false
+
+  const status = getErrorStatus(error)
+  if (
+    status === 401 ||
+    status === 403 ||
+    status === 404 ||
+    status === 408 ||
+    status === 409 ||
+    status === 425 ||
+    status === 429 ||
+    (status !== undefined && status >= 500)
+  ) {
+    return true
+  }
+
+  const message = getErrorMessage(error).toLowerCase()
+  const recoverableMarkers = [
+    'invalid api key',
+    'x-api-key',
+    'unauthorized',
+    'authentication',
+    'permission denied',
+    'forbidden',
+    'model_not_found',
+    'model not found',
+    'does not exist',
+    'not available',
+    'unavailable',
+    'overloaded',
+    'rate limit',
+    'ratelimit',
+    'quota',
+    'credit balance',
+    'insufficient_quota',
+    'timeout',
+    'timed out',
+    'fetch failed',
+    'network',
+    'connection',
+    'connect',
+    'econn',
+    'etimedout',
+    'enotfound',
+    'eai_again',
+    'socket',
+    'tls',
+    'ssl',
+    'terminated',
+    'stream ended before',
+    'complete response',
+    'empty_response',
+    'service unavailable',
+  ]
+
+  return recoverableMarkers.some(marker => message.includes(marker))
+}
+
+function isAuxiliaryRuntimeRequest(
+  modelParam: string | import('#core/utils/config').ModelPointerType,
+  toolUseContext?: ToolUseContext,
+): boolean {
+  const modelKey = String(modelParam)
+  if (AUXILIARY_MODEL_POINTERS.has(modelKey)) return true
+  return Boolean(toolUseContext?.agentId && toolUseContext.agentId !== 'main')
+}
+
+function isSameModelProfile(a: ModelProfile, b: ModelProfile): boolean {
+  return (
+    a.modelName === b.modelName &&
+    a.provider === b.provider &&
+    (a.baseURL || '') === (b.baseURL || '') &&
+    a.apiKey === b.apiKey
+  )
+}
 
 export {
   API_ERROR_MESSAGE_PREFIX,
@@ -145,7 +288,7 @@ export async function queryLLM(
     inputParam: options.model,
     resolvedModelName: resolvedModel,
     provider: modelProfile.provider,
-    isPointer: ['main', 'task', 'compact', 'quick'].includes(options.model),
+    isPointer: MODEL_POINTERS.has(String(options.model)),
     hasResponseState: !!toolUseContext?.responseState,
     conversationId: toolUseContext?.responseState?.conversationId,
     requestId: getCurrentRequest()?.id,
@@ -163,36 +306,38 @@ export async function queryLLM(
 
   markPhase('LLM_CALL')
 
-  try {
-    const queryFn =
-      options.__testQueryLLMWithPromptCaching ?? queryLLMWithPromptCaching
-    const cleanOptions: any = { ...options }
-    delete cleanOptions.__testModelManager
-    delete cleanOptions.__testQueryLLMWithPromptCaching
+  const queryFn =
+    options.__testQueryLLMWithPromptCaching ?? queryLLMWithPromptCaching
+  const cleanOptions = { ...options }
+  delete cleanOptions.__testModelManager
+  delete cleanOptions.__testQueryLLMWithPromptCaching
 
+  const executeQueryWithProfile = (profile: ModelProfile) => {
     const runQuery = () =>
-      queryFn(
-        messages,
-        systemPrompt,
-        maxThinkingTokens,
-        tools,
-        signal,
-        {
-          ...cleanOptions,
-          model: resolvedModel,
-          modelProfile,
-          toolUseContext,
-        }, // Pass resolved ModelProfile and toolUseContext
-      )
+      queryFn(messages, systemPrompt, maxThinkingTokens, tools, signal, {
+        ...cleanOptions,
+        model: profile.modelName,
+        modelProfile: profile,
+        toolUseContext,
+      })
 
-    const result = options.__testQueryLLMWithPromptCaching
-      ? await runQuery()
-      : await withVCR(messages, runQuery)
+    return options.__testQueryLLMWithPromptCaching
+      ? runQuery()
+      : withVCR(messages, runQuery)
+  }
 
+  const recordSuccessfulRequest = (
+    result: AssistantMessage,
+    usedProfile: ModelProfile,
+    fallbackToMain = false,
+  ) => {
     debugLogger.api('LLM_REQUEST_SUCCESS', {
       costUSD: result.costUSD,
       durationMs: result.durationMs,
       responseLength: result.message.content?.length || 0,
+      model: usedProfile.modelName,
+      provider: usedProfile.provider,
+      fallbackToMain,
       requestId: getCurrentRequest()?.id,
     })
 
@@ -206,12 +351,77 @@ export async function queryLLM(
       debugLogger.api('RESPONSE_STATE_UPDATED', {
         conversationId: toolUseContext.responseState.conversationId,
         responseId: result.responseId,
+        fallbackToMain,
         requestId: getCurrentRequest()?.id,
       })
     }
+  }
 
+  try {
+    const result = await executeQueryWithProfile(modelProfile)
+    recordSuccessfulRequest(result, modelProfile)
     return result
   } catch (error) {
+    if (
+      isAuxiliaryRuntimeRequest(options.model, toolUseContext) &&
+      isRuntimeFallbackError(error, signal)
+    ) {
+      const mainProfile = modelManager.resolveModel('main')
+      if (mainProfile && !isSameModelProfile(mainProfile, modelProfile)) {
+        const reason = getErrorMessage(error).slice(0, 500)
+        debugLogger.warn('MODEL_RUNTIME_FALLBACK_TO_MAIN', {
+          inputParam: options.model,
+          failedModelName: modelProfile.modelName,
+          failedProvider: modelProfile.provider,
+          fallbackModelName: mainProfile.modelName,
+          fallbackProvider: mainProfile.provider,
+          agentId: toolUseContext?.agentId,
+          reason,
+          status: getErrorStatus(error),
+          requestId: getCurrentRequest()?.id,
+        })
+
+        addNotification({
+          title: 'Model fallback',
+          message: `Auxiliary model ${modelProfile.name || modelProfile.modelName} failed; routing this request to main profile ${mainProfile.name || mainProfile.modelName}.`,
+          kind: 'warning',
+          source: 'system',
+        })
+
+        try {
+          const fallbackResult = await executeQueryWithProfile(mainProfile)
+          recordSuccessfulRequest(fallbackResult, mainProfile, true)
+          return fallbackResult
+        } catch (fallbackError) {
+          debugLogger.warn('MODEL_RUNTIME_FALLBACK_TO_MAIN_FAILED', {
+            inputParam: options.model,
+            fallbackModelName: mainProfile.modelName,
+            fallbackProvider: mainProfile.provider,
+            agentId: toolUseContext?.agentId,
+            originalReason: reason,
+            fallbackReason: getErrorMessage(fallbackError).slice(0, 500),
+            fallbackStatus: getErrorStatus(fallbackError),
+            requestId: getCurrentRequest()?.id,
+          })
+
+          logErrorWithDiagnosis(
+            fallbackError,
+            {
+              messageCount: messages.length,
+              systemPromptLength: systemPrompt.join(' ').length,
+              model: 'main',
+              originalModel: options.model,
+              toolCount: tools.length,
+              phase: 'LLM_CALL_FALLBACK_TO_MAIN',
+            },
+            currentRequest?.id,
+          )
+
+          throw fallbackError
+        }
+      }
+    }
+
     // 使用错误诊断系统记录 LLM 相关错误
     logErrorWithDiagnosis(
       error,
