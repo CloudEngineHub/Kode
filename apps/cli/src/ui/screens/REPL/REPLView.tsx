@@ -302,11 +302,7 @@ export function REPLView({
         measureTimerRef.current = null
       }
     }
-  }, [
-    rows,
-    columns,
-    layoutMeasureKey,
-  ])
+  }, [rows, columns, layoutMeasureKey])
 
   const isMinimizedViewport = normalizedRows <= 0
   const isMicroViewport = normalizedRows > 0 && normalizedRows <= 4
@@ -383,7 +379,10 @@ export function REPLView({
         >
           <Box ref={rootUiRef} flexDirection="column" width="100%">
             {shouldRenderStaticOutput && (
-              <Static key={staticOutputKey} items={staticItemsWithStartupHeader}>
+              <Static
+                key={staticOutputKey}
+                items={staticItemsWithStartupHeader}
+              >
                 {(item: TranscriptItem) => item.jsx}
               </Static>
             )}
@@ -408,7 +407,10 @@ export function REPLView({
             width="100%"
           >
             {shouldRenderStaticOutput && (
-              <Static key={staticOutputKey} items={staticItemsWithStartupHeader}>
+              <Static
+                key={staticOutputKey}
+                items={staticItemsWithStartupHeader}
+              >
                 {(item: TranscriptItem) => item.jsx}
               </Static>
             )}
@@ -421,6 +423,7 @@ export function REPLView({
               <PromptInput
                 key={`prompt-${conversationKey}`}
                 {...promptInputProps}
+                suppressStatusLine
               />
             )}
           </Box>
@@ -450,7 +453,10 @@ export function REPLView({
         ) : (
           <Box ref={rootUiRef} flexDirection="column" width="100%">
             {shouldRenderStaticOutput && (
-              <Static key={staticOutputKey} items={staticItemsWithStartupHeader}>
+              <Static
+                key={staticOutputKey}
+                items={staticItemsWithStartupHeader}
+              >
                 {(item: TranscriptItem) => item.jsx}
               </Static>
             )}
@@ -547,6 +553,9 @@ export function REPLView({
                   <PromptInput
                     key={`prompt-${conversationKey}`}
                     {...promptInputProps}
+                    suppressStatusLine={
+                      isLayoutMeasurementPending || isLayoutMeasurementStale
+                    }
                   />
                 )}
             </Box>

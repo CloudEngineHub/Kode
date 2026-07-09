@@ -87,6 +87,7 @@ export function PromptInputView({
   statusLine,
   customStatusLineActive,
   statusLinePadding,
+  suppressStatusLine = false,
   tokenUsage,
   textInputColumns,
   textInputMaxHeight,
@@ -133,6 +134,7 @@ export function PromptInputView({
   statusLine: string | null
   customStatusLineActive: boolean
   statusLinePadding: number
+  suppressStatusLine?: boolean
   tokenUsage: number
   textInputColumns: number
   textInputMaxHeight: number
@@ -149,7 +151,6 @@ export function PromptInputView({
     tightRows: 15,
     compactRows: 15,
   })
-  const showStatusLine = normalizedRows > 8
   const showAuxiliaryRows = !isMicroViewport
   const modePrefix = getPromptModePrefix({ mode, theme, isLoading })
   const contextLimitLabel = formatContextLimit(modelInfo?.contextLength)
@@ -160,6 +161,8 @@ export function PromptInputView({
     clearInputPending ||
     modelSwitchMessage.show ||
     toastMessage.show
+  const showStatusLine =
+    normalizedRows > 8 && (!suppressStatusLine || hasPriorityStatusMessage)
   const showModelInfo =
     Boolean(modelInfo) &&
     !compact &&
@@ -246,9 +249,7 @@ export function PromptInputView({
             maxHeight={textInputMaxHeight}
             isDimmed={isDisabled || isLoading || isEditingExternally}
             disableCursorMovementForUpDownKeys={() =>
-              completionActive ||
-              historyIndex > 0 ||
-              !input.includes('\n')
+              completionActive || historyIndex > 0 || !input.includes('\n')
             }
             cursorOffset={cursorOffset}
             onChangeCursorOffset={setCursorOffset}
@@ -272,82 +273,84 @@ export function PromptInputView({
         !completionActive &&
         suggestions.length === 0 &&
         showStatusLine && (
-        <Box flexDirection="column">
-          <Box
-            flexDirection="row"
-            overflow="hidden"
-            paddingX={horizontalStatusPadding}
-            width={statusRowWidth}
-          >
+          <Box flexDirection="column">
             <Box
-              justifyContent="flex-start"
-              flexShrink={1}
-              width={statusTextWidth}
+              flexDirection="row"
+              overflow="hidden"
+              paddingX={horizontalStatusPadding}
+              width={statusRowWidth}
             >
-              {exitMessage.show ? (
-                <Text dimColor wrap="truncate-end">
-                  Press {exitMessage.key} again to exit
-                </Text>
-              ) : message.show ? (
-                <Text dimColor wrap="truncate-end">
-                  {message.text}
-                </Text>
-              ) : rewindPending ? (
-                <Text dimColor wrap="truncate-end">
-                  Press Escape again to rewind
-                </Text>
-              ) : clearInputPending ? (
-                <Text dimColor wrap="truncate-end">
-                  Press Escape again to clear input
-                </Text>
-              ) : modelSwitchMessage.show ? (
-                <Text color={theme.success} wrap="truncate-end">
-                  {modelSwitchMessage.text}
-                </Text>
-              ) : toastMessage.show ? (
-                <Text
-                  color={
-                    toastMessage.kind === 'error'
-                      ? theme.error
-                      : toastMessage.kind === 'warning'
-                        ? theme.warning
-                        : toastMessage.kind === 'success'
-                          ? theme.success
-                          : theme.secondaryText
-                  }
-                  wrap="truncate-end"
-                >
-                  {toastMessage.text}
-                </Text>
-              ) : statusLine ? (
-                <Text dimColor wrap="truncate-end">
-                  {statusLine}
-                </Text>
-              ) : null}
-            </Box>
-            {!compact && !hasPriorityStatusMessage && showInlineModelStatus && (
-              <SentryErrorBoundary
-                children={
-                  <Box
-                    flexDirection="column"
-                    flexShrink={0}
-                    marginLeft={1}
-                    overflow="hidden"
-                    width={modelStatusWidth}
+              <Box
+                justifyContent="flex-start"
+                flexShrink={1}
+                width={statusTextWidth}
+              >
+                {exitMessage.show ? (
+                  <Text dimColor wrap="truncate-end">
+                    Press {exitMessage.key} again to exit
+                  </Text>
+                ) : message.show ? (
+                  <Text dimColor wrap="truncate-end">
+                    {message.text}
+                  </Text>
+                ) : rewindPending ? (
+                  <Text dimColor wrap="truncate-end">
+                    Press Escape again to rewind
+                  </Text>
+                ) : clearInputPending ? (
+                  <Text dimColor wrap="truncate-end">
+                    Press Escape again to clear input
+                  </Text>
+                ) : modelSwitchMessage.show ? (
+                  <Text color={theme.success} wrap="truncate-end">
+                    {modelSwitchMessage.text}
+                  </Text>
+                ) : toastMessage.show ? (
+                  <Text
+                    color={
+                      toastMessage.kind === 'error'
+                        ? theme.error
+                        : toastMessage.kind === 'warning'
+                          ? theme.warning
+                          : toastMessage.kind === 'success'
+                            ? theme.success
+                            : theme.secondaryText
+                    }
+                    wrap="truncate-end"
                   >
-                    <Text dimColor wrap="truncate-middle">
-                      {modelStatusText}
-                    </Text>
-                    <TokenWarning
-                      tokenUsage={tokenUsage}
-                      contextLimit={modelInfo?.contextLength}
-                    />
-                  </Box>
-                }
-              />
-            )}
+                    {toastMessage.text}
+                  </Text>
+                ) : statusLine ? (
+                  <Text dimColor wrap="truncate-end">
+                    {statusLine}
+                  </Text>
+                ) : null}
+              </Box>
+              {!compact &&
+                !hasPriorityStatusMessage &&
+                showInlineModelStatus && (
+                  <SentryErrorBoundary
+                    children={
+                      <Box
+                        flexDirection="column"
+                        flexShrink={0}
+                        marginLeft={1}
+                        overflow="hidden"
+                        width={modelStatusWidth}
+                      >
+                        <Text dimColor wrap="truncate-middle">
+                          {modelStatusText}
+                        </Text>
+                        <TokenWarning
+                          tokenUsage={tokenUsage}
+                          contextLimit={modelInfo?.contextLength}
+                        />
+                      </Box>
+                    }
+                  />
+                )}
+            </Box>
           </Box>
-        </Box>
         )}
 
       {showAuxiliaryRows && completionActive && suggestions.length > 0 && (

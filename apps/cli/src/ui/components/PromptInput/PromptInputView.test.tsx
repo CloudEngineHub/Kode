@@ -88,6 +88,7 @@ function renderPromptInputView(args: {
   tokenUsage?: number
   terminalRows?: number
   terminalColumns?: number
+  suppressStatusLine?: boolean
 }) {
   const tokenUsage = args.tokenUsage ?? 0
   const terminalRows = args.terminalRows ?? 24
@@ -142,6 +143,7 @@ function renderPromptInputView(args: {
         statusLine={args.statusLine}
         customStatusLineActive={args.customStatusLineActive}
         statusLinePadding={0}
+        suppressStatusLine={args.suppressStatusLine}
         tokenUsage={tokenUsage}
         textInputColumns={80}
         textInputMaxHeight={1}
@@ -336,6 +338,40 @@ describe('PromptInputView status line layout', () => {
     expect(
       Math.max(...finalStatusRows.map(line => line.length)),
     ).toBeLessThanOrEqual(90)
+  })
+
+  test('can suppress nonessential status chrome while the parent layout is settling', async () => {
+    const harness = createHarness(
+      renderPromptInputView({
+        customStatusLineActive: false,
+        statusLine: 'Input: Chat',
+        suppressStatusLine: true,
+      }),
+    )
+
+    await harness.wait(20)
+    const output = harness.getOutput()
+
+    expect(output).not.toContain('Input: Chat')
+    expect(output).not.toContain('[custom-openai] mimo-v2.5-pro')
+    expect(output).not.toContain('Context low')
+  })
+
+  test('keeps priority status messages visible while status chrome is suppressed', async () => {
+    const harness = createHarness(
+      renderPromptInputView({
+        customStatusLineActive: false,
+        statusLine: 'Input: Chat',
+        message: { show: true, text: 'Press Escape again to clear input' },
+        suppressStatusLine: true,
+      }),
+    )
+
+    await harness.wait(20)
+    const output = harness.getOutput()
+
+    expect(output).toContain('Press Escape again to clear input')
+    expect(output).not.toContain('[custom-openai] mimo-v2.5-pro')
   })
 
   test('uses a single input row in micro-height terminals', async () => {

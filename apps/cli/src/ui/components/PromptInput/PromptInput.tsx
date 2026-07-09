@@ -114,6 +114,7 @@ export function PromptInput({
   onRestorePastesApplied,
   draftPastes,
   onDraftPastesChange,
+  suppressStatusLine = false,
 }: PromptInputProps): React.ReactNode {
   type QueuedPrompt = {
     seq: number
@@ -1200,6 +1201,7 @@ export function PromptInput({
       statusLine={effectiveStatusLine}
       customStatusLineActive={isStatusLineConfigured}
       statusLinePadding={statusLinePadding}
+      suppressStatusLine={suppressStatusLine}
       tokenUsage={tokenUsage}
       textInputColumns={textInputColumns}
       textInputMaxHeight={textInputMaxHeight}

@@ -4,10 +4,7 @@ import type { Message } from '#core/query'
 import type { SetToolJSXFn } from '#core/tooling/Tool'
 import type { Tool } from '#core/tooling/Tool'
 import type { SetForkConvoWithMessagesOnTheNextRender } from '#ui-ink/types/conversationReset'
-import type {
-  PastedImageAttachment,
-  PastedTextSegment,
-} from './pasteTypes'
+import type { PastedImageAttachment, PastedTextSegment } from './pasteTypes'
 
 export type PromptMode = 'bash' | 'background' | 'prompt' | 'koding'
 
@@ -57,4 +54,5 @@ export type PromptInputProps = {
     pastedTexts: PastedTextSegment[]
     pastedImages: PastedImageAttachment[]
   }) => void
+  suppressStatusLine?: boolean
 }
