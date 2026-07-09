@@ -363,6 +363,13 @@ function supportsLogging(client: WrappedClient): boolean {
   return Boolean(capabilities?.logging)
 }
 
+function supportsCompletions(client: WrappedClient): boolean {
+  if (client.type !== 'connected') return false
+  const capabilities =
+    client.capabilities ?? client.client.getServerCapabilities?.() ?? null
+  return Boolean(capabilities?.completions)
+}
+
 export function McpServersScreen(props: { onDone(result?: string): void }) {
   const { onDone } = props
   const theme = getTheme()
@@ -409,6 +416,9 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
   const [resourceSubscriptionPendingKey, setResourceSubscriptionPendingKey] =
     useState<string | null>(null)
   const [serverLoggingSupport, setServerLoggingSupport] = useState<
+    Record<string, boolean>
+  >({})
+  const [serverCompletionSupport, setServerCompletionSupport] = useState<
     Record<string, boolean>
   >({})
   const [mcpListChangedTick, setMcpListChangedTick] = useState(0)
@@ -459,9 +469,11 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
       for (const client of clients) clientByName.set(client.name, client)
       const subscriptionSupport: Record<string, boolean> = {}
       const loggingSupport: Record<string, boolean> = {}
+      const completionSupport: Record<string, boolean> = {}
       for (const client of clients) {
         subscriptionSupport[client.name] = supportsResourceSubscriptions(client)
         loggingSupport[client.name] = supportsLogging(client)
+        completionSupport[client.name] = supportsCompletions(client)
       }
 
       const globalConfig = getGlobalConfig()
@@ -523,11 +535,13 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
       setServers(items)
       setResourceSubscriptionSupport(subscriptionSupport)
       setServerLoggingSupport(loggingSupport)
+      setServerCompletionSupport(completionSupport)
     } catch (err) {
       if (!isCurrentRefresh()) return
       setServers([])
       setResourceSubscriptionSupport({})
       setServerLoggingSupport({})
+      setServerCompletionSupport({})
       setServersError(err instanceof Error ? err.message : String(err))
     } finally {
       if (isCurrentRefresh()) setLoadingServers(false)
@@ -1147,6 +1161,9 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
     if (counts?.prompts) capabilities.push('prompts')
     const loggingSupported = serverLoggingSupport[activeServer.name] === true
     if (loggingSupported) capabilities.push('logging')
+    const completionsSupported =
+      serverCompletionSupport[activeServer.name] === true
+    if (completionsSupported) capabilities.push('completions')
 
     const { showAuthLine, authenticated } = computeAuthStatus(
       activeServer.name,

@@ -360,7 +360,11 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
             const connectedClient = {
               type: 'connected',
               name: 'srv',
-              capabilities: { resources: { subscribe: true }, logging: {} },
+              capabilities: {
+                resources: { subscribe: true },
+                logging: {},
+                completions: {},
+              },
             }
             if (getClientsCallCount === 2) {
               await new Promise(resolve => setTimeout(resolve, 220))
@@ -542,7 +546,9 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
       await h.wait(150)
 
       expect(h.getOutput()).toContain('Resources: 1 resources')
-      expect(h.getOutput()).toContain('Capabilities: resources, logging')
+      expect(h.getOutput()).toContain(
+        'Capabilities: resources, logging, completions',
+      )
       expect(h.getOutput()).toContain('Set log level: warning')
       expect(h.getOutput()).toContain('1. View resources')
       expect(reconnectCount).toBe(0)
