@@ -452,6 +452,50 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     expect(focused).toBe('second')
   })
 
+  test('Select: stale focusValue does not pull focus back when keep-alive changes option structure', async () => {
+    let focused = ''
+
+    function SelectChangingStructureHarness(): React.ReactNode {
+      const [showExtra, setShowExtra] = useState(false)
+
+      useEffect(() => {
+        const intervalId = setInterval(() => {
+          setShowExtra(prev => !prev)
+        }, 30)
+        return () => clearInterval(intervalId)
+      }, [])
+
+      return (
+        <Select
+          focusValue="first"
+          options={[
+            { label: 'First', value: 'first' },
+            { label: 'Second', value: 'second' },
+            ...(showExtra ? [{ label: 'Third', value: 'third' }] : []),
+          ]}
+          onFocus={value => {
+            focused = value
+          }}
+        />
+      )
+    }
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <SelectChangingStructureHarness />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(60)
+    expect(focused).toBe('first')
+
+    h.stdin.write('\u001B[B')
+    await h.wait(180)
+
+    expect(focused).toBe('second')
+  })
+
   test('Select: down-arrow focus is not pulled back when keep-alive clears and restores stale focusValue', async () => {
     let focused = ''
 
