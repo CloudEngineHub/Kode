@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test'
+import React from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 
-import { __terminalFrameForTests } from './TerminalFrame'
+import { TerminalStatusLine, __terminalFrameForTests } from './TerminalFrame'
 
 describe('TerminalFrame helpers', () => {
   test('labels runtime attachment without network wording', () => {
@@ -22,5 +24,25 @@ describe('TerminalFrame helpers', () => {
         { key: '/help', label: 'commands' },
       ]),
     ).toBe('Enter send | /help commands')
+  })
+
+  test('formats viewport dimensions for terminal status display', () => {
+    expect(
+      __terminalFrameForTests.terminalViewportSizeText({ cols: 120, rows: 32 }),
+    ).toBe('120x32')
+    expect(__terminalFrameForTests.terminalViewportSizeText(null)).toBe('auto')
+  })
+
+  test('renders viewport dimensions in the status line', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(TerminalStatusLine, {
+        leading: 'running',
+        viewportSize: { cols: 100, rows: 24 },
+        hints: [{ key: 'Enter', label: 'send' }],
+      }),
+    )
+
+    expect(html).toContain('100x24')
+    expect(html).toContain('running | 100x24 viewport | Enter send')
   })
 })

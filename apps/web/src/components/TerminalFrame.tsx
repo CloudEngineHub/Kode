@@ -1,6 +1,7 @@
 import React from 'react'
 import { CircleDot, Terminal } from 'lucide-react'
 
+import type { TerminalViewportSize } from '../lib/terminalViewport'
 import { cn } from '../lib/utils'
 
 export type TerminalStatusHint = {
@@ -14,6 +15,12 @@ function terminalAttachmentLabel(runtimeAttached?: boolean): string {
 
 function terminalStatusHintText(hints: readonly TerminalStatusHint[]): string {
   return hints.map(hint => `${hint.key} ${hint.label}`).join(' | ')
+}
+
+function terminalViewportSizeText(
+  viewportSize?: TerminalViewportSize | null,
+): string {
+  return viewportSize ? `${viewportSize.cols}x${viewportSize.rows}` : 'auto'
 }
 
 function TerminalTitleBar(props: {
@@ -66,17 +73,31 @@ function TerminalTitleBar(props: {
 export function TerminalStatusLine(props: {
   hints: readonly TerminalStatusHint[]
   leading?: string
+  viewportSize?: TerminalViewportSize | null
 }) {
+  const viewportText = terminalViewportSizeText(props.viewportSize)
+  const ariaParts = [
+    props.leading ?? 'ready',
+    props.viewportSize ? `${viewportText} viewport` : null,
+    terminalStatusHintText(props.hints),
+  ].filter(Boolean)
+
   return (
     <div
       className="flex min-h-8 items-center gap-3 border-t border-[hsl(var(--kode-terminal-border))] bg-[hsl(var(--kode-terminal-panel))] px-3 py-1 font-mono text-[11px] text-[hsl(var(--kode-terminal-muted))]"
       role="status"
-      aria-label={terminalStatusHintText(props.hints)}
+      aria-label={ariaParts.join(' | ')}
     >
       <div className="hidden shrink-0 items-center gap-2 sm:flex">
         <span className="text-[hsl(var(--kode-terminal-prompt))]">$</span>
         <span>{props.leading ?? 'ready'}</span>
       </div>
+      {props.viewportSize ? (
+        <div className="hidden shrink-0 items-center gap-1.5 md:flex">
+          <span className="text-[hsl(var(--kode-terminal-prompt))]">:</span>
+          <span>{viewportText}</span>
+        </div>
+      ) : null}
       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
         {props.hints.map(hint => (
           <span
@@ -213,4 +234,5 @@ export function TerminalPlaceholder(props: {
 export const __terminalFrameForTests = {
   terminalAttachmentLabel,
   terminalStatusHintText,
+  terminalViewportSizeText,
 }

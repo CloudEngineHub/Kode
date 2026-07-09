@@ -16,6 +16,7 @@ import {
   TerminalStatusLine,
   type TerminalStatusHint,
 } from '../components/TerminalFrame'
+import { useTerminalViewportSize } from '../hooks/useTerminalViewportSize'
 import { cn } from '../lib/utils'
 
 function isChatEvent(event: AgentEvent): boolean {
@@ -301,6 +302,7 @@ export function ChatPage(props: {
   const [isFollowingOutput, setIsFollowingOutput] = React.useState(true)
   const [hasNewOutputWhileDetached, setHasNewOutputWhileDetached] =
     React.useState(false)
+  const terminalViewportSize = useTerminalViewportSize(scrollViewportRef)
 
   const chatEvents = React.useMemo(
     () => getChatEventsForRender(props.events),
@@ -438,6 +440,7 @@ export function ChatPage(props: {
         <TerminalStatusLine
           hints={CHAT_TERMINAL_HINTS}
           leading={props.sending ? 'running' : 'ready'}
+          viewportSize={terminalViewportSize}
         />
       }
     >
