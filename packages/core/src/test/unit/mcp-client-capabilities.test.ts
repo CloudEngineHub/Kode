@@ -22,6 +22,7 @@ describe('MCP client capability summary', () => {
       roots: { enabled: true, listChanged: true },
       sampling: { enabled: false },
       elicitation: { enabled: false },
+      tasks: { enabled: false },
     })
   })
 
@@ -30,12 +31,14 @@ describe('MCP client capability summary', () => {
       roots: { listChanged: false },
       sampling: {},
       elicitation: {},
+      tasks: {},
     })
 
     expect(formatMcpClientCapabilitySummary(summary)).toEqual([
       'roots: enabled',
       'sampling: enabled',
       'elicitation: enabled',
+      'tasks: enabled',
     ])
   })
 
@@ -46,6 +49,7 @@ describe('MCP client capability summary', () => {
       'roots: disabled',
       'sampling: disabled',
       'elicitation: disabled',
+      'tasks: disabled',
     ])
   })
 })

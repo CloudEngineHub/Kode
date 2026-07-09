@@ -156,6 +156,7 @@ describe('mcp-cli client-capabilities', () => {
       roots: { enabled: true, listChanged: true },
       sampling: { enabled: false },
       elicitation: { enabled: false },
+      tasks: { enabled: false },
     })
   })
 
@@ -169,5 +170,6 @@ describe('mcp-cli client-capabilities', () => {
     expect(result.stdout).toContain('roots: disabled')
     expect(result.stdout).toContain('sampling: disabled')
     expect(result.stdout).toContain('elicitation: disabled')
+    expect(result.stdout).toContain('tasks: disabled')
   })
 })

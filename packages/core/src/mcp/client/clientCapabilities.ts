@@ -6,6 +6,7 @@ export type McpClientCapabilitySummary = {
   roots: { enabled: boolean; listChanged: boolean }
   sampling: { enabled: boolean }
   elicitation: { enabled: boolean }
+  tasks: { enabled: boolean }
 }
 
 export function summarizeMcpClientCapabilities(
@@ -18,6 +19,7 @@ export function summarizeMcpClientCapabilities(
     },
     sampling: { enabled: Boolean(capabilities.sampling) },
     elicitation: { enabled: Boolean(capabilities.elicitation) },
+    tasks: { enabled: Boolean(capabilities.tasks) },
   }
 }
 
@@ -45,5 +47,6 @@ export function formatMcpClientCapabilitySummary(
     ),
     formatMcpClientCapabilityLine('sampling', summary.sampling.enabled),
     formatMcpClientCapabilityLine('elicitation', summary.elicitation.enabled),
+    formatMcpClientCapabilityLine('tasks', summary.tasks.enabled),
   ]
 }
