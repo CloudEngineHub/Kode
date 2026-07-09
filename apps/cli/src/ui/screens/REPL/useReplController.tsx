@@ -183,6 +183,15 @@ export function useReplController(props: REPLProps) {
     messages: MessageType[]
     options?: ForkConvoWithMessagesOptions
   } | null>(null)
+  const pendingForkApplySeqRef = useRef(0)
+  const isMountedRef = useRef(true)
+
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
 
   const setForkConvoWithMessagesOnTheNextRender =
     useCallback<SetForkConvoWithMessagesOnTheNextRender>(
@@ -869,11 +878,13 @@ export function useReplController(props: REPLProps) {
     if (toolJSX?.displayMode === 'fullscreen') return
 
     const request = pendingForkConvoWithMessages
+    const applySeq = ++pendingForkApplySeqRef.current
     setPendingForkConvoWithMessages(null)
     pendingForkConvoWithMessagesRef.current = null
 
-    // For non-fullscreen forks, handle clearViewport synchronously then update state
-    // This matches the old pattern where clearTerminal was called before state updates
+    // Keep viewport clears ordered before the React state replacement. Otherwise
+    // resize/reflow can interleave with a full transcript replacement and leave
+    // duplicate footer/header frames in scrollback.
     const applyStateUpdates = () => {
       setForkNumber(prev => prev + 1)
       setStaticOutputEpoch(prev => prev + 1)
@@ -887,17 +898,21 @@ export function useReplController(props: REPLProps) {
       }
     }
 
-    // clearViewport is async but we don't need to await it - the terminal
-    // writes are ordered on stdout, so the clear happens before React renders
-    if (request.options?.clearViewport) {
-      void clearViewport()
-    }
+    void (async () => {
+      if (request.options?.clearViewport) {
+        await clearViewport()
+      }
 
-    if (batchedUpdates) {
-      batchedUpdates(applyStateUpdates)
-    } else {
-      applyStateUpdates()
-    }
+      if (!isMountedRef.current || pendingForkApplySeqRef.current !== applySeq) {
+        return
+      }
+
+      if (batchedUpdates) {
+        batchedUpdates(applyStateUpdates)
+      } else {
+        applyStateUpdates()
+      }
+    })()
   }, [pendingForkConvoWithMessages, toolJSX?.displayMode])
 
   useEffect(() => {
