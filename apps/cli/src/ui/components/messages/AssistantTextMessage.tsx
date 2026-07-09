@@ -42,6 +42,41 @@ const FINAL_MARKDOWN_FOLD_LINE_THRESHOLD = 220
 const FINAL_MARKDOWN_VISIBLE_LINES = 120
 const FINAL_MARKDOWN_FOLD_CHAR_THRESHOLD = 20000
 const FINAL_MARKDOWN_VISIBLE_CHARS = 12000
+const TOOL_PROGRESS_VISIBLE_LINES = 8
+
+export function prepareToolProgressTextForRender(raw: string): {
+  summary: string
+  details: string[]
+  hiddenLines: number
+} {
+  const lines = raw
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .map(line => line.trimEnd())
+
+  const firstContentIndex = lines.findIndex(line => line.trim().length > 0)
+  if (firstContentIndex < 0) {
+    return { summary: '', details: [], hiddenLines: 0 }
+  }
+
+  const contentLines = lines
+    .slice(firstContentIndex)
+    .filter((line, index, list) => {
+      if (line.trim().length > 0) return true
+      return index < list.length - 1
+    })
+
+  const visibleLines = contentLines.slice(0, TOOL_PROGRESS_VISIBLE_LINES)
+  const hiddenLines = Math.max(0, contentLines.length - visibleLines.length)
+  const [summary = '', ...details] = visibleLines
+
+  return {
+    summary: summary.trim(),
+    details: details.map(line => line.trim()),
+    hiddenLines,
+  }
+}
 
 export function prepareAssistantMarkdownTextForRender(text: string): {
   text: string
@@ -99,8 +134,33 @@ export function AssistantTextMessage({
   // Tool progress messages should render as raw text (no markdown parsing).
   if (text.startsWith('<tool-progress>')) {
     const raw = extractTag(text, 'tool-progress') ?? ''
-    if (raw.trim().length === 0) return null
-    return <Text color={getTheme().secondaryText}>{raw}</Text>
+    const prepared = prepareToolProgressTextForRender(raw)
+    if (prepared.summary.length === 0) return null
+    const theme = getTheme()
+    return (
+      <Box flexDirection="column">
+        <Box flexDirection="row">
+          <Text color={theme.secondaryText}>  Progress </Text>
+          <Text color={theme.secondaryText} wrap="truncate-end">
+            {prepared.summary}
+          </Text>
+        </Box>
+        {prepared.details.map((line, index) => (
+          <Text
+            key={`${index}:${line}`}
+            color={theme.secondaryText}
+            wrap="truncate-end"
+          >
+            {`    ${line}`}
+          </Text>
+        ))}
+        {prepared.hiddenLines > 0 && (
+          <Text color={theme.secondaryText}>
+            {`    ... ${prepared.hiddenLines} more progress lines`}
+          </Text>
+        )}
+      </Box>
+    )
   }
 
   // Compatibility: background bash completion notification.
