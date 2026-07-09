@@ -6,7 +6,7 @@ import { ASCII_LOGO, PRODUCT_NAME } from '#core/constants/product'
 export const MIN_LOGO_WIDTH = 70
 const DEFAULT_TERMINAL_COLUMNS = 80
 const DEFAULT_TERMINAL_ROWS = 24
-const FULL_LOGO_MIN_ROWS = 32
+const FULL_LOGO_MIN_ROWS = 18
 const DISPLAY_ASCII_LOGO = ASCII_LOGO.trimStart()
 
 function normalizeDimension(value: number | undefined, fallback: number) {

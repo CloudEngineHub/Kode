@@ -54,6 +54,7 @@ import { useReplQuery } from './useReplQuery'
 import { useReplInit } from './useReplInit'
 import { buildPromptInputProps } from './promptInputProps'
 import { useMessageSelectorSelect } from './useMessageSelectorSelect'
+import { buildStartupHeaderIdentityKey } from './startupHeaderIdentity'
 import type { BinaryFeedbackContext, REPLProps } from './types'
 import { ensureLspManagerInitialized } from '#tools/tools/system/LspTool/call'
 import { describeToolPermissionRuleSource } from '#core/permissions/ruleString'
@@ -151,6 +152,21 @@ export function useReplController(props: REPLProps) {
     ),
   )
   const initialForkNumberRef = useRef(forkNumber)
+  const startupHeaderTerminalSizeRef = useRef({
+    forkNumber,
+    columns: terminalColumns,
+    rows: terminalRows,
+  })
+  if (startupHeaderTerminalSizeRef.current.forkNumber !== forkNumber) {
+    startupHeaderTerminalSizeRef.current = {
+      forkNumber,
+      columns: terminalColumns,
+      rows: terminalRows,
+    }
+  }
+  const startupHeaderTerminalColumns =
+    startupHeaderTerminalSizeRef.current.columns
+  const startupHeaderTerminalRows = startupHeaderTerminalSizeRef.current.rows
   const [staticOutputEpoch, setStaticOutputEpoch] = useState(0)
   const [uiRefreshCounter, setUiRefreshCounter] = useState(0)
 
@@ -1079,29 +1095,23 @@ export function useReplController(props: REPLProps) {
     forkNumber,
   })
 
-  const startupHeaderKey = useMemo(() => {
-    const mcpKey = mcpClients
-      .map(client => `${client.type}:${client.name}`)
-      .join('\u0000')
-    const updateCommandsKey = updateCommands?.join('\u0000') ?? ''
-    return [
+  const startupHeaderKey = useMemo(
+    () =>
+      buildStartupHeaderIdentityKey({
+        forkNumber,
+        isDefaultModel,
+        updateAvailableVersion,
+        updateCommands,
+        mcpClients,
+      }),
+    [
       forkNumber,
-      terminalColumns,
-      terminalRows,
-      isDefaultModel ? 'default' : 'custom',
-      updateAvailableVersion ?? '',
-      updateCommandsKey,
-      mcpKey,
-    ].join('|')
-  }, [
-    forkNumber,
-    isDefaultModel,
-    mcpClients,
-    terminalColumns,
-    terminalRows,
-    updateAvailableVersion,
-    updateCommands,
-  ])
+      isDefaultModel,
+      mcpClients,
+      updateAvailableVersion,
+      updateCommands,
+    ],
+  )
 
   const startupHeader = useMemo(
     () => (
@@ -1111,8 +1121,8 @@ export function useReplController(props: REPLProps) {
           isDefaultModel={isDefaultModel}
           updateBannerVersion={updateAvailableVersion}
           updateBannerCommands={updateCommands}
-          terminalColumns={terminalColumns}
-          terminalRows={terminalRows}
+          terminalColumns={startupHeaderTerminalColumns}
+          terminalRows={startupHeaderTerminalRows}
         />
         <ProjectOnboarding workspaceDir={getOriginalCwd()} />
       </Box>
@@ -1121,8 +1131,8 @@ export function useReplController(props: REPLProps) {
       isDefaultModel,
       mcpClients,
       startupHeaderKey,
-      terminalColumns,
-      terminalRows,
+      startupHeaderTerminalColumns,
+      startupHeaderTerminalRows,
       updateAvailableVersion,
       updateCommands,
     ],
