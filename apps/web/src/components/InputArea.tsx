@@ -12,6 +12,8 @@ export function InputArea(props: {
   disabled?: boolean
   isSending?: boolean
 }) {
+  const inputId = React.useId()
+  const hintId = React.useId()
   const isBusy = props.isSending === true
   const isSubmitDisabled = props.disabled || isBusy || !props.value.trim()
 
@@ -25,6 +27,7 @@ export function InputArea(props: {
 
   return (
     <form
+      aria-label="Chat prompt"
       className="flex items-end gap-2 border border-[hsl(var(--kode-terminal-border))] bg-[hsl(var(--kode-terminal-panel))] p-2 font-mono shadow-sm shadow-black/20"
       onSubmit={event => {
         event.preventDefault()
@@ -32,14 +35,26 @@ export function InputArea(props: {
         props.onSubmit()
       }}
     >
-      <div className="flex min-h-12 shrink-0 items-start gap-2 px-1 py-2 text-[13px]">
+      <label className="sr-only" htmlFor={inputId}>
+        Prompt
+      </label>
+      <p id={hintId} className="sr-only">
+        Press Enter to send. Press Shift+Enter for a new line.
+      </p>
+      <div
+        aria-hidden="true"
+        className="flex min-h-12 shrink-0 items-start gap-2 px-1 py-2 text-[13px]"
+      >
         <span className="text-[hsl(var(--kode-terminal-muted))]">chat</span>
         <span className="text-[hsl(var(--kode-terminal-prompt))]">$</span>
       </div>
       <Textarea
+        id={inputId}
+        name="prompt"
         value={props.value}
         onChange={e => props.onChange(e.target.value)}
         onKeyDown={onKeyDown}
+        aria-describedby={hintId}
         placeholder={isBusy ? 'compose next prompt...' : 'type prompt...'}
         className="max-h-40 min-h-[48px] resize-none border-0 bg-transparent px-1 py-2 font-mono text-[13px] leading-6 text-[hsl(var(--kode-terminal-text))] shadow-none placeholder:text-[hsl(var(--kode-terminal-muted))] focus-visible:ring-0"
         disabled={props.disabled}
