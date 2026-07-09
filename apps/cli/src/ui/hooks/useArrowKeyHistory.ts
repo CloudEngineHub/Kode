@@ -1,6 +1,13 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { getHistoryWithPastes } from '#core/history'
 import type { PromptMode } from '#ui-ink/components/PromptInput/types'
+
+const HISTORY_PRELOAD_DELAY_MS = 100
+
+type HistoryEntryWithPastes = {
+  display: string
+  pastedTexts: Array<{ placeholder: string; text: string }>
+}
 
 export type ArrowKeyHistorySnapshot<Extra> = {
   text: string
@@ -25,41 +32,67 @@ export function parsePromptHistoryDisplay(display: string): {
 export function useArrowKeyHistory<Extra>(args: {
   current: ArrowKeyHistorySnapshot<Extra>
   emptyExtra: Extra
+  historyScopeKey?: string
+  loadHistory?: () => HistoryEntryWithPastes[]
   onRestore: (snapshot: ArrowKeyHistorySnapshot<Extra>) => void
-  buildExtraFromHistoryEntry?: (entry: {
-    display: string
-    pastedTexts: Array<{ placeholder: string; text: string }>
-  }) => Extra
+  buildExtraFromHistoryEntry?: (entry: HistoryEntryWithPastes) => Extra
 }) {
-  const { current, emptyExtra, onRestore, buildExtraFromHistoryEntry } = args
+  const {
+    current,
+    emptyExtra,
+    historyScopeKey,
+    loadHistory = getHistoryWithPastes,
+    onRestore,
+    buildExtraFromHistoryEntry,
+  } = args
 
   const [historyIndex, setHistoryIndex] = useState(0)
   const historyIndexRef = useRef(0)
   historyIndexRef.current = historyIndex
 
   const draftSnapshotRef = useRef<ArrowKeyHistorySnapshot<Extra> | null>(null)
-  const historySnapshotRef = useRef<Array<{
-    display: string
-    pastedTexts: Array<{ placeholder: string; text: string }>
-  }> | null>(null)
+  const historySnapshotRef = useRef<HistoryEntryWithPastes[] | null>(null)
+  const preloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const currentRef = useRef(current)
   currentRef.current = current
+  const loadHistoryRef = useRef(loadHistory)
+  loadHistoryRef.current = loadHistory
+
+  const clearPreloadTimer = useCallback(() => {
+    if (!preloadTimerRef.current) return
+    clearTimeout(preloadTimerRef.current)
+    preloadTimerRef.current = null
+  }, [])
+
+  const scheduleHistoryPreload = useCallback(() => {
+    clearPreloadTimer()
+    preloadTimerRef.current = setTimeout(() => {
+      preloadTimerRef.current = null
+      if (historySnapshotRef.current) return
+      historySnapshotRef.current = loadHistoryRef.current()
+    }, HISTORY_PRELOAD_DELAY_MS)
+  }, [clearPreloadTimer])
+
+  useEffect(() => {
+    historyIndexRef.current = 0
+    setHistoryIndex(0)
+    draftSnapshotRef.current = null
+    historySnapshotRef.current = null
+    scheduleHistoryPreload()
+
+    return clearPreloadTimer
+  }, [clearPreloadTimer, historyScopeKey, scheduleHistoryPreload])
 
   const getHistorySnapshot = () => {
     if (!historySnapshotRef.current) {
-      historySnapshotRef.current = getHistoryWithPastes()
+      historySnapshotRef.current = loadHistoryRef.current()
     }
     return historySnapshotRef.current
   }
 
   const updateFromHistoryEntry = (
-    entry:
-      | {
-          display: string
-          pastedTexts: Array<{ placeholder: string; text: string }>
-        }
-      | undefined,
+    entry: HistoryEntryWithPastes | undefined,
     cursor: 'start' | 'end',
   ) => {
     if (entry === undefined) return
@@ -112,14 +145,16 @@ export function useArrowKeyHistory<Extra>(args: {
     historyIndexRef.current = 0
     draftSnapshotRef.current = null
     historySnapshotRef.current = null
+    scheduleHistoryPreload()
     setHistoryIndex(0)
-  }, [])
+  }, [scheduleHistoryPreload])
 
   function resetHistory() {
     historyIndexRef.current = 0
     setHistoryIndex(0)
     draftSnapshotRef.current = null
     historySnapshotRef.current = null
+    scheduleHistoryPreload()
   }
 
   return {

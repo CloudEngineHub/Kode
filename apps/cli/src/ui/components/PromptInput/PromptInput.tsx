@@ -655,6 +655,7 @@ export function PromptInput({
       extra: { pastedTexts, pastedImages },
     },
     emptyExtra: { pastedTexts: [], pastedImages: [] },
+    historyScopeKey: currentPwd,
     onRestore: snapshot => {
       setPastedTexts(snapshot.extra.pastedTexts)
       setPastedImages(snapshot.extra.pastedImages)
