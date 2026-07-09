@@ -13,6 +13,15 @@ let mouseEventsSuspended = false
 
 const ENABLE_MOUSE_EVENTS_SEQUENCE = '\x1b[?1006h\x1b[?1000h'
 const DISABLE_MOUSE_EVENTS_SEQUENCE = '\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l'
+const FALSE_ENV_VALUES = new Set(['0', 'false', 'off', 'no', 'disabled'])
+
+export function isMouseEventsEnabled(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  const raw = env.KODE_TUI_MOUSE
+  if (!raw) return true
+  return !FALSE_ENV_VALUES.has(raw.trim().toLowerCase())
+}
 
 export function setTerminalTitle(title: string): void {
   if (process.platform === 'win32') {
@@ -84,6 +93,7 @@ export function clearScrollback(): Promise<void> {
 
 export function enableMouseEvents(): void {
   if (!process.stdin?.isTTY || !process.stdout?.isTTY) return
+  if (!isMouseEventsEnabled()) return
   mouseEventsRefCount += 1
   if (mouseEventsRefCount !== 1 || mouseEventsSuspended) return
 
@@ -123,6 +133,7 @@ export function suspendMouseEvents(): void {
 
 export function resumeMouseEvents(): void {
   if (!process.stdin?.isTTY || !process.stdout?.isTTY) return
+  if (!isMouseEventsEnabled()) return
   if (mouseEventsRefCount <= 0 || !mouseEventsSuspended) return
   mouseEventsSuspended = false
   writeToTty(ENABLE_MOUSE_EVENTS_SEQUENCE)

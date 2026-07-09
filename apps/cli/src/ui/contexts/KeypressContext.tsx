@@ -229,7 +229,10 @@ function bufferBackslashEnter(keypressHandler: (key: ParsedKey) => void) {
   return (key: ParsedKey) => bufferer.next(key)
 }
 
-function bufferFastReturn(keypressHandler: (key: ParsedKey) => void) {
+function bufferFastReturn(
+  keypressHandler: (key: ParsedKey) => void,
+  shouldProtectFastReturn: () => boolean,
+) {
   let lastKeyTime = 0
   let lastKey: ParsedKey | null = null
   return (key: ParsedKey) => {
@@ -243,6 +246,7 @@ function bufferFastReturn(keypressHandler: (key: ParsedKey) => void) {
         lastKey.sequence.length >= FAST_RETURN_PASTE_LIKE_CHARS)
 
     if (
+      shouldProtectFastReturn() &&
       key.name === 'return' &&
       previousLooksLikePaste &&
       now - lastKeyTime <= FAST_RETURN_TIMEOUT
@@ -962,10 +966,10 @@ export function KeypressProvider({
       })
     }
 
-    let processor = broadcast
-    if (!terminalCapabilityManager.isBracketedPasteEnabled()) {
-      processor = bufferFastReturn(processor)
-    }
+    let processor = bufferFastReturn(
+      broadcast,
+      () => !terminalCapabilityManager.isBracketedPasteEnabled(),
+    )
     processor = bufferBackslashEnter(processor)
     processor = bufferPaste(processor)
 

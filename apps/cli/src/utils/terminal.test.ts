@@ -11,6 +11,34 @@ import {
 const writes: string[] = []
 
 mock.module('#cli-utils/stdio', () => ({
+  clearCapturedTuiStdio: () => {},
+  createInkStdio: () => ({
+    stderr: process.stderr,
+    stdout: process.stdout,
+  }),
+  ensureTuiStdioPatched: () => ({
+    stderr: process.stderr,
+    stdout: process.stdout,
+  }),
+  flushCapturedTuiStdioToFile: () => null,
+  getCapturedTuiStdioLogPath: () => '',
+  getCapturedTuiStdioText: () => null,
+  isStdioPatchedForTui: () => false,
+  restoreTuiStdioPatch: () => {},
+  writeToStderr: (
+    chunk: Uint8Array | string,
+    encodingOrCallback?:
+      | BufferEncoding
+      | ((err?: NodeJS.ErrnoException | null) => void),
+    callback?: (err?: NodeJS.ErrnoException | null) => void,
+  ) => {
+    const cb =
+      typeof encodingOrCallback === 'function'
+        ? encodingOrCallback
+        : callback
+    cb?.()
+    return true
+  },
   writeToStdout: (
     chunk: Uint8Array | string,
     encodingOrCallback?:
@@ -38,6 +66,7 @@ const DISABLE_MOUSE_EVENTS_SEQUENCE =
 
 let originalStdin: PropertyDescriptor | undefined
 let originalStdout: PropertyDescriptor | undefined
+let originalKodeTuiMouse: string | undefined
 let terminal: typeof import('./terminal') | null = null
 
 function installFakeTty(): void {
@@ -67,18 +96,29 @@ function resetMouseState(): void {
 beforeAll(async () => {
   originalStdin = Object.getOwnPropertyDescriptor(process, 'stdin')
   originalStdout = Object.getOwnPropertyDescriptor(process, 'stdout')
+  originalKodeTuiMouse = process.env.KODE_TUI_MOUSE
   installFakeTty()
   terminal = await import('./terminal')
 })
 
 beforeEach(() => {
   installFakeTty()
+  if (originalKodeTuiMouse === undefined) {
+    delete process.env.KODE_TUI_MOUSE
+  } else {
+    process.env.KODE_TUI_MOUSE = originalKodeTuiMouse
+  }
   resetMouseState()
   writes.length = 0
 })
 
 afterAll(() => {
   resetMouseState()
+  if (originalKodeTuiMouse === undefined) {
+    delete process.env.KODE_TUI_MOUSE
+  } else {
+    process.env.KODE_TUI_MOUSE = originalKodeTuiMouse
+  }
   restoreTty()
 })
 
@@ -133,5 +173,19 @@ describe('terminal mouse tracking lifecycle', () => {
       ENABLE_MOUSE_EVENTS_SEQUENCE,
       DISABLE_MOUSE_EVENTS_SEQUENCE,
     ])
+  })
+
+  test('honors KODE_TUI_MOUSE=0 as a terminal tracking opt-out', () => {
+    expect(terminal).not.toBeNull()
+
+    process.env.KODE_TUI_MOUSE = '0'
+
+    terminal!.enableMouseEvents()
+    terminal!.suspendMouseEvents()
+    terminal!.resumeMouseEvents()
+    terminal!.disableMouseEvents()
+
+    expect(terminal!.isMouseEventsEnabled()).toBe(false)
+    expect(writes).toEqual([])
   })
 })

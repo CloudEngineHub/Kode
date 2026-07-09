@@ -1,5 +1,6 @@
 import {
   afterAll,
+  afterEach,
   beforeAll,
   beforeEach,
   describe,
@@ -73,15 +74,85 @@ function restoreProcessState(): void {
   else process.env.KODE_SCREEN_READER = originalKodeScreenReader
 }
 
+function findChildProcessCallback(args: unknown[]):
+  | ((error: Error | null, stdout: string, stderr: string) => void)
+  | undefined {
+  for (let index = args.length - 1; index >= 0; index -= 1) {
+    const value = args[index]
+    if (typeof value === 'function') {
+      return value as (
+        error: Error | null,
+        stdout: string,
+        stderr: string,
+      ) => void
+    }
+  }
+  return undefined
+}
+
 mock.module('child_process', () => ({
+  exec: (...args: unknown[]) => {
+    const callback = findChildProcessCallback(args)
+    const child = new EventEmitter()
+    queueMicrotask(() => callback?.(null, '', ''))
+    return child
+  },
+  execFile: (...args: unknown[]) => {
+    const callback = findChildProcessCallback(args)
+    const child = new EventEmitter()
+    queueMicrotask(() => callback?.(null, '', ''))
+    return child
+  },
+  execFileSync: () => Buffer.from(''),
   spawnSync: () => ({ status: 0 }),
   spawn: (command: string, args: string[]) => {
     lifecycle.push(`spawn:${command}`)
-    lifecycle.push(`spawn.raw:${fakeStdin.isRaw}`)
+    lifecycle.push(`spawn.raw:${fakeStdin?.isRaw ?? false}`)
     lifecycle.push(`spawn.file:${args.at(-1) ?? ''}`)
 
-    const child = new EventEmitter()
+    const stdout = new EventEmitter() as EventEmitter & {
+      destroy: () => void
+      setEncoding: () => void
+    }
+    stdout.setEncoding = () => {}
+    stdout.destroy = () => {
+      stdout.emit('close')
+    }
+
+    const stderr = new EventEmitter() as EventEmitter & {
+      destroy: () => void
+      setEncoding: () => void
+    }
+    stderr.setEncoding = () => {}
+    stderr.destroy = () => {
+      stderr.emit('close')
+    }
+
+    const stdin = {
+      end: () => {},
+      write: () => true,
+    }
+
+    const child = new EventEmitter() as EventEmitter & {
+      kill: () => void
+      stderr: typeof stderr
+      stdin: typeof stdin
+      stdout: typeof stdout
+    }
+    child.stdout = stdout
+    child.stderr = stderr
+    child.stdin = stdin
+    child.kill = () => {
+      child.emit('exit', 143, null)
+    }
+
+    const commandLine = [command, ...args].join(' ')
     queueMicrotask(() => {
+      if (commandLine.includes('hello-statusline')) {
+        stdout.emit('data', 'hello-statusline\n')
+      }
+      stdout.emit('end')
+      stderr.emit('end')
       child.emit('exit', exitCode, null)
     })
     return child
@@ -89,6 +160,21 @@ mock.module('child_process', () => ({
 }))
 
 mock.module('#cli-utils/stdio', () => ({
+  clearCapturedTuiStdio: () => {},
+  createInkStdio: () => ({
+    stderr: process.stderr,
+    stdout: process.stdout,
+  }),
+  ensureTuiStdioPatched: () => ({
+    stderr: process.stderr,
+    stdout: process.stdout,
+  }),
+  flushCapturedTuiStdioToFile: () => null,
+  getCapturedTuiStdioLogPath: () => '',
+  getCapturedTuiStdioText: () => null,
+  isStdioPatchedForTui: () => false,
+  restoreTuiStdioPatch: () => {},
+  writeToStderr: () => true,
   writeToStdout: (chunk: string, callback?: () => void) => {
     lifecycle.push(`stdout:${chunk}`)
     callback?.()
@@ -97,8 +183,26 @@ mock.module('#cli-utils/stdio', () => ({
 }))
 
 mock.module('#cli-utils/terminal', () => ({
+  clearScrollback: () => Promise.resolve(),
+  clearTerminal: () => Promise.resolve(),
+  clearViewport: () => Promise.resolve(),
+  disableBracketedPasteMode: () => {},
+  disableKittyKeyboardProtocol: () => {},
   enableLineWrapping: () => lifecycle.push('lineWrapping.enable'),
   disableLineWrapping: () => lifecycle.push('lineWrapping.disable'),
+  disableModifyOtherKeys: () => {},
+  enableBracketedPasteMode: () => {},
+  enableKittyKeyboardProtocol: () => {},
+  enableModifyOtherKeys: () => {},
+  enableMouseEvents: () => {},
+  disableMouseEvents: () => {},
+  enterAlternateScreen: () => {},
+  exitAlternateScreen: () => {},
+  isAlternateScreenActive: () => false,
+  isMouseEventsEnabled: () => true,
+  resetMouseEvents: () => {},
+  setTerminalTitle: () => {},
+  shouldEnterAlternateScreen: () => false,
   suspendMouseEvents: () => lifecycle.push('mouse.suspend'),
   resumeMouseEvents: () => lifecycle.push('mouse.resume'),
   withEphemeralAlternateScreen: async <T>(fn: () => Promise<T> | T) => {
@@ -112,6 +216,7 @@ mock.module('#cli-utils/terminal', () => ({
 }))
 
 mock.module('#ui-ink/utils/inkInstanceStore', () => ({
+  setInkInstanceForStdout: () => {},
   getInkInstanceForStdout: () => ({
     pause: () => lifecycle.push('ink.pause'),
     resume: () => lifecycle.push('ink.resume'),
@@ -124,6 +229,19 @@ mock.module('#ui-ink/utils/terminalCapabilityManager', () => ({
   terminalCapabilityManager: {
     disableAllModes: () => lifecycle.push('terminalModes.disable'),
     enableSupportedModes: () => lifecycle.push('terminalModes.enable'),
+    getTerminalAppearanceSnapshot: () => ({
+      backgroundColor: undefined,
+      colorScheme: 'unknown',
+      isDark: undefined,
+    }),
+    getTerminalBackgroundColor: () => undefined,
+    getTerminalName: () => undefined,
+    isBracketedPasteEnabled: () => false,
+    isBracketedPasteSupported: () => false,
+    isKittyProtocolEnabled: () => false,
+    isKittyProtocolSupported: () => false,
+    isModifyOtherKeysEnabled: () => false,
+    isModifyOtherKeysSupported: () => false,
   },
 }))
 
@@ -139,6 +257,10 @@ beforeEach(() => {
   delete process.env.VISUAL
   delete process.env.SCREENREADER
   delete process.env.KODE_SCREEN_READER
+})
+
+afterEach(() => {
+  exitCode = 0
 })
 
 afterAll(() => {

@@ -20,7 +20,7 @@ const BACKSPACE_CODE = 8 // \x08
 const DEL_CODE = 127 // \x7f
 const PASTE_GUARD_MESSAGE =
   'Paste detected. Press Enter again after it appears to submit.'
-const LEGACY_PASTE_AGGREGATION_DELAY_MS = 200
+const LEGACY_PASTE_AGGREGATION_DELAY_MS = 75
 
 // Helper to check if input is a backspace character
 function isBackspaceChar(input: string): boolean {
@@ -153,7 +153,7 @@ export default function TextInput({
 
   const armPasteGuard = React.useCallback(() => {
     if (isPasteTrusted()) return
-    pasteGuardUntilRef.current = Date.now() + 40
+    pasteGuardUntilRef.current = Date.now() + 20
   }, [isPasteTrusted])
 
   const shouldBlockEnter = React.useCallback(

@@ -11,6 +11,7 @@ import { PermissionProvider } from '#ui-ink/contexts/PermissionContext'
 import { useCancelRequest } from '#ui-ink/hooks/useCancelRequest'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { setCwd } from '#core/utils/state'
+import { clearConfigCacheForTesting } from '#config'
 import { createInkHarnessManager, createInkTestHarness } from './inkTestHarness'
 
 function PromptInputHarness({
@@ -582,9 +583,9 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
     // Long paste chunks are aggregated on a timer; typing during that window
     // should not be lost or inserted relative to a stale render closure.
     h.stdin.write('a'.repeat(801))
-    await h.wait(100)
+    await h.wait(25)
     h.stdin.write('!')
-    await h.wait(350)
+    await h.wait(200)
 
     expect(h.getOutput()).toContain('RAW:\"hi![Pasted text #1]\"')
 
@@ -666,7 +667,7 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
     expect(guardedOutput).not.toContain('SUBMIT_COUNT:1')
     expect(guardedOutput).not.toContain('RAW:"\\n')
 
-    await h.wait(350)
+    await h.wait(200)
     expect(h.getOutput()).toContain('RAW:"[Pasted text #1]"')
 
     h.clearOutput()
@@ -845,6 +846,7 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
     process.env.USERPROFILE = homeDir
     process.env.KODE_STATUSLINE_ENABLED = '1'
     process.env.KODE_CONFIG_DIR = join(homeDir, '.kode')
+    clearConfigCacheForTesting()
 
     mkdirSync(join(homeDir, '.kode'), { recursive: true })
     const cmd =
@@ -882,6 +884,7 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
       if (originalConfigDir === undefined) delete process.env.KODE_CONFIG_DIR
       else process.env.KODE_CONFIG_DIR = originalConfigDir
 
+      clearConfigCacheForTesting()
       rmSync(homeDir, { recursive: true, force: true })
     }
   })

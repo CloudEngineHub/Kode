@@ -27,6 +27,7 @@ import { wrapLines } from '#ui-ink/primitives/text/wrapLines'
 import { isStdioPatchedForTui } from '#cli-utils/stdio'
 import {
   isAlternateScreenActive,
+  isMouseEventsEnabled,
   shouldEnterAlternateScreen,
 } from '#cli-utils/terminal'
 
@@ -156,6 +157,11 @@ export function Doctor({
     )
     lines.push(
       `- bracketed paste: ${yesNo(bpSupported)} (${enabledDisabled(bpEnabled)})`,
+    )
+    lines.push(
+      `- mouse tracking: ${enabledDisabled(isMouseEventsEnabled())} (env: ${
+        process.env.KODE_TUI_MOUSE ?? 'default'
+      })`,
     )
     lines.push('')
     lines.push('Rendering')
