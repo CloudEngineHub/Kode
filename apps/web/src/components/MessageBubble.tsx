@@ -5,6 +5,11 @@ import remarkGfm from 'remark-gfm'
 import type { AgentEvent, SdkContentBlock } from '@kode/protocol'
 
 import { cn } from '../lib/utils'
+import {
+  formatMcpProgressNumber,
+  sanitizeMcpProgressLabel,
+  sanitizeMcpProgressMessage,
+} from '../lib/mcpProgress'
 import { Badge } from './ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import { Skeleton } from './ui/skeleton'
@@ -50,24 +55,15 @@ function formatStreamEvent(event: unknown): string | null {
   const record = event as Record<string, unknown>
   if (record.type !== 'mcp_progress') return null
 
-  const server = typeof record.server === 'string' ? record.server : 'MCP'
-  const tool = typeof record.tool === 'string' ? record.tool : 'tool'
+  const server = sanitizeMcpProgressLabel(record.server, 'MCP')
+  const tool = sanitizeMcpProgressLabel(record.tool, 'tool')
   const progress =
     record.progress && typeof record.progress === 'object'
       ? (record.progress as Record<string, unknown>)
       : {}
-  const message =
-    typeof progress.message === 'string' && progress.message.trim()
-      ? progress.message.trim()
-      : 'working'
-  const current =
-    typeof progress.progress === 'number' && Number.isFinite(progress.progress)
-      ? progress.progress
-      : null
-  const total =
-    typeof progress.total === 'number' && Number.isFinite(progress.total)
-      ? progress.total
-      : null
+  const message = sanitizeMcpProgressMessage(progress.message)
+  const current = formatMcpProgressNumber(progress.progress)
+  const total = formatMcpProgressNumber(progress.total)
   const amount =
     current !== null && total !== null
       ? ` (${current}/${total})`

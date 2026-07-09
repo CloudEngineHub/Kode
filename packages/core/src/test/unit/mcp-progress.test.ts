@@ -100,4 +100,80 @@ describe('MCP progress notifications', () => {
       },
     ])
   })
+
+  test('normalizes MCP progress text before emitting UI progress', async () => {
+    const events: unknown[] = []
+    const longMessage = `${'x'.repeat(260)}\u001B[2J\nnext line`
+    const client: any = {
+      request: async (req: any) => {
+        if (req.method === 'tools/list') {
+          return {
+            tools: [
+              {
+                name: 'noisy',
+                inputSchema: { type: 'object', properties: {} },
+              },
+            ],
+          }
+        }
+        throw new Error(`Unexpected method: ${String(req.method)}`)
+      },
+      callTool: async (_request: unknown, _schema: unknown, options: any) => {
+        options?.onprogress?.({
+          progress: Number.NaN,
+          total: Infinity,
+          message: longMessage,
+          extra: 'ignored',
+        })
+        return { content: [{ type: 'text', text: 'done' }] }
+      },
+    }
+
+    __setMcpClientsForTests([
+      {
+        type: 'connected',
+        name: 'srv',
+        client,
+        capabilities: { tools: {} },
+      } as any,
+    ])
+
+    const [tool] = await getMCPTools()
+    const ctx: ToolUseContext = {
+      abortController: new AbortController(),
+      messageId: 'message',
+      toolUseId: 'tool-use',
+      readFileTimestamps: {},
+      options: {
+        commands: [],
+        tools: [],
+        messageLogName: 'test',
+        maxThinkingTokens: 0,
+        onStreamEvent: event => events.push(event),
+      },
+    }
+
+    const gen = tool!.call({}, ctx)
+    const progress = await gen.next()
+
+    if (progress.done || (progress.value as any)?.type !== 'progress') {
+      throw new Error('Expected first MCP tool update to be progress')
+    }
+
+    const progressText =
+      (progress.value as any).content?.message?.content?.[0]?.type === 'text'
+        ? (progress.value as any).content.message.content[0].text
+        : ''
+    expect(progressText).not.toContain('\u001B')
+    expect(progressText).toContain('...')
+    expect(progressText).toContain('<tool-progress>MCP srv/noisy: ')
+
+    expect(events).toHaveLength(1)
+    const event = events[0] as any
+    expect(event.progress.progress).toBeUndefined()
+    expect(event.progress.total).toBeUndefined()
+    expect(event.progress.extra).toBeUndefined()
+    expect(event.progress.message).not.toContain('\u001B')
+    expect(event.progress.message.length).toBeLessThanOrEqual(243)
+  })
 })

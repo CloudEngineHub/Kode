@@ -22,6 +22,10 @@ import type {
 } from '@kode/protocol'
 
 import type { WorkspaceInfo } from '../lib/workspaces'
+import {
+  sanitizeMcpProgressLabel,
+  sanitizeMcpProgressMessage,
+} from '../lib/mcpProgress'
 import { cn } from '../lib/utils'
 import { Badge } from './ui/badge'
 import { ScrollArea } from './ui/scroll-area'
@@ -120,17 +124,12 @@ function describeStreamEvent(event: AgentEvent): ActivityItem | null {
   }
 
   if (streamEvent.type === 'mcp_progress') {
-    const server =
-      typeof streamEvent.server === 'string' ? streamEvent.server : 'mcp'
-    const tool =
-      typeof streamEvent.tool === 'string' ? streamEvent.tool : 'tool'
+    const server = sanitizeMcpProgressLabel(streamEvent.server, 'mcp')
+    const tool = sanitizeMcpProgressLabel(streamEvent.tool, 'tool')
     const progress = isRecord(streamEvent.progress)
       ? streamEvent.progress
       : undefined
-    const message =
-      typeof progress?.message === 'string' && progress.message.trim()
-        ? progress.message.trim()
-        : 'running'
+    const message = sanitizeMcpProgressMessage(progress?.message, 'running')
     return {
       key: event.uuid ?? `mcp-${server}-${tool}`,
       label: `${server}/${tool}`,

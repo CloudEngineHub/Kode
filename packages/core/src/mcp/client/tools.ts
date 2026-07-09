@@ -26,10 +26,19 @@ import type { ConnectedClient } from './types'
 import { isRecord } from './utils'
 import { getMcpListChangedVersion } from './listChanged'
 
+const MCP_PROGRESS_MESSAGE_MAX_LENGTH = 240
+const MCP_PROGRESS_LABEL_MAX_LENGTH = 80
+
 type AnthropicImageMediaType = Extract<
   ImageBlockParam['source'],
   { type: 'base64' }
 >['media_type']
+
+type NormalizedMcpProgress = {
+  progress?: number
+  total?: number
+  message?: string
+}
 
 function isTextBlock(value: unknown): value is { type: 'text'; text: string } {
   return (
@@ -81,24 +90,64 @@ function formatProgressNumber(value: unknown): string | null {
     : String(Number(value.toFixed(2)))
 }
 
+function sanitizeProgressText(
+  value: unknown,
+  maxLength: number,
+): string | undefined {
+  if (typeof value !== 'string') return undefined
+
+  const cleaned = value
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (!cleaned) return undefined
+  if (cleaned.length <= maxLength) return cleaned
+  return `${cleaned.slice(0, maxLength)}...`
+}
+
+function sanitizeProgressMessage(value: unknown): string | undefined {
+  return sanitizeProgressText(value, MCP_PROGRESS_MESSAGE_MAX_LENGTH)
+}
+
+function sanitizeProgressLabel(value: unknown, fallback: string): string {
+  return sanitizeProgressText(value, MCP_PROGRESS_LABEL_MAX_LENGTH) ?? fallback
+}
+
+function normalizeProgressNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function normalizeMcpProgress(progress: unknown): NormalizedMcpProgress {
+  const record = isRecord(progress) ? progress : {}
+  const normalized: NormalizedMcpProgress = {}
+  const current = normalizeProgressNumber(record.progress)
+  const total = normalizeProgressNumber(record.total)
+  const message = sanitizeProgressMessage(record.message)
+
+  if (current !== undefined) normalized.progress = current
+  if (total !== undefined) normalized.total = total
+  if (message !== undefined) normalized.message = message
+
+  return normalized
+}
+
 function formatMcpToolProgress(args: {
   server: string
   tool: string
-  progress: unknown
+  progress: NormalizedMcpProgress
 }): string {
-  const record = isRecord(args.progress) ? args.progress : null
-  const message =
-    typeof record?.message === 'string' && record.message.trim()
-      ? record.message.trim()
-      : ''
-  const current = formatProgressNumber(record?.progress)
-  const total = formatProgressNumber(record?.total)
+  const server = sanitizeProgressLabel(args.server, 'server')
+  const tool = sanitizeProgressLabel(args.tool, 'tool')
+  const message = args.progress.message ?? ''
+  const current = formatProgressNumber(args.progress.progress)
+  const total = formatProgressNumber(args.progress.total)
   const ratio = current && total ? `${current}/${total}` : current
   const detail = [message, ratio ? `(${ratio})` : ''].filter(Boolean).join(' ')
 
   return detail
-    ? `MCP ${args.server}/${args.tool}: ${detail}`
-    : `MCP ${args.server}/${args.tool}: progress update`
+    ? `MCP ${server}/${tool}: ${detail}`
+    : `MCP ${server}/${tool}: progress update`
 }
 
 export const getMCPTools = memoize(
@@ -182,18 +231,19 @@ export const getMCPTools = memoize(
                 toolUseId: context.toolUseId,
                 signal: context.abortController.signal,
                 onProgress: progress => {
+                  const normalizedProgress = normalizeMcpProgress(progress)
                   context.options?.onStreamEvent?.({
                     type: 'mcp_progress',
-                    server: client.name,
-                    tool: tool.name,
+                    server: sanitizeProgressLabel(client.name, 'server'),
+                    tool: sanitizeProgressLabel(tool.name, 'tool'),
                     toolUseId: context.toolUseId,
-                    progress,
+                    progress: normalizedProgress,
                   })
 
                   const progressText = formatMcpToolProgress({
                     server: client.name,
                     tool: tool.name,
-                    progress,
+                    progress: normalizedProgress,
                   })
                   if (progressText === lastProgressText) return
                   lastProgressText = progressText
