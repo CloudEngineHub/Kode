@@ -18,6 +18,11 @@ type ToolUseLikeBlockParam = ToolUseBlockParam & {
   type: 'tool_use' | 'server_tool_use' | 'mcp_tool_use'
 }
 
+type MessageNode = {
+  message: NormalizedMessage
+  next: MessageNode | null
+}
+
 function isToolUseLikeBlockParam(block: any): block is ToolUseLikeBlockParam {
   return (
     block &&
@@ -42,61 +47,57 @@ function isToolUseRequestMessage(
 export function reorderMessages(
   messages: NormalizedMessage[],
 ): NormalizedMessage[] {
-  const ms: NormalizedMessage[] = []
-  const toolUseMessageIndexes = new Map<string, number>()
-  const progressMessageIndexes = new Map<string, number>()
-
-  const shiftIndexesFrom = (index: number) => {
-    for (const [toolUseID, currentIndex] of toolUseMessageIndexes) {
-      if (currentIndex >= index) {
-        toolUseMessageIndexes.set(toolUseID, currentIndex + 1)
-      }
-    }
-    for (const [toolUseID, currentIndex] of progressMessageIndexes) {
-      if (currentIndex >= index) {
-        progressMessageIndexes.set(toolUseID, currentIndex + 1)
-      }
-    }
-  }
+  let firstNode: MessageNode | null = null
+  let lastNode: MessageNode | null = null
+  const toolUseMessageNodes = new Map<string, MessageNode>()
+  const progressMessageNodes = new Map<string, MessageNode>()
 
   const getToolUseRequestID = (message: ToolUseRequestMessage): string | null =>
     message.message.content.find(isToolUseLikeBlockParam)?.id ?? null
 
-  const rememberMessageIndex = (message: NormalizedMessage, index: number) => {
+  const rememberMessageNode = (node: MessageNode) => {
+    const { message } = node
     if (message.type === 'progress') {
-      progressMessageIndexes.set(message.toolUseID, index)
+      progressMessageNodes.set(message.toolUseID, node)
       return
     }
     if (isToolUseRequestMessage(message)) {
       const toolUseID = getToolUseRequestID(message)
-      if (toolUseID) toolUseMessageIndexes.set(toolUseID, index)
+      if (toolUseID) toolUseMessageNodes.set(toolUseID, node)
     }
   }
 
-  const pushMessage = (message: NormalizedMessage) => {
-    const index = ms.push(message) - 1
-    rememberMessageIndex(message, index)
+  const appendMessage = (message: NormalizedMessage) => {
+    const node: MessageNode = { message, next: null }
+    if (lastNode) {
+      lastNode.next = node
+    } else {
+      firstNode = node
+    }
+    lastNode = node
+    rememberMessageNode(node)
   }
 
-  const insertMessage = (index: number, message: NormalizedMessage) => {
-    shiftIndexesFrom(index)
-    ms.splice(index, 0, message)
-    rememberMessageIndex(message, index)
+  const insertMessageAfter = (
+    anchor: MessageNode,
+    message: NormalizedMessage,
+  ) => {
+    const node: MessageNode = { message, next: anchor.next }
+    anchor.next = node
+    if (lastNode === anchor) lastNode = node
+    rememberMessageNode(node)
   }
 
   for (const message of messages) {
     if (message.type === 'progress') {
-      const existingProgressIndex = progressMessageIndexes.get(
-        message.toolUseID,
-      )
-      if (existingProgressIndex !== undefined) {
-        ms[existingProgressIndex] = message
-        progressMessageIndexes.set(message.toolUseID, existingProgressIndex)
+      const existingProgressNode = progressMessageNodes.get(message.toolUseID)
+      if (existingProgressNode) {
+        existingProgressNode.message = message
         continue
       }
-      const toolUseMessageIndex = toolUseMessageIndexes.get(message.toolUseID)
-      if (toolUseMessageIndex !== undefined) {
-        insertMessage(toolUseMessageIndex + 1, message)
+      const toolUseMessageNode = toolUseMessageNodes.get(message.toolUseID)
+      if (toolUseMessageNode) {
+        insertMessageAfter(toolUseMessageNode, message)
         continue
       }
     }
@@ -109,23 +110,27 @@ export function reorderMessages(
       const toolUseID = (message.message.content[0] as ToolResultBlockParam)
         ?.tool_use_id
 
-      const lastProgressIndex = progressMessageIndexes.get(toolUseID)
-      if (lastProgressIndex !== undefined) {
-        insertMessage(lastProgressIndex + 1, message)
+      const lastProgressNode = progressMessageNodes.get(toolUseID)
+      if (lastProgressNode) {
+        insertMessageAfter(lastProgressNode, message)
         continue
       }
 
-      const toolUseMessageIndex = toolUseMessageIndexes.get(toolUseID)
-      if (toolUseMessageIndex !== undefined) {
-        insertMessage(toolUseMessageIndex + 1, message)
+      const toolUseMessageNode = toolUseMessageNodes.get(toolUseID)
+      if (toolUseMessageNode) {
+        insertMessageAfter(toolUseMessageNode, message)
         continue
       }
     } else {
-      pushMessage(message)
+      appendMessage(message)
     }
   }
 
-  return ms
+  const reorderedMessages: NormalizedMessage[] = []
+  for (let node = firstNode; node; node = node.next) {
+    reorderedMessages.push(node.message)
+  }
+  return reorderedMessages
 }
 
 const getToolResultIDs = memoize(
