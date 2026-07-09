@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import {
   createMcpTransportCandidates,
+  getMcpClientInfo,
   getMcpConnectionTimeoutMs,
 } from '#core/mcp/client/connection'
 import { getMcpServerConnectionBatchSize } from '#core/mcp/client/settings'
+import { MACRO } from '#core/constants/macros'
+import { PRODUCT_COMMAND } from '#core/constants/product'
 import {
   getClients,
   getMCPCommands,
@@ -73,6 +76,17 @@ describe('MCP connection internals', () => {
     process.env.MCP_CONNECTION_TIMEOUT_MS = 'not-a-number'
     expect(getMcpServerConnectionBatchSize()).toBe(3)
     expect(getMcpConnectionTimeoutMs()).toBe(30_000)
+  })
+
+  test('advertises current MCP client info and honors version overrides', () => {
+    expect(getMcpClientInfo()).toEqual({
+      name: PRODUCT_COMMAND,
+      version: MACRO.VERSION,
+    })
+    expect(getMcpClientInfo({ clientVersion: '9.9.9-test' })).toEqual({
+      name: PRODUCT_COMMAND,
+      version: '9.9.9-test',
+    })
   })
 
   test('preserves cache.clear compatibility shims on public getters', () => {

@@ -17,6 +17,7 @@ import {
   checkHasTrustDialogAccepted,
   type McpServerConfig,
 } from '#core/utils/config'
+import { MACRO } from '#core/constants/macros'
 import { PRODUCT_COMMAND } from '#core/constants/product'
 import { logMCPError } from '#core/utils/log'
 import { getCwd } from '#core/utils/state'
@@ -35,6 +36,16 @@ import {
 import type { WrappedClient } from './types'
 
 type GlobalWithWebSocket = { WebSocket?: unknown }
+export type McpClientConnectionOptions = { clientVersion?: string }
+
+export function getMcpClientInfo(
+  options?: McpClientConnectionOptions,
+): { name: string; version: string } {
+  return {
+    name: PRODUCT_COMMAND,
+    version: options?.clientVersion ?? MACRO.VERSION,
+  }
+}
 
 async function ensureWebSocketGlobal(): Promise<void> {
   const global = globalThis as unknown as GlobalWithWebSocket
@@ -357,6 +368,7 @@ export async function createMcpTransportCandidates(
 export async function connectToServer(
   name: string,
   serverRef: McpServerConfig,
+  options?: McpClientConnectionOptions,
 ): Promise<Client> {
   const candidates = await createMcpTransportCandidates(name, serverRef)
 
@@ -366,7 +378,7 @@ export async function connectToServer(
 
   for (const candidate of candidates) {
     const client = new Client(
-      { name: PRODUCT_COMMAND, version: '0.1.0' },
+      getMcpClientInfo(options),
       {
         capabilities: getMcpClientCapabilities(),
         listChanged: {
@@ -492,10 +504,10 @@ export function captureMcpCapabilities(
 export async function connectMcpServer(
   name: string,
   serverRef: McpServerConfig,
-  _options?: { clientVersion?: string },
+  options?: McpClientConnectionOptions,
 ): Promise<WrappedClient> {
   try {
-    const client = await connectToServer(name, serverRef)
+    const client = await connectToServer(name, serverRef, options)
     return {
       name,
       client,
