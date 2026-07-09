@@ -54,3 +54,9 @@ export {
   type McpListChangedEvent,
   type McpListKind,
 } from './listChanged'
+export {
+  __resetMcpLoggingForTests,
+  handleMcpLoggingMessage,
+  subscribeMcpLogMessage,
+  type McpLogMessageEvent,
+} from './logging'

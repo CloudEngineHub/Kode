@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { UnauthorizedError } from '@modelcontextprotocol/sdk/client/auth.js'
 import {
+  LoggingMessageNotificationSchema,
   ResourceUpdatedNotificationSchema,
   type ServerCapabilities,
 } from '@modelcontextprotocol/sdk/types.js'
@@ -21,6 +22,7 @@ import { logMCPError } from '#core/utils/log'
 import { getCwd } from '#core/utils/state'
 
 import { notifyMcpListChanged } from './listChanged'
+import { handleMcpLoggingMessage } from './logging'
 import { notifyMcpResourceUpdated } from './resourceUpdates'
 import { getMcpOAuthProvider } from './oauth'
 import { getMcpServer } from './config'
@@ -408,6 +410,12 @@ export async function connectToServer(
       },
     )
     registerMcpClientRequestHandlers(client)
+    client.setNotificationHandler(
+      LoggingMessageNotificationSchema,
+      notification => {
+        handleMcpLoggingMessage(name, notification)
+      },
+    )
     client.setNotificationHandler(
       ResourceUpdatedNotificationSchema,
       notification => {
