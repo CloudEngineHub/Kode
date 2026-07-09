@@ -30,7 +30,6 @@ export function buildPromptInputProps(args: {
   setForkConvoWithMessagesOnTheNextRender: PromptInputProps['setForkConvoWithMessagesOnTheNextRender']
   readFileTimestamps: PromptInputProps['readFileTimestamps']
   abortController: PromptInputProps['abortController']
-  onManageTasks?: PromptInputProps['onManageTasks']
   restorePastes?: PromptInputProps['restorePastes']
   onRestorePastesApplied?: PromptInputProps['onRestorePastesApplied']
   draftPastes?: PromptInputProps['draftPastes']
@@ -64,7 +63,6 @@ export function buildPromptInputProps(args: {
       args.setForkConvoWithMessagesOnTheNextRender,
     readFileTimestamps: args.readFileTimestamps,
     abortController: args.abortController,
-    onManageTasks: args.onManageTasks,
     restorePastes: args.restorePastes,
     onRestorePastesApplied: args.onRestorePastesApplied,
     draftPastes: args.draftPastes,

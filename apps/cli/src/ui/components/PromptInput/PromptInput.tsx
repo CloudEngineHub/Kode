@@ -39,7 +39,6 @@ import { getPromptInputSpecialKeyAction } from '#ui-ink/utils/promptInputSpecial
 import { setTerminalTitle } from '#cli-utils/terminal'
 import { Cursor, countWrappedLines } from '#cli-utils/Cursor'
 import { getCurrentOutputStyle } from '#cli-services/outputStyles'
-import { hasBackgroundTasks } from '#core/tasks/backgroundRegistry'
 import { submitPrompt } from './submit'
 import {
   usePromptPastes,
@@ -111,7 +110,6 @@ export function PromptInput({
   setForkConvoWithMessagesOnTheNextRender,
   readFileTimestamps,
   onModelChange,
-  onManageTasks,
   restorePastes,
   onRestorePastesApplied,
   draftPastes,
@@ -715,18 +713,6 @@ export function PromptInput({
   }
   const handleHistoryDown = () => {
     if (completionActive) resetCompletion()
-
-    if (
-      typeof onManageTasks === 'function' &&
-      historyIndex === 0 &&
-      input.length === 0
-    ) {
-      if (hasBackgroundTasks()) {
-        onManageTasks()
-        return
-      }
-    }
-
     onHistoryDown()
   }
 

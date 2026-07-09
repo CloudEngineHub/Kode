@@ -42,7 +42,6 @@ export type PromptInputProps = {
   abortController: AbortController | null
   onModelChange?: () => void
   uiRefreshCounter?: number
-  onManageTasks?: () => void
   shortcutsOpen?: boolean
   restorePastes?: {
     id: number
