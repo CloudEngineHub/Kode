@@ -6,19 +6,17 @@ import fs from 'fs';
 
 const runner = new TestRunner('SqliteStore');
 
-// 测试数据库路径
-const TEST_DB_PATH = path.join(__dirname, '../../../.tmp/test-sqlite.db');
-const TEST_STORE_DIR = path.join(__dirname, '../../../.tmp/sqlite-store');
+// 每个测试进程使用独立目录，避免并行 runner 互相删除数据库文件。
+const TEST_RUN_DIR = path.join(__dirname, '../../../.tmp', `sqlite-store-${process.pid}`);
+const TEST_DB_PATH = path.join(TEST_RUN_DIR, 'test-sqlite.db');
+const TEST_STORE_DIR = path.join(TEST_RUN_DIR, 'store');
 
 let store: SqliteStore;
 
 // 清理测试数据
 function cleanupTestData() {
-  if (fs.existsSync(TEST_DB_PATH)) {
-    fs.unlinkSync(TEST_DB_PATH);
-  }
-  if (fs.existsSync(TEST_STORE_DIR)) {
-    fs.rmSync(TEST_STORE_DIR, { recursive: true, force: true });
+  if (fs.existsSync(TEST_RUN_DIR)) {
+    fs.rmSync(TEST_RUN_DIR, { recursive: true, force: true });
   }
 }
 
@@ -32,7 +30,8 @@ runner
     }
     store = new SqliteStore(TEST_DB_PATH, TEST_STORE_DIR);
   })
-  .afterAll(() => {
+  .afterAll(async () => {
+    await store.close();
     cleanupTestData();
   });
 
