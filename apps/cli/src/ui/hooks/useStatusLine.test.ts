@@ -8,6 +8,16 @@ import { render, Text } from 'ink'
 import stripAnsi from 'strip-ansi'
 import { normalizeStatusLineOutput, useStatusLine } from './useStatusLine'
 
+function makeDelayedStatusLineCommand(label: string, delayMs: number): string {
+  if (process.platform === 'win32') {
+    const pingCount = Math.max(2, Math.ceil(delayMs / 1000) + 1)
+    return `ping -n ${pingCount} 127.0.0.1 > nul && echo ${label}`
+  }
+
+  const delaySeconds = Math.max(0.1, delayMs / 1000)
+  return `sleep ${delaySeconds}; printf '${label}\\n'`
+}
+
 describe('normalizeStatusLineOutput', () => {
   test('keeps status line output to the first non-empty line', () => {
     expect(
@@ -32,12 +42,11 @@ describe('normalizeStatusLineOutput', () => {
     process.env.KODE_CONFIG_DIR = join(homeDir, '.kode')
     mkdirSync(join(homeDir, '.kode'), { recursive: true })
 
-    const runtime = JSON.stringify(process.execPath)
     writeFileSync(
       join(homeDir, '.kode', 'settings.json'),
       JSON.stringify(
         {
-          statusLine: `${runtime} -e "setTimeout(()=>console.log('late-statusline'),800)"`,
+          statusLine: makeDelayedStatusLineCommand('late-statusline', 800),
         },
         null,
         2,
@@ -79,6 +88,87 @@ describe('normalizeStatusLineOutput', () => {
 
       expect(output).toContain('CONFIGURED:true')
       expect(output).toContain('TEXT:null')
+    } finally {
+      instance.unmount()
+
+      if (originalHome === undefined) delete process.env.HOME
+      else process.env.HOME = originalHome
+
+      if (originalUserProfile === undefined) delete process.env.USERPROFILE
+      else process.env.USERPROFILE = originalUserProfile
+
+      if (originalEnabled === undefined)
+        delete process.env.KODE_STATUSLINE_ENABLED
+      else process.env.KODE_STATUSLINE_ENABLED = originalEnabled
+
+      if (originalConfigDir === undefined) delete process.env.KODE_CONFIG_DIR
+      else process.env.KODE_CONFIG_DIR = originalConfigDir
+
+      rmSync(homeDir, { recursive: true, force: true })
+    }
+  })
+
+  test('lets slow statusline commands finish across interval ticks', async () => {
+    const originalHome = process.env.HOME
+    const originalUserProfile = process.env.USERPROFILE
+    const originalEnabled = process.env.KODE_STATUSLINE_ENABLED
+    const originalConfigDir = process.env.KODE_CONFIG_DIR
+
+    const homeDir = mkdtempSync(join(tmpdir(), 'kode-statusline-slow-'))
+    process.env.HOME = homeDir
+    process.env.USERPROFILE = homeDir
+    process.env.KODE_STATUSLINE_ENABLED = '1'
+    process.env.KODE_CONFIG_DIR = join(homeDir, '.kode')
+    mkdirSync(join(homeDir, '.kode'), { recursive: true })
+
+    writeFileSync(
+      join(homeDir, '.kode', 'settings.json'),
+      JSON.stringify(
+        {
+          statusLine: makeDelayedStatusLineCommand('slow-statusline', 1300),
+        },
+        null,
+        2,
+      ) + '\n',
+      'utf8',
+    )
+
+    const stdout = new PassThrough() as PassThrough & {
+      isTTY?: boolean
+      columns?: number
+      rows?: number
+    }
+    stdout.isTTY = true
+    stdout.columns = 100
+    stdout.rows = 24
+
+    let rawOutput = ''
+    stdout.on('data', chunk => {
+      rawOutput += chunk.toString('utf8')
+    })
+
+    function StatusLineProbe(): React.ReactNode {
+      const statusLine = useStatusLine({})
+      return React.createElement(
+        Text,
+        null,
+        `CONFIGURED:${String(statusLine.isConfigured)} TEXT:${statusLine.text ?? 'null'}`,
+      )
+    }
+
+    const instance = render(React.createElement(StatusLineProbe), {
+      stdout: stdout as unknown as NodeJS.WriteStream,
+      exitOnCtrlC: false,
+    })
+
+    try {
+      await new Promise(resolve =>
+        setTimeout(resolve, process.platform === 'win32' ? 2800 : 1800),
+      )
+      const output = stripAnsi(rawOutput)
+
+      expect(output).toContain('CONFIGURED:true')
+      expect(output).toContain('TEXT:slow-statusline')
     } finally {
       instance.unmount()
 

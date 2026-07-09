@@ -84,8 +84,10 @@ export function useStatusLine(input?: unknown): {
   const abortRef = useRef<AbortController | null>(null)
   const inputRef = useRef<unknown>(input)
   const inputSignatureRef = useRef<string | null>(null)
-  const tickRef = useRef<(() => void) | null>(null)
+  const tickRef = useRef<((source?: 'input' | 'interval') => void) | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const runningRef = useRef(false)
+  const rerunAfterCurrentRef = useRef(false)
 
   useEffect(() => {
     const nextSignature = serializeStatusLineInput(input)
@@ -96,7 +98,7 @@ export function useStatusLine(input?: unknown): {
     if (!tickRef.current) return
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
-      tickRef.current?.()
+      tickRef.current?.('input')
     }, 300)
 
     return () => {
@@ -112,7 +114,13 @@ export function useStatusLine(input?: unknown): {
     const shell = BunShell.getInstance()
     let alive = true
 
-    const tick = async () => {
+    const tick = async (source: 'input' | 'interval' = 'interval') => {
+      if (!alive) return
+      if (runningRef.current) {
+        if (source === 'input') rerunAfterCurrentRef.current = true
+        return
+      }
+
       const config = getStatusLineConfig()
       const command = config?.command ?? null
       const padding = config?.padding ?? 0
@@ -121,6 +129,7 @@ export function useStatusLine(input?: unknown): {
         lastCommandRef.current = null
         abortRef.current?.abort()
         abortRef.current = null
+        rerunAfterCurrentRef.current = false
         if (alive) {
           setState(prev =>
             prev.text === null && prev.padding === 0 && !prev.isConfigured
@@ -133,9 +142,11 @@ export function useStatusLine(input?: unknown): {
 
       const commandChanged = lastCommandRef.current !== command
       lastCommandRef.current = command
-      abortRef.current?.abort()
       const ac = new AbortController()
       abortRef.current = ac
+      runningRef.current = true
+      const runInputSignature =
+        inputSignatureRef.current ?? serializeStatusLineInput(inputRef.current)
 
       if (alive) {
         setState(prev => {
@@ -148,40 +159,60 @@ export function useStatusLine(input?: unknown): {
         })
       }
 
-      const result = await shell.exec(command, ac.signal, 5000, {
-        stdin: serializeStatusLineInput(
-          buildDynamicStatusLineInput(inputRef.current),
-        ),
-      })
-      if (!alive) return
-      if (result.interrupted) return
+      try {
+        const result = await shell.exec(command, ac.signal, 5000, {
+          stdin: serializeStatusLineInput(
+            buildDynamicStatusLineInput(inputRef.current),
+          ),
+        })
+        if (!alive) return
+        if (result.interrupted) return
+        if (ac.signal.aborted) return
+        if (runInputSignature !== inputSignatureRef.current) {
+          rerunAfterCurrentRef.current = true
+          return
+        }
 
-      const raw = result.code === 0 ? result.stdout : ''
-      const next = normalizeStatusLineOutput(raw)
-      if (alive) {
-        const text = next || null
-        setState(prev =>
-          prev.text === text && prev.padding === padding && prev.isConfigured
-            ? prev
-            : { text, padding, isConfigured: true },
-        )
+        const raw = result.code === 0 ? result.stdout : ''
+        const next = normalizeStatusLineOutput(raw)
+        if (alive) {
+          const text = next || null
+          setState(prev =>
+            prev.text === text && prev.padding === padding && prev.isConfigured
+              ? prev
+              : { text, padding, isConfigured: true },
+          )
+        }
+      } finally {
+        if (abortRef.current === ac) abortRef.current = null
+        runningRef.current = false
+
+        if (alive && rerunAfterCurrentRef.current) {
+          rerunAfterCurrentRef.current = false
+          setTimeout(() => {
+            if (!alive) return
+            tick('input').catch(() => {})
+          }, 0)
+        }
       }
     }
 
-    tickRef.current = () => {
-      tick().catch(() => {})
+    tickRef.current = source => {
+      tick(source).catch(() => {})
     }
 
     tick().catch(() => {})
 
     const intervalId = setInterval(() => {
-      tickRef.current?.()
+      tickRef.current?.('interval')
     }, 1000)
 
     return () => {
       alive = false
       abortRef.current?.abort()
       tickRef.current = null
+      runningRef.current = false
+      rerunAfterCurrentRef.current = false
       clearInterval(intervalId)
     }
   }, [])
