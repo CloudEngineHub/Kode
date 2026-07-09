@@ -88,9 +88,23 @@ describe('Logo', () => {
     expect(output).not.toMatch(/(?:\n\s*){4,}/)
   })
 
-  test('keeps the full logo on spacious terminals', async () => {
+  test('uses compact layout on normal-height wide terminals', async () => {
     const harness = createHarness(
       <Logo mcpClients={[]} terminalColumns={100} terminalRows={30} />,
+    )
+
+    await harness.wait(20)
+    const output = harness.getOutput()
+    const firstLogoLine = ASCII_LOGO.trim().split(/\r?\n/)[0]
+
+    expect(output).toContain('KODE CLI')
+    expect(output).not.toContain(firstLogoLine)
+    expect(output).not.toMatch(/(?:\n\s*){4,}/)
+  })
+
+  test('keeps the full logo on tall spacious terminals', async () => {
+    const harness = createHarness(
+      <Logo mcpClients={[]} terminalColumns={100} terminalRows={40} />,
     )
 
     await harness.wait(20)

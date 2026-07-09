@@ -6,7 +6,7 @@ import { ASCII_LOGO, PRODUCT_NAME } from '#core/constants/product'
 export const MIN_LOGO_WIDTH = 70
 const DEFAULT_TERMINAL_COLUMNS = 80
 const DEFAULT_TERMINAL_ROWS = 24
-const COMPACT_LOGO_MAX_ROWS = 24
+const FULL_LOGO_MIN_ROWS = 32
 const DISPLAY_ASCII_LOGO = ASCII_LOGO.trimStart()
 
 function normalizeDimension(value: number | undefined, fallback: number) {
@@ -33,7 +33,7 @@ export function Logo({
   const failed = mcpClients.filter(c => c.type !== 'connected')
   const columns = normalizeDimension(terminalColumns, DEFAULT_TERMINAL_COLUMNS)
   const rows = normalizeDimension(terminalRows, DEFAULT_TERMINAL_ROWS)
-  const isCompact = columns < MIN_LOGO_WIDTH || rows <= COMPACT_LOGO_MAX_ROWS
+  const isCompact = columns < MIN_LOGO_WIDTH || rows < FULL_LOGO_MIN_ROWS
 
   // Generate separator that fits terminal width
   const separatorWidth = isCompact
