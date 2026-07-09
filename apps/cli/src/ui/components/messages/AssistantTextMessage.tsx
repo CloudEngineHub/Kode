@@ -38,6 +38,48 @@ type Props = {
   isTransient?: boolean
 }
 
+const FINAL_MARKDOWN_FOLD_LINE_THRESHOLD = 220
+const FINAL_MARKDOWN_VISIBLE_LINES = 120
+const FINAL_MARKDOWN_FOLD_CHAR_THRESHOLD = 20000
+const FINAL_MARKDOWN_VISIBLE_CHARS = 12000
+
+export function prepareAssistantMarkdownTextForRender(text: string): {
+  text: string
+  folded: boolean
+} {
+  if (
+    text.length <= FINAL_MARKDOWN_FOLD_CHAR_THRESHOLD &&
+    text.split(/\r?\n/, FINAL_MARKDOWN_FOLD_LINE_THRESHOLD + 1).length <=
+      FINAL_MARKDOWN_FOLD_LINE_THRESHOLD
+  ) {
+    return { text, folded: false }
+  }
+
+  const lines = text.split(/\r?\n/)
+  let visibleText: string
+  let hiddenDescription: string
+
+  if (lines.length > FINAL_MARKDOWN_FOLD_LINE_THRESHOLD) {
+    const visibleLines = lines.slice(0, FINAL_MARKDOWN_VISIBLE_LINES)
+    visibleText = visibleLines.join('\n')
+    hiddenDescription = `${lines.length - visibleLines.length} lines hidden`
+  } else {
+    visibleText = text.slice(0, FINAL_MARKDOWN_VISIBLE_CHARS)
+    hiddenDescription = `${text.length - visibleText.length} characters hidden`
+  }
+
+  const fenceCount = visibleText
+    .split(/\r?\n/)
+    .filter(line => line.trimStart().startsWith('```')).length
+  const closedVisibleText =
+    fenceCount % 2 === 1 ? `${visibleText}\n\`\`\`` : visibleText
+
+  return {
+    text: `${closedVisibleText}\n\n[Output folded: ${hiddenDescription}. Full content is available in the transcript.]`,
+    folded: true,
+  }
+}
+
 export function AssistantTextMessage({
   param: { text },
   costUSD,
@@ -244,6 +286,7 @@ export function AssistantTextMessage({
           text={text}
           contentWidth={contentWidth}
           maxHeight={maxHeight}
+          isTransient={Boolean(isTransient)}
           addMargin={addMargin}
           shouldShowDot={shouldShowDot}
           costUSD={costUSD}
@@ -258,6 +301,7 @@ function AssistantMarkdownContent({
   text,
   contentWidth,
   maxHeight,
+  isTransient,
   addMargin,
   shouldShowDot,
   costUSD,
@@ -267,13 +311,24 @@ function AssistantMarkdownContent({
   text: string
   contentWidth: number
   maxHeight?: number
+  isTransient: boolean
   addMargin: boolean
   shouldShowDot: boolean
   costUSD: number
   durationMs: number
   debug: boolean
 }): React.ReactNode {
-  const content = useMemo(() => applyMarkdown(text), [text])
+  const renderText = useMemo(
+    () =>
+      isTransient
+        ? { text, folded: false }
+        : prepareAssistantMarkdownTextForRender(text),
+    [isTransient, text],
+  )
+  const content = useMemo(
+    () => applyMarkdown(renderText.text),
+    [renderText.text],
+  )
 
   return (
     <Box
