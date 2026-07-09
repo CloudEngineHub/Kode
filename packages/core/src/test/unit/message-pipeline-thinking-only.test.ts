@@ -1,6 +1,7 @@
-import { describe, expect, mock, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { createAssistantMessage, createUserMessage } from '#core/utils/messages'
 import type { AssistantMessage, Message } from '@kode/engine/message-pipeline'
+import { __setLlmLazyQueryLLMLoaderForTests } from '#core/ai/llmLazy'
 
 type QueryLLMImplementation = (
   messages: Message[],
@@ -14,11 +15,6 @@ let queryLLMImplementation: QueryLLMImplementation = async () => {
 const queryLLM = mock(async (messages: Message[], systemPrompt: string[]) =>
   queryLLMImplementation(messages, systemPrompt),
 )
-
-mock.module('#core/ai/llm', () => ({
-  API_ERROR_MESSAGE_PREFIX: 'API_ERROR: ',
-  queryLLM,
-}))
 
 function createThinkingOnlyMessage(text: string): AssistantMessage {
   const message = createAssistantMessage('')
@@ -61,6 +57,14 @@ function createToolUseContext(maxTurns?: number) {
 }
 
 describe('messagePipeline thinking-only recovery', () => {
+  beforeEach(() => {
+    __setLlmLazyQueryLLMLoaderForTests(async () => queryLLM)
+  })
+
+  afterEach(() => {
+    __setLlmLazyQueryLLMLoaderForTests(null)
+  })
+
   test('recovers within the same turn until the model returns a final response', async () => {
     const calls: Array<{ messages: Message[]; systemPrompt: string[] }> = []
     queryLLM.mockClear()

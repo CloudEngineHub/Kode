@@ -19,7 +19,7 @@ function extractMessageText(content: unknown): string {
 
 export async function interpretHashCommand(input: string): Promise<string> {
   try {
-    const { queryQuick } = await import('#core/ai/llm')
+    const { queryQuick } = await import('#core/ai/llmLazy')
 
     const systemPrompt = [
       "You're helping the user structure notes that will be added to their AGENTS.md file.",

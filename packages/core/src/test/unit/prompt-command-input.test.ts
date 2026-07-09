@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
@@ -10,6 +10,8 @@ import {
   setCwd,
   setOriginalCwd,
 } from '#core/utils/state'
+import { __setLlmLazyQueryQuickLoaderForTests } from '#core/ai/llmLazy'
+import { createAssistantMessage } from '#core/utils/messages'
 
 function makeContext(overrides?: { disableSlashCommands?: boolean }) {
   return {
@@ -61,7 +63,7 @@ describe('prompt command input', () => {
   })
 
   afterEach(async () => {
-    mock.restore()
+    __setLlmLazyQueryQuickLoaderForTests(null)
     process.chdir(runnerProcessCwd)
     await setCwd(runnerShellCwd)
     setOriginalCwd(runnerOriginalCwd)
@@ -109,18 +111,10 @@ describe('prompt command input', () => {
   })
 
   test('/note writes the note to AGENTS.md', async () => {
-    mock.module('#core/ai/llm', () => ({
-      queryQuick: async () => ({
-        message: {
-          content: [
-            {
-              type: 'text',
-              text: '# API Docs\n\nRemember to update API docs.',
-            },
-          ],
-        },
-      }),
-    }))
+    __setLlmLazyQueryQuickLoaderForTests(
+      async () => async () =>
+        createAssistantMessage('# API Docs\n\nRemember to update API docs.'),
+    )
 
     const messages = await processUserInput(
       '/note Remember to update API docs',
