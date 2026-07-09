@@ -1,6 +1,6 @@
 import { Box, Static, Text, type DOMElement, measureElement } from 'ink'
 import * as React from 'react'
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import type { ToolUseConfirm } from '#ui-ink/components/permissions/PermissionRequest'
@@ -96,7 +96,8 @@ export function REPLView({
   const mainControlsRef = useRef<DOMElement | null>(null)
   const messageSelectorRef = useRef<DOMElement | null>(null)
   const lastMeasureKeyRef = useRef('')
-  const lastMeasureAtRef = useRef(0)
+  const scheduledMeasureKeyRef = useRef('')
+  const measureTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { rows, columns } = useTerminalSize()
   const normalizedRows = normalizeTerminalDimension(rows, 0)
   const theme = getTheme()
@@ -174,7 +175,7 @@ export function REPLView({
   const [mainControlsHeight, setMainControlsHeight] = useState(0)
   const [messageSelectorHeight, setMessageSelectorHeight] = useState(0)
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (rows <= 0 || columns <= 0) return
     const measureKey = [
       rows,
@@ -194,29 +195,44 @@ export function REPLView({
       messageSelectorMessages.length,
     ].join(':')
 
-    const now = Date.now()
     if (
       measureKey === lastMeasureKeyRef.current &&
-      now - lastMeasureAtRef.current < 200
+      measureTimerRef.current === null
     ) {
       return
     }
 
-    lastMeasureKeyRef.current = measureKey
-    lastMeasureAtRef.current = now
-
-    if (mainControlsRef.current) {
-      const measured = measureElement(mainControlsRef.current).height
-      setMainControlsHeight(prev => (prev === measured ? prev : measured))
-    } else {
-      setMainControlsHeight(prev => (prev === 0 ? prev : 0))
+    if (measureTimerRef.current) {
+      clearTimeout(measureTimerRef.current)
+      measureTimerRef.current = null
     }
 
-    if (messageSelectorRef.current) {
-      const measured = measureElement(messageSelectorRef.current).height
-      setMessageSelectorHeight(prev => (prev === measured ? prev : measured))
-    } else {
-      setMessageSelectorHeight(prev => (prev === 0 ? prev : 0))
+    scheduledMeasureKeyRef.current = measureKey
+    measureTimerRef.current = setTimeout(() => {
+      measureTimerRef.current = null
+      if (scheduledMeasureKeyRef.current !== measureKey) return
+      lastMeasureKeyRef.current = measureKey
+
+      if (mainControlsRef.current) {
+        const measured = measureElement(mainControlsRef.current).height
+        setMainControlsHeight(prev => (prev === measured ? prev : measured))
+      } else {
+        setMainControlsHeight(prev => (prev === 0 ? prev : 0))
+      }
+
+      if (messageSelectorRef.current) {
+        const measured = measureElement(messageSelectorRef.current).height
+        setMessageSelectorHeight(prev => (prev === measured ? prev : measured))
+      } else {
+        setMessageSelectorHeight(prev => (prev === 0 ? prev : 0))
+      }
+    }, MEASURE_DEBOUNCE_MS)
+
+    return () => {
+      if (measureTimerRef.current) {
+        clearTimeout(measureTimerRef.current)
+        measureTimerRef.current = null
+      }
     }
   }, [
     rows,
