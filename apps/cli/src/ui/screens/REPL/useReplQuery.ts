@@ -21,6 +21,10 @@ import {
   getOutputStyleSystemPromptAdditions,
   getCurrentOutputStyleDefinition,
 } from '#cli-services/outputStyles'
+import type {
+  AssistantStreamStore,
+  AssistantStreamUpdateEvent,
+} from './assistantStreamStore'
 
 export function appendMessagesForReplState(
   oldMessages: MessageType[],
@@ -38,7 +42,8 @@ export function appendMessagesForReplState(
     if (message.type === 'progress') {
       const current = next ?? oldMessages
       const existingIndex = current.findIndex(
-        item => item.type === 'progress' && item.toolUseID === message.toolUseID,
+        item =>
+          item.type === 'progress' && item.toolUseID === message.toolUseID,
       )
       if (existingIndex >= 0) {
         getNext()[existingIndex] = message
@@ -50,6 +55,26 @@ export function appendMessagesForReplState(
   }
 
   return next ?? oldMessages
+}
+
+export async function runReplQueryWithCleanup<T>(args: {
+  controller: AbortController
+  assistantStreamStore: Pick<AssistantStreamStore, 'endTurn'>
+  clearAbortController: (controller: AbortController) => boolean
+  setIsLoading: (isLoading: boolean) => void
+  execute: () => Promise<T>
+}): Promise<T> {
+  try {
+    return await args.execute()
+  } finally {
+    try {
+      args.assistantStreamStore.endTurn(args.controller)
+    } finally {
+      if (args.clearAbortController(args.controller)) {
+        args.setIsLoading(false)
+      }
+    }
+  }
 }
 
 export function useReplQuery(args: {
@@ -78,15 +103,19 @@ export function useReplQuery(args: {
     m2: AssistantMessage,
   ) => Promise<BinaryFeedbackResult>
   setAbortController: (abortController: AbortController | null) => void
+  clearAbortController: (abortController: AbortController) => boolean
   setIsLoading: (isLoading: boolean) => void
+  assistantStreamStore: AssistantStreamStore
 }): (
   newMessages: MessageType[],
   passedAbortController?: AbortController,
 ) => Promise<void> {
   const {
     appendSystemPrompt,
+    assistantStreamStore,
     canUseTool,
     checkPendingForkAndSuppressAppend,
+    clearAbortController,
     commands,
     disableSlashCommands,
     forkNumber,
@@ -117,58 +146,50 @@ export function useReplQuery(args: {
         setAbortController(controllerToUse)
       }
 
-      try {
-        const shouldSuppressAppend =
-          checkPendingForkAndSuppressAppend?.(newMessages) ?? false
-        if (shouldSuppressAppend) {
-          setAbortController(null)
-          setIsLoading(false)
-          return
-        }
+      await runReplQueryWithCleanup({
+        controller: controllerToUse,
+        assistantStreamStore,
+        clearAbortController,
+        setIsLoading,
+        execute: async () => {
+          try {
+            const shouldSuppressAppend =
+              checkPendingForkAndSuppressAppend?.(newMessages) ?? false
+            if (shouldSuppressAppend) return
 
-        const isKodingRequest =
-          newMessages.length > 0 &&
-          newMessages[0].type === 'user' &&
-          newMessages[0].options?.isKodingRequest === true
+            const isKodingRequest =
+              newMessages.length > 0 &&
+              newMessages[0].type === 'user' &&
+              newMessages[0].options?.isKodingRequest === true
 
-        setMessages(oldMessages =>
-          appendMessagesForReplState(oldMessages, newMessages),
-        )
+            setMessages(oldMessages =>
+              appendMessagesForReplState(oldMessages, newMessages),
+            )
 
-        markProjectOnboardingComplete()
+            markProjectOnboardingComplete()
 
-        const lastMessage = newMessages[newMessages.length - 1]!
-        if (lastMessage.type === 'assistant') {
-          setAbortController(null)
-          setIsLoading(false)
-          return
-        }
+            const lastMessage = newMessages[newMessages.length - 1]!
+            if (lastMessage.type === 'assistant') return
 
-        const outputStyle = getCurrentOutputStyleDefinition()
-        const [systemPrompt, context, maxThinkingTokens] = await Promise.all([
-          buildSystemPromptForSession({
-            disableSlashCommands,
-            systemPromptOverride,
-            appendSystemPrompt,
-            outputStyleActive: outputStyle !== null,
-            keepCodingInstructions: outputStyle?.keepCodingInstructions,
-          }),
-          getContext(),
-          getMaxThinkingTokens([...messages, lastMessage], {
-            thinkingMode,
-          }),
-        ])
+            const outputStyle = getCurrentOutputStyleDefinition()
+            const [systemPrompt, context, maxThinkingTokens] =
+              await Promise.all([
+                buildSystemPromptForSession({
+                  disableSlashCommands,
+                  systemPromptOverride,
+                  appendSystemPrompt,
+                  outputStyleActive: outputStyle !== null,
+                  keepCodingInstructions: outputStyle?.keepCodingInstructions,
+                }),
+                getContext(),
+                getMaxThinkingTokens([...messages, lastMessage], {
+                  thinkingMode,
+                }),
+              ])
 
-        let lastAssistantMessage: MessageType | null = null
-
-        for await (const message of runTurn({
-          messages: [...messages, lastMessage],
-          systemPrompt,
-          context,
-          canUseTool,
-          toolUseContext: {
-            agentId: 'main',
-            options: {
+            let lastAssistantMessage: MessageType | null = null
+            assistantStreamStore.beginTurn(controllerToUse)
+            const toolUseOptions = {
               commands,
               forkNumber,
               messageLogName,
@@ -188,58 +209,77 @@ export function useReplQuery(args: {
               ),
               getCustomSystemPromptAdditions:
                 getOutputStyleSystemPromptAdditions,
-            },
-            messageId: getLastAssistantMessageId([...messages, lastMessage]),
-            readFileTimestamps,
-            abortController: controllerToUse,
-            setToolJSX,
-          },
-          getBinaryFeedbackResponse,
-        })) {
-          setMessages(oldMessages =>
-            appendMessagesForReplState(oldMessages, [message]),
-          )
-          if (message.type === 'assistant') {
-            lastAssistantMessage = message
-          }
-        }
+              onAssistantStreamUpdate: (event: AssistantStreamUpdateEvent) => {
+                assistantStreamStore.handleUpdate(controllerToUse, event)
+              },
+            }
 
-        if (
-          isKodingRequest &&
-          lastAssistantMessage &&
-          lastAssistantMessage.type === 'assistant'
-        ) {
-          try {
-            const content =
-              typeof lastAssistantMessage.message.content === 'string'
-                ? lastAssistantMessage.message.content
-                : lastAssistantMessage.message.content
-                    .filter(block => block.type === 'text')
-                    .map(block => (block.type === 'text' ? block.text : ''))
-                    .join('\n')
+            for await (const message of runTurn({
+              messages: [...messages, lastMessage],
+              systemPrompt,
+              context,
+              canUseTool,
+              toolUseContext: {
+                agentId: 'main',
+                options: toolUseOptions,
+                messageId: getLastAssistantMessageId([
+                  ...messages,
+                  lastMessage,
+                ]),
+                readFileTimestamps,
+                abortController: controllerToUse,
+                setToolJSX,
+              },
+              getBinaryFeedbackResponse,
+            })) {
+              if (message.type === 'assistant') {
+                assistantStreamStore.clearPreview(controllerToUse)
+              }
+              setMessages(oldMessages =>
+                appendMessagesForReplState(oldMessages, [message]),
+              )
+              if (message.type === 'assistant') {
+                lastAssistantMessage = message
+              }
+            }
 
-            if (content && content.trim().length > 0) {
-              handleHashCommand(content)
+            if (
+              isKodingRequest &&
+              lastAssistantMessage &&
+              lastAssistantMessage.type === 'assistant'
+            ) {
+              try {
+                const content =
+                  typeof lastAssistantMessage.message.content === 'string'
+                    ? lastAssistantMessage.message.content
+                    : lastAssistantMessage.message.content
+                        .filter(block => block.type === 'text')
+                        .map(block => (block.type === 'text' ? block.text : ''))
+                        .join('\n')
+
+                if (content && content.trim().length > 0) {
+                  handleHashCommand(content)
+                }
+              } catch (error) {
+                logError(error)
+                debugLogger.error('REPL_KODING_SAVE_PROJECT_DOCS_ERROR', {
+                  error,
+                })
+              }
             }
           } catch (error) {
             logError(error)
-            debugLogger.error('REPL_KODING_SAVE_PROJECT_DOCS_ERROR', { error })
+            debugLogger.error('REPL_QUERY_ERROR', { error })
           }
-        }
-
-        setIsLoading(false)
-      } catch (error) {
-        logError(error)
-        debugLogger.error('REPL_QUERY_ERROR', { error })
-      } finally {
-        // Ensure the UI never gets stuck in a "loading" state when a turn fails early.
-        setIsLoading(false)
-      }
+        },
+      })
     },
     [
       appendSystemPrompt,
+      assistantStreamStore,
       canUseTool,
       checkPendingForkAndSuppressAppend,
+      clearAbortController,
       commands,
       disableSlashCommands,
       forkNumber,

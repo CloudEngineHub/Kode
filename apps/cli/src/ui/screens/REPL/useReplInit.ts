@@ -26,6 +26,7 @@ export function useReplInit(args: {
   reverify: () => void
   setIsLoading: (isLoading: boolean) => void
   setAbortController: (abortController: AbortController | null) => void
+  clearAbortController: (abortController: AbortController) => boolean
   setHaveShownCostDialog: (value: boolean) => void
   onQuery: (
     newMessages: MessageType[],
@@ -34,6 +35,7 @@ export function useReplInit(args: {
 }) {
   const {
     commands,
+    clearAbortController,
     forkNumber,
     initialPrompt,
     mcpClients,
@@ -104,11 +106,13 @@ export function useReplInit(args: {
         Boolean(getGlobalConfig().hasAcknowledgedCostThreshold),
       )
     } finally {
-      setIsLoading(false)
-      setAbortController(null)
+      if (clearAbortController(controller)) {
+        setIsLoading(false)
+      }
     }
   }, [
     commands,
+    clearAbortController,
     forkNumber,
     initialPrompt,
     mcpClients,

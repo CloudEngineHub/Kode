@@ -10,6 +10,9 @@ import { setRequestStatus } from '#core/utils/requestStatus'
 import { REPL } from './REPL'
 import { REPLView } from './REPLView'
 import type { TranscriptItem } from './useTranscriptItems'
+import { createAssistantStreamStore } from './assistantStreamStore'
+
+const assistantStreamStore = createAssistantStreamStore()
 
 type TestHarness = {
   unmount: () => void
@@ -62,6 +65,7 @@ function renderReplView(args: {
       startupHeaderKey={args.startupHeaderKey}
       showStartupHeader={args.showStartupHeader}
       transientItems={args.transientItems ?? []}
+      assistantStreamStore={assistantStreamStore}
       toolJSX={null}
       toolUseConfirm={null}
       setToolUseConfirm={() => {}}

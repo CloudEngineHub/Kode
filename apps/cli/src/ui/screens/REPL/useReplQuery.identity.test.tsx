@@ -7,6 +7,7 @@ import type { BinaryFeedbackResult, Message } from '#core/query'
 import type { WrappedClient } from '#core/mcp/client'
 import type { ToolUseContext } from '#core/tooling/Tool'
 import { useReplQuery } from './useReplQuery'
+import { createAssistantStreamStore } from './assistantStreamStore'
 
 type OnQuery = ReturnType<typeof useReplQuery>
 
@@ -84,7 +85,9 @@ const getBinaryFeedbackResponse = async (): Promise<BinaryFeedbackResult> => ({
   shouldSkipPermissionCheck: false,
 })
 const setAbortController = (_controller: AbortController | null) => {}
+const clearAbortController = (_controller: AbortController) => true
 const setIsLoading = (_isLoading: boolean) => {}
+const assistantStreamStore = createAssistantStreamStore()
 
 function Probe({
   label,
@@ -114,7 +117,9 @@ function Probe({
     setToolJSX,
     getBinaryFeedbackResponse,
     setAbortController,
+    clearAbortController,
     setIsLoading,
+    assistantStreamStore,
   })
   onRender(onQuery)
   return <Text>{label}</Text>

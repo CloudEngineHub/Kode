@@ -30,6 +30,8 @@ import { getTheme } from '#core/utils/theme'
 import type { TranscriptItem } from './useTranscriptItems'
 import type { BinaryFeedbackContext } from './types'
 import { TransientViewportProvider } from '#ui-ink/contexts/TransientViewportContext'
+import { AssistantStreamPreview } from './AssistantStreamPreview'
+import type { AssistantStreamStore } from './assistantStreamStore'
 
 const VIEWPORT_SAFE_MARGIN_ROWS = 1
 const MEASURE_DEBOUNCE_MS = 400
@@ -43,6 +45,7 @@ export function REPLView({
   startupHeader,
   showStartupHeader = false,
   transientItems,
+  assistantStreamStore,
   toolJSX,
   toolUseConfirm,
   setToolUseConfirm,
@@ -74,6 +77,7 @@ export function REPLView({
   startupHeaderKey?: string
   showStartupHeader?: boolean
   transientItems: TranscriptItem[]
+  assistantStreamStore: AssistantStreamStore
   toolJSX: {
     jsx: ReactNode | null
     shouldHidePromptInput: boolean
@@ -273,11 +277,10 @@ export function REPLView({
       messageSelectorHeight -
       VIEWPORT_SAFE_MARGIN_ROWS,
   )
-  const showTransientRegion =
+  const canShowTransientRegion =
     !isLayoutMeasurementStale &&
     !isLayoutMeasurementPending &&
     !isMicroViewport &&
-    transientItems.length > 0 &&
     transientMaxHeight > 0
   const isLayoutSettling =
     isLayoutMeasurementPending || isLayoutMeasurementStale
@@ -415,17 +418,13 @@ export function REPLView({
               </Static>
             )}
 
-            {showTransientRegion && (
-              <Box
-                flexDirection="column"
-                height={transientMaxHeight}
-                justifyContent="flex-end"
-                overflow="hidden"
-                width="100%"
-              >
-                {transientItems.map(item => item.jsx)}
-              </Box>
-            )}
+            <AssistantStreamPreview
+              store={assistantStreamStore}
+              transientItems={transientItems}
+              maxHeight={transientMaxHeight}
+              isVisible={canShowTransientRegion}
+              debug={debug}
+            />
 
             <Box
               ref={mainControlsRef}

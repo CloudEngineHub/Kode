@@ -56,6 +56,10 @@ import { buildPromptInputProps } from './promptInputProps'
 import { useMessageSelectorSelect } from './useMessageSelectorSelect'
 import { buildStartupHeaderIdentityKey } from './startupHeaderIdentity'
 import type { BinaryFeedbackContext, REPLProps } from './types'
+import {
+  createAssistantStreamStore,
+  type AssistantStreamStore,
+} from './assistantStreamStore'
 import { ensureLspManagerInitialized } from '#tools/tools/system/LspTool/call'
 import { describeToolPermissionRuleSource } from '#core/permissions/ruleString'
 import { triggerModelConfigChange } from '#core/messages'
@@ -95,6 +99,18 @@ export function useReplController(props: REPLProps) {
   const mcpClients = props.mcpClients ?? []
   const isDefaultModel = props.isDefaultModel ?? true
   const { rows: terminalRows, columns: terminalColumns } = useTerminalSize()
+  const assistantStreamStoreRef = useRef<AssistantStreamStore | null>(null)
+  if (assistantStreamStoreRef.current === null) {
+    assistantStreamStoreRef.current = createAssistantStreamStore()
+  }
+  const assistantStreamStore = assistantStreamStoreRef.current
+
+  useEffect(
+    () => () => {
+      assistantStreamStore.destroy()
+    },
+    [assistantStreamStore],
+  )
   const [updateAvailableVersion, setUpdateAvailableVersion] = useState<
     string | null
   >(() => props.initialUpdateVersion ?? null)
@@ -206,8 +222,27 @@ export function useReplController(props: REPLProps) {
     [],
   )
 
-  const [abortController, setAbortController] =
+  const [abortController, setAbortControllerState] =
     useState<AbortController | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
+  const setAbortController = useCallback(
+    (nextController: AbortController | null) => {
+      abortControllerRef.current = nextController
+      setAbortControllerState(nextController)
+    },
+    [],
+  )
+  const clearAbortController = useCallback(
+    (completedController: AbortController) => {
+      if (abortControllerRef.current !== completedController) return false
+      abortControllerRef.current = null
+      setAbortControllerState(currentController =>
+        currentController === completedController ? null : currentController,
+      )
+      return true
+    },
+    [],
+  )
   const [isLoading, setIsLoading] = useState(false)
   const [cancelRequestKey, setCancelRequestKey] = useState(0)
   type ToolView = {
@@ -868,6 +903,9 @@ export function useReplController(props: REPLProps) {
     if (!isLoading) return
     setCancelRequestKey(prev => prev + 1)
     setIsLoading(false)
+    if (abortController) {
+      assistantStreamStore.endTurn(abortController)
+    }
     if (toolUseConfirm) {
       toolUseConfirm.onAbort()
       setAbortController(null)
@@ -879,7 +917,14 @@ export function useReplController(props: REPLProps) {
     }
     setAbortController(null)
     showToast('Interrupted')
-  }, [abortController, isLoading, showToast, toolUseConfirm])
+  }, [
+    abortController,
+    assistantStreamStore,
+    isLoading,
+    setAbortController,
+    showToast,
+    toolUseConfirm,
+  ])
 
   useCancelRequest(
     setToolJSXWithClear,
@@ -1058,7 +1103,9 @@ export function useReplController(props: REPLProps) {
     setToolJSX: setToolJSXWithClear,
     getBinaryFeedbackResponse,
     setAbortController,
+    clearAbortController,
     setIsLoading,
+    assistantStreamStore,
   })
   useEffect(() => {
     onQueryRef.current = onQuery
@@ -1080,6 +1127,7 @@ export function useReplController(props: REPLProps) {
     reverify,
     setIsLoading,
     setAbortController,
+    clearAbortController,
     setHaveShownCostDialog,
     onQuery,
   })
@@ -1308,6 +1356,7 @@ export function useReplController(props: REPLProps) {
     startupHeaderKey,
     showStartupHeader,
     transientItems,
+    assistantStreamStore,
     toolJSX,
     toolUseConfirm,
     setToolUseConfirm,
