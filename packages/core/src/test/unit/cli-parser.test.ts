@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { createCliProgram } from '#host-cli/entrypoints/cli/cliParser'
+import { shouldRunHeadlessMode } from '#host-cli/entrypoints/cli/cliParser/headlessMode'
 
 describe('cli parser (commander)', () => {
   test('--help prints help and exits (no UI started)', () => {
@@ -28,7 +29,7 @@ describe('cli parser (commander)', () => {
 
     expect(out).toContain('Usage: kode')
     expect(out).toContain('--print')
-    expect(out).toContain('--web')
+    expect(out).toContain('--headless')
   })
 
   test('--version prints package version and exits (no UI started)', () => {
@@ -59,17 +60,39 @@ describe('cli parser (commander)', () => {
     expect(out.trim()).toBe(String(pkg.version))
   })
 
-  test('parseOptions picks up --cwd and --print', () => {
+  test('parseOptions picks up --cwd, --print, and --headless', () => {
     const program = createCliProgram('', undefined)
-    program.parseOptions(['--cwd', '/tmp', '--print', '--web'])
+    program.parseOptions(['--cwd', '/tmp', '--print', '--headless', '--web'])
 
     const opts = program.opts() as unknown as {
       cwd: string
       print: boolean
+      headless: boolean
       web: boolean
     }
     expect(opts.cwd).toBe('/tmp')
     expect(opts.print).toBe(true)
+    expect(opts.headless).toBe(true)
     expect(opts.web).toBe(true)
+  })
+
+  test('headless mode detection is explicit or safely inferred', () => {
+    expect(shouldRunHeadlessMode({ headless: true })).toBe(true)
+    expect(shouldRunHeadlessMode({ print: true })).toBe(true)
+    expect(shouldRunHeadlessMode({ outputFormat: 'json' })).toBe(true)
+    expect(shouldRunHeadlessMode({ inputFormat: 'stream-json' })).toBe(true)
+    expect(
+      shouldRunHeadlessMode({
+        stdoutIsTTY: false,
+        stdinContent: 'hello',
+      }),
+    ).toBe(true)
+    expect(
+      shouldRunHeadlessMode({
+        stdoutIsTTY: true,
+        stdinContent: 'hello',
+      }),
+    ).toBe(false)
+    expect(shouldRunHeadlessMode({ stdoutIsTTY: false })).toBe(false)
   })
 })

@@ -36,7 +36,31 @@ import type { RenderOptions } from 'ink'
 let didEnterAlternateScreen = false
 
 function wantsPrintMode(): boolean {
-  return process.argv.includes('-p') || process.argv.includes('--print')
+  const readFlagValue = (flag: string): string | null => {
+    const prefix = `${flag}=`
+    for (let i = 0; i < process.argv.length; i += 1) {
+      const arg = process.argv[i]
+      if (arg === flag) return process.argv[i + 1] ?? null
+      if (arg?.startsWith(prefix)) return arg.slice(prefix.length)
+    }
+    return null
+  }
+
+  const outputFormat = String(readFlagValue('--output-format') ?? 'text')
+    .toLowerCase()
+    .trim()
+  const inputFormat = String(readFlagValue('--input-format') ?? 'text')
+    .toLowerCase()
+    .trim()
+
+  return (
+    process.argv.includes('-p') ||
+    process.argv.includes('--print') ||
+    process.argv.includes('--headless') ||
+    outputFormat === 'json' ||
+    outputFormat === 'stream-json' ||
+    inputFormat === 'stream-json'
+  )
 }
 
 export async function runCli(): Promise<void> {

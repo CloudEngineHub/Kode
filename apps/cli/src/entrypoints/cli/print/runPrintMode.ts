@@ -107,7 +107,7 @@ export async function runPrintMode({
 
   if (normalizedOutputFormat === 'stream-json' && !verbose) {
     console.error(
-      'Error: When using --print, --output-format=stream-json requires --verbose',
+      'Error: When using --print/--headless, --output-format=stream-json requires --verbose',
     )
     process.exit(1)
   }
@@ -118,7 +118,7 @@ export async function runPrintMode({
 
   if (includePartialMessages && normalizedOutputFormat !== 'stream-json') {
     console.error(
-      'Error: --include-partial-messages requires --print and --output-format=stream-json.',
+      'Error: --include-partial-messages requires --print/--headless and --output-format=stream-json.',
     )
     process.exit(1)
   }
@@ -182,7 +182,7 @@ export async function runPrintMode({
   } else {
     if (!inputPrompt) {
       console.error(
-        'Error: Input must be provided either through stdin or as a prompt argument when using --print',
+        'Error: Input must be provided either through stdin or as a prompt argument when using --print or --headless',
       )
       process.exit(1)
     }

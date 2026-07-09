@@ -37,6 +37,7 @@ describe('CLI command registration', () => {
     for (const flag of [
       '--cwd <cwd>',
       '-p, --print',
+      '--headless',
       '--output-format <format>',
       '--input-format <format>',
       '--allowedTools, --allowed-tools <tools...>',
