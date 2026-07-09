@@ -14,6 +14,20 @@ export type PastedImageAttachment = {
   mediaType: string
 }
 
+const PASTED_TEXT_PLACEHOLDER_PATTERN = /\[Pasted text #\d+(?: \+\d+ lines)?\]/g
+const IMAGE_PLACEHOLDER_PATTERN = /\[Image #\d+\]/g
+
+function collectPlaceholderMatches(
+  input: string,
+  pattern: RegExp,
+): Set<string> {
+  const placeholders = new Set<string>()
+  for (const match of input.matchAll(pattern)) {
+    placeholders.add(match[0])
+  }
+  return placeholders
+}
+
 function arePastedTextSegmentsEqual(
   a: PastedTextSegment[],
   b: PastedTextSegment[],
@@ -219,9 +233,26 @@ export function usePromptPastes(args: {
   }, [])
 
   useEffect(() => {
-    setPastedTexts(prev => prev.filter(p => input.includes(p.placeholder)))
-    setPastedImages(prev => prev.filter(p => input.includes(p.placeholder)))
-  }, [input, setPastedImages, setPastedTexts])
+    if (pastedTexts.length === 0 && pastedImages.length === 0) return
+
+    const referencedTextPlaceholders =
+      pastedTexts.length > 0
+        ? collectPlaceholderMatches(input, PASTED_TEXT_PLACEHOLDER_PATTERN)
+        : null
+    const referencedImagePlaceholders =
+      pastedImages.length > 0
+        ? collectPlaceholderMatches(input, IMAGE_PLACEHOLDER_PATTERN)
+        : null
+
+    setPastedTexts(prev => {
+      if (!referencedTextPlaceholders || prev.length === 0) return prev
+      return prev.filter(p => referencedTextPlaceholders.has(p.placeholder))
+    })
+    setPastedImages(prev => {
+      if (!referencedImagePlaceholders || prev.length === 0) return prev
+      return prev.filter(p => referencedImagePlaceholders.has(p.placeholder))
+    })
+  }, [input, pastedImages, pastedTexts, setPastedImages, setPastedTexts])
 
   return {
     pastedTexts,

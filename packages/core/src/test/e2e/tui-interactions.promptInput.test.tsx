@@ -282,6 +282,10 @@ function DraftPastePersistenceHarnessInner(): React.ReactNode {
         setShowPrompt(prev => !prev)
         return true
       }
+      if (key.ctrl && inputChar === 'r') {
+        setInput('hello world')
+        return true
+      }
     },
     { priority: 50 },
   )
@@ -1001,6 +1005,28 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
     const out = h.getOutput()
     expect(out).toContain('SUB:\"hello PASTE world\"')
     expect(out).not.toContain('SUB:\"hello [Pasted text #1] world\"')
+  })
+
+  test('removed pasted text placeholders are not expanded on submit', async () => {
+    const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
+    const h = createInkTestHarness(
+      <DraftPastePersistenceHarness conversationKey={conversationKey} />,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    h.clearOutput()
+
+    // Simulate editing the prompt so the placeholder is no longer present.
+    h.stdin.write('\x12')
+    await h.wait(75)
+
+    h.stdin.write('\r')
+    await h.wait(150)
+
+    const out = h.getOutput()
+    expect(out).toContain('SUB:\"hello world\"')
+    expect(out).not.toContain('SUB:\"hello PASTE world\"')
   })
 
   test('up arrow on middle line moves cursor up (not history)', async () => {
