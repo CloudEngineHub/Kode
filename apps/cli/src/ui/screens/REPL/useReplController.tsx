@@ -1187,45 +1187,80 @@ export function useReplController(props: REPLProps) {
     saveGlobalConfig({ ...projectConfig, hasAcknowledgedCostThreshold: true })
   }, [])
 
-  const promptInputProps = buildPromptInputProps({
-    commands,
-    forkNumber,
-    messageLogName: props.messageLogName,
-    initialPrompt: props.initialPrompt,
-    tools: props.tools,
-    disableSlashCommands,
-    isDisabled: apiKeyStatus !== 'valid',
-    isLoading,
-    onQuery,
-    debug,
-    verbose,
-    messages,
-    setToolJSX: setToolJSXWithClear,
-    input: inputValue,
-    onInputChange: setInputValue,
-    mode: inputMode,
-    onModeChange: setInputMode,
-    submitCount,
-    onSubmitCountChange: setSubmitCount,
-    setIsLoading,
-    setAbortController,
-    uiRefreshCounter,
-    onShowMessageSelector: () => setIsMessageSelectorVisible(prev => !prev),
-    setForkConvoWithMessagesOnTheNextRender,
-    readFileTimestamps: readFileTimestampsRef.current,
-    abortController,
-    onManageTasks: openTasksScreen,
-    restorePastes,
-    onRestorePastesApplied: id => {
-      setRestorePastes(prev => {
-        if (!prev) return prev
-        if (prev.id !== id) return prev
-        return undefined
-      })
-    },
-    draftPastes,
-    onDraftPastesChange: setDraftPastes,
-  })
+  const handleShowMessageSelector = useCallback(() => {
+    setIsMessageSelectorVisible(prev => !prev)
+  }, [])
+
+  const handleRestorePastesApplied = useCallback((id: number) => {
+    setRestorePastes(prev => {
+      if (!prev) return prev
+      if (prev.id !== id) return prev
+      return undefined
+    })
+  }, [])
+
+  const promptInputProps = useMemo(
+    () =>
+      buildPromptInputProps({
+        commands,
+        forkNumber,
+        messageLogName: props.messageLogName,
+        initialPrompt: props.initialPrompt,
+        tools: props.tools,
+        disableSlashCommands,
+        isDisabled: apiKeyStatus !== 'valid',
+        isLoading,
+        onQuery,
+        debug,
+        verbose,
+        messages,
+        setToolJSX: setToolJSXWithClear,
+        input: inputValue,
+        onInputChange: setInputValue,
+        mode: inputMode,
+        onModeChange: setInputMode,
+        submitCount,
+        onSubmitCountChange: setSubmitCount,
+        setIsLoading,
+        setAbortController,
+        uiRefreshCounter,
+        onShowMessageSelector: handleShowMessageSelector,
+        setForkConvoWithMessagesOnTheNextRender,
+        readFileTimestamps: readFileTimestampsRef.current,
+        abortController,
+        onManageTasks: openTasksScreen,
+        restorePastes,
+        onRestorePastesApplied: handleRestorePastesApplied,
+        draftPastes,
+        onDraftPastesChange: setDraftPastes,
+      }),
+    [
+      abortController,
+      apiKeyStatus,
+      commands,
+      debug,
+      disableSlashCommands,
+      draftPastes,
+      forkNumber,
+      handleRestorePastesApplied,
+      handleShowMessageSelector,
+      inputMode,
+      inputValue,
+      isLoading,
+      messages,
+      onQuery,
+      openTasksScreen,
+      props.initialPrompt,
+      props.messageLogName,
+      props.tools,
+      restorePastes,
+      setForkConvoWithMessagesOnTheNextRender,
+      setToolJSXWithClear,
+      submitCount,
+      uiRefreshCounter,
+      verbose,
+    ],
+  )
 
   const handleMessageSelectorSelect = useMessageSelectorSelect({
     messages,
