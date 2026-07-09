@@ -156,21 +156,6 @@ export function useReplController(props: REPLProps) {
     ),
   )
   const initialForkNumberRef = useRef(forkNumber)
-  const startupHeaderTerminalSizeRef = useRef({
-    forkNumber,
-    columns: terminalColumns,
-    rows: terminalRows,
-  })
-  if (startupHeaderTerminalSizeRef.current.forkNumber !== forkNumber) {
-    startupHeaderTerminalSizeRef.current = {
-      forkNumber,
-      columns: terminalColumns,
-      rows: terminalRows,
-    }
-  }
-  const startupHeaderTerminalColumns =
-    startupHeaderTerminalSizeRef.current.columns
-  const startupHeaderTerminalRows = startupHeaderTerminalSizeRef.current.rows
   const [staticOutputEpoch, setStaticOutputEpoch] = useState(0)
   const [uiRefreshCounter, setUiRefreshCounter] = useState(0)
 
@@ -1159,8 +1144,8 @@ export function useReplController(props: REPLProps) {
           isDefaultModel={isDefaultModel}
           updateBannerVersion={updateAvailableVersion}
           updateBannerCommands={updateCommands}
-          terminalColumns={startupHeaderTerminalColumns}
-          terminalRows={startupHeaderTerminalRows}
+          terminalColumns={terminalColumns}
+          terminalRows={terminalRows}
         />
         <ProjectOnboarding workspaceDir={getOriginalCwd()} />
       </Box>
@@ -1169,8 +1154,8 @@ export function useReplController(props: REPLProps) {
       isDefaultModel,
       mcpClients,
       startupHeaderKey,
-      startupHeaderTerminalColumns,
-      startupHeaderTerminalRows,
+      terminalColumns,
+      terminalRows,
       updateAvailableVersion,
       updateCommands,
     ],

@@ -41,7 +41,6 @@ export function REPLView({
   staticOutputEpoch,
   staticItems,
   startupHeader,
-  startupHeaderKey,
   showStartupHeader = false,
   transientItems,
   toolJSX,
@@ -165,48 +164,9 @@ export function REPLView({
     !isMessageSelectorVisible &&
     !binaryFeedbackContext &&
     !showingCostDialog
-  const startupHeaderStaticItemRef = useRef<{
-    epoch: number
-    item: TranscriptItem
-  } | null>(null)
   const mountedStaticOutputEpochRef = useRef<number | null>(null)
-  const shouldPrintStartupHeaderStatically =
-    shouldRenderStartupHeader && staticItems.length === 0
-
-  if (shouldPrintStartupHeaderStatically && startupHeader) {
-    const key = `startup:${startupHeaderKey ?? 'startup'}`
-    const current = startupHeaderStaticItemRef.current
-    if (!current || current.epoch !== staticOutputEpoch) {
-      startupHeaderStaticItemRef.current = {
-        epoch: staticOutputEpoch,
-        item: {
-          key,
-          jsx: (
-            <Box key={key} flexDirection="column" width="100%">
-              {startupHeader}
-            </Box>
-          ),
-        },
-      }
-    }
-  }
-
-  const startupHeaderStaticItem =
-    startupHeaderStaticItemRef.current?.epoch === staticOutputEpoch
-      ? startupHeaderStaticItemRef.current.item
-      : null
-  const staticItemsWithStartupHeader = useMemo(
-    () =>
-      startupHeaderStaticItem
-        ? [startupHeaderStaticItem, ...staticItems]
-        : staticItems,
-    [staticItems, startupHeaderStaticItem],
-  )
-  const staticOutputKey = startupHeaderStaticItem
-    ? `static-${staticOutputEpoch}-${startupHeaderStaticItem.key}`
-    : `static-${staticOutputEpoch}`
-  const shouldRenderStartupHeaderInControls =
-    shouldRenderStartupHeader && !startupHeaderStaticItem
+  const staticOutputKey = `static-${staticOutputEpoch}`
+  const shouldRenderStartupHeaderInControls = shouldRenderStartupHeader
 
   const [mainControlsHeight, setMainControlsHeight] = useState(0)
   const [messageSelectorHeight, setMessageSelectorHeight] = useState(0)
@@ -353,7 +313,7 @@ export function REPLView({
             : isLoading
               ? 'Working... Esc to interrupt'
               : null
-  const hasStaticOutput = staticItemsWithStartupHeader.length > 0
+  const hasStaticOutput = staticItems.length > 0
   const shouldMountStaticOutputNormally =
     !isMinimizedViewport &&
     !isMicroViewport &&
@@ -382,10 +342,7 @@ export function REPLView({
         >
           <Box ref={rootUiRef} flexDirection="column" width="100%">
             {shouldRenderStaticOutput && (
-              <Static
-                key={staticOutputKey}
-                items={staticItemsWithStartupHeader}
-              >
+              <Static key={staticOutputKey} items={staticItems}>
                 {(item: TranscriptItem) => item.jsx}
               </Static>
             )}
@@ -410,10 +367,7 @@ export function REPLView({
             width="100%"
           >
             {shouldRenderStaticOutput && (
-              <Static
-                key={staticOutputKey}
-                items={staticItemsWithStartupHeader}
-              >
+              <Static key={staticOutputKey} items={staticItems}>
                 {(item: TranscriptItem) => item.jsx}
               </Static>
             )}
@@ -456,10 +410,7 @@ export function REPLView({
         ) : (
           <Box ref={rootUiRef} flexDirection="column" width="100%">
             {shouldRenderStaticOutput && (
-              <Static
-                key={staticOutputKey}
-                items={staticItemsWithStartupHeader}
-              >
+              <Static key={staticOutputKey} items={staticItems}>
                 {(item: TranscriptItem) => item.jsx}
               </Static>
             )}

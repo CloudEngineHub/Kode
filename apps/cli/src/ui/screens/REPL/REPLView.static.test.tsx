@@ -7,6 +7,7 @@ import PromptInput from '#ui-ink/components/PromptInput'
 import type { PromptMode } from '#ui-ink/components/PromptInput/types'
 import { KeypressProvider } from '#ui-ink/contexts/KeypressContext'
 import { setRequestStatus } from '#core/utils/requestStatus'
+import { REPL } from './REPL'
 import { REPLView } from './REPLView'
 import type { TranscriptItem } from './useTranscriptItems'
 
@@ -354,7 +355,7 @@ describe('REPLView Static output epoch', () => {
     expect(output).toContain('Header B')
   })
 
-  test('does not reprint the same startup header during ordinary rerenders', async () => {
+  test('keeps the same live startup header bounded during ordinary rerenders', async () => {
     const harness = createHarness(
       renderReplView({
         staticOutputEpoch: 0,
@@ -380,10 +381,11 @@ describe('REPLView Static output epoch', () => {
     )
     await harness.wait(20)
 
-    expect(harness.getOutput()).not.toContain('KODE CLI')
+    const output = harness.getOutput()
+    expect(countOccurrences(output, 'KODE CLI')).toBeLessThanOrEqual(1)
   })
 
-  test('does not reprint the startup header when its identity changes in the same epoch', async () => {
+  test('does not append a stale startup header when its identity changes in the same epoch', async () => {
     const harness = createHarness(
       renderReplView({
         staticOutputEpoch: 0,
@@ -411,10 +413,10 @@ describe('REPLView Static output epoch', () => {
 
     const output = harness.getOutput()
     expect(output).not.toContain('Header A')
-    expect(output).not.toContain('Header B')
+    expect(countOccurrences(output, 'Header B')).toBeLessThanOrEqual(1)
   })
 
-  test('does not reprint the same startup header when the terminal resizes', async () => {
+  test('keeps the live startup header bounded when the terminal resizes', async () => {
     const harness = createHarness(
       renderReplView({
         staticOutputEpoch: 0,
@@ -433,7 +435,8 @@ describe('REPLView Static output epoch', () => {
     await harness.wait(220)
 
     const output = harness.getOutput()
-    expect(output).not.toContain('KODE CLI')
+    expect(output).toContain('KODE CLI')
+    expect(countOccurrences(output, 'KODE CLI')).toBeLessThanOrEqual(1)
   })
 
   test('does not reprint static history when the terminal resizes', async () => {
@@ -626,5 +629,35 @@ describe('REPLView Static output epoch', () => {
     expect(output).not.toContain('static-a')
     expect(output).not.toContain('KODE CLI')
     expect(output).not.toContain('transient-a')
+  })
+
+  test('REPL startup header uses the current terminal height for MCP summary after resize', async () => {
+    const messageLogName = `startup-resize-${Date.now()}-${Math.random()}`
+    const harness = createHarness(
+      <KeypressProvider>
+        <REPL
+          commands={[]}
+          initialPrompt={undefined}
+          messageLogName={messageLogName}
+          shouldShowPromptInput
+          tools={[]}
+          verbose={false}
+          mcpClients={[{ type: 'connected', name: 'codegraph' } as any]}
+          isDefaultModel={false}
+        />
+      </KeypressProvider>,
+      { columns: 100, rows: 24 },
+    )
+
+    await harness.wait(120)
+    expect(harness.getOutput()).toContain('codegraph')
+
+    harness.clearOutput()
+    harness.resize(100, 8)
+    await harness.wait(520)
+
+    const output = harness.getOutput()
+    expect(output).toContain('MCP Servers:')
+    expect(output).toContain('codegraph')
   })
 })
