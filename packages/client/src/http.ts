@@ -48,12 +48,14 @@ function toWebSocketUrl(args: {
   baseUrl: URL
   token: string
   workspaceId?: string
+  sessionId?: string
 }): URL {
   const wsUrl = new URL(args.baseUrl.toString())
   wsUrl.protocol = wsUrl.protocol === 'https:' ? 'wss:' : 'ws:'
   wsUrl.pathname = '/ws'
   wsUrl.searchParams.set('token', args.token)
   if (args.workspaceId) wsUrl.searchParams.set('workspace', args.workspaceId)
+  if (args.sessionId) wsUrl.searchParams.set('session_id', args.sessionId)
   return wsUrl
 }
 
@@ -115,6 +117,7 @@ export class HttpClient implements KodeClient {
       baseUrl,
       token: this.options.token,
       workspaceId: this.options.workspaceId,
+      sessionId: this.sessionId ?? undefined,
     })
 
     const WebSocketImpl =
@@ -166,7 +169,6 @@ export class HttpClient implements KodeClient {
 
     ws.addEventListener('close', () => {
       this.ws = null
-      this.sessionId = null
     })
   }
 

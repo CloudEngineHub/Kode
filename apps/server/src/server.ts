@@ -14,6 +14,11 @@ import { createRoutes } from './routes'
 import { createWebSocketHandlers } from './ws/connection'
 import type { DaemonSession } from './ws/types'
 
+type WebSocketData = {
+  session: DaemonSession
+  replayHistory: boolean
+}
+
 export type KodeDaemon = {
   url: string
   host: string
@@ -83,7 +88,7 @@ export async function startKodeDaemon(args: {
     mcpClients,
   })
 
-  const server = await serveNode<{ session: DaemonSession }>({
+  const server = await serveNode<WebSocketData>({
     hostname: host,
     port,
     fetch: routes.fetch,

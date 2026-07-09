@@ -161,6 +161,14 @@ export async function handleChatPrompt(args: {
       }
     }
 
+    if (session.clients.size === 0) {
+      return {
+        result: false,
+        message: 'Permission required, but no UI client is attached.',
+        shouldPromptUser: false,
+      }
+    }
+
     const requestId =
       typeof params.toolUseContext.toolUseId === 'string' &&
       params.toolUseContext.toolUseId

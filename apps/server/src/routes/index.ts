@@ -3,6 +3,7 @@ import { basename, resolve } from 'node:path'
 import { loadToolPermissionContextFromDisk } from '@kode/core/utils/permissions/toolPermissionSettings'
 import type { Tool } from '@kode/core/tooling/Tool'
 import type { WrappedClient } from '@kode/core/mcp/client'
+import { isUuid } from '@kode/core/utils/uuid'
 
 import { maybeServeWebui } from '../server/webui'
 import { routeChat } from './chat'
@@ -12,6 +13,11 @@ import type { DaemonSession } from '../ws/types'
 
 type UpgradeServer<TData> = {
   upgrade: (req: Request, options: { data: TData }) => boolean
+}
+
+type WebSocketData = {
+  session: DaemonSession
+  replayHistory: boolean
 }
 
 export function createRoutes(args: {
@@ -32,7 +38,7 @@ export function createRoutes(args: {
 }): {
   fetch: (
     req: Request,
-    server: UpgradeServer<{ session: DaemonSession }>,
+    server: UpgradeServer<WebSocketData>,
   ) => Promise<Response | undefined>
 } {
   return {
@@ -114,25 +120,44 @@ export function createRoutes(args: {
         const selectedCwd =
           workspaces.find(w => w.id === selected)?.path ?? resolve(args.cwd)
 
-        const sessionId = crypto.randomUUID()
-        const session: DaemonSession = {
-          sessionId,
-          cwd: selectedCwd,
-          ws: null,
-          messages: [],
-          readFileTimestamps: {},
-          responseState: {},
-          toolPermissionContext: loadToolPermissionContextFromDisk({
-            projectDir: selectedCwd,
-            includeKodeProjectConfig: true,
-            isBypassPermissionsModeAvailable: true,
-          }),
-          activeAbortController: null,
-          inflightPermissionRequests: new Map(),
-        }
-        args.sessions.set(sessionId, session)
+        const requestedSessionId =
+          url.searchParams.get('session_id') ??
+          url.searchParams.get('sessionId') ??
+          ''
+        const existing =
+          isUuid(requestedSessionId) && args.sessions.has(requestedSessionId)
+            ? args.sessions.get(requestedSessionId) ?? null
+            : null
+        const canAttachExisting =
+          existing !== null && resolve(existing.cwd) === resolve(selectedCwd)
 
-        const ok = server.upgrade(req, { data: { session } })
+        const session =
+          existing && canAttachExisting
+            ? existing
+            : (() => {
+                const sessionId = crypto.randomUUID()
+                const next: DaemonSession = {
+                  sessionId,
+                  cwd: selectedCwd,
+                  clients: new Set(),
+                  messages: [],
+                  readFileTimestamps: {},
+                  responseState: {},
+                  toolPermissionContext: loadToolPermissionContextFromDisk({
+                    projectDir: selectedCwd,
+                    includeKodeProjectConfig: true,
+                    isBypassPermissionsModeAvailable: true,
+                  }),
+                  activeAbortController: null,
+                  inflightPermissionRequests: new Map(),
+                }
+                args.sessions.set(sessionId, next)
+                return next
+              })()
+
+        const ok = server.upgrade(req, {
+          data: { session, replayHistory: canAttachExisting },
+        })
         return ok ? undefined : new Response('Upgrade failed', { status: 400 })
       }
 

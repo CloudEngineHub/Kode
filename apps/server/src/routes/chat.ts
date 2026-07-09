@@ -5,16 +5,10 @@ import { handleChatPrompt } from '../handlers/chat.handler'
 import { sendSessionList } from '../handlers/session.handler'
 import { log } from '../ws/events'
 import type { DaemonSession } from '../ws/types'
+import { broadcastSessionJson } from '../ws/sessionBroadcaster'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
-}
-
-function sendJson(
-  ws: { send: (data: string) => void },
-  payload: unknown,
-): void {
-  ws.send(JSON.stringify(payload))
 }
 
 export async function routeChat(
@@ -74,13 +68,6 @@ export async function routeChat(
       { status: 404 },
     )
   }
-  const ws = session.ws
-  if (!ws) {
-    return Response.json(
-      { ok: false, error: 'No active websocket connection for this session' },
-      { status: 409 },
-    )
-  }
 
   if (session.activeAbortController) {
     return Response.json(
@@ -91,7 +78,7 @@ export async function routeChat(
 
   const wsSend = (payload: unknown) => {
     try {
-      sendJson(ws, payload)
+      broadcastSessionJson(session, payload)
     } catch {}
   }
 
@@ -111,12 +98,14 @@ export async function routeChat(
     } catch (err) {
       wsSend(log('error', err instanceof Error ? err.message : String(err)))
     } finally {
-      try {
-        sendSessionList(ws, {
-          cwd: session.cwd,
-          onError: message => wsSend(log('error', message)),
-        })
-      } catch {}
+      for (const client of Array.from(session.clients)) {
+        try {
+          sendSessionList(client, {
+            cwd: session.cwd,
+            onError: message => wsSend(log('error', message)),
+          })
+        } catch {}
+      }
     }
   })()
 

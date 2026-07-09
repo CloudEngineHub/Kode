@@ -29,9 +29,16 @@ import {
 import { handleChatPrompt } from '../handlers/chat.handler'
 import { parseClientWsMessage, sendJson, log } from './events'
 import type { DaemonSession, InflightPermissionDecision } from './types'
+import {
+  addSessionClient,
+  broadcastSessionJson,
+  removeSessionClient,
+} from './sessionBroadcaster'
 import { resolveInProjectRoot, toGitPath } from '../server/pathSecurity'
 
-type WsWithSession = WebSocket & { data: { session: DaemonSession } }
+type WsWithSession = WebSocket & {
+  data: { session: DaemonSession; replayHistory: boolean }
+}
 
 type PermissionRequest = {
   type: 'permission_request'
@@ -73,6 +80,45 @@ function parseGitStatusPorcelain(
     const path = arrowIdx >= 0 ? rest.slice(arrowIdx + 4).trim() : rest
     return path ? [{ path, status }] : []
   })
+}
+
+function sendSessionListToClient(ws: WsWithSession, session: DaemonSession) {
+  sendSessionList(ws, {
+    cwd: session.cwd,
+    onError: message => sendJson(ws, log('error', message)),
+  })
+}
+
+function broadcastSessionList(session: DaemonSession) {
+  for (const client of Array.from(session.clients)) {
+    sendSessionList(client, {
+      cwd: session.cwd,
+      onError: message => sendJson(client, log('error', message)),
+    })
+  }
+}
+
+function replaySessionHistory(ws: WsWithSession, session: DaemonSession) {
+  if (session.messages.length === 0) return
+  sendJson(ws, { type: 'history_begin', sessionId: session.sessionId })
+  for (const m of session.messages) {
+    const sdk = kodeMessageToSdkMessage(m, session.sessionId)
+    if (sdk) sendJson(ws, sdk)
+  }
+  sendJson(ws, { type: 'history_end', sessionId: session.sessionId })
+}
+
+function denyInflightPermissions(session: DaemonSession, message: string) {
+  for (const resolve of session.inflightPermissionRequests.values()) {
+    try {
+      resolve({
+        decision: 'deny',
+        rejectionMessage: message,
+        updatedInput: null,
+      })
+    } catch {}
+  }
+  session.inflightPermissionRequests.clear()
 }
 
 export function createWebSocketHandlers(args: {
@@ -172,7 +218,7 @@ export function createWebSocketHandlers(args: {
   return {
     open(ws: WsWithSession) {
       const session = ws.data.session
-      session.ws = ws
+      addSessionClient(session, ws)
       sendJson(
         ws,
         makeSdkInitMessage({
@@ -182,10 +228,8 @@ export function createWebSocketHandlers(args: {
           slashCommands: args.slashCommands,
         }),
       )
-      sendSessionList(ws, {
-        cwd: session.cwd,
-        onError: message => sendJson(ws, log('error', message)),
-      })
+      if (ws.data.replayHistory) replaySessionHistory(ws, session)
+      sendSessionListToClient(ws, session)
     },
 
     async message(ws: WsWithSession, message: RawData) {
@@ -202,16 +246,7 @@ export function createWebSocketHandlers(args: {
         try {
           session.activeAbortController?.abort()
         } catch {}
-        for (const resolve of session.inflightPermissionRequests.values()) {
-          try {
-            resolve({
-              decision: 'deny',
-              rejectionMessage: 'Cancelled',
-              updatedInput: null,
-            })
-          } catch {}
-        }
-        session.inflightPermissionRequests.clear()
+        denyInflightPermissions(session, 'Cancelled')
         return
       }
 
@@ -232,10 +267,7 @@ export function createWebSocketHandlers(args: {
       }
 
       if (payload.type === 'list_sessions') {
-        sendSessionList(ws, {
-          cwd: session.cwd,
-          onError: message => sendJson(ws, log('error', message)),
-        })
+        sendSessionListToClient(ws, session)
         return
       }
 
@@ -243,16 +275,7 @@ export function createWebSocketHandlers(args: {
         try {
           session.activeAbortController?.abort()
         } catch {}
-        for (const resolve of session.inflightPermissionRequests.values()) {
-          try {
-            resolve({
-              decision: 'deny',
-              rejectionMessage: 'Cancelled',
-              updatedInput: null,
-            })
-          } catch {}
-        }
-        session.inflightPermissionRequests.clear()
+        denyInflightPermissions(session, 'Cancelled')
 
         session.messages = []
         session.readFileTimestamps = {}
@@ -270,8 +293,8 @@ export function createWebSocketHandlers(args: {
         session.sessionId = nextId
         args.sessions.set(session.sessionId, session)
 
-        sendJson(
-          ws,
+        broadcastSessionJson(
+          session,
           makeSdkInitMessage({
             sessionId: session.sessionId,
             cwd: session.cwd,
@@ -279,10 +302,7 @@ export function createWebSocketHandlers(args: {
             slashCommands: args.slashCommands,
           }),
         )
-        sendSessionList(ws, {
-          cwd: session.cwd,
-          onError: message => sendJson(ws, log('error', message)),
-        })
+        broadcastSessionList(session)
         return
       }
 
@@ -310,8 +330,8 @@ export function createWebSocketHandlers(args: {
           session.sessionId = payload.sessionId
           args.sessions.set(session.sessionId, session)
 
-          sendJson(
-            ws,
+          broadcastSessionJson(
+            session,
             makeSdkInitMessage({
               sessionId: session.sessionId,
               cwd: session.cwd,
@@ -320,17 +340,20 @@ export function createWebSocketHandlers(args: {
             }),
           )
 
-          sendJson(ws, { type: 'history_begin', sessionId: session.sessionId })
+          broadcastSessionJson(session, {
+            type: 'history_begin',
+            sessionId: session.sessionId,
+          })
           for (const m of loaded) {
             const sdk = kodeMessageToSdkMessage(m, session.sessionId)
-            if (sdk) sendJson(ws, sdk)
+            if (sdk) broadcastSessionJson(session, sdk)
           }
-          sendJson(ws, { type: 'history_end', sessionId: session.sessionId })
-
-          sendSessionList(ws, {
-            cwd: session.cwd,
-            onError: message => sendJson(ws, log('error', message)),
+          broadcastSessionJson(session, {
+            type: 'history_end',
+            sessionId: session.sessionId,
           })
+
+          broadcastSessionList(session)
         } catch (err) {
           sendJson(
             ws,
@@ -346,7 +369,8 @@ export function createWebSocketHandlers(args: {
           return
         }
 
-        const wsSend = (outgoing: unknown) => sendJson(ws, outgoing)
+        const wsSend = (outgoing: unknown) =>
+          broadcastSessionJson(session, outgoing)
 
         try {
           await handleChatPrompt({
@@ -361,10 +385,7 @@ export function createWebSocketHandlers(args: {
             mcpClients: args.mcpClients,
           })
         } finally {
-          sendSessionList(ws, {
-            cwd: session.cwd,
-            onError: message => sendJson(ws, log('error', message)),
-          })
+          broadcastSessionList(session)
         }
       }
 
@@ -668,21 +689,10 @@ export function createWebSocketHandlers(args: {
 
     close(ws: WsWithSession) {
       const session = ws.data.session
-      session.ws = null
-      try {
-        session.activeAbortController?.abort()
-      } catch {}
-      for (const resolve of session.inflightPermissionRequests.values()) {
-        try {
-          resolve({
-            decision: 'deny',
-            rejectionMessage: 'Disconnected',
-            updatedInput: null,
-          })
-        } catch {}
+      removeSessionClient(session, ws)
+      if (session.clients.size === 0) {
+        denyInflightPermissions(session, 'Disconnected')
       }
-      session.inflightPermissionRequests.clear()
-      args.sessions.delete(session.sessionId)
     },
   }
 }

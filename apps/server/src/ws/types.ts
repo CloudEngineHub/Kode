@@ -2,6 +2,10 @@ import type { Message } from '@kode/core/query'
 import type { ToolUseContext } from '@kode/core/tooling/Tool'
 import type { ToolPermissionContext } from '@kode/core/types/toolPermissionContext'
 
+export type DaemonClient = {
+  send: (data: string) => void
+}
+
 export type InflightPermissionDecision = {
   decision: 'allow_once' | 'allow_always' | 'deny'
   updatedInput?: Record<string, unknown> | null
@@ -11,7 +15,7 @@ export type InflightPermissionDecision = {
 export type DaemonSession = {
   sessionId: string
   cwd: string
-  ws: { send: (data: string) => void } | null
+  clients: Set<DaemonClient>
   messages: Message[]
   readFileTimestamps: Record<string, number>
   responseState: ToolUseContext['responseState']

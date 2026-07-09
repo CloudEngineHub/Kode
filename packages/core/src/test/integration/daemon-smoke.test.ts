@@ -143,4 +143,116 @@ describe('daemon (Bun HTTP+WS)', () => {
       daemon.stop()
     }
   }, 20_000)
+
+  test('reattaches to a daemon session after websocket disconnect', async () => {
+    const daemon = await startKodeDaemon({
+      cwd: process.cwd(),
+      port: 0,
+      echo: true,
+    })
+
+    try {
+      const token = encodeURIComponent(daemon.token)
+      const openWs = (sessionId?: string) => {
+        const sessionParam = sessionId
+          ? `&session_id=${encodeURIComponent(sessionId)}`
+          : ''
+        return new WsClient(
+          `ws://${daemon.host}:${daemon.port}/ws?token=${token}${sessionParam}`,
+        )
+      }
+
+      const first = openWs()
+      const firstEvents: AnyEvent[] = []
+      first.on('message', data => {
+        try {
+          firstEvents.push(JSON.parse(decodeWsMessageData(data)))
+        } catch {}
+      })
+
+      await new Promise<void>((resolve, reject) => {
+        first.once('open', () => resolve())
+        first.once('error', err =>
+          reject(
+            err instanceof Error
+              ? err
+              : new Error(err ? String(err) : 'ws error'),
+          ),
+        )
+      })
+
+      const init = await waitForEvent(
+        'init',
+        firstEvents,
+        e => e && e.type === 'system' && e.subtype === 'init',
+        5_000,
+      )
+      const sessionId = String(init.session_id ?? '')
+      expect(sessionId).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+      )
+
+      await closeWs(first)
+
+      const chatResponse = await fetch(
+        `http://${daemon.host}:${daemon.port}/api/chat?token=${token}`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ sessionId, prompt: 'background hello' }),
+        },
+      )
+      expect(chatResponse.status).toBe(200)
+      expect((await chatResponse.json()).ok).toBe(true)
+
+      await new Promise(resolve => setTimeout(resolve, 100))
+
+      const second = openWs(sessionId)
+      const secondEvents: AnyEvent[] = []
+      second.on('message', data => {
+        try {
+          secondEvents.push(JSON.parse(decodeWsMessageData(data)))
+        } catch {}
+      })
+
+      await new Promise<void>((resolve, reject) => {
+        second.once('open', () => resolve())
+        second.once('error', err =>
+          reject(
+            err instanceof Error
+              ? err
+              : new Error(err ? String(err) : 'ws error'),
+          ),
+        )
+      })
+
+      const reattachedInit = await waitForEvent(
+        'reattached init',
+        secondEvents,
+        e => e && e.type === 'system' && e.subtype === 'init',
+        5_000,
+      )
+      expect(reattachedInit.session_id).toBe(sessionId)
+
+      const replayedAssistant = await waitForEvent(
+        'history replay',
+        secondEvents,
+        e =>
+          e &&
+          e.type === 'assistant' &&
+          Array.isArray(e.message?.content) &&
+          e.message.content.some(
+            (block: any) =>
+              block?.type === 'text' &&
+              String(block.text ?? '').includes('background hello'),
+          ),
+        5_000,
+      )
+      expect(replayedAssistant.session_id).toBe(sessionId)
+
+      await closeWs(second)
+    } finally {
+      daemon.stop()
+    }
+  }, 20_000)
 })
