@@ -11,6 +11,7 @@ type PromptKeyEvent = {
   altKey?: boolean
   ctrlKey?: boolean
   metaKey?: boolean
+  isComposing?: boolean
 }
 
 type PromptHistoryKeyArgs = PromptKeyEvent & {
@@ -21,12 +22,16 @@ type PromptHistoryKeyArgs = PromptKeyEvent & {
 
 function hasPromptKeyModifier(event: PromptKeyEvent): boolean {
   return Boolean(
-    event.shiftKey || event.altKey || event.ctrlKey || event.metaKey,
+    event.shiftKey ||
+    event.altKey ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.isComposing,
   )
 }
 
 function shouldSubmitPromptKey(event: PromptKeyEvent): boolean {
-  return event.key === 'Enter' && !event.shiftKey
+  return event.key === 'Enter' && !hasPromptKeyModifier(event)
 }
 
 function getPromptHistoryDirection(
@@ -63,6 +68,7 @@ export function InputArea(props: {
       altKey: e.altKey,
       ctrlKey: e.ctrlKey,
       metaKey: e.metaKey,
+      isComposing: e.nativeEvent.isComposing,
       selectionStart: e.currentTarget.selectionStart,
       selectionEnd: e.currentTarget.selectionEnd,
       valueLength: e.currentTarget.value.length,
@@ -79,7 +85,18 @@ export function InputArea(props: {
       return
     }
 
-    if (!shouldSubmitPromptKey(e)) return
+    if (
+      !shouldSubmitPromptKey({
+        key: e.key,
+        shiftKey: e.shiftKey,
+        altKey: e.altKey,
+        ctrlKey: e.ctrlKey,
+        metaKey: e.metaKey,
+        isComposing: e.nativeEvent.isComposing,
+      })
+    ) {
+      return
+    }
     e.preventDefault()
     if (isSubmitDisabled) return
     props.onSubmit()

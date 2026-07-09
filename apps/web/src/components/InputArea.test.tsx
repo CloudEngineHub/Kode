@@ -42,6 +42,18 @@ describe('InputArea accessibility', () => {
         shiftKey: true,
       }),
     ).toBe(false)
+    expect(
+      __inputAreaForTests.shouldSubmitPromptKey({
+        key: 'Enter',
+        ctrlKey: true,
+      }),
+    ).toBe(false)
+    expect(
+      __inputAreaForTests.shouldSubmitPromptKey({
+        key: 'Enter',
+        isComposing: true,
+      }),
+    ).toBe(false)
 
     expect(
       __inputAreaForTests.getPromptHistoryDirection({
@@ -64,6 +76,15 @@ describe('InputArea accessibility', () => {
         key: 'ArrowUp',
         selectionStart: 2,
         selectionEnd: 2,
+        valueLength: 8,
+      }),
+    ).toBeNull()
+    expect(
+      __inputAreaForTests.getPromptHistoryDirection({
+        key: 'ArrowUp',
+        isComposing: true,
+        selectionStart: 0,
+        selectionEnd: 0,
         valueLength: 8,
       }),
     ).toBeNull()
