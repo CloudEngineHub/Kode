@@ -1,5 +1,5 @@
 import { useStdout } from 'ink'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useSyncExternalStore } from 'react'
 import type { Writable } from 'node:stream'
 import { normalizeTerminalDimension } from '#ui-ink/primitives/layout/viewportRows'
 
@@ -7,9 +7,10 @@ export type TerminalSize = { columns: number; rows: number }
 
 type StreamState = {
   size: TerminalSize
-  listeners: Set<(size: TerminalSize) => void>
+  listeners: Set<() => void>
   onResize: () => void
   attached: boolean
+  debounceTimer: ReturnType<typeof setTimeout> | null
 }
 
 const streamStates = new WeakMap<Writable, StreamState>()
@@ -38,13 +39,12 @@ function getStreamState(stream: Writable): StreamState {
   const state: StreamState = {
     size: readTerminalSize(stream as { columns?: number; rows?: number }),
     listeners: new Set(),
+    debounceTimer: null,
     onResize: () => {
       const next = readTerminalSize(
         stream as { columns?: number; rows?: number },
       )
-      if (areTerminalSizesEqual(state.size, next)) return
-      state.size = next
-      state.listeners.forEach(listener => listener(next))
+      commitResize(state, next)
     },
     attached: false,
   }
@@ -55,84 +55,112 @@ function getStreamState(stream: Writable): StreamState {
 
 const RESIZE_DEBOUNCE_MS = 150
 
+function emit(state: StreamState): void {
+  state.listeners.forEach(listener => listener())
+}
+
+function commitSize(state: StreamState, next: TerminalSize): void {
+  if (areTerminalSizesEqual(state.size, next)) return
+  state.size = next
+  emit(state)
+}
+
+function commitResize(state: StreamState, next: TerminalSize): void {
+  if (areTerminalSizesEqual(state.size, next)) return
+
+  if (state.debounceTimer) {
+    clearTimeout(state.debounceTimer)
+    state.debounceTimer = null
+  }
+
+  const isShrinking =
+    next.columns < state.size.columns || next.rows < state.size.rows
+  if (isShrinking) {
+    commitSize(state, next)
+    return
+  }
+
+  // Debounce rapid expand/jitter resize events without rendering a stale wide
+  // layout into a newly narrowed terminal.
+  state.debounceTimer = setTimeout(() => {
+    state.debounceTimer = null
+    commitSize(state, next)
+  }, RESIZE_DEBOUNCE_MS)
+}
+
+export function getTerminalSizeSnapshot(stream: Writable): TerminalSize {
+  const state = getStreamState(stream)
+  const streamSize = readTerminalSize(
+    stream as { columns?: number; rows?: number },
+  )
+  const isShrinking =
+    streamSize.columns < state.size.columns || streamSize.rows < state.size.rows
+  if (isShrinking) {
+    if (state.debounceTimer) {
+      clearTimeout(state.debounceTimer)
+      state.debounceTimer = null
+    }
+    state.size = streamSize
+  }
+  return state.size
+}
+
+export function subscribeTerminalSize(
+  stream: Writable,
+  listener: () => void,
+): () => void {
+  const state = getStreamState(stream)
+  state.listeners.add(listener)
+  commitResize(
+    state,
+    readTerminalSize(stream as { columns?: number; rows?: number }),
+  )
+
+  if (!state.attached) {
+    state.attached = true
+    stream.setMaxListeners?.(20)
+    if (typeof stream.prependListener === 'function') {
+      stream.prependListener('resize', state.onResize)
+    } else {
+      stream.on?.('resize', state.onResize)
+    }
+  }
+
+  return () => {
+    state.listeners.delete(listener)
+    if (state.listeners.size === 0 && state.attached) {
+      state.attached = false
+      stream.off?.('resize', state.onResize)
+      if (state.debounceTimer) {
+        clearTimeout(state.debounceTimer)
+        state.debounceTimer = null
+      }
+    }
+  }
+}
+
 export function useTerminalSize(): TerminalSize {
   const { stdout } = useStdout()
   const stream = useMemo(
     () => (stdout ?? process.stdout) as unknown as Writable,
     [stdout],
   )
-  const state = getStreamState(stream)
-
-  const [size, setSize] = useState<TerminalSize>(() => state.size)
-  const sizeRef = useRef(size)
-  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const streamSize = readTerminalSize(
-    stream as { columns?: number; rows?: number },
+  const store = useMemo(
+    () => ({
+      subscribe: (listener: () => void) =>
+        subscribeTerminalSize(stream, listener),
+      getSnapshot: () => getTerminalSizeSnapshot(stream),
+    }),
+    [stream],
   )
-  const effectiveSize =
-    streamSize.columns < size.columns || streamSize.rows < size.rows
-      ? streamSize
-      : size
-  sizeRef.current = effectiveSize
 
-  useEffect(() => {
-    const streamState = getStreamState(stream)
-    const commitSize = (next: TerminalSize) => {
-      setSize(previous => {
-        if (areTerminalSizesEqual(previous, next)) {
-          return previous
-        }
-        sizeRef.current = next
-        return next
-      })
-    }
-    const listener = (next: TerminalSize) => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current)
-        debounceTimerRef.current = null
-      }
+  return useSyncExternalStore(
+    store.subscribe,
+    store.getSnapshot,
+    store.getSnapshot,
+  )
+}
 
-      const previous = sizeRef.current
-      const isShrinking =
-        next.columns < previous.columns || next.rows < previous.rows
-      if (isShrinking) {
-        commitSize(next)
-        return
-      }
-
-      // Debounce rapid expand/jitter resize events without rendering a stale
-      // wide layout into a newly narrowed terminal.
-      debounceTimerRef.current = setTimeout(() => {
-        debounceTimerRef.current = null
-        commitSize(next)
-      }, RESIZE_DEBOUNCE_MS)
-    }
-
-    streamState.listeners.add(listener)
-    // Force-sync in case size changed between render and effect.
-    setSize(streamState.size)
-
-    if (!streamState.attached) {
-      streamState.attached = true
-      stream.setMaxListeners?.(20)
-      if (typeof stream.prependListener === 'function') {
-        stream.prependListener('resize', streamState.onResize)
-      } else {
-        stream.on?.('resize', streamState.onResize)
-      }
-    }
-
-    return () => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current)
-      }
-      streamState.listeners.delete(listener)
-      if (streamState.listeners.size === 0 && streamState.attached) {
-        streamState.attached = false
-        stream.off?.('resize', streamState.onResize)
-      }
-    }
-  }, [stream])
-
-  return effectiveSize
+export const __terminalSizeStoreForTests = {
+  getStreamState,
 }
