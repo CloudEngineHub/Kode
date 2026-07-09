@@ -19,6 +19,7 @@ import { MessageResponse } from '#ui-ink/components/MessageResponse'
 import { KeypressProvider } from '#ui-ink/contexts/KeypressContext'
 import { createInkHarnessManager, createInkTestHarness } from './inkTestHarness'
 import { Select } from '#ui-ink/components/CustomSelect/select'
+import { useModelSelectorInput } from '#ui-ink/components/ModelSelector/useModelSelectorInput'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { useMouse } from '#ui-ink/hooks/useMouse'
 import { useScopedIndexState } from '#ui-ink/hooks/useScopedIndexState'
@@ -1893,6 +1894,93 @@ describe('TUI E2E regression (Ink render): Misc', () => {
 
     await h.wait(120)
     expect(focused).toBe('third')
+  })
+
+  test('ModelSelector: model params parent input leaves Enter on select fields to the Select', async () => {
+    let activeField = 0
+    let submitted = false
+
+    function ModelParamsParentInputHarness(): React.ReactNode {
+      const [activeFieldIndex, setActiveFieldIndex] = useState(0)
+      const formFields = useMemo(
+        () => [
+          { name: 'maxTokens', component: 'select' },
+          { name: 'submit', component: 'button' },
+        ],
+        [],
+      )
+
+      useEffect(() => {
+        activeField = activeFieldIndex
+      }, [activeFieldIndex])
+
+      useModelSelectorInput({
+        currentScreen: 'modelParams',
+        mainMenuOptions: [],
+        providerFocusIndex: 0,
+        setProviderFocusIndex: () => {},
+        partnerProviderOptions: [],
+        partnerProviderFocusIndex: 0,
+        setPartnerProviderFocusIndex: () => {},
+        codingPlanOptions: [],
+        codingPlanFocusIndex: 0,
+        setCodingPlanFocusIndex: () => {},
+        selectedProvider: 'custom-openai',
+        apiKey: '',
+        resourceName: '',
+        providerBaseUrl: '',
+        customBaseUrl: '',
+        customModelName: '',
+        contextLength: 128000,
+        contextLengthOptions: [],
+        setContextLength: () => {},
+        isTestingConnection: false,
+        connectionTestResult: null,
+        activeFieldIndex,
+        setActiveFieldIndex,
+        handleProviderSelection: () => {},
+        handleApiKeySubmit: () => {},
+        fetchModelsWithRetry: async () => [],
+        navigateTo: () => {},
+        handleResourceNameSubmit: () => {},
+        handleCustomBaseUrlSubmit: () => {},
+        handleProviderBaseUrlSubmit: () => {},
+        handleCustomModelSubmit: () => {},
+        handleConfirmation: async () => {},
+        setValidationError: () => {},
+        handleConnectionTest: () => {},
+        handleContextLengthSubmit: () => {},
+        setModelLoadError: () => {},
+        getFormFieldsForModelParams: () => formFields as any,
+        handleModelParamsSubmit: () => {
+          submitted = true
+        },
+      })
+
+      return <Text>field:{activeFieldIndex}</Text>
+    }
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <ModelParamsParentInputHarness />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(30)
+
+    h.stdin.write('\r')
+    await h.wait(40)
+    expect(activeField).toBe(0)
+    expect(submitted).toBe(false)
+
+    h.stdin.write('\t')
+    await h.wait(40)
+    expect(activeField).toBe(1)
+
+    h.stdin.write('\r')
+    await h.wait(40)
+    expect(submitted).toBe(true)
   })
 
   test('KeypressProvider: priority can fall back to default on rerender', async () => {

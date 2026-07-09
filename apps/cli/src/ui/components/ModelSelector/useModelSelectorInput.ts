@@ -330,12 +330,10 @@ export function useModelSelectorInput(args: {
         args.activeFieldIndex === formFields.length - 1
       ) {
         args.handleModelParamsSubmit()
-      } else if (currentField?.component === 'select') {
-        args.setActiveFieldIndex(current =>
-          Math.min(current + 1, formFields.length - 1),
-        )
+        return true
       }
-      return true
+
+      if (currentField?.component === 'select') return false
     }
   })
 }
