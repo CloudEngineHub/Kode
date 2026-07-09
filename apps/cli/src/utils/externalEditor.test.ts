@@ -1,11 +1,9 @@
 import {
   afterAll,
   afterEach,
-  beforeAll,
   beforeEach,
   describe,
   expect,
-  mock,
   test,
 } from 'bun:test'
 import { EventEmitter } from 'node:events'
@@ -13,11 +11,17 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import {
+  __setExternalEditorDependencyLoaderForTests,
+  launchExternalEditor,
+  launchExternalEditorForFilePath,
+  type ExternalEditorDependencies,
+} from './externalEditor'
+
 const lifecycle: string[] = []
 
 let exitCode: number | null = 0
 let fakeStdin: FakeTTYInput
-let editor: typeof import('./externalEditor') | undefined
 
 const originalStdin = Object.getOwnPropertyDescriptor(process, 'stdin')
 const originalStdout = Object.getOwnPropertyDescriptor(process, 'stdout')
@@ -74,180 +78,49 @@ function restoreProcessState(): void {
   else process.env.KODE_SCREEN_READER = originalKodeScreenReader
 }
 
-function findChildProcessCallback(args: unknown[]):
-  | ((error: Error | null, stdout: string, stderr: string) => void)
-  | undefined {
-  for (let index = args.length - 1; index >= 0; index -= 1) {
-    const value = args[index]
-    if (typeof value === 'function') {
-      return value as (
-        error: Error | null,
-        stdout: string,
-        stderr: string,
-      ) => void
-    }
-  }
-  return undefined
-}
+function createFakeDependencies(): ExternalEditorDependencies {
+  const dependencies = {
+    spawnSync: () => ({ status: 0 }),
+    spawn: (command: string, args: string[]) => {
+      lifecycle.push(`spawn:${command}`)
+      lifecycle.push(`spawn.raw:${fakeStdin?.isRaw ?? false}`)
+      lifecycle.push(`spawn.file:${args.at(-1) ?? ''}`)
 
-mock.module('child_process', () => ({
-  exec: (...args: unknown[]) => {
-    const callback = findChildProcessCallback(args)
-    const child = new EventEmitter()
-    queueMicrotask(() => callback?.(null, '', ''))
-    return child
-  },
-  execFile: (...args: unknown[]) => {
-    const callback = findChildProcessCallback(args)
-    const child = new EventEmitter()
-    queueMicrotask(() => callback?.(null, '', ''))
-    return child
-  },
-  execFileSync: () => Buffer.from(''),
-  spawnSync: () => ({ status: 0 }),
-  spawn: (command: string, args: string[]) => {
-    lifecycle.push(`spawn:${command}`)
-    lifecycle.push(`spawn.raw:${fakeStdin?.isRaw ?? false}`)
-    lifecycle.push(`spawn.file:${args.at(-1) ?? ''}`)
-
-    const stdout = new EventEmitter() as EventEmitter & {
-      destroy: () => void
-      setEncoding: () => void
-    }
-    stdout.setEncoding = () => {}
-    stdout.destroy = () => {
-      stdout.emit('close')
-    }
-
-    const stderr = new EventEmitter() as EventEmitter & {
-      destroy: () => void
-      setEncoding: () => void
-    }
-    stderr.setEncoding = () => {}
-    stderr.destroy = () => {
-      stderr.emit('close')
-    }
-
-    const stdin = {
-      end: () => {},
-      write: () => true,
-    }
-
-    const child = new EventEmitter() as EventEmitter & {
-      kill: () => void
-      stderr: typeof stderr
-      stdin: typeof stdin
-      stdout: typeof stdout
-    }
-    child.stdout = stdout
-    child.stderr = stderr
-    child.stdin = stdin
-    child.kill = () => {
-      child.emit('exit', 143, null)
-    }
-
-    const commandLine = [command, ...args].join(' ')
-    queueMicrotask(() => {
-      if (commandLine.includes('hello-statusline')) {
-        stdout.emit('data', 'hello-statusline\n')
+      const child = new EventEmitter()
+      queueMicrotask(() => child.emit('exit', exitCode, null))
+      return child
+    },
+    writeToStdout: (chunk: Uint8Array | string, callback?: () => void) => {
+      lifecycle.push(`stdout:${String(chunk)}`)
+      callback?.()
+      return true
+    },
+    enableLineWrapping: () => lifecycle.push('lineWrapping.enable'),
+    disableLineWrapping: () => lifecycle.push('lineWrapping.disable'),
+    suspendMouseEvents: () => lifecycle.push('mouse.suspend'),
+    resumeMouseEvents: () => lifecycle.push('mouse.resume'),
+    withEphemeralAlternateScreen: async <T>(fn: () => Promise<T> | T) => {
+      lifecycle.push('alternateScreen.enter')
+      try {
+        return await fn()
+      } finally {
+        lifecycle.push('alternateScreen.exit')
       }
-      stdout.emit('end')
-      stderr.emit('end')
-      child.emit('exit', exitCode, null)
-    })
-    return child
-  },
-}))
-
-mock.module('#cli-utils/stdio', () => ({
-  clearCapturedTuiStdio: () => {},
-  createInkStdio: () => ({
-    stderr: process.stderr,
-    stdout: process.stdout,
-  }),
-  ensureTuiStdioPatched: () => ({
-    stderr: process.stderr,
-    stdout: process.stdout,
-  }),
-  flushCapturedTuiStdioToFile: () => null,
-  getCapturedTuiStdioLogPath: () => '',
-  getCapturedTuiStdioText: () => null,
-  isStdioPatchedForTui: () => false,
-  restoreTuiStdioPatch: () => {},
-  writeToStderr: () => true,
-  writeToStdout: (chunk: string, callback?: () => void) => {
-    lifecycle.push(`stdout:${chunk}`)
-    callback?.()
-    return true
-  },
-}))
-
-mock.module('#cli-utils/terminal', () => ({
-  clearScrollback: () => Promise.resolve(),
-  clearTerminal: () => Promise.resolve(),
-  clearViewport: () => Promise.resolve(),
-  disableBracketedPasteMode: () => {},
-  disableKittyKeyboardProtocol: () => {},
-  enableLineWrapping: () => lifecycle.push('lineWrapping.enable'),
-  disableLineWrapping: () => lifecycle.push('lineWrapping.disable'),
-  disableModifyOtherKeys: () => {},
-  enableBracketedPasteMode: () => {},
-  enableKittyKeyboardProtocol: () => {},
-  enableModifyOtherKeys: () => {},
-  enableMouseEvents: () => {},
-  disableMouseEvents: () => {},
-  enterAlternateScreen: () => {},
-  exitAlternateScreen: () => {},
-  isAlternateScreenActive: () => false,
-  isMouseEventsEnabled: () => true,
-  resetMouseEvents: () => {},
-  setTerminalTitle: () => {},
-  shouldEnterAlternateScreen: () => false,
-  suspendMouseEvents: () => lifecycle.push('mouse.suspend'),
-  resumeMouseEvents: () => lifecycle.push('mouse.resume'),
-  withEphemeralAlternateScreen: async <T>(fn: () => Promise<T> | T) => {
-    lifecycle.push('alternateScreen.enter')
-    try {
-      return await fn()
-    } finally {
-      lifecycle.push('alternateScreen.exit')
-    }
-  },
-}))
-
-mock.module('#ui-ink/utils/inkInstanceStore', () => ({
-  setInkInstanceForStdout: () => {},
-  getInkInstanceForStdout: () => ({
-    pause: () => lifecycle.push('ink.pause'),
-    resume: () => lifecycle.push('ink.resume'),
-    suspendStdin: () => lifecycle.push('ink.suspendStdin'),
-    resumeStdin: () => lifecycle.push('ink.resumeStdin'),
-  }),
-}))
-
-mock.module('#ui-ink/utils/terminalCapabilityManager', () => ({
-  terminalCapabilityManager: {
-    disableAllModes: () => lifecycle.push('terminalModes.disable'),
-    enableSupportedModes: () => lifecycle.push('terminalModes.enable'),
-    getTerminalAppearanceSnapshot: () => ({
-      backgroundColor: undefined,
-      colorScheme: 'unknown',
-      isDark: undefined,
+    },
+    getInkInstanceForStdout: () => ({
+      pause: () => lifecycle.push('ink.pause'),
+      resume: () => lifecycle.push('ink.resume'),
+      suspendStdin: () => lifecycle.push('ink.suspendStdin'),
+      resumeStdin: () => lifecycle.push('ink.resumeStdin'),
     }),
-    getTerminalBackgroundColor: () => undefined,
-    getTerminalName: () => undefined,
-    isBracketedPasteEnabled: () => false,
-    isBracketedPasteSupported: () => false,
-    isKittyProtocolEnabled: () => false,
-    isKittyProtocolSupported: () => false,
-    isModifyOtherKeysEnabled: () => false,
-    isModifyOtherKeysSupported: () => false,
-  },
-}))
+    terminalCapabilityManager: {
+      disableAllModes: () => lifecycle.push('terminalModes.disable'),
+      enableSupportedModes: () => lifecycle.push('terminalModes.enable'),
+    },
+  }
 
-beforeAll(async () => {
-  editor = await import('./externalEditor')
-})
+  return dependencies as unknown as ExternalEditorDependencies
+}
 
 beforeEach(() => {
   lifecycle.length = 0
@@ -257,20 +130,21 @@ beforeEach(() => {
   delete process.env.VISUAL
   delete process.env.SCREENREADER
   delete process.env.KODE_SCREEN_READER
+  __setExternalEditorDependencyLoaderForTests(createFakeDependencies)
 })
 
 afterEach(() => {
   exitCode = 0
+  __setExternalEditorDependencyLoaderForTests(null)
 })
 
 afterAll(() => {
   restoreProcessState()
-  mock.restore()
 })
 
 describe('external editor terminal suspension', () => {
   test('launchExternalEditor owns Ink and terminal mode restore around the child editor', async () => {
-    const result = await editor!.launchExternalEditor('draft')
+    const result = await launchExternalEditor('draft')
 
     expect(result).toEqual({
       text: 'draft',
@@ -309,7 +183,7 @@ describe('external editor terminal suspension', () => {
     exitCode = 2
 
     try {
-      const result = await editor!.launchExternalEditorForFilePath(filePath)
+      const result = await launchExternalEditorForFilePath(filePath)
 
       expect(result.ok).toBe(false)
       expect(fakeStdin.isRaw).toBe(true)

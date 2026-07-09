@@ -20,22 +20,62 @@ type EditorCommand = {
   shell?: boolean
 }
 
+export type ExternalEditorDependencies = {
+  spawn: typeof spawn
+  spawnSync: typeof spawnSync
+  disableLineWrapping: typeof disableLineWrapping
+  enableLineWrapping: typeof enableLineWrapping
+  resumeMouseEvents: typeof resumeMouseEvents
+  suspendMouseEvents: typeof suspendMouseEvents
+  withEphemeralAlternateScreen: typeof withEphemeralAlternateScreen
+  writeToStdout: typeof writeToStdout
+  getInkInstanceForStdout: typeof getInkInstanceForStdout
+  terminalCapabilityManager: Pick<
+    typeof terminalCapabilityManager,
+    'disableAllModes' | 'enableSupportedModes'
+  >
+}
+
+const defaultDependencies: ExternalEditorDependencies = {
+  spawn,
+  spawnSync,
+  disableLineWrapping,
+  enableLineWrapping,
+  resumeMouseEvents,
+  suspendMouseEvents,
+  withEphemeralAlternateScreen,
+  writeToStdout,
+  getInkInstanceForStdout,
+  terminalCapabilityManager,
+}
+
+let dependencyLoader = (): ExternalEditorDependencies => defaultDependencies
+
+export function __setExternalEditorDependencyLoaderForTests(
+  loader: (() => ExternalEditorDependencies) | null,
+): void {
+  dependencyLoader = loader ?? (() => defaultDependencies)
+}
+
 const isWindows = process.platform === 'win32'
 
-function showTerminalCursor(): void {
+function showTerminalCursor(dependencies: ExternalEditorDependencies): void {
   if (!process.stdout?.isTTY) return
   // Reset styles + show cursor for full-screen editors.
-  writeToStdout('\x1b[0m\x1b[?25h')
+  dependencies.writeToStdout('\x1b[0m\x1b[?25h')
 }
 
-function hideTerminalCursor(): void {
+function hideTerminalCursor(dependencies: ExternalEditorDependencies): void {
   if (!process.stdout?.isTTY) return
-  writeToStdout('\x1b[?25l')
+  dependencies.writeToStdout('\x1b[?25l')
 }
 
-async function withSuspendedInk<T>(fn: () => Promise<T> | T): Promise<T> {
+async function withSuspendedInk<T>(
+  dependencies: ExternalEditorDependencies,
+  fn: () => Promise<T> | T,
+): Promise<T> {
   const stdout = process.stdout as NodeJS.WriteStream
-  const instance = getInkInstanceForStdout(stdout)
+  const instance = dependencies.getInkInstanceForStdout(stdout)
   const hasInk = Boolean(instance)
   const screenReaderEnv =
     process.env.KODE_SCREEN_READER ?? process.env.SCREENREADER
@@ -43,32 +83,39 @@ async function withSuspendedInk<T>(fn: () => Promise<T> | T): Promise<T> {
   try {
     instance?.pause?.()
     instance?.suspendStdin?.()
-    terminalCapabilityManager.disableAllModes()
-    suspendMouseEvents()
-    enableLineWrapping()
-    showTerminalCursor()
-    return await withEphemeralAlternateScreen(fn)
+    dependencies.terminalCapabilityManager.disableAllModes()
+    dependencies.suspendMouseEvents()
+    dependencies.enableLineWrapping()
+    showTerminalCursor(dependencies)
+    return await dependencies.withEphemeralAlternateScreen(fn)
   } finally {
     if (hasInk) {
-      hideTerminalCursor()
+      hideTerminalCursor(dependencies)
       if (!screenReaderEnv) {
-        disableLineWrapping()
+        dependencies.disableLineWrapping()
       }
     }
-    terminalCapabilityManager.enableSupportedModes()
-    resumeMouseEvents()
+    dependencies.terminalCapabilityManager.enableSupportedModes()
+    dependencies.resumeMouseEvents()
     instance?.resumeStdin?.()
     instance?.resume?.()
   }
 }
 
-function isCommandAvailable(command: string): boolean {
+function isCommandAvailable(
+  command: string,
+  dependencies: ExternalEditorDependencies,
+): boolean {
   const checker = isWindows ? 'where' : 'which'
-  const result = spawnSync(checker, [command], { stdio: 'ignore' })
+  const result = dependencies.spawnSync(checker, [command], {
+    stdio: 'ignore',
+  })
   return result.status === 0
 }
 
-function resolveEditorCommand(): EditorCommand | null {
+function resolveEditorCommand(
+  dependencies: ExternalEditorDependencies,
+): EditorCommand | null {
   const envEditor = process.env.VISUAL || process.env.EDITOR
   if (envEditor?.trim()) {
     return {
@@ -81,7 +128,7 @@ function resolveEditorCommand(): EditorCommand | null {
 
   const candidates: EditorCommand[] = []
 
-  if (isCommandAvailable('code')) {
+  if (isCommandAvailable('code', dependencies)) {
     candidates.push({
       command: 'code',
       args: ['-w'],
@@ -91,21 +138,21 @@ function resolveEditorCommand(): EditorCommand | null {
   }
 
   if (!isWindows) {
-    if (isCommandAvailable('nano')) {
+    if (isCommandAvailable('nano', dependencies)) {
       candidates.push({
         command: 'nano',
         args: [],
         displayName: 'nano',
       })
     }
-    if (isCommandAvailable('vim')) {
+    if (isCommandAvailable('vim', dependencies)) {
       candidates.push({
         command: 'vim',
         args: [],
         displayName: 'vim',
       })
     }
-    if (isCommandAvailable('open')) {
+    if (isCommandAvailable('open', dependencies)) {
       candidates.push({
         command: 'open',
         args: ['-W', '-t'],
@@ -115,7 +162,9 @@ function resolveEditorCommand(): EditorCommand | null {
   } else {
     // Windows: check for VS Code first, then fallback to notepad
     if (candidates.length > 0) {
-      const found = candidates.find(c => isCommandAvailable(c.command))
+      const found = candidates.find(c =>
+        isCommandAvailable(c.command, dependencies),
+      )
       if (found) return found
     }
     // notepad is always available on Windows
@@ -128,12 +177,14 @@ function resolveEditorCommand(): EditorCommand | null {
   }
 
   return (
-    candidates.find(candidate => isCommandAvailable(candidate.command)) ?? null
+    candidates.find(candidate =>
+      isCommandAvailable(candidate.command, dependencies),
+    ) ?? null
   )
 }
 
 export function getExternalEditorLabel(): string | null {
-  return resolveEditorCommand()?.displayName ?? null
+  return resolveEditorCommand(dependencyLoader())?.displayName ?? null
 }
 
 function restoreStdinState(previouslyRaw: boolean): void {
@@ -155,7 +206,8 @@ export type ExternalEditorResult =
 export async function launchExternalEditor(
   initialText: string,
 ): Promise<ExternalEditorResult> {
-  const editorCommand = resolveEditorCommand()
+  const dependencies = dependencyLoader()
+  const editorCommand = resolveEditorCommand(dependencies)
   if (!editorCommand) {
     return {
       text: null,
@@ -178,9 +230,9 @@ export async function launchExternalEditor(
   }
 
   try {
-    await withSuspendedInk(async () => {
+    await withSuspendedInk(dependencies, async () => {
       await new Promise<void>((resolve, reject) => {
-        const child = spawn(
+        const child = dependencies.spawn(
           editorCommand.command,
           [...editorCommand.args, filePath],
           {
@@ -236,7 +288,8 @@ export type ExternalEditorFileResult =
 export async function launchExternalEditorForFilePath(
   filePath: string,
 ): Promise<ExternalEditorFileResult> {
-  const editorCommand = resolveEditorCommand()
+  const dependencies = dependencyLoader()
+  const editorCommand = resolveEditorCommand(dependencies)
   if (!editorCommand) {
     return {
       ok: false,
@@ -255,9 +308,9 @@ export async function launchExternalEditorForFilePath(
   }
 
   try {
-    await withSuspendedInk(async () => {
+    await withSuspendedInk(dependencies, async () => {
       await new Promise<void>((resolve, reject) => {
-        const child = spawn(
+        const child = dependencies.spawn(
           editorCommand.command,
           [...editorCommand.args, filePath],
           {

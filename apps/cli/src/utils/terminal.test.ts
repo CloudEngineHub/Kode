@@ -4,61 +4,10 @@ import {
   beforeEach,
   describe,
   expect,
-  mock,
   test,
 } from 'bun:test'
 
 const writes: string[] = []
-
-mock.module('#cli-utils/stdio', () => ({
-  clearCapturedTuiStdio: () => {},
-  createInkStdio: () => ({
-    stderr: process.stderr,
-    stdout: process.stdout,
-  }),
-  ensureTuiStdioPatched: () => ({
-    stderr: process.stderr,
-    stdout: process.stdout,
-  }),
-  flushCapturedTuiStdioToFile: () => null,
-  getCapturedTuiStdioLogPath: () => '',
-  getCapturedTuiStdioText: () => null,
-  isStdioPatchedForTui: () => false,
-  restoreTuiStdioPatch: () => {},
-  writeToStderr: (
-    chunk: Uint8Array | string,
-    encodingOrCallback?:
-      | BufferEncoding
-      | ((err?: NodeJS.ErrnoException | null) => void),
-    callback?: (err?: NodeJS.ErrnoException | null) => void,
-  ) => {
-    const cb =
-      typeof encodingOrCallback === 'function'
-        ? encodingOrCallback
-        : callback
-    cb?.()
-    return true
-  },
-  writeToStdout: (
-    chunk: Uint8Array | string,
-    encodingOrCallback?:
-      | BufferEncoding
-      | ((err?: NodeJS.ErrnoException | null) => void),
-    callback?: (err?: NodeJS.ErrnoException | null) => void,
-  ) => {
-    writes.push(
-      typeof chunk === 'string'
-        ? chunk
-        : Buffer.from(chunk).toString('utf8'),
-    )
-    const cb =
-      typeof encodingOrCallback === 'function'
-        ? encodingOrCallback
-        : callback
-    cb?.()
-    return true
-  },
-}))
 
 const ENABLE_MOUSE_EVENTS_SEQUENCE = '\x1b[?1006h\x1b[?1000h'
 const DISABLE_MOUSE_EVENTS_SEQUENCE =
@@ -68,6 +17,21 @@ let originalStdin: PropertyDescriptor | undefined
 let originalStdout: PropertyDescriptor | undefined
 let originalKodeTuiMouse: string | undefined
 let terminal: typeof import('./terminal') | null = null
+
+function captureWrite(
+  chunk: Uint8Array | string,
+  encodingOrCallback?:
+    BufferEncoding | ((err?: NodeJS.ErrnoException | null) => void),
+  callback?: (err?: NodeJS.ErrnoException | null) => void,
+): boolean {
+  writes.push(
+    typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'),
+  )
+  const cb =
+    typeof encodingOrCallback === 'function' ? encodingOrCallback : callback
+  cb?.()
+  return true
+}
 
 function installFakeTty(): void {
   Object.defineProperty(process, 'stdin', {
@@ -99,10 +63,16 @@ beforeAll(async () => {
   originalKodeTuiMouse = process.env.KODE_TUI_MOUSE
   installFakeTty()
   terminal = await import('./terminal')
+  terminal.__setTerminalWriteToStdoutLoaderForTests(
+    () => captureWrite as typeof import('#cli-utils/stdio').writeToStdout,
+  )
 })
 
 beforeEach(() => {
   installFakeTty()
+  terminal!.__setTerminalWriteToStdoutLoaderForTests(
+    () => captureWrite as typeof import('#cli-utils/stdio').writeToStdout,
+  )
   if (originalKodeTuiMouse === undefined) {
     delete process.env.KODE_TUI_MOUSE
   } else {
@@ -114,6 +84,7 @@ beforeEach(() => {
 
 afterAll(() => {
   resetMouseState()
+  terminal?.__setTerminalWriteToStdoutLoaderForTests(null)
   if (originalKodeTuiMouse === undefined) {
     delete process.env.KODE_TUI_MOUSE
   } else {

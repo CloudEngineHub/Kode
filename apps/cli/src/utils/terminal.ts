@@ -2,9 +2,20 @@ import { safeParseJSON } from '#core/utils/json'
 import { logError } from '#core/utils/log'
 import { writeToStdout as writeToRealStdout } from '#cli-utils/stdio'
 
+type WriteToStdout = typeof writeToRealStdout
+
+const defaultWriteToStdoutLoader = (): WriteToStdout => writeToRealStdout
+let writeToStdoutLoader = defaultWriteToStdoutLoader
+
+export function __setTerminalWriteToStdoutLoaderForTests(
+  loader: (() => WriteToStdout) | null,
+): void {
+  writeToStdoutLoader = loader ?? defaultWriteToStdoutLoader
+}
+
 function writeToTty(sequence: string): void {
   if (!process.stdout?.isTTY) return
-  writeToRealStdout(sequence)
+  writeToStdoutLoader()(sequence)
 }
 
 let alternateScreenRefCount = 0
@@ -12,7 +23,8 @@ let mouseEventsRefCount = 0
 let mouseEventsSuspended = false
 
 const ENABLE_MOUSE_EVENTS_SEQUENCE = '\x1b[?1006h\x1b[?1000h'
-const DISABLE_MOUSE_EVENTS_SEQUENCE = '\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l'
+const DISABLE_MOUSE_EVENTS_SEQUENCE =
+  '\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l'
 const FALSE_ENV_VALUES = new Set(['0', 'false', 'off', 'no', 'disabled'])
 
 export function isMouseEventsEnabled(
@@ -76,7 +88,7 @@ export function clearViewport(): Promise<void> {
     //
     // Avoid CSI 3J (clear scrollback), so the user can still scroll up to see
     // prior shell output and earlier CLI output.
-    writeToRealStdout('\x1b[2J\x1b[H', () => resolve())
+    writeToStdoutLoader()('\x1b[2J\x1b[H', () => resolve())
   })
 }
 
@@ -87,7 +99,7 @@ export function clearScrollback(): Promise<void> {
     // - CSI 2J: clear screen
     // - CSI 3J: clear scrollback
     // - CSI H : move cursor to home
-    writeToRealStdout('\x1b[2J\x1b[3J\x1b[H', () => resolve())
+    writeToStdoutLoader()('\x1b[2J\x1b[3J\x1b[H', () => resolve())
   })
 }
 
