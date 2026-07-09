@@ -127,6 +127,33 @@ export class HttpClient implements KodeClient {
     }
   }
 
+  private watchSocketFailure(args: {
+    ws: WebSocketLike | null
+    onClose: () => void
+    onError: () => void
+  }): () => void {
+    const ws = args.ws
+    if (!ws) return () => {}
+
+    const onClose = () => {
+      if (this.ws === ws) this.ws = null
+      args.onClose()
+    }
+    const onError = () => {
+      args.onError()
+    }
+
+    ws.addEventListener('close', onClose)
+    ws.addEventListener('error', onError)
+
+    return () => {
+      try {
+        ws.removeEventListener?.('close', onClose)
+        ws.removeEventListener?.('error', onError)
+      } catch {}
+    }
+  }
+
   private async ensureConnected(): Promise<void> {
     if (this.ws?.readyState === 1) return
 
@@ -242,13 +269,11 @@ export class HttpClient implements KodeClient {
     return await new Promise<Session[]>((resolve, reject) => {
       let settled = false
       let unsubscribe = () => {}
+      let unwatchFailure = () => {}
 
       const cleanup = () => {
         unsubscribe()
-        try {
-          ws?.removeEventListener?.('close', onClose)
-          ws?.removeEventListener?.('error', onError)
-        } catch {}
+        unwatchFailure()
       }
       const complete = (sessions: Session[]) => {
         if (settled) return
@@ -262,16 +287,13 @@ export class HttpClient implements KodeClient {
         cleanup()
         reject(new Error(message))
       }
-      const onClose = () => {
-        this.ws = null
-        fail('WebSocket connection closed before session list was received')
-      }
-      const onError = () => {
-        fail('WebSocket connection error before session list was received')
-      }
-
-      ws?.addEventListener('close', onClose)
-      ws?.addEventListener('error', onError)
+      unwatchFailure = this.watchSocketFailure({
+        ws,
+        onClose: () =>
+          fail('WebSocket connection closed before session list was received'),
+        onError: () =>
+          fail('WebSocket connection error before session list was received'),
+      })
 
       unsubscribe = this.onMessage(msg => {
         if (!isSessionListMessage(msg)) return
@@ -310,13 +332,11 @@ export class HttpClient implements KodeClient {
       let capturing = false
       let settled = false
       let unsubscribe = () => {}
+      let unwatchFailure = () => {}
 
       const cleanup = () => {
         unsubscribe()
-        try {
-          ws?.removeEventListener?.('close', onClose)
-          ws?.removeEventListener?.('error', onError)
-        } catch {}
+        unwatchFailure()
       }
       const complete = () => {
         if (settled) return
@@ -330,16 +350,15 @@ export class HttpClient implements KodeClient {
         cleanup()
         reject(new Error(message))
       }
-      const onClose = () => {
-        this.ws = null
-        fail('WebSocket connection closed before session history was received')
-      }
-      const onError = () => {
-        fail('WebSocket connection error before session history was received')
-      }
-
-      ws?.addEventListener('close', onClose)
-      ws?.addEventListener('error', onError)
+      unwatchFailure = this.watchSocketFailure({
+        ws,
+        onClose: () =>
+          fail(
+            'WebSocket connection closed before session history was received',
+          ),
+        onError: () =>
+          fail('WebSocket connection error before session history was received'),
+      })
 
       unsubscribe = this.onMessage(msg => {
         if (isRecord(msg) && msg.type === 'history_begin') {
@@ -414,15 +433,13 @@ export class HttpClient implements KodeClient {
       done = true
       wake()
     }
-    const onClose = () => {
-      this.ws = null
-      failStream('WebSocket connection closed before the response completed')
-    }
-    const onError = () => {
-      failStream('WebSocket connection error before the response completed')
-    }
-    ws?.addEventListener('close', onClose)
-    ws?.addEventListener('error', onError)
+    const unwatchFailure = this.watchSocketFailure({
+      ws,
+      onClose: () =>
+        failStream('WebSocket connection closed before the response completed'),
+      onError: () =>
+        failStream('WebSocket connection error before the response completed'),
+    })
 
     try {
       this.send({ type: 'prompt', prompt: message })
@@ -442,10 +459,7 @@ export class HttpClient implements KodeClient {
       if (streamError) throw streamError
     } finally {
       unsubscribe()
-      try {
-        ws?.removeEventListener?.('close', onClose)
-        ws?.removeEventListener?.('error', onError)
-      } catch {}
+      unwatchFailure()
     }
   }
 }
