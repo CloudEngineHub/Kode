@@ -32,18 +32,45 @@ export function areTerminalSizesEqual(
   return previous.columns === next.columns && previous.rows === next.rows
 }
 
+function isTransientZeroSize(size: TerminalSize): boolean {
+  return size.columns <= 0 || size.rows <= 0
+}
+
+function readInitialTerminalSize(stream: Writable): TerminalSize {
+  const size = readTerminalSize(stream as { columns?: number; rows?: number })
+  if (!isTransientZeroSize(size)) return size
+  return { columns: 80, rows: 24 }
+}
+
+function holdLastVisibleStreamSize(stream: Writable, size: TerminalSize): void {
+  const target = stream as { columns?: number; rows?: number }
+  try {
+    if (typeof target.columns === 'number' && target.columns <= 0) {
+      target.columns = size.columns
+    }
+    if (typeof target.rows === 'number' && target.rows <= 0) {
+      target.rows = size.rows
+    }
+  } catch {
+    // Some custom streams may expose readonly dimensions.
+  }
+}
+
 function getStreamState(stream: Writable): StreamState {
   const existing = streamStates.get(stream)
   if (existing) return existing
 
   const state: StreamState = {
-    size: readTerminalSize(stream as { columns?: number; rows?: number }),
+    size: readInitialTerminalSize(stream),
     listeners: new Set(),
     debounceTimer: null,
     onResize: () => {
       const next = readTerminalSize(
         stream as { columns?: number; rows?: number },
       )
+      if (isTransientZeroSize(next)) {
+        holdLastVisibleStreamSize(stream, state.size)
+      }
       commitResize(state, next)
     },
     attached: false,
@@ -66,6 +93,14 @@ function commitSize(state: StreamState, next: TerminalSize): void {
 }
 
 function commitResize(state: StreamState, next: TerminalSize): void {
+  if (isTransientZeroSize(next)) {
+    if (state.debounceTimer) {
+      clearTimeout(state.debounceTimer)
+      state.debounceTimer = null
+    }
+    return
+  }
+
   if (areTerminalSizesEqual(state.size, next)) return
 
   if (state.debounceTimer) {
@@ -93,6 +128,11 @@ export function getTerminalSizeSnapshot(stream: Writable): TerminalSize {
   const streamSize = readTerminalSize(
     stream as { columns?: number; rows?: number },
   )
+  if (isTransientZeroSize(streamSize)) {
+    holdLastVisibleStreamSize(stream, state.size)
+    return state.size
+  }
+
   const isShrinking =
     streamSize.columns < state.size.columns || streamSize.rows < state.size.rows
   if (isShrinking) {

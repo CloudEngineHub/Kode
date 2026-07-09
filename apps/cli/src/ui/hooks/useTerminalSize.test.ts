@@ -64,7 +64,11 @@ function createHarness(element: React.ReactElement): TestHarness {
 
 function SizeProbe({ label }: { label: string }): React.ReactNode {
   const size = useTerminalSize()
-  return React.createElement(Text, null, `${label}:${size.columns}x${size.rows}`)
+  return React.createElement(
+    Text,
+    null,
+    `${label}:${size.columns}x${size.rows}`,
+  )
 }
 
 describe('terminal size helpers', () => {
@@ -131,5 +135,22 @@ describe('terminal size helpers', () => {
 
     expect(harness.output()).toContain('A:80x20')
     expect(harness.output()).toContain('B:80x20')
+  })
+
+  test('ignores transient zero-size resize events until a visible size returns', async () => {
+    const harness = createHarness(
+      React.createElement(SizeProbe, { label: 'A' }),
+    )
+
+    await harness.wait(50)
+    expect(harness.output()).toContain('A:100x30')
+
+    harness.resize(0, 0)
+    await harness.wait(50)
+    expect(harness.output()).not.toContain('A:0x0')
+
+    harness.resize(90, 24)
+    await harness.wait(220)
+    expect(harness.output()).toContain('A:90x24')
   })
 })

@@ -439,6 +439,30 @@ describe('REPLView Static output epoch', () => {
     expect(harness.getOutput()).not.toContain('static-a')
   })
 
+  test('does not reprint static history after transient zero-size resize and restore', async () => {
+    const staticItems = [makeStaticItem('static-a')]
+    const harness = createHarness(
+      renderReplView({
+        staticOutputEpoch: 0,
+        staticItems,
+      }),
+      { columns: 100, rows: 24 },
+    )
+
+    await harness.wait(80)
+    expect(harness.getOutput()).toContain('static-a')
+
+    harness.clearOutput()
+    harness.resize(0, 0)
+    await harness.wait(120)
+    expect(harness.getOutput()).not.toContain('static-a')
+
+    harness.clearOutput()
+    harness.resize(90, 24)
+    await harness.wait(520)
+    expect(harness.getOutput()).not.toContain('static-a')
+  })
+
   test('does not duplicate prompt controls after normal to micro to normal resize', async () => {
     const renderWithPrompt = () => (
       <KeypressProvider>
