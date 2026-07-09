@@ -5,10 +5,12 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import {
+  __isMcpRootsCwdWatcherActiveForTests,
   __resetMcpRootsForTests,
   __setMcpRootsTrustOverrideForTests,
   createMcpRootsForCwd,
   getMcpClientCapabilities,
+  notifyMcpRootsListChanged,
   registerMcpClientRequestHandlers,
   unregisterMcpClientRequestHandlers,
 } from '#core/mcp/client/roots'
@@ -103,7 +105,9 @@ describe('MCP client roots', () => {
     try {
       __setMcpRootsTrustOverrideForTests(true)
       registerMcpClientRequestHandlers(client)
+      expect(__isMcpRootsCwdWatcherActiveForTests()).toBe(true)
       unregisterMcpClientRequestHandlers(client)
+      expect(__isMcpRootsCwdWatcherActiveForTests()).toBe(false)
 
       await setCwd(projectDir)
       expect(notifications).toEqual([])
@@ -112,5 +116,22 @@ describe('MCP client roots', () => {
       await setCwd(originalCwd)
       rmSync(projectDir, { recursive: true, force: true })
     }
+  })
+
+  test('stops watching cwd after a roots notification failure removes the last client', async () => {
+    __setMcpRootsTrustOverrideForTests(true)
+
+    registerMcpClientRequestHandlers({
+      setRequestHandler: () => {},
+      sendRootsListChanged: async () => {
+        throw new Error('closed')
+      },
+    } as any)
+
+    expect(__isMcpRootsCwdWatcherActiveForTests()).toBe(true)
+    notifyMcpRootsListChanged()
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    expect(__isMcpRootsCwdWatcherActiveForTests()).toBe(false)
   })
 })

@@ -52,10 +52,18 @@ function ensureCwdChangedSubscription(): void {
   })
 }
 
+function cleanupCwdChangedSubscriptionIfIdle(): void {
+  if (rootsClients.size > 0 || !unsubscribeCwdChanged) return
+
+  unsubscribeCwdChanged()
+  unsubscribeCwdChanged = null
+}
+
 export function notifyMcpRootsListChanged(): void {
   for (const client of rootsClients) {
     void client.sendRootsListChanged().catch(error => {
       rootsClients.delete(client)
+      cleanupCwdChangedSubscriptionIfIdle()
       logMCPError(
         'roots',
         `Failed to notify MCP roots list change: ${error instanceof Error ? error.message : String(error)}`,
@@ -77,6 +85,7 @@ export function registerMcpClientRequestHandlers(client: Client): void {
 
 export function unregisterMcpClientRequestHandlers(client: Client): void {
   rootsClients.delete(client)
+  cleanupCwdChangedSubscriptionIfIdle()
 }
 
 export function __setMcpRootsTrustOverrideForTests(
@@ -90,4 +99,8 @@ export function __resetMcpRootsForTests(): void {
   rootsClients.clear()
   unsubscribeCwdChanged?.()
   unsubscribeCwdChanged = null
+}
+
+export function __isMcpRootsCwdWatcherActiveForTests(): boolean {
+  return unsubscribeCwdChanged !== null
 }
