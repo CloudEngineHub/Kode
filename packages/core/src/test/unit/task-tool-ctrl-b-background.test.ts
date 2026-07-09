@@ -37,11 +37,13 @@ describe('TaskTool ctrl+b backgrounding parity', () => {
         setToolJSX: (value: any) => {
           if (triggered) return
           if (!value || !value.jsx) return
-          const jsx: any = value.jsx
-          const onBackground = jsx?.props?.onBackground
-          if (typeof onBackground !== 'function') return
+          const onKeypress = value.onKeypress
+          if (typeof onKeypress !== 'function') return
           triggered = true
-          setTimeout(() => onBackground(), 0)
+          setTimeout(
+            () => onKeypress('b', { ctrl: true, meta: false, shift: false }),
+            0,
+          )
         },
       } as any,
     )) {

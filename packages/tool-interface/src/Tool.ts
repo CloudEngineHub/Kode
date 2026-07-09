@@ -4,6 +4,17 @@ import type { PermissionMode, ToolPermissionContext } from './permissions'
 
 export type ToolRenderOutput = unknown
 
+export type ToolKeypress = Readonly<{
+  ctrl: boolean
+  meta: boolean
+  shift: boolean
+}>
+
+export type ToolKeypressHandler = (
+  input: string,
+  key: ToolKeypress,
+) => boolean | void
+
 export type AssistantStreamUpdate =
   | {
       type: 'start'
@@ -22,6 +33,7 @@ export type SetToolJSXFn<TRenderable = ToolRenderOutput> = (
     jsx: TRenderable | null
     shouldHidePromptInput: boolean
     displayMode?: 'inline' | 'fullscreen'
+    onKeypress?: ToolKeypressHandler
   } | null,
 ) => void
 

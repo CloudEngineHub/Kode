@@ -1,5 +1,5 @@
 import * as React from 'react'
-import type { ToolUseContext } from '@kode/tool-interface/Tool'
+import type { SetToolJSXFn, ToolUseContext } from '@kode/tool-interface/Tool'
 import { createAssistantMessage } from '#core/utils/messages'
 import { BunShell } from '#runtime/shell'
 import { getBunShellSandboxPlan } from '#core/sandbox/bunShellSandboxPlan'
@@ -21,12 +21,7 @@ import { executeForegroundBash } from './executeForeground'
 import { maybeAttachSandboxNetworkPorts } from './sandboxNetwork'
 import { LlmGateProgress } from './LlmGateProgress'
 
-type SetToolJSX = (
-  value: {
-    jsx: unknown
-    shouldHidePromptInput: boolean
-  } | null,
-) => void
+type SetToolJSX = SetToolJSXFn<React.ReactNode>
 
 type Input = {
   command: string

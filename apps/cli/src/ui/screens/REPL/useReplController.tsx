@@ -45,6 +45,7 @@ import { ThinkingToggleScreen } from '#ui-ink/screens/overlays/ThinkingToggleScr
 import { ModelConfig } from '#ui-ink/components/ModelConfig'
 import { Doctor } from '#ui-ink/screens/Doctor'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
+import { useToolKeypress } from '#ui-ink/hooks/useToolKeypress'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import { submitPrompt } from '#ui-ink/components/PromptInput/submit'
 import { parsePromptHistoryDisplay } from '#ui-ink/hooks/useArrowKeyHistory'
@@ -82,6 +83,7 @@ import type {
   ForkConvoWithMessagesOptions,
   SetForkConvoWithMessagesOnTheNextRender,
 } from '#ui-ink/types/conversationReset'
+import type { ToolKeypressHandler } from '@kode/tool-interface/Tool'
 
 const batchedUpdates: ((fn: () => void) => void) | null =
   typeof (ReactReconciler as any)?.batchedUpdates === 'function'
@@ -249,6 +251,7 @@ export function useReplController(props: REPLProps) {
     jsx: React.ReactNode | null
     shouldHidePromptInput: boolean
     displayMode?: 'inline' | 'fullscreen'
+    onKeypress?: ToolKeypressHandler
   }
 
   const [toolViewStack, setToolViewStack] = useState<ToolView[]>([])
@@ -259,6 +262,8 @@ export function useReplController(props: REPLProps) {
 
   const toolJSX: ToolView | null =
     toolViewStack.length > 0 ? toolViewStack[toolViewStack.length - 1] : null
+
+  useToolKeypress(toolJSX?.onKeypress)
 
   const toolJSXRef = useRef<typeof toolJSX>(toolJSX)
   useEffect(() => {

@@ -8,6 +8,8 @@ import type { AssistantMessage } from '#core/query'
 import { Message } from './Message'
 import { ToolUseLoader } from './ToolUseLoader'
 import { AssistantThinkingMessage } from './messages/AssistantThinkingMessage'
+import { BashToolRunInBackgroundOverlay } from '#tools/tools/system/BashTool/BashToolRunInBackgroundOverlay'
+import { setRequestStatus } from '#core/utils/requestStatus'
 
 type TestHarness = {
   unmount: () => void
@@ -47,6 +49,7 @@ afterEach(() => {
   while (mounted.length > 0) {
     mounted.pop()?.unmount()
   }
+  setRequestStatus({ kind: 'idle' })
   mock.restore()
 })
 
@@ -204,6 +207,37 @@ describe('animation lifecycle', () => {
     expect(setIntervalSpy).not.toHaveBeenCalled()
     await harness.wait(220)
     expect(setIntervalSpy).not.toHaveBeenCalled()
+    expect(harness.getRenderCount()).toBe(initialRenderCount)
+    expect(harness.getOutput()).toBe(initialOutput)
+  })
+
+  test('does not animate a hidden Bash tool status', async () => {
+    setRequestStatus({ kind: 'tool' })
+    const setIntervalSpy = spyOn(globalThis, 'setInterval')
+    const harness = createHarness(<BashToolRunInBackgroundOverlay />)
+
+    await harness.wait(40)
+    const initialRenderCount = harness.getRenderCount()
+
+    expect(setIntervalSpy).not.toHaveBeenCalled()
+    await harness.wait(220)
+    expect(harness.getRenderCount()).toBe(initialRenderCount)
+  })
+
+  test('keeps the Bash request status static for screen readers', async () => {
+    setRequestStatus({ kind: 'thinking', inputTokens: 42 })
+    const setIntervalSpy = spyOn(globalThis, 'setInterval')
+    const harness = createHarness(<BashToolRunInBackgroundOverlay />, {
+      isScreenReaderEnabled: true,
+    })
+
+    await harness.wait(40)
+    const initialOutput = harness.getOutput()
+    const initialRenderCount = harness.getRenderCount()
+
+    expect(initialOutput).toContain('Prefilling')
+    expect(setIntervalSpy).not.toHaveBeenCalled()
+    await harness.wait(220)
     expect(harness.getRenderCount()).toBe(initialRenderCount)
     expect(harness.getOutput()).toBe(initialOutput)
   })

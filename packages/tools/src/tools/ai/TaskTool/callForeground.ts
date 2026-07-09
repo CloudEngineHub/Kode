@@ -26,7 +26,10 @@ import {
   appendBackgroundTaskOutput,
   touchBackgroundTaskOutputFile,
 } from '#core/tasks/backgroundRegistry'
-import { BashToolRunInBackgroundOverlay } from '#tools/tools/system/BashTool/BashToolRunInBackgroundOverlay'
+import {
+  BashToolRunInBackgroundOverlay,
+  createRunInBackgroundKeypressHandler,
+} from '#tools/tools/system/BashTool/BashToolRunInBackgroundOverlay'
 
 import { asyncLaunchMessage } from './assistantText'
 import type { PreparedTaskToolRun } from './callTypes'
@@ -251,6 +254,8 @@ export async function* callTaskToolForeground(
     backgroundRequested = true
     resolveBackgroundRequested?.()
   }
+  const onBackgroundKeypress =
+    createRunInBackgroundKeypressHandler(requestBackground)
 
   let backgrounded = false
   const runAbortController = new AbortController()
@@ -266,10 +271,9 @@ export async function* callTaskToolForeground(
       if (backgrounded) return
       if (runAbortController.signal.aborted) return
       setToolJSX({
-        jsx: React.createElement(BashToolRunInBackgroundOverlay, {
-          onBackground: requestBackground,
-        }),
+        jsx: React.createElement(BashToolRunInBackgroundOverlay),
         shouldHidePromptInput: false,
+        onKeypress: onBackgroundKeypress,
       })
     }, PROGRESS_INITIAL_DELAY_MS)
     overlayTimeout.unref?.()

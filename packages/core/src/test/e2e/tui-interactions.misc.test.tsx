@@ -6,7 +6,10 @@ import { AskUserQuestionPermissionRequest } from '#ui-ink/components/permissions
 import { AskUserQuestionTool } from '#tools/tools/interaction/AskUserQuestionTool/AskUserQuestionTool'
 import { ExitPlanModePermissionRequest } from '#ui-ink/components/permissions/PlanModePermissionRequest/ExitPlanModePermissionRequest'
 import { ExitPlanModeTool } from '#tools/tools/interaction/PlanModeTool/ExitPlanModeTool'
-import { BashToolRunInBackgroundOverlay } from '#tools/tools/system/BashTool/BashToolRunInBackgroundOverlay'
+import {
+  BashToolRunInBackgroundOverlay,
+  createRunInBackgroundKeypressHandler,
+} from '#tools/tools/system/BashTool/BashToolRunInBackgroundOverlay'
 import { ModelConfig } from '#ui-ink/components/ModelConfig'
 import {
   createAssistantMessage,
@@ -28,8 +31,10 @@ import { useModelSelectorInput } from '#ui-ink/components/ModelSelector/useModel
 import { useModelSelectorState } from '#ui-ink/components/ModelSelector/useModelSelectorState'
 import { ToolPicker } from '#host-cli/commands/agent/agents/ui/wizard/ToolPicker'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
+import { useToolKeypress } from '#ui-ink/hooks/useToolKeypress'
 import { useMouse } from '#ui-ink/hooks/useMouse'
 import { useScopedIndexState } from '#ui-ink/hooks/useScopedIndexState'
+import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { PermissionProvider } from '#ui-ink/contexts/PermissionContext'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -259,8 +264,8 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     expect(allowed).toBe(true)
     expect(done).toBe(true)
     const stored =
-      toolUseConfirm.toolUseContext.options?.askUserQuestionAnswersByToolUseId
-        ?.['mouse-m']
+      toolUseConfirm.toolUseContext.options
+        ?.askUserQuestionAnswersByToolUseId?.['mouse-m']
     expect(stored?.['Pick mouse one']).toBe('Second')
   })
 
@@ -2521,14 +2526,30 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     expect(handledBy).toEqual(['dynamic', 'fallback'])
   })
 
-  test('Bash overlay: ctrl+b triggers background callback', async () => {
-    let backgrounded = false
+  test('Bash overlay: ctrl+b is consumed before prompt input', async () => {
+    let backgroundCalls = 0
+    let promptCalls = 0
+    const onBackgroundKeypress = createRunInBackgroundKeypressHandler(() => {
+      backgroundCalls += 1
+    })
+
+    function BashOverlayHarness(): React.ReactNode {
+      useToolKeypress(onBackgroundKeypress)
+      useKeypress(
+        (input, key) => {
+          if (input !== 'b' || !key.ctrl) return false
+          promptCalls += 1
+          return true
+        },
+        { priority: KEYPRESS_PRIORITY.INPUT },
+      )
+      return <BashToolRunInBackgroundOverlay />
+    }
+
     const h = createInkTestHarness(
-      <BashToolRunInBackgroundOverlay
-        onBackground={() => {
-          backgrounded = true
-        }}
-      />,
+      <KeypressProvider>
+        <BashOverlayHarness />
+      </KeypressProvider>,
     )
     harnessManager.track(h)
 
@@ -2536,8 +2557,11 @@ describe('TUI E2E regression (Ink render): Misc', () => {
 
     h.stdin.write('\x02')
     await h.wait(25)
+    h.stdin.write('\x02')
+    await h.wait(25)
 
-    expect(backgrounded).toBe(true)
+    expect(backgroundCalls).toBe(1)
+    expect(promptCalls).toBe(0)
   })
 
   test('queued Waiting… progress is replaced by Running… for same tool_use_id', async () => {
