@@ -180,18 +180,15 @@ export function Select({
     <Box ref={containerRef} {...styles.container()}>
       {state.visibleOptions.map(option => {
         const key = 'value' in option ? option.value : optionHeaderKey(option)
+        const isSelectableOption = 'value' in option
         const isFocused =
           !isDisabled &&
           state.focusedValue !== undefined &&
-          ('value' in option
-            ? state.focusedValue === option.value
-            : option.optionValues.includes(state.focusedValue))
+          isSelectableOption &&
+          state.focusedValue === option.value
         const isSelected =
-          !!state.value &&
-          ('value' in option
-            ? state.value === option.value
-            : option.optionValues.includes(state.value))
-        const smallPointer = 'header' in option
+          !!state.value && isSelectableOption && state.value === option.value
+        const smallPointer = false
         const labelText = 'label' in option ? option.label : option.header
         let label: ReactNode = labelText
 

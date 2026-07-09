@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import React, { useEffect, useMemo, useState } from 'react'
 import { Box, Text } from 'ink'
+import figures from 'figures'
 import { AskUserQuestionPermissionRequest } from '#ui-ink/components/permissions/AskUserQuestionPermissionRequest/AskUserQuestionPermissionRequest'
 import { AskUserQuestionTool } from '#tools/tools/interaction/AskUserQuestionTool/AskUserQuestionTool'
 import { BashToolRunInBackgroundOverlay } from '#tools/tools/system/BashTool/BashToolRunInBackgroundOverlay'
@@ -300,6 +301,34 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     await h.wait(25)
 
     expect(selected).toBe('first')
+  })
+
+  test('Select: grouped options render a single focus marker', async () => {
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <Select
+          options={[
+            {
+              header: 'Group',
+              options: [
+                { label: 'First', value: 'first' },
+                { label: 'Second', value: 'second' },
+              ],
+            },
+          ]}
+        />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+
+    const output = h.getOutput()
+    const focusMarkers = [figures.pointer, figures.triangleDownSmall].reduce(
+      (count, marker) => count + output.split(marker).length - 1,
+      0,
+    )
+    expect(focusMarkers).toBe(1)
   })
 
   test('Select: digit key selects the matching visible option', async () => {
@@ -1255,6 +1284,65 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     expect(selected).toBe('second')
   })
 
+  test('Select: repeated down-arrow focus survives synchronous keep-alive remount', async () => {
+    let focused = ''
+    let selected = ''
+
+    function SelectSyncRemountHarness(): React.ReactNode {
+      const [showSelect, setShowSelect] = useState(true)
+
+      useKeypress(
+        (_input, key) => {
+          if (!key.downArrow) return
+
+          setShowSelect(false)
+          setTimeout(() => setShowSelect(true), 0)
+          return false
+        },
+        { priority: 10 },
+      )
+
+      if (!showSelect) return <Text>Loading actions...</Text>
+
+      return (
+        <Select
+          focusScope="test:select-sync-remount"
+          focusValue="first"
+          options={[
+            { label: 'First', value: 'first' },
+            { label: 'Second', value: 'second' },
+            { label: 'Third', value: 'third' },
+          ]}
+          onFocus={value => {
+            focused = value
+          }}
+          onChange={value => {
+            selected = value
+          }}
+        />
+      )
+    }
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <SelectSyncRemountHarness />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(40)
+    expect(focused).toBe('first')
+
+    h.stdin.write('\u001B[B\u001B[B')
+    await h.wait(120)
+    expect(focused).toBe('third')
+
+    h.stdin.write('\r')
+    await h.wait(40)
+
+    expect(selected).toBe('third')
+  })
+
   test('Select: lagging focusValue echo does not pull down-arrow focus backward', async () => {
     let focused = ''
     let selected = ''
@@ -1484,6 +1572,70 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     h.stdin.write('\u001B[B')
     await h.wait(80)
     expect(focused).toBe('third')
+  })
+
+  test('Scoped index: synchronous keep-alive removal persists down-arrow before unmount', async () => {
+    let focused = ''
+    const scope = `test:scoped-index-sync-remount:${Date.now()}:${Math.random()}`
+
+    function ScopedIndexList(): React.ReactNode {
+      const items = ['first', 'second', 'third']
+      const [selectedIndex, setSelectedIndex] = useScopedIndexState({
+        scope,
+        itemCount: items.length,
+      })
+
+      useEffect(() => {
+        focused = items[selectedIndex] ?? ''
+      }, [items, selectedIndex])
+
+      useKeypress((_, key) => {
+        if (!key.downArrow) return
+        setSelectedIndex(prev => Math.min(items.length - 1, prev + 1))
+        return true
+      })
+
+      return (
+        <Box flexDirection="column">
+          {items.map((item, index) => (
+            <Text key={item}>
+              {index === selectedIndex ? '>' : ' '} {item}
+            </Text>
+          ))}
+        </Box>
+      )
+    }
+
+    function KeepAliveRemountHarness(): React.ReactNode {
+      const [showList, setShowList] = useState(true)
+
+      useKeypress(
+        (_, key) => {
+          if (!key.downArrow) return
+
+          setShowList(false)
+          setTimeout(() => setShowList(true), 0)
+          return false
+        },
+        { priority: 10 },
+      )
+
+      return showList ? <ScopedIndexList /> : <Text>Loading list...</Text>
+    }
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <KeepAliveRemountHarness />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(40)
+    expect(focused).toBe('first')
+
+    h.stdin.write('\u001B[B')
+    await h.wait(80)
+    expect(focused).toBe('second')
   })
 
   test('Scoped index: keep-alive initial index churn does not pull focus backward', async () => {
