@@ -13,6 +13,10 @@ function isPermissionRequest(
   return event.type === 'permission_request'
 }
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
 const EVENT_FLUSH_DELAY_MS = 50
 
 export function useChat(args: {
@@ -156,6 +160,14 @@ export function useChat(args: {
         if (ev.type === 'history_begin' || ev.type === 'history_end') continue
         enqueueEvent(ev)
       }
+    } catch (error) {
+      enqueueEvent({
+        type: 'log',
+        log: {
+          level: 'error',
+          message: getErrorMessage(error),
+        },
+      })
     } finally {
       flushBufferedEvents()
       setSending(false)

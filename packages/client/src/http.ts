@@ -295,10 +295,12 @@ export class HttpClient implements KodeClient {
 
   async *sendMessage(message: string): AsyncGenerator<AgentEvent> {
     await this.ensureConnected()
+    const ws = this.ws
 
     const queue: AgentEvent[] = []
     let resolveNext: (() => void) | null = null
     let done = false
+    let streamError: Error | null = null
 
     const wake = () => {
       if (!resolveNext) return
@@ -321,11 +323,28 @@ export class HttpClient implements KodeClient {
       wake()
     })
 
+    const failStream = (message: string) => {
+      if (done) return
+      streamError = new Error(message)
+      done = true
+      wake()
+    }
+    const onClose = () => {
+      this.ws = null
+      failStream('WebSocket connection closed before the response completed')
+    }
+    const onError = () => {
+      failStream('WebSocket connection error before the response completed')
+    }
+    ws?.addEventListener('close', onClose)
+    ws?.addEventListener('error', onError)
+
     try {
       this.send({ type: 'prompt', prompt: message })
 
       while (!done || queue.length > 0) {
         if (queue.length === 0) {
+          if (streamError) throw streamError
           await new Promise<void>(resolve => {
             resolveNext = resolve
           })
@@ -335,8 +354,13 @@ export class HttpClient implements KodeClient {
         const next = queue.shift()
         if (next) yield next
       }
+      if (streamError) throw streamError
     } finally {
       unsubscribe()
+      try {
+        ws?.removeEventListener?.('close', onClose)
+        ws?.removeEventListener?.('error', onError)
+      } catch {}
     }
   }
 }
