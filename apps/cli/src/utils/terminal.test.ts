@@ -115,4 +115,23 @@ describe('terminal mouse tracking lifecycle', () => {
       DISABLE_MOUSE_EVENTS_SEQUENCE,
     ])
   })
+
+  test('force resets nested mouse tracking for process shutdown cleanup', () => {
+    expect(terminal).not.toBeNull()
+
+    terminal!.enableMouseEvents()
+    terminal!.enableMouseEvents()
+    terminal!.resetMouseEvents()
+    terminal!.disableMouseEvents()
+    terminal!.resumeMouseEvents()
+    terminal!.enableMouseEvents()
+    terminal!.disableMouseEvents()
+
+    expect(writes).toEqual([
+      ENABLE_MOUSE_EVENTS_SEQUENCE,
+      DISABLE_MOUSE_EVENTS_SEQUENCE,
+      ENABLE_MOUSE_EVENTS_SEQUENCE,
+      DISABLE_MOUSE_EVENTS_SEQUENCE,
+    ])
+  })
 })

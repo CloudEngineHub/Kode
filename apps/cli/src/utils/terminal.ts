@@ -107,6 +107,13 @@ export function disableMouseEvents(): void {
   writeToTty(DISABLE_MOUSE_EVENTS_SEQUENCE)
 }
 
+export function resetMouseEvents(): void {
+  if (!process.stdout?.isTTY) return
+  mouseEventsRefCount = 0
+  mouseEventsSuspended = false
+  writeToTty(DISABLE_MOUSE_EVENTS_SEQUENCE)
+}
+
 export function suspendMouseEvents(): void {
   if (!process.stdout?.isTTY) return
   if (mouseEventsRefCount <= 0 || mouseEventsSuspended) return

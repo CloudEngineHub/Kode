@@ -12,10 +12,10 @@ import { showInvalidConfigDialog } from '#ui-ink/screens/setup/InvalidConfigScre
 import { ensurePackagedRuntimeEnv, ensureYogaWasmPath } from './bootstrapEnv'
 import { terminalCapabilityManager } from '#ui-ink/utils/terminalCapabilityManager'
 import {
-  disableMouseEvents,
   enableLineWrapping,
   enterAlternateScreen,
   exitAlternateScreen,
+  resetMouseEvents,
   shouldEnterAlternateScreen,
 } from '#cli-utils/terminal'
 import {
@@ -141,7 +141,7 @@ process.on('exit', () => {
     enableLineWrapping()
   } catch {}
   try {
-    disableMouseEvents()
+    resetMouseEvents()
   } catch {}
   resetCursor()
   if (didEnterAlternateScreen) {
@@ -199,7 +199,7 @@ async function gracefulExit(code = 0) {
     enableLineWrapping()
   } catch {}
   try {
-    disableMouseEvents()
+    resetMouseEvents()
   } catch {}
   if (didEnterAlternateScreen) {
     try {
