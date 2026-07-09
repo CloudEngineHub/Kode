@@ -21,6 +21,7 @@ const DEL_CODE = 127 // \x7f
 const PASTE_GUARD_MESSAGE =
   'Paste detected. Added as a placeholder; press Enter to send.'
 const LEGACY_PASTE_AGGREGATION_DELAY_MS = 75
+const SPECIAL_PASTE_AGGREGATION_DELAY_MS = 32
 
 // Helper to check if input is a backspace character
 function isBackspaceChar(input: string): boolean {
@@ -48,6 +49,20 @@ export function __getLineFeedInputActionForTests(args: {
     return 'newline'
   }
   return 'submit'
+}
+
+export function __getPasteAggregationDelayForTests(args: {
+  input: string
+  hasPendingPaste: boolean
+  terminalColumns?: number
+}): number | null {
+  const options = { terminalColumns: args.terminalColumns }
+  if (!shouldAggregatePasteChunk(args.input, args.hasPendingPaste, options)) {
+    return null
+  }
+  return shouldTreatAsSpecialPaste(args.input, options)
+    ? SPECIAL_PASTE_AGGREGATION_DELAY_MS
+    : LEGACY_PASTE_AGGREGATION_DELAY_MS
 }
 
 export default function TextInput({
@@ -207,14 +222,11 @@ export default function TextInput({
     terminalColumns: columns,
   })
 
-  const resetPasteTimeout = React.useCallback(() => {
+  const resetPasteTimeout = React.useCallback((delayMs: number) => {
     if (pasteTimeoutRef.current) {
       clearTimeout(pasteTimeoutRef.current)
     }
-    pasteTimeoutRef.current = setTimeout(
-      flushAggregatedPaste,
-      LEGACY_PASTE_AGGREGATION_DELAY_MS,
-    )
+    pasteTimeoutRef.current = setTimeout(flushAggregatedPaste, delayMs)
   }, [flushAggregatedPaste])
 
   const wrappedOnInput = (input: string, key: Key): void => {
@@ -324,15 +336,18 @@ export default function TextInput({
     // that we would see e.g. 1024 characters and then just a few
     // more in the next frame that belong with the original paste.
     // This batching number is not consistent.
-    if (
-      onPaste &&
-      shouldAggregatePasteChunk(input, pasteTimeoutRef.current !== null, {
-        terminalColumns: columns,
-      })
-    ) {
+    const pasteAggregationDelay = onPaste
+      ? __getPasteAggregationDelayForTests({
+          input,
+          hasPendingPaste: pasteTimeoutRef.current !== null,
+          terminalColumns: columns,
+        })
+      : null
+
+    if (onPaste && pasteAggregationDelay !== null) {
       armPasteGuard()
       pasteChunksRef.current.push(input)
-      resetPasteTimeout()
+      resetPasteTimeout(pasteAggregationDelay)
       return
     }
 
