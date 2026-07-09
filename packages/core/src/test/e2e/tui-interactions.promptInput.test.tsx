@@ -578,6 +578,32 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
     await h.wait(150)
   })
 
+  test('bracketed paste folds promptly without waiting for legacy paste aggregation', async () => {
+    await setCwd(process.cwd())
+
+    const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
+    const h = createInkTestHarness(
+      <PromptInputHarness conversationKey={conversationKey} showRaw={true} />,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    h.clearOutput()
+
+    h.stdin.write(`\x1b[200~${'a'.repeat(200)}\x1b[201~`)
+    await h.wait(75)
+
+    const output = h.getOutput()
+    expect(output).toContain('RAW:"[Pasted text #1]"')
+    expect(output).not.toContain(`RAW:"${'a'.repeat(200)}"`)
+
+    h.clearOutput()
+    h.stdin.write('\r')
+    await h.wait(200)
+
+    expect(h.getOutput()).toContain('SUBMIT_COUNT:1')
+  })
+
   test('rapid Enter after a paste-sized chunk shows paste guard without inserting newline', async () => {
     await setCwd(process.cwd())
 

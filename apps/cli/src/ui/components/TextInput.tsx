@@ -5,7 +5,11 @@ import { useTextInput } from '#ui-ink/hooks/useTextInput'
 import { getTheme } from '#core/utils/theme'
 import { type Key, useKeypress } from '#ui-ink/hooks/useKeypress'
 import { PASTE_PROTECTION_RETURN_KEY_NAME } from '#ui-ink/contexts/KeypressContext'
-import { shouldAggregatePasteChunk } from '#core/utils/paste'
+import {
+  normalizeLineEndings,
+  shouldAggregatePasteChunk,
+  shouldTreatAsSpecialPaste,
+} from '#core/utils/paste'
 import { terminalCapabilityManager } from '#ui-ink/utils/terminalCapabilityManager'
 import { useBracketedPasteSequences } from './TextInputBracketedPaste'
 import type { Props } from './TextInput.types'
@@ -236,6 +240,20 @@ export default function TextInput({
       } as Key
       if (shouldBlockEnter(nextKey)) return
       onInput('\r', nextKey)
+      return
+    }
+
+    if (key.paste && input) {
+      const normalized = normalizeLineEndings(input)
+      if (
+        onPasteRef.current &&
+        shouldTreatAsSpecialPaste(normalized, { terminalColumns: columns })
+      ) {
+        setTimeout(() => onPasteRef.current?.(normalized), 0)
+        return
+      }
+
+      onInput(normalized, key)
       return
     }
 
