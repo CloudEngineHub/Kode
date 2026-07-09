@@ -155,6 +155,94 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
     }
   })
 
+  test('LogList: Enter returns selected log JSON through callback', async () => {
+    let mockLogs = [
+      {
+        date: '2026-07-08',
+        fullPath: 'log.json',
+        value: 0,
+        created: new Date('2026-07-08T12:00:00Z'),
+        modified: new Date('2026-07-08T12:00:00Z'),
+        firstPrompt: 'hello',
+        messageCount: 1,
+        messages: [
+          {
+            type: 'user',
+            uuid: '00000000-0000-4000-8000-000000000001',
+            message: {
+              role: 'user',
+              content: 'hello',
+            },
+            timestamp: '2026-07-08T12:00:00Z',
+          },
+        ],
+      },
+    ]
+
+    try {
+      mock.module('#core/utils/log', () => {
+        return {
+          CACHE_PATHS: {
+            messages: () => 'messages',
+            errors: () => 'errors',
+          },
+          formatDate: () => '2026-07-08 12:00',
+          loadLogList: async () => mockLogs,
+          logError: () => {},
+        }
+      })
+
+      const { LogList } = await import('#ui-ink/screens/LogList')
+      let result: any = null
+      const h = createInkTestHarness(
+        <KeypressProvider>
+          <LogList
+            context={{}}
+            type="messages"
+            onDone={nextResult => {
+              result = nextResult
+            }}
+          />
+        </KeypressProvider>,
+      )
+      harnessManager.track(h)
+
+      await h.wait(50)
+      expect(h.getOutput()).toContain('hello')
+
+      h.stdin.write('\r')
+      await h.wait(50)
+
+      expect(result).toMatchObject({ type: 'stdout', exitCode: 0 })
+      expect(result.text).toContain('00000000-0000-4000-8000-000000000001')
+      expect(h.getOutput()).not.toContain('"uuid"')
+
+      mockLogs = []
+      let emptyResult: any = null
+      const emptyHarness = createInkTestHarness(
+        <KeypressProvider>
+          <LogList
+            context={{}}
+            type="messages"
+            onDone={nextResult => {
+              emptyResult = nextResult
+            }}
+          />
+        </KeypressProvider>,
+      )
+      harnessManager.track(emptyHarness)
+
+      await emptyHarness.wait(50)
+      expect(emptyResult).toEqual({
+        type: 'stderr',
+        text: 'No message logs found.\n',
+        exitCode: 1,
+      })
+    } finally {
+      mock.restore()
+    }
+  })
+
   test('McpServersScreen: resources and prompts can be opened from a connected server', async () => {
     let reconnectCount = 0
     let getClientsCallCount = 0

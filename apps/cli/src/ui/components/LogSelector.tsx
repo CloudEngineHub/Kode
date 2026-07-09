@@ -14,17 +14,17 @@ import { useExitOnCtrlCD } from '#ui-ink/hooks/useExitOnCtrlCD'
 type LogSelectorProps = {
   logs: LogOption[]
   onSelect: (logValue: number) => void
+  onCancel: () => void
 }
 
 export function LogSelector({
   logs,
   onSelect,
+  onCancel,
 }: LogSelectorProps): React.ReactNode {
   const theme = getTheme()
   const layout = useScreenLayout()
-  const exitState = useExitOnCtrlCD(() => process.exit(0))
-
-  if (logs.length === 0) return null
+  const exitState = useExitOnCtrlCD(onCancel)
 
   const [selectedIndex, setSelectedIndex] = React.useState(0)
 
@@ -53,7 +53,7 @@ export function LogSelector({
     const inputChar = input.length === 1 ? input : ''
 
     if (key.escape) {
-      process.exit(0)
+      onCancel()
       return true
     }
 
@@ -92,6 +92,8 @@ export function LogSelector({
       return true
     }
   })
+
+  if (logs.length === 0) return null
 
   const topIndicator = window.showUpIndicator ? `${figures.arrowUp} More` : ' '
   const bottomIndicator = window.showDownIndicator
