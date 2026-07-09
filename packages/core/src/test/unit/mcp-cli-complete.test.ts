@@ -154,9 +154,15 @@ describe('mcp-cli client-capabilities', () => {
     expect(result.stderr).toBe('')
     expect(JSON.parse(result.stdout)).toEqual({
       roots: { enabled: true, listChanged: true },
-      sampling: { enabled: false },
-      elicitation: { enabled: false },
-      tasks: { enabled: false },
+      sampling: { enabled: false, context: false, tools: false },
+      elicitation: { enabled: false, form: false, url: false },
+      tasks: {
+        enabled: false,
+        list: false,
+        cancel: false,
+        samplingCreateMessage: false,
+        elicitationCreate: false,
+      },
     })
   })
 
