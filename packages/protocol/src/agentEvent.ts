@@ -1,5 +1,6 @@
 import { z } from 'zod'
 
+import type { Session } from './session'
 import type { SdkMessage } from './streamJson'
 
 export type PermissionRequestEvent = {
@@ -20,8 +21,24 @@ export type HistoryEndEvent = {
   sessionId: string
 }
 
+export type TurnStateEvent = {
+  type: 'turn_state'
+  session_id: string
+  state: 'idle' | 'running'
+}
+
+export type SessionListEvent = {
+  type: 'session_list'
+  sessions: Session[]
+}
+
 export type AgentEvent =
-  SdkMessage | PermissionRequestEvent | HistoryBeginEvent | HistoryEndEvent
+  | SdkMessage
+  | PermissionRequestEvent
+  | HistoryBeginEvent
+  | HistoryEndEvent
+  | TurnStateEvent
+  | SessionListEvent
 
 const ContentBlockSchema = z
   .object({
@@ -141,14 +158,48 @@ const HistoryEndEventSchema = z
   })
   .strict()
 
-export const AgentEventSchema = z.discriminatedUnion('type', [
-  SystemEventSchema,
-  UserEventSchema,
-  AssistantEventSchema,
-  StreamEventSchema,
-  ResultEventSchema,
-  LogEventSchema,
-  PermissionRequestEventSchema,
-  HistoryBeginEventSchema,
-  HistoryEndEventSchema,
-]) as unknown as z.ZodType<AgentEvent>
+const TurnStateEventSchema = z
+  .object({
+    type: z.literal('turn_state'),
+    session_id: z.string(),
+    state: z.enum(['idle', 'running']),
+  })
+  .strict()
+
+const SessionSchema = z
+  .object({
+    sessionId: z.string(),
+    slug: z.string().nullable(),
+    customTitle: z.string().nullable(),
+    tag: z.string().nullable(),
+    summary: z.string().nullable(),
+    cwd: z.string().nullable(),
+    createdAt: z.string().nullable(),
+    modifiedAt: z.string().nullable(),
+    events: z.array(z.lazy(() => AgentEventSchema)).optional(),
+  })
+  .strict() as unknown as z.ZodType<Session>
+
+const SessionListEventSchema = z
+  .object({
+    type: z.literal('session_list'),
+    sessions: z.array(SessionSchema),
+  })
+  .strict()
+
+export const AgentEventSchema: z.ZodType<AgentEvent> = z.discriminatedUnion(
+  'type',
+  [
+    SystemEventSchema,
+    UserEventSchema,
+    AssistantEventSchema,
+    StreamEventSchema,
+    ResultEventSchema,
+    LogEventSchema,
+    PermissionRequestEventSchema,
+    HistoryBeginEventSchema,
+    HistoryEndEventSchema,
+    TurnStateEventSchema,
+    SessionListEventSchema,
+  ],
+) as unknown as z.ZodType<AgentEvent>
