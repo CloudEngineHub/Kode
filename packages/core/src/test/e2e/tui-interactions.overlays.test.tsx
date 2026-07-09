@@ -280,8 +280,12 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
     let promptRevision = 0
     let resourceRevision = 0
     let leakedEscapes = 0
+    const subscribedResources: string[] = []
+    const unsubscribedResources: string[] = []
     let listChangedListener:
       ((event: { kind: string; server: string }) => void) | null = null
+    let resourceUpdatedListener:
+      ((event: { server: string; uri: string }) => void) | null = null
 
     function EscapeLeakSpy(): React.ReactNode {
       useKeypress(
@@ -351,15 +355,20 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
           clearMcpAuth: async () => {},
           getClients: async () => {
             getClientsCallCount += 1
+            const connectedClient = {
+              type: 'connected',
+              name: 'srv',
+              capabilities: { resources: { subscribe: true } },
+            }
             if (getClientsCallCount === 2) {
               await new Promise(resolve => setTimeout(resolve, 220))
               return [{ type: 'failed', name: 'srv' }]
             }
             if (getClientsCallCount === 3) {
               await new Promise(resolve => setTimeout(resolve, 20))
-              return [{ type: 'connected', name: 'srv' }]
+              return [connectedClient]
             }
-            return [{ type: 'connected', name: 'srv' }]
+            return [connectedClient]
           },
           getMcpAuthSnapshot: () => ({ isAuthenticated: false }),
           getMCPCommands: async () =>
@@ -386,12 +395,39 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
           resetMcpConnections: async () => {
             reconnectCount += 1
           },
+          subscribeMCPResource: async ({
+            server,
+            uri,
+          }: {
+            server: string
+            uri: string
+          }) => {
+            subscribedResources.push(`${server}:${uri}`)
+          },
+          unsubscribeMCPResource: async ({
+            server,
+            uri,
+          }: {
+            server: string
+            uri: string
+          }) => {
+            unsubscribedResources.push(`${server}:${uri}`)
+          },
           subscribeMcpListChanged: (
             listener: (event: { kind: string; server: string }) => void,
           ) => {
             listChangedListener = listener
             return () => {
               if (listChangedListener === listener) listChangedListener = null
+            }
+          },
+          subscribeMcpResourceUpdated: (
+            listener: (event: { server: string; uri: string }) => void,
+          ) => {
+            resourceUpdatedListener = listener
+            return () => {
+              if (resourceUpdatedListener === listener)
+                resourceUpdatedListener = null
             }
           },
         }
@@ -522,6 +558,26 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
       expect(output).toContain('Size: 2.0 KiB')
       expect(output).toContain('Primary project documentation')
       expect(output).toContain('audience: user')
+      expect(output).toContain('subscription: available')
+      expect(output).toContain('Press s to subscribe')
+
+      h.stdin.write('s')
+      await h.wait(120)
+      expect(subscribedResources).toEqual(['srv:file:///project/README.md'])
+      expect(h.getOutput()).toContain('subscription: subscribed')
+      expect(h.getOutput()).toContain('Press u to unsubscribe')
+
+      resourceUpdatedListener?.({
+        server: 'srv',
+        uri: 'file:///project/README.md',
+      })
+      await h.wait(80)
+      expect(h.getOutput()).toContain('received updates: 1')
+
+      h.stdin.write('u')
+      await h.wait(120)
+      expect(unsubscribedResources).toEqual(['srv:file:///project/README.md'])
+      expect(h.getOutput()).toContain('subscription: available')
 
       h.stdin.write('\x1b')
       await h.wait(80)

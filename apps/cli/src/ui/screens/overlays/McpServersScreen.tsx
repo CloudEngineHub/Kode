@@ -17,9 +17,13 @@ import {
   getMcpServer,
   listMCPServers,
   resetMcpConnections,
+  subscribeMCPResource,
+  subscribeMcpResourceUpdated,
   subscribeMcpListChanged,
+  unsubscribeMCPResource,
   type McpPromptCommand,
   type McpResource,
+  type WrappedClient,
 } from '#core/mcp/client'
 import {
   getCurrentProjectConfig,
@@ -339,6 +343,17 @@ function computeAuthStatus(
   return { showAuthLine: true, authenticated: snapshot.isAuthenticated }
 }
 
+function resourceSubscriptionKey(server: string, uri: string): string {
+  return `${server}\n${uri}`
+}
+
+function supportsResourceSubscriptions(client: WrappedClient): boolean {
+  if (client.type !== 'connected') return false
+  const capabilities =
+    client.capabilities ?? client.client.getServerCapabilities?.() ?? null
+  return Boolean(capabilities?.resources?.subscribe)
+}
+
 export function McpServersScreen(props: { onDone(result?: string): void }) {
   const { onDone } = props
   const theme = getTheme()
@@ -374,6 +389,16 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
   const [resourcesLoading, setResourcesLoading] = useState(false)
   const [resources, setResources] = useState<McpResource[]>([])
   const [resourcesError, setResourcesError] = useState<string | null>(null)
+  const [resourceSubscriptionSupport, setResourceSubscriptionSupport] =
+    useState<Record<string, boolean>>({})
+  const [resourceSubscriptions, setResourceSubscriptions] = useState<
+    Record<string, true>
+  >({})
+  const [resourceUpdateCounts, setResourceUpdateCounts] = useState<
+    Record<string, number>
+  >({})
+  const [resourceSubscriptionPendingKey, setResourceSubscriptionPendingKey] =
+    useState<string | null>(null)
   const [mcpListChangedTick, setMcpListChangedTick] = useState(0)
 
   const [authInProgress, setAuthInProgress] = useState(false)
@@ -418,6 +443,10 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
 
       const clientByName = new Map<string, (typeof clients)[number]>()
       for (const client of clients) clientByName.set(client.name, client)
+      const subscriptionSupport: Record<string, boolean> = {}
+      for (const client of clients) {
+        subscriptionSupport[client.name] = supportsResourceSubscriptions(client)
+      }
 
       const globalConfig = getGlobalConfig()
       const projectConfig = getCurrentProjectConfig()
@@ -476,9 +505,11 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
 
       if (!isCurrentRefresh()) return
       setServers(items)
+      setResourceSubscriptionSupport(subscriptionSupport)
     } catch (err) {
       if (!isCurrentRefresh()) return
       setServers([])
+      setResourceSubscriptionSupport({})
       setServersError(err instanceof Error ? err.message : String(err))
     } finally {
       if (isCurrentRefresh()) setLoadingServers(false)
@@ -498,6 +529,17 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
     return subscribeMcpListChanged(() => {
       if (!mountedRef.current) return
       setMcpListChangedTick(tick => tick + 1)
+    })
+  }, [])
+
+  useEffect(() => {
+    return subscribeMcpResourceUpdated(event => {
+      if (!mountedRef.current) return
+      const key = resourceSubscriptionKey(event.server, event.uri)
+      setResourceUpdateCounts(prev => ({
+        ...prev,
+        [key]: (prev[key] ?? 0) + 1,
+      }))
     })
   }, [])
 
@@ -604,7 +646,78 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
     })
   }, [])
 
-  useKeypress((_input, key) => {
+  const subscribeToResource = useCallback(
+    async (server: string, resource: McpResource) => {
+      const key = resourceSubscriptionKey(server, resource.uri)
+      setResourceSubscriptionPendingKey(key)
+      try {
+        await subscribeMCPResource({ server, uri: resource.uri })
+        setResourceSubscriptions(prev => ({ ...prev, [key]: true }))
+      } finally {
+        setResourceSubscriptionPendingKey(current =>
+          current === key ? null : current,
+        )
+      }
+    },
+    [],
+  )
+
+  const unsubscribeFromResource = useCallback(
+    async (server: string, resource: McpResource) => {
+      const key = resourceSubscriptionKey(server, resource.uri)
+      setResourceSubscriptionPendingKey(key)
+      try {
+        await unsubscribeMCPResource({ server, uri: resource.uri })
+        setResourceSubscriptions(prev => {
+          const next = { ...prev }
+          delete next[key]
+          return next
+        })
+      } finally {
+        setResourceSubscriptionPendingKey(current =>
+          current === key ? null : current,
+        )
+      }
+    },
+    [],
+  )
+
+  useKeypress((input, key) => {
+    if (route.kind === 'resource') {
+      const keyValue = resourceSubscriptionKey(
+        route.serverName,
+        route.resource.uri,
+      )
+      const canSubscribe =
+        resourceSubscriptionSupport[route.serverName] === true
+      const isSubscribed = resourceSubscriptions[keyValue] === true
+      const isPending = resourceSubscriptionPendingKey === keyValue
+
+      if (
+        input === 's' &&
+        canSubscribe &&
+        !isSubscribed &&
+        !isPending
+      ) {
+        void runAction(() =>
+          subscribeToResource(route.serverName, route.resource),
+        )
+        return true
+      }
+
+      if (
+        input === 'u' &&
+        canSubscribe &&
+        isSubscribed &&
+        !isPending
+      ) {
+        void runAction(() =>
+          unsubscribeFromResource(route.serverName, route.resource),
+        )
+        return true
+      }
+    }
+
     if (!key.escape) return
 
     switch (route.kind) {
@@ -1485,6 +1598,16 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
           (value): value is string => typeof value === 'string',
         )
       : []
+    const subscriptionKey = resourceSubscriptionKey(
+      route.serverName,
+      resource.uri,
+    )
+    const subscriptionSupported =
+      resourceSubscriptionSupport[route.serverName] === true
+    const subscriptionPending =
+      resourceSubscriptionPendingKey === subscriptionKey
+    const isSubscribed = resourceSubscriptions[subscriptionKey] === true
+    const updateCount = resourceUpdateCounts[subscriptionKey] ?? 0
 
     return (
       <Box flexDirection="column" gap={gap}>
@@ -1546,6 +1669,48 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
                   </Text>
                 ) : null}
               </Box>
+            </Box>
+          ) : null}
+
+          <Box flexDirection="column" marginTop={1}>
+            <Text bold>Resource updates:</Text>
+            <Box flexDirection="column" paddingLeft={2}>
+              <Text wrap="truncate-end">
+                <Text dimColor>
+                  subscription:{' '}
+                  {subscriptionSupported
+                    ? subscriptionPending
+                      ? 'updating...'
+                      : isSubscribed
+                        ? 'subscribed'
+                        : 'available'
+                    : 'not supported'}
+                </Text>
+              </Text>
+              {updateCount > 0 ? (
+                <Text wrap="truncate-end">
+                  <Text dimColor>
+                    received updates: {updateCount}
+                  </Text>
+                </Text>
+              ) : null}
+              {subscriptionSupported ? (
+                <Text wrap="truncate-end">
+                  <Text dimColor>
+                    {isSubscribed
+                      ? 'Press u to unsubscribe'
+                      : 'Press s to subscribe'}
+                  </Text>
+                </Text>
+              ) : null}
+            </Box>
+          </Box>
+
+          {actionError ? (
+            <Box marginTop={1}>
+              <Text color={theme.error} wrap="wrap">
+                Error: {actionError}
+              </Text>
             </Box>
           ) : null}
         </Box>
