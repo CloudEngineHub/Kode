@@ -7,6 +7,7 @@ import type { ToolUseConfirm } from '#ui-ink/components/permissions/PermissionRe
 import { PermissionRequest } from '#ui-ink/components/permissions/PermissionRequest'
 import PromptInput from '#ui-ink/components/PromptInput'
 import { RequestStatusIndicator } from '#ui-ink/components/RequestStatusIndicator'
+import { RunningTasksPanel } from '#ui-ink/components/RunningTasksPanel'
 import { CostThresholdDialog } from '#ui-ink/components/CostThresholdDialog'
 import { BinaryFeedback } from '#ui-ink/components/binary-feedback/BinaryFeedback'
 import { MessageSelector } from '#ui-ink/components/MessageSelector'
@@ -402,6 +403,14 @@ export function REPLView({
                   <RequestStatusIndicator />
                 </Box>
               )}
+
+              {!toolUseConfirm &&
+                !toolJSX &&
+                !binaryFeedbackContext &&
+                !isMessageSelectorVisible &&
+                !showingCostDialog && (
+                  <RunningTasksPanel maxWidth={columns} />
+                )}
 
               {toast &&
                 !toolUseConfirm &&
