@@ -17,6 +17,8 @@ import {
 } from '#protocol/utils/kodeAgentSessionId'
 import { appendSessionJsonlFromMessage } from '#protocol/utils/kodeAgentSessionLog'
 import { createUserMessage } from '#core/utils/messages'
+import { setFlagAgentsFromCliJson } from '@kode/agent'
+import { parseToolSpec } from '#tools/tools/ai/TaskTool/toolSpec'
 
 describe('TaskTool', () => {
   test('subagent permission mode cannot auto-escalate beyond parent context', () => {
@@ -49,6 +51,95 @@ describe('TaskTool', () => {
     expect(result.success).toBe(true)
     if (result.success) {
       expect('thoroughness' in result.data).toBe(false)
+    }
+  })
+
+  test('inputSchema requires max_turns to be a positive integer', () => {
+    const base = {
+      description: 'Turn limit',
+      prompt: 'Use the configured turn limit',
+      subagent_type: 'general-purpose',
+    }
+
+    expect(
+      TaskTool.inputSchema.safeParse({ ...base, max_turns: 2 }).success,
+    ).toBe(true)
+    expect(
+      TaskTool.inputSchema.safeParse({ ...base, max_turns: 0 }).success,
+    ).toBe(false)
+    expect(
+      TaskTool.inputSchema.safeParse({ ...base, max_turns: 1.5 }).success,
+    ).toBe(false)
+  })
+
+  test('rejects malformed constrained tool specs explicitly', () => {
+    expect(() => parseToolSpec('Bash(git:*')).toThrow(
+      "Invalid agent tool spec 'Bash(git:*'",
+    )
+  })
+
+  test('passes max_turns and constrained agent tool rules to the query', async () => {
+    let capturedOptions: any = null
+    setFlagAgentsFromCliJson(
+      JSON.stringify({
+        'task-tool-policy-test': {
+          description: 'Task tool policy test agent',
+          tools: ['Bash(git:*)', 'Read'],
+          prompt: 'Return ok.',
+        },
+      }),
+    )
+
+    try {
+      async function* stubQuery(
+        _messages: any,
+        _systemPrompt: any,
+        _context: any,
+        _canUseTool: any,
+        toolUseContext: any,
+      ) {
+        capturedOptions = toolUseContext?.options ?? null
+        yield createAssistantMessage('ok')
+      }
+
+      const gen = TaskTool.call(
+        {
+          description: 'Policy pass through',
+          prompt: 'Capture query options',
+          subagent_type: 'task-tool-policy-test',
+          max_turns: 2,
+        },
+        {
+          abortController: new AbortController(),
+          readFileTimestamps: {},
+          messageId: 'm',
+          options: {
+            safeMode: false,
+            forkNumber: 0,
+            messageLogName: 'task-tool-test',
+            verbose: false,
+            model: 'main',
+            mcpClients: [],
+            commandAllowedTools: ['Read(~/**)'],
+          },
+          __testQuery: stubQuery,
+        },
+      )
+
+      for await (const _ of gen) {
+        // exhaust
+      }
+
+      expect(capturedOptions?.maxTurns).toBe(2)
+      expect(
+        capturedOptions?.tools.map((tool: any) => tool.name).sort(),
+      ).toEqual(['Bash', 'Read'])
+      expect(capturedOptions?.commandAllowedTools).toEqual([
+        'Read(~/**)',
+        'Bash(git:*)',
+      ])
+    } finally {
+      setFlagAgentsFromCliJson(undefined)
     }
   })
 

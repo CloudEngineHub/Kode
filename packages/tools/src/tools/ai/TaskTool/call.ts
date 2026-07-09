@@ -18,7 +18,7 @@ import { loadKodeAgentSidechainMessagesForResume } from '#protocol/utils/kodeAge
 import { getTaskTools } from './prompt'
 import { buildForkContextForAgent } from './forkContext'
 import { normalizeAgentModelName, modelEnumToPointer } from './models'
-import { getToolNameFromSpec } from './toolSpec'
+import { getToolNameFromSpec, parseToolSpec } from './toolSpec'
 import {
   applyAgentPermissionMode,
   normalizeAgentPermissionMode,
@@ -97,6 +97,7 @@ export async function* callTaskTool(
 
   const toolFilter = agentConfig.tools
   let tools = await getTaskTools(safeMode)
+  let agentCommandAllowedTools: string[] = []
   if (toolFilter) {
     const isAllArray =
       Array.isArray(toolFilter) &&
@@ -105,10 +106,12 @@ export async function* callTaskTool(
     if (toolFilter === '*' || isAllArray) {
       // Keep all tools
     } else if (Array.isArray(toolFilter)) {
-      const allowedToolNames = new Set(
-        toolFilter.map(getToolNameFromSpec).filter(Boolean),
-      )
+      const parsedToolSpecs = toolFilter.map(parseToolSpec)
+      const allowedToolNames = new Set(parsedToolSpecs.map(spec => spec.name))
       tools = tools.filter(t => allowedToolNames.has(t.name))
+      agentCommandAllowedTools = parsedToolSpecs.flatMap(spec =>
+        spec.commandAllowedRule ? [spec.commandAllowedRule] : [],
+      )
     }
   }
 
@@ -121,6 +124,11 @@ export async function* callTaskTool(
     )
     tools = tools.filter(t => !disallowedToolNames.has(t.name))
   }
+
+  const enabledToolNames = new Set(tools.map(tool => tool.name))
+  agentCommandAllowedTools = agentCommandAllowedTools.filter(rule =>
+    enabledToolNames.has(getToolNameFromSpec(rule)),
+  )
 
   const agentId = input.resume || generateAgentId()
   let baseTranscript: any[] = []
@@ -189,7 +197,13 @@ export async function* callTaskTool(
     verbose,
     permissionMode: toolPermissionContext.mode,
     toolPermissionContext,
-    commandAllowedTools: options.commandAllowedTools,
+    commandAllowedTools: [
+      ...new Set([
+        ...(options.commandAllowedTools ?? []),
+        ...agentCommandAllowedTools,
+      ]),
+    ],
+    maxTurns: input.max_turns,
     maxThinkingTokens,
     model: modelToUse,
     mcpClients: options.mcpClients,

@@ -27,8 +27,19 @@ export const BUILTIN_EXPLORE: AgentConfig = {
   agentType: 'Explore',
   whenToUse:
     'Fast agent specialized for exploring codebases. Use this when you need to quickly find files by patterns (eg. "src/components/**/*.tsx"), search code for keywords (eg. "API endpoints"), or answer questions about the codebase (eg. "how do API endpoints work?"). When calling this agent, specify the desired thoroughness level: "quick" for basic searches, "medium" for moderate exploration, or "very thorough" for comprehensive analysis across multiple locations and naming conventions.',
-  tools: '*',
-  disallowedTools: ['Task', 'ExitPlanMode', 'Edit', 'Write', 'NotebookEdit'],
+  tools: [
+    'LS',
+    'Glob',
+    'Grep',
+    'Lsp',
+    'Read',
+    'WebSearch',
+    'WebFetch',
+    'ListMcpResources',
+    'ReadMcpResource',
+    'MCPSearch',
+  ],
+  permissionMode: 'plan',
   systemPrompt: `You are a file search specialist for Kode CLI. You excel at thoroughly navigating and exploring codebases.
 
 === CRITICAL: READ-ONLY MODE - NO FILE MODIFICATIONS ===
@@ -38,7 +49,6 @@ This is a READ-ONLY exploration task. You are STRICTLY PROHIBITED from:
 - Deleting files (no rm or deletion)
 - Moving or copying files (no mv or cp)
 - Creating temporary files anywhere, including /tmp
-- Using redirect operators (>, >>, |) or heredocs to write to files
 - Running ANY commands that change system state
 
 Your role is EXCLUSIVELY to search and analyze existing code. You do NOT have access to file editing tools - attempting to edit files will fail.
@@ -47,8 +57,8 @@ Guidelines:
 - Use Glob for broad file pattern matching
 - Use Grep for searching file contents with regex
 - Use Read when you know the specific file path you need to read
-- Use Bash ONLY for read-only operations (ls, git status, git log, git diff, find, cat, head, tail)
-- NEVER use Bash for: mkdir, touch, rm, cp, mv, git add, git commit, npm install, bun install, pnpm install, or any file creation/modification
+- Use LS, Glob, Grep, Lsp, and Read for local codebase exploration
+- Bash and all mutation-capable tools are intentionally unavailable
 - Return file paths as absolute paths in your final response
 - Communicate your final report directly as a normal message (do NOT try to write files)
 
@@ -64,8 +74,19 @@ export const BUILTIN_PLAN: AgentConfig = {
   agentType: 'Plan',
   whenToUse:
     'Agent specialized for producing high quality plans before execution.',
-  tools: '*',
-  disallowedTools: ['Task', 'ExitPlanMode', 'Edit', 'Write', 'NotebookEdit'],
+  tools: [
+    'LS',
+    'Glob',
+    'Grep',
+    'Lsp',
+    'Read',
+    'WebSearch',
+    'WebFetch',
+    'ListMcpResources',
+    'ReadMcpResource',
+    'MCPSearch',
+  ],
+  permissionMode: 'plan',
   systemPrompt: `You are a software architect and planning specialist for Kode CLI. Your role is to explore the codebase and design implementation plans.
 
 === CRITICAL: READ-ONLY MODE - NO FILE MODIFICATIONS ===
@@ -75,7 +96,6 @@ This is a READ-ONLY planning task. You are STRICTLY PROHIBITED from:
 - Deleting files (no rm or deletion)
 - Moving or copying files (no mv or cp)
 - Creating temporary files anywhere, including /tmp
-- Using redirect operators (>, >>, |) or heredocs to write to files
 - Running ANY commands that change system state
 
 Your role is EXCLUSIVELY to explore the codebase and design implementation plans. You do NOT have access to file editing tools - attempting to edit files will fail.
@@ -85,7 +105,8 @@ Your role is EXCLUSIVELY to explore the codebase and design implementation plans
 2) Explore thoroughly:
    - Read any files provided in the prompt
    - Find existing patterns and conventions using Glob/Grep/Read
-   - Use Bash ONLY for read-only operations (ls, git status, git log, git diff, find, cat, head, tail)
+   - Use LS, Glob, Grep, Lsp, and Read for local codebase exploration
+   - Bash and all mutation-capable tools are intentionally unavailable
 3) Design a solution:
    - Create a step-by-step implementation plan
    - Consider trade-offs and follow existing patterns
@@ -225,14 +246,14 @@ export const BUILTIN_CAPABILITIES_MANAGER: AgentConfig = {
   agentType: 'capabilities-manager',
   whenToUse:
     'Agent specialized for managing Kode capabilities (statusline, LSP, output styles, plugins) through agent CLI interactions, without hard install menus or forcing users to memorize subcommands.',
-  tools: ['Task', 'SlashCommand', 'Skill', 'Read', 'Edit'],
+  tools: ['SlashCommand', 'Skill', 'Read', 'Edit'],
   systemPrompt: `You are a capability management agent for Kode CLI.
 
 Your job is to help the user manage Kode features (statusline, LSP, output styles, plugins) through the agent CLI.
 
 Non-negotiables:
 - Do NOT respond with "installation menu" style instructions (long lists of install commands or "run /x install").
-- Prefer executing actions through tools (Task/Skill/Read/Edit) rather than telling the user to do manual multi-step procedures.
+- Prefer executing actions through tools (Skill/Read/Edit) rather than telling the user to do manual multi-step procedures.
 - Keep changes minimal, verify after each change, and report what changed.
 
 When invoked as a "/capabilities" entrypoint:
@@ -242,7 +263,7 @@ When invoked as a "/capabilities" entrypoint:
 - Apply minimal safe fixes automatically when no preference is required; ask a single question when a choice is required.
 
 Statusline:
-- If the user wants to set up or change statusline, use Task tool to create a task with subagent_type "statusline-setup" and the user's intent as the prompt.
+- If the user wants to set up or change statusline, perform the statusline setup directly with Read and Edit. Follow the same settings-preservation and verification rules as the built-in "statusline-setup" agent; nested Task calls are unavailable to subagents.
 - Verify by checking that ~/.kode/settings.json has statusLine configured; ask the user to confirm it renders under the input (visual check).
 
 	LSP:
