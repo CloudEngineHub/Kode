@@ -598,47 +598,47 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
     })
   }, [])
 
-  useKeypress((input, key) => {
+  useKeypress((_input, key) => {
     if (!key.escape) return
 
     switch (route.kind) {
       case 'list':
         authAbortControllerRef.current?.abort()
         props.onDone()
-        return
+        return true
       case 'server':
         setRoute({ kind: 'list', focusValue: route.serverName })
-        return
+        return true
       case 'tools':
         setRoute({ kind: 'server', serverName: route.serverName })
-        return
+        return true
       case 'tool':
         setRoute({
           kind: 'tools',
           serverName: route.serverName,
           focusValue: route.tool.name,
         })
-        return
+        return true
       case 'prompts':
         setRoute({ kind: 'server', serverName: route.serverName })
-        return
+        return true
       case 'prompt':
         setRoute({
           kind: 'prompts',
           serverName: route.serverName,
           focusValue: route.prompt.name,
         })
-        return
+        return true
       case 'resources':
         setRoute({ kind: 'server', serverName: route.serverName })
-        return
+        return true
       case 'resource':
         setRoute({
           kind: 'resources',
           serverName: route.serverName,
           focusValue: route.resource.uri,
         })
-        return
+        return true
       case 'auth':
         authAbortControllerRef.current?.abort()
         authAbortControllerRef.current = null
@@ -646,7 +646,7 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
         setAuthError(null)
         setAuthUrl(null)
         setRoute({ kind: 'server', serverName: route.serverName })
-        return
+        return true
     }
   })
 

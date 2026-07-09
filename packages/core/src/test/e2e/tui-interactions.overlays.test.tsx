@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, mock } from 'bun:test'
 import React from 'react'
 import { KeypressProvider } from '#ui-ink/contexts/KeypressContext'
+import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { ModelPickerScreen } from '#ui-ink/screens/overlays/ModelPickerScreen'
 import { ThinkingToggleScreen } from '#ui-ink/screens/overlays/ThinkingToggleScreen'
 import { WorkTasksScreen } from '#ui-ink/screens/overlays/WorkTasksScreen'
@@ -160,8 +161,21 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
     let promptsEnabled = false
     let promptRevision = 0
     let resourceRevision = 0
+    let leakedEscapes = 0
     let listChangedListener:
       ((event: { kind: string; server: string }) => void) | null = null
+
+    function EscapeLeakSpy(): React.ReactNode {
+      useKeypress(
+        (_input, key) => {
+          if (!key.escape) return
+          leakedEscapes += 1
+          return true
+        },
+        { priority: -100 },
+      )
+      return null
+    }
 
     const reviewPrompt = {
       type: 'prompt',
@@ -292,7 +306,10 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
 
       const h = createInkTestHarness(
         <KeypressProvider>
-          <McpServersScreen onDone={() => {}} />
+          <>
+            <McpServersScreen onDone={() => {}} />
+            <EscapeLeakSpy />
+          </>
         </KeypressProvider>,
       )
       harnessManager.track(h)
@@ -308,6 +325,7 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
       h.stdin.write('\x1b')
       await h.wait(250)
       expect(h.getOutput()).toContain('srv')
+      expect(leakedEscapes).toBe(0)
 
       h.clearOutput()
       h.stdin.write('\r')
@@ -407,6 +425,7 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
       expect(latestFrame).not.toContain('failed')
       expect(latestFrame).toContain('❯2. Reconnect')
       expect(reconnectCount).toBe(2)
+      expect(leakedEscapes).toBe(0)
 
       h.unmount()
       promptsEnabled = true
