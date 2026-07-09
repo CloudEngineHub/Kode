@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 
 import { __setMcpClientsForTests } from '#core/mcp/client'
+import {
+  __resetMcpRootsForTests,
+  __setMcpRootsTrustOverrideForTests,
+} from '#core/mcp/client/roots'
 import { runMcpCli } from '#host-cli/entrypoints/mcpCli'
 
 async function captureMcpCli(argv: string[]): Promise<{
@@ -22,8 +26,7 @@ async function captureMcpCli(argv: string[]): Promise<{
   ) => {
     stdout += String(chunk)
     const callback = args.find(arg => typeof arg === 'function') as
-      | (() => void)
-      | undefined
+      (() => void) | undefined
     callback?.()
     return true
   }
@@ -33,8 +36,7 @@ async function captureMcpCli(argv: string[]): Promise<{
   ) => {
     stderr += String(chunk)
     const callback = args.find(arg => typeof arg === 'function') as
-      | (() => void)
-      | undefined
+      (() => void) | undefined
     callback?.()
     return true
   }
@@ -64,6 +66,7 @@ async function captureMcpCli(argv: string[]): Promise<{
 describe('mcp-cli complete', () => {
   afterEach(() => {
     __setMcpClientsForTests(null)
+    __resetMcpRootsForTests()
   })
 
   test('prints MCP completion values from a prompt reference', async () => {
@@ -133,5 +136,38 @@ describe('mcp-cli complete', () => {
     expect(result.stderr).toContain(
       'Error: Provide exactly one of --prompt or --resource',
     )
+  })
+})
+
+describe('mcp-cli client-capabilities', () => {
+  afterEach(() => {
+    __setMcpClientsForTests(null)
+    __resetMcpRootsForTests()
+  })
+
+  test('prints client capabilities as JSON', async () => {
+    __setMcpRootsTrustOverrideForTests(true)
+
+    const result = await captureMcpCli(['client-capabilities', '--json'])
+
+    expect(result.code).toBe(0)
+    expect(result.stderr).toBe('')
+    expect(JSON.parse(result.stdout)).toEqual({
+      roots: { enabled: true, listChanged: true },
+      sampling: { enabled: false },
+      elicitation: { enabled: false },
+    })
+  })
+
+  test('prints disabled client capabilities in text output', async () => {
+    __setMcpRootsTrustOverrideForTests(false)
+
+    const result = await captureMcpCli(['client-capabilities'])
+
+    expect(result.code).toBe(0)
+    expect(result.stderr).toBe('')
+    expect(result.stdout).toContain('roots: disabled')
+    expect(result.stdout).toContain('sampling: disabled')
+    expect(result.stdout).toContain('elicitation: disabled')
   })
 })
