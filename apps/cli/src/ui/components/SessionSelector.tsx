@@ -23,7 +23,12 @@ type SessionSelectorProps = {
   enterLabel?: string
 }
 
-export function SessionSelector({
+export function SessionSelector(props: SessionSelectorProps): React.ReactNode {
+  if (props.sessions.length === 0) return null
+  return <PopulatedSessionSelector {...props} />
+}
+
+function PopulatedSessionSelector({
   sessions,
   onSelect,
   onClose,
@@ -35,7 +40,6 @@ export function SessionSelector({
   const theme = getTheme()
   const layout = useScreenLayout()
   const { rows } = useTerminalSize()
-  if (sessions.length === 0) return null
 
   const requestExit = useCliExit()
   const close = onClose ?? (() => requestExit(0))
