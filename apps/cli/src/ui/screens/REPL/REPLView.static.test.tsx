@@ -248,6 +248,34 @@ describe('REPLView Static output epoch', () => {
     expect(harness.getOutput()).toContain('transient-b')
   })
 
+  test('keeps transient output visible when prompt text changes within the same height', async () => {
+    const renderWithPrompt = (input: string, transientLabel: string) => (
+      <KeypressProvider>
+        {renderReplView({
+          staticOutputEpoch: 0,
+          staticItems: [],
+          transientItems: [makeStaticItem(transientLabel)],
+          shouldShowPromptInput: true,
+          promptInputProps: makePromptInputProps({ input }),
+        })}
+      </KeypressProvider>
+    )
+
+    const harness = createHarness(renderWithPrompt('', 'transient-a'), {
+      columns: 100,
+      rows: 30,
+    })
+
+    await harness.wait(480)
+    expect(harness.getOutput()).toContain('transient-a')
+
+    harness.clearOutput()
+    harness.rerender(renderWithPrompt('abc', 'transient-b'))
+    await harness.wait(80)
+
+    expect(harness.getOutput()).toContain('transient-b')
+  })
+
   test('updates startup header without reprinting static history', async () => {
     const staticItems = [makeStaticItem('static-a')]
     const harness = createHarness(

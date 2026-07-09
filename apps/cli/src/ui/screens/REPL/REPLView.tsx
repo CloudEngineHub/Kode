@@ -18,7 +18,11 @@ import { PermissionProvider } from '#ui-ink/contexts/PermissionContext'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import { useBackgroundTaskSnapshots } from '#ui-ink/hooks/useBackgroundTaskSnapshots'
 import { useFlickerDetector } from '#ui-ink/hooks/useFlickerDetector'
-import { normalizeTerminalDimension } from '#ui-ink/primitives/layout/viewportRows'
+import {
+  computeResponsiveRows,
+  normalizeTerminalDimension,
+} from '#ui-ink/primitives/layout/viewportRows'
+import { countWrappedLines } from '#cli-utils/Cursor'
 import type { NormalizedMessage } from '#core/utils/messages'
 import type { Message as MessageType } from '#core/query'
 import type { Tool } from '#core/tooling/Tool'
@@ -118,14 +122,36 @@ export function REPLView({
   const hasToolUseConfirm = Boolean(toolUseConfirm)
   const hasBinaryFeedback = Boolean(binaryFeedbackContext)
   const hasToast = Boolean(toast)
-  const promptInputMeasureSignature = shouldShowPromptInput
-    ? [
-        promptInputProps.input.length,
-        promptInputProps.input.split('\n').length,
-        promptInputProps.mode,
-        promptInputProps.submitCount,
-      ].join(':')
-    : ''
+  const promptInputMeasureSignature = useMemo(() => {
+    if (!shouldShowPromptInput) return ''
+
+    const textInputColumns = Math.max(1, columns - 6)
+    const textInputMaxHeight = computeResponsiveRows({
+      rows,
+      minRows: 1,
+      maxRows: 8,
+      ratio: 1 / 3,
+    })
+    const inputLineCount = countWrappedLines(
+      promptInputProps.input,
+      textInputColumns,
+      textInputMaxHeight + 1,
+    )
+    const inputBoxHeight = Math.min(inputLineCount, textInputMaxHeight) + 2
+
+    return [
+      inputBoxHeight,
+      promptInputProps.mode,
+      promptInputProps.submitCount,
+    ].join(':')
+  }, [
+    columns,
+    promptInputProps.input,
+    promptInputProps.mode,
+    promptInputProps.submitCount,
+    rows,
+    shouldShowPromptInput,
+  ])
   const runningTasksLayoutSignature = useMemo(
     () => buildRunningTasksLayoutSignature(backgroundTasks),
     [backgroundTasks],
