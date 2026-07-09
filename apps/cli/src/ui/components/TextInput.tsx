@@ -20,6 +20,7 @@ const BACKSPACE_CODE = 8 // \x08
 const DEL_CODE = 127 // \x7f
 const PASTE_GUARD_MESSAGE =
   'Paste detected. Press Enter again after it appears to submit.'
+const LEGACY_PASTE_AGGREGATION_DELAY_MS = 200
 
 // Helper to check if input is a backspace character
 function isBackspaceChar(input: string): boolean {
@@ -184,7 +185,10 @@ export default function TextInput({
     if (pasteTimeoutRef.current) {
       clearTimeout(pasteTimeoutRef.current)
     }
-    pasteTimeoutRef.current = setTimeout(flushAggregatedPaste, 500)
+    pasteTimeoutRef.current = setTimeout(
+      flushAggregatedPaste,
+      LEGACY_PASTE_AGGREGATION_DELAY_MS,
+    )
   }, [flushAggregatedPaste])
 
   const wrappedOnInput = (input: string, key: Key): void => {

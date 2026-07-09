@@ -566,7 +566,7 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
     h.stdin.write('a'.repeat(801))
     await h.wait(100)
     h.stdin.write('!')
-    await h.wait(650)
+    await h.wait(350)
 
     expect(h.getOutput()).toContain('RAW:\"hi![Pasted text #1]\"')
 
@@ -589,7 +589,7 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
     h.stdin.write('hi')
     await h.wait(75)
     h.stdin.write('a'.repeat(200))
-    await h.wait(650)
+    await h.wait(350)
 
     const output = h.getOutput()
     expect(output).toContain('RAW:"hi[Pasted text #1]"')
@@ -648,7 +648,7 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
     expect(guardedOutput).not.toContain('SUBMIT_COUNT:1')
     expect(guardedOutput).not.toContain('RAW:"\\n')
 
-    await h.wait(650)
+    await h.wait(350)
     expect(h.getOutput()).toContain('RAW:"[Pasted text #1]"')
 
     h.clearOutput()
