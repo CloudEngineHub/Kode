@@ -106,6 +106,36 @@ export function __computeCompletionRefreshForTests(args: {
   }
 }
 
+export function __computeCompletionActivationForTests(args: {
+  state: CompletionState
+  suggestions: UnifiedSuggestion[]
+  context: CompletionContext
+}):
+  | { action: 'none' }
+  | {
+      action: 'activate'
+      suggestions: UnifiedSuggestion[]
+      selectedIndex: number
+      context: CompletionContext
+    } {
+  const sameActiveCompletion =
+    args.state.isActive &&
+    args.state.preview === null &&
+    areCompletionContextsEqual(args.state.context, args.context) &&
+    areSuggestionsEqual(args.state.suggestions, args.suggestions)
+
+  if (sameActiveCompletion) {
+    return { action: 'none' }
+  }
+
+  return {
+    action: 'activate',
+    suggestions: args.suggestions,
+    selectedIndex: 0,
+    context: args.context,
+  }
+}
+
 export function __shouldLoadMentionSuggestionsForTests(args: {
   isEnabled: boolean
   currentContext: CompletionContext | null
@@ -184,22 +214,22 @@ export function useUnifiedCompletion({
   const activateCompletion = useCallback(
     (suggestions: UnifiedSuggestion[], context: CompletionContext) => {
       setState(prev => {
-        if (
-          prev.isActive &&
-          prev.selectedIndex === 0 &&
-          prev.preview === null &&
-          areCompletionContextsEqual(prev.context, context) &&
-          areSuggestionsEqual(prev.suggestions, suggestions)
-        ) {
+        const result = __computeCompletionActivationForTests({
+          state: prev,
+          suggestions,
+          context,
+        })
+
+        if (result.action === 'none') {
           return prev
         }
 
         return {
           ...prev,
-          suggestions,
-          selectedIndex: 0,
+          suggestions: result.suggestions,
+          selectedIndex: result.selectedIndex,
           isActive: true,
-          context,
+          context: result.context,
           preview: null,
         }
       })

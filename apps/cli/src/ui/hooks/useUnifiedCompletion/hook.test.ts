@@ -1,9 +1,14 @@
 import { describe, expect, test } from 'bun:test'
 
 import {
+  __computeCompletionActivationForTests,
   __computeCompletionRefreshForTests,
   __shouldLoadMentionSuggestionsForTests,
 } from './hook'
+import type {
+  CompletionContext,
+  UnifiedSuggestion,
+} from '#cli-utils/completion/types'
 import type { CompletionState } from './types'
 
 function makeState(overrides: Partial<CompletionState>): CompletionState {
@@ -18,6 +23,62 @@ function makeState(overrides: Partial<CompletionState>): CompletionState {
     ...overrides,
   }
 }
+
+const commandContext: CompletionContext = {
+  type: 'command',
+  prefix: '/h',
+  startPos: 0,
+  endPos: 2,
+  trigger: '/',
+}
+
+const commandSuggestions: UnifiedSuggestion[] = [
+  { value: 'help', displayValue: 'help', type: 'command', score: 10 },
+  {
+    value: 'history',
+    displayValue: 'history',
+    type: 'command',
+    score: 9,
+  },
+]
+
+describe('__computeCompletionActivationForTests', () => {
+  test('does not reset selection for the same active completion list', () => {
+    const result = __computeCompletionActivationForTests({
+      state: makeState({
+        isActive: true,
+        context: commandContext,
+        suggestions: commandSuggestions,
+        selectedIndex: 1,
+      }),
+      context: commandContext,
+      suggestions: commandSuggestions,
+    })
+
+    expect(result.action).toBe('none')
+  })
+
+  test('starts from the first suggestion when the completion context changes', () => {
+    const result = __computeCompletionActivationForTests({
+      state: makeState({
+        isActive: true,
+        context: commandContext,
+        suggestions: commandSuggestions,
+        selectedIndex: 1,
+      }),
+      context: {
+        ...commandContext,
+        prefix: '/hi',
+        endPos: 3,
+      },
+      suggestions: commandSuggestions,
+    })
+
+    expect(result.action).toBe('activate')
+    if (result.action !== 'activate') return
+    expect(result.selectedIndex).toBe(0)
+  })
+})
 
 describe('__computeCompletionRefreshForTests', () => {
   test('refreshes active loading suggestions when new command matches arrive', () => {
