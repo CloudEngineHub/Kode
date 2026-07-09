@@ -127,10 +127,7 @@ const AUTO_FOLLOW_BOTTOM_THRESHOLD_PX = 72
 const CHAT_TERMINAL_HINTS: readonly TerminalStatusHint[] = [
   { key: 'Enter', label: 'send' },
   { key: 'Shift+Enter', label: 'newline' },
-  { key: 'Up/Down', label: 'history' },
   { key: '/help', label: 'commands' },
-  { key: '@file', label: 'attach' },
-  { key: 'Scroll', label: 'review output' },
 ]
 
 type PromptHistoryDirection = 'previous' | 'next'
@@ -331,18 +328,8 @@ export function ChatPage(props: {
         key: 'daemon',
         label: runtimeStatusCompactLabel(props.runtimeStatus ?? null),
       },
-      {
-        key: 'agent',
-        label: `agent ${phaseLabel(runtimePhase).toLowerCase()}`,
-      },
-      {
-        key: 'events',
-        label: `${visibleEvents.length} event${
-          visibleEvents.length === 1 ? '' : 's'
-        }`,
-      },
     ],
-    [props.runtimeStatus, runtimePhase, visibleEvents.length],
+    [props.runtimeStatus],
   )
   const lastEventKey =
     visibleEvents.length > 0

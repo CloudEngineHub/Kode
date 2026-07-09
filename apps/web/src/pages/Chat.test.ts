@@ -254,18 +254,12 @@ describe('ChatPage event normalization', () => {
     expect(html).toContain('role="log"')
     expect(html).toContain('Permission pending')
     expect(html).toContain('daemon online')
-    expect(html).toContain('agent needs approval')
-    expect(html).toContain('1 event')
     expect(html).toContain('Enter')
-    expect(html).toContain('Up/Down')
     expect(html).toContain('/help')
     expect(__chatPageForTests.chatTerminalHints.map(hint => hint.key)).toEqual([
       'Enter',
       'Shift+Enter',
-      'Up/Down',
       '/help',
-      '@file',
-      'Scroll',
     ])
   })
 })

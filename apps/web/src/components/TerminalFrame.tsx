@@ -107,7 +107,7 @@ export function TerminalStatusLine(props: {
         <span>{props.leading ?? 'ready'}</span>
       </div>
       {props.viewportSize ? (
-        <div className="hidden shrink-0 items-center gap-1.5 md:flex">
+        <div className="hidden shrink-0 items-center gap-1.5 xl:flex">
           <span className="text-[hsl(var(--kode-terminal-prompt))]">:</span>
           <span>{viewportText}</span>
         </div>
