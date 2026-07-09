@@ -139,6 +139,34 @@ describe('Bash LLM intent gate', () => {
     expect(calls).toBe(3)
   })
 
+  test('fails closed without retrying after unrecoverable API key errors', async () => {
+    let calls = 0
+    const result = await runBashLlmSafetyGate({
+      command: TRIGGER_COMMAND,
+      userPrompt: TRIGGER_PROMPT,
+      description: '',
+      platform: process.platform,
+      commandSource: 'agent_call',
+      safeMode: false,
+      runInBackground: false,
+      willSandbox: false,
+      sandboxRequired: false,
+      cwd: process.cwd(),
+      originalCwd: process.cwd(),
+      query: async () => {
+        calls++
+        throw new Error('LLM gate model error: API_ERROR: Invalid API key')
+      },
+    })
+
+    expect(result.decision).toBe('error')
+    expect(calls).toBe(1)
+    if (result.decision === 'error') {
+      expect(result.errorType).toBe('api')
+      expect(result.canFailOpen).toBe(false)
+    }
+  })
+
   test('formats non-Zod errors in error path (Error instance)', async () => {
     const result = await runBashLlmSafetyGate({
       command: TRIGGER_COMMAND,

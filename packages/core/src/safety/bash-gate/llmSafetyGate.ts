@@ -84,6 +84,18 @@ function formatParseError(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+function isUnrecoverableAuthError(error: unknown): boolean {
+  const errorStr = formatParseError(error).toLowerCase()
+  if (!errorStr.startsWith('llm gate model error:')) return false
+  return (
+    errorStr.includes('invalid api key') ||
+    errorStr.includes('incorrect api key') ||
+    errorStr.includes('authentication') ||
+    errorStr.includes('unauthorized') ||
+    /\b401\b/.test(errorStr)
+  )
+}
+
 async function defaultGateQuery(args: {
   systemPrompt: string[]
   userInput: string
@@ -223,6 +235,9 @@ export async function runBashLlmSafetyGate(params: {
           output: '',
           error: formatParseError(e),
         })
+        if (isUnrecoverableAuthError(e)) {
+          break
+        }
       }
     }
     throw lastError ?? new Error('LLM gate produced no verdict')

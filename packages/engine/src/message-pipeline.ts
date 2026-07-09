@@ -7,7 +7,10 @@ import { emitReminderEvent } from '#core/services/systemReminder'
 import { addNotification } from '#core/services/notificationCenter'
 import '#core/services/workspaceSafety'
 import { markPhase } from '#core/utils/debugLogger'
-import { createAssistantMessage } from './messages/create'
+import {
+  createAssistantAPIErrorMessage,
+  createAssistantMessage,
+} from './messages/create'
 import {
   INTERRUPT_MESSAGE,
   INTERRUPT_MESSAGE_FOR_TOOL_USE,
@@ -63,6 +66,64 @@ export { __ToolUseQueueForTests } from './pipeline/tool-use-queue'
 export { runToolUse } from './pipeline/tool-use'
 export { normalizeToolInput } from './pipeline/tool-input'
 
+type PipelineRetryState = {
+  stopHookActive?: boolean
+  stopHookAttempts?: number
+  thinkingOnlyAttempts?: number
+}
+
+const MAX_THINKING_ONLY_ATTEMPTS = 1
+const THINKING_ONLY_RETRY_PROMPT = [
+  'The previous model response contained internal reasoning only, with no final assistant text and no tool call.',
+  'Continue the same user request now. Either call the appropriate tool or provide the final user-facing response.',
+  'Do not repeat the internal reasoning block.',
+].join(' ')
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function blockHasText(block: Record<string, unknown>): boolean {
+  return (
+    (typeof block.text === 'string' && block.text.trim().length > 0) ||
+    (typeof block.content === 'string' && block.content.trim().length > 0)
+  )
+}
+
+function isThinkingBlock(block: Record<string, unknown>): boolean {
+  if (block.type !== 'thinking' && block.type !== 'reasoning') return false
+  return (
+    blockHasText(block) ||
+    (typeof block.thinking === 'string' && block.thinking.trim().length > 0) ||
+    (typeof block.summary === 'string' && block.summary.trim().length > 0)
+  )
+}
+
+function isThinkingOnlyAssistantMessage(message: AssistantMessage): boolean {
+  const content = message.message.content
+  if (!Array.isArray(content) || content.length === 0) return false
+
+  let hasThinking = false
+  for (const block of content) {
+    if (!isRecord(block)) return false
+    if (isToolUseLikeBlock(block)) return false
+    if (block.type === 'text' && blockHasText(block)) return false
+    if (isThinkingBlock(block)) {
+      hasThinking = true
+      continue
+    }
+    if (block.type === 'text') continue
+    return false
+  }
+
+  return hasThinking
+}
+
+function createThinkingOnlyRetryMetaMessage(): AssistantMessage {
+  const message = createAssistantMessage('<thinking-only-retry />')
+  return { ...message, isMeta: true }
+}
+
 export async function* messagePipeline(
   messages: Message[],
   systemPrompt: string[],
@@ -93,7 +154,7 @@ async function* messagePipelineCore(
     m1: AssistantMessage,
     m2: AssistantMessage,
   ) => Promise<BinaryFeedbackResult>,
-  hookState?: { stopHookActive?: boolean; stopHookAttempts?: number },
+  hookState?: PipelineRetryState,
 ): AsyncGenerator<Message, void> {
   setRequestStatus({ kind: 'thinking' })
 
@@ -101,6 +162,7 @@ async function* messagePipelineCore(
     markPhase('QUERY_INIT')
     const stopHookActive = hookState?.stopHookActive === true
     const stopHookAttempts = hookState?.stopHookAttempts ?? 0
+    const thinkingOnlyAttempts = hookState?.thinkingOnlyAttempts ?? 0
 
     const maxTurns = toolUseContext.options.maxTurns
     const normalizedMaxTurns =
@@ -365,6 +427,31 @@ async function* messagePipelineCore(
 
     // If there's no more tool use, we're done
     if (!toolUseMessages.length) {
+      if (isThinkingOnlyAssistantMessage(assistantMessage)) {
+        yield assistantMessage
+
+        if (thinkingOnlyAttempts < MAX_THINKING_ONLY_ATTEMPTS) {
+          yield* await messagePipelineCore(
+            [...messages, createThinkingOnlyRetryMetaMessage()],
+            [...systemPrompt, THINKING_ONLY_RETRY_PROMPT],
+            context,
+            canUseTool,
+            toolUseContext,
+            getBinaryFeedbackResponse,
+            {
+              ...hookState,
+              thinkingOnlyAttempts: thinkingOnlyAttempts + 1,
+            },
+          )
+          return
+        }
+
+        yield createAssistantAPIErrorMessage(
+          'API_ERROR: Model returned internal reasoning only without a final response or tool call. Please retry.',
+        )
+        return
+      }
+
       const stopHookEvent =
         toolUseContext.agentId && toolUseContext.agentId !== 'main'
           ? ('SubagentStop' as const)
