@@ -78,6 +78,7 @@ export function updateHookTranscriptForMessages(
   for (const msg of messages) {
     const msgRecord = asRecord(msg)
     if (!msgRecord) continue
+    if (msgRecord.isMeta === true) continue
     const msgType = msgRecord.type
     if (msgType !== 'user' && msgType !== 'assistant') continue
 
