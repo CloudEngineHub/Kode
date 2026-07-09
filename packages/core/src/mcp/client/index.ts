@@ -17,6 +17,12 @@ export { getClients, getClientsForCliMcpConfig } from './clients'
 export { __setMcpClientsForTests } from './clients'
 export { MCPClientManager } from './manager'
 
+export {
+  completeMCPArgument,
+  type McpCompletion,
+  type McpCompletionRef,
+  type McpCompletionRequest,
+} from './completion'
 export { getMCPTools } from './tools'
 export { getMCPCommands, runCommand, type McpPromptCommand } from './commands'
 export {

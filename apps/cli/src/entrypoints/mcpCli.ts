@@ -1,7 +1,12 @@
 import { Command } from 'commander'
 import chalk from 'chalk'
 import { setCwd } from '#core/utils/state'
-import { getClients, type WrappedClient } from '#core/mcp/client'
+import {
+  completeMCPArgument,
+  getClients,
+  type McpCompletionRef,
+  type WrappedClient,
+} from '#core/mcp/client'
 import { requestClientPages } from '#core/mcp/client/request'
 import {
   CallToolResultSchema,
@@ -65,6 +70,34 @@ function parseServerResource(input: string): { server: string; uri: string } {
     )
   }
   return { server: trimmed.slice(0, slash), uri: trimmed.slice(slash + 1) }
+}
+
+function parseContextArguments(input?: string): Record<string, string> {
+  if (!input) return {}
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(input)
+  } catch (error) {
+    throw new Error(
+      `Invalid --context JSON: ${error instanceof Error ? error.message : String(error)}`,
+    )
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Invalid --context JSON: expected an object')
+  }
+
+  const out: Record<string, string> = {}
+  for (const [key, value] of Object.entries(parsed)) {
+    if (typeof value !== 'string') {
+      throw new Error(
+        `Invalid --context JSON: value for '${key}' must be a string`,
+      )
+    }
+    out[key] = value
+  }
+  return out
 }
 
 async function readStdinUtf8(): Promise<string> {
@@ -467,6 +500,57 @@ export async function runMcpCli(args: {
     })
 
   program
+    .command('complete')
+    .description('Request MCP prompt or resource argument completions')
+    .requiredOption('--server <server>', 'MCP server name')
+    .option('--prompt <name>', 'Prompt reference name')
+    .option('--resource <uri>', 'Resource URI or URI template reference')
+    .requiredOption('--argument <name>', 'Argument name to complete')
+    .option('--value <value>', 'Current argument value', '')
+    .option(
+      '--context <json>',
+      'Previously resolved argument values as a JSON object',
+    )
+    .option('--json', 'Output in JSON format')
+    .action(async options => {
+      const prompt = String(options.prompt ?? '').trim()
+      const resource = String(options.resource ?? '').trim()
+      if ((prompt ? 1 : 0) + (resource ? 1 : 0) !== 1) {
+        throw new Error('Provide exactly one of --prompt or --resource')
+      }
+
+      const ref: McpCompletionRef = prompt
+        ? { type: 'ref/prompt', name: prompt }
+        : { type: 'ref/resource', uri: resource }
+      const contextArguments = parseContextArguments(options.context)
+      const completion = await completeMCPArgument({
+        server: String(options.server),
+        ref,
+        argument: {
+          name: String(options.argument),
+          value: String(options.value ?? ''),
+        },
+        ...(Object.keys(contextArguments).length > 0
+          ? { context: { arguments: contextArguments } }
+          : {}),
+      })
+
+      if (options.json) {
+        console.log(toJson(completion))
+        return
+      }
+
+      for (const value of completion.values) console.log(value)
+      if (completion.hasMore) {
+        process.stderr.write(
+          chalk.dim(
+            `More results available${typeof completion.total === 'number' ? ` (${completion.total} total)` : ''}`,
+          ) + '\n',
+        )
+      }
+    })
+
+  program
     .command('read')
     .description('Read an MCP resource')
     .argument('<resource>', 'Resource identifier in format <server>/<uri>')
@@ -489,9 +573,7 @@ export async function runMcpCli(args: {
     })
 
   try {
-    await program.parseAsync(['node', 'mcp-cli', ...args.argv], {
-      from: 'user',
-    })
+    await program.parseAsync(args.argv, { from: 'user' })
     const exitCode =
       typeof process.exitCode === 'number'
         ? process.exitCode
