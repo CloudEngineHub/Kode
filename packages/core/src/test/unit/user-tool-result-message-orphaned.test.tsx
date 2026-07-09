@@ -245,6 +245,41 @@ describe('UserToolResultMessage orphaned fallback', () => {
     expect(out).not.toContain('Tool result unavailable')
   })
 
+  test('caps matched tool string result renderers outside verbose mode', async () => {
+    const longResult = Array.from(
+      { length: 85 },
+      (_, index) => `line ${index + 1}`,
+    ).join('\n')
+    const param = makeToolResultParam('tool-use-long-string', 'assistant content')
+    const message = makeToolResultMessage(param, { value: longResult })
+    const toolUse = makeToolUseMessage('tool-use-long-string', 'FakeTool')
+    const tool = makeTool({
+      renderToolResultMessage(output) {
+        return (output as any).value
+      },
+    })
+
+    const terse = await renderToolResult({
+      param,
+      message,
+      messages: [toolUse, message],
+      tools: [tool],
+      verbose: false,
+    })
+    const verbose = await renderToolResult({
+      param,
+      message,
+      messages: [toolUse, message],
+      tools: [tool],
+      verbose: true,
+    })
+
+    expect(terse).toContain('line 80')
+    expect(terse).toContain('... [truncated 5 lines] ...')
+    expect(terse).not.toContain('line 81')
+    expect(verbose).toContain('line 85')
+  })
+
   test('falls back when the tool_use exists but the tool is unavailable', async () => {
     const param = makeToolResultParam('tool-use-2', 'raw content')
     const message = makeToolResultMessage(param, { value: 'from data' })
