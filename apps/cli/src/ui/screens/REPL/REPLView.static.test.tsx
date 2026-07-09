@@ -410,6 +410,45 @@ describe('REPLView Static output epoch', () => {
     expect(harness.getOutput()).not.toContain('static-a')
   })
 
+  test('does not reprint static history after shrinking to micro viewport and restoring', async () => {
+    const staticItems = [makeStaticItem('static-a')]
+    const harness = createHarness(
+      renderReplView({
+        staticOutputEpoch: 0,
+        staticItems,
+      }),
+      { columns: 100, rows: 24 },
+    )
+
+    await harness.wait(80)
+    expect(harness.getOutput()).toContain('static-a')
+
+    harness.clearOutput()
+    harness.resize(100, 4)
+    await harness.wait(80)
+    expect(harness.getOutput()).not.toContain('static-a')
+
+    harness.clearOutput()
+    harness.resize(100, 24)
+    await harness.wait(220)
+    expect(harness.getOutput()).not.toContain('static-a')
+  })
+
+  test('does not print static history when first rendered in a micro viewport', async () => {
+    const staticItems = [makeStaticItem('static-a')]
+    const harness = createHarness(
+      renderReplView({
+        staticOutputEpoch: 0,
+        staticItems,
+      }),
+      { columns: 100, rows: 4 },
+    )
+
+    await harness.wait(80)
+
+    expect(harness.getOutput()).not.toContain('static-a')
+  })
+
   test('does not carry a startup header across static output epoch resets', async () => {
     const harness = createHarness(
       renderReplView({

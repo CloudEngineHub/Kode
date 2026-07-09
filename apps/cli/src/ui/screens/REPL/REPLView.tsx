@@ -169,6 +169,7 @@ export function REPLView({
     epoch: number
     item: TranscriptItem
   } | null>(null)
+  const mountedStaticOutputEpochRef = useRef<number | null>(null)
   const shouldPrintStartupHeaderStatically =
     shouldRenderStartupHeader && staticItems.length === 0
 
@@ -322,15 +323,8 @@ export function REPLView({
     !isMicroViewport &&
     transientItems.length > 0 &&
     transientMaxHeight > 0
-  const showInlineRequestStatus =
+  const showRequestStatus =
     !isMicroViewport &&
-    !showTransientRegion &&
-    !toolJSX &&
-    !toolUseConfirm &&
-    !binaryFeedbackContext &&
-    isLoading
-  const showTransientRequestStatus =
-    showTransientRegion &&
     !toolJSX &&
     !toolUseConfirm &&
     !binaryFeedbackContext &&
@@ -360,6 +354,25 @@ export function REPLView({
             : isLoading
               ? 'Working... Esc to interrupt'
               : null
+  const hasStaticOutput = staticItemsWithStartupHeader.length > 0
+  const shouldMountStaticOutputNormally =
+    !isMinimizedViewport &&
+    !isMicroViewport &&
+    !isFullScreenToolView &&
+    !toolUseConfirm &&
+    hasStaticOutput
+  if (shouldMountStaticOutputNormally) {
+    mountedStaticOutputEpochRef.current = staticOutputEpoch
+  }
+  const shouldPreserveStaticOutputInConstrainedViewport =
+    (isMinimizedViewport || isMicroViewport) &&
+    !isFullScreenToolView &&
+    !toolUseConfirm &&
+    hasStaticOutput &&
+    mountedStaticOutputEpochRef.current === staticOutputEpoch
+  const shouldRenderStaticOutput =
+    shouldMountStaticOutputNormally ||
+    shouldPreserveStaticOutputInConstrainedViewport
 
   if (isMinimizedViewport) {
     return (
@@ -368,7 +381,13 @@ export function REPLView({
           conversationKey={conversationKey}
           isBypassPermissionsModeAvailable={!safeMode}
         >
-          <Box ref={rootUiRef} flexDirection="column" width="100%" />
+          <Box ref={rootUiRef} flexDirection="column" width="100%">
+            {shouldRenderStaticOutput && (
+              <Static key={staticOutputKey} items={staticItemsWithStartupHeader}>
+                {(item: TranscriptItem) => item.jsx}
+              </Static>
+            )}
+          </Box>
         </PermissionProvider>
       </TransientViewportProvider>
     )
@@ -388,6 +407,11 @@ export function REPLView({
             overflow="hidden"
             width="100%"
           >
+            {shouldRenderStaticOutput && (
+              <Static key={staticOutputKey} items={staticItemsWithStartupHeader}>
+                {(item: TranscriptItem) => item.jsx}
+              </Static>
+            )}
             {microStatus && (
               <Text dimColor wrap="truncate-end">
                 {microStatus}
@@ -425,9 +449,11 @@ export function REPLView({
           </Box>
         ) : (
           <Box ref={rootUiRef} flexDirection="column" width="100%">
-            <Static key={staticOutputKey} items={staticItemsWithStartupHeader}>
-              {(item: TranscriptItem) => item.jsx}
-            </Static>
+            {shouldRenderStaticOutput && (
+              <Static key={staticOutputKey} items={staticItemsWithStartupHeader}>
+                {(item: TranscriptItem) => item.jsx}
+              </Static>
+            )}
 
             {showTransientRegion && (
               <Box
@@ -438,8 +464,6 @@ export function REPLView({
                 width="100%"
               >
                 {transientItems.map(item => item.jsx)}
-                {/* Status indicator at bottom of messages, above controls */}
-                {showTransientRequestStatus && <RequestStatusIndicator />}
               </Box>
             )}
 
@@ -456,9 +480,9 @@ export function REPLView({
                 </Box>
               )}
 
-              {showInlineRequestStatus && (
+              {showRequestStatus && (
                 <Box paddingX={1}>
-                  <RequestStatusIndicator />
+                  <RequestStatusIndicator marginTop={0} />
                 </Box>
               )}
 

@@ -52,7 +52,11 @@ function getTokenDisplay(status: RequestStatus): string {
   return ''
 }
 
-export function RequestStatusIndicator(): React.ReactNode {
+export function RequestStatusIndicator({
+  marginTop = 1,
+}: {
+  marginTop?: number
+} = {}): React.ReactNode {
   const frames = SPINNER_FRAMES
   const theme = getTheme()
 
@@ -106,7 +110,7 @@ export function RequestStatusIndicator(): React.ReactNode {
   }
 
   return (
-    <Box flexDirection="row" marginTop={1}>
+    <Box flexDirection="row" marginTop={marginTop}>
       <Text color={theme.kode} bold>
         {frames[frame]} {getLabel(status)}
       </Text>
