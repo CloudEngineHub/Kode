@@ -17,7 +17,60 @@ function isChatEvent(event: AgentEvent): boolean {
   )
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function getMcpProgressEventKey(event: AgentEvent): string | null {
+  if (event.type !== 'stream_event') return null
+  const streamEvent = event.event
+  if (!isRecord(streamEvent) || streamEvent.type !== 'mcp_progress') {
+    return null
+  }
+
+  const parentToolUseId =
+    typeof event.parent_tool_use_id === 'string'
+      ? event.parent_tool_use_id
+      : ''
+  const toolUseId =
+    typeof streamEvent.toolUseId === 'string' ? streamEvent.toolUseId : ''
+  const server =
+    typeof streamEvent.server === 'string' ? streamEvent.server : 'unknown'
+  const tool = typeof streamEvent.tool === 'string' ? streamEvent.tool : 'tool'
+
+  return parentToolUseId || toolUseId || `${server}:${tool}`
+}
+
+function getChatEventsForRender(events: AgentEvent[]): AgentEvent[] {
+  const out: AgentEvent[] = []
+  const mcpProgressIndexes = new Map<string, number>()
+
+  for (const event of events) {
+    if (!isChatEvent(event)) continue
+
+    const progressKey = getMcpProgressEventKey(event)
+    if (!progressKey) {
+      out.push(event)
+      continue
+    }
+
+    const existingIndex = mcpProgressIndexes.get(progressKey)
+    if (existingIndex === undefined) {
+      mcpProgressIndexes.set(progressKey, out.length)
+      out.push(event)
+      continue
+    }
+
+    out[existingIndex] = event
+  }
+
+  return out
+}
+
 function getEventKey(event: AgentEvent, index: number): string {
+  const mcpProgressKey = getMcpProgressEventKey(event)
+  if (mcpProgressKey) return `stream_event-mcp_progress-${mcpProgressKey}`
+
   const record = event as Record<string, unknown>
   const uuid = typeof record.uuid === 'string' ? record.uuid : ''
   if (uuid) return `${event.type}-${uuid}`
@@ -51,7 +104,7 @@ export function ChatPage(props: {
   }, [props.events.length, props.sending])
 
   const chatEvents = React.useMemo(
-    () => props.events.filter(isChatEvent),
+    () => getChatEventsForRender(props.events),
     [props.events],
   )
 
@@ -92,4 +145,9 @@ export function ChatPage(props: {
       </div>
     </div>
   )
+}
+
+export const __chatPageForTests = {
+  getChatEventsForRender,
+  getEventKey,
 }
