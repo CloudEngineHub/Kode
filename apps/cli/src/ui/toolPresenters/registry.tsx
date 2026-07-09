@@ -89,15 +89,50 @@ function normalizePrimitiveInkToolRenderOutput(
   options: ResultOptions,
   key?: React.Key,
 ): React.ReactNode {
+  const text = normalizePrimitiveInkToolRenderChild(value, options)
+
+  return key === undefined ? <Text>{text}</Text> : <Text key={key}>{text}</Text>
+}
+
+function normalizePrimitiveInkToolRenderChild(
+  value: string | number,
+  options: ResultOptions,
+): string {
   const rawText = String(value)
-  const text = options.verbose
+  return options.verbose
     ? rawText
     : truncateTextForDisplay(rawText, {
         maxLines: MAX_INLINE_TOOL_RESULT_LINES,
         maxChars: MAX_INLINE_TOOL_RESULT_CHARS,
       }).text
+}
 
-  return key === undefined ? <Text>{text}</Text> : <Text key={key}>{text}</Text>
+function normalizeInkToolRenderChild(
+  node: React.ReactNode,
+  options: ResultOptions,
+): React.ReactNode {
+  if (typeof node === 'string' || typeof node === 'number') {
+    return normalizePrimitiveInkToolRenderChild(node, options)
+  }
+
+  if (Array.isArray(node)) {
+    return node.map(child => normalizeInkToolRenderChild(child, options))
+  }
+
+  if (!React.isValidElement(node)) {
+    return node
+  }
+
+  const props = node.props as { children?: React.ReactNode }
+  if (props.children === undefined) {
+    return node
+  }
+
+  return React.cloneElement(
+    node as React.ReactElement<{ children?: React.ReactNode }>,
+    undefined,
+    normalizeInkToolRenderChild(props.children, options),
+  )
 }
 
 function normalizeInkToolRenderOutput(
@@ -117,9 +152,13 @@ function normalizeInkToolRenderOutput(
           `text-${index}`,
         )
       ) : (
-        child
+        normalizeInkToolRenderChild(child, options)
       ),
     )
+  }
+
+  if (React.isValidElement(node)) {
+    return normalizeInkToolRenderChild(node, options)
   }
 
   return node as React.ReactNode
