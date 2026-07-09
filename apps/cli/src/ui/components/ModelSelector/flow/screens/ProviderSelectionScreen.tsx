@@ -5,8 +5,8 @@ import {
   ScreenFrame,
   type ScreenExitState,
 } from '#ui-ink/primitives/layout/ScreenFrame'
+import type { Option, WindowedOptionInteractions } from '../../viewTypes'
 
-type Option = { value: string; label: string }
 type WindowedOptionsLayout = {
   visibleOptionCount: number
   showIndicators: boolean
@@ -22,6 +22,8 @@ type Props = {
   mainMenuOptions: Option[]
   providerFocusIndex: number
   providerReservedLines: number
+  onProviderOptionPress: (optionIndex: number) => void
+  onProviderOptionWheel: (direction: 'up' | 'down') => void
   getWindowedOptionsLayout: (
     requestedCount: number,
     optionLength: number,
@@ -31,6 +33,7 @@ type Props = {
     options: Option[],
     focusedIndex: number,
     layout: WindowedOptionsLayout,
+    interactions?: WindowedOptionInteractions,
   ) => React.ReactNode
 }
 
@@ -44,6 +47,8 @@ export function ProviderSelectionScreen({
   mainMenuOptions,
   providerFocusIndex,
   providerReservedLines,
+  onProviderOptionPress,
+  onProviderOptionWheel,
   getWindowedOptionsLayout,
   renderWindowedOptions,
 }: Props) {
@@ -81,6 +86,10 @@ export function ProviderSelectionScreen({
             mainMenuOptions.length,
             providerReservedLines,
           ),
+          {
+            onOptionPress: onProviderOptionPress,
+            onWheel: onProviderOptionWheel,
+          },
         )}
 
         <Box marginTop={tightLayout ? 0 : 1}>

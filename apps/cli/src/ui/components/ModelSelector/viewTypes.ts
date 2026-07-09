@@ -12,6 +12,11 @@ import type { ModelInfo } from './flow/types'
 
 export type Option = { value: string; label: string }
 
+export type WindowedOptionInteractions = {
+  onOptionPress?: (optionIndex: number) => void
+  onWheel?: (direction: 'up' | 'down') => void
+}
+
 export type ModelParamsField = {
   name: string
   label: string
@@ -110,14 +115,20 @@ export type ModelSelectorViewProps = {
   mainMenuOptions: Option[]
   providerFocusIndex: number
   providerReservedLines: number
+  onProviderOptionPress: (optionIndex: number) => void
+  onProviderOptionWheel: (direction: 'up' | 'down') => void
 
   partnerProviderOptions: Option[]
   partnerProviderFocusIndex: number
   partnerReservedLines: number
+  onPartnerProviderOptionPress: (optionIndex: number) => void
+  onPartnerProviderOptionWheel: (direction: 'up' | 'down') => void
 
   codingPlanOptions: Option[]
   codingPlanFocusIndex: number
   codingReservedLines: number
+  onCodingPlanOptionPress: (optionIndex: number) => void
+  onCodingPlanOptionWheel: (direction: 'up' | 'down') => void
 
   formatApiKeyDisplay: (key: string) => string
   getProviderLabel: (provider: string, modelCount: number) => string

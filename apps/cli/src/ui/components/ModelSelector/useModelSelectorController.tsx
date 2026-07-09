@@ -35,6 +35,15 @@ function readApiKeyFromEnv(provider: string): string | undefined {
   return undefined
 }
 
+function clampOptionIndex(next: number, length: number): number {
+  if (length <= 0) return 0
+  return Math.max(0, Math.min(next, length - 1))
+}
+
+function getWheelDelta(direction: 'up' | 'down'): number {
+  return direction === 'down' ? 1 : -1
+}
+
 export function useModelSelectorController(
   props: ModelSelectorProps,
 ): ModelSelectorViewProps {
@@ -96,6 +105,69 @@ export function useModelSelectorController(
   const actions = useModelSelectorActions({ props, state, onDone })
 
   useEscapeNavigation(actions.handleBack, props.abortController)
+
+  const onProviderOptionPress = (optionIndex: number) => {
+    const nextIndex = clampOptionIndex(
+      optionIndex,
+      menus.mainMenuOptions.length,
+    )
+    const opt = menus.mainMenuOptions[nextIndex]
+    if (!opt) return
+
+    state.setProviderFocusIndex(nextIndex)
+    void actions.handleProviderSelection(opt.value)
+  }
+
+  const onProviderOptionWheel = (direction: 'up' | 'down') => {
+    state.setProviderFocusIndex(prev =>
+      clampOptionIndex(
+        prev + getWheelDelta(direction),
+        menus.mainMenuOptions.length,
+      ),
+    )
+  }
+
+  const onPartnerProviderOptionPress = (optionIndex: number) => {
+    const nextIndex = clampOptionIndex(
+      optionIndex,
+      menus.partnerProviderOptions.length,
+    )
+    const opt = menus.partnerProviderOptions[nextIndex]
+    if (!opt) return
+
+    state.setPartnerProviderFocusIndex(nextIndex)
+    void actions.handleProviderSelection(opt.value)
+  }
+
+  const onPartnerProviderOptionWheel = (direction: 'up' | 'down') => {
+    state.setPartnerProviderFocusIndex(prev =>
+      clampOptionIndex(
+        prev + getWheelDelta(direction),
+        menus.partnerProviderOptions.length,
+      ),
+    )
+  }
+
+  const onCodingPlanOptionPress = (optionIndex: number) => {
+    const nextIndex = clampOptionIndex(
+      optionIndex,
+      menus.codingPlanOptions.length,
+    )
+    const opt = menus.codingPlanOptions[nextIndex]
+    if (!opt) return
+
+    state.setCodingPlanFocusIndex(nextIndex)
+    void actions.handleProviderSelection(opt.value)
+  }
+
+  const onCodingPlanOptionWheel = (direction: 'up' | 'down') => {
+    state.setCodingPlanFocusIndex(prev =>
+      clampOptionIndex(
+        prev + getWheelDelta(direction),
+        menus.codingPlanOptions.length,
+      ),
+    )
+  }
 
   useModelSelectorInput({
     currentScreen: state.currentScreen,
@@ -210,12 +282,18 @@ export function useModelSelectorController(
     mainMenuOptions: menus.mainMenuOptions,
     providerFocusIndex: state.providerFocusIndex,
     providerReservedLines: menus.providerReservedLines,
+    onProviderOptionPress,
+    onProviderOptionWheel,
     partnerProviderOptions: menus.partnerProviderOptions,
     partnerProviderFocusIndex: state.partnerProviderFocusIndex,
     partnerReservedLines: menus.partnerReservedLines,
+    onPartnerProviderOptionPress,
+    onPartnerProviderOptionWheel,
     codingPlanOptions: menus.codingPlanOptions,
     codingPlanFocusIndex: state.codingPlanFocusIndex,
     codingReservedLines: menus.codingReservedLines,
+    onCodingPlanOptionPress,
+    onCodingPlanOptionWheel,
     formatApiKeyDisplay: actions.formatApiKeyDisplay,
     getProviderLabel: menus.getProviderLabel,
   }

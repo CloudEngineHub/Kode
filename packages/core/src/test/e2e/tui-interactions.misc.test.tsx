@@ -22,6 +22,7 @@ import { MessageResponse } from '#ui-ink/components/MessageResponse'
 import { KeypressProvider } from '#ui-ink/contexts/KeypressContext'
 import { createInkHarnessManager, createInkTestHarness } from './inkTestHarness'
 import { Select } from '#ui-ink/components/CustomSelect/select'
+import { ModelSelector } from '#ui-ink/components/ModelSelector/ModelSelector'
 import { ScopedMultiSelect } from '#ui-ink/components/CustomSelect/multi-select'
 import { useModelSelectorInput } from '#ui-ink/components/ModelSelector/useModelSelectorInput'
 import { useModelSelectorState } from '#ui-ink/components/ModelSelector/useModelSelectorState'
@@ -2187,6 +2188,81 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     h.stdin.write('\r')
     await h.wait(40)
     expect(submitted).toBe(true)
+  })
+
+  test('ModelSelector: mouse click selects Custom OpenAI provider from provider list', async () => {
+    let done = false
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <ModelSelector
+          onDone={() => {
+            done = true
+          }}
+          abortController={new AbortController()}
+        />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(75)
+
+    const outputLines = h.getOutput().split(/\r?\n/)
+    const customProviderLineIndex = outputLines.findIndex(line =>
+      line.includes('Custom OpenAI API'),
+    )
+    expect(customProviderLineIndex).toBeGreaterThanOrEqual(0)
+
+    const customProviderColumn =
+      outputLines[customProviderLineIndex].indexOf('Custom OpenAI API') + 1
+    expect(customProviderColumn).toBeGreaterThan(0)
+
+    h.clearOutput()
+    h.stdin.write(
+      `\x1b[<0;${customProviderColumn};${customProviderLineIndex + 1}M`,
+    )
+    await h.wait(75)
+
+    const output = h.getOutput()
+    expect(done).toBe(false)
+    expect(output).toContain('Custom API Server Setup')
+    expect(output).toContain('Enter your custom API URL')
+  })
+
+  test('ModelSelector: mouse wheel moves provider focus', async () => {
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <ModelSelector
+          onDone={() => {}}
+          abortController={new AbortController()}
+        />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(75)
+
+    const outputLines = h.getOutput().split(/\r?\n/)
+    const providerLineIndex = outputLines.findIndex(line =>
+      line.includes('Other Providers'),
+    )
+    expect(providerLineIndex).toBeGreaterThanOrEqual(0)
+
+    const providerColumn =
+      outputLines[providerLineIndex].indexOf('Other Providers') + 1
+    expect(providerColumn).toBeGreaterThan(0)
+
+    h.stdin.write('\x1b[H')
+    await h.wait(40)
+
+    h.stdin.write(`\x1b[<65;${providerColumn};${providerLineIndex + 1}M`)
+    await h.wait(40)
+
+    h.clearOutput()
+    h.stdin.write('\r')
+    await h.wait(75)
+
+    expect(h.getOutput()).toContain('Some Coding Plans')
   })
 
   test('ModelSelector: provider focus survives keep-alive remount', async () => {
