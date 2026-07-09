@@ -360,7 +360,7 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
             const connectedClient = {
               type: 'connected',
               name: 'srv',
-              capabilities: { resources: { subscribe: true } },
+              capabilities: { resources: { subscribe: true }, logging: {} },
             }
             if (getClientsCallCount === 2) {
               await new Promise(resolve => setTimeout(resolve, 220))
@@ -398,6 +398,10 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
           resetMcpConnections: async () => {
             reconnectCount += 1
           },
+          setMcpLoggingLevel: async (_args: {
+            server: string
+            level: string
+          }) => {},
           subscribeMCPResource: async ({
             server,
             uri,
@@ -538,6 +542,8 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
       await h.wait(150)
 
       expect(h.getOutput()).toContain('Resources: 1 resources')
+      expect(h.getOutput()).toContain('Capabilities: resources, logging')
+      expect(h.getOutput()).toContain('Set log level: warning')
       expect(h.getOutput()).toContain('1. View resources')
       expect(reconnectCount).toBe(0)
 

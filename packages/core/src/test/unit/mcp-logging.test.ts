@@ -3,7 +3,9 @@ import type { LoggingMessageNotification } from '@modelcontextprotocol/sdk/types
 
 import {
   __resetMcpLoggingForTests,
+  __setMcpClientsForTests,
   handleMcpLoggingMessage,
+  setMcpLoggingLevel,
   subscribeMcpLogMessage,
 } from '#core/mcp/client'
 import {
@@ -23,6 +25,7 @@ function createLoggingNotification(
 describe('MCP logging notifications', () => {
   afterEach(() => {
     __resetMcpLoggingForTests()
+    __setMcpClientsForTests(null)
     clearNotifications()
   })
 
@@ -103,5 +106,42 @@ describe('MCP logging notifications', () => {
     )
 
     expect(events).toEqual([])
+  })
+
+  test('setMcpLoggingLevel sends logging/setLevel through connected servers', async () => {
+    const levels: string[] = []
+    const client: any = {
+      setLoggingLevel: async (level: string) => {
+        levels.push(level)
+      },
+    }
+
+    __setMcpClientsForTests([
+      {
+        type: 'connected',
+        name: 'codegraph',
+        client,
+        capabilities: { logging: {} },
+      } as any,
+    ])
+
+    await setMcpLoggingLevel({ server: 'codegraph', level: 'warning' })
+
+    expect(levels).toEqual(['warning'])
+  })
+
+  test('setMcpLoggingLevel rejects servers without logging capability', async () => {
+    __setMcpClientsForTests([
+      {
+        type: 'connected',
+        name: 'codegraph',
+        client: {},
+        capabilities: {},
+      } as any,
+    ])
+
+    await expect(
+      setMcpLoggingLevel({ server: 'codegraph', level: 'info' }),
+    ).rejects.toThrow('does not support logging')
   })
 })

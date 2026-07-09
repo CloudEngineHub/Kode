@@ -56,7 +56,10 @@ export {
 } from './listChanged'
 export {
   __resetMcpLoggingForTests,
+  MCP_LOGGING_LEVELS,
   handleMcpLoggingMessage,
+  setMcpLoggingLevel,
   subscribeMcpLogMessage,
   type McpLogMessageEvent,
+  type McpLoggingLevel,
 } from './logging'

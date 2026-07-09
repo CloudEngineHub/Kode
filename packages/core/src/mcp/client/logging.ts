@@ -1,4 +1,7 @@
-import type { LoggingMessageNotification } from '@modelcontextprotocol/sdk/types.js'
+import type {
+  LoggingLevel,
+  LoggingMessageNotification,
+} from '@modelcontextprotocol/sdk/types.js'
 
 import {
   addNotification,
@@ -6,8 +9,10 @@ import {
 } from '#core/services/notificationCenter'
 import { logMCPError } from '#core/utils/log'
 
-type McpLoggingLevel = LoggingMessageNotification['params']['level']
+import { getClients } from './clients'
+import type { ConnectedClient, WrappedClient } from './types'
 
+export type McpLoggingLevel = LoggingLevel
 export type McpLogMessageEvent = {
   server: string
   level: McpLoggingLevel
@@ -18,9 +23,48 @@ export type McpLogMessageEvent = {
 type Listener = (event: McpLogMessageEvent) => void
 
 const listeners = new Set<Listener>()
+export const MCP_LOGGING_LEVELS = [
+  'debug',
+  'info',
+  'notice',
+  'warning',
+  'error',
+  'critical',
+  'alert',
+  'emergency',
+] as const satisfies readonly McpLoggingLevel[]
 const MAX_DISPLAY_CHARS = 500
 const SENSITIVE_KEY_PATTERN =
   /(?:api[_-]?key|authorization|cookie|credential|password|secret|token)/i
+
+function getCapabilities(client: ConnectedClient) {
+  if (client.capabilities) return client.capabilities
+  try {
+    return client.client.getServerCapabilities() ?? null
+  } catch {
+    return null
+  }
+}
+
+async function findLoggingClient(server: string): Promise<ConnectedClient> {
+  const clients = await getClients()
+  const match = clients.find((client: WrappedClient) => client.name === server)
+  if (!match) {
+    throw new Error(
+      `Server "${server}" not found. Available servers: ${clients.map(c => c.name).join(', ')}`,
+    )
+  }
+  if (match.type !== 'connected') {
+    throw new Error(`Server "${server}" is not connected`)
+  }
+
+  const capabilities = getCapabilities(match)
+  if (!capabilities?.logging) {
+    throw new Error(`Server "${server}" does not support logging`)
+  }
+
+  return match
+}
 
 function truncate(value: string): string {
   if (value.length <= MAX_DISPLAY_CHARS) return value
@@ -93,6 +137,17 @@ export function subscribeMcpLogMessage(listener: Listener): () => void {
   return () => {
     listeners.delete(listener)
   }
+}
+
+export async function setMcpLoggingLevel({
+  server,
+  level,
+}: {
+  server: string
+  level: McpLoggingLevel
+}): Promise<void> {
+  const match = await findLoggingClient(server)
+  await match.client.setLoggingLevel(level)
 }
 
 export function handleMcpLoggingMessage(

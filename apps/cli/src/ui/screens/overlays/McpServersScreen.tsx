@@ -17,10 +17,12 @@ import {
   getMcpServer,
   listMCPServers,
   resetMcpConnections,
+  setMcpLoggingLevel,
   subscribeMCPResource,
   subscribeMcpResourceUpdated,
   subscribeMcpListChanged,
   unsubscribeMCPResource,
+  type McpLoggingLevel,
   type McpPromptCommand,
   type McpResource,
   type WrappedClient,
@@ -354,6 +356,13 @@ function supportsResourceSubscriptions(client: WrappedClient): boolean {
   return Boolean(capabilities?.resources?.subscribe)
 }
 
+function supportsLogging(client: WrappedClient): boolean {
+  if (client.type !== 'connected') return false
+  const capabilities =
+    client.capabilities ?? client.client.getServerCapabilities?.() ?? null
+  return Boolean(capabilities?.logging)
+}
+
 export function McpServersScreen(props: { onDone(result?: string): void }) {
   const { onDone } = props
   const theme = getTheme()
@@ -399,6 +408,9 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
   >({})
   const [resourceSubscriptionPendingKey, setResourceSubscriptionPendingKey] =
     useState<string | null>(null)
+  const [serverLoggingSupport, setServerLoggingSupport] = useState<
+    Record<string, boolean>
+  >({})
   const [mcpListChangedTick, setMcpListChangedTick] = useState(0)
 
   const [authInProgress, setAuthInProgress] = useState(false)
@@ -409,6 +421,7 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
   const serverRefreshGenerationRef = useRef(0)
 
   const [actionError, setActionError] = useState<string | null>(null)
+  const [actionMessage, setActionMessage] = useState<string | null>(null)
 
   const closeScreen = useCallback(() => {
     authAbortControllerRef.current?.abort()
@@ -419,6 +432,7 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
 
   const runAction = useCallback(async (action: () => Promise<void>) => {
     setActionError(null)
+    setActionMessage(null)
     try {
       await action()
     } catch (err) {
@@ -444,8 +458,10 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
       const clientByName = new Map<string, (typeof clients)[number]>()
       for (const client of clients) clientByName.set(client.name, client)
       const subscriptionSupport: Record<string, boolean> = {}
+      const loggingSupport: Record<string, boolean> = {}
       for (const client of clients) {
         subscriptionSupport[client.name] = supportsResourceSubscriptions(client)
+        loggingSupport[client.name] = supportsLogging(client)
       }
 
       const globalConfig = getGlobalConfig()
@@ -506,10 +522,12 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
       if (!isCurrentRefresh()) return
       setServers(items)
       setResourceSubscriptionSupport(subscriptionSupport)
+      setServerLoggingSupport(loggingSupport)
     } catch (err) {
       if (!isCurrentRefresh()) return
       setServers([])
       setResourceSubscriptionSupport({})
+      setServerLoggingSupport({})
       setServersError(err instanceof Error ? err.message : String(err))
     } finally {
       if (isCurrentRefresh()) setLoadingServers(false)
@@ -678,6 +696,14 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
           current === key ? null : current,
         )
       }
+    },
+    [],
+  )
+
+  const updateLoggingLevel = useCallback(
+    async (server: string, level: McpLoggingLevel) => {
+      await setMcpLoggingLevel({ server, level })
+      setActionMessage(`MCP log level set to ${level}`)
     },
     [],
   )
@@ -1119,6 +1145,8 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
     if (counts?.tools) capabilities.push('tools')
     if (counts?.resources) capabilities.push('resources')
     if (counts?.prompts) capabilities.push('prompts')
+    const loggingSupported = serverLoggingSupport[activeServer.name] === true
+    if (loggingSupported) capabilities.push('logging')
 
     const { showAuthLine, authenticated } = computeAuthStatus(
       activeServer.name,
@@ -1151,6 +1179,11 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
 
       if (activeServer.status !== 'needs-auth') {
         actions.push({ label: 'Reconnect', value: 'reconnect' })
+      }
+
+      if (loggingSupported) {
+        actions.push({ label: 'Set log level: warning', value: 'log:warning' })
+        actions.push({ label: 'Set log level: info', value: 'log:info' })
       }
 
       actions.push({ label: 'Disable', value: 'toggle-enabled' })
@@ -1265,6 +1298,14 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
               </Text>
             </Box>
           ) : null}
+
+          {actionMessage ? (
+            <Box marginTop={1}>
+              <Text color={theme.success} wrap="truncate-end">
+                {actionMessage}
+              </Text>
+            </Box>
+          ) : null}
         </Box>
 
         <Box flexDirection="column" borderStyle="round" paddingX={1}>
@@ -1305,6 +1346,13 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
                 }
                 if (value === 'reconnect') {
                   await runAction(async () => reconnect())
+                  return
+                }
+                if (value.startsWith('log:')) {
+                  const level = value.slice('log:'.length) as McpLoggingLevel
+                  await runAction(async () =>
+                    updateLoggingLevel(activeServer.name, level),
+                  )
                   return
                 }
                 if (value === 'toggle-enabled') {
