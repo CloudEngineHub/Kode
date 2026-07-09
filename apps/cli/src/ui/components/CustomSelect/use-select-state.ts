@@ -343,6 +343,9 @@ export const useSelectState = ({
   const onFocusRef = useRef(onFocus)
   const lastFocusedValueRef = useRef<string | undefined>(state.focusedValue)
   const lastNotifiedFocusValueRef = useRef<string | undefined>(undefined)
+  const focusNotificationSequenceRef = useRef(0)
+  const latestFocusNotificationSequenceRef = useRef(0)
+  const pendingFocusEchoesRef = useRef(new Map<string, number>())
   const lastSyncedRef = useRef({
     structureKey,
     visibleOptionCount,
@@ -355,6 +358,9 @@ export const useSelectState = ({
 
     if (lastNotifiedFocusValueRef.current === value) return
     lastNotifiedFocusValueRef.current = value
+    const sequence = ++focusNotificationSequenceRef.current
+    latestFocusNotificationSequenceRef.current = sequence
+    pendingFocusEchoesRef.current.set(value, sequence)
     onFocusRef.current?.(value)
   }, [])
 
@@ -465,12 +471,43 @@ export const useSelectState = ({
   }, [dispatchWithFocusMirror, state.previousValue, state.value])
 
   const appliedFocusValueRef = useRef<string | undefined>(undefined)
+  const ignoredFocusEchoRef = useRef<string | undefined>(undefined)
+  const previousFocusValuePropRef = useRef<string | undefined>(focusValue)
   useEffect(() => {
+    if (previousFocusValuePropRef.current !== focusValue) {
+      previousFocusValuePropRef.current = focusValue
+      ignoredFocusEchoRef.current = undefined
+    }
+
     if (!focusValue) {
       return
     }
 
     if (!focusValueExists) {
+      return
+    }
+
+    const currentFocusedValue = stateRef.current.focusedValue
+    if (ignoredFocusEchoRef.current === focusValue) {
+      return
+    }
+
+    const pendingEchoSequence = pendingFocusEchoesRef.current.get(focusValue)
+    if (pendingEchoSequence !== undefined) {
+      pendingFocusEchoesRef.current.delete(focusValue)
+
+      // Parent state can echo an older onFocus after a newer keypress.
+      if (
+        currentFocusedValue !== focusValue &&
+        pendingEchoSequence < latestFocusNotificationSequenceRef.current
+      ) {
+        ignoredFocusEchoRef.current = focusValue
+        return
+      }
+    }
+
+    if (currentFocusedValue === focusValue) {
+      appliedFocusValueRef.current = focusValue
       return
     }
 

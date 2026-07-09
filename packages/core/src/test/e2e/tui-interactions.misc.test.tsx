@@ -1067,6 +1067,67 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     expect(selected).toBe('third')
   })
 
+  test('Select: lagging focusValue echo does not pull down-arrow focus backward', async () => {
+    let focused = ''
+    let selected = ''
+
+    function SelectLaggingFocusEchoHarness(): React.ReactNode {
+      const [focusValue, setFocusValue] = useState<string | undefined>('first')
+      const [tick, setTick] = useState(0)
+
+      useEffect(() => {
+        const intervalId = setInterval(() => {
+          setTick(prev => prev + 1)
+        }, 30)
+        return () => clearInterval(intervalId)
+      }, [])
+
+      return (
+        <Select
+          focusValue={focusValue}
+          options={[
+            { label: `First ${tick}`, value: 'first' },
+            { label: `Second ${tick}`, value: 'second' },
+            { label: `Third ${tick}`, value: 'third' },
+          ]}
+          onFocus={value => {
+            focused = value
+            setTimeout(() => setFocusValue(value), 80)
+          }}
+          onChange={value => {
+            selected = value
+          }}
+        />
+      )
+    }
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <SelectLaggingFocusEchoHarness />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(40)
+    expect(focused).toBe('first')
+
+    h.stdin.write('\u001B[B')
+    await h.wait(20)
+    expect(focused).toBe('second')
+
+    h.stdin.write('\u001B[B')
+    await h.wait(40)
+    expect(focused).toBe('third')
+
+    await h.wait(120)
+    expect(focused).toBe('third')
+
+    h.stdin.write('\r')
+    await h.wait(40)
+
+    expect(selected).toBe('third')
+  })
+
   test('Select: focusValue is applied after options arrive from keep-alive loading', async () => {
     let focused = ''
 
