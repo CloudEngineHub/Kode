@@ -13,6 +13,8 @@ function isPermissionRequest(
   return event.type === 'permission_request'
 }
 
+const EVENT_FLUSH_DELAY_MS = 50
+
 export function useChat(args: {
   client: HttpClient | null
   resetKey: string
@@ -39,6 +41,49 @@ export function useChat(args: {
     React.useState<PermissionRequestEvent | null>(null)
   const [input, setInput] = React.useState('')
   const [sending, setSending] = React.useState(false)
+  const eventBufferRef = React.useRef<AgentEvent[]>([])
+  const eventFlushTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  )
+
+  const appendBufferedEvents = React.useCallback(() => {
+    const buffered = eventBufferRef.current
+    if (buffered.length === 0) return
+    eventBufferRef.current = []
+    setEvents(prev => [...prev, ...buffered])
+  }, [])
+
+  const clearEventFlushTimer = React.useCallback(() => {
+    if (!eventFlushTimerRef.current) return
+    clearTimeout(eventFlushTimerRef.current)
+    eventFlushTimerRef.current = null
+  }, [])
+
+  const flushBufferedEvents = React.useCallback(() => {
+    clearEventFlushTimer()
+    appendBufferedEvents()
+  }, [appendBufferedEvents, clearEventFlushTimer])
+
+  const clearBufferedEvents = React.useCallback(() => {
+    clearEventFlushTimer()
+    eventBufferRef.current = []
+  }, [clearEventFlushTimer])
+
+  const scheduleEventFlush = React.useCallback(() => {
+    if (eventFlushTimerRef.current) return
+    eventFlushTimerRef.current = setTimeout(() => {
+      eventFlushTimerRef.current = null
+      appendBufferedEvents()
+    }, EVENT_FLUSH_DELAY_MS)
+  }, [appendBufferedEvents])
+
+  const enqueueEvent = React.useCallback(
+    (event: AgentEvent) => {
+      eventBufferRef.current.push(event)
+      scheduleEventFlush()
+    },
+    [scheduleEventFlush],
+  )
 
   const refreshSessions = React.useCallback(async () => {
     if (!args.client) return
@@ -51,12 +96,19 @@ export function useChat(args: {
   }, [args.client])
 
   React.useEffect(() => {
+    clearBufferedEvents()
     setSelectedSessionId(null)
     setEvents([])
     setPermissionRequest(null)
     setInput('')
     void refreshSessions()
-  }, [args.client, args.resetKey, refreshSessions])
+  }, [args.client, args.resetKey, clearBufferedEvents, refreshSessions])
+
+  React.useEffect(() => {
+    return () => {
+      clearBufferedEvents()
+    }
+  }, [clearBufferedEvents])
 
   const startNewSession = React.useCallback(() => {
     args.onNewSession()
@@ -65,6 +117,7 @@ export function useChat(args: {
   const selectSession = React.useCallback(
     async (id: string) => {
       if (!args.client) return
+      clearBufferedEvents()
       setSelectedSessionId(id)
       setEvents([])
       setPermissionRequest(null)
@@ -78,7 +131,7 @@ export function useChat(args: {
         void refreshSessions()
       }
     },
-    [args.client, refreshSessions],
+    [args.client, clearBufferedEvents, refreshSessions],
   )
 
   const clearPermissionRequest = React.useCallback(
@@ -101,13 +154,21 @@ export function useChat(args: {
           continue
         }
         if (ev.type === 'history_begin' || ev.type === 'history_end') continue
-        setEvents(prev => [...prev, ev])
+        enqueueEvent(ev)
       }
     } finally {
+      flushBufferedEvents()
       setSending(false)
       void refreshSessions()
     }
-  }, [args.client, input, refreshSessions, sending])
+  }, [
+    args.client,
+    enqueueEvent,
+    flushBufferedEvents,
+    input,
+    refreshSessions,
+    sending,
+  ])
 
   return {
     sessions,

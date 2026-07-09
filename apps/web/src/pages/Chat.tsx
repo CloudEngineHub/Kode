@@ -7,6 +7,31 @@ import { MessageBubble } from '../components/MessageBubble'
 import { InputArea } from '../components/InputArea'
 import { cn } from '../lib/utils'
 
+function isChatEvent(event: AgentEvent): boolean {
+  return (
+    event.type === 'user' ||
+    event.type === 'assistant' ||
+    event.type === 'result' ||
+    event.type === 'log'
+  )
+}
+
+function getEventKey(event: AgentEvent, index: number): string {
+  const record = event as Record<string, unknown>
+  const uuid = typeof record.uuid === 'string' ? record.uuid : ''
+  if (uuid) return `${event.type}-${uuid}`
+
+  const sessionId =
+    typeof record.session_id === 'string'
+      ? record.session_id
+      : typeof record.sessionId === 'string'
+        ? record.sessionId
+        : ''
+  if (sessionId) return `${event.type}-${sessionId}-${index}`
+
+  return `${event.type}-${index}`
+}
+
 export function ChatPage(props: {
   events: AgentEvent[]
   input: string
@@ -18,15 +43,15 @@ export function ChatPage(props: {
   const bottomRef = React.useRef<HTMLDivElement | null>(null)
 
   React.useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' })
-  }, [props.events.length])
+    bottomRef.current?.scrollIntoView({
+      block: 'end',
+      behavior: props.sending ? 'auto' : 'smooth',
+    })
+  }, [props.events.length, props.sending])
 
-  const chatEvents = props.events.filter(
-    e =>
-      e.type === 'user' ||
-      e.type === 'assistant' ||
-      e.type === 'result' ||
-      e.type === 'log',
+  const chatEvents = React.useMemo(
+    () => props.events.filter(isChatEvent),
+    [props.events],
   )
 
   return (
@@ -43,7 +68,7 @@ export function ChatPage(props: {
             </div>
           ) : (
             chatEvents.map((event, idx) => (
-              <MessageBubble key={`${event.type}-${idx}`} event={event} />
+              <MessageBubble key={getEventKey(event, idx)} event={event} />
             ))
           )}
           <div ref={bottomRef} />

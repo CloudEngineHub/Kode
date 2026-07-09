@@ -23,6 +23,8 @@ type BubbleMessage = {
   blocks?: SdkContentBlock[]
 }
 
+const MARKDOWN_PLUGINS = [remarkGfm]
+
 function isSdkContentBlock(value: unknown): value is SdkContentBlock {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const record = value as Record<string, unknown>
@@ -162,10 +164,16 @@ function renderBlocks(blocks: SdkContentBlock[] | undefined) {
   )
 }
 
-export function MessageBubble(props: { event: AgentEvent }) {
-  const msg = toBubbleMessage(props.event)
-  if (!msg) return null
+export const MessageBubble = React.memo(function MessageBubble(props: {
+  event: AgentEvent
+}) {
+  const msg = React.useMemo(() => toBubbleMessage(props.event), [props.event])
+  const renderedBlocks = React.useMemo(
+    () => renderBlocks(msg?.blocks),
+    [msg?.blocks],
+  )
 
+  if (!msg) return null
   const isUser = msg.role === 'user'
   const bubbleClass = cn(
     'max-w-[min(740px,100%)] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm',
@@ -181,7 +189,7 @@ export function MessageBubble(props: { event: AgentEvent }) {
       <div className="flex w-full max-w-[min(820px,100%)] flex-col gap-2">
         <div className={bubbleClass}>
           {msg.text ? (
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            <ReactMarkdown remarkPlugins={MARKDOWN_PLUGINS}>
               {msg.text}
             </ReactMarkdown>
           ) : (
@@ -197,8 +205,8 @@ export function MessageBubble(props: { event: AgentEvent }) {
             </div>
           )}
         </div>
-        {renderBlocks(msg.blocks)}
+        {renderedBlocks}
       </div>
     </div>
   )
-}
+})
