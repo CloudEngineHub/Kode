@@ -3,6 +3,9 @@ import { Box, Text, render } from 'ink'
 import React from 'react'
 import { PassThrough } from 'node:stream'
 import stripAnsi from 'strip-ansi'
+import PromptInput from '#ui-ink/components/PromptInput'
+import type { PromptMode } from '#ui-ink/components/PromptInput/types'
+import { KeypressProvider } from '#ui-ink/contexts/KeypressContext'
 import { REPLView } from './REPLView'
 import type { TranscriptItem } from './useTranscriptItems'
 
@@ -37,6 +40,8 @@ function renderReplView(args: {
   staticOutputEpoch: number
   staticItems: TranscriptItem[]
   isLoading?: boolean
+  shouldShowPromptInput?: boolean
+  promptInputProps?: React.ComponentProps<typeof PromptInput>
 }) {
   return (
     <REPLView
@@ -61,16 +66,45 @@ function renderReplView(args: {
       unresolvedToolUseIDs={new Set()}
       showingCostDialog={false}
       onCostDialogDone={() => {}}
-      shouldShowPromptInput={false}
+      shouldShowPromptInput={args.shouldShowPromptInput ?? false}
       isMessageSelectorVisible={false}
-      promptInputProps={
-        {} as React.ComponentProps<typeof REPLView>['promptInputProps']
-      }
+      promptInputProps={args.promptInputProps ?? makePromptInputProps()}
       messageSelectorMessages={[]}
       onMessageSelectorSelect={() => {}}
       onMessageSelectorEscape={() => {}}
     />
   )
+}
+
+function makePromptInputProps(
+  overrides: Partial<React.ComponentProps<typeof PromptInput>> = {},
+): React.ComponentProps<typeof PromptInput> {
+  return {
+    commands: [],
+    forkNumber: 0,
+    messageLogName: 'tui',
+    isDisabled: false,
+    isLoading: false,
+    onQuery: async () => {},
+    debug: false,
+    verbose: false,
+    messages: [],
+    setToolJSX: () => {},
+    tools: [],
+    input: '',
+    onInputChange: () => {},
+    mode: 'prompt' as PromptMode,
+    onModeChange: () => {},
+    submitCount: 0,
+    onSubmitCountChange: () => {},
+    setIsLoading: () => {},
+    setAbortController: () => {},
+    onShowMessageSelector: () => {},
+    setForkConvoWithMessagesOnTheNextRender: () => {},
+    readFileTimestamps: {},
+    abortController: null,
+    ...overrides,
+  }
 }
 
 function createHarness(element: React.ReactElement): TestHarness {
@@ -153,5 +187,26 @@ describe('REPLView Static output epoch', () => {
 
     expect(harness.getOutput()).toContain('static-a')
     expect(harness.getOutput()).not.toMatch(/(?:\n\s*){4,}/)
+  })
+
+  test('does not insert a large blank gap between startup output and prompt controls', async () => {
+    const staticItems = [makeStaticItem('welcome', 'Welcome')]
+    const harness = createHarness(
+      <KeypressProvider>
+        {renderReplView({
+          staticOutputEpoch: 0,
+          staticItems,
+          shouldShowPromptInput: true,
+          promptInputProps: makePromptInputProps(),
+        })}
+      </KeypressProvider>,
+    )
+
+    await harness.wait(80)
+
+    const output = harness.getOutput()
+    expect(output).toContain('Welcome')
+    expect(output).toContain('Input:')
+    expect(output).not.toMatch(/Welcome[\s\S]*?(?:\n\s*){6,}[\s\S]*?Input:/)
   })
 })

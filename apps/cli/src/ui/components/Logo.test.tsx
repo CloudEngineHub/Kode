@@ -97,6 +97,7 @@ describe('Logo', () => {
     const output = harness.getOutput()
     const firstLogoLine = ASCII_LOGO.trim().split(/\r?\n/)[0]
 
+    expect(output.trimEnd().startsWith(firstLogoLine)).toBe(true)
     expect(output).toContain(firstLogoLine)
     expect(output).not.toContain('KODE CLI')
   })

@@ -7,6 +7,7 @@ export const MIN_LOGO_WIDTH = 70
 const DEFAULT_TERMINAL_COLUMNS = 80
 const DEFAULT_TERMINAL_ROWS = 24
 const COMPACT_LOGO_MAX_ROWS = 24
+const DISPLAY_ASCII_LOGO = ASCII_LOGO.trimStart()
 
 function normalizeDimension(value: number | undefined, fallback: number) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return fallback
@@ -61,7 +62,7 @@ export function Logo({
             {PRODUCT_NAME.toUpperCase()} CLI
           </Text>
         ) : (
-          <Text color={theme.kode}>{ASCII_LOGO}</Text>
+          <Text color={theme.kode}>{DISPLAY_ASCII_LOGO}</Text>
         )}
       </Box>
 
