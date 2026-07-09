@@ -207,7 +207,7 @@ describe('PromptInputView status line layout', () => {
 
   test('lets priority messages use the full status line', async () => {
     const pasteGuardMessage =
-      'Paste detected. Press Enter again after it appears to submit.'
+      'Paste detected. Added as a placeholder; press Enter to send.'
     const harness = createHarness(
       renderPromptInputView({
         customStatusLineActive: false,

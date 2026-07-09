@@ -19,7 +19,7 @@ export type { Props } from './TextInput.types'
 const BACKSPACE_CODE = 8 // \x08
 const DEL_CODE = 127 // \x7f
 const PASTE_GUARD_MESSAGE =
-  'Paste detected. Press Enter again after it appears to submit.'
+  'Paste detected. Added as a placeholder; press Enter to send.'
 const LEGACY_PASTE_AGGREGATION_DELAY_MS = 75
 
 // Helper to check if input is a backspace character
@@ -156,23 +156,6 @@ export default function TextInput({
     pasteGuardUntilRef.current = Date.now() + 20
   }, [isPasteTrusted])
 
-  const shouldBlockEnter = React.useCallback(
-    (key: Key): boolean => {
-      if (!key.return || key.shift || key.meta) return false
-      if (isPasteTrusted()) return false
-      if (pasteTimeoutRef.current !== null) {
-        showPasteWarning()
-        return true
-      }
-      if (!pasteGuardUntilRef.current) return false
-      if (Date.now() >= pasteGuardUntilRef.current) return false
-      pasteGuardUntilRef.current = 0
-      showPasteWarning()
-      return true
-    },
-    [isPasteTrusted, showPasteWarning],
-  )
-
   React.useEffect(
     () => () => {
       clearPasteWarning()
@@ -185,22 +168,44 @@ export default function TextInput({
     [clearPasteWarning],
   )
 
-  const handleBracketedPasteSequences = useBracketedPasteSequences({
-    insertText: (text: string) => onInput(text, {} as Key),
-    onPaste,
-    terminalColumns: columns,
-  })
-
   const flushAggregatedPaste = React.useCallback(() => {
+    if (pasteTimeoutRef.current) {
+      clearTimeout(pasteTimeoutRef.current)
+      pasteTimeoutRef.current = null
+    }
+    pasteGuardUntilRef.current = 0
     const pastedText = pasteChunksRef.current.join('')
     pasteChunksRef.current = []
-    pasteTimeoutRef.current = null
     if (!pastedText) return
 
     setTimeout(() => {
       onPasteRef.current?.(pastedText)
     }, 0)
   }, [])
+
+  const shouldBlockEnter = React.useCallback(
+    (key: Key): boolean => {
+      if (!key.return || key.shift || key.meta) return false
+      if (isPasteTrusted()) return false
+      if (pasteTimeoutRef.current !== null) {
+        flushAggregatedPaste()
+        showPasteWarning()
+        return true
+      }
+      if (!pasteGuardUntilRef.current) return false
+      if (Date.now() >= pasteGuardUntilRef.current) return false
+      pasteGuardUntilRef.current = 0
+      showPasteWarning()
+      return true
+    },
+    [flushAggregatedPaste, isPasteTrusted, showPasteWarning],
+  )
+
+  const handleBracketedPasteSequences = useBracketedPasteSequences({
+    insertText: (text: string) => onInput(text, {} as Key),
+    onPaste,
+    terminalColumns: columns,
+  })
 
   const resetPasteTimeout = React.useCallback(() => {
     if (pasteTimeoutRef.current) {
@@ -214,6 +219,9 @@ export default function TextInput({
 
   const wrappedOnInput = (input: string, key: Key): void => {
     if (key.name === PASTE_PROTECTION_RETURN_KEY_NAME) {
+      if (pasteTimeoutRef.current !== null) {
+        flushAggregatedPaste()
+      }
       showPasteWarning()
       return
     }

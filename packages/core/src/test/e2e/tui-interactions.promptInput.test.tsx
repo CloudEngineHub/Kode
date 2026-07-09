@@ -659,7 +659,7 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
 
     const guardedOutput = h.getOutput()
     expect(guardedOutput).toContain(
-      'Paste detected. Press Enter again after it appears to submit.',
+      'Paste detected. Added as a placeholder; press Enter to send.',
     )
     expect(guardedOutput).not.toContain('SUBMIT_COUNT:1')
     expect(guardedOutput).not.toContain('RAW:"\\n')
