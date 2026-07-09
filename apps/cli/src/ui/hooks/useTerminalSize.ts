@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Writable } from 'node:stream'
 import { normalizeTerminalDimension } from '#ui-ink/primitives/layout/viewportRows'
 
-type TerminalSize = { columns: number; rows: number }
+export type TerminalSize = { columns: number; rows: number }
 
 type StreamState = {
   size: TerminalSize
@@ -14,11 +14,21 @@ type StreamState = {
 
 const streamStates = new WeakMap<Writable, StreamState>()
 
-function readSize(stream: { columns?: number; rows?: number }): TerminalSize {
+export function readTerminalSize(stream: {
+  columns?: number
+  rows?: number
+}): TerminalSize {
   return {
     columns: normalizeTerminalDimension(stream.columns, 80),
     rows: normalizeTerminalDimension(stream.rows, 24),
   }
+}
+
+export function areTerminalSizesEqual(
+  previous: TerminalSize,
+  next: TerminalSize,
+): boolean {
+  return previous.columns === next.columns && previous.rows === next.rows
 }
 
 function getStreamState(stream: Writable): StreamState {
@@ -26,10 +36,13 @@ function getStreamState(stream: Writable): StreamState {
   if (existing) return existing
 
   const state: StreamState = {
-    size: readSize(stream as { columns?: number; rows?: number }),
+    size: readTerminalSize(stream as { columns?: number; rows?: number }),
     listeners: new Set(),
     onResize: () => {
-      const next = readSize(stream as { columns?: number; rows?: number })
+      const next = readTerminalSize(
+        stream as { columns?: number; rows?: number },
+      )
+      if (areTerminalSizesEqual(state.size, next)) return
       state.size = next
       state.listeners.forEach(listener => listener(next))
     },
@@ -53,7 +66,9 @@ export function useTerminalSize(): TerminalSize {
   const [size, setSize] = useState<TerminalSize>(() => state.size)
   const sizeRef = useRef(size)
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const streamSize = readSize(stream as { columns?: number; rows?: number })
+  const streamSize = readTerminalSize(
+    stream as { columns?: number; rows?: number },
+  )
   const effectiveSize =
     streamSize.columns < size.columns || streamSize.rows < size.rows
       ? streamSize
@@ -64,7 +79,7 @@ export function useTerminalSize(): TerminalSize {
     const streamState = getStreamState(stream)
     const commitSize = (next: TerminalSize) => {
       setSize(previous => {
-        if (previous.columns === next.columns && previous.rows === next.rows) {
+        if (areTerminalSizesEqual(previous, next)) {
           return previous
         }
         sizeRef.current = next
