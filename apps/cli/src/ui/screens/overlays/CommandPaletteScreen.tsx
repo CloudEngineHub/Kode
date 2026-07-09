@@ -203,11 +203,11 @@ export function CommandPaletteScreen({
         )
         return true
       }
-      if (key.home || (key.ctrl && inputChar === 'a')) {
+      if (key.home) {
         setFocusedIndex(0)
         return true
       }
-      if (key.end || (key.ctrl && inputChar === 'e')) {
+      if (key.end) {
         setFocusedIndex(filtered.length - 1)
         return true
       }

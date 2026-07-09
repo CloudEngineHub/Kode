@@ -6,6 +6,7 @@ import { ModelPickerScreen } from '#ui-ink/screens/overlays/ModelPickerScreen'
 import { ThinkingToggleScreen } from '#ui-ink/screens/overlays/ThinkingToggleScreen'
 import { WorkTasksScreen } from '#ui-ink/screens/overlays/WorkTasksScreen'
 import { TranscriptScreen } from '#ui-ink/screens/overlays/TranscriptScreen'
+import { CommandPaletteScreen } from '#ui-ink/screens/overlays/CommandPaletteScreen'
 import { createInkHarnessManager, createInkTestHarness } from './inkTestHarness'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -153,6 +154,35 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
     } finally {
       mock.restore()
     }
+  })
+
+  test('CommandPaletteScreen: Ctrl+A and Ctrl+E stay inside the filter input', async () => {
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <CommandPaletteScreen onDone={() => {}} />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(100)
+    h.stdin.write('open')
+    await h.wait(50)
+
+    h.clearOutput()
+    h.stdin.write('\x01')
+    h.stdin.write('help')
+    await h.wait(50)
+
+    expect(h.getOutput()).toContain('helpopen')
+    expect(h.getOutput()).not.toContain('openhelp')
+
+    h.clearOutput()
+    h.stdin.write('\x05')
+    h.stdin.write('x')
+    await h.wait(50)
+
+    expect(h.getOutput()).toContain('helpopenx')
+    expect(h.getOutput()).not.toContain('helpxopen')
   })
 
   test('LogList: Enter returns selected log JSON through callback', async () => {
