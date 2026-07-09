@@ -127,7 +127,7 @@ export function REPLView({
   if (shouldPrintStartupHeaderStatically && startupHeader) {
     const key = `startup:${startupHeaderKey ?? 'startup'}`
     const current = startupHeaderStaticItemRef.current
-    if (current?.epoch !== staticOutputEpoch || current.item.key !== key) {
+    if (!current || current.epoch !== staticOutputEpoch) {
       startupHeaderStaticItemRef.current = {
         epoch: staticOutputEpoch,
         item: {

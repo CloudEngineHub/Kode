@@ -263,6 +263,37 @@ describe('REPLView Static output epoch', () => {
     expect(harness.getOutput()).not.toContain('KODE CLI')
   })
 
+  test('does not reprint the startup header when its identity changes in the same epoch', async () => {
+    const harness = createHarness(
+      renderReplView({
+        staticOutputEpoch: 0,
+        staticItems: [],
+        startupHeader: <Text>Header A</Text>,
+        startupHeaderKey: 'header-a',
+        showStartupHeader: true,
+      }),
+    )
+
+    await harness.wait(20)
+    expect(harness.getOutput()).toContain('Header A')
+
+    harness.clearOutput()
+    harness.rerender(
+      renderReplView({
+        staticOutputEpoch: 0,
+        staticItems: [],
+        startupHeader: <Text>Header B</Text>,
+        startupHeaderKey: 'header-b',
+        showStartupHeader: true,
+      }),
+    )
+    await harness.wait(20)
+
+    const output = harness.getOutput()
+    expect(output).not.toContain('Header A')
+    expect(output).not.toContain('Header B')
+  })
+
   test('does not reprint the same startup header when the terminal resizes', async () => {
     const harness = createHarness(
       renderReplView({
