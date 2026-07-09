@@ -4,10 +4,10 @@ import { readFileSync, writeFileSync } from 'node:fs'
 
 import {
   makeSdkInitMessage,
+  makeSdkResultMessage,
   kodeMessageToSdkMessage,
 } from '#protocol/utils/kodeAgentStreamJson'
 import { isUuid } from '@kode/core/utils/uuid'
-import { loadToolPermissionContextFromDisk } from '@kode/core/utils/permissions/toolPermissionSettings'
 import { setCwd, setOriginalCwd } from '@kode/core/utils/state'
 import { grantReadPermissionForOriginalDir } from '@kode/core/utils/permissions/filesystem'
 import type { WrappedClient } from '@kode/core/mcp/client'
@@ -22,19 +22,24 @@ import {
 import type { Tool, ToolUseContext } from '@kode/core/tooling/Tool'
 import { resolveToolDescription } from '@kode/core/tooling/Tool'
 
-import {
-  sendSessionList,
-  loadSessionMessages,
-} from '../handlers/session.handler'
+import { sendSessionList } from '../handlers/session.handler'
 import { handleChatPrompt } from '../handlers/chat.handler'
 import { parseClientWsMessage, sendJson, log } from './events'
-import type { DaemonSession, InflightPermissionDecision } from './types'
+import type { DaemonClient, DaemonSession } from './types'
+import {
+  denyAllPermissionRequests,
+  denyPermissionRequestsOwnedBy,
+  resolvePermissionRequest,
+  waitForPermissionDecision,
+} from './permissionRequests'
 import {
   addSessionClient,
   broadcastSessionJson,
   removeSessionClient,
 } from './sessionBroadcaster'
 import { resolveInProjectRoot, toGitPath } from '../server/pathSecurity'
+import type { SessionRegistry } from '../sessionRegistry'
+import type { DaemonTurnGate } from '../turnGate'
 
 type WsWithSession = WebSocket & {
   data: { session: DaemonSession; replayHistory: boolean }
@@ -99,7 +104,6 @@ function broadcastSessionList(session: DaemonSession) {
 }
 
 function replaySessionHistory(ws: WsWithSession, session: DaemonSession) {
-  if (session.messages.length === 0) return
   sendJson(ws, { type: 'history_begin', sessionId: session.sessionId })
   for (const m of session.messages) {
     const sdk = kodeMessageToSdkMessage(m, session.sessionId)
@@ -108,42 +112,59 @@ function replaySessionHistory(ws: WsWithSession, session: DaemonSession) {
   sendJson(ws, { type: 'history_end', sessionId: session.sessionId })
 }
 
-function denyInflightPermissions(session: DaemonSession, message: string) {
-  for (const resolve of session.inflightPermissionRequests.values()) {
-    try {
-      resolve({
-        decision: 'deny',
-        rejectionMessage: message,
-        updatedInput: null,
-      })
-    } catch {}
+function makeTurnState(session: DaemonSession) {
+  return {
+    type: 'turn_state' as const,
+    session_id: session.sessionId,
+    state: session.turnInFlight ? ('running' as const) : ('idle' as const),
   }
-  session.inflightPermissionRequests.clear()
+}
+
+function moveClientToSession(
+  ws: WsWithSession,
+  nextSession: DaemonSession,
+): void {
+  const previousSession = ws.data.session
+  if (previousSession === nextSession) return
+
+  removeSessionClient(previousSession, ws)
+  denyPermissionRequestsOwnedBy(previousSession, ws, 'Disconnected')
+  if (previousSession.clients.size === 0) {
+    denyAllPermissionRequests(previousSession, 'Disconnected')
+  }
+  ws.data.session = nextSession
+  addSessionClient(nextSession, ws)
 }
 
 export function createWebSocketHandlers(args: {
-  sessions: Map<string, DaemonSession>
+  sessionRegistry: SessionRegistry
+  turnGate: DaemonTurnGate
   toolNames: string[]
   slashCommands: string[]
   commands: unknown[]
   tools: Tool[]
   echo: boolean
+  echoDelayMs: number
   mcpClients: WrappedClient[]
+  promptHandler?: typeof handleChatPrompt
 }) {
   const bashTool = args.tools.find(t => t.name === 'Bash') ?? null
+  const promptHandler = args.promptHandler ?? handleChatPrompt
+  const activeOperationOwners = new Map<DaemonSession, DaemonClient>()
 
   const requestToolPermission = async (params: {
     ws: WsWithSession
     session: DaemonSession
     tool: Tool
     input: Record<string, unknown>
+    abortController: AbortController
   }): Promise<
     { ok: true } | { ok: false; message: string; shouldPromptUser?: boolean }
   > => {
     const toolUseContext: ToolUseContext = {
       agentId: 'main',
       messageId: undefined,
-      abortController: new AbortController(),
+      abortController: params.abortController,
       readFileTimestamps: params.session.readFileTimestamps,
       options: {
         safeMode: false,
@@ -160,6 +181,9 @@ export function createWebSocketHandlers(args: {
       toolUseContext,
       assistantMessage,
     )
+    if (params.abortController.signal.aborted) {
+      return { ok: false, message: REJECT_MESSAGE, shouldPromptUser: false }
+    }
     if (base.result === true) return { ok: true }
 
     if (base.shouldPromptUser === false) {
@@ -180,6 +204,9 @@ export function createWebSocketHandlers(args: {
       params.tool,
       params.input as never,
     )
+    if (params.abortController.signal.aborted) {
+      return { ok: false, message: REJECT_MESSAGE, shouldPromptUser: false }
+    }
 
     const request: PermissionRequest = {
       type: 'permission_request',
@@ -188,11 +215,17 @@ export function createWebSocketHandlers(args: {
       tool_description: toolDescription,
       input: params.input,
     }
-    sendJson(params.ws, request)
-
-    const decision = await new Promise<InflightPermissionDecision>(resolve => {
-      params.session.inflightPermissionRequests.set(requestId, resolve)
+    const decision = await waitForPermissionDecision({
+      session: params.session,
+      requestId,
+      owner: params.ws,
+      signal: toolUseContext.abortController.signal,
+      sendRequest: () => sendJson(params.ws, request),
     })
+
+    if (params.abortController.signal.aborted) {
+      return { ok: false, message: REJECT_MESSAGE, shouldPromptUser: false }
+    }
 
     if (decision.updatedInput && typeof decision.updatedInput === 'object') {
       Object.assign(params.input, decision.updatedInput)
@@ -215,6 +248,37 @@ export function createWebSocketHandlers(args: {
     return { ok: true }
   }
 
+  const runExclusiveWorkspaceOperation = async (params: {
+    session: DaemonSession
+    owner: DaemonClient
+    onBusy: () => void
+    operation: (abortController: AbortController) => void | Promise<void>
+  }): Promise<void> => {
+    const lease = args.turnGate.tryAcquire(params.session)
+    if (!lease) {
+      params.onBusy()
+      return
+    }
+    const abortController = new AbortController()
+    params.session.activeAbortController = abortController
+    activeOperationOwners.set(params.session, params.owner)
+    try {
+      await params.operation(abortController)
+    } finally {
+      try {
+        abortController.abort()
+      } catch {}
+      if (params.session.activeAbortController === abortController) {
+        params.session.activeAbortController = null
+      }
+      if (activeOperationOwners.get(params.session) === params.owner) {
+        activeOperationOwners.delete(params.session)
+      }
+      lease.release()
+      args.sessionRegistry.evictIdleSessions()
+    }
+  }
+
   return {
     open(ws: WsWithSession) {
       const session = ws.data.session
@@ -229,6 +293,7 @@ export function createWebSocketHandlers(args: {
         }),
       )
       if (ws.data.replayHistory) replaySessionHistory(ws, session)
+      sendJson(ws, makeTurnState(session))
       sendSessionListToClient(ws, session)
     },
 
@@ -246,18 +311,13 @@ export function createWebSocketHandlers(args: {
         try {
           session.activeAbortController?.abort()
         } catch {}
-        denyInflightPermissions(session, 'Cancelled')
+        denyAllPermissionRequests(session, 'Cancelled')
         return
       }
 
       if (payload.type === 'permission_response') {
-        const resolve = session.inflightPermissionRequests.get(
-          payload.requestId,
-        )
-        if (!resolve) return
-        session.inflightPermissionRequests.delete(payload.requestId)
         try {
-          resolve({
+          resolvePermissionRequest(session, payload.requestId, ws, {
             decision: payload.decision,
             updatedInput: payload.updatedInput,
             rejectionMessage: payload.rejectionMessage,
@@ -272,186 +332,242 @@ export function createWebSocketHandlers(args: {
       }
 
       if (payload.type === 'new_session') {
-        try {
-          session.activeAbortController?.abort()
-        } catch {}
-        denyInflightPermissions(session, 'Cancelled')
-
-        session.messages = []
-        session.readFileTimestamps = {}
-        session.responseState = {}
-        session.activeAbortController = null
-
-        session.toolPermissionContext = loadToolPermissionContextFromDisk({
-          projectDir: session.cwd,
-          includeKodeProjectConfig: true,
-          isBypassPermissionsModeAvailable: true,
-        })
-
-        const nextId = crypto.randomUUID()
-        args.sessions.delete(session.sessionId)
-        session.sessionId = nextId
-        args.sessions.set(session.sessionId, session)
-
-        broadcastSessionJson(
-          session,
+        if (session.turnInFlight) {
+          sendJson(
+            ws,
+            log('error', 'Cannot switch sessions during an active turn'),
+          )
+          return
+        }
+        const nextSession = args.sessionRegistry.create(session.cwd)
+        moveClientToSession(ws, nextSession)
+        args.sessionRegistry.evictIdleSessions()
+        sendJson(
+          ws,
           makeSdkInitMessage({
-            sessionId: session.sessionId,
-            cwd: session.cwd,
+            sessionId: nextSession.sessionId,
+            cwd: nextSession.cwd,
             tools: args.toolNames,
             slashCommands: args.slashCommands,
           }),
         )
-        broadcastSessionList(session)
+        replaySessionHistory(ws, nextSession)
+        sendJson(ws, makeTurnState(nextSession))
+        sendSessionListToClient(ws, nextSession)
         return
       }
 
       if (payload.type === 'resume') {
+        if (session.turnInFlight) {
+          sendJson(
+            ws,
+            log('error', 'Cannot switch sessions during an active turn'),
+          )
+          return
+        }
         if (!isUuid(payload.sessionId)) {
           sendJson(ws, log('error', 'Invalid session_id'))
           return
         }
 
-        try {
-          const loaded = loadSessionMessages({
-            cwd: session.cwd,
-            sessionId: payload.sessionId,
-          })
-
-          session.messages = loaded
-          session.readFileTimestamps = {}
-          session.responseState = {}
-          try {
-            session.activeAbortController?.abort()
-          } catch {}
-          session.activeAbortController = null
-
-          args.sessions.delete(session.sessionId)
-          session.sessionId = payload.sessionId
-          args.sessions.set(session.sessionId, session)
-
-          broadcastSessionJson(
-            session,
-            makeSdkInitMessage({
-              sessionId: session.sessionId,
-              cwd: session.cwd,
-              tools: args.toolNames,
-              slashCommands: args.slashCommands,
-            }),
-          )
-
-          broadcastSessionJson(session, {
-            type: 'history_begin',
-            sessionId: session.sessionId,
-          })
-          for (const m of loaded) {
-            const sdk = kodeMessageToSdkMessage(m, session.sessionId)
-            if (sdk) broadcastSessionJson(session, sdk)
-          }
-          broadcastSessionJson(session, {
-            type: 'history_end',
-            sessionId: session.sessionId,
-          })
-
-          broadcastSessionList(session)
-        } catch (err) {
+        const found = args.sessionRegistry.getOrLoad({
+          cwd: session.cwd,
+          sessionId: payload.sessionId,
+        })
+        if (found.ok === false) {
           sendJson(
             ws,
-            log('error', err instanceof Error ? err.message : String(err)),
+            log(
+              'error',
+              found.reason === 'cwd_mismatch'
+                ? 'Session workspace mismatch'
+                : `Session not found: ${payload.sessionId}`,
+            ),
           )
+          return
         }
+        moveClientToSession(ws, found.session)
+        args.sessionRegistry.evictIdleSessions()
+        sendJson(
+          ws,
+          makeSdkInitMessage({
+            sessionId: found.session.sessionId,
+            cwd: found.session.cwd,
+            tools: args.toolNames,
+            slashCommands: args.slashCommands,
+          }),
+        )
+        replaySessionHistory(ws, found.session)
+        sendJson(ws, makeTurnState(found.session))
+        sendSessionListToClient(ws, found.session)
         return
       }
 
       if (payload.type === 'prompt') {
-        if (session.activeAbortController) {
-          sendJson(ws, log('error', 'Session already has an active prompt'))
+        const turnLease = args.turnGate.tryAcquire(session)
+        if (!turnLease) {
+          sendJson(
+            ws,
+            makeSdkResultMessage({
+              sessionId: session.sessionId,
+              result: 'Another turn is already active',
+              numTurns: 0,
+              totalCostUsd: 0,
+              durationMs: 0,
+              durationApiMs: 0,
+              isError: true,
+            }),
+          )
           return
         }
+        broadcastSessionJson(session, makeTurnState(session))
 
         const wsSend = (outgoing: unknown) =>
           broadcastSessionJson(session, outgoing)
 
         try {
-          await handleChatPrompt({
+          await promptHandler({
             wsSend,
             session,
             prompt: payload.prompt,
             echo: args.echo,
+            echoDelayMs: args.echoDelayMs,
             commands: args.commands,
             tools: args.tools,
             toolNames: args.toolNames,
             slashCommands: args.slashCommands,
             mcpClients: args.mcpClients,
           })
+        } catch (err) {
+          session.activeAbortController = null
+          denyAllPermissionRequests(session, 'Turn failed')
+          wsSend(
+            makeSdkResultMessage({
+              sessionId: session.sessionId,
+              result: err instanceof Error ? err.message : String(err),
+              numTurns: 0,
+              totalCostUsd: 0,
+              durationMs: 0,
+              durationApiMs: 0,
+              isError: true,
+            }),
+          )
         } finally {
+          turnLease.release()
+          args.sessionRegistry.evictIdleSessions()
+          broadcastSessionJson(session, makeTurnState(session))
           broadcastSessionList(session)
         }
       }
 
       if (payload.type === 'fs_read') {
-        try {
-          setOriginalCwd(session.cwd)
-          await setCwd(session.cwd)
-          grantReadPermissionForOriginalDir()
+        await runExclusiveWorkspaceOperation({
+          session,
+          owner: ws,
+          onBusy: () =>
+            sendJson(ws, log('error', 'Workspace is busy with an active turn')),
+          operation: async abortController => {
+            try {
+              setOriginalCwd(session.cwd)
+              await setCwd(session.cwd)
+              if (abortController.signal.aborted) {
+                sendJson(ws, log('info', 'Operation cancelled'))
+                return
+              }
+              grantReadPermissionForOriginalDir()
 
-          const abs = resolveInProjectRoot(session.cwd, payload.path)
-          const content = readFileSync(abs, 'utf8')
-          sendJson(ws, {
-            type: 'fs_read_result',
-            ok: true,
-            path: payload.path,
-            content,
-          })
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err)
-          sendJson(ws, log('error', msg))
-        }
+              const abs = resolveInProjectRoot(session.cwd, payload.path)
+              const content = readFileSync(abs, 'utf8')
+              sendJson(ws, {
+                type: 'fs_read_result',
+                ok: true,
+                path: payload.path,
+                content,
+              })
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err)
+              sendJson(ws, log('error', msg))
+            }
+          },
+        })
         return
       }
 
       if (payload.type === 'fs_write') {
-        try {
-          setOriginalCwd(session.cwd)
-          await setCwd(session.cwd)
-          grantReadPermissionForOriginalDir()
+        await runExclusiveWorkspaceOperation({
+          session,
+          owner: ws,
+          onBusy: () =>
+            sendJson(ws, {
+              type: 'fs_write_result',
+              ok: false,
+              path: payload.path,
+              message: 'Workspace is busy with an active turn',
+            }),
+          operation: async abortController => {
+            try {
+              setOriginalCwd(session.cwd)
+              await setCwd(session.cwd)
+              if (abortController.signal.aborted) {
+                sendJson(ws, {
+                  type: 'fs_write_result',
+                  ok: false,
+                  path: payload.path,
+                  message: 'Operation cancelled',
+                })
+                return
+              }
+              grantReadPermissionForOriginalDir()
 
-          const abs = resolveInProjectRoot(session.cwd, payload.path)
+              const abs = resolveInProjectRoot(session.cwd, payload.path)
 
-          const writeTool = args.tools.find(t => t.name === 'Write') ?? null
-          if (writeTool) {
-            const permission = await requestToolPermission({
-              ws,
-              session,
-              tool: writeTool,
-              input: { file_path: abs, content: payload.content },
-            })
-            if (permission.ok === false) {
+              const writeTool = args.tools.find(t => t.name === 'Write') ?? null
+              if (writeTool) {
+                const permission = await requestToolPermission({
+                  ws,
+                  session,
+                  tool: writeTool,
+                  input: { file_path: abs, content: payload.content },
+                  abortController,
+                })
+                if (permission.ok === false) {
+                  sendJson(ws, {
+                    type: 'fs_write_result',
+                    ok: false,
+                    path: payload.path,
+                    message: permission.message,
+                  })
+                  return
+                }
+              }
+
+              if (abortController.signal.aborted) {
+                sendJson(ws, {
+                  type: 'fs_write_result',
+                  ok: false,
+                  path: payload.path,
+                  message: 'Operation cancelled',
+                })
+                return
+              }
+
+              writeFileSync(abs, payload.content, { encoding: 'utf8' })
+              sendJson(ws, {
+                type: 'fs_write_result',
+                ok: true,
+                path: payload.path,
+              })
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err)
               sendJson(ws, {
                 type: 'fs_write_result',
                 ok: false,
                 path: payload.path,
-                message: permission.message,
+                message: msg,
               })
-              return
             }
-          }
-
-          writeFileSync(abs, payload.content, { encoding: 'utf8' })
-          sendJson(ws, {
-            type: 'fs_write_result',
-            ok: true,
-            path: payload.path,
-          })
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err)
-          sendJson(ws, {
-            type: 'fs_write_result',
-            ok: false,
-            path: payload.path,
-            message: msg,
-          })
-        }
+          },
+        })
         return
       }
 
@@ -470,56 +586,80 @@ export function createWebSocketHandlers(args: {
       }
 
       if (payload.type === 'git_checkout') {
-        if (!bashTool) {
-          sendJson(ws, {
-            type: 'git_checkout_result',
-            ok: false,
-            message: 'Bash tool unavailable',
-          })
-          return
-        }
-
-        const checkoutCommand = `git checkout ${JSON.stringify(payload.branch)}`
-        const builtinOutcome = runBuiltinPreToolUseGuards({
-          toolName: 'Bash',
-          toolInput: { command: checkoutCommand },
-          cwd: session.cwd,
-        })
-        if (builtinOutcome?.kind === 'block') {
-          sendJson(ws, {
-            type: 'git_checkout_result',
-            ok: false,
-            message: builtinOutcome.message,
-          })
-          return
-        }
-
-        const commandInput = { command: checkoutCommand }
-        const permission = await requestToolPermission({
-          ws,
+        await runExclusiveWorkspaceOperation({
           session,
-          tool: bashTool,
-          input: commandInput,
-        })
-        if (permission.ok === false) {
-          sendJson(ws, {
-            type: 'git_checkout_result',
-            ok: false,
-            message: permission.message,
-          })
-          return
-        }
+          owner: ws,
+          onBusy: () =>
+            sendJson(ws, {
+              type: 'git_checkout_result',
+              ok: false,
+              message: 'Workspace is busy with an active turn',
+            }),
+          operation: async abortController => {
+            if (!bashTool) {
+              sendJson(ws, {
+                type: 'git_checkout_result',
+                ok: false,
+                message: 'Bash tool unavailable',
+              })
+              return
+            }
 
-        const res = runGit(['checkout', payload.branch], session.cwd)
-        if (res.ok === false) {
-          sendJson(ws, {
-            type: 'git_checkout_result',
-            ok: false,
-            message: res.error,
-          })
-          return
-        }
-        sendJson(ws, { type: 'git_checkout_result', ok: true })
+            const checkoutCommand = `git checkout ${JSON.stringify(payload.branch)}`
+            const builtinOutcome = runBuiltinPreToolUseGuards({
+              toolName: 'Bash',
+              toolInput: { command: checkoutCommand },
+              cwd: session.cwd,
+            })
+            if (builtinOutcome?.kind === 'block') {
+              sendJson(ws, {
+                type: 'git_checkout_result',
+                ok: false,
+                message: builtinOutcome.message,
+              })
+              return
+            }
+
+            const commandInput = { command: checkoutCommand }
+            const permission = await requestToolPermission({
+              ws,
+              session,
+              tool: bashTool,
+              input: commandInput,
+              abortController,
+            })
+            if (permission.ok === false) {
+              sendJson(ws, {
+                type: 'git_checkout_result',
+                ok: false,
+                message: abortController.signal.aborted
+                  ? 'Operation cancelled'
+                  : permission.message,
+              })
+              return
+            }
+
+            if (abortController.signal.aborted) {
+              sendJson(ws, {
+                type: 'git_checkout_result',
+                ok: false,
+                message: 'Operation cancelled',
+              })
+              return
+            }
+
+            const res = runGit(['checkout', payload.branch], session.cwd)
+            if (res.ok === false) {
+              sendJson(ws, {
+                type: 'git_checkout_result',
+                ok: false,
+                message: res.error,
+              })
+              return
+            }
+            sendJson(ws, { type: 'git_checkout_result', ok: true })
+          },
+        })
         return
       }
 
@@ -592,107 +732,168 @@ export function createWebSocketHandlers(args: {
       }
 
       if (payload.type === 'git_stage') {
-        if (!bashTool) {
-          sendJson(ws, {
-            type: 'git_action_result',
-            ok: false,
-            action: 'stage',
-            message: 'Bash tool unavailable',
-          })
-          return
-        }
-
-        let relPath: string
-        try {
-          relPath = toGitPath(session.cwd, payload.path)
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err)
-          sendJson(ws, {
-            type: 'git_action_result',
-            ok: false,
-            action: 'stage',
-            message: msg,
-          })
-          return
-        }
-
-        const permission = await requestToolPermission({
-          ws,
+        await runExclusiveWorkspaceOperation({
           session,
-          tool: bashTool,
-          input: { command: `git add -- ${JSON.stringify(relPath)}` },
-        })
-        if (permission.ok === false) {
-          sendJson(ws, {
-            type: 'git_action_result',
-            ok: false,
-            action: 'stage',
-            message: permission.message,
-          })
-          return
-        }
+          owner: ws,
+          onBusy: () =>
+            sendJson(ws, {
+              type: 'git_action_result',
+              ok: false,
+              action: 'stage',
+              message: 'Workspace is busy with an active turn',
+            }),
+          operation: async abortController => {
+            if (!bashTool) {
+              sendJson(ws, {
+                type: 'git_action_result',
+                ok: false,
+                action: 'stage',
+                message: 'Bash tool unavailable',
+              })
+              return
+            }
 
-        const res = runGit(['add', '--', relPath], session.cwd)
-        if (res.ok === false) {
-          sendJson(ws, {
-            type: 'git_action_result',
-            ok: false,
-            action: 'stage',
-            message: res.error,
-          })
-          return
-        }
-        sendJson(ws, { type: 'git_action_result', ok: true, action: 'stage' })
+            let relPath: string
+            try {
+              relPath = toGitPath(session.cwd, payload.path)
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err)
+              sendJson(ws, {
+                type: 'git_action_result',
+                ok: false,
+                action: 'stage',
+                message: msg,
+              })
+              return
+            }
+
+            const permission = await requestToolPermission({
+              ws,
+              session,
+              tool: bashTool,
+              input: { command: `git add -- ${JSON.stringify(relPath)}` },
+              abortController,
+            })
+            if (permission.ok === false) {
+              sendJson(ws, {
+                type: 'git_action_result',
+                ok: false,
+                action: 'stage',
+                message: abortController.signal.aborted
+                  ? 'Operation cancelled'
+                  : permission.message,
+              })
+              return
+            }
+
+            if (abortController.signal.aborted) {
+              sendJson(ws, {
+                type: 'git_action_result',
+                ok: false,
+                action: 'stage',
+                message: 'Operation cancelled',
+              })
+              return
+            }
+
+            const res = runGit(['add', '--', relPath], session.cwd)
+            if (res.ok === false) {
+              sendJson(ws, {
+                type: 'git_action_result',
+                ok: false,
+                action: 'stage',
+                message: res.error,
+              })
+              return
+            }
+            sendJson(ws, {
+              type: 'git_action_result',
+              ok: true,
+              action: 'stage',
+            })
+          },
+        })
         return
       }
 
       if (payload.type === 'git_commit') {
-        if (!bashTool) {
-          sendJson(ws, {
-            type: 'git_commit_result',
-            ok: false,
-            message: 'Bash tool unavailable',
-          })
-          return
-        }
-
-        const permission = await requestToolPermission({
-          ws,
+        await runExclusiveWorkspaceOperation({
           session,
-          tool: bashTool,
-          input: {
-            command: `git commit -m ${JSON.stringify(payload.message)}`,
+          owner: ws,
+          onBusy: () =>
+            sendJson(ws, {
+              type: 'git_commit_result',
+              ok: false,
+              message: 'Workspace is busy with an active turn',
+            }),
+          operation: async abortController => {
+            if (!bashTool) {
+              sendJson(ws, {
+                type: 'git_commit_result',
+                ok: false,
+                message: 'Bash tool unavailable',
+              })
+              return
+            }
+
+            const permission = await requestToolPermission({
+              ws,
+              session,
+              tool: bashTool,
+              input: {
+                command: `git commit -m ${JSON.stringify(payload.message)}`,
+              },
+              abortController,
+            })
+            if (permission.ok === false) {
+              sendJson(ws, {
+                type: 'git_commit_result',
+                ok: false,
+                message: abortController.signal.aborted
+                  ? 'Operation cancelled'
+                  : permission.message,
+              })
+              return
+            }
+
+            if (abortController.signal.aborted) {
+              sendJson(ws, {
+                type: 'git_commit_result',
+                ok: false,
+                message: 'Operation cancelled',
+              })
+              return
+            }
+
+            const res = runGit(['commit', '-m', payload.message], session.cwd)
+            if (res.ok === false) {
+              sendJson(ws, {
+                type: 'git_commit_result',
+                ok: false,
+                message: res.error,
+              })
+              return
+            }
+            sendJson(ws, { type: 'git_commit_result', ok: true })
           },
         })
-        if (permission.ok === false) {
-          sendJson(ws, {
-            type: 'git_commit_result',
-            ok: false,
-            message: permission.message,
-          })
-          return
-        }
-
-        const res = runGit(['commit', '-m', payload.message], session.cwd)
-        if (res.ok === false) {
-          sendJson(ws, {
-            type: 'git_commit_result',
-            ok: false,
-            message: res.error,
-          })
-          return
-        }
-        sendJson(ws, { type: 'git_commit_result', ok: true })
         return
       }
     },
 
     close(ws: WsWithSession) {
       const session = ws.data.session
-      removeSessionClient(session, ws)
-      if (session.clients.size === 0) {
-        denyInflightPermissions(session, 'Disconnected')
+      if (activeOperationOwners.get(session) === ws) {
+        try {
+          session.activeAbortController?.abort()
+        } catch {}
       }
+      removeSessionClient(session, ws)
+      denyPermissionRequestsOwnedBy(session, ws, 'Disconnected')
+      if (session.clients.size === 0) {
+        denyAllPermissionRequests(session, 'Disconnected')
+      }
+      args.sessionRegistry.evictIdleSessions()
     },
   }
 }

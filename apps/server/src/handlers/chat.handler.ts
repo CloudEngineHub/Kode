@@ -4,6 +4,8 @@ import { randomUUID } from 'node:crypto'
 import {
   createUserMessage,
   createAssistantMessage,
+  INTERRUPT_MESSAGE,
+  INTERRUPT_MESSAGE_FOR_TOOL_USE,
   REJECT_MESSAGE,
   REJECT_MESSAGE_WITH_FEEDBACK_PREFIX,
 } from '@kode/core/utils/messages'
@@ -20,6 +22,7 @@ import {
 } from '#protocol/utils/kodeAgentStreamJson'
 import { setSessionId } from '@kode/core/utils/sessionId'
 import { setKodeAgentSessionForkInfo } from '#protocol/utils/kodeAgentSessionForkInfo'
+import { appendSessionJsonlFromMessage } from '#protocol/utils/kodeAgentSessionLog'
 import { setCwd, setOriginalCwd } from '@kode/core/utils/state'
 import { grantReadPermissionForOriginalDir } from '@kode/core/utils/permissions/filesystem'
 import {
@@ -27,8 +30,8 @@ import {
   type Tool,
   type ToolUseContext,
 } from '@kode/core/tooling/Tool'
-import type { InflightPermissionDecision } from '../ws/types'
 import type { DaemonSession } from '../ws/types'
+import { waitForPermissionDecision } from '../ws/permissionRequests'
 import type { WrappedClient } from '@kode/core/mcp/client'
 
 type WsSend = (payload: unknown) => void
@@ -60,227 +63,317 @@ function shouldForwardStreamEvent(event: unknown): boolean {
   return isRecord(event) && event.type === 'mcp_progress'
 }
 
+async function waitForDelayOrAbort(
+  delayMs: number,
+  signal: AbortSignal,
+): Promise<void> {
+  if (delayMs <= 0 || signal.aborted) return
+
+  await new Promise<void>(resolve => {
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const finish = () => {
+      if (timer) clearTimeout(timer)
+      signal.removeEventListener('abort', finish)
+      resolve()
+    }
+    timer = setTimeout(finish, delayMs)
+    signal.addEventListener('abort', finish, { once: true })
+  })
+}
+
 export async function handleChatPrompt(args: {
   wsSend: WsSend
   session: DaemonSession
   prompt: string
   echo: boolean
+  echoDelayMs: number
   commands: unknown[]
   tools: Tool[]
   toolNames: string[]
   slashCommands: string[]
   mcpClients: WrappedClient[]
+  persistSession?: boolean
 }): Promise<void> {
   const {
     wsSend,
     session,
     prompt,
     echo,
+    echoDelayMs,
     commands,
     tools,
-    toolNames,
-    slashCommands,
     mcpClients,
   } = args
-
-  setOriginalCwd(session.cwd)
-  await setCwd(session.cwd)
-  grantReadPermissionForOriginalDir()
-
-  setKodeAgentSessionForkInfo(null)
-  setSessionId(session.sessionId)
 
   const abortController = new AbortController()
   session.activeAbortController = abortController
 
   const startedAt = Date.now()
   const costBefore = getTotalCost()
+  let lastAssistant: AssistantMessage | null = null
+  let userMessageRecorded = false
+  let cancellationMessageRecorded = false
+  let terminalResultSent = false
+  const shouldPersistSession =
+    args.persistSession ?? process.env.NODE_ENV !== 'test'
 
-  const userMsg = createUserMessage(prompt)
-  session.messages.push(userMsg)
-  const sdkUser = kodeMessageToSdkMessage(userMsg, session.sessionId)
-  if (sdkUser) wsSend(sdkUser)
+  const recordMessage = (
+    message: Message,
+    options: { persist?: boolean } = {},
+  ) => {
+    if (message.type === 'progress') return
+    session.messages.push(message)
+    if (options.persist && shouldPersistSession) {
+      appendSessionJsonlFromMessage({
+        cwd: session.cwd,
+        message,
+        toolUseContext: { agentId: 'main' },
+      })
+    }
+    if (message.type === 'assistant') {
+      lastAssistant = message
+      const text = extractFirstAssistantText(message.message as ApiMessage)
+      if (
+        text === INTERRUPT_MESSAGE ||
+        text === INTERRUPT_MESSAGE_FOR_TOOL_USE
+      ) {
+        cancellationMessageRecorded = true
+      }
+    }
+  }
 
-  if (echo) {
-    const assistant = createAssistantMessage(prompt)
-    session.messages.push(assistant)
-    const sdkAssistant = kodeMessageToSdkMessage(assistant, session.sessionId)
-    if (sdkAssistant) wsSend(sdkAssistant)
+  const recordAndSendMessage = (
+    message: Message,
+    options: { persist?: boolean } = {},
+  ) => {
+    recordMessage(message, options)
+    const sdk = kodeMessageToSdkMessage(message, session.sessionId)
+    if (sdk) wsSend(sdk)
+  }
 
+  const ensureCancellationMessage = () => {
+    if (!userMessageRecorded || cancellationMessageRecorded) return
+    recordAndSendMessage(createAssistantMessage(INTERRUPT_MESSAGE), {
+      persist: true,
+    })
+  }
+
+  const sendTerminalResult = (params: {
+    result: string
+    isError: boolean
+    usage?: unknown
+  }) => {
+    if (terminalResultSent) return
     wsSend(
       makeSdkResultMessage({
         sessionId: session.sessionId,
-        result: prompt,
-        numTurns: 1,
-        usage: undefined,
-        totalCostUsd: 0,
+        result: params.result,
+        numTurns: userMessageRecorded ? 1 : 0,
+        usage: params.usage,
+        totalCostUsd: Math.max(0, getTotalCost() - costBefore),
         durationMs: Date.now() - startedAt,
         durationApiMs: 0,
-        isError: false,
+        isError: params.isError,
       }),
     )
-
-    session.activeAbortController = null
-    return
+    terminalResultSent = true
   }
 
-  const requestToolPermission = async (params: {
-    tool: Tool
-    input: Record<string, unknown>
-    toolUseContext: ToolUseContext
-    assistantMessage: AssistantMessage
-  }): Promise<
-    | { result: true }
-    | {
-        result: false
-        message: string
-        shouldPromptUser?: boolean
-      }
-  > => {
-    const base = await hasPermissionsToUseTool(
-      params.tool,
-      params.input,
-      params.toolUseContext,
-      params.assistantMessage,
-    )
-    if (base.result === true) return { result: true }
-
-    if (base.shouldPromptUser === false) {
-      return {
-        result: false,
-        message: base.message,
-        shouldPromptUser: false,
-      }
-    }
-
-    if (params.toolUseContext.abortController.signal.aborted) {
-      return {
-        result: false,
-        message: REJECT_MESSAGE,
-        shouldPromptUser: false,
-      }
-    }
-
-    if (session.clients.size === 0) {
-      return {
-        result: false,
-        message: 'Permission required, but no UI client is attached.',
-        shouldPromptUser: false,
-      }
-    }
-
-    const requestId =
-      typeof params.toolUseContext.toolUseId === 'string' &&
-      params.toolUseContext.toolUseId
-        ? params.toolUseContext.toolUseId
-        : crypto.randomUUID()
-
-    const toolDescription = await resolveToolDescription(
-      params.tool,
-      params.input as never,
-    )
-
-    const request: PermissionRequest = {
-      type: 'permission_request',
-      request_id: requestId,
-      tool_name: params.tool.name,
-      tool_description: toolDescription,
-      input: params.input,
-    }
-    wsSend(request)
-
-    const decision = await new Promise<InflightPermissionDecision>(resolve => {
-      session.inflightPermissionRequests.set(requestId, resolve)
-    })
-
-    if (params.toolUseContext.abortController.signal.aborted) {
-      return {
-        result: false,
-        message: REJECT_MESSAGE,
-        shouldPromptUser: false,
-      }
-    }
-
-    if (decision.updatedInput && typeof decision.updatedInput === 'object') {
-      Object.assign(params.input, decision.updatedInput)
-    }
-
-    if (decision.decision === 'deny') {
-      try {
-        params.toolUseContext.abortController.abort()
-      } catch {}
-      const message =
-        decision.rejectionMessage && decision.rejectionMessage.trim()
-          ? `${REJECT_MESSAGE_WITH_FEEDBACK_PREFIX}${decision.rejectionMessage.trim()}`
-          : REJECT_MESSAGE
-      return { result: false, message, shouldPromptUser: false }
-    }
-
-    if (decision.decision === 'allow_always') {
-      try {
-        await savePermission(
-          params.tool,
-          params.input,
-          null,
-          params.toolUseContext,
-        )
-      } catch {}
-    }
-
-    return { result: true }
+  const sendCancelledResult = () => {
+    ensureCancellationMessage()
+    sendTerminalResult({ result: INTERRUPT_MESSAGE, isError: true })
   }
 
-  const canUseTool: CanUseToolFn = async (
-    tool,
-    input,
-    toolUseContext,
-    assistantMessage,
-  ) => {
-    return await requestToolPermission({
+  try {
+    setOriginalCwd(session.cwd)
+    await setCwd(session.cwd)
+    if (abortController.signal.aborted) {
+      sendCancelledResult()
+      return
+    }
+    grantReadPermissionForOriginalDir()
+
+    setKodeAgentSessionForkInfo(null)
+    setSessionId(session.sessionId)
+
+    if (echo) {
+      const userMsg = createUserMessage(prompt)
+      recordMessage(userMsg, { persist: true })
+      userMessageRecorded = true
+      const sdkUser = kodeMessageToSdkMessage(userMsg, session.sessionId)
+      if (sdkUser) wsSend(sdkUser)
+
+      await waitForDelayOrAbort(echoDelayMs, abortController.signal)
+      if (abortController.signal.aborted) {
+        sendCancelledResult()
+        return
+      }
+
+      const assistant = createAssistantMessage(prompt)
+      recordAndSendMessage(assistant, { persist: true })
+      sendTerminalResult({ result: prompt, isError: false })
+      return
+    }
+
+    const requestToolPermission = async (params: {
+      tool: Tool
+      input: Record<string, unknown>
+      toolUseContext: ToolUseContext
+      assistantMessage: AssistantMessage
+    }): Promise<
+      | { result: true }
+      | {
+          result: false
+          message: string
+          shouldPromptUser?: boolean
+        }
+    > => {
+      const base = await hasPermissionsToUseTool(
+        params.tool,
+        params.input,
+        params.toolUseContext,
+        params.assistantMessage,
+      )
+      if (params.toolUseContext.abortController.signal.aborted) {
+        return {
+          result: false,
+          message: REJECT_MESSAGE,
+          shouldPromptUser: false,
+        }
+      }
+      if (base.result === true) return { result: true }
+
+      if (base.shouldPromptUser === false) {
+        return {
+          result: false,
+          message: base.message,
+          shouldPromptUser: false,
+        }
+      }
+
+      const requestId =
+        typeof params.toolUseContext.toolUseId === 'string' &&
+        params.toolUseContext.toolUseId
+          ? params.toolUseContext.toolUseId
+          : crypto.randomUUID()
+
+      const toolDescription = await resolveToolDescription(
+        params.tool,
+        params.input as never,
+      )
+
+      const request: PermissionRequest = {
+        type: 'permission_request',
+        request_id: requestId,
+        tool_name: params.tool.name,
+        tool_description: toolDescription,
+        input: params.input,
+      }
+      const decision = await waitForPermissionDecision({
+        session,
+        requestId,
+        owner: null,
+        signal: params.toolUseContext.abortController.signal,
+        sendRequest: () => wsSend(request),
+      })
+
+      if (params.toolUseContext.abortController.signal.aborted) {
+        return {
+          result: false,
+          message: REJECT_MESSAGE,
+          shouldPromptUser: false,
+        }
+      }
+
+      if (decision.updatedInput && typeof decision.updatedInput === 'object') {
+        Object.assign(params.input, decision.updatedInput)
+      }
+
+      if (decision.decision === 'deny') {
+        try {
+          params.toolUseContext.abortController.abort()
+        } catch {}
+        const message =
+          decision.rejectionMessage && decision.rejectionMessage.trim()
+            ? `${REJECT_MESSAGE_WITH_FEEDBACK_PREFIX}${decision.rejectionMessage.trim()}`
+            : REJECT_MESSAGE
+        return { result: false, message, shouldPromptUser: false }
+      }
+
+      if (decision.decision === 'allow_always') {
+        try {
+          await savePermission(
+            params.tool,
+            params.input,
+            null,
+            params.toolUseContext,
+          )
+        } catch {}
+      }
+
+      return { result: true }
+    }
+
+    const canUseTool: CanUseToolFn = async (
       tool,
       input,
       toolUseContext,
       assistantMessage,
-    })
-  }
+    ) => {
+      return await requestToolPermission({
+        tool,
+        input,
+        toolUseContext,
+        assistantMessage,
+      })
+    }
 
-  const [context, systemPrompt] = await Promise.all([
-    getContext(),
-    buildSystemPromptForSession({ disableSlashCommands: false }),
-  ])
+    const [context, systemPrompt] = await Promise.all([
+      getContext(),
+      buildSystemPromptForSession({ disableSlashCommands: false }),
+    ])
+    if (abortController.signal.aborted) {
+      sendCancelledResult()
+      return
+    }
 
-  const options = {
-    commands,
-    tools,
-    verbose: true,
-    safeMode: false,
-    forkNumber: 0,
-    messageLogName: session.sessionId,
-    maxThinkingTokens: 0,
-    persistSession: true,
-    toolPermissionContext: session.toolPermissionContext,
-    mcpClients,
-    shouldAvoidPermissionPrompts: false,
-    onStreamEvent: (event: unknown) => {
-      if (!shouldForwardStreamEvent(event)) return
-      wsSend(
-        makeSdkStreamEventMessage({
-          sessionId: session.sessionId,
-          event,
-          parentToolUseId:
-            isRecord(event) && typeof event.toolUseId === 'string'
-              ? event.toolUseId
-              : null,
-          uuid: randomUUID(),
-        }),
-      )
-    },
-  }
+    // Do not expose or persist a user turn until all fallible setup has
+    // completed. From here, the engine remains the canonical persistence
+    // owner for normal turns (including compaction and sidechain records).
+    const userMsg = createUserMessage(prompt)
+    recordMessage(userMsg)
+    userMessageRecorded = true
+    const sdkUser = kodeMessageToSdkMessage(userMsg, session.sessionId)
+    if (sdkUser) wsSend(sdkUser)
 
-  let lastAssistant: AssistantMessage | null = null
-  let queryError: unknown = null
+    const options = {
+      commands,
+      tools,
+      verbose: true,
+      safeMode: false,
+      forkNumber: 0,
+      messageLogName: session.sessionId,
+      maxThinkingTokens: 0,
+      persistSession: shouldPersistSession,
+      toolPermissionContext: session.toolPermissionContext,
+      mcpClients,
+      shouldAvoidPermissionPrompts: false,
+      onStreamEvent: (event: unknown) => {
+        if (!shouldForwardStreamEvent(event)) return
+        wsSend(
+          makeSdkStreamEventMessage({
+            sessionId: session.sessionId,
+            event,
+            parentToolUseId:
+              isRecord(event) && typeof event.toolUseId === 'string'
+                ? event.toolUseId
+                : null,
+            uuid: randomUUID(),
+          }),
+        )
+      },
+    }
 
-  try {
     const baseMessages: Message[] = [...session.messages]
 
     for await (const m of runTurn({
@@ -298,51 +391,41 @@ export async function handleChatPrompt(args: {
         responseState: session.responseState,
       },
     })) {
+      recordAndSendMessage(m)
       if (abortController.signal.aborted) break
-
-      if (m.type === 'assistant') lastAssistant = m
-      if (m.type !== 'progress') {
-        session.messages.push(m)
-      }
-      const sdk = kodeMessageToSdkMessage(m, session.sessionId)
-      if (sdk) wsSend(sdk)
     }
+
+    if (abortController.signal.aborted) {
+      sendCancelledResult()
+      return
+    }
+
+    const resultFromAssistant = lastAssistant
+      ? extractFirstAssistantText(lastAssistant.message as ApiMessage)
+      : null
+    sendTerminalResult({
+      result:
+        typeof resultFromAssistant === 'string' ? resultFromAssistant : '',
+      isError: false,
+      usage: lastAssistant?.message?.usage,
+    })
   } catch (err) {
-    queryError = err
+    const wasCancelled = abortController.signal.aborted
     try {
       abortController.abort()
     } catch {}
+    if (wasCancelled) {
+      sendCancelledResult()
+    } else {
+      sendTerminalResult({
+        result: err instanceof Error ? err.message : String(err),
+        isError: true,
+        usage: lastAssistant?.message?.usage,
+      })
+    }
   } finally {
-    session.activeAbortController = null
+    if (session.activeAbortController === abortController) {
+      session.activeAbortController = null
+    }
   }
-
-  const resultFromAssistant = lastAssistant
-    ? extractFirstAssistantText(lastAssistant.message as ApiMessage)
-    : null
-  const resultText =
-    typeof resultFromAssistant === 'string'
-      ? resultFromAssistant
-      : queryError instanceof Error
-        ? queryError.message
-        : queryError
-          ? String(queryError)
-          : ''
-
-  const usage = lastAssistant?.message?.usage
-  const durationMs = Date.now() - startedAt
-  const totalCostUsd = Math.max(0, getTotalCost() - costBefore)
-  const isError = Boolean(queryError) || abortController.signal.aborted
-
-  wsSend(
-    makeSdkResultMessage({
-      sessionId: session.sessionId,
-      result: String(resultText),
-      numTurns: 1,
-      usage,
-      totalCostUsd,
-      durationMs,
-      durationApiMs: 0,
-      isError,
-    }),
-  )
 }

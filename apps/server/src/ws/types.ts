@@ -12,6 +12,11 @@ export type InflightPermissionDecision = {
   rejectionMessage?: string | null
 }
 
+export type InflightPermissionRequest = {
+  owner: DaemonClient | null
+  resolve: (value: InflightPermissionDecision) => void
+}
+
 export type DaemonSession = {
   sessionId: string
   cwd: string
@@ -21,8 +26,6 @@ export type DaemonSession = {
   responseState: ToolUseContext['responseState']
   toolPermissionContext: ToolPermissionContext
   activeAbortController: AbortController | null
-  inflightPermissionRequests: Map<
-    string,
-    (value: InflightPermissionDecision) => void
-  >
+  turnInFlight: boolean
+  inflightPermissionRequests: Map<string, InflightPermissionRequest>
 }

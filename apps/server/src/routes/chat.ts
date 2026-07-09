@@ -1,11 +1,14 @@
 import type { Tool } from '@kode/core/tooling/Tool'
 import type { WrappedClient } from '@kode/core/mcp/client'
+import { isUuid } from '@kode/core/utils/uuid'
+import { makeSdkResultMessage } from '#protocol/utils/kodeAgentStreamJson'
 
 import { handleChatPrompt } from '../handlers/chat.handler'
 import { sendSessionList } from '../handlers/session.handler'
 import { log } from '../ws/events'
-import type { DaemonSession } from '../ws/types'
 import { broadcastSessionJson } from '../ws/sessionBroadcaster'
+import type { SessionRegistry } from '../sessionRegistry'
+import type { DaemonTurnGate } from '../turnGate'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -14,8 +17,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export async function routeChat(
   req: Request,
   ctx: {
-    sessions: Map<string, DaemonSession>
+    sessionRegistry: SessionRegistry
+    turnGate: DaemonTurnGate
+    resolveCwd: () => Promise<string>
     echo: boolean
+    echoDelayMs: number
     commands: unknown[]
     tools: Tool[]
     toolNames: string[]
@@ -54,6 +60,12 @@ export async function routeChat(
       { status: 400 },
     )
   }
+  if (!isUuid(sessionId)) {
+    return Response.json(
+      { ok: false, error: 'Invalid sessionId' },
+      { status: 400 },
+    )
+  }
   if (!prompt.trim()) {
     return Response.json(
       { ok: false, error: 'Missing prompt' },
@@ -61,20 +73,36 @@ export async function routeChat(
     )
   }
 
-  const session = ctx.sessions.get(sessionId)
-  if (!session) {
+  const found = ctx.sessionRegistry.getOrLoad({
+    cwd: await ctx.resolveCwd(),
+    sessionId,
+  })
+  if (found.ok === false) {
     return Response.json(
-      { ok: false, error: 'Unknown session' },
-      { status: 404 },
+      {
+        ok: false,
+        error:
+          found.reason === 'cwd_mismatch'
+            ? 'Session workspace mismatch'
+            : 'Unknown session',
+      },
+      { status: found.reason === 'cwd_mismatch' ? 409 : 404 },
     )
   }
+  const session = found.session
 
-  if (session.activeAbortController) {
+  const turnLease = ctx.turnGate.tryAcquire(session)
+  if (!turnLease) {
     return Response.json(
       { ok: false, error: 'Session already has an active prompt' },
       { status: 409 },
     )
   }
+  broadcastSessionJson(session, {
+    type: 'turn_state',
+    session_id: session.sessionId,
+    state: 'running',
+  })
 
   const wsSend = (payload: unknown) => {
     try {
@@ -89,6 +117,7 @@ export async function routeChat(
         session,
         prompt,
         echo: ctx.echo,
+        echoDelayMs: ctx.echoDelayMs,
         commands: ctx.commands,
         tools: ctx.tools,
         toolNames: ctx.toolNames,
@@ -96,8 +125,28 @@ export async function routeChat(
         mcpClients: ctx.mcpClients,
       })
     } catch (err) {
-      wsSend(log('error', err instanceof Error ? err.message : String(err)))
+      const message = err instanceof Error ? err.message : String(err)
+      session.activeAbortController = null
+      wsSend(
+        makeSdkResultMessage({
+          sessionId: session.sessionId,
+          result: message,
+          numTurns: 0,
+          totalCostUsd: 0,
+          durationMs: 0,
+          durationApiMs: 0,
+          isError: true,
+        }),
+      )
+      wsSend(log('error', message))
     } finally {
+      turnLease.release()
+      ctx.sessionRegistry.evictIdleSessions()
+      wsSend({
+        type: 'turn_state',
+        session_id: session.sessionId,
+        state: 'idle',
+      })
       for (const client of Array.from(session.clients)) {
         try {
           sendSessionList(client, {

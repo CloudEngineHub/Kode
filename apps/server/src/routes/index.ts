@@ -1,6 +1,5 @@
 import { basename, resolve } from 'node:path'
 
-import { loadToolPermissionContextFromDisk } from '@kode/core/utils/permissions/toolPermissionSettings'
 import type { Tool } from '@kode/core/tooling/Tool'
 import type { WrappedClient } from '@kode/core/mcp/client'
 import { isUuid } from '@kode/core/utils/uuid'
@@ -10,6 +9,8 @@ import { routeChat } from './chat'
 import { routeSession } from './session'
 import type { WorkspaceInfo } from '../handlers/workspaces.handler'
 import type { DaemonSession } from '../ws/types'
+import type { SessionRegistry } from '../sessionRegistry'
+import type { DaemonTurnGate } from '../turnGate'
 
 type UpgradeServer<TData> = {
   upgrade: (req: Request, options: { data: TData }) => boolean
@@ -27,9 +28,11 @@ export function createRoutes(args: {
     workspaces: WorkspaceInfo[]
     currentId: string
   }>
-  sessions: Map<string, DaemonSession>
+  sessionRegistry: SessionRegistry
+  turnGate: DaemonTurnGate
   cwd: string
   echo: boolean
+  echoDelayMs: number
   commands: unknown[]
   tools: Tool[]
   toolNames: string[]
@@ -41,6 +44,21 @@ export function createRoutes(args: {
     server: UpgradeServer<WebSocketData>,
   ) => Promise<Response | undefined>
 } {
+  const resolveWorkspaceCwd = async (url: URL): Promise<string> => {
+    const fallback = resolve(args.cwd)
+    try {
+      const { workspaces, currentId } = await args.listWorkspaces()
+      const requested = url.searchParams.get('workspace')
+      const selected =
+        requested && workspaces.some(w => w.id === requested)
+          ? requested
+          : currentId
+      return workspaces.find(w => w.id === selected)?.path ?? fallback
+    } catch {
+      return fallback
+    }
+  }
+
   return {
     async fetch(req, server) {
       const url = new URL(req.url)
@@ -66,7 +84,7 @@ export function createRoutes(args: {
           transport: 'daemon',
           version: process.env.npm_package_version ?? null,
           pid: process.pid,
-          activeSessions: args.sessions.size,
+          activeSessions: args.sessionRegistry.size,
         })
       }
 
@@ -101,8 +119,11 @@ export function createRoutes(args: {
       }
 
       const chatResponse = await routeChat(req, {
-        sessions: args.sessions,
+        sessionRegistry: args.sessionRegistry,
+        turnGate: args.turnGate,
+        resolveCwd: () => resolveWorkspaceCwd(url),
         echo: args.echo,
+        echoDelayMs: args.echoDelayMs,
         commands: args.commands,
         tools: args.tools,
         toolNames: args.toolNames,
@@ -120,53 +141,49 @@ export function createRoutes(args: {
       if (url.pathname === '/ws') {
         if (!args.checkToken(req))
           return new Response('Unauthorized', { status: 401 })
-        const { workspaces, currentId } = await args.listWorkspaces()
-        const requested = url.searchParams.get('workspace')
-        const selected =
-          requested && workspaces.some(w => w.id === requested)
-            ? requested
-            : currentId
-        const selectedCwd =
-          workspaces.find(w => w.id === selected)?.path ?? resolve(args.cwd)
+        const selectedCwd = await resolveWorkspaceCwd(url)
 
         const requestedSessionId =
           url.searchParams.get('session_id') ??
           url.searchParams.get('sessionId') ??
           ''
-        const existing =
-          isUuid(requestedSessionId) && args.sessions.has(requestedSessionId)
-            ? (args.sessions.get(requestedSessionId) ?? null)
-            : null
-        const canAttachExisting =
-          existing !== null && resolve(existing.cwd) === resolve(selectedCwd)
+        let session: DaemonSession
+        let replayHistory = false
+        let removeOnUpgradeFailure = false
+        if (requestedSessionId) {
+          if (!isUuid(requestedSessionId)) {
+            return new Response('Invalid session id', { status: 400 })
+          }
+          const found = args.sessionRegistry.getOrLoad({
+            cwd: selectedCwd,
+            sessionId: requestedSessionId,
+          })
+          if (found.ok === false) {
+            return new Response(
+              found.reason === 'cwd_mismatch'
+                ? 'Session workspace mismatch'
+                : 'Unknown session',
+              { status: found.reason === 'cwd_mismatch' ? 409 : 404 },
+            )
+          }
+          session = found.session
+          replayHistory = true
+          removeOnUpgradeFailure = found.restored
+        } else {
+          session = args.sessionRegistry.create(selectedCwd)
+          removeOnUpgradeFailure = true
+        }
 
-        const session =
-          existing && canAttachExisting
-            ? existing
-            : (() => {
-                const sessionId = crypto.randomUUID()
-                const next: DaemonSession = {
-                  sessionId,
-                  cwd: selectedCwd,
-                  clients: new Set(),
-                  messages: [],
-                  readFileTimestamps: {},
-                  responseState: {},
-                  toolPermissionContext: loadToolPermissionContextFromDisk({
-                    projectDir: selectedCwd,
-                    includeKodeProjectConfig: true,
-                    isBypassPermissionsModeAvailable: true,
-                  }),
-                  activeAbortController: null,
-                  inflightPermissionRequests: new Map(),
-                }
-                args.sessions.set(sessionId, next)
-                return next
-              })()
-
-        const ok = server.upgrade(req, {
-          data: { session, replayHistory: canAttachExisting },
-        })
+        let ok = false
+        try {
+          ok = server.upgrade(req, {
+            data: { session, replayHistory },
+          })
+        } finally {
+          if (!ok && removeOnUpgradeFailure) {
+            args.sessionRegistry.deleteIfIdle(session)
+          }
+        }
         return ok ? undefined : new Response('Upgrade failed', { status: 400 })
       }
 
