@@ -262,17 +262,14 @@ export function useReplController(props: REPLProps) {
       const prevFull = prevMode === 'fullscreen'
       const nextFull = nextMode === 'fullscreen'
 
-      const maybeApplyPendingForkConvoWithMessages = (): void => {
+      const maybeApplyPendingForkConvoWithMessages = (
+        afterApply?: () => void,
+      ): boolean => {
         const request = pendingForkConvoWithMessagesRef.current
-        if (!request) return
+        if (!request) return false
+        const applySeq = ++pendingForkApplySeqRef.current
 
         pendingForkConvoWithMessagesRef.current = null
-
-        if (request.options?.clearViewport) {
-          // Don't await; ordering of writes on stdout is preserved and this keeps
-          // the transition to the restored main buffer from flashing.
-          void clearViewport()
-        }
 
         const applyStateUpdates = () => {
           setPendingForkConvoWithMessages(null)
@@ -288,11 +285,35 @@ export function useReplController(props: REPLProps) {
           }
         }
 
-        if (batchedUpdates) {
-          batchedUpdates(applyStateUpdates)
-          return
+        const applyAll = () => {
+          if (batchedUpdates) {
+            batchedUpdates(() => {
+              applyStateUpdates()
+              afterApply?.()
+            })
+            return
+          }
+          applyStateUpdates()
+          afterApply?.()
         }
-        applyStateUpdates()
+
+        if (!request.options?.clearViewport) {
+          applyAll()
+          return true
+        }
+
+        void (async () => {
+          await clearViewport()
+          if (
+            !isMountedRef.current ||
+            pendingForkApplySeqRef.current !== applySeq
+          ) {
+            return
+          }
+          applyAll()
+        })()
+
+        return true
       }
 
       const screenReaderEnv =
@@ -319,9 +340,12 @@ export function useReplController(props: REPLProps) {
           // Switching buffers can reset terminal modes (kitty/modifyOtherKeys/bracketed paste)
           // in some terminals; re-assert what we detected at startup so keybindings keep working.
           terminalCapabilityManager.enableSupportedModes()
-          void clearViewport()
-          doSetState()
           ephemeralFullscreenAltScreenRef.current = true
+          void (async () => {
+            await clearViewport()
+            if (!isMountedRef.current) return
+            doSetState()
+          })()
           return
         } else if (prevFull && !nextFull) {
           if (ephemeralFullscreenAltScreenRef.current) {
@@ -333,7 +357,7 @@ export function useReplController(props: REPLProps) {
           // Apply any pending transcript fork/reset immediately when leaving a
           // fullscreen tool view so the restored main buffer doesn't flash the
           // pre-overlay frame (e.g. `/resume`).
-          maybeApplyPendingForkConvoWithMessages()
+          if (maybeApplyPendingForkConvoWithMessages(doSetState)) return
         } else if (
           prevFull &&
           nextFull &&
@@ -348,7 +372,7 @@ export function useReplController(props: REPLProps) {
           // Avoid explicit terminal clears here; the UI should remain within the viewport
           // and rely on Ink's reconciliation to keep transitions stable.
           if (prevFull && !nextFull) {
-            maybeApplyPendingForkConvoWithMessages()
+            if (maybeApplyPendingForkConvoWithMessages(doSetState)) return
           }
           doSetState()
           return
@@ -903,7 +927,10 @@ export function useReplController(props: REPLProps) {
         await clearViewport()
       }
 
-      if (!isMountedRef.current || pendingForkApplySeqRef.current !== applySeq) {
+      if (
+        !isMountedRef.current ||
+        pendingForkApplySeqRef.current !== applySeq
+      ) {
         return
       }
 

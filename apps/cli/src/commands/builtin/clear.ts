@@ -35,7 +35,7 @@ const clear = {
   isEnabled: true,
   isHidden: false,
   async call(_, context) {
-    clearConversation(context)
+    await clearConversation(context)
     return ''
   },
   userFacingName() {

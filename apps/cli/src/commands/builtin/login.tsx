@@ -22,7 +22,7 @@ export default () =>
       return (
         <Login
           onDone={async () => {
-            clearConversation(context)
+            await clearConversation(context)
             onDone()
           }}
         />
