@@ -9,6 +9,7 @@ import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import { useScopedIndexState } from '#ui-ink/hooks/useScopedIndexState'
+import { PressableRow } from '#ui-ink/primitives/list/PressableRow'
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
@@ -45,6 +46,23 @@ export function ModelPickerScreen({
   })
   const [status, setStatus] = useState<string | null>(null)
 
+  const selectModelAtIndex = useCallback(
+    (index: number) => {
+      const selected = models[index]
+      setSelectedIndex(index)
+      if (!selected) {
+        setStatus(
+          models.length === 0 ? 'No models configured' : 'Nothing selected',
+        )
+        return false
+      }
+      onSelectModel(selected.modelName)
+      onDone()
+      return true
+    },
+    [models, onDone, onSelectModel, setSelectedIndex],
+  )
+
   const confirm = useCallback(() => {
     const selected = models[selectedIndex]
     if (!selected) {
@@ -53,9 +71,8 @@ export function ModelPickerScreen({
       )
       return
     }
-    onSelectModel(selected.modelName)
-    onDone()
-  }, [models, onDone, onSelectModel, selectedIndex])
+    selectModelAtIndex(selectedIndex)
+  }, [models, selectedIndex, selectModelAtIndex])
 
   useKeypress(
     (input, key) => {
@@ -124,14 +141,18 @@ export function ModelPickerScreen({
                 model.isActive ? '' : ' (inactive)'
               }`
               return (
-                <Text
+                <PressableRow
                   key={model.modelName}
-                  color={isSelected ? theme.text : theme.secondaryText}
-                  bold={isSelected}
-                  wrap="truncate-end"
+                  onPress={() => selectModelAtIndex(idx)}
                 >
-                  {isSelected ? figures.pointer : ' '} {label}
-                </Text>
+                  <Text
+                    color={isSelected ? theme.text : theme.secondaryText}
+                    bold={isSelected}
+                    wrap="truncate-end"
+                  >
+                    {isSelected ? figures.pointer : ' '} {label}
+                  </Text>
+                </PressableRow>
               )
             })
           ) : (

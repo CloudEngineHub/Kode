@@ -14,6 +14,7 @@ import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { useScopedIndexState } from '#ui-ink/hooks/useScopedIndexState'
+import { PressableRow } from '#ui-ink/primitives/list/PressableRow'
 
 // All available themes
 const THEME_OPTIONS: ThemeNames[] = [
@@ -210,6 +211,36 @@ export function ConfigScreen({ onClose }: Props): React.ReactNode {
     onClose()
   }, [onClose])
 
+  const activateSetting = useCallback(
+    (index: number) => {
+      if (editingString) return false
+
+      const currentSetting = settings[index]
+      setSelectedIndex(index)
+      if (!currentSetting || currentSetting.disabled) return false
+
+      if (currentSetting.type === 'boolean') {
+        currentSetting.onChange(!currentSetting.value)
+        return true
+      }
+
+      if (currentSetting.type === 'enum') {
+        const currentIndex = currentSetting.options.indexOf(
+          currentSetting.value,
+        )
+        const nextIndex = (currentIndex + 1) % currentSetting.options.length
+        currentSetting.onChange(currentSetting.options[nextIndex])
+        return true
+      }
+
+      setCurrentInput(String(currentSetting.value))
+      setEditingString(true)
+      setInputError(null)
+      return true
+    },
+    [editingString, settings, setSelectedIndex],
+  )
+
   useKeypress(
     (input, key) => {
       if (didCloseRef.current) return true
@@ -275,25 +306,7 @@ export function ConfigScreen({ onClose }: Props): React.ReactNode {
       } else if (key.end || inputChar === 'G') {
         setSelectedIndex(Math.max(0, settings.length - 1))
       } else if (key.return) {
-        const currentSetting = settings[selectedIndex]
-        if (currentSetting?.disabled) return
-
-        if (currentSetting?.type === 'boolean') {
-          currentSetting.onChange(!currentSetting.value)
-        } else if (currentSetting?.type === 'enum') {
-          const currentIndex = currentSetting.options.indexOf(
-            currentSetting.value,
-          )
-          const nextIndex = (currentIndex + 1) % currentSetting.options.length
-          currentSetting.onChange(currentSetting.options[nextIndex])
-        } else if (
-          currentSetting?.type === 'string' ||
-          currentSetting?.type === 'number'
-        ) {
-          setCurrentInput(String(currentSetting.value))
-          setEditingString(true)
-          setInputError(null)
-        }
+        activateSetting(selectedIndex)
       } else if (key.escape || (key.ctrl && inputChar === 'c')) {
         // Check if config has changed
         const currentConfigString = JSON.stringify(getGlobalConfig())
@@ -373,7 +386,12 @@ export function ConfigScreen({ onClose }: Props): React.ReactNode {
           {settings.map((setting, index) => {
             const isSelected = index === selectedIndex
             return (
-              <Box key={setting.id} flexDirection="column">
+              <PressableRow
+                key={setting.id}
+                flexDirection="column"
+                isActive={!editingString}
+                onPress={() => activateSetting(index)}
+              >
                 <Box flexDirection="row" gap={1}>
                   <Text
                     color={
@@ -415,7 +433,7 @@ export function ConfigScreen({ onClose }: Props): React.ReactNode {
                     ) : null}
                   </Box>
                 ) : null}
-              </Box>
+              </PressableRow>
             )
           })}
         </Box>

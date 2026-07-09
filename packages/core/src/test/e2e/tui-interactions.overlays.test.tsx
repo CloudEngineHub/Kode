@@ -4,6 +4,7 @@ import { KeypressProvider } from '#ui-ink/contexts/KeypressContext'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { ModelPickerScreen } from '#ui-ink/screens/overlays/ModelPickerScreen'
 import { ThinkingToggleScreen } from '#ui-ink/screens/overlays/ThinkingToggleScreen'
+import { ConfigScreen } from '#ui-ink/screens/overlays/ConfigScreen'
 import { WorkTasksScreen } from '#ui-ink/screens/overlays/WorkTasksScreen'
 import { TranscriptScreen } from '#ui-ink/screens/overlays/TranscriptScreen'
 import { CommandPaletteScreen } from '#ui-ink/screens/overlays/CommandPaletteScreen'
@@ -11,6 +12,8 @@ import { createInkHarnessManager, createInkTestHarness } from './inkTestHarness'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { getGlobalConfig, saveGlobalConfig } from '#core/utils/config'
+import { reloadModelManager } from '#core/utils/model'
 
 const harnessManager = createInkHarnessManager()
 
@@ -97,6 +100,78 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
     expect(closed).toBe(true)
   })
 
+  test('ModelPickerScreen: SGR mouse click selects a model', async () => {
+    const originalConfig = JSON.parse(JSON.stringify(getGlobalConfig()))
+    saveGlobalConfig({
+      ...getGlobalConfig(),
+      modelProfiles: [
+        {
+          name: 'Code Model',
+          provider: 'custom-openai',
+          modelName: 'code-model',
+          apiKey: 'test-key',
+          maxTokens: 1024,
+          contextLength: 128_000,
+          isActive: true,
+          createdAt: 1,
+          lastUsed: 2,
+        },
+        {
+          name: 'Other Model',
+          provider: 'custom-openai',
+          modelName: 'other-model',
+          apiKey: 'test-key',
+          maxTokens: 1024,
+          contextLength: 128_000,
+          isActive: true,
+          createdAt: 2,
+          lastUsed: 1,
+        },
+      ],
+      modelPointers: {
+        main: 'code-model',
+        task: '',
+        compact: '',
+        quick: '',
+      },
+    })
+    reloadModelManager()
+
+    try {
+      let selectedModel = ''
+      let closed = false
+      const h = createInkTestHarness(
+        <KeypressProvider>
+          <ModelPickerScreen
+            onDone={() => {
+              closed = true
+            }}
+            onSelectModel={modelName => {
+              selectedModel = modelName
+            }}
+          />
+        </KeypressProvider>,
+      )
+      harnessManager.track(h)
+
+      await h.wait(25)
+      const outputLines = h.getOutput().split(/\r?\n/)
+      const modelLineIndex = outputLines.findIndex(line =>
+        line.includes('Other Model'),
+      )
+      expect(modelLineIndex).toBeGreaterThanOrEqual(0)
+
+      h.stdin.write(`\x1b[<0;4;${modelLineIndex + 1}M`)
+      await h.wait(25)
+
+      expect(selectedModel).toBe('other-model')
+      expect(closed).toBe(true)
+    } finally {
+      saveGlobalConfig(originalConfig)
+      reloadModelManager()
+    }
+  })
+
   test('ThinkingToggleScreen: Alt+T closes', async () => {
     let closed = false
     const h = createInkTestHarness(
@@ -118,6 +193,70 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
     await h.wait(25)
 
     expect(closed).toBe(true)
+  })
+
+  test('ThinkingToggleScreen: SGR mouse click selects an option', async () => {
+    let selected: boolean | null = null
+    let closed = false
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <ThinkingToggleScreen
+          currentValue={false}
+          isMidConversation={false}
+          onSelect={value => {
+            selected = value
+          }}
+          onDone={() => {
+            closed = true
+          }}
+        />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    const outputLines = h.getOutput().split(/\r?\n/)
+    const enabledLineIndex = outputLines.findIndex(line =>
+      line.includes('Enabled'),
+    )
+    expect(enabledLineIndex).toBeGreaterThanOrEqual(0)
+
+    h.stdin.write(`\x1b[<0;4;${enabledLineIndex + 1}M`)
+    await h.wait(25)
+
+    expect(selected).toBe(true)
+    expect(closed).toBe(true)
+  })
+
+  test('ConfigScreen: SGR mouse click toggles a setting row', async () => {
+    const originalConfig = JSON.parse(JSON.stringify(getGlobalConfig()))
+    saveGlobalConfig({
+      ...getGlobalConfig(),
+      stream: true,
+    })
+
+    try {
+      const h = createInkTestHarness(
+        <KeypressProvider>
+          <ConfigScreen onClose={() => {}} />
+        </KeypressProvider>,
+      )
+      harnessManager.track(h)
+
+      await h.wait(25)
+      const outputLines = h.getOutput().split(/\r?\n/)
+      const streamLineIndex = outputLines.findIndex(line =>
+        line.includes('Stream responses'),
+      )
+      expect(streamLineIndex).toBeGreaterThanOrEqual(0)
+
+      h.stdin.write(`\x1b[<0;4;${streamLineIndex + 1}M`)
+      await h.wait(25)
+
+      expect(getGlobalConfig().stream).toBe(false)
+    } finally {
+      saveGlobalConfig(originalConfig)
+    }
   })
 
   test('HistorySearchScreen: Enter triggers accept', async () => {

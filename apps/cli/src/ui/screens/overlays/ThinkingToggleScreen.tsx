@@ -8,6 +8,7 @@ import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import { useScopedIndexState } from '#ui-ink/hooks/useScopedIndexState'
+import { PressableRow } from '#ui-ink/primitives/list/PressableRow'
 
 type ThinkingToggleOption = {
   value: boolean
@@ -57,12 +58,21 @@ export function ThinkingToggleScreen({
     initialIndex,
   })
 
+  const selectOption = useCallback(
+    (index: number) => {
+      const option = options[index]
+      if (!option) return false
+      setSelectedIndex(index)
+      onSelect(option.value)
+      onDone()
+      return true
+    },
+    [onDone, onSelect, options, setSelectedIndex],
+  )
+
   const confirm = useCallback(() => {
-    const option = options[selectedIndex]
-    if (!option) return
-    onSelect(option.value)
-    onDone()
-  }, [onDone, onSelect, options, selectedIndex])
+    selectOption(selectedIndex)
+  }, [selectedIndex, selectOption])
 
   useKeypress(
     (input, key) => {
@@ -132,15 +142,19 @@ export function ThinkingToggleScreen({
           {options.map((option, idx) => {
             const isSelected = idx === selectedIndex
             return (
-              <Text
+              <PressableRow
                 key={option.label}
-                color={isSelected ? theme.text : theme.secondaryText}
-                bold={isSelected}
-                wrap="truncate-end"
+                onPress={() => selectOption(idx)}
               >
-                {isSelected ? figures.pointer : ' '} {option.label} —{' '}
-                {option.description}
-              </Text>
+                <Text
+                  color={isSelected ? theme.text : theme.secondaryText}
+                  bold={isSelected}
+                  wrap="truncate-end"
+                >
+                  {isSelected ? figures.pointer : ' '} {option.label} —{' '}
+                  {option.description}
+                </Text>
+              </PressableRow>
             )
           })}
         </Box>
