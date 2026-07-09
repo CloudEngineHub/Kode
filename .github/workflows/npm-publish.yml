@@ -15,29 +15,58 @@ jobs:
   verify:
     if: github.event_name != 'push' || github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
+    env:
+      KODE_SKIP_BINARY_DOWNLOAD: '1'
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     outputs:
       version: ${{ steps.ver.outputs.version }}
       tag_name: ${{ steps.ver.outputs.tag_name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20.19.0'
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+
       - name: Validate tag matches package.json version
         id: ver
         run: |
           VERSION=$(node -p "require('./package.json').version")
           TAG="${GITHUB_REF_NAME}"
+          if [ "${GITHUB_REF_TYPE}" != "tag" ]; then
+            echo "Stable release must run from a tag (got ${GITHUB_REF})."
+            exit 1
+          fi
           if [ "v${VERSION}" != "${TAG}" ]; then
             echo "Tag '${TAG}' does not match package.json version '${VERSION}'"
             exit 1
           fi
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "tag_name=${TAG}" >> "${GITHUB_OUTPUT}"
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Format
+        run: bun run format:check
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Test
+        run: bun run test
 
   build-binaries:
     needs: verify
@@ -54,6 +83,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -63,10 +94,10 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: '1.3.14'
 
       - name: Install
-        run: bun install
+        run: bun install --frozen-lockfile
 
       - name: Build Linux seccomp assets (Unix socket blocking)
         if: runner.os == 'Linux'
@@ -116,6 +147,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -126,10 +159,10 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: '1.3.14'
 
       - name: Install
-        run: bun install
+        run: bun install --frozen-lockfile
 
       - name: Sync workspace versions
         run: node scripts/set-version.mjs "${{ needs.verify.outputs.version }}"
@@ -151,12 +184,6 @@ jobs:
 
       - name: Prepare Kode binary platform packages
         run: node scripts/prepare-kode-bin-packages.mjs
-
-      - name: Typecheck
-        run: bun run typecheck
-
-      - name: Test
-        run: bun test
 
       - name: Build (all-in-bun)
         run: bun run build
