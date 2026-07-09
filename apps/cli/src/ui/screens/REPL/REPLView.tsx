@@ -7,12 +7,16 @@ import type { ToolUseConfirm } from '#ui-ink/components/permissions/PermissionRe
 import { PermissionRequest } from '#ui-ink/components/permissions/PermissionRequest'
 import PromptInput from '#ui-ink/components/PromptInput'
 import { RequestStatusIndicator } from '#ui-ink/components/RequestStatusIndicator'
-import { RunningTasksPanel } from '#ui-ink/components/RunningTasksPanel'
+import {
+  buildRunningTasksLayoutSignature,
+  RunningTasksPanel,
+} from '#ui-ink/components/RunningTasksPanel'
 import { CostThresholdDialog } from '#ui-ink/components/CostThresholdDialog'
 import { BinaryFeedback } from '#ui-ink/components/binary-feedback/BinaryFeedback'
 import { MessageSelector } from '#ui-ink/components/MessageSelector'
 import { PermissionProvider } from '#ui-ink/contexts/PermissionContext'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
+import { useBackgroundTaskSnapshots } from '#ui-ink/hooks/useBackgroundTaskSnapshots'
 import { useFlickerDetector } from '#ui-ink/hooks/useFlickerDetector'
 import { normalizeTerminalDimension } from '#ui-ink/primitives/layout/viewportRows'
 import type { NormalizedMessage } from '#core/utils/messages'
@@ -100,6 +104,7 @@ export function REPLView({
   const scheduledMeasureKeyRef = useRef('')
   const measureTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { rows, columns } = useTerminalSize()
+  const backgroundTasks = useBackgroundTaskSnapshots()
   const normalizedRows = normalizeTerminalDimension(rows, 0)
   const theme = getTheme()
   useFlickerDetector(
@@ -121,6 +126,10 @@ export function REPLView({
         promptInputProps.submitCount,
       ].join(':')
     : ''
+  const runningTasksLayoutSignature = useMemo(
+    () => buildRunningTasksLayoutSignature(backgroundTasks),
+    [backgroundTasks],
+  )
   const shouldRenderStartupHeader =
     Boolean(startupHeader) &&
     showStartupHeader &&
@@ -189,6 +198,7 @@ export function REPLView({
         showingCostDialog ? 1 : 0,
         shouldShowPromptInput ? 1 : 0,
         hasToast ? 1 : 0,
+        runningTasksLayoutSignature,
         isLoading ? 1 : 0,
         promptInputMeasureSignature,
         messageSelectorMessages.length,
@@ -204,6 +214,7 @@ export function REPLView({
       showingCostDialog,
       shouldShowPromptInput,
       hasToast,
+      runningTasksLayoutSignature,
       isLoading,
       promptInputMeasureSignature,
       messageSelectorMessages.length,
@@ -430,7 +441,10 @@ export function REPLView({
                 !binaryFeedbackContext &&
                 !isMessageSelectorVisible &&
                 !showingCostDialog && (
-                  <RunningTasksPanel maxWidth={columns} />
+                  <RunningTasksPanel
+                    maxWidth={columns}
+                    tasks={backgroundTasks}
+                  />
                 )}
 
               {toast &&

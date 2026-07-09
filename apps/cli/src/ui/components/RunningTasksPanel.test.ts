@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test'
-import { buildRunningTaskRowsForTests } from './RunningTasksPanel'
+import {
+  buildRunningTaskRowsForTests,
+  buildRunningTasksLayoutSignature,
+} from './RunningTasksPanel'
 import type { BackgroundTaskSnapshot } from '#core/tasks/backgroundRegistry'
 
 function agentTask(
@@ -87,5 +90,34 @@ describe('RunningTasksPanel helpers', () => {
     ])
     expect(result.hiddenCount).toBe(1)
     expect(result.rows[0]?.label.length).toBeLessThanOrEqual(14)
+  })
+
+  test('builds a stable layout signature from visible and hidden active rows', () => {
+    expect(buildRunningTasksLayoutSignature([])).toBe('0:0')
+    expect(
+      buildRunningTasksLayoutSignature([
+        agentTask({ taskId: 'completed', status: 'completed' }),
+      ]),
+    ).toBe('0:0')
+    expect(
+      buildRunningTasksLayoutSignature([
+        agentTask({ taskId: 'agent-1', startedAt: 1 }),
+      ]),
+    ).toBe('1:0')
+    expect(
+      buildRunningTasksLayoutSignature([
+        agentTask({ taskId: 'agent-1', startedAt: 1 }),
+        agentTask({ taskId: 'agent-2', startedAt: 2 }),
+        agentTask({ taskId: 'agent-3', startedAt: 3 }),
+      ]),
+    ).toBe('3:0')
+    expect(
+      buildRunningTasksLayoutSignature([
+        agentTask({ taskId: 'agent-1', startedAt: 1 }),
+        agentTask({ taskId: 'agent-2', startedAt: 2 }),
+        agentTask({ taskId: 'agent-3', startedAt: 3 }),
+        agentTask({ taskId: 'agent-4', startedAt: 4 }),
+      ]),
+    ).toBe('3:1')
   })
 })

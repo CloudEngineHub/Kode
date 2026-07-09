@@ -5,7 +5,6 @@ import type {
   BackgroundTaskSnapshot,
   BackgroundTaskStatus,
 } from '#core/tasks/backgroundRegistry'
-import { useBackgroundTaskSnapshots } from '#ui-ink/hooks/useBackgroundTaskSnapshots'
 
 const MAX_VISIBLE_TASKS = 3
 
@@ -85,13 +84,23 @@ export function buildRunningTaskRowsForTests(args: {
   }
 }
 
+export function buildRunningTasksLayoutSignature(
+  tasks: BackgroundTaskSnapshot[],
+): string {
+  const activeCount = tasks.filter(isActiveTask).length
+  return `${Math.min(activeCount, MAX_VISIBLE_TASKS)}:${
+    activeCount > MAX_VISIBLE_TASKS ? 1 : 0
+  }`
+}
+
 export function RunningTasksPanel({
   maxWidth,
+  tasks,
 }: {
   maxWidth: number
+  tasks: BackgroundTaskSnapshot[]
 }): React.ReactNode {
   const theme = getTheme()
-  const tasks = useBackgroundTaskSnapshots()
   const { rows, hiddenCount } = useMemo(
     () => buildRunningTaskRowsForTests({ tasks, maxWidth }),
     [maxWidth, tasks],
