@@ -328,6 +328,10 @@ export async function queryAnthropicNative(
                 typeof toolUseContext?.options?.onStreamEvent === 'function'
                   ? toolUseContext.options.onStreamEvent
                   : undefined,
+              onAssistantStreamUpdate:
+                toolUseContext?.options?.onAssistantStreamUpdate,
+              agentId: toolUseContext?.agentId,
+              requestId: toolUseContext?.requestId ?? getCurrentRequest()?.id,
             },
           )
         } else {

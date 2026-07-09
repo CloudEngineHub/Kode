@@ -3,12 +3,19 @@ import { AssistantMessage } from '#core/query'
 import { setRequestStatus } from '#core/utils/requestStatus'
 import { randomUUID } from 'crypto'
 import { createAnthropicUsage } from '#core/utils/anthropic'
+import {
+  emitAssistantStreamUpdate,
+  type AssistantStreamUpdateOptions,
+} from './assistantStreamUpdate'
 
 export async function processResponsesStream(
   stream: AsyncGenerator<StreamingEvent>,
   startTime: number,
   fallbackResponseId: string,
+  options?: AssistantStreamUpdateOptions,
 ): Promise<{ assistantMessage: AssistantMessage; rawResponse: any }> {
+  emitAssistantStreamUpdate(options, { type: 'start' })
+
   const contentBlocks: any[] = []
   const usage: any = {
     prompt_tokens: 0,
@@ -44,6 +51,12 @@ export async function processResponsesStream(
     }
 
     if (event.type === 'text_delta') {
+      if (event.delta) {
+        emitAssistantStreamUpdate(options, {
+          type: 'text_delta',
+          delta: event.delta,
+        })
+      }
       if (!hasMarkedStreaming) {
         setRequestStatus({ kind: 'streaming' })
         hasMarkedStreaming = true

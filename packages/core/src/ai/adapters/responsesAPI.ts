@@ -14,6 +14,7 @@ import {
   convertMessagesToInput,
 } from './responsesAPI/messageInput'
 import { parseNonStreamingResponse as parseResponsesApiNonStreamingResponse } from './responsesAPI/nonStreaming'
+import type { AssistantStreamUpdateOptions } from './assistantStreamUpdate'
 
 type StreamingFunctionCallState = {
   id?: string
@@ -302,7 +303,10 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
   }
 
   // Override parseResponse to handle Response API directly without double conversion
-  async parseResponse(response: any): Promise<UnifiedResponse> {
+  async parseResponse(
+    response: any,
+    options?: AssistantStreamUpdateOptions,
+  ): Promise<UnifiedResponse> {
     // Check if this is a streaming response (has ReadableStream body)
     if (response?.body instanceof ReadableStream) {
       // Handle streaming directly - don't go through OpenAIAdapter conversion
@@ -310,6 +314,7 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
         this.parseStreamingResponse(response),
         Date.now(),
         response.id ?? `resp_${Date.now()}`,
+        options,
       )
 
       // LINUX WAY: ONE representation only - tool_use blocks in content
@@ -478,6 +483,7 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
   // Implement abstract method for parsing streaming OpenAI responses
   protected async parseStreamingOpenAIResponse(
     response: any,
+    options?: AssistantStreamUpdateOptions,
   ): Promise<{ assistantMessage: any; rawResponse: any }> {
     // Delegate to the processResponsesStream helper for consistency
     const { processResponsesStream } = await import('./responsesStreaming')
@@ -486,6 +492,7 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
       this.parseStreamingResponse(response),
       Date.now(),
       response.id ?? `resp_${Date.now()}`,
+      options,
     )
   }
 

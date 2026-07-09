@@ -1,6 +1,10 @@
 import type { ChatCompletionStream } from 'openai/lib/ChatCompletionStream'
 import type OpenAI from 'openai'
 import { OpenAIStreamError } from '#core/ai/openai/stream'
+import {
+  emitAssistantStreamUpdate,
+  type AssistantStreamUpdateOptions,
+} from '#core/ai/adapters/assistantStreamUpdate'
 import { debug as debugLogger } from '#core/utils/debugLogger'
 import {
   setRequestStatus,
@@ -141,7 +145,10 @@ export function isOpenAIStreamDegradedResponse(
 export async function handleMessageStream(
   stream: ChatCompletionStream,
   signal?: AbortSignal,
+  options?: AssistantStreamUpdateOptions,
 ): Promise<OpenAI.ChatCompletion> {
+  emitAssistantStreamUpdate(options, { type: 'start' })
+
   const streamStartTime = Date.now()
   let ttftMs: number | undefined
   let chunkCount = 0
@@ -204,7 +211,12 @@ export async function handleMessageStream(
 
         message = messageReducer(message, chunk)
 
-        if (chunk?.choices?.[0]?.delta?.content) {
+        const textDelta = chunk?.choices?.[0]?.delta?.content
+        if (textDelta) {
+          emitAssistantStreamUpdate(options, {
+            type: 'text_delta',
+            delta: textDelta,
+          })
           if (!hasMarkedStreaming) {
             setRequestStatus({ kind: 'streaming' })
             hasMarkedStreaming = true

@@ -4,6 +4,19 @@ import type { PermissionMode, ToolPermissionContext } from './permissions'
 
 export type ToolRenderOutput = unknown
 
+export type AssistantStreamUpdate =
+  | {
+      type: 'start'
+      agentId?: string
+      requestId?: string
+    }
+  | {
+      type: 'text_delta'
+      delta: string
+      agentId?: string
+      requestId?: string
+    }
+
 export type SetToolJSXFn<TRenderable = ToolRenderOutput> = (
   jsx: {
     jsx: TRenderable | null
@@ -16,6 +29,7 @@ export interface ToolUseContext {
   messageId: string | undefined
   toolUseId?: string
   agentId?: string
+  requestId?: string
   safeMode?: boolean
   commandSource?: CommandSource
   abortController: AbortController
@@ -33,6 +47,9 @@ export interface ToolUseContext {
     getCustomSystemPromptAdditions?: () => string[]
     openMessageSelector?: () => void
     onStreamEvent?: (event: unknown) => void
+    onAssistantStreamUpdate?: (
+      event: AssistantStreamUpdate,
+    ) => void | Promise<void>
     maxBudgetUsd?: number
     maxTurns?: number
     forkNumber?: number

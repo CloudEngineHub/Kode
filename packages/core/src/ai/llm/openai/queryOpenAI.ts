@@ -35,6 +35,7 @@ import {
 } from '#core/ai/openai'
 import type { UnifiedRequestParams } from '#core/types/modelCapabilities'
 import type { RequestHeadersProfile } from '#core/ai/llm/restrictedClientCompat'
+import type { AssistantStreamUpdateOptions } from '#core/ai/adapters/assistantStreamUpdate'
 
 import {
   convertAnthropicMessagesToOpenAIMessages,
@@ -100,6 +101,11 @@ export async function queryOpenAI(
 
   // 🔍 Debug: 记录模型配置详情
   const currentRequest = getCurrentRequest()
+  const assistantStreamUpdateOptions = {
+    onAssistantStreamUpdate: toolUseContext?.options?.onAssistantStreamUpdate,
+    agentId: toolUseContext?.agentId,
+    requestId: toolUseContext?.requestId ?? currentRequest?.id,
+  } satisfies AssistantStreamUpdateOptions
   debugLogger.api('MODEL_CONFIG_OPENAI', {
     modelProfileFound: !!modelProfile,
     modelProfileId: modelProfile?.modelName,
@@ -271,8 +277,12 @@ export async function queryOpenAI(
             options?.requestHeadersProfile,
           )
 
-          const unifiedResponse =
-            await adapterContext.adapter.parseResponse(response)
+          const unifiedResponse = await adapterContext.adapter.parseResponse(
+            response,
+            adapterContext.request.stream === true
+              ? assistantStreamUpdateOptions
+              : undefined,
+          )
 
           const assistantMessage = buildAssistantMessageFromUnifiedResponse(
             unifiedResponse,
@@ -323,6 +333,7 @@ export async function queryOpenAI(
           finalResponse = await handleMessageStream(
             s as ChatCompletionStream,
             signal,
+            assistantStreamUpdateOptions,
           )
         } else {
           finalResponse = s

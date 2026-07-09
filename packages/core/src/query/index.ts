@@ -36,6 +36,9 @@ export interface ExtendedToolUseContext extends ToolUseContext {
     verbose: boolean
     safeMode: boolean
     onStreamEvent?: (event: unknown) => void
+    onAssistantStreamUpdate?: NonNullable<
+      ToolUseContext['options']
+    >['onAssistantStreamUpdate']
     maxBudgetUsd?: number
     maxTurns?: number
     maxThinkingTokens: number

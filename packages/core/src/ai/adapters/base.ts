@@ -5,6 +5,7 @@ import {
 } from '#core/types/modelCapabilities'
 import { ModelProfile } from '#core/utils/config'
 import { Tool } from '#core/tooling/Tool'
+import type { AssistantStreamUpdateOptions } from './assistantStreamUpdate'
 
 // Canonical token representation - normalize once at the boundary
 interface TokenUsage {
@@ -68,7 +69,10 @@ export abstract class ModelAPIAdapter {
 
   // Subclasses must implement these methods
   abstract createRequest(params: UnifiedRequestParams): any
-  abstract parseResponse(response: any): Promise<UnifiedResponse>
+  abstract parseResponse(
+    response: any,
+    options?: AssistantStreamUpdateOptions,
+  ): Promise<UnifiedResponse>
   abstract buildTools(tools: Tool[]): any
 
   // Optional: subclasses can implement streaming for real-time updates
