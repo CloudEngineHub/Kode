@@ -12,6 +12,7 @@ import { getClients, type WrappedClient } from '#core/mcp/client'
 
 import { JsonRpcError, type JsonRpcPeer } from '../../jsonrpc'
 import type * as Protocol from '../../protocol'
+import type { AcpSessionManager } from '../../sessionManager'
 import { connectAcpMcpServers, mergeMcpClients } from '../mcp'
 import { coercePermissionMode, getModeState } from '../modes'
 import {
@@ -47,7 +48,7 @@ async function loadSessionDeps(): Promise<{
 
 export async function handleSessionNew(args: {
   peer: JsonRpcPeer
-  sessions: Map<string, SessionState>
+  sessionManager: AcpSessionManager<SessionState>
   params: unknown
 }): Promise<Protocol.NewSessionResponse> {
   const p = isRecord(args.params) ? args.params : {}
@@ -88,6 +89,7 @@ export async function handleSessionNew(args: {
     cwd,
     mcpServers,
     mcpClients,
+    sessionOwnedMcpClients: acpMcpClients,
     commands,
     tools,
     systemPrompt,
@@ -101,7 +103,7 @@ export async function handleSessionNew(args: {
     toolCalls: new Map(),
   }
 
-  args.sessions.set(sessionId, session)
+  await args.sessionManager.set(sessionId, session)
 
   sendAvailableCommands(args.peer, session)
   sendCurrentMode(args.peer, session)
@@ -115,7 +117,7 @@ export async function handleSessionNew(args: {
 
 export async function handleSessionLoad(args: {
   peer: JsonRpcPeer
-  sessions: Map<string, SessionState>
+  sessionManager: AcpSessionManager<SessionState>
   params: unknown
 }): Promise<Protocol.LoadSessionResponse> {
   const p = isRecord(args.params) ? args.params : {}
@@ -166,6 +168,7 @@ export async function handleSessionLoad(args: {
     cwd,
     mcpServers,
     mcpClients,
+    sessionOwnedMcpClients: acpMcpClients,
     commands,
     tools,
     systemPrompt,
@@ -183,7 +186,7 @@ export async function handleSessionLoad(args: {
     toolCalls: new Map(),
   }
 
-  args.sessions.set(sessionId, session)
+  await args.sessionManager.set(sessionId, session)
   sendAvailableCommands(args.peer, session)
   sendCurrentMode(args.peer, session)
   replayConversation(args.peer, session)
@@ -193,14 +196,14 @@ export async function handleSessionLoad(args: {
 
 export async function handleSessionSetMode(args: {
   peer: JsonRpcPeer
-  sessions: Map<string, SessionState>
+  sessionManager: AcpSessionManager<SessionState>
   params: unknown
 }): Promise<Protocol.SetSessionModeResponse> {
   const p = isRecord(args.params) ? args.params : {}
   const sessionId = typeof p.sessionId === 'string' ? p.sessionId : ''
   const modeId = typeof p.modeId === 'string' ? p.modeId : ''
 
-  const session = args.sessions.get(sessionId)
+  const session = args.sessionManager.get(sessionId)
   if (!session)
     throw new JsonRpcError(-32602, `Session not found: ${sessionId}`)
 
@@ -221,12 +224,12 @@ export async function handleSessionSetMode(args: {
 }
 
 export async function handleSessionCancel(args: {
-  sessions: Map<string, SessionState>
+  sessionManager: AcpSessionManager<SessionState>
   params: unknown
 }): Promise<void> {
   const p = isRecord(args.params) ? args.params : {}
   const sessionId = typeof p.sessionId === 'string' ? p.sessionId : ''
-  const session = args.sessions.get(sessionId)
+  const session = args.sessionManager.get(sessionId)
   if (!session) return
   session.activeAbortController?.abort()
 }

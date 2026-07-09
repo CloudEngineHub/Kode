@@ -9,6 +9,21 @@ export type ManagedAcpSession = {
   sessionOwnedMcpClients?: WrappedClient[]
 }
 
+export type AcpTurnBusyReason = 'session_busy' | 'global_turn_busy'
+
+export type AcpTurnLease = {
+  sessionId: string
+  release(): void
+}
+
+export type AcpTurnAcquireResult =
+  | { ok: true; lease: AcpTurnLease }
+  | {
+      ok: false
+      reason: AcpTurnBusyReason
+      activeSessionId: string
+    }
+
 type SessionEntry<T extends ManagedAcpSession> = {
   session: T
   lastAccessedAt: number
@@ -27,6 +42,12 @@ export async function closeSessionOwnedMcpClients(
 
 export class AcpSessionManager<T extends ManagedAcpSession> {
   private readonly sessions = new Map<string, SessionEntry<T>>()
+  private activeTurn:
+    | {
+        sessionId: string
+        token: symbol
+      }
+    | undefined
 
   constructor(
     private readonly options: {
@@ -49,6 +70,38 @@ export class AcpSessionManager<T extends ManagedAcpSession> {
 
   values(): T[] {
     return Array.from(this.sessions.values(), entry => entry.session)
+  }
+
+  tryAcquireTurn(sessionId: string): AcpTurnAcquireResult {
+    const activeTurn = this.activeTurn
+    if (activeTurn) {
+      return {
+        ok: false,
+        reason:
+          activeTurn.sessionId === sessionId
+            ? 'session_busy'
+            : 'global_turn_busy',
+        activeSessionId: activeTurn.sessionId,
+      }
+    }
+
+    const token = Symbol(sessionId)
+    this.activeTurn = { sessionId, token }
+    let released = false
+
+    return {
+      ok: true,
+      lease: {
+        sessionId,
+        release: () => {
+          if (released) return
+          released = true
+          if (this.activeTurn?.token === token) {
+            this.activeTurn = undefined
+          }
+        },
+      },
+    }
   }
 
   async set(sessionId: string, session: T): Promise<void> {

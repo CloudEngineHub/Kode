@@ -4,6 +4,8 @@ import { JsonRpcPeer } from './jsonrpc'
 
 type TransportOptions = {
   writeLine: (line: string) => void
+  input?: NodeJS.ReadableStream
+  onClose?: () => Promise<void> | void
 }
 
 /**
@@ -29,7 +31,7 @@ export class StdioTransport {
 
     // Read newline-delimited JSON from stdin.
     this.rl = readline.createInterface({
-      input: process.stdin,
+      input: this.opts.input ?? process.stdin,
       crlfDelay: Infinity,
     })
 
@@ -62,6 +64,10 @@ export class StdioTransport {
         const pending = Array.from(this.pending)
         if (pending.length > 0) {
           await Promise.allSettled(pending)
+        }
+        if (this.opts.onClose) {
+          await this.opts.onClose()
+          return
         }
         process.exit(0)
       })()

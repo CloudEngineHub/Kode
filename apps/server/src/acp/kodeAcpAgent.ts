@@ -13,12 +13,22 @@ import {
 } from './agent/handlers/sessions'
 import { handleSessionPrompt } from './agent/handlers/prompt'
 import type { SessionState } from './agent/types'
+import { AcpSessionManager } from './sessionManager'
+
+export type KodeAcpAgentOptions = {
+  sessionManager?: AcpSessionManager<SessionState>
+}
 
 export class KodeAcpAgent {
   private clientCapabilities: Protocol.ClientCapabilities = {}
-  private readonly sessions = new Map<string, SessionState>()
+  private readonly sessionManager: AcpSessionManager<SessionState>
 
-  constructor(private readonly peer: JsonRpcPeer) {
+  constructor(
+    private readonly peer: JsonRpcPeer,
+    options: KodeAcpAgentOptions = {},
+  ) {
+    this.sessionManager =
+      options.sessionManager ?? new AcpSessionManager<SessionState>()
     this.registerMethods()
   }
 
@@ -51,7 +61,7 @@ export class KodeAcpAgent {
   private onSessionNew(params: unknown): Promise<Protocol.NewSessionResponse> {
     return handleSessionNew({
       peer: this.peer,
-      sessions: this.sessions,
+      sessionManager: this.sessionManager,
       params,
     })
   }
@@ -61,7 +71,7 @@ export class KodeAcpAgent {
   ): Promise<Protocol.LoadSessionResponse> {
     return handleSessionLoad({
       peer: this.peer,
-      sessions: this.sessions,
+      sessionManager: this.sessionManager,
       params,
     })
   }
@@ -71,19 +81,19 @@ export class KodeAcpAgent {
   ): Promise<Protocol.SetSessionModeResponse> {
     return handleSessionSetMode({
       peer: this.peer,
-      sessions: this.sessions,
+      sessionManager: this.sessionManager,
       params,
     })
   }
 
   private onSessionCancel(params: unknown): Promise<void> {
-    return handleSessionCancel({ sessions: this.sessions, params })
+    return handleSessionCancel({ sessionManager: this.sessionManager, params })
   }
 
   private onSessionPrompt(params: unknown): Promise<Protocol.PromptResponse> {
     return handleSessionPrompt({
       peer: this.peer,
-      sessions: this.sessions,
+      sessionManager: this.sessionManager,
       params,
     })
   }
