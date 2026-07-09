@@ -168,7 +168,7 @@ export function PromptInputView({
     !compact &&
     !customStatusLineActive &&
     !hasPriorityStatusMessage &&
-    columns >= 64
+    columns >= 80
   const modelStatusText =
     showModelInfo && modelInfo
       ? `[${modelInfo.provider}] ${modelInfo.name}${
@@ -177,10 +177,19 @@ export function PromptInputView({
             : ''
         }`
       : null
-  const rightStatusWidth = Math.max(
-    18,
-    Math.min(60, Math.floor(columns * 0.45)),
+  const horizontalStatusPadding = 1 + Math.max(0, statusLinePadding)
+  const statusContentColumns = Math.max(
+    1,
+    columns - horizontalStatusPadding * 2,
   )
+  const modelStatusWidth = modelStatusText
+    ? Math.min(52, Math.max(24, Math.floor(statusContentColumns * 0.36)))
+    : 0
+  const showInlineModelStatus =
+    Boolean(modelStatusText) && statusContentColumns - modelStatusWidth > 24
+  const statusTextWidth = showInlineModelStatus
+    ? Math.max(1, statusContentColumns - modelStatusWidth - 1)
+    : statusContentColumns
 
   return (
     <Box flexDirection="column">
@@ -258,12 +267,12 @@ export function PromptInputView({
       {/* Status line - below PWD */}
       {!completionActive && suggestions.length === 0 && showStatusLine && (
         <Box flexDirection="column">
-          <Box
-            flexDirection="row"
-            justifyContent="space-between"
-            paddingX={1 + Math.max(0, statusLinePadding)}
-          >
-            <Box justifyContent="flex-start" gap={1} flexShrink={1}>
+          <Box flexDirection="row" paddingX={horizontalStatusPadding}>
+            <Box
+              justifyContent="flex-start"
+              flexShrink={1}
+              width={statusTextWidth}
+            >
               {exitMessage.show ? (
                 <Text dimColor wrap="truncate-end">
                   Press {exitMessage.key} again to exit
@@ -305,20 +314,13 @@ export function PromptInputView({
                 </Text>
               ) : null}
             </Box>
-            {!compact && !hasPriorityStatusMessage && (
+            {!compact && !hasPriorityStatusMessage && showInlineModelStatus && (
               <SentryErrorBoundary
                 children={
-                  <Box
-                    justifyContent="flex-end"
-                    gap={1}
-                    flexShrink={0}
-                    width={modelStatusText ? rightStatusWidth : undefined}
-                  >
-                    {modelStatusText ? (
-                      <Text dimColor wrap="truncate-start">
-                        {modelStatusText}
-                      </Text>
-                    ) : null}
+                  <Box flexShrink={0} marginLeft={1} width={modelStatusWidth}>
+                    <Text dimColor wrap="truncate-middle">
+                      {modelStatusText}
+                    </Text>
                     <TokenWarning
                       tokenUsage={tokenUsage}
                       contextLimit={modelInfo?.contextLength}

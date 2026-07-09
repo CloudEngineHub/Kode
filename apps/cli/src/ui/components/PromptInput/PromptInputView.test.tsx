@@ -10,6 +10,7 @@ import { PromptInputView } from './PromptInputView'
 type TestHarness = {
   unmount: () => void
   getOutput: () => string
+  resize: (columns: number, rows?: number) => void
   wait: (ms: number) => Promise<void>
 }
 
@@ -21,7 +22,10 @@ afterEach(() => {
   }
 })
 
-function createHarness(element: React.ReactElement): TestHarness {
+function createHarness(
+  element: React.ReactElement,
+  options: { columns?: number; rows?: number } = {},
+): TestHarness {
   const stdin = new PassThrough() as PassThrough & {
     isTTY?: boolean
     isRaw?: boolean
@@ -43,8 +47,8 @@ function createHarness(element: React.ReactElement): TestHarness {
     rows?: number
   }
   stdout.isTTY = true
-  stdout.columns = 120
-  stdout.rows = 24
+  stdout.columns = options.columns ?? 120
+  stdout.rows = options.rows ?? 24
 
   let rawOutput = ''
   stdout.on('data', chunk => {
@@ -60,6 +64,11 @@ function createHarness(element: React.ReactElement): TestHarness {
   const harness: TestHarness = {
     unmount: () => instance.unmount(),
     getOutput: () => stripAnsi(rawOutput),
+    resize: (columns, rows = stdout.rows ?? 24) => {
+      stdout.columns = columns
+      stdout.rows = rows
+      stdout.emit('resize')
+    },
     wait: async ms => new Promise(resolve => setTimeout(resolve, ms)),
   }
   mounted.push(harness)
@@ -201,5 +210,39 @@ describe('PromptInputView status line layout', () => {
 
     expect(output).toContain(pasteGuardMessage)
     expect(output).not.toContain('[custom-openai] mimo-v2.5-pro')
+  })
+
+  test('keeps long default status and model info on one bounded row after resize', async () => {
+    const longDefaultStatusLine =
+      'Input: Chat · /bash command · /note note · & background · Tools: Auto-run safe tools (shift+tab) · Enter send'
+    const harness = createHarness(
+      renderPromptInputView({
+        customStatusLineActive: false,
+        statusLine: longDefaultStatusLine,
+      }),
+      { columns: 120 },
+    )
+
+    await harness.wait(20)
+    harness.resize(90)
+    await harness.wait(180)
+    harness.resize(120)
+    await harness.wait(180)
+
+    const output = harness.getOutput()
+    expect(output).toContain('Input: Chat')
+    expect(output).toContain('[custom-openai] mimo-v2.5-pro')
+
+    const isolatedModelRows = output
+      .replace(/\r/g, '\n')
+      .split('\n')
+      .filter(line => {
+        const trimmed = line.trim()
+        return (
+          trimmed.startsWith('[custom-openai] mimo-v2.5-pro') &&
+          !line.includes('Input: Chat')
+        )
+      })
+    expect(isolatedModelRows).toHaveLength(0)
   })
 })
