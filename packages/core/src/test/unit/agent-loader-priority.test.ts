@@ -6,6 +6,11 @@ import { join, resolve } from 'node:path'
 import { clearAgentCache, getAgentByType } from '@kode/agent/loader'
 import { getCwd, setCwd } from '#core/utils/state'
 
+function restoreEnv(name: string, value: string | undefined): void {
+  if (value === undefined) delete process.env[name]
+  else process.env[name] = value
+}
+
 function writeAgentFile(args: {
   dir: string
   agentType: string
@@ -103,10 +108,10 @@ test('agent loader precedence: project > user > built-in; .kode > .claude', asyn
     const resolvedBuiltIn = await getAgentByType('general-purpose')
     expect(resolvedBuiltIn?.systemPrompt).toBe('user override prompt')
   } finally {
-    process.env.HOME = originalHome
-    process.env.KODE_CONFIG_DIR = originalKodeDir
-    process.env.ANYKODE_CONFIG_DIR = originalAnyKodeDir
-    process.env.CLAUDE_CONFIG_DIR = originalClaudeDir
+    restoreEnv('HOME', originalHome)
+    restoreEnv('KODE_CONFIG_DIR', originalKodeDir)
+    restoreEnv('ANYKODE_CONFIG_DIR', originalAnyKodeDir)
+    restoreEnv('CLAUDE_CONFIG_DIR', originalClaudeDir)
     clearAgentCache()
     await setCwd(originalCwd)
   }
