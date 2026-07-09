@@ -85,6 +85,24 @@ function getEventKey(event: AgentEvent, index: number): string {
   return `${event.type}-${index}`
 }
 
+const AUTO_FOLLOW_BOTTOM_THRESHOLD_PX = 72
+
+type ScrollMetrics = {
+  scrollTop: number
+  scrollHeight: number
+  clientHeight: number
+}
+
+function isNearScrollBottom(
+  metrics: ScrollMetrics,
+  thresholdPx = AUTO_FOLLOW_BOTTOM_THRESHOLD_PX,
+): boolean {
+  return (
+    metrics.scrollHeight - metrics.scrollTop - metrics.clientHeight <=
+    thresholdPx
+  )
+}
+
 function TerminalEmptyState(props: { workspacePath?: string | null }) {
   return (
     <div className="grid gap-1 text-[hsl(var(--kode-terminal-muted))]">
@@ -144,6 +162,8 @@ export function ChatPage(props: {
   workspacePath?: string | null
 }) {
   const bottomRef = React.useRef<HTMLDivElement | null>(null)
+  const scrollViewportRef = React.useRef<HTMLDivElement | null>(null)
+  const shouldAutoFollowRef = React.useRef(true)
 
   const chatEvents = React.useMemo(
     () => getChatEventsForRender(props.events),
@@ -155,10 +175,24 @@ export function ChatPage(props: {
       : 'empty'
 
   React.useEffect(() => {
+    shouldAutoFollowRef.current = true
+  }, [props.sessionTitle, props.workspacePath])
+
+  const handleViewportScroll = React.useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      shouldAutoFollowRef.current = isNearScrollBottom(event.currentTarget)
+    },
+    [],
+  )
+
+  React.useEffect(() => {
+    if (!props.sending && !shouldAutoFollowRef.current) return
+
     bottomRef.current?.scrollIntoView({
       block: 'end',
       behavior: props.sending ? 'auto' : 'smooth',
     })
+    shouldAutoFollowRef.current = true
   }, [chatEvents.length, lastEventKey, props.events.length, props.sending])
 
   return (
@@ -180,12 +214,19 @@ export function ChatPage(props: {
       }
       footerClassName="p-2 md:p-3"
     >
-      <ScrollArea className="kode-terminal-scroll flex-1">
+      <ScrollArea
+        className="kode-terminal-scroll flex-1"
+        viewportRef={scrollViewportRef}
+        onViewportScroll={handleViewportScroll}
+      >
         <div
           className={cn(
             'mx-auto flex min-h-full w-full max-w-6xl flex-col justify-end gap-2 px-3 py-4 font-mono text-[13px] leading-6 md:px-5',
           )}
           aria-live="polite"
+          aria-label="Kode terminal transcript"
+          aria-relevant="additions text"
+          role="log"
         >
           {chatEvents.length === 0 ? (
             <div className="flex flex-1 items-end pb-2">
@@ -207,4 +248,5 @@ export function ChatPage(props: {
 export const __chatPageForTests = {
   getChatEventsForRender,
   getEventKey,
+  isNearScrollBottom,
 }

@@ -39,9 +39,21 @@ describe('ChatPage event normalization', () => {
         parent_tool_use_id: null,
         message: { role: 'user', content: 'run tool' },
       },
-      mcpProgressEvent({ uuid: 'progress-1', toolUseId: 'tool-a', progress: 1 }),
-      mcpProgressEvent({ uuid: 'progress-2', toolUseId: 'tool-a', progress: 2 }),
-      mcpProgressEvent({ uuid: 'progress-3', toolUseId: 'tool-b', progress: 1 }),
+      mcpProgressEvent({
+        uuid: 'progress-1',
+        toolUseId: 'tool-a',
+        progress: 1,
+      }),
+      mcpProgressEvent({
+        uuid: 'progress-2',
+        toolUseId: 'tool-a',
+        progress: 2,
+      }),
+      mcpProgressEvent({
+        uuid: 'progress-3',
+        toolUseId: 'tool-b',
+        progress: 1,
+      }),
     ]
 
     const normalized = __chatPageForTests.getChatEventsForRender(events)
@@ -56,5 +68,23 @@ describe('ChatPage event normalization', () => {
     expect(__chatPageForTests.getEventKey(normalized[1]!, 1)).toBe(
       'stream_event-mcp_progress-tool-a',
     )
+  })
+
+  test('detects sticky bottom scroll state with a small threshold', () => {
+    expect(
+      __chatPageForTests.isNearScrollBottom({
+        scrollTop: 928,
+        clientHeight: 400,
+        scrollHeight: 1400,
+      }),
+    ).toBe(true)
+
+    expect(
+      __chatPageForTests.isNearScrollBottom({
+        scrollTop: 800,
+        clientHeight: 400,
+        scrollHeight: 1400,
+      }),
+    ).toBe(false)
   })
 })
