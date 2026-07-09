@@ -767,7 +767,7 @@ export function KeypressProvider({
   children: React.ReactNode
   debugKeystrokeLogging?: boolean
 }) {
-  const { stdin, setRawMode } = useStdin()
+  const { stdin, setRawMode, isRawModeSupported } = useStdin()
 
   type Subscription<THandler> = {
     handler: THandler
@@ -945,7 +945,9 @@ export function KeypressProvider({
   useEffect(() => {
     const wasRaw = (stdin as unknown as { isRaw?: boolean } | null)?.isRaw
     const shouldEnableRaw =
-      stdin.isTTY === true && (wasRaw === false || wasRaw === undefined)
+      isRawModeSupported &&
+      stdin.isTTY === true &&
+      (wasRaw === false || wasRaw === undefined)
     if (shouldEnableRaw) {
       try {
         setRawMode(true)
@@ -996,7 +998,14 @@ export function KeypressProvider({
         }
       }
     }
-  }, [stdin, setRawMode, debugKeystrokeLogging, broadcast, broadcastMouse])
+  }, [
+    stdin,
+    setRawMode,
+    isRawModeSupported,
+    debugKeystrokeLogging,
+    broadcast,
+    broadcastMouse,
+  ])
 
   useEffect(() => {
     return () => {
