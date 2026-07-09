@@ -10,6 +10,11 @@ type ServeNodeFetchServer<TData> = {
   upgrade: (req: Request, options: { data: TData }) => boolean
 }
 
+export type ServeNodeWebSocketServer = Pick<
+  WebSocketServer,
+  'handleUpgrade' | 'clients' | 'close'
+>
+
 export type ServeNodeOptions<TData> = {
   hostname: string
   port: number
@@ -25,6 +30,7 @@ export type ServeNodeOptions<TData> = {
     ) => void | Promise<void>
     close: (ws: WebSocket & { data: TData }) => void
   }
+  webSocketServer?: ServeNodeWebSocketServer
 }
 
 export type ServeNodeResult = {
@@ -103,17 +109,16 @@ async function sendFetchResponseToSocket(
   headers.push(`content-length: ${body.length}`)
 
   const statusText = response.statusText || 'OK'
-  socket.write(`HTTP/1.1 ${response.status} ${statusText}\r\n`)
-  socket.write(headers.join('\r\n'))
-  socket.write('\r\n\r\n')
-  if (body.length) socket.write(body)
-  socket.destroy()
+  const head = Buffer.from(
+    `HTTP/1.1 ${response.status} ${statusText}\r\n${headers.join('\r\n')}\r\n\r\n`,
+  )
+  socket.end(body.length ? Buffer.concat([head, body]) : head)
 }
 
 export async function serveNode<TData>(
   options: ServeNodeOptions<TData>,
 ): Promise<ServeNodeResult> {
-  const wss = new WebSocketServer({ noServer: true })
+  const wss = options.webSocketServer ?? new WebSocketServer({ noServer: true })
 
   const httpServer = createServer(async (req, res) => {
     const request = await toFetchRequest(req, options.hostname)
@@ -126,47 +131,65 @@ export async function serveNode<TData>(
     await sendFetchResponse(res, response)
   })
 
-  httpServer.on('upgrade', async (req, socket, head) => {
-    const request = await toFetchRequest(req, options.hostname)
-    let upgraded = false
+  httpServer.on('upgrade', (req, socket, head) => {
+    void (async () => {
+      const request = await toFetchRequest(req, options.hostname)
+      let upgradeState: 'pending' | 'upgrading' | 'upgraded' | 'failed' =
+        'pending'
+      const didUpgrade = () => upgradeState === 'upgraded'
 
-    const response = await options.fetch(request, {
-      upgrade: (_request, upgradeOptions) => {
-        if (upgraded) return true
-        upgraded = true
+      const response = await options.fetch(request, {
+        upgrade: (_request, upgradeOptions) => {
+          if (didUpgrade()) return true
+          if (upgradeState !== 'pending') return false
 
-        try {
-          wss.handleUpgrade(req, socket, head, ws => {
-            const wsWithData = Object.assign(ws, { data: upgradeOptions.data })
+          upgradeState = 'upgrading'
+          let accepted = false
+          try {
+            wss.handleUpgrade(req, socket, head, ws => {
+              const wsWithData = Object.assign(ws, {
+                data: upgradeOptions.data,
+              })
 
-            ws.on('message', message => {
-              Promise.resolve(
-                options.websocket.message(wsWithData, message),
-              ).catch(() => {})
-            })
-            ws.on('close', () => {
+              ws.on('message', message => {
+                Promise.resolve(
+                  options.websocket.message(wsWithData, message),
+                ).catch(() => {})
+              })
+              ws.on('close', () => {
+                try {
+                  options.websocket.close(wsWithData)
+                } catch {}
+              })
+
+              accepted = true
+              upgradeState = 'upgraded'
               try {
-                options.websocket.close(wsWithData)
+                options.websocket.open(wsWithData)
               } catch {}
             })
+          } catch {
+            upgradeState = 'failed'
+            return false
+          }
 
-            try {
-              options.websocket.open(wsWithData)
-            } catch {}
-          })
+          if (!accepted) {
+            upgradeState = 'failed'
+            return false
+          }
           return true
-        } catch {
-          return false
-        }
-      },
-    })
+        },
+      })
 
-    if (upgraded) return
-    if (response) {
-      await sendFetchResponseToSocket(socket, response)
-      return
-    }
-    socket.destroy()
+      if (didUpgrade()) return
+      if (response) {
+        await sendFetchResponseToSocket(socket, response)
+        return
+      }
+      socket.destroy()
+    })().catch(() => {
+      socket.destroy()
+    })
   })
 
   await new Promise<void>((resolve, reject) => {
