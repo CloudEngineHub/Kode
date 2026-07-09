@@ -267,6 +267,7 @@ export default function App() {
                 sending={chat.sending}
                 permissionRequest={chat.permissionRequest}
                 runtimeAttached={runtimeAttached}
+                runtimeStatus={runtimeStatus}
                 sessionTitle={selectedSessionTitle}
                 workspacePath={currentWorkspace?.path ?? null}
               />

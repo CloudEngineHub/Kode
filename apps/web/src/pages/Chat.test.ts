@@ -238,6 +238,13 @@ describe('ChatPage event normalization', () => {
         },
         sessionTitle: 'New session',
         workspacePath: 'C:\\repo',
+        runtimeStatus: {
+          ok: true,
+          transport: 'daemon',
+          pid: 123,
+          version: '2.2.1',
+          activeSessions: 1,
+        },
       }),
     )
     const controlsMatch = html.match(/<textarea[^>]+aria-controls="([^"]+)"/)
@@ -246,6 +253,9 @@ describe('ChatPage event normalization', () => {
     expect(html).toContain(`id="${controlsMatch?.[1]}"`)
     expect(html).toContain('role="log"')
     expect(html).toContain('Permission pending')
+    expect(html).toContain('daemon online')
+    expect(html).toContain('agent needs approval')
+    expect(html).toContain('1 event')
     expect(html).toContain('Enter')
     expect(html).toContain('Up/Down')
     expect(html).toContain('/help')

@@ -9,12 +9,23 @@ export type TerminalStatusHint = {
   label: string
 }
 
+export type TerminalStatusSegment = {
+  key: string
+  label: string
+}
+
 function terminalAttachmentLabel(runtimeAttached?: boolean): string {
   return runtimeAttached ? 'attached' : 'detached'
 }
 
 function terminalStatusHintText(hints: readonly TerminalStatusHint[]): string {
   return hints.map(hint => `${hint.key} ${hint.label}`).join(' | ')
+}
+
+function terminalStatusSegmentText(
+  segments: readonly TerminalStatusSegment[] = [],
+): string {
+  return segments.map(segment => segment.label).join(' | ')
 }
 
 function terminalViewportSizeText(
@@ -73,12 +84,15 @@ function TerminalTitleBar(props: {
 export function TerminalStatusLine(props: {
   hints: readonly TerminalStatusHint[]
   leading?: string
+  segments?: readonly TerminalStatusSegment[]
   viewportSize?: TerminalViewportSize | null
 }) {
   const viewportText = terminalViewportSizeText(props.viewportSize)
+  const segmentText = terminalStatusSegmentText(props.segments)
   const ariaParts = [
     props.leading ?? 'ready',
     props.viewportSize ? `${viewportText} viewport` : null,
+    segmentText || null,
     terminalStatusHintText(props.hints),
   ].filter(Boolean)
 
@@ -96,6 +110,18 @@ export function TerminalStatusLine(props: {
         <div className="hidden shrink-0 items-center gap-1.5 md:flex">
           <span className="text-[hsl(var(--kode-terminal-prompt))]">:</span>
           <span>{viewportText}</span>
+        </div>
+      ) : null}
+      {props.segments?.length ? (
+        <div className="hidden min-w-0 shrink items-center gap-2 lg:flex">
+          {props.segments.map(segment => (
+            <span
+              key={segment.key}
+              className="min-w-0 truncate text-[hsl(var(--kode-terminal-muted))]"
+            >
+              {segment.label}
+            </span>
+          ))}
         </div>
       ) : null}
       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
@@ -234,5 +260,6 @@ export function TerminalPlaceholder(props: {
 export const __terminalFrameForTests = {
   terminalAttachmentLabel,
   terminalStatusHintText,
+  terminalStatusSegmentText,
   terminalViewportSizeText,
 }

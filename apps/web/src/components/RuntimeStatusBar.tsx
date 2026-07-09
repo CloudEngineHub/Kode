@@ -9,14 +9,11 @@ import {
 } from 'lucide-react'
 
 import type { RuntimeStatus } from '@kode/client'
+import {
+  compactSessionId,
+  runtimeStatusCompactLabel,
+} from '../lib/runtimePresentation'
 import { cn } from '../lib/utils'
-
-function shortSessionId(sessionId: string | null): string {
-  if (!sessionId) return 'new'
-  const trimmed = sessionId.trim()
-  if (trimmed.length <= 8) return trimmed || 'new'
-  return trimmed.slice(0, 8)
-}
 
 function StatusPill(props: {
   tone?: 'default' | 'success' | 'muted' | 'warn'
@@ -59,13 +56,7 @@ export function RuntimeStatusBar(props: {
           props.runtimeStatus ? (daemonOnline ? 'success' : 'warn') : 'muted'
         }
         icon={<Server className="h-3.5 w-3.5 shrink-0" />}
-        label={
-          props.runtimeStatus
-            ? daemonOnline
-              ? 'daemon online'
-              : 'daemon offline'
-            : 'daemon checking'
-        }
+        label={runtimeStatusCompactLabel(props.runtimeStatus)}
       />
       <StatusPill
         tone={props.runtimeAttached ? 'success' : 'muted'}
@@ -93,7 +84,7 @@ export function RuntimeStatusBar(props: {
       <StatusPill
         tone="muted"
         icon={<CircleDot className="h-3.5 w-3.5 shrink-0" />}
-        label={`session ${shortSessionId(props.selectedSessionId)}`}
+        label={`session ${compactSessionId(props.selectedSessionId)}`}
       />
       <StatusPill
         tone="muted"
@@ -105,5 +96,5 @@ export function RuntimeStatusBar(props: {
 }
 
 export const __runtimeStatusBarForTests = {
-  shortSessionId,
+  shortSessionId: compactSessionId,
 }

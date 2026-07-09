@@ -23,14 +23,22 @@ import type {
 
 import type { WorkspaceInfo } from '../lib/workspaces'
 import {
+  compactId,
+  getRuntimePhase,
+  phaseLabel,
+  phaseTone,
+  runtimeStatusDetail,
+  runtimeStatusTitle,
+  type RuntimePhase,
+  type RuntimeTone,
+} from '../lib/runtimePresentation'
+import {
   sanitizeMcpProgressLabel,
   sanitizeMcpProgressMessage,
 } from '../lib/mcpProgress'
 import { cn } from '../lib/utils'
 import { Badge } from './ui/badge'
 import { ScrollArea } from './ui/scroll-area'
-
-type RuntimePhase = 'detached' | 'permission' | 'running' | 'attached'
 
 type EventSummary = {
   messages: number
@@ -39,7 +47,7 @@ type EventSummary = {
   results: number
 }
 
-type ActivityTone = 'default' | 'success' | 'warning' | 'danger' | 'muted'
+type ActivityTone = RuntimeTone | 'danger'
 
 type ActivityItem = {
   key: string
@@ -58,11 +66,6 @@ function sessionTitle(session: Session | null): string {
   )
 }
 
-function shortId(value: string | null | undefined): string {
-  if (!value) return 'none'
-  return value.length > 8 ? value.slice(0, 8) : value
-}
-
 function formatSessionTime(value: string | null | undefined): string {
   if (!value) return 'not saved'
   const date = new Date(value)
@@ -73,17 +76,6 @@ function formatSessionTime(value: string | null | undefined): string {
     hour: '2-digit',
     minute: '2-digit',
   })
-}
-
-function getRuntimePhase(args: {
-  runtimeAttached: boolean
-  running: boolean
-  permissionRequest: PermissionRequestEvent | null
-}): RuntimePhase {
-  if (!args.runtimeAttached) return 'detached'
-  if (args.permissionRequest) return 'permission'
-  if (args.running) return 'running'
-  return 'attached'
 }
 
 function summarizeAgentEvents(events: AgentEvent[]): EventSummary {
@@ -216,49 +208,12 @@ function getRecentActivity(events: AgentEvent[], limit = 6): ActivityItem[] {
     .reverse()
 }
 
-function phaseLabel(phase: RuntimePhase): string {
-  if (phase === 'detached') return 'Detached'
-  if (phase === 'permission') return 'Needs approval'
-  if (phase === 'running') return 'Running'
-  return 'Attached'
-}
-
-function phaseTone(phase: RuntimePhase): ActivityTone {
-  if (phase === 'detached') return 'muted'
-  if (phase === 'permission') return 'warning'
-  if (phase === 'running') return 'default'
-  return 'success'
-}
-
 function phaseBadgeVariant(
   phase: RuntimePhase,
 ): React.ComponentProps<typeof Badge>['variant'] {
   if (phase === 'attached') return 'success'
   if (phase === 'detached') return 'secondary'
   return 'secondary'
-}
-
-function runtimeStatusTitle(status: RuntimeStatus | null): string {
-  if (!status) return 'Daemon checking'
-  return status.ok ? 'Daemon online' : 'Daemon unavailable'
-}
-
-function runtimeStatusDetail(status: RuntimeStatus | null): string {
-  if (!status) return 'Waiting for the daemon health check.'
-  if (!status.ok)
-    return 'History remains visible when the live runtime is down.'
-
-  const details = [
-    status.pid === null ? null : `pid ${status.pid}`,
-    status.activeSessions === null
-      ? null
-      : `${status.activeSessions} live session${
-          status.activeSessions === 1 ? '' : 's'
-        }`,
-    status.version ? `v${status.version}` : null,
-  ].filter(Boolean)
-
-  return details.length > 0 ? details.join(' · ') : 'Daemon runtime is ready.'
 }
 
 function ToneDot(props: { tone: ActivityTone }) {
@@ -324,7 +279,7 @@ export function WorkspaceDashboard(props: {
   const phase = getRuntimePhase({
     runtimeAttached: props.runtimeAttached,
     running: props.running,
-    permissionRequest: props.permissionRequest,
+    permissionPending: Boolean(props.permissionRequest),
   })
   const summary = React.useMemo(
     () => summarizeAgentEvents(props.events),
@@ -423,7 +378,7 @@ export function WorkspaceDashboard(props: {
             title="Session"
             action={
               <span className="font-mono text-[11px] text-muted-foreground">
-                {shortId(session?.sessionId)}
+                {compactId(session?.sessionId)}
               </span>
             }
           >
@@ -531,6 +486,6 @@ export const __workspaceDashboardForTests = {
   runtimeStatusDetail,
   runtimeStatusTitle,
   sessionTitle,
-  shortId,
+  shortId: compactId,
   summarizeAgentEvents,
 }

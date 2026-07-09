@@ -60,7 +60,7 @@ describe('WorkspaceDashboard helpers', () => {
       __workspaceDashboardForTests.getRuntimePhase({
         runtimeAttached: true,
         running: true,
-        permissionRequest,
+        permissionPending: Boolean(permissionRequest),
       }),
     ).toBe('permission')
   })
@@ -69,12 +69,12 @@ describe('WorkspaceDashboard helpers', () => {
     const detached = __workspaceDashboardForTests.getRuntimePhase({
       runtimeAttached: false,
       running: false,
-      permissionRequest: null,
+      permissionPending: false,
     })
     const attached = __workspaceDashboardForTests.getRuntimePhase({
       runtimeAttached: true,
       running: false,
-      permissionRequest: null,
+      permissionPending: false,
     })
 
     expect(detached).toBe('detached')
@@ -117,7 +117,7 @@ describe('WorkspaceDashboard helpers', () => {
         version: '2.2.1',
         activeSessions: 1,
       }),
-    ).toBe('pid 123 · 1 live session · v2.2.1')
+    ).toBe('pid 123 | 1 live session | v2.2.1')
 
     expect(
       __workspaceDashboardForTests.runtimeStatusTitle({

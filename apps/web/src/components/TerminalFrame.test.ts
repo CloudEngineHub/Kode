@@ -33,16 +33,32 @@ describe('TerminalFrame helpers', () => {
     expect(__terminalFrameForTests.terminalViewportSizeText(null)).toBe('auto')
   })
 
+  test('formats terminal status segments for aria labels', () => {
+    expect(
+      __terminalFrameForTests.terminalStatusSegmentText([
+        { key: 'daemon', label: 'daemon online' },
+        { key: 'agent', label: 'agent running' },
+      ]),
+    ).toBe('daemon online | agent running')
+  })
+
   test('renders viewport dimensions in the status line', () => {
     const html = renderToStaticMarkup(
       React.createElement(TerminalStatusLine, {
         leading: 'running',
+        segments: [
+          { key: 'daemon', label: 'daemon online' },
+          { key: 'agent', label: 'agent running' },
+        ],
         viewportSize: { cols: 100, rows: 24 },
         hints: [{ key: 'Enter', label: 'send' }],
       }),
     )
 
     expect(html).toContain('100x24')
-    expect(html).toContain('running | 100x24 viewport | Enter send')
+    expect(html).toContain('daemon online')
+    expect(html).toContain(
+      'running | 100x24 viewport | daemon online | agent running | Enter send',
+    )
   })
 })

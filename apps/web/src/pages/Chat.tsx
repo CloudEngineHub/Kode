@@ -1,6 +1,7 @@
 import React from 'react'
 import { ArrowDownToLine } from 'lucide-react'
 
+import type { RuntimeStatus } from '@kode/client'
 import type {
   AgentEvent,
   PermissionRequestEvent,
@@ -15,8 +16,14 @@ import {
   TerminalFrame,
   TerminalStatusLine,
   type TerminalStatusHint,
+  type TerminalStatusSegment,
 } from '../components/TerminalFrame'
 import { useTerminalViewportSize } from '../hooks/useTerminalViewportSize'
+import {
+  getRuntimePhase,
+  phaseLabel,
+  runtimeStatusCompactLabel,
+} from '../lib/runtimePresentation'
 import { cn } from '../lib/utils'
 
 function isChatEvent(event: AgentEvent): boolean {
@@ -289,6 +296,7 @@ export function ChatPage(props: {
   sending?: boolean
   permissionRequest?: PermissionRequestEvent | null
   runtimeAttached?: boolean
+  runtimeStatus?: RuntimeStatus | null
   sessionTitle?: string
   workspacePath?: string | null
 }) {
@@ -311,6 +319,30 @@ export function ChatPage(props: {
   const visibleEvents = React.useMemo(
     () => appendPermissionRequestEvent(chatEvents, props.permissionRequest),
     [chatEvents, props.permissionRequest],
+  )
+  const runtimePhase = getRuntimePhase({
+    runtimeAttached: props.runtimeAttached === true,
+    running: props.sending === true,
+    permissionPending: Boolean(props.permissionRequest),
+  })
+  const terminalStatusSegments = React.useMemo<TerminalStatusSegment[]>(
+    () => [
+      {
+        key: 'daemon',
+        label: runtimeStatusCompactLabel(props.runtimeStatus ?? null),
+      },
+      {
+        key: 'agent',
+        label: `agent ${phaseLabel(runtimePhase).toLowerCase()}`,
+      },
+      {
+        key: 'events',
+        label: `${visibleEvents.length} event${
+          visibleEvents.length === 1 ? '' : 's'
+        }`,
+      },
+    ],
+    [props.runtimeStatus, runtimePhase, visibleEvents.length],
   )
   const lastEventKey =
     visibleEvents.length > 0
@@ -439,7 +471,8 @@ export function ChatPage(props: {
       statusLine={
         <TerminalStatusLine
           hints={CHAT_TERMINAL_HINTS}
-          leading={props.sending ? 'running' : 'ready'}
+          leading={phaseLabel(runtimePhase).toLowerCase()}
+          segments={terminalStatusSegments}
           viewportSize={terminalViewportSize}
         />
       }
