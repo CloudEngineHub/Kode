@@ -67,6 +67,10 @@ import {
 import { getModelManager } from '#core/utils/model'
 import { getToolPermissionContextForConversationKey } from '#core/utils/toolPermissionContextState'
 import type { PromptMode } from '#ui-ink/components/PromptInput/types'
+import type {
+  PastedImageAttachment,
+  PastedTextSegment,
+} from '#ui-ink/components/PromptInput/pasteTypes'
 import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { terminalCapabilityManager } from '#ui-ink/utils/terminalCapabilityManager'
 import type {
@@ -363,22 +367,14 @@ export function useReplController(props: REPLProps) {
   const [restorePastes, setRestorePastes] = useState<
     | {
         id: number
-        pastedTexts: Array<{ placeholder: string; text: string }>
-        pastedImages: Array<{
-          placeholder: string
-          data: string
-          mediaType: string
-        }>
+        pastedTexts: PastedTextSegment[]
+        pastedImages: PastedImageAttachment[]
       }
     | undefined
   >(undefined)
   const [draftPastes, setDraftPastes] = useState<{
-    pastedTexts: Array<{ placeholder: string; text: string }>
-    pastedImages: Array<{
-      placeholder: string
-      data: string
-      mediaType: string
-    }>
+    pastedTexts: PastedTextSegment[]
+    pastedImages: PastedImageAttachment[]
   }>({ pastedTexts: [], pastedImages: [] })
   const [sessionThinkingMode, setSessionThinkingMode] = useState<
     'enabled' | 'auto' | null

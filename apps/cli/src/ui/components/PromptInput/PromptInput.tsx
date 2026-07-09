@@ -73,7 +73,8 @@ function getDraftPastesSignature(args: {
       item => `text:${item.placeholder}:${item.text.length}`,
     ),
     ...args.pastedImages.map(
-      item => `image:${item.placeholder}:${item.mediaType}:${item.data.length}`,
+      item =>
+        `image:${item.id}:${item.placeholder}:${item.mediaType}:${item.byteLength}`,
     ),
   ].join('\n')
 }

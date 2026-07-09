@@ -10,7 +10,11 @@ import { handleHashCommand } from '#core/utils/hashCommand'
 import { processUserInput } from '#ui-ink/utils/processUserInput'
 import type { PromptMode } from './types'
 import type { PastedImageAttachment, PastedTextSegment } from './pastes'
-import { expandPastedTextPlaceholders } from './pastes'
+import {
+  expandPastedTextPlaceholders,
+  releasePastedImageAttachments,
+  resolvePastedImageAttachments,
+} from './pastes'
 import { interpretHashCommand } from './hashCommand'
 import { getCwd } from '#core/utils/state'
 import type { SetForkConvoWithMessagesOnTheNextRender } from '#ui-ink/types/conversationReset'
@@ -148,7 +152,7 @@ export async function submitPrompt(args: {
     pastedTexts: args.pastedTexts,
   })
 
-  const imagesForMessage = args.pastedImages
+  const imagesForMessage = resolvePastedImageAttachments(args.pastedImages)
 
   args.clearPastes()
   args.onInputChange('')
@@ -195,7 +199,9 @@ export async function submitPrompt(args: {
       },
       imagesForMessage.length > 0 ? imagesForMessage : null,
     )
+    releasePastedImageAttachments(args.pastedImages)
   } catch (error) {
+    releasePastedImageAttachments(args.pastedImages)
     args.setIsLoading(false)
     logError(error)
     return

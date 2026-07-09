@@ -6,16 +6,94 @@ import {
 } from '#core/utils/paste'
 import type { ClipboardImage } from '#core/utils/image/media'
 import type { PromptMode } from './types'
+import type {
+  PastedImageAttachment,
+  PastedTextSegment,
+  ResolvedPastedImageAttachment,
+} from './pasteTypes'
 
-export type PastedTextSegment = { placeholder: string; text: string }
-export type PastedImageAttachment = {
-  placeholder: string
-  data: string
-  mediaType: string
-}
+export type {
+  PastedImageAttachment,
+  PastedTextSegment,
+  ResolvedPastedImageAttachment,
+} from './pasteTypes'
 
 const PASTED_TEXT_PLACEHOLDER_PATTERN = /\[Pasted text #\d+(?: \+\d+ lines)?\]/g
 const IMAGE_PLACEHOLDER_PATTERN = /\[Image #\d+\]/g
+const pastedImageDataStore = new Map<
+  string,
+  { data: string; mediaType: string; byteLength: number }
+>()
+let pastedImageStoreId = 1
+
+function estimateBase64ByteLength(data: string): number {
+  const normalized = data.replace(/\s/g, '')
+  if (normalized.length === 0) return 0
+  const padding = normalized.endsWith('==')
+    ? 2
+    : normalized.endsWith('=')
+      ? 1
+      : 0
+  return Math.max(0, Math.floor((normalized.length * 3) / 4) - padding)
+}
+
+export function storePastedImageAttachment(args: {
+  image: ClipboardImage
+  placeholder: string
+}): PastedImageAttachment {
+  const id = `pasted-image-${pastedImageStoreId++}`
+  const byteLength = estimateBase64ByteLength(args.image.data)
+
+  pastedImageDataStore.set(id, {
+    data: args.image.data,
+    mediaType: args.image.mediaType,
+    byteLength,
+  })
+
+  return {
+    id,
+    placeholder: args.placeholder,
+    mediaType: args.image.mediaType,
+    byteLength,
+  }
+}
+
+export function resolvePastedImageAttachments(
+  images: PastedImageAttachment[],
+): ResolvedPastedImageAttachment[] {
+  const resolved: ResolvedPastedImageAttachment[] = []
+
+  for (const image of images) {
+    const stored = pastedImageDataStore.get(image.id)
+    const legacyData = (image as { data?: unknown }).data
+    const data =
+      stored?.data ?? (typeof legacyData === 'string' ? legacyData : null)
+
+    if (!data) continue
+
+    resolved.push({
+      ...image,
+      mediaType: stored?.mediaType ?? image.mediaType,
+      byteLength: stored?.byteLength ?? image.byteLength,
+      data,
+    })
+  }
+
+  return resolved
+}
+
+export function releasePastedImageAttachments(
+  images: PastedImageAttachment[],
+): void {
+  for (const image of images) {
+    pastedImageDataStore.delete(image.id)
+  }
+}
+
+export function __clearPastedImageDataForTests(): void {
+  pastedImageDataStore.clear()
+  pastedImageStoreId = 1
+}
 
 function collectPlaceholderMatches(
   input: string,
@@ -51,9 +129,10 @@ function arePastedImageAttachmentsEqual(
   return a.every((item, index) => {
     const other = b[index]
     return (
+      other?.id === item.id &&
       other?.placeholder === item.placeholder &&
-      other.data === item.data &&
-      other.mediaType === item.mediaType
+      other.mediaType === item.mediaType &&
+      other.byteLength === item.byteLength
     )
   })
 }
@@ -179,7 +258,7 @@ export function usePromptPastes(args: {
       pastedImageCounter.current += 1
       setPastedImages(prev => [
         ...prev,
-        { placeholder, data: image.data, mediaType: image.mediaType },
+        storePastedImageAttachment({ image, placeholder }),
       ])
       return placeholder
     },

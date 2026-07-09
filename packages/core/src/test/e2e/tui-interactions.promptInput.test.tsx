@@ -5,6 +5,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { Box, Text } from 'ink'
 import PromptInput from '#ui-ink/components/PromptInput'
+import type { PastedImageAttachment } from '#ui-ink/components/PromptInput/pasteTypes'
 import type { PromptMode } from '#ui-ink/components/PromptInput/types'
 import { KeypressProvider } from '#ui-ink/contexts/KeypressContext'
 import { PermissionProvider } from '#ui-ink/contexts/PermissionContext'
@@ -266,11 +267,7 @@ function DraftPastePersistenceHarnessInner(): React.ReactNode {
   const [showPrompt, setShowPrompt] = useState(true)
   const [draftPastes, setDraftPastes] = useState<{
     pastedTexts: Array<{ placeholder: string; text: string }>
-    pastedImages: Array<{
-      placeholder: string
-      data: string
-      mediaType: string
-    }>
+    pastedImages: PastedImageAttachment[]
   }>({
     pastedTexts: [{ placeholder: '[Pasted text #1]', text: 'PASTE' }],
     pastedImages: [],
