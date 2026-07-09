@@ -51,26 +51,45 @@ export function useTerminalSize(): TerminalSize {
   const state = getStreamState(stream)
 
   const [size, setSize] = useState<TerminalSize>(() => state.size)
+  const sizeRef = useRef(size)
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const streamSize = readSize(stream as { columns?: number; rows?: number })
+  const effectiveSize =
+    streamSize.columns < size.columns || streamSize.rows < size.rows
+      ? streamSize
+      : size
+  sizeRef.current = effectiveSize
 
   useEffect(() => {
     const streamState = getStreamState(stream)
+    const commitSize = (next: TerminalSize) => {
+      setSize(previous => {
+        if (previous.columns === next.columns && previous.rows === next.rows) {
+          return previous
+        }
+        sizeRef.current = next
+        return next
+      })
+    }
     const listener = (next: TerminalSize) => {
-      // Debounce rapid resize events
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current)
+        debounceTimerRef.current = null
       }
+
+      const previous = sizeRef.current
+      const isShrinking =
+        next.columns < previous.columns || next.rows < previous.rows
+      if (isShrinking) {
+        commitSize(next)
+        return
+      }
+
+      // Debounce rapid expand/jitter resize events without rendering a stale
+      // wide layout into a newly narrowed terminal.
       debounceTimerRef.current = setTimeout(() => {
         debounceTimerRef.current = null
-        setSize(previous => {
-          if (
-            previous.columns === next.columns &&
-            previous.rows === next.rows
-          ) {
-            return previous
-          }
-          return next
-        })
+        commitSize(next)
       }, RESIZE_DEBOUNCE_MS)
     }
 
@@ -96,5 +115,5 @@ export function useTerminalSize(): TerminalSize {
     }
   }, [stream])
 
-  return size
+  return effectiveSize
 }

@@ -10,6 +10,7 @@ import { PromptInputView } from './PromptInputView'
 type TestHarness = {
   unmount: () => void
   getOutput: () => string
+  clearOutput: () => void
   resize: (columns: number, rows?: number) => void
   wait: (ms: number) => Promise<void>
 }
@@ -64,6 +65,9 @@ function createHarness(
   const harness: TestHarness = {
     unmount: () => instance.unmount(),
     getOutput: () => stripAnsi(rawOutput),
+    clearOutput: () => {
+      rawOutput = ''
+    },
     resize: (columns, rows = stdout.rows ?? 24) => {
       stdout.columns = columns
       stdout.rows = rows
@@ -79,7 +83,10 @@ function renderPromptInputView(args: {
   customStatusLineActive: boolean
   statusLine: string
   message?: { show: boolean; text?: string }
+  tokenUsage?: number
 }) {
+  const tokenUsage = args.tokenUsage ?? 0
+
   return (
     <KeypressProvider>
       <PromptInputView
@@ -90,7 +97,7 @@ function renderPromptInputView(args: {
           provider: 'custom-openai',
           name: 'mimo-v2.5-pro',
           contextLength: 1_048_576,
-          currentTokens: 0,
+          currentTokens: tokenUsage,
         }}
         input=""
         cursorOffset={0}
@@ -132,7 +139,7 @@ function renderPromptInputView(args: {
         currentMode="default"
         modeCycleShortcutText="shift+tab"
         showQuickModelSwitchShortcut={false}
-        tokenUsage={0}
+        tokenUsage={tokenUsage}
         textInputColumns={80}
         textInputMaxHeight={1}
         completionReservedRows={4}
@@ -243,5 +250,52 @@ describe('PromptInputView status line layout', () => {
         )
       })
     expect(isolatedModelRows).toHaveLength(0)
+  })
+
+  test('keeps resized model status bounded when token warning is active', async () => {
+    const harness = createHarness(
+      renderPromptInputView({
+        customStatusLineActive: false,
+        statusLine: 'Input: Chat',
+        tokenUsage: 1_000_000,
+      }),
+      { columns: 120 },
+    )
+
+    await harness.wait(220)
+    harness.clearOutput()
+    harness.resize(90)
+    await harness.wait(180)
+
+    const output = harness.getOutput()
+    const statusRows = output
+      .replace(/\r/g, '\n')
+      .split('\n')
+      .filter(
+        line =>
+          line.includes('Input: Chat') ||
+          line.includes('[custom-openai] mimo-v2.5-pro') ||
+          line.includes('Context low'),
+      )
+    expect(statusRows.length).toBeGreaterThan(0)
+    expect(statusRows.some(line => line.includes('1.0MContext low'))).toBe(
+      false,
+    )
+
+    const finalStatusRows = statusRows.slice(-2)
+    expect(finalStatusRows.some(line => line.includes('Input: Chat'))).toBe(
+      true,
+    )
+    expect(finalStatusRows.some(line => line.includes('Context low'))).toBe(
+      true,
+    )
+    expect(
+      finalStatusRows.filter(line =>
+        line.trim().startsWith('[custom-openai] mimo-v2.5-pro'),
+      ),
+    ).toHaveLength(0)
+    expect(
+      Math.max(...finalStatusRows.map(line => line.length)),
+    ).toBeLessThanOrEqual(90)
   })
 })

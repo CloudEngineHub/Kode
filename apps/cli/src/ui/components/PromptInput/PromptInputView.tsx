@@ -188,6 +188,7 @@ export function PromptInputView({
   const statusTextWidth = showInlineModelStatus
     ? Math.max(1, statusContentColumns - modelStatusWidth - 1)
     : statusContentColumns
+  const statusRowWidth = Math.max(1, columns)
 
   return (
     <Box flexDirection="column">
@@ -264,7 +265,12 @@ export function PromptInputView({
       {/* Status line - below PWD */}
       {!completionActive && suggestions.length === 0 && showStatusLine && (
         <Box flexDirection="column">
-          <Box flexDirection="row" paddingX={horizontalStatusPadding}>
+          <Box
+            flexDirection="row"
+            overflow="hidden"
+            paddingX={horizontalStatusPadding}
+            width={statusRowWidth}
+          >
             <Box
               justifyContent="flex-start"
               flexShrink={1}
@@ -314,7 +320,13 @@ export function PromptInputView({
             {!compact && !hasPriorityStatusMessage && showInlineModelStatus && (
               <SentryErrorBoundary
                 children={
-                  <Box flexShrink={0} marginLeft={1} width={modelStatusWidth}>
+                  <Box
+                    flexDirection="column"
+                    flexShrink={0}
+                    marginLeft={1}
+                    overflow="hidden"
+                    width={modelStatusWidth}
+                  >
                     <Text dimColor wrap="truncate-middle">
                       {modelStatusText}
                     </Text>
