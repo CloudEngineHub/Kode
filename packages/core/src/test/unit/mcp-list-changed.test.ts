@@ -7,7 +7,9 @@ import {
   getMCPResourceTemplates,
   getMCPResources,
   getMCPTools,
+  getMcpListChangedVersion,
   notifyMcpListChanged,
+  subscribeMcpListChanged,
 } from '#core/mcp/client'
 import {
   clearNotifications,
@@ -212,6 +214,29 @@ describe('MCP list_changed cache invalidation', () => {
       message: 'test: tools',
       kind: 'info',
       source: 'system',
+      channel: 'mcp:list-changed',
+    })
+  })
+
+  test('coalesces repeated list_changed notifications without dropping events', () => {
+    const events: unknown[] = []
+    const unsubscribe = subscribeMcpListChanged(event => {
+      events.push(event)
+    })
+
+    notifyMcpListChanged({ kind: 'tools', server: 'test' })
+    notifyMcpListChanged({ kind: 'tools', server: 'test' })
+    unsubscribe()
+
+    expect(getMcpListChangedVersion('tools')).toBe(2)
+    expect(events).toEqual([
+      { kind: 'tools', server: 'test' },
+      { kind: 'tools', server: 'test' },
+    ])
+    expect(getNotifications()).toHaveLength(1)
+    expect(getNotifications()[0]).toMatchObject({
+      id: 'mcp:list-changed:test:tools',
+      message: 'test: tools',
       channel: 'mcp:list-changed',
     })
   })

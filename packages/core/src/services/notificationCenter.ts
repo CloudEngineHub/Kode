@@ -50,8 +50,9 @@ export function addNotification(
     createdAt?: number
   },
 ): InAppNotification {
+  const id = notif.id ?? nextId()
   const record: InAppNotification = {
-    id: notif.id ?? nextId(),
+    id,
     createdAt: notif.createdAt ?? Date.now(),
     title: notif.title,
     message: notif.message,
@@ -60,7 +61,17 @@ export function addNotification(
     channel: notif.channel,
   }
 
-  notifications = [...notifications, record].slice(-MAX_NOTIFICATIONS)
+  const existingIndex = notif.id
+    ? notifications.findIndex(item => item.id === notif.id)
+    : -1
+  notifications =
+    existingIndex === -1
+      ? [...notifications, record].slice(-MAX_NOTIFICATIONS)
+      : [
+          ...notifications.slice(0, existingIndex),
+          ...notifications.slice(existingIndex + 1),
+          record,
+        ].slice(-MAX_NOTIFICATIONS)
   emit()
   return record
 }

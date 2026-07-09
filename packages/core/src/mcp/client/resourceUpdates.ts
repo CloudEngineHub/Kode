@@ -18,6 +18,7 @@ export function subscribeMcpResourceUpdated(listener: Listener): () => void {
 
 export function notifyMcpResourceUpdated(event: McpResourceUpdatedEvent): void {
   addNotification({
+    id: `mcp:resource-updated:${event.server}:${event.uri}`,
     title: 'MCP resource updated',
     message: `${event.server}: ${event.uri}`,
     kind: 'info',

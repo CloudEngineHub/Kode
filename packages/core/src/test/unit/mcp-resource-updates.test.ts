@@ -94,4 +94,26 @@ describe('MCP resource update subscriptions', () => {
       source: 'system',
     })
   })
+
+  test('coalesces repeated resource update notifications without dropping events', () => {
+    const events: unknown[] = []
+    const unsubscribe = subscribeMcpResourceUpdated(event => {
+      events.push(event)
+    })
+
+    notifyMcpResourceUpdated({ server: 'srv', uri: 'file:///one' })
+    notifyMcpResourceUpdated({ server: 'srv', uri: 'file:///one' })
+    unsubscribe()
+
+    expect(events).toEqual([
+      { server: 'srv', uri: 'file:///one' },
+      { server: 'srv', uri: 'file:///one' },
+    ])
+    expect(getNotifications()).toHaveLength(1)
+    expect(getNotifications()[0]).toMatchObject({
+      id: 'mcp:resource-updated:srv:file:///one',
+      message: 'srv: file:///one',
+      channel: 'mcp:resource-updated',
+    })
+  })
 })

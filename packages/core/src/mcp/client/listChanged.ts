@@ -30,6 +30,7 @@ export function notifyMcpListChanged(event: McpListChangedEvent): void {
   versions[event.kind] += 1
 
   addNotification({
+    id: `mcp:list-changed:${event.server}:${event.kind}`,
     title: 'MCP list changed',
     message: `${event.server}: ${event.kind}`,
     kind: 'info',
