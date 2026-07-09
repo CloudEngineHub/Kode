@@ -12,6 +12,7 @@ import {
   getMcpAuthSnapshot,
   getMCPCommands,
   getMCPResources,
+  getMCPResourceTemplates,
   getMCPTools,
   MCP_LOGGING_LEVELS,
   getMcprcServerStatus,
@@ -26,6 +27,7 @@ import {
   type McpLoggingLevel,
   type McpPromptCommand,
   type McpResource,
+  type McpResourceTemplate,
   type WrappedClient,
 } from '#core/mcp/client'
 import {
@@ -73,6 +75,7 @@ type ServerCounts = {
   tools: number
   prompts: number
   resources: number
+  resourceTemplates: number
 }
 
 type Route =
@@ -84,6 +87,12 @@ type Route =
   | { kind: 'prompt'; serverName: string; prompt: McpPromptCommand }
   | { kind: 'resources'; serverName: string; focusValue?: string }
   | { kind: 'resource'; serverName: string; resource: McpResource }
+  | { kind: 'resourceTemplates'; serverName: string; focusValue?: string }
+  | {
+      kind: 'resourceTemplate'
+      serverName: string
+      template: McpResourceTemplate
+    }
   | { kind: 'auth'; serverName: string }
 
 function getScopeLabel(scope: McpUiScope): string {
@@ -286,6 +295,84 @@ function resourceTitleForList(resource: McpResource): string {
   return resource.title?.trim() || resource.name || resource.uri
 }
 
+function resourceTemplateTitleForList(
+  template: McpResourceTemplate,
+): string {
+  return template.title?.trim() || template.name || template.uriTemplate
+}
+
+type ResourceAnnotationDisplay = {
+  audience: string[]
+  priority: number | null
+  lastModified: string | null
+}
+
+function getResourceAnnotationDisplay(
+  annotations: unknown,
+): ResourceAnnotationDisplay {
+  const annotationRecord =
+    annotations && typeof annotations === 'object' && !Array.isArray(annotations)
+      ? (annotations as Record<string, unknown>)
+      : null
+
+  return {
+    audience: Array.isArray(annotationRecord?.audience)
+      ? annotationRecord.audience.filter(
+          (value): value is string => typeof value === 'string',
+        )
+      : [],
+    priority:
+      typeof annotationRecord?.priority === 'number'
+        ? annotationRecord.priority
+        : null,
+    lastModified:
+      typeof annotationRecord?.lastModified === 'string'
+        ? annotationRecord.lastModified
+        : null,
+  }
+}
+
+function hasResourceAnnotationDisplay(
+  annotations: ResourceAnnotationDisplay,
+): boolean {
+  return (
+    annotations.audience.length > 0 ||
+    annotations.priority !== null ||
+    annotations.lastModified !== null
+  )
+}
+
+function ResourceAnnotationDetails({
+  annotations,
+}: {
+  annotations: ResourceAnnotationDisplay
+}) {
+  if (!hasResourceAnnotationDisplay(annotations)) return null
+
+  return (
+    <Box flexDirection="column" marginTop={1}>
+      <Text bold>Annotations:</Text>
+      <Box flexDirection="column" paddingLeft={2}>
+        {annotations.audience.length ? (
+          <Text wrap="truncate-end">
+            <Text dimColor>audience: {annotations.audience.join(', ')}</Text>
+          </Text>
+        ) : null}
+        {annotations.priority !== null ? (
+          <Text wrap="truncate-end">
+            <Text dimColor>priority: {annotations.priority}</Text>
+          </Text>
+        ) : null}
+        {annotations.lastModified ? (
+          <Text wrap="truncate-end">
+            <Text dimColor>last modified: {annotations.lastModified}</Text>
+          </Text>
+        ) : null}
+      </Box>
+    </Box>
+  )
+}
+
 function formatResourceSize(size: unknown): string | null {
   if (typeof size !== 'number' || !Number.isFinite(size)) return null
   if (size < 1024) return `${size} B`
@@ -406,6 +493,14 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
   const [resourcesLoading, setResourcesLoading] = useState(false)
   const [resources, setResources] = useState<McpResource[]>([])
   const [resourcesError, setResourcesError] = useState<string | null>(null)
+  const [resourceTemplatesLoading, setResourceTemplatesLoading] =
+    useState(false)
+  const [resourceTemplates, setResourceTemplates] = useState<
+    McpResourceTemplate[]
+  >([])
+  const [resourceTemplatesError, setResourceTemplatesError] = useState<
+    string | null
+  >(null)
   const [resourceSubscriptionSupport, setResourceSubscriptionSupport] =
     useState<Record<string, boolean>>({})
   const [resourceSubscriptions, setResourceSubscriptions] = useState<
@@ -621,6 +716,8 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
     route.kind === 'prompt' ||
     route.kind === 'resources' ||
     route.kind === 'resource' ||
+    route.kind === 'resourceTemplates' ||
+    route.kind === 'resourceTemplate' ||
     route.kind === 'auth'
       ? (servers.find(s => s.name === route.serverName) ?? null)
       : null
@@ -674,6 +771,14 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
   const rememberResourcesFocus = useCallback((focusValue: string) => {
     setRoute(prev => {
       if (prev.kind !== 'resources' || prev.focusValue === focusValue)
+        return prev
+      return { ...prev, focusValue }
+    })
+  }, [])
+
+  const rememberResourceTemplatesFocus = useCallback((focusValue: string) => {
+    setRoute(prev => {
+      if (prev.kind !== 'resourceTemplates' || prev.focusValue === focusValue)
         return prev
       return { ...prev, focusValue }
     })
@@ -804,6 +909,16 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
           focusValue: route.resource.uri,
         })
         return true
+      case 'resourceTemplates':
+        setRoute({ kind: 'server', serverName: route.serverName })
+        return true
+      case 'resourceTemplate':
+        setRoute({
+          kind: 'resourceTemplates',
+          serverName: route.serverName,
+          focusValue: route.template.uriTemplate,
+        })
+        return true
       case 'auth':
         authAbortControllerRef.current?.abort()
         authAbortControllerRef.current = null
@@ -834,11 +949,13 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
 
     ;(async () => {
       try {
-        const [allTools, allPrompts, allResources] = await Promise.all([
-          getMCPTools(),
-          getMCPCommands(),
-          getMCPResources(),
-        ])
+        const [allTools, allPrompts, allResources, allResourceTemplates] =
+          await Promise.all([
+            getMCPTools(),
+            getMCPCommands(),
+            getMCPResources(),
+            getMCPResourceTemplates(),
+          ])
         const toolsForServer = allTools.filter(t =>
           t.userFacingName().startsWith(`${activeServerName} - `),
         )
@@ -848,12 +965,16 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
         const resourcesForServer = allResources.filter(
           resource => resource.server === activeServerName,
         )
+        const resourceTemplatesForServer = allResourceTemplates.filter(
+          template => template.server === activeServerName,
+        )
 
         if (didCancel) return
         setActiveServerCounts({
           tools: toolsForServer.length,
           prompts: promptsForServer.length,
           resources: resourcesForServer.length,
+          resourceTemplates: resourceTemplatesForServer.length,
         })
       } catch (err) {
         if (didCancel) return
@@ -977,6 +1098,43 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
   }, [
     route.kind,
     route.kind === 'resources' ? route.serverName : null,
+    activeServerName,
+    mcpListChangedTick,
+  ])
+
+  useEffect(() => {
+    if (route.kind !== 'resourceTemplates') return
+    if (activeServerName === null) return
+
+    let didCancel = false
+
+    setResourceTemplates([])
+    setResourceTemplatesLoading(true)
+    setResourceTemplatesError(null)
+    ;(async () => {
+      try {
+        const allTemplates = await getMCPResourceTemplates()
+        const templatesForServer = allTemplates.filter(
+          template => template.server === activeServerName,
+        )
+        if (didCancel) return
+        setResourceTemplates(templatesForServer)
+      } catch (err) {
+        if (didCancel) return
+        setResourceTemplatesError(
+          err instanceof Error ? err.message : String(err),
+        )
+      } finally {
+        if (!didCancel) setResourceTemplatesLoading(false)
+      }
+    })()
+
+    return () => {
+      didCancel = true
+    }
+  }, [
+    route.kind,
+    route.kind === 'resourceTemplates' ? route.serverName : null,
     activeServerName,
     mcpListChangedTick,
   ])
@@ -1168,7 +1326,8 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
       (activeServerCountsLoading || counts === null)
     const capabilities: string[] = []
     if (counts?.tools) capabilities.push('tools')
-    if (counts?.resources) capabilities.push('resources')
+    if (counts?.resources || counts?.resourceTemplates)
+      capabilities.push('resources')
     if (counts?.prompts) capabilities.push('prompts')
     const loggingSupported = serverLoggingSupport[activeServer.name] === true
     if (loggingSupported) capabilities.push('logging')
@@ -1194,6 +1353,12 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
       }
       if (counts?.resources && counts.resources > 0) {
         actions.push({ label: 'View resources', value: 'resources' })
+      }
+      if (counts?.resourceTemplates && counts.resourceTemplates > 0) {
+        actions.push({
+          label: 'View resource templates',
+          value: 'resource-templates',
+        })
       }
 
       if (isRemoteConfig(activeServer.config)) {
@@ -1318,6 +1483,16 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
               </Text>
             ) : null}
 
+            {counts?.resourceTemplates && counts.resourceTemplates > 0 ? (
+              <Text wrap="truncate-end">
+                <Text bold>Resource templates: </Text>
+                <Text dimColor>
+                  {counts.resourceTemplates}{' '}
+                  {counts.resourceTemplates === 1 ? 'template' : 'templates'}
+                </Text>
+              </Text>
+            ) : null}
+
             {counts?.prompts && counts.prompts > 0 ? (
               <Text wrap="truncate-end">
                 <Text bold>Prompts: </Text>
@@ -1372,6 +1547,13 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
                 }
                 if (value === 'resources') {
                   setRoute({ kind: 'resources', serverName: activeServer.name })
+                  return
+                }
+                if (value === 'resource-templates') {
+                  setRoute({
+                    kind: 'resourceTemplates',
+                    serverName: activeServer.name,
+                  })
                   return
                 }
                 if (value === 'prompts') {
@@ -1670,25 +1852,7 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
     const resource = route.resource
     const title = resourceTitleForList(resource)
     const size = formatResourceSize(resource.size)
-    const annotationRecord =
-      resource.annotations &&
-      typeof resource.annotations === 'object' &&
-      !Array.isArray(resource.annotations)
-        ? (resource.annotations as Record<string, unknown>)
-        : null
-    const lastModified =
-      typeof annotationRecord?.lastModified === 'string'
-        ? annotationRecord.lastModified
-        : null
-    const priority =
-      typeof annotationRecord?.priority === 'number'
-        ? annotationRecord.priority
-        : null
-    const audience = Array.isArray(annotationRecord?.audience)
-      ? annotationRecord.audience.filter(
-          (value): value is string => typeof value === 'string',
-        )
-      : []
+    const annotations = getResourceAnnotationDisplay(resource.annotations)
     const subscriptionKey = resourceSubscriptionKey(
       route.serverName,
       resource.uri,
@@ -1740,28 +1904,7 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
             </Box>
           ) : null}
 
-          {audience.length || priority !== null || lastModified ? (
-            <Box flexDirection="column" marginTop={1}>
-              <Text bold>Annotations:</Text>
-              <Box flexDirection="column" paddingLeft={2}>
-                {audience.length ? (
-                  <Text wrap="truncate-end">
-                    <Text dimColor>audience: {audience.join(', ')}</Text>
-                  </Text>
-                ) : null}
-                {priority !== null ? (
-                  <Text wrap="truncate-end">
-                    <Text dimColor>priority: {priority}</Text>
-                  </Text>
-                ) : null}
-                {lastModified ? (
-                  <Text wrap="truncate-end">
-                    <Text dimColor>last modified: {lastModified}</Text>
-                  </Text>
-                ) : null}
-              </Box>
-            </Box>
-          ) : null}
+          <ResourceAnnotationDetails annotations={annotations} />
 
           <Box flexDirection="column" marginTop={1}>
             <Text bold>Resource updates:</Text>
@@ -1804,6 +1947,134 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
               </Text>
             </Box>
           ) : null}
+        </Box>
+
+        <Box marginTop={tightLayout ? 0 : 1}>
+          <Text dimColor wrap="truncate-end">
+            {exitState.pending
+              ? `Press ${exitState.keyName} again to close`
+              : 'Esc to go back'}
+          </Text>
+        </Box>
+      </Box>
+    )
+  })()
+
+  const resourceTemplatesView = (() => {
+    if (!activeServer) return null
+
+    const options: Option[] = resourceTemplates.map(template => ({
+      label: resourceTemplateTitleForList(template),
+      value: template.uriTemplate,
+    }))
+
+    return (
+      <Box flexDirection="column" gap={gap}>
+        <Box flexDirection="column" borderStyle="round" paddingX={1}>
+          <Box marginBottom={1}>
+            <Text bold wrap="truncate-end">
+              Resource templates for {activeServer.name}{' '}
+              <Text dimColor>
+                ({resourceTemplates.length}{' '}
+                {resourceTemplates.length === 1 ? 'template' : 'templates'})
+              </Text>
+            </Text>
+          </Box>
+
+          {resourceTemplatesLoading ? (
+            <Text dimColor wrap="truncate-end">
+              Loading resource templates...
+            </Text>
+          ) : resourceTemplatesError ? (
+            <Text color={theme.error} wrap="wrap">
+              Error: {resourceTemplatesError}
+            </Text>
+          ) : resourceTemplates.length === 0 ? (
+            <Text dimColor wrap="truncate-end">
+              No resource templates available
+            </Text>
+          ) : (
+            <Select
+              options={options}
+              visibleOptionCount={Math.min(
+                12,
+                Math.max(3, options.length),
+              )}
+              focusScope={`mcp:server:${activeServer.name}:resourceTemplates`}
+              focusValue={
+                route.kind === 'resourceTemplates'
+                  ? route.focusValue
+                  : undefined
+              }
+              onFocus={rememberResourceTemplatesFocus}
+              onChange={value => {
+                const template = resourceTemplates.find(
+                  item => item.uriTemplate === value,
+                )
+                if (template)
+                  setRoute({
+                    kind: 'resourceTemplate',
+                    serverName: activeServer.name,
+                    template,
+                  })
+              }}
+            />
+          )}
+        </Box>
+
+        <Box marginTop={tightLayout ? 0 : 1}>
+          <Text dimColor wrap="truncate-end">
+            {exitState.pending
+              ? `Press ${exitState.keyName} again to close`
+              : 'Esc to go back'}
+          </Text>
+        </Box>
+      </Box>
+    )
+  })()
+
+  const resourceTemplateView = (() => {
+    if (route.kind !== 'resourceTemplate') return null
+    const template = route.template
+    const title = resourceTemplateTitleForList(template)
+    const annotations = getResourceAnnotationDisplay(template.annotations)
+
+    return (
+      <Box flexDirection="column" gap={gap}>
+        <Box flexDirection="column" borderStyle="round" paddingX={1}>
+          <Box marginBottom={1}>
+            <Text bold wrap="truncate-end">
+              {title} <Text dimColor>({route.serverName})</Text>
+            </Text>
+          </Box>
+
+          {template.name ? (
+            <Text wrap="truncate-end">
+              <Text bold>Template name: </Text>
+              <Text dimColor>{template.name}</Text>
+            </Text>
+          ) : null}
+
+          <Text wrap="wrap">
+            <Text bold>URI template: </Text>
+            <Text dimColor>{template.uriTemplate}</Text>
+          </Text>
+
+          {template.mimeType ? (
+            <Text wrap="truncate-end">
+              <Text bold>MIME type: </Text>
+              <Text dimColor>{template.mimeType}</Text>
+            </Text>
+          ) : null}
+
+          {template.description ? (
+            <Box flexDirection="column" marginTop={1}>
+              <Text bold>Description:</Text>
+              <Text wrap="wrap">{template.description}</Text>
+            </Box>
+          ) : null}
+
+          <ResourceAnnotationDetails annotations={annotations} />
         </Box>
 
         <Box marginTop={tightLayout ? 0 : 1}>
@@ -1968,9 +2239,13 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
                     ? resourcesView
                     : route.kind === 'resource'
                       ? resourceView
-                      : route.kind === 'auth'
-                        ? authView
-                        : null}
+                      : route.kind === 'resourceTemplates'
+                        ? resourceTemplatesView
+                        : route.kind === 'resourceTemplate'
+                          ? resourceTemplateView
+                          : route.kind === 'auth'
+                            ? authView
+                            : null}
     </ScreenFrame>
   )
 }

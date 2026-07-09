@@ -281,6 +281,7 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
     let promptsEnabled = false
     let promptRevision = 0
     let resourceRevision = 0
+    let resourceTemplateRevision = 0
     let leakedEscapes = 0
     const subscribedResources: string[] = []
     const unsubscribedResources: string[] = []
@@ -350,6 +351,29 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
       size: 1024,
     }
 
+    const fileTemplate = {
+      server: 'srv',
+      uriTemplate: 'file:///{path}',
+      name: 'project-file',
+      title: 'Project Files',
+      description: 'Open files by project-relative path',
+      mimeType: 'text/plain',
+      annotations: {
+        audience: ['assistant'],
+        priority: 0.6,
+        lastModified: '2026-07-09T00:00:00Z',
+      },
+    }
+
+    const guideTemplate = {
+      server: 'srv',
+      uriTemplate: 'file:///guides/{slug}.md',
+      name: 'guide-file',
+      title: 'Guide Files',
+      description: 'Open guide files by slug',
+      mimeType: 'text/markdown',
+    }
+
     try {
       mock.module('#core/mcp/client', () => {
         return {
@@ -390,6 +414,10 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
               ? [readmeResource]
               : [readmeResource, guideResource]
           },
+          getMCPResourceTemplates: async () =>
+            resourceTemplateRevision === 0
+              ? [fileTemplate]
+              : [fileTemplate, guideTemplate],
           getMCPTools: async () => [],
           MCP_LOGGING_LEVELS: [
             'debug',
@@ -559,13 +587,38 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
       expect(h.getOutput()).toContain(
         'Capabilities: resources, logging, completions',
       )
-      expect(h.getOutput()).toContain('Set log level: debug')
       expect(h.getOutput()).toContain('Set log level: warning')
+      expect(h.getOutput()).toContain('Set log level: info')
       expect(h.getOutput()).toContain('1. View resources')
+      expect(h.getOutput()).toContain('2. View resource templates')
+      expect(h.getOutput()).toContain('Resource templates: 1 template')
       expect(reconnectCount).toBe(0)
 
+      h.stdin.write('2')
+      await h.wait(120)
+      expect(h.getOutput()).toContain('Resource templates for srv')
+      expect(h.getOutput()).toContain('Project Files')
+
+      resourceTemplateRevision = 1
+      listChangedListener?.({ kind: 'resources', server: 'srv' })
+      await h.wait(120)
+      expect(h.getOutput()).toContain('Guide Files')
+
+      h.stdin.write('1')
       await h.wait(80)
-      h.stdin.write('\r')
+      expect(h.getOutput()).toContain('Template name: project-file')
+      expect(h.getOutput()).toContain('URI template: file:///{path}')
+      expect(h.getOutput()).toContain('MIME type: text/plain')
+      expect(h.getOutput()).toContain('Open files by project-relative path')
+      expect(h.getOutput()).toContain('audience: assistant')
+
+      h.stdin.write('\x1b')
+      await h.wait(80)
+      h.stdin.write('\x1b')
+      await h.wait(350)
+
+      h.clearOutput()
+      h.stdin.write('1')
       await h.wait(300)
       expect(h.getOutput()).toContain('Resources for srv')
       expect(h.getOutput()).toContain('Project README')
@@ -651,6 +704,8 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
         h.clearOutput()
         if (serverActionsOutput.includes('1. Reconnect')) {
           h.stdin.write('\r')
+        } else if (serverActionsOutput.includes('3. Reconnect')) {
+          h.stdin.write('3')
         } else {
           h.stdin.write('\x1B[B')
           await h.wait(80)
