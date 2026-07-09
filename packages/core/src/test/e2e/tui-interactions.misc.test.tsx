@@ -214,6 +214,63 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     expect(leakedKeypresses).toBe(0)
   })
 
+  test('Select: mouse wheel does not change focus unless explicitly enabled', async () => {
+    let focused = ''
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <Select
+          options={[
+            { label: 'First', value: 'first' },
+            { label: 'Second', value: 'second' },
+            { label: 'Third', value: 'third' },
+          ]}
+          onFocus={value => {
+            focused = value
+          }}
+        />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    expect(focused).toBe('first')
+
+    h.stdin.write('\x1b[<65;1;1M')
+    await h.wait(25)
+
+    expect(focused).toBe('first')
+  })
+
+  test('Select: mouse wheel navigation is available when explicitly enabled', async () => {
+    let focused = ''
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <Select
+          enableMouseWheel={true}
+          options={[
+            { label: 'First', value: 'first' },
+            { label: 'Second', value: 'second' },
+            { label: 'Third', value: 'third' },
+          ]}
+          onFocus={value => {
+            focused = value
+          }}
+        />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    expect(focused).toBe('first')
+
+    h.stdin.write('\x1b[<65;1;1M')
+    await h.wait(25)
+
+    expect(focused).toBe('second')
+  })
+
   test('Select: grouped options focus the first selectable option', async () => {
     let selected = ''
 

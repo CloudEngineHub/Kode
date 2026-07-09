@@ -73,6 +73,13 @@ export type SelectProps = {
    * Value to focus
    */
   readonly focusValue?: string
+
+  /**
+   * Enable mouse wheel navigation for this select.
+   *
+   * @default false
+   */
+  readonly enableMouseWheel?: boolean
 }
 
 function SelectOptionRow({
@@ -122,6 +129,7 @@ export function Select({
   onChange,
   onFocus,
   focusValue,
+  enableMouseWheel = false,
 }: SelectProps) {
   const containerRef = useRef<DOMElement | null>(null)
   const state = useSelectState({
@@ -143,7 +151,7 @@ export function Select({
         state.focusNextOption()
       }
     },
-    { isActive: !isDisabled, priority: 10 },
+    { isActive: enableMouseWheel && !isDisabled, priority: 10 },
   )
 
   const appTheme = getTheme()
