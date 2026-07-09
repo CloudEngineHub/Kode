@@ -2,5 +2,8 @@
   "name": "@kode/runtime",
   "private": true,
   "version": "0.0.0",
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "@kode/config": "workspace:*"
+  }
 }

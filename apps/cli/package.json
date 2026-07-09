@@ -4,8 +4,19 @@
   "version": "0.0.0",
   "type": "module",
   "dependencies": {
-    "@kode/client": "workspace:*",
-    "@kode/core": "workspace:*"
+    "@kode/agent": "workspace:*",
+    "@kode/ai": "workspace:*",
+    "@kode/config": "workspace:*",
+    "@kode/context": "workspace:*",
+    "@kode/core": "workspace:*",
+    "@kode/engine": "workspace:*",
+    "@kode/hooks": "workspace:*",
+    "@kode/permissions": "workspace:*",
+    "@kode/protocol": "workspace:*",
+    "@kode/runtime": "workspace:*",
+    "@kode/server": "workspace:*",
+    "@kode/tool-interface": "workspace:*",
+    "@kode/tools": "workspace:*"
   },
   "scripts": {
     "dev": "bun run src/dispatch.ts --verbose",

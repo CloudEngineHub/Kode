@@ -4,8 +4,13 @@
   "version": "0.0.0",
   "type": "module",
   "dependencies": {
+    "@kode/config": "workspace:*",
+    "@kode/context": "workspace:*",
     "@kode/core": "workspace:*",
-    "@kode/protocol": "workspace:*"
+    "@kode/engine": "workspace:*",
+    "@kode/hooks": "workspace:*",
+    "@kode/protocol": "workspace:*",
+    "@kode/tools": "workspace:*"
   },
   "scripts": {
     "dev": "bun run src/index.ts",

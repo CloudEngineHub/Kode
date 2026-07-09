@@ -119,8 +119,19 @@
       "name": "@kode/cli",
       "version": "0.0.0",
       "dependencies": {
-        "@kode/client": "workspace:*",
+        "@kode/agent": "workspace:*",
+        "@kode/ai": "workspace:*",
+        "@kode/config": "workspace:*",
+        "@kode/context": "workspace:*",
         "@kode/core": "workspace:*",
+        "@kode/engine": "workspace:*",
+        "@kode/hooks": "workspace:*",
+        "@kode/permissions": "workspace:*",
+        "@kode/protocol": "workspace:*",
+        "@kode/runtime": "workspace:*",
+        "@kode/server": "workspace:*",
+        "@kode/tool-interface": "workspace:*",
+        "@kode/tools": "workspace:*",
       },
     },
     "apps/desktop": {
@@ -131,8 +142,13 @@
       "name": "@kode/server",
       "version": "0.0.0",
       "dependencies": {
+        "@kode/config": "workspace:*",
+        "@kode/context": "workspace:*",
         "@kode/core": "workspace:*",
+        "@kode/engine": "workspace:*",
+        "@kode/hooks": "workspace:*",
         "@kode/protocol": "workspace:*",
+        "@kode/tools": "workspace:*",
       },
     },
     "apps/vscode": {
@@ -191,24 +207,24 @@
       "name": "@kode/core",
       "version": "0.0.0",
       "dependencies": {
-        "@kode/agent": "workspace:*",
         "@kode/config": "workspace:*",
         "@kode/context": "workspace:*",
-        "@kode/engine": "workspace:*",
         "@kode/hooks": "workspace:*",
         "@kode/permissions": "workspace:*",
         "@kode/protocol": "workspace:*",
         "@kode/runtime": "workspace:*",
         "@kode/tool-interface": "workspace:*",
-        "@kode/tools": "workspace:*",
       },
     },
     "packages/engine": {
       "name": "@kode/engine",
       "version": "0.0.0",
       "dependencies": {
+        "@kode/config": "workspace:*",
         "@kode/core": "workspace:*",
+        "@kode/hooks": "workspace:*",
         "@kode/protocol": "workspace:*",
+        "@kode/runtime": "workspace:*",
         "@kode/tool-interface": "workspace:*",
       },
     },
@@ -290,10 +306,16 @@
     "packages/protocol": {
       "name": "@kode/protocol",
       "version": "0.0.0",
+      "dependencies": {
+        "@kode/config": "workspace:*",
+      },
     },
     "packages/runtime": {
       "name": "@kode/runtime",
       "version": "0.0.0",
+      "dependencies": {
+        "@kode/config": "workspace:*",
+      },
     },
     "packages/tool-interface": {
       "name": "@kode/tool-interface",
@@ -303,7 +325,13 @@
       "name": "@kode/tools",
       "version": "0.0.0",
       "dependencies": {
+        "@kode/agent": "workspace:*",
+        "@kode/context": "workspace:*",
+        "@kode/core": "workspace:*",
         "@kode/engine": "workspace:*",
+        "@kode/permissions": "workspace:*",
+        "@kode/protocol": "workspace:*",
+        "@kode/runtime": "workspace:*",
         "@kode/tool-interface": "workspace:*",
       },
     },
