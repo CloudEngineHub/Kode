@@ -156,23 +156,34 @@ export function PromptInputView({
   const showStatusLine = normalizeTerminalDimension(rows, 0) > 8
   const modePrefix = getPromptModePrefix({ mode, theme, isLoading })
   const contextLimitLabel = formatContextLimit(modelInfo?.contextLength)
+  const hasPriorityStatusMessage =
+    exitMessage.show ||
+    message.show ||
+    rewindPending ||
+    clearInputPending ||
+    modelSwitchMessage.show ||
+    toastMessage.show
   const showModelInfo =
-    Boolean(modelInfo) && !compact && !customStatusLineActive
+    Boolean(modelInfo) &&
+    !compact &&
+    !customStatusLineActive &&
+    !hasPriorityStatusMessage &&
+    columns >= 64
+  const modelStatusText =
+    showModelInfo && modelInfo
+      ? `[${modelInfo.provider}] ${modelInfo.name}${
+          contextLimitLabel
+            ? `: ${formatTokenCount(modelInfo.currentTokens)} / ${contextLimitLabel}`
+            : ''
+        }`
+      : null
+  const rightStatusWidth = Math.max(
+    18,
+    Math.min(60, Math.floor(columns * 0.45)),
+  )
 
   return (
     <Box flexDirection="column">
-      {/* Model info - top right of input */}
-      {showModelInfo && modelInfo && (
-        <Box justifyContent="flex-end" flexDirection="row">
-          <Text dimColor wrap="truncate-end">
-            [{modelInfo.provider}] {modelInfo.name}
-            {contextLimitLabel
-              ? `: ${formatTokenCount(modelInfo.currentTokens)} / ${contextLimitLabel}`
-              : ''}
-          </Text>
-        </Box>
-      )}
-
       {pendingPrompts.length > 0 && (
         <PendingPrompts pendingPrompts={pendingPrompts} width={columns} />
       )}
@@ -252,7 +263,7 @@ export function PromptInputView({
             justifyContent="space-between"
             paddingX={1 + Math.max(0, statusLinePadding)}
           >
-            <Box justifyContent="flex-start" gap={1}>
+            <Box justifyContent="flex-start" gap={1} flexShrink={1}>
               {exitMessage.show ? (
                 <Text dimColor wrap="truncate-end">
                   Press {exitMessage.key} again to exit
@@ -294,10 +305,20 @@ export function PromptInputView({
                 </Text>
               ) : null}
             </Box>
-            {!compact && (
+            {!compact && !hasPriorityStatusMessage && (
               <SentryErrorBoundary
                 children={
-                  <Box justifyContent="flex-end" gap={1}>
+                  <Box
+                    justifyContent="flex-end"
+                    gap={1}
+                    flexShrink={0}
+                    width={modelStatusText ? rightStatusWidth : undefined}
+                  >
+                    {modelStatusText ? (
+                      <Text dimColor wrap="truncate-start">
+                        {modelStatusText}
+                      </Text>
+                    ) : null}
                     <TokenWarning
                       tokenUsage={tokenUsage}
                       contextLimit={modelInfo?.contextLength}

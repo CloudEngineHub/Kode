@@ -69,6 +69,7 @@ function createHarness(element: React.ReactElement): TestHarness {
 function renderPromptInputView(args: {
   customStatusLineActive: boolean
   statusLine: string
+  message?: { show: boolean; text?: string }
 }) {
   return (
     <KeypressProvider>
@@ -111,7 +112,7 @@ function renderPromptInputView(args: {
         onTextPaste={() => {}}
         onSpecialKey={() => false}
         exitMessage={{ show: false }}
-        message={{ show: false }}
+        message={args.message ?? { show: false }}
         clearInputPending={false}
         rewindPending={false}
         modelSwitchMessage={{ show: false }}
@@ -146,6 +147,11 @@ describe('PromptInputView status line layout', () => {
 
     expect(output).toContain('[custom-openai] mimo-v2.5-pro: 0 / 1.0M')
     expect(output).toContain('Input: Chat')
+
+    const modelInfoLine = output
+      .split('\n')
+      .find(line => line.includes('[custom-openai] mimo-v2.5-pro'))
+    expect(modelInfoLine).toContain('Input: Chat')
   })
 
   test('does not duplicate model info when a custom status line is active', async () => {
@@ -177,5 +183,23 @@ describe('PromptInputView status line layout', () => {
     expect(output).toContain('Input: Chat')
     expect(output).not.toContain('[custom-openai] mimo-v2.5-pro')
     expect(output).not.toContain('0 / 1.0M')
+  })
+
+  test('lets priority messages use the full status line', async () => {
+    const pasteGuardMessage =
+      'Paste detected. Press Enter again after it appears to submit.'
+    const harness = createHarness(
+      renderPromptInputView({
+        customStatusLineActive: false,
+        statusLine: 'Input: Chat',
+        message: { show: true, text: pasteGuardMessage },
+      }),
+    )
+
+    await harness.wait(20)
+    const output = harness.getOutput()
+
+    expect(output).toContain(pasteGuardMessage)
+    expect(output).not.toContain('[custom-openai] mimo-v2.5-pro')
   })
 })

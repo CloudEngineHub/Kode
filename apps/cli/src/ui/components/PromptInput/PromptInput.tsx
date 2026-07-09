@@ -329,9 +329,8 @@ export function PromptInput({
     tightRows: 15,
     compactRows: 15,
   })
-  const modelInfoRows = !compact && !isStatusLineConfigured && modelInfo ? 1 : 0
   const pwdRows = compact ? 0 : 1
-  const completionReservedRows = inputBoxHeight + modelInfoRows + pwdRows + 1
+  const completionReservedRows = inputBoxHeight + pwdRows + 1
   const completionAvailableRows = computeAvailableRows({
     rows,
     reservedRows: completionReservedRows,
