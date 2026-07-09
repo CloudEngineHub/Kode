@@ -194,6 +194,8 @@ AGENTS.md
 bun.lock
 bun.lockb
 package-lock.json
+!bun.lock
+!kode-agent-sdk/package-lock.json
 yarn.lock
 pnpm-lock.yaml
 

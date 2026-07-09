@@ -5,6 +5,27 @@ import reactHooksPlugin from 'eslint-plugin-react-hooks';
 
 const files = ['**/*.{js,ts,tsx}'];
 
+// eslint-plugin-react-hooks v7 folds React Compiler migration rules into its
+// recommended preset. Adopt the stable Hooks rules now; the compiler rules
+// need a separate UI migration instead of being silently fixed by this gate.
+// package.json holds the current exhaustive-deps warning ratchet (55).
+const deferredReactCompilerRules = {
+  'react-hooks/static-components': 'off',
+  'react-hooks/use-memo': 'off',
+  'react-hooks/preserve-manual-memoization': 'off',
+  'react-hooks/incompatible-library': 'off',
+  'react-hooks/immutability': 'off',
+  'react-hooks/globals': 'off',
+  'react-hooks/refs': 'off',
+  'react-hooks/set-state-in-effect': 'off',
+  'react-hooks/error-boundaries': 'off',
+  'react-hooks/purity': 'off',
+  'react-hooks/set-state-in-render': 'off',
+  'react-hooks/unsupported-syntax': 'off',
+  'react-hooks/config': 'off',
+  'react-hooks/gating': 'off',
+};
+
 const disabledRules = {
   'no-unused-vars': 'off',
   'no-empty': 'off',
@@ -38,6 +59,7 @@ export default [
       'vendor/**',
       'coverage/**',
       'apps/server/static/**',
+      '.temp/**',
       '.tmp/**',
       '.tmp-*/**',
       '.tmp-kode-config/**',
@@ -67,6 +89,8 @@ export default [
     },
     rules: {
       ...js.configs.recommended.rules,
+      ...reactHooksPlugin.configs.flat.recommended.rules,
+      ...deferredReactCompilerRules,
       ...disabledRules,
     },
   },
