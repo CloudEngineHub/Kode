@@ -2,6 +2,7 @@ import { basename, resolve } from 'node:path'
 
 import { loadToolPermissionContextFromDisk } from '@kode/core/utils/permissions/toolPermissionSettings'
 import type { Tool } from '@kode/core/tooling/Tool'
+import type { WrappedClient } from '@kode/core/mcp/client'
 
 import { maybeServeWebui } from '../server/webui'
 import { routeChat } from './chat'
@@ -27,6 +28,7 @@ export function createRoutes(args: {
   tools: Tool[]
   toolNames: string[]
   slashCommands: string[]
+  mcpClients: WrappedClient[]
 }): {
   fetch: (
     req: Request,
@@ -93,6 +95,7 @@ export function createRoutes(args: {
         tools: args.tools,
         toolNames: args.toolNames,
         slashCommands: args.slashCommands,
+        mcpClients: args.mcpClients,
       })
       if (chatResponse) return chatResponse
 

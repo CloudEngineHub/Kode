@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url'
 
 import { setCwd, setOriginalCwd } from '@kode/core/utils/state'
 import { grantReadPermissionForOriginalDir } from '@kode/core/utils/permissions/filesystem'
+import { getClients } from '@kode/core/mcp/client'
 import { getTools } from '@kode/tools'
 
 import { serveNode } from './server/serveNode'
@@ -49,7 +50,7 @@ export async function startKodeDaemon(args: {
   await setCwd(cwd)
   grantReadPermissionForOriginalDir()
 
-  const tools = await getTools()
+  const [tools, mcpClients] = await Promise.all([getTools(), getClients()])
   const toolNames = tools.map(t => t.name)
   const commands: unknown[] = []
   const slashCommands: string[] = []
@@ -69,6 +70,7 @@ export async function startKodeDaemon(args: {
     tools,
     toolNames,
     slashCommands,
+    mcpClients,
   })
 
   const websocket = createWebSocketHandlers({
@@ -78,6 +80,7 @@ export async function startKodeDaemon(args: {
     commands,
     tools,
     echo,
+    mcpClients,
   })
 
   const server = await serveNode<{ session: DaemonSession }>({

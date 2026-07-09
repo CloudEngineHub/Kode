@@ -10,6 +10,7 @@ import { isUuid } from '@kode/core/utils/uuid'
 import { loadToolPermissionContextFromDisk } from '@kode/core/utils/permissions/toolPermissionSettings'
 import { setCwd, setOriginalCwd } from '@kode/core/utils/state'
 import { grantReadPermissionForOriginalDir } from '@kode/core/utils/permissions/filesystem'
+import type { WrappedClient } from '@kode/core/mcp/client'
 import { hasPermissionsToUseTool, savePermission } from '@kode/core/permissions'
 import { runBuiltinPreToolUseGuards } from '@kode/hooks/builtin/preToolUse'
 import {
@@ -81,6 +82,7 @@ export function createWebSocketHandlers(args: {
   commands: unknown[]
   tools: Tool[]
   echo: boolean
+  mcpClients: WrappedClient[]
 }) {
   const bashTool = args.tools.find(t => t.name === 'Bash') ?? null
 
@@ -356,6 +358,7 @@ export function createWebSocketHandlers(args: {
             tools: args.tools,
             toolNames: args.toolNames,
             slashCommands: args.slashCommands,
+            mcpClients: args.mcpClients,
           })
         } finally {
           sendSessionList(ws, {

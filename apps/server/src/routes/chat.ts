@@ -1,4 +1,5 @@
 import type { Tool } from '@kode/core/tooling/Tool'
+import type { WrappedClient } from '@kode/core/mcp/client'
 
 import { handleChatPrompt } from '../handlers/chat.handler'
 import { sendSessionList } from '../handlers/session.handler'
@@ -25,6 +26,7 @@ export async function routeChat(
     tools: Tool[]
     toolNames: string[]
     slashCommands: string[]
+    mcpClients: WrappedClient[]
   },
 ): Promise<Response | undefined> {
   const url = new URL(req.url)
@@ -104,6 +106,7 @@ export async function routeChat(
         tools: ctx.tools,
         toolNames: ctx.toolNames,
         slashCommands: ctx.slashCommands,
+        mcpClients: ctx.mcpClients,
       })
     } catch (err) {
       wsSend(log('error', err instanceof Error ? err.message : String(err)))

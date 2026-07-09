@@ -29,6 +29,7 @@ import {
 } from '@kode/core/tooling/Tool'
 import type { InflightPermissionDecision } from '../ws/types'
 import type { DaemonSession } from '../ws/types'
+import type { WrappedClient } from '@kode/core/mcp/client'
 
 type WsSend = (payload: unknown) => void
 
@@ -68,6 +69,7 @@ export async function handleChatPrompt(args: {
   tools: Tool[]
   toolNames: string[]
   slashCommands: string[]
+  mcpClients: WrappedClient[]
 }): Promise<void> {
   const {
     wsSend,
@@ -78,6 +80,7 @@ export async function handleChatPrompt(args: {
     tools,
     toolNames,
     slashCommands,
+    mcpClients,
   } = args
 
   setOriginalCwd(session.cwd)
@@ -248,7 +251,7 @@ export async function handleChatPrompt(args: {
     maxThinkingTokens: 0,
     persistSession: true,
     toolPermissionContext: session.toolPermissionContext,
-    mcpClients: [],
+    mcpClients,
     shouldAvoidPermissionPrompts: false,
     onStreamEvent: (event: unknown) => {
       if (!shouldForwardStreamEvent(event)) return
