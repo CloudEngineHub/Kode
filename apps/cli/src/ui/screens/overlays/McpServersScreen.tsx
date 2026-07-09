@@ -340,6 +340,7 @@ function computeAuthStatus(
 }
 
 export function McpServersScreen(props: { onDone(result?: string): void }) {
+  const { onDone } = props
   const theme = getTheme()
   const { rows, columns } = useTerminalSize()
   const tightLayout = rows <= 18 || columns <= 72
@@ -347,8 +348,6 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
   const paddingY = tightLayout ? 0 : 1
   const gap = tightLayout ? 0 : 1
   const paddingX = tightLayout || compactLayout ? 1 : 2
-
-  const exitState = useExitOnCtrlCD(() => process.exit(0))
 
   const [route, setRoute] = useState<Route>({ kind: 'list' })
   const [servers, setServers] = useState<McpUiServer[]>([])
@@ -385,6 +384,13 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
   const serverRefreshGenerationRef = useRef(0)
 
   const [actionError, setActionError] = useState<string | null>(null)
+
+  const closeScreen = useCallback(() => {
+    authAbortControllerRef.current?.abort()
+    onDone()
+  }, [onDone])
+
+  const exitState = useExitOnCtrlCD(closeScreen)
 
   const runAction = useCallback(async (action: () => Promise<void>) => {
     setActionError(null)
@@ -603,8 +609,7 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
 
     switch (route.kind) {
       case 'list':
-        authAbortControllerRef.current?.abort()
-        props.onDone()
+        closeScreen()
         return true
       case 'server':
         setRoute({ kind: 'list', focusValue: route.serverName })
@@ -970,7 +975,7 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
       <Box marginTop={tightLayout ? 0 : 1}>
         <Text dimColor wrap="truncate-end">
           {exitState.pending
-            ? `Press ${exitState.keyName} again to exit`
+            ? `Press ${exitState.keyName} again to close`
             : '↑↓ to navigate · Enter to confirm · Esc to cancel'}
         </Text>
       </Box>
@@ -1205,7 +1210,7 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
         <Box marginTop={tightLayout ? 0 : 1}>
           <Text dimColor wrap="truncate-end">
             {exitState.pending
-              ? `Press ${exitState.keyName} again to exit`
+              ? `Press ${exitState.keyName} again to close`
               : 'Esc to go back'}
           </Text>
         </Box>
@@ -1266,7 +1271,7 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
         <Box marginTop={tightLayout ? 0 : 1}>
           <Text dimColor wrap="truncate-end">
             {exitState.pending
-              ? `Press ${exitState.keyName} again to exit`
+              ? `Press ${exitState.keyName} again to close`
               : 'Esc to go back'}
           </Text>
         </Box>
@@ -1329,7 +1334,7 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
         <Box marginTop={tightLayout ? 0 : 1}>
           <Text dimColor wrap="truncate-end">
             {exitState.pending
-              ? `Press ${exitState.keyName} again to exit`
+              ? `Press ${exitState.keyName} again to close`
               : 'Esc to go back'}
           </Text>
         </Box>
@@ -1385,7 +1390,7 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
         <Box marginTop={tightLayout ? 0 : 1}>
           <Text dimColor wrap="truncate-end">
             {exitState.pending
-              ? `Press ${exitState.keyName} again to exit`
+              ? `Press ${exitState.keyName} again to close`
               : 'Esc to go back'}
           </Text>
         </Box>
@@ -1448,7 +1453,7 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
         <Box marginTop={tightLayout ? 0 : 1}>
           <Text dimColor wrap="truncate-end">
             {exitState.pending
-              ? `Press ${exitState.keyName} again to exit`
+              ? `Press ${exitState.keyName} again to close`
               : 'Esc to go back'}
           </Text>
         </Box>
@@ -1548,7 +1553,7 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
         <Box marginTop={tightLayout ? 0 : 1}>
           <Text dimColor wrap="truncate-end">
             {exitState.pending
-              ? `Press ${exitState.keyName} again to exit`
+              ? `Press ${exitState.keyName} again to close`
               : 'Esc to go back'}
           </Text>
         </Box>
@@ -1616,7 +1621,7 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
         <Box marginTop={tightLayout ? 0 : 1}>
           <Text dimColor wrap="truncate-end">
             {exitState.pending
-              ? `Press ${exitState.keyName} again to exit`
+              ? `Press ${exitState.keyName} again to close`
               : 'Esc to go back'}
           </Text>
         </Box>

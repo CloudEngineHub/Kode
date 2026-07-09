@@ -422,6 +422,45 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
       const { McpServersScreen } =
         await import('#ui-ink/screens/overlays/McpServersScreen')
 
+      const originalExit = process.exit
+      let processExitCalled = false
+      let ctrlCClosed = false
+      try {
+        ;(process as any).exit = (() => {
+          processExitCalled = true
+          return undefined as never
+        }) as typeof process.exit
+
+        const closeHarness = createInkTestHarness(
+          <KeypressProvider>
+            <McpServersScreen
+              onDone={() => {
+                ctrlCClosed = true
+              }}
+            />
+          </KeypressProvider>,
+        )
+        harnessManager.track(closeHarness)
+
+        await closeHarness.wait(250)
+        closeHarness.stdin.write('\x03')
+        await closeHarness.wait(40)
+
+        expect(ctrlCClosed).toBe(false)
+        expect(processExitCalled).toBe(false)
+        expect(closeHarness.getOutput()).toContain('again to close')
+
+        closeHarness.stdin.write('\x03')
+        await closeHarness.wait(40)
+
+        expect(ctrlCClosed).toBe(true)
+        expect(processExitCalled).toBe(false)
+        closeHarness.unmount()
+        getClientsCallCount = 0
+      } finally {
+        process.exit = originalExit
+      }
+
       const h = createInkTestHarness(
         <KeypressProvider>
           <>
@@ -463,6 +502,7 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
       expect(h.getOutput()).toContain('1. View resources')
       expect(reconnectCount).toBe(0)
 
+      await h.wait(80)
       h.stdin.write('\r')
       await h.wait(300)
       expect(h.getOutput()).toContain('Resources for srv')
