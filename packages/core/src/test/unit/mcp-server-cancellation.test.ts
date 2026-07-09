@@ -1,12 +1,65 @@
 import { describe, expect, test } from 'bun:test'
 
 import {
+  __convertToolPayloadToMcpContentForTests,
   __createLinkedMcpAbortControllerForTests,
   __createMcpProgressReporterForTests,
 } from '#core/mcp/server'
 import { createAssistantMessage } from '#core/utils/messages'
 
 describe('MCP server cancellation', () => {
+  test('converts tool text and image payload blocks to MCP content blocks', () => {
+    const content = __convertToolPayloadToMcpContentForTests({
+      payload: [
+        { type: 'text', text: 'hello' },
+        {
+          type: 'image',
+          source: {
+            type: 'base64',
+            data: 'aW1hZ2U=',
+            media_type: 'image/png',
+          },
+        },
+      ],
+      fallback: 'fallback',
+    })
+
+    expect(content).toEqual([
+      { type: 'text', text: 'hello' },
+      { type: 'image', data: 'aW1hZ2U=', mimeType: 'image/png' },
+    ])
+  })
+
+  test('keeps unknown tool payload blocks inspectable as text', () => {
+    const content = __convertToolPayloadToMcpContentForTests({
+      payload: [{ type: 'resource_link', uri: 'file:///tmp/a.txt' }],
+      fallback: 'fallback',
+    })
+
+    expect(content).toEqual([
+      {
+        type: 'text',
+        text: '{"type":"resource_link","uri":"file:///tmp/a.txt"}',
+      },
+    ])
+  })
+
+  test('preserves legacy string and fallback behavior for MCP tool results', () => {
+    expect(
+      __convertToolPayloadToMcpContentForTests({
+        payload: 'plain result',
+        fallback: 'fallback',
+      }),
+    ).toEqual([{ type: 'text', text: 'plain result' }])
+
+    expect(
+      __convertToolPayloadToMcpContentForTests({
+        payload: { ignored: true },
+        fallback: { output: 1 },
+      }),
+    ).toEqual([{ type: 'text', text: '{"output":1}' }])
+  })
+
   test('links MCP request abort signals into tool abort controllers', () => {
     const requestAbort = new AbortController()
     const linked = __createLinkedMcpAbortControllerForTests(requestAbort.signal)

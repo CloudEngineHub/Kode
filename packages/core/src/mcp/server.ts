@@ -45,9 +45,75 @@ type McpProgressExtra = {
   sendNotification(notification: McpProgressNotification): Promise<void>
 }
 
+type McpToolContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'image'; data: string; mimeType: string }
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
 }
+
+function stringifyForMcpText(value: unknown): string {
+  if (typeof value === 'string') return value
+  if (value === undefined) return ''
+  try {
+    const json = JSON.stringify(value)
+    return json === undefined ? String(value) : json
+  } catch {
+    return String(value)
+  }
+}
+
+function convertToolPayloadItemToMcpContent(
+  item: unknown,
+): McpToolContentBlock | null {
+  if (typeof item === 'string') return { type: 'text', text: item }
+  if (!isRecord(item)) return { type: 'text', text: stringifyForMcpText(item) }
+
+  if (item.type === 'text' && typeof item.text === 'string') {
+    return { type: 'text', text: item.text }
+  }
+
+  const source = isRecord(item.source) ? item.source : null
+  if (
+    item.type === 'image' &&
+    source?.type === 'base64' &&
+    typeof source.data === 'string'
+  ) {
+    return {
+      type: 'image',
+      data: source.data,
+      mimeType:
+        typeof source.media_type === 'string' ? source.media_type : 'image/png',
+    }
+  }
+
+  return { type: 'text', text: stringifyForMcpText(item) }
+}
+
+function convertToolPayloadToMcpContent(args: {
+  payload: unknown
+  fallback: unknown
+}): McpToolContentBlock[] {
+  const { payload, fallback } = args
+
+  if (typeof payload === 'string') return [{ type: 'text', text: payload }]
+
+  if (Array.isArray(payload)) {
+    const blocks = payload
+      .map(convertToolPayloadItemToMcpContent)
+      .filter((block): block is McpToolContentBlock => block !== null)
+
+    return blocks.length > 0
+      ? blocks
+      : [{ type: 'text', text: stringifyForMcpText(payload) }]
+  }
+
+  return [{ type: 'text', text: stringifyForMcpText(fallback) }]
+}
+
+export const __convertToolPayloadToMcpContentForTests =
+  convertToolPayloadToMcpContent
 
 function getMcpProgressToken(extra: McpProgressExtra): McpProgressToken | null {
   const token = extra._meta?.progressToken
@@ -305,15 +371,11 @@ export async function startMCPServer(
         finalResult.resultForAssistant ??
         tool.renderResultForAssistant(finalResult.data)
 
-      const text =
-        typeof payload === 'string'
-          ? payload
-          : Array.isArray(payload)
-            ? JSON.stringify(payload)
-            : JSON.stringify(finalResult.data)
-
       return {
-        content: [{ type: 'text' as const, text }],
+        content: convertToolPayloadToMcpContent({
+          payload,
+          fallback: finalResult.data,
+        }),
       }
     } catch (error) {
       logError(error)
