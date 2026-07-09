@@ -61,21 +61,69 @@ export function TerminalFrame(props: {
   runtimeAttached?: boolean
   children: React.ReactNode
   footer?: React.ReactNode
+  className?: string
+  contentClassName?: string
+  footerClassName?: string
 }) {
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[hsl(var(--kode-terminal-bg))] text-[hsl(var(--kode-terminal-text))]">
+    <div
+      className={cn(
+        'flex h-full min-h-0 flex-col bg-[hsl(var(--kode-terminal-bg))] text-[hsl(var(--kode-terminal-text))]',
+        props.className,
+      )}
+    >
       <TerminalTitleBar
         title={props.title}
         context={props.context}
         detail={props.detail}
         runtimeAttached={props.runtimeAttached}
       />
-      <div className="flex min-h-0 flex-1 flex-col">{props.children}</div>
+      <div
+        className={cn(
+          'kode-terminal-surface flex min-h-0 flex-1 flex-col',
+          props.contentClassName,
+        )}
+      >
+        {props.children}
+      </div>
       {props.footer ? (
-        <div className="border-t border-[hsl(var(--kode-terminal-border))] bg-[hsl(var(--kode-terminal-bg))] p-3 md:p-4">
+        <div
+          className={cn(
+            'border-t border-[hsl(var(--kode-terminal-border))] bg-[hsl(var(--kode-terminal-bg))] p-3 md:p-4',
+            props.footerClassName,
+          )}
+        >
           {props.footer}
         </div>
       ) : null}
+    </div>
+  )
+}
+
+function TerminalOutputLine(props: {
+  label: string
+  marker: string
+  children: React.ReactNode
+  tone?: 'muted' | 'accent' | 'warning'
+}) {
+  return (
+    <div className="grid min-w-0 grid-cols-[4.5rem_minmax(0,1fr)] gap-3 py-0.5">
+      <div className="truncate text-right text-[11px] uppercase tracking-normal text-[hsl(var(--kode-terminal-muted))]">
+        {props.label}
+      </div>
+      <div className="flex min-w-0 gap-3">
+        <span
+          className={cn(
+            'shrink-0 text-[hsl(var(--kode-terminal-muted))]',
+            props.tone === 'accent' &&
+              'text-[hsl(var(--kode-terminal-prompt))]',
+            props.tone === 'warning' && 'text-[hsl(var(--kode-terminal-tool))]',
+          )}
+        >
+          {props.marker}
+        </span>
+        <div className="min-w-0 break-words">{props.children}</div>
+      </div>
     </div>
   )
 }
@@ -93,27 +141,25 @@ export function TerminalPlaceholder(props: {
       runtimeAttached={props.runtimeAttached}
     >
       <div className="flex h-full min-h-0 items-end p-4 font-mono text-[13px] leading-6 md:p-6">
-        <div className="grid w-full gap-2">
-          <div className="flex min-w-0 gap-3">
-            <span className="shrink-0 text-[hsl(var(--kode-terminal-prompt))]">
-              kode $
-            </span>
-            <span className="min-w-0 truncate">{props.command}</span>
-          </div>
-          <div className="flex min-w-0 gap-3 text-[hsl(var(--kode-terminal-muted))]">
-            <span className="shrink-0">cwd</span>
-            <span className="min-w-0 truncate">
+        <div className="grid w-full gap-1">
+          <TerminalOutputLine label="session" marker="$" tone="accent">
+            kode {props.command}
+          </TerminalOutputLine>
+          <TerminalOutputLine label="cwd" marker="~">
+            <span className="text-[hsl(var(--kode-terminal-muted))]">
               {props.workspacePath ?? '~'}
             </span>
-          </div>
-          <div className="flex min-w-0 gap-3 text-[hsl(var(--kode-terminal-tool))]">
-            <span className="shrink-0">status</span>
-            <span className="min-w-0 truncate">
+          </TerminalOutputLine>
+          <TerminalOutputLine label="status" marker="!" tone="warning">
+            <span className="text-[hsl(var(--kode-terminal-tool))]">
               {props.command === 'shell'
                 ? 'shell transport pending'
                 : 'workspace file bridge pending'}
             </span>
-          </div>
+          </TerminalOutputLine>
+          <TerminalOutputLine label="runtime" marker=">" tone="accent">
+            {props.runtimeAttached ? 'attached' : 'detached'}
+          </TerminalOutputLine>
         </div>
       </div>
     </TerminalFrame>

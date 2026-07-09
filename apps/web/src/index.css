@@ -85,3 +85,63 @@
     }
   }
 }
+
+@layer components {
+  .kode-terminal-surface {
+    background-image:
+      linear-gradient(
+        hsl(var(--kode-terminal-text) / 0.035) 1px,
+        transparent 1px
+      ),
+      linear-gradient(
+        90deg,
+        hsl(var(--kode-terminal-text) / 0.025) 1px,
+        transparent 1px
+      );
+    background-size:
+      24px 24px,
+      24px 24px;
+    background-position: -1px -1px;
+  }
+
+  .kode-terminal-scroll [data-radix-scroll-area-viewport] {
+    scroll-behavior: smooth;
+  }
+
+  .kode-terminal-message pre,
+  .kode-terminal-message code {
+    font-family: var(--kode-font-mono);
+  }
+
+  .kode-terminal-message pre {
+    scrollbar-color: hsl(var(--kode-terminal-border))
+      hsl(var(--kode-terminal-bg));
+  }
+
+  .kode-terminal-caret {
+    animation: kode-terminal-caret 1s steps(1, end) infinite;
+  }
+
+  @keyframes kode-terminal-caret {
+    0%,
+    48% {
+      opacity: 1;
+    }
+
+    49%,
+    100% {
+      opacity: 0.18;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .kode-terminal-caret {
+      animation: none;
+      opacity: 0.85;
+    }
+
+    .kode-terminal-scroll [data-radix-scroll-area-viewport] {
+      scroll-behavior: auto;
+    }
+  }
+}

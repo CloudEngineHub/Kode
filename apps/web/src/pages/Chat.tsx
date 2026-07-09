@@ -85,6 +85,53 @@ function getEventKey(event: AgentEvent, index: number): string {
   return `${event.type}-${index}`
 }
 
+function TerminalEmptyState(props: { workspacePath?: string | null }) {
+  return (
+    <div className="grid gap-1 text-[hsl(var(--kode-terminal-muted))]">
+      <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3">
+        <span className="text-right text-[11px] uppercase">boot</span>
+        <span className="min-w-0 break-words">
+          <span className="text-[hsl(var(--kode-terminal-prompt))]">$</span>
+          <span className="pl-3 text-[hsl(var(--kode-terminal-text))]">
+            kode web
+          </span>
+        </span>
+      </div>
+      <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3">
+        <span className="text-right text-[11px] uppercase">cwd</span>
+        <span className="min-w-0 break-words">
+          <span>~</span>
+          <span className="pl-3">{props.workspacePath ?? '~'}</span>
+        </span>
+      </div>
+      <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3">
+        <span className="text-right text-[11px] uppercase">ready</span>
+        <span className="min-w-0 break-words">
+          <span className="text-[hsl(var(--kode-terminal-prompt))]">&gt;</span>
+          <span className="pl-3 text-[hsl(var(--kode-terminal-text))]">
+            new session
+          </span>
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function ThinkingLine() {
+  return (
+    <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3 rounded-md px-2 py-1 font-mono text-[13px] leading-6">
+      <span className="text-right text-[11px] uppercase tracking-normal text-[hsl(var(--kode-terminal-assistant))]">
+        kode
+      </span>
+      <span className="min-w-0 text-[hsl(var(--kode-terminal-muted))]">
+        <span className="text-[hsl(var(--kode-terminal-assistant))]">&gt;</span>
+        <span className="pl-3">thinking</span>
+        <span className="kode-terminal-caret ml-1 inline-block h-4 w-2 translate-y-0.5 bg-[hsl(var(--kode-terminal-assistant))]" />
+      </span>
+    </div>
+  )
+}
+
 export function ChatPage(props: {
   events: AgentEvent[]
   input: string
@@ -98,17 +145,21 @@ export function ChatPage(props: {
 }) {
   const bottomRef = React.useRef<HTMLDivElement | null>(null)
 
+  const chatEvents = React.useMemo(
+    () => getChatEventsForRender(props.events),
+    [props.events],
+  )
+  const lastEventKey =
+    chatEvents.length > 0
+      ? getEventKey(chatEvents[chatEvents.length - 1]!, chatEvents.length - 1)
+      : 'empty'
+
   React.useEffect(() => {
     bottomRef.current?.scrollIntoView({
       block: 'end',
       behavior: props.sending ? 'auto' : 'smooth',
     })
-  }, [props.events.length, props.sending])
-
-  const chatEvents = React.useMemo(
-    () => getChatEventsForRender(props.events),
-    [props.events],
-  )
+  }, [chatEvents.length, lastEventKey, props.events.length, props.sending])
 
   return (
     <TerminalFrame
@@ -127,23 +178,25 @@ export function ChatPage(props: {
           />
         </div>
       }
+      footerClassName="p-2 md:p-3"
     >
-      <ScrollArea className="flex-1">
+      <ScrollArea className="kode-terminal-scroll flex-1">
         <div
           className={cn(
-            'mx-auto flex min-h-full w-full max-w-6xl flex-col justify-end gap-3 px-3 py-4 font-mono text-[13px] leading-6 md:px-5',
+            'mx-auto flex min-h-full w-full max-w-6xl flex-col justify-end gap-2 px-3 py-4 font-mono text-[13px] leading-6 md:px-5',
           )}
           aria-live="polite"
         >
           {chatEvents.length === 0 ? (
-            <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-              New session
+            <div className="flex flex-1 items-end pb-2">
+              <TerminalEmptyState workspacePath={props.workspacePath} />
             </div>
           ) : (
             chatEvents.map((event, idx) => (
               <MessageBubble key={getEventKey(event, idx)} event={event} />
             ))
           )}
+          {props.sending ? <ThinkingLine /> : null}
           <div ref={bottomRef} />
         </div>
       </ScrollArea>

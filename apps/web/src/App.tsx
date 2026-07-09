@@ -236,7 +236,7 @@ export default function App() {
                 input={chat.input}
                 onInputChange={chat.setInput}
                 onSend={() => void chat.send()}
-                disabled={!client || chat.sending}
+                disabled={!client}
                 sending={chat.sending}
                 runtimeAttached={runtimeAttached}
                 sessionTitle={selectedSessionTitle}

@@ -211,8 +211,8 @@ function ToolBlockCard(props: { block: SdkContentBlock }) {
         : `Block: ${type}`
 
   return (
-    <Card className="border-[hsl(var(--kode-terminal-border))] bg-[hsl(var(--kode-terminal-panel))] text-[hsl(var(--kode-terminal-text))] shadow-none">
-      <CardHeader className="py-3">
+    <Card className="rounded-md border-[hsl(var(--kode-terminal-border))] bg-[hsl(var(--kode-terminal-panel))] text-[hsl(var(--kode-terminal-text))] shadow-none">
+      <CardHeader className="py-2.5">
         <CardTitle className="flex items-center gap-2 font-mono text-sm font-medium">
           <Badge variant="secondary">{type}</Badge>
           <span className="truncate">{title}</span>
@@ -223,7 +223,7 @@ function ToolBlockCard(props: { block: SdkContentBlock }) {
           ) : null}
         </CardTitle>
       </CardHeader>
-      <CardContent className="pb-4 pt-0 text-xs">
+      <CardContent className="pb-3 pt-0 text-xs">
         <pre className="max-h-64 overflow-auto rounded-md border border-[hsl(var(--kode-terminal-border))] bg-[hsl(var(--kode-terminal-bg))] p-3 leading-relaxed text-[hsl(var(--kode-terminal-text))]">
           {JSON.stringify(input ?? props.block, null, 2)}
         </pre>
@@ -323,7 +323,12 @@ export const MessageBubble = React.memo(function MessageBubble(props: {
   const meta = terminalKindMeta(msg.kind)
 
   return (
-    <div className="grid w-full grid-cols-[4.5rem_minmax(0,1fr)] gap-3 rounded-md border border-transparent px-2 py-2 hover:border-[hsl(var(--kode-terminal-border))]/70 hover:bg-[hsl(var(--kode-terminal-panel))]/60">
+    <div
+      className={cn(
+        'grid w-full grid-cols-[4.5rem_minmax(0,1fr)] gap-3 border-l-2 border-l-transparent px-2 py-1.5',
+        'hover:border-l-[hsl(var(--kode-terminal-border))] hover:bg-[hsl(var(--kode-terminal-panel))]/45',
+      )}
+    >
       <div
         className={cn(
           'select-none pt-0.5 text-right font-mono text-[11px] uppercase tracking-normal',
@@ -342,9 +347,9 @@ export const MessageBubble = React.memo(function MessageBubble(props: {
           >
             {meta.marker}
           </span>
-          <div className="min-w-0 flex-1 text-[hsl(var(--kode-terminal-text))]">
+          <div className="kode-terminal-message min-w-0 flex-1 break-words text-[hsl(var(--kode-terminal-text))]">
             {msg.text ? (
-              <div className="prose prose-sm prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-headings:text-[hsl(var(--kode-terminal-text))] prose-a:text-[hsl(var(--kode-terminal-assistant))] prose-strong:text-[hsl(var(--kode-terminal-text))]">
+              <div className="prose prose-sm prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-headings:my-2 prose-headings:text-[hsl(var(--kode-terminal-text))] prose-a:text-[hsl(var(--kode-terminal-assistant))] prose-strong:text-[hsl(var(--kode-terminal-text))] prose-code:break-words">
                 <MarkdownBody text={msg.text} />
               </div>
             ) : (
