@@ -2,11 +2,11 @@ import { MCP_DEFAULTS, type McpServerConfig } from '#core/utils/config'
 import { debug } from '#core/utils/debugLogger'
 import {
   captureMcpCapabilities,
+  closeMcpClient,
   connectMcpServer,
   getMcpConnectionTimeoutMs,
   getMcpServerConnectionBatchSize,
 } from './connection'
-import { unregisterMcpClientRequestHandlers } from './roots'
 import type { WrappedClient } from './types'
 
 type ManagedClientEntry = {
@@ -38,10 +38,7 @@ function serverConfigKey(name: string, serverRef: McpServerConfig): string {
 
 async function closeWrappedClient(client: WrappedClient): Promise<void> {
   if (client.type !== 'connected') return
-  unregisterMcpClientRequestHandlers(client.client)
-  try {
-    await client.client.close()
-  } catch {}
+  await closeMcpClient(client.client)
 }
 
 async function pingWrappedClient(client: WrappedClient): Promise<boolean> {

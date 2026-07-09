@@ -38,13 +38,92 @@ import type { WrappedClient } from './types'
 type GlobalWithWebSocket = { WebSocket?: unknown }
 export type McpClientConnectionOptions = { clientVersion?: string }
 
-export function getMcpClientInfo(
-  options?: McpClientConnectionOptions,
-): { name: string; version: string } {
+export function getMcpClientInfo(options?: McpClientConnectionOptions): {
+  name: string
+  version: string
+} {
   return {
     name: PRODUCT_COMMAND,
     version: options?.clientVersion ?? MACRO.VERSION,
   }
+}
+
+export function createMcpClientSdkOptions(name: string) {
+  return {
+    capabilities: getMcpClientCapabilities(),
+    listChanged: {
+      tools: {
+        onChanged: (error: Error | null) => {
+          if (error) {
+            logMCPError(
+              name,
+              `Failed to refresh tools after list change: ${error.message}`,
+            )
+            return
+          }
+          notifyMcpListChanged({ kind: 'tools', server: name })
+        },
+      },
+      prompts: {
+        onChanged: (error: Error | null) => {
+          if (error) {
+            logMCPError(
+              name,
+              `Failed to refresh prompts after list change: ${error.message}`,
+            )
+            return
+          }
+          notifyMcpListChanged({ kind: 'prompts', server: name })
+        },
+      },
+      resources: {
+        onChanged: (error: Error | null) => {
+          if (error) {
+            logMCPError(
+              name,
+              `Failed to refresh resources after list change: ${error.message}`,
+            )
+            return
+          }
+          notifyMcpListChanged({ kind: 'resources', server: name })
+        },
+      },
+    },
+  }
+}
+
+export function createMcpClient(
+  name: string,
+  options?: McpClientConnectionOptions,
+): Client {
+  const client = new Client(
+    getMcpClientInfo(options),
+    createMcpClientSdkOptions(name),
+  )
+  registerMcpClientRequestHandlers(client)
+  client.setNotificationHandler(
+    LoggingMessageNotificationSchema,
+    notification => {
+      handleMcpLoggingMessage(name, notification)
+    },
+  )
+  client.setNotificationHandler(
+    ResourceUpdatedNotificationSchema,
+    notification => {
+      notifyMcpResourceUpdated({
+        server: name,
+        uri: notification.params.uri,
+      })
+    },
+  )
+  return client
+}
+
+export async function closeMcpClient(client: Client): Promise<void> {
+  unregisterMcpClientRequestHandlers(client)
+  try {
+    await client.close()
+  } catch {}
 }
 
 async function ensureWebSocketGlobal(): Promise<void> {
@@ -377,66 +456,7 @@ export async function connectToServer(
   let lastError: unknown
 
   for (const candidate of candidates) {
-    const client = new Client(
-      getMcpClientInfo(options),
-      {
-        capabilities: getMcpClientCapabilities(),
-        listChanged: {
-          tools: {
-            onChanged: (error: Error | null) => {
-              if (error) {
-                logMCPError(
-                  name,
-                  `Failed to refresh tools after list change: ${error.message}`,
-                )
-                return
-              }
-              notifyMcpListChanged({ kind: 'tools', server: name })
-            },
-          },
-          prompts: {
-            onChanged: (error: Error | null) => {
-              if (error) {
-                logMCPError(
-                  name,
-                  `Failed to refresh prompts after list change: ${error.message}`,
-                )
-                return
-              }
-              notifyMcpListChanged({ kind: 'prompts', server: name })
-            },
-          },
-          resources: {
-            onChanged: (error: Error | null) => {
-              if (error) {
-                logMCPError(
-                  name,
-                  `Failed to refresh resources after list change: ${error.message}`,
-                )
-                return
-              }
-              notifyMcpListChanged({ kind: 'resources', server: name })
-            },
-          },
-        },
-      },
-    )
-    registerMcpClientRequestHandlers(client)
-    client.setNotificationHandler(
-      LoggingMessageNotificationSchema,
-      notification => {
-        handleMcpLoggingMessage(name, notification)
-      },
-    )
-    client.setNotificationHandler(
-      ResourceUpdatedNotificationSchema,
-      notification => {
-        notifyMcpResourceUpdated({
-          server: name,
-          uri: notification.params.uri,
-        })
-      },
-    )
+    const client = createMcpClient(name, options)
 
     try {
       const connectPromise = client.connect(candidate.transport)
@@ -479,10 +499,7 @@ export async function connectToServer(
       return client
     } catch (error) {
       lastError = error
-      unregisterMcpClientRequestHandlers(client)
-      try {
-        await client.close()
-      } catch {}
+      await closeMcpClient(client)
     }
   }
 

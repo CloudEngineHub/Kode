@@ -1,19 +1,29 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import {
+  createMcpClientSdkOptions,
   createMcpTransportCandidates,
   getMcpClientInfo,
   getMcpConnectionTimeoutMs,
 } from '#core/mcp/client/connection'
 import { getMcpServerConnectionBatchSize } from '#core/mcp/client/settings'
+import {
+  __resetMcpRootsForTests,
+  __setMcpRootsTrustOverrideForTests,
+} from '#core/mcp/client/roots'
 import { MACRO } from '#core/constants/macros'
 import { PRODUCT_COMMAND } from '#core/constants/product'
 import {
+  __resetMcpListChangedForTests,
   getClients,
   getMCPCommands,
   getMCPResources,
   getMCPResourceTemplates,
   getMCPTools,
 } from '#core/mcp/client'
+import {
+  clearNotifications,
+  getNotifications,
+} from '#core/services/notificationCenter'
 
 describe('MCP connection internals', () => {
   const originalBatchSize = process.env.MCP_SERVER_CONNECTION_BATCH_SIZE
@@ -27,6 +37,10 @@ describe('MCP connection internals', () => {
     if (originalTimeout === undefined)
       delete process.env.MCP_CONNECTION_TIMEOUT_MS
     else process.env.MCP_CONNECTION_TIMEOUT_MS = originalTimeout
+
+    __resetMcpRootsForTests()
+    __resetMcpListChangedForTests()
+    clearNotifications()
   })
 
   test('preserves transport fallback ordering for HTTP and SSE configs', async () => {
@@ -87,6 +101,30 @@ describe('MCP connection internals', () => {
       name: PRODUCT_COMMAND,
       version: '9.9.9-test',
     })
+  })
+
+  test('builds SDK options with roots and list_changed refresh hooks', () => {
+    __setMcpRootsTrustOverrideForTests(true)
+
+    const options = createMcpClientSdkOptions('srv') as any
+
+    expect(options.capabilities).toEqual({
+      roots: { listChanged: true },
+    })
+
+    options.listChanged.tools.onChanged(null)
+    options.listChanged.prompts.onChanged(null)
+    options.listChanged.resources.onChanged(null)
+
+    expect(getNotifications().map(n => n.message)).toEqual([
+      'srv: tools',
+      'srv: prompts',
+      'srv: resources',
+    ])
+
+    clearNotifications()
+    options.listChanged.tools.onChanged(new Error('refresh failed'))
+    expect(getNotifications()).toEqual([])
   })
 
   test('preserves cache.clear compatibility shims on public getters', () => {

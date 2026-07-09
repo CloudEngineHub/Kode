@@ -1,4 +1,5 @@
 import type { WrappedClient } from '#core/mcp/client'
+import { closeMcpClient } from '#core/mcp/client/connection'
 
 export const ACP_MAX_ACTIVE_SESSIONS = 100
 
@@ -19,9 +20,7 @@ export async function closeSessionOwnedMcpClients(
   const clients = session.sessionOwnedMcpClients ?? []
   for (const client of clients) {
     if (client.type !== 'connected') continue
-    try {
-      await client.client.close()
-    } catch {}
+    await closeMcpClient(client.client)
   }
   session.sessionOwnedMcpClients = []
 }
