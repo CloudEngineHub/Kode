@@ -17,6 +17,16 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+function createErrorLogEvent(error: unknown): AgentEvent {
+  return {
+    type: 'log',
+    log: {
+      level: 'error',
+      message: getErrorMessage(error),
+    },
+  }
+}
+
 const EVENT_FLUSH_DELAY_MS = 50
 
 export function useChat(args: {
@@ -129,8 +139,8 @@ export function useChat(args: {
       try {
         const loaded = await args.client.loadSession(id)
         setEvents(loaded.events ?? [])
-      } catch {
-        setEvents([])
+      } catch (error) {
+        setEvents([createErrorLogEvent(error)])
       } finally {
         void refreshSessions()
       }
@@ -161,13 +171,7 @@ export function useChat(args: {
         enqueueEvent(ev)
       }
     } catch (error) {
-      enqueueEvent({
-        type: 'log',
-        log: {
-          level: 'error',
-          message: getErrorMessage(error),
-        },
-      })
+      enqueueEvent(createErrorLogEvent(error))
     } finally {
       flushBufferedEvents()
       setSending(false)
@@ -195,4 +199,8 @@ export function useChat(args: {
     selectSession,
     clearPermissionRequest,
   }
+}
+
+export const __useChatForTests = {
+  createErrorLogEvent,
 }
