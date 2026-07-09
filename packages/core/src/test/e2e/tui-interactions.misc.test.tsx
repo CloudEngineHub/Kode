@@ -7,6 +7,7 @@ import { AskUserQuestionTool } from '#tools/tools/interaction/AskUserQuestionToo
 import { ExitPlanModePermissionRequest } from '#ui-ink/components/permissions/PlanModePermissionRequest/ExitPlanModePermissionRequest'
 import { ExitPlanModeTool } from '#tools/tools/interaction/PlanModeTool/ExitPlanModeTool'
 import { BashToolRunInBackgroundOverlay } from '#tools/tools/system/BashTool/BashToolRunInBackgroundOverlay'
+import { ModelConfig } from '#ui-ink/components/ModelConfig'
 import {
   createAssistantMessage,
   createProgressMessage,
@@ -14,6 +15,8 @@ import {
   reorderMessages,
 } from '#core/utils/messages'
 import type { Message as KodeMessage } from '#core/query'
+import { getGlobalConfig, saveGlobalConfig } from '#core/utils/config'
+import { reloadModelManager } from '#core/utils/model'
 import { Message } from '#ui-ink/components/Message'
 import { MessageResponse } from '#ui-ink/components/MessageResponse'
 import { KeypressProvider } from '#ui-ink/contexts/KeypressContext'
@@ -368,6 +371,77 @@ describe('TUI E2E regression (Ink render): Misc', () => {
       if (previousConfigDir === undefined) delete process.env.KODE_CONFIG_DIR
       else process.env.KODE_CONFIG_DIR = previousConfigDir
       rmSync(configDir, { recursive: true, force: true })
+    }
+  })
+
+  test('ModelConfig: pointer picker keeps printable filter input out of parent shortcuts', async () => {
+    const originalConfig = JSON.parse(JSON.stringify(getGlobalConfig()))
+
+    saveGlobalConfig({
+      ...getGlobalConfig(),
+      modelProfiles: [
+        {
+          name: 'Code Model',
+          provider: 'custom-openai',
+          modelName: 'code-model',
+          apiKey: 'test-key',
+          maxTokens: 1024,
+          contextLength: 128_000,
+          isActive: true,
+          createdAt: 1,
+          lastUsed: 2,
+        },
+        {
+          name: 'Other Model',
+          provider: 'custom-openai',
+          modelName: 'other-model',
+          apiKey: 'test-key',
+          maxTokens: 1024,
+          contextLength: 128_000,
+          isActive: true,
+          createdAt: 2,
+          lastUsed: 1,
+        },
+      ],
+      modelPointers: {
+        main: 'other-model',
+        task: '',
+        compact: '',
+        quick: '',
+      },
+    })
+    reloadModelManager()
+
+    try {
+      const h = createInkTestHarness(
+        <KeypressProvider>
+          <ModelConfig onClose={() => {}} />
+        </KeypressProvider>,
+      )
+      harnessManager.track(h)
+
+      await h.wait(100)
+      h.stdin.write('\r')
+      await h.wait(100)
+
+      expect(h.getOutput()).toContain('Set main model')
+
+      h.clearOutput()
+      h.stdin.write('c')
+      await h.wait(25)
+
+      expect(getGlobalConfig().modelPointers?.main).toBe('other-model')
+      expect(h.getOutput()).toContain('Set main model')
+      expect(h.getOutput()).toContain('Code Model')
+
+      h.clearOutput()
+      h.stdin.write('\x04')
+      await h.wait(25)
+
+      expect(getGlobalConfig().modelPointers?.main).toBe('')
+    } finally {
+      saveGlobalConfig(originalConfig)
+      reloadModelManager()
     }
   })
 

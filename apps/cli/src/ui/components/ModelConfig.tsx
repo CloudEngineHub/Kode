@@ -172,7 +172,7 @@ export function ModelConfig({ onClose }: Props): React.ReactNode {
           closePointerPicker()
           return true
         }
-        if (inputChar === 'c') {
+        if (key.ctrl && inputChar.toLowerCase() === 'd') {
           clearPointer(activePointer)
           closePointerPicker()
           return true
@@ -321,7 +321,7 @@ export function ModelConfig({ onClose }: Props): React.ReactNode {
 
           <Box marginTop={tightLayout ? 0 : 1}>
             <Text dimColor wrap="truncate-end">
-              ↑/↓ navigate · Enter select · Esc back · c clear pointer
+              ↑/↓ navigate · Enter select · Esc back · Ctrl+D clear pointer
             </Text>
           </Box>
         </Box>
