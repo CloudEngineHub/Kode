@@ -5,14 +5,20 @@ function normalizeTmpDir(raw: string): string {
   return raw.trim().replace(/[\\/]+$/, '')
 }
 
-function mapLegacyTmpDirToKodeDir(raw: string): string {
+function mapLegacyTmpDirToKodeDir(
+  raw: string,
+  platform: NodeJS.Platform,
+): string {
   const normalized = normalizeTmpDir(raw)
   if (!normalized) return normalized
 
-  const base = path.basename(normalized)
-  if (base === 'claude') return path.join(path.dirname(normalized), 'kode')
+  const targetPath = platform === 'win32' ? path.win32 : path.posix
+  const base = targetPath.basename(normalized)
+  if (base === 'claude') {
+    return targetPath.join(targetPath.dirname(normalized), 'kode')
+  }
   if (base === 'kode') return normalized
-  return path.join(normalized, 'kode')
+  return targetPath.join(normalized, 'kode')
 }
 
 export function resolveSandboxTmpDir(options?: {
@@ -27,12 +33,12 @@ export function resolveSandboxTmpDir(options?: {
 
   const legacyTmpDir = process.env[LEGACY_ENV.tmpDir]
   if (typeof legacyTmpDir === 'string' && legacyTmpDir.trim()) {
-    return mapLegacyTmpDirToKodeDir(legacyTmpDir)
+    return mapLegacyTmpDirToKodeDir(legacyTmpDir, platform)
   }
 
   const legacyTmpBase = process.env[LEGACY_ENV.codeTmpDir]
   if (typeof legacyTmpBase === 'string' && legacyTmpBase.trim()) {
-    return mapLegacyTmpDirToKodeDir(legacyTmpBase)
+    return mapLegacyTmpDirToKodeDir(legacyTmpBase, platform)
   }
 
   if (platform === 'win32') {
