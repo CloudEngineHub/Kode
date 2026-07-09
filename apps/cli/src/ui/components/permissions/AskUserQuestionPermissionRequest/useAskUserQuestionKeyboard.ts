@@ -30,7 +30,10 @@ export function useAskUserQuestionKeyboard(args: {
   hideSubmitTab: boolean
   onCancel: () => void
   onAllowWithAnswers: (answers: Record<string, string>) => void
-}): void {
+}): {
+  activateOption: (optionIndex: number) => boolean
+  activateSubmit: () => boolean
+} {
   const questionStatesRef = useRef(args.questionStates)
   const answersRef = useRef(args.answers)
   const currentQuestionIndexRef = useRef(args.currentQuestionIndex)
@@ -112,6 +115,86 @@ export function useAskUserQuestionKeyboard(args: {
       setCurrentQuestionIndex(prev => prev + 1)
       setFocusedOptionIndex(0)
     }
+  }
+
+  const activateSubmit = (): boolean => {
+    const currentQuestionIndex = currentQuestionIndexRef.current
+    const currentQuestion = args.questions[currentQuestionIndex]
+    const isSubmitTab = currentQuestionIndex === args.questions.length
+
+    if (isSubmitTab || !currentQuestion?.multiSelect) return false
+
+    setCurrentQuestionIndex(prev => prev + 1)
+    setFocusedOptionIndex(0)
+    setIsMultiSelectSubmitFocused(false)
+    return true
+  }
+
+  const activateOption = (optionIndex: number): boolean => {
+    const currentQuestionIndex = currentQuestionIndexRef.current
+    const currentQuestion = args.questions[currentQuestionIndex]
+    const isSubmitTab = currentQuestionIndex === args.questions.length
+    if (isSubmitTab || !currentQuestion) return false
+
+    const normalizedOptionIndex = Math.trunc(optionIndex)
+    const optionCount = currentQuestion.options.length + 1
+    if (
+      !Number.isFinite(normalizedOptionIndex) ||
+      normalizedOptionIndex < 0 ||
+      normalizedOptionIndex >= optionCount
+    ) {
+      return false
+    }
+
+    const questionText = currentQuestion.question
+    const isSelectingOther =
+      normalizedOptionIndex === currentQuestion.options.length
+
+    setFocusedOptionIndex(normalizedOptionIndex)
+    setIsMultiSelectSubmitFocused(false)
+
+    if (currentQuestion.multiSelect) {
+      if (isSelectingOther) return true
+
+      const existing = questionStatesRef.current[questionText]?.selectedValue
+      const selected = Array.isArray(existing) ? existing : []
+      const value = currentQuestion.options[normalizedOptionIndex]?.label
+      if (!value) return false
+
+      const next = selected.includes(value)
+        ? selected.filter(v => v !== value)
+        : [...selected, value]
+
+      setQuestionState(questionText, { selectedValue: next }, true)
+
+      const otherText =
+        questionStatesRef.current[questionText]?.textInputValue ?? ''
+      const updated = {
+        ...answersRef.current,
+        [questionText]: formatMultiSelectAnswer(next, otherText),
+      }
+      answersRef.current = updated
+      args.setAnswers(updated)
+      return true
+    }
+
+    if (isSelectingOther) return true
+
+    const selectedValue = currentQuestion.options[normalizedOptionIndex]?.label
+    if (!selectedValue) return false
+
+    setQuestionState(questionText, { selectedValue }, false)
+
+    if (args.hideSubmitTab) {
+      args.onAllowWithAnswers({
+        ...answersRef.current,
+        [questionText]: selectedValue,
+      })
+      return true
+    }
+
+    setAnswer(questionText, selectedValue, true)
+    return true
   }
 
   useKeypress((input, key) => {
@@ -233,33 +316,7 @@ export function useAskUserQuestionKeyboard(args: {
         optionCount,
       })
       if (numericOptionIndex !== null) {
-        setFocusedOptionIndex(numericOptionIndex)
-        setIsMultiSelectSubmitFocused(false)
-
-        const isSelectingOther =
-          numericOptionIndex === currentQuestion.options.length
-        if (isSelectingOther) return
-
-        const existing = questionStatesRef.current[questionText]?.selectedValue
-        const selected = Array.isArray(existing) ? existing : []
-        const value = currentQuestion.options[numericOptionIndex]?.label
-        if (!value) return
-
-        const next = selected.includes(value)
-          ? selected.filter(v => v !== value)
-          : [...selected, value]
-
-        setQuestionState(questionText, { selectedValue: next }, true)
-
-        const otherText =
-          questionStatesRef.current[questionText]?.textInputValue ?? ''
-        const updated = {
-          ...answersRef.current,
-          [questionText]: formatMultiSelectAnswer(next, otherText),
-        }
-        answersRef.current = updated
-        args.setAnswers(updated)
-        return
+        return activateOption(numericOptionIndex) ? true : undefined
       }
 
       if (key.downArrow || key.upArrow || key.tab) {
@@ -288,10 +345,7 @@ export function useAskUserQuestionKeyboard(args: {
       }
 
       if (multiSelectSubmitFocused && (key.return || input === ' ')) {
-        setCurrentQuestionIndex(prev => prev + 1)
-        setFocusedOptionIndex(0)
-        setIsMultiSelectSubmitFocused(false)
-        return
+        return activateSubmit() ? true : undefined
       }
 
       if (key.return || (input === ' ' && !isOtherFocused)) {
@@ -350,27 +404,7 @@ export function useAskUserQuestionKeyboard(args: {
       optionCount,
     })
     if (numericOptionIndex !== null) {
-      setFocusedOptionIndex(numericOptionIndex)
-
-      const isSelectingOther =
-        numericOptionIndex === currentQuestion.options.length
-      if (isSelectingOther) return
-
-      const selectedValue = currentQuestion.options[numericOptionIndex]?.label
-      if (!selectedValue) return
-
-      setQuestionState(questionText, { selectedValue }, false)
-
-      if (args.hideSubmitTab) {
-        args.onAllowWithAnswers({
-          ...answersRef.current,
-          [questionText]: selectedValue,
-        })
-        return
-      }
-
-      setAnswer(questionText, selectedValue, true)
-      return
+      return activateOption(numericOptionIndex) ? true : undefined
     }
 
     if (key.downArrow || key.upArrow) {
@@ -410,19 +444,11 @@ export function useAskUserQuestionKeyboard(args: {
       return
     }
 
-    const selectedValue = currentQuestion.options[focusedOptionIndex]?.label
-    if (!selectedValue) return
-
-    setQuestionState(questionText, { selectedValue }, false)
-
-    if (args.hideSubmitTab) {
-      args.onAllowWithAnswers({
-        ...answersRef.current,
-        [questionText]: selectedValue,
-      })
-      return
-    }
-
-    setAnswer(questionText, selectedValue, true)
+    return activateOption(focusedOptionIndex) ? true : undefined
   })
+
+  return {
+    activateOption,
+    activateSubmit,
+  }
 }

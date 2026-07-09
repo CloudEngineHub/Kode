@@ -190,6 +190,79 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     expect(stored?.['剩余9个未合并的功能分支，是否也要删除？']).toBe('保留不动')
   })
 
+  test('AskUserQuestion: SGR mouse click selects a numbered option', async () => {
+    let allowed = false
+    let done = false
+    const input: any = {
+      questions: [
+        {
+          question: 'Pick mouse one',
+          header: 'Pick Mouse',
+          multiSelect: false,
+          options: [
+            {
+              label: 'First',
+              description: 'First option',
+            },
+            {
+              label: 'Second',
+              description: 'Second option',
+            },
+          ],
+        },
+      ],
+    }
+
+    const toolUseConfirm: any = {
+      assistantMessage: createAssistantMessage(''),
+      tool: AskUserQuestionTool,
+      description: 'Ask user question',
+      input,
+      commandPrefix: null,
+      toolUseContext: {
+        messageId: 'mouse-m',
+        abortController: new AbortController(),
+        readFileTimestamps: {},
+      },
+      riskScore: null,
+      onAbort: () => {},
+      onAllow: () => {
+        allowed = true
+      },
+      onReject: () => {},
+    }
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <AskUserQuestionPermissionRequest
+          toolUseConfirm={toolUseConfirm}
+          onDone={() => {
+            done = true
+          }}
+          verbose={false}
+        />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    const outputLines = h.getOutput().split(/\r?\n/)
+    const secondOptionLineIndex = outputLines.findIndex(line =>
+      line.includes('2. Second'),
+    )
+    expect(secondOptionLineIndex).toBeGreaterThanOrEqual(0)
+
+    h.stdin.write(`\x1b[<0;4;${secondOptionLineIndex + 1}M`)
+    await h.wait(25)
+
+    expect(allowed).toBe(true)
+    expect(done).toBe(true)
+    const stored =
+      toolUseConfirm.toolUseContext.options?.askUserQuestionAnswersByToolUseId
+        ?.['mouse-m']
+    expect(stored?.['Pick mouse one']).toBe('Second')
+  })
+
   test('AskUserQuestion: down-arrow focus survives keep-alive remount', async () => {
     let allowed = false
     let done = false

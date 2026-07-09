@@ -164,7 +164,7 @@ export function AskUserQuestionPermissionRequest({
     [toolUseConfirm, onDone],
   )
 
-  useAskUserQuestionKeyboard({
+  const askQuestionActions = useAskUserQuestionKeyboard({
     questions,
     currentQuestionIndex,
     setCurrentQuestionIndex,
@@ -224,6 +224,8 @@ export function AskUserQuestionPermissionRequest({
             isOtherFocused={isOtherFocused}
             isMultiSelectSubmitFocused={isMultiSelectSubmitFocused}
             isLastQuestion={currentQuestionIndex === questions.length - 1}
+            onOptionPress={askQuestionActions.activateOption}
+            onSubmitPress={askQuestionActions.activateSubmit}
           />
         )}
 

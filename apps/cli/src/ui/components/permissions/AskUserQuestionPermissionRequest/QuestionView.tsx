@@ -1,10 +1,32 @@
-import React from 'react'
-import { Box, Text } from 'ink'
+import React, { useRef, type ReactNode } from 'react'
+import { Box, Text, type DOMElement } from 'ink'
 import figures from 'figures'
 
 import type { Theme } from '#core/utils/theme'
+import { useMousePress } from '#ui-ink/hooks/useMouse'
 
 import type { Question, QuestionState } from './types'
+
+function PressableQuestionRow(props: {
+  children: ReactNode
+  onPress?: () => boolean
+}): React.ReactNode {
+  const ref = useRef<DOMElement | null>(null)
+
+  useMousePress(
+    ref,
+    () => {
+      props.onPress?.()
+    },
+    { isActive: props.onPress !== undefined, priority: 25 },
+  )
+
+  return (
+    <Box ref={ref} flexDirection="column">
+      {props.children}
+    </Box>
+  )
+}
 
 export function AskUserQuestionView(props: {
   theme: Theme
@@ -15,6 +37,8 @@ export function AskUserQuestionView(props: {
   isOtherFocused: boolean
   isMultiSelectSubmitFocused: boolean
   isLastQuestion: boolean
+  onOptionPress?: (optionIndex: number) => boolean
+  onSubmitPress?: () => boolean
 }): React.ReactNode {
   const rawSelected = props.questionState?.selectedValue
   const selectedValues = Array.isArray(rawSelected) ? rawSelected : []
@@ -59,7 +83,10 @@ export function AskUserQuestionView(props: {
               : ' '
 
           return (
-            <Box key={option.label} flexDirection="column">
+            <PressableQuestionRow
+              key={option.label}
+              onPress={() => props.onOptionPress?.(index) ?? false}
+            >
               <Text color={color}>
                 {pointer} {indicator} {index + 1}. {option.label}
               </Text>
@@ -67,11 +94,15 @@ export function AskUserQuestionView(props: {
                 {'  '}
                 {option.description}
               </Text>
-            </Box>
+            </PressableQuestionRow>
           )
         })}
 
-        <Box flexDirection="column">
+        <PressableQuestionRow
+          onPress={() =>
+            props.onOptionPress?.(props.question.options.length) ?? false
+          }
+        >
           <Text
             color={props.isOtherFocused ? props.theme.kode : props.theme.text}
           >
@@ -93,21 +124,25 @@ export function AskUserQuestionView(props: {
               {props.isOtherFocused && <Text color={props.theme.text}>_</Text>}
             </Text>
           )}
-        </Box>
+        </PressableQuestionRow>
 
         {props.question.multiSelect && (
           <Box marginTop={0}>
-            <Text
-              color={
-                props.isMultiSelectSubmitFocused
-                  ? props.theme.kode
-                  : props.theme.text
-              }
-              bold={props.isMultiSelectSubmitFocused}
+            <PressableQuestionRow
+              onPress={() => props.onSubmitPress?.() ?? false}
             >
-              {props.isMultiSelectSubmitFocused ? figures.pointer : ' '}{' '}
-              {props.isLastQuestion ? 'Submit' : 'Next'}
-            </Text>
+              <Text
+                color={
+                  props.isMultiSelectSubmitFocused
+                    ? props.theme.kode
+                    : props.theme.text
+                }
+                bold={props.isMultiSelectSubmitFocused}
+              >
+                {props.isMultiSelectSubmitFocused ? figures.pointer : ' '}{' '}
+                {props.isLastQuestion ? 'Submit' : 'Next'}
+              </Text>
+            </PressableQuestionRow>
           </Box>
         )}
 
