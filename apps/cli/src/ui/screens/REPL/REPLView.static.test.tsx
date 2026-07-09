@@ -39,6 +39,9 @@ function makeStaticItem(key: string, label = key): TranscriptItem {
 function renderReplView(args: {
   staticOutputEpoch: number
   staticItems: TranscriptItem[]
+  startupHeader?: React.ReactNode
+  startupHeaderKey?: string
+  showStartupHeader?: boolean
   isLoading?: boolean
   shouldShowPromptInput?: boolean
   promptInputProps?: React.ComponentProps<typeof PromptInput>
@@ -50,6 +53,9 @@ function renderReplView(args: {
       debug={false}
       staticOutputEpoch={args.staticOutputEpoch}
       staticItems={args.staticItems}
+      startupHeader={args.startupHeader}
+      startupHeaderKey={args.startupHeaderKey}
+      showStartupHeader={args.showStartupHeader}
       transientItems={[]}
       toolJSX={null}
       toolUseConfirm={null}
@@ -189,13 +195,48 @@ describe('REPLView Static output epoch', () => {
     expect(harness.getOutput()).not.toMatch(/(?:\n\s*){4,}/)
   })
 
-  test('does not insert a large blank gap between startup output and prompt controls', async () => {
-    const staticItems = [makeStaticItem('welcome', 'Welcome')]
+  test('updates startup header without reprinting static history', async () => {
+    const staticItems = [makeStaticItem('static-a')]
+    const harness = createHarness(
+      renderReplView({
+        staticOutputEpoch: 0,
+        staticItems,
+        startupHeader: <Text>Header A</Text>,
+        startupHeaderKey: 'header-a',
+        showStartupHeader: true,
+      }),
+    )
+
+    await harness.wait(20)
+    expect(harness.getOutput()).toContain('static-a')
+    expect(harness.getOutput()).toContain('Header A')
+
+    harness.clearOutput()
+    harness.rerender(
+      renderReplView({
+        staticOutputEpoch: 0,
+        staticItems,
+        startupHeader: <Text>Header B</Text>,
+        startupHeaderKey: 'header-b',
+        showStartupHeader: true,
+      }),
+    )
+    await harness.wait(20)
+
+    const output = harness.getOutput()
+    expect(output).not.toContain('static-a')
+    expect(output).toContain('Header B')
+  })
+
+  test('does not insert a large blank gap between startup header and prompt controls', async () => {
     const harness = createHarness(
       <KeypressProvider>
         {renderReplView({
           staticOutputEpoch: 0,
-          staticItems,
+          staticItems: [],
+          startupHeader: <Text>Welcome</Text>,
+          startupHeaderKey: 'welcome',
+          showStartupHeader: true,
           shouldShowPromptInput: true,
           promptInputProps: makePromptInputProps(),
         })}

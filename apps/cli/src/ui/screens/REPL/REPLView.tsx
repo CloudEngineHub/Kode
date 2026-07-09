@@ -30,6 +30,9 @@ export function REPLView({
   debug,
   staticOutputEpoch,
   staticItems,
+  startupHeader,
+  startupHeaderKey,
+  showStartupHeader = false,
   transientItems,
   toolJSX,
   toolUseConfirm,
@@ -58,6 +61,9 @@ export function REPLView({
   debug: boolean
   staticOutputEpoch: number
   staticItems: TranscriptItem[]
+  startupHeader?: ReactNode
+  startupHeaderKey?: string
+  showStartupHeader?: boolean
   transientItems: TranscriptItem[]
   toolJSX: {
     jsx: ReactNode | null
@@ -103,6 +109,17 @@ export function REPLView({
   const hasToolUseConfirm = Boolean(toolUseConfirm)
   const hasBinaryFeedback = Boolean(binaryFeedbackContext)
   const hasToast = Boolean(toast)
+  const shouldRenderStartupHeader =
+    Boolean(startupHeader) &&
+    showStartupHeader &&
+    !toolJSX &&
+    !toolUseConfirm &&
+    !isMessageSelectorVisible &&
+    !binaryFeedbackContext &&
+    !showingCostDialog
+  const startupHeaderMeasureKey = shouldRenderStartupHeader
+    ? (startupHeaderKey ?? 'startup')
+    : ''
 
   const [mainControlsHeight, setMainControlsHeight] = useState(0)
   const [messageSelectorHeight, setMessageSelectorHeight] = useState(0)
@@ -120,6 +137,7 @@ export function REPLView({
       showingCostDialog ? 1 : 0,
       shouldShowPromptInput ? 1 : 0,
       hasToast ? 1 : 0,
+      startupHeaderMeasureKey,
       isLoading ? 1 : 0,
       transientItems.length,
       messageSelectorMessages.length,
@@ -160,6 +178,7 @@ export function REPLView({
     showingCostDialog,
     shouldShowPromptInput,
     hasToast,
+    startupHeaderMeasureKey,
     isLoading,
     transientItems.length,
     messageSelectorMessages.length,
@@ -227,6 +246,12 @@ export function REPLView({
               flexDirection="column"
               width="100%"
             >
+              {shouldRenderStartupHeader && (
+                <Box flexDirection="column" width="100%">
+                  {startupHeader}
+                </Box>
+              )}
+
               {showInlineRequestStatus && (
                 <Box paddingX={1}>
                   <RequestStatusIndicator />

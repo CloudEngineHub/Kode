@@ -1079,6 +1079,57 @@ export function useReplController(props: REPLProps) {
     forkNumber,
   })
 
+  const startupHeaderKey = useMemo(() => {
+    const mcpKey = mcpClients
+      .map(client => `${client.type}:${client.name}`)
+      .join('\u0000')
+    const updateCommandsKey = updateCommands?.join('\u0000') ?? ''
+    return [
+      forkNumber,
+      terminalColumns,
+      terminalRows,
+      isDefaultModel ? 'default' : 'custom',
+      updateAvailableVersion ?? '',
+      updateCommandsKey,
+      mcpKey,
+    ].join('|')
+  }, [
+    forkNumber,
+    isDefaultModel,
+    mcpClients,
+    terminalColumns,
+    terminalRows,
+    updateAvailableVersion,
+    updateCommands,
+  ])
+
+  const startupHeader = useMemo(
+    () => (
+      <Box flexDirection="column" key={startupHeaderKey}>
+        <Logo
+          mcpClients={mcpClients}
+          isDefaultModel={isDefaultModel}
+          updateBannerVersion={updateAvailableVersion}
+          updateBannerCommands={updateCommands}
+          terminalColumns={terminalColumns}
+          terminalRows={terminalRows}
+        />
+        <ProjectOnboarding workspaceDir={getOriginalCwd()} />
+      </Box>
+    ),
+    [
+      isDefaultModel,
+      mcpClients,
+      startupHeaderKey,
+      terminalColumns,
+      terminalRows,
+      updateAvailableVersion,
+      updateCommands,
+    ],
+  )
+  const showStartupHeader =
+    messages.length === 0 && transcript.items.length === 0
+
   const staticItemsRef = useRef<TranscriptItem[]>([])
   const printedKeysRef = useRef<Set<string>>(new Set())
   const lastStaticOutputEpochRef = useRef<number>(staticOutputEpoch)
@@ -1091,25 +1142,6 @@ export function useReplController(props: REPLProps) {
     }
 
     const items: TranscriptItem[] = []
-
-    // Always include logo as first item
-    const logoKey = `logo-${forkNumber}`
-    items.push({
-      key: logoKey,
-      jsx: (
-        <Box flexDirection="column" key={logoKey}>
-          <Logo
-            mcpClients={mcpClients}
-            isDefaultModel={isDefaultModel}
-            updateBannerVersion={updateAvailableVersion}
-            updateBannerCommands={updateCommands}
-            terminalColumns={terminalColumns}
-            terminalRows={terminalRows}
-          />
-          <ProjectOnboarding workspaceDir={getOriginalCwd()} />
-        </Box>
-      ),
-    })
 
     items.push(...transcript.items.slice(0, transcript.replStaticPrefixLength))
 
@@ -1128,18 +1160,7 @@ export function useReplController(props: REPLProps) {
     }
 
     return staticItemsRef.current
-  }, [
-    forkNumber,
-    isDefaultModel,
-    mcpClients,
-    staticOutputEpoch,
-    terminalColumns,
-    terminalRows,
-    transcript.items,
-    transcript.replStaticPrefixLength,
-    updateAvailableVersion,
-    updateCommands,
-  ])
+  }, [staticOutputEpoch, transcript.items, transcript.replStaticPrefixLength])
 
   const transientItems = useMemo(
     () => transcript.items.slice(transcript.replStaticPrefixLength),
@@ -1210,6 +1231,9 @@ export function useReplController(props: REPLProps) {
     debug,
     staticOutputEpoch,
     staticItems,
+    startupHeader,
+    startupHeaderKey,
+    showStartupHeader,
     transientItems,
     toolJSX,
     toolUseConfirm,
