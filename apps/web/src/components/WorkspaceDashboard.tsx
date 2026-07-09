@@ -70,11 +70,11 @@ function formatSessionTime(value: string | null | undefined): string {
 }
 
 function getRuntimePhase(args: {
-  connected: boolean
+  runtimeAttached: boolean
   running: boolean
   permissionRequest: PermissionRequestEvent | null
 }): RuntimePhase {
-  if (!args.connected) return 'detached'
+  if (!args.runtimeAttached) return 'detached'
   if (args.permissionRequest) return 'permission'
   if (args.running) return 'running'
   return 'attached'
@@ -289,7 +289,7 @@ function Panel(props: {
 }
 
 export function WorkspaceDashboard(props: {
-  connected: boolean
+  runtimeAttached: boolean
   running: boolean
   workspace: WorkspaceInfo | null
   selectedSession: Session | null
@@ -297,7 +297,7 @@ export function WorkspaceDashboard(props: {
   permissionRequest: PermissionRequestEvent | null
 }) {
   const phase = getRuntimePhase({
-    connected: props.connected,
+    runtimeAttached: props.runtimeAttached,
     running: props.running,
     permissionRequest: props.permissionRequest,
   })
@@ -332,17 +332,19 @@ export function WorkspaceDashboard(props: {
           <Panel title="Agent backend">
             <div className="grid gap-2">
               <div className="flex items-start gap-3 rounded-lg bg-background/65 p-3">
-                {props.connected ? (
+                {props.runtimeAttached ? (
                   <Plug className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
                 ) : (
                   <Unplug className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                 )}
                 <div className="min-w-0">
                   <div className="text-sm font-medium">
-                    {props.connected ? 'Runtime attached' : 'Runtime detached'}
+                    {props.runtimeAttached
+                      ? 'Runtime attached'
+                      : 'Runtime detached'}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    {props.connected
+                    {props.runtimeAttached
                       ? 'Web UI is receiving live session updates.'
                       : 'History can load without starting a live runtime.'}
                   </div>

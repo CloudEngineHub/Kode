@@ -36,7 +36,7 @@ function StatusPill(props: {
 }
 
 export function RuntimeStatusBar(props: {
-  connected: boolean
+  runtimeAttached: boolean
   running: boolean
   selectedSessionId: string | null
   eventCount: number
@@ -44,15 +44,15 @@ export function RuntimeStatusBar(props: {
   return (
     <div className="hidden min-w-0 items-center gap-2 xl:flex">
       <StatusPill
-        tone={props.connected ? 'success' : 'muted'}
+        tone={props.runtimeAttached ? 'success' : 'muted'}
         icon={
-          props.connected ? (
+          props.runtimeAttached ? (
             <Plug className="h-3.5 w-3.5 shrink-0" />
           ) : (
             <Unplug className="h-3.5 w-3.5 shrink-0" />
           )
         }
-        label={props.connected ? 'attached' : 'detached'}
+        label={props.runtimeAttached ? 'attached' : 'detached'}
       />
       <StatusPill
         tone={props.running ? 'default' : 'muted'}

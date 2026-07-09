@@ -3,13 +3,13 @@ import React from 'react'
 import { HttpClient } from '@kode/client'
 import type { KodeClient } from '@kode/client'
 
-export function useWebSocket(args: {
+export function useRuntimeClient(args: {
   baseUrl: string
   token: string
   workspaceId: string | null
 }): {
   client: KodeClient | null
-  connected: boolean
+  runtimeAttached: boolean
   restartClient: () => void
 } {
   const [nonce, setNonce] = React.useState(0)
@@ -24,20 +24,20 @@ export function useWebSocket(args: {
     })
   }, [args.baseUrl, args.token, args.workspaceId, nonce])
 
-  const [connected, setConnected] = React.useState(false)
+  const [runtimeAttached, setRuntimeAttached] = React.useState(false)
   React.useEffect(() => {
     if (!client) {
-      setConnected(false)
+      setRuntimeAttached(false)
       return
     }
 
-    setConnected(client.isConnected())
-    const unsubscribe = client.onConnectionChange(setConnected)
+    setRuntimeAttached(client.isConnected())
+    const unsubscribe = client.onConnectionChange(setRuntimeAttached)
     return () => {
       unsubscribe()
       client.disconnect()
     }
   }, [client])
 
-  return { client, connected, restartClient }
+  return { client, runtimeAttached, restartClient }
 }

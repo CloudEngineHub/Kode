@@ -111,11 +111,12 @@ export function ChatPage(props: {
       <ScrollArea className="flex-1 bg-muted/10">
         <div
           className={cn(
-            'mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-6 md:px-6',
+            'mx-auto flex min-h-full w-full max-w-5xl flex-col justify-end gap-4 px-4 py-6 md:px-6',
           )}
+          aria-live="polite"
         >
           {chatEvents.length === 0 ? (
-            <div className="flex min-h-[42vh] items-center justify-center text-sm text-muted-foreground">
+            <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
               New session
             </div>
           ) : (

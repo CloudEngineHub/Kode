@@ -58,7 +58,7 @@ describe('WorkspaceDashboard helpers', () => {
   test('prioritizes permission state over running state', () => {
     expect(
       __workspaceDashboardForTests.getRuntimePhase({
-        connected: true,
+        runtimeAttached: true,
         running: true,
         permissionRequest,
       }),
@@ -67,12 +67,12 @@ describe('WorkspaceDashboard helpers', () => {
 
   test('distinguishes runtime attachment from backend availability', () => {
     const detached = __workspaceDashboardForTests.getRuntimePhase({
-      connected: false,
+      runtimeAttached: false,
       running: false,
       permissionRequest: null,
     })
     const attached = __workspaceDashboardForTests.getRuntimePhase({
-      connected: true,
+      runtimeAttached: true,
       running: false,
       permissionRequest: null,
     })

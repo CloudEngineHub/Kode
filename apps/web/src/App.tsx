@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 
 import { useChat } from './hooks/useChat'
-import { useWebSocket } from './hooks/useWebSocket'
+import { useRuntimeClient } from './hooks/useRuntimeClient'
 import { useWorkspaces } from './hooks/useWorkspaces'
 import { Sidebar } from './components/Sidebar'
 import { ThemeToggle } from './components/ThemeToggle'
@@ -54,7 +54,7 @@ export default function App() {
     loading: workspacesLoading,
   } = useWorkspaces({ token })
 
-  const { client, restartClient, connected } = useWebSocket({
+  const { client, restartClient, runtimeAttached } = useRuntimeClient({
     baseUrl: baseUrlForClient(),
     token,
     workspaceId,
@@ -192,7 +192,7 @@ export default function App() {
             </Tabs>
 
             <RuntimeStatusBar
-              connected={connected}
+              runtimeAttached={runtimeAttached}
               running={chat.sending}
               selectedSessionId={chat.selectedSessionId}
               eventCount={chat.events.length}
@@ -201,11 +201,13 @@ export default function App() {
             <div
               className={cn(
                 'h-2 w-2 shrink-0 rounded-full xl:hidden',
-                connected ? 'bg-emerald-500' : 'bg-muted-foreground/40',
+                runtimeAttached ? 'bg-emerald-500' : 'bg-muted-foreground/40',
               )}
-              aria-label={connected ? 'Runtime attached' : 'Runtime detached'}
+              aria-label={
+                runtimeAttached ? 'Runtime attached' : 'Runtime detached'
+              }
               role="status"
-              title={connected ? 'Runtime attached' : 'Runtime detached'}
+              title={runtimeAttached ? 'Runtime attached' : 'Runtime detached'}
             />
             <ThemeToggle />
           </div>
@@ -242,7 +244,7 @@ export default function App() {
 
         <div className="hidden min-h-0 2xl:block">
           <WorkspaceDashboard
-            connected={connected}
+            runtimeAttached={runtimeAttached}
             running={chat.sending}
             workspace={currentWorkspace}
             selectedSession={selectedSession}
