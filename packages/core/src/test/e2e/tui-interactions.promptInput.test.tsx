@@ -525,6 +525,23 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
     expect(h.getOutput()).toContain('SUBMIT_COUNT:1')
   })
 
+  test('typing and Enter delivered in the same stdin chunk submits on the first press', async () => {
+    const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
+    const h = createInkTestHarness(
+      <PromptInputHarness conversationKey={conversationKey} showRaw={true} />,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    h.clearOutput()
+
+    h.stdin.write('hello\r')
+    await h.wait(200)
+
+    expect(h.getOutput()).toContain('SUBMIT_COUNT:1')
+    expect(h.getOutput()).toContain('RAW:""')
+  })
+
   test('delayed paste placeholder uses latest cursor position', async () => {
     await setCwd(process.cwd())
 

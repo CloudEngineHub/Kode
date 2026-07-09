@@ -331,12 +331,19 @@ function createDataListener(
     const looksLikeEscapeContinuation =
       (data.startsWith('[') && /^\[[0-9;]*[~^$uA-Za-z]$/.test(data)) ||
       (data.startsWith('O') && /^O[0-9]?[A-Za-z]$/.test(data))
+    const lineBreakCount = (data.match(/\r\n|\r|\n/g) ?? []).length
+    const hasSingleTrailingReturn =
+      lineBreakCount === 1 &&
+      (data.endsWith('\r') || data.endsWith('\n')) &&
+      !data.slice(0, -1).includes('\r') &&
+      !data.slice(0, -1).includes('\n')
 
     const canBulkInsert =
       data.length > 1 &&
       !hasEsc &&
       !hasDisallowedControlChars &&
-      !looksLikeEscapeContinuation
+      !looksLikeEscapeContinuation &&
+      !hasSingleTrailingReturn
 
     if (canBulkInsert) {
       // Flush any pending ESC prefix before injecting a bulk insert.
