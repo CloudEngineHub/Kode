@@ -18,7 +18,7 @@ export { __setMcpClientsForTests } from './clients'
 export { MCPClientManager } from './manager'
 
 export { getMCPTools } from './tools'
-export { getMCPCommands, runCommand } from './commands'
+export { getMCPCommands, runCommand, type McpPromptCommand } from './commands'
 export {
   getMCPResources,
   getMCPResourceTemplates,

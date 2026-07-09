@@ -18,6 +18,7 @@ import {
   listMCPServers,
   resetMcpConnections,
   subscribeMcpListChanged,
+  type McpPromptCommand,
   type McpResource,
 } from '#core/mcp/client'
 import {
@@ -72,6 +73,8 @@ type Route =
   | { kind: 'server'; serverName: string; actionFocusValue?: string }
   | { kind: 'tools'; serverName: string; focusValue?: string }
   | { kind: 'tool'; serverName: string; tool: Tool }
+  | { kind: 'prompts'; serverName: string; focusValue?: string }
+  | { kind: 'prompt'; serverName: string; prompt: McpPromptCommand }
   | { kind: 'resources'; serverName: string; focusValue?: string }
   | { kind: 'resource'; serverName: string; resource: McpResource }
   | { kind: 'auth'; serverName: string }
@@ -259,6 +262,19 @@ function toolTitleForList(serverName: string, tool: Tool): string {
   return full
 }
 
+function promptTitleForList(
+  serverName: string,
+  prompt: McpPromptCommand,
+): string {
+  const full = prompt.userFacingName()
+  const prefix = `${serverName}:`
+  const suffix = ' (MCP)'
+  if (full.startsWith(prefix) && full.endsWith(suffix)) {
+    return full.slice(prefix.length, full.length - suffix.length)
+  }
+  return full
+}
+
 function resourceTitleForList(resource: McpResource): string {
   return resource.title?.trim() || resource.name || resource.uri
 }
@@ -353,6 +369,9 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
   const [toolDetailDescription, setToolDetailDescription] = useState<
     string | null
   >(null)
+  const [promptsLoading, setPromptsLoading] = useState(false)
+  const [prompts, setPrompts] = useState<McpPromptCommand[]>([])
+  const [promptsError, setPromptsError] = useState<string | null>(null)
   const [resourcesLoading, setResourcesLoading] = useState(false)
   const [resources, setResources] = useState<McpResource[]>([])
   const [resourcesError, setResourcesError] = useState<string | null>(null)
@@ -517,6 +536,8 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
     route.kind === 'server' ||
     route.kind === 'tools' ||
     route.kind === 'tool' ||
+    route.kind === 'prompts' ||
+    route.kind === 'prompt' ||
     route.kind === 'resources' ||
     route.kind === 'resource' ||
     route.kind === 'auth'
@@ -562,6 +583,13 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
     })
   }, [])
 
+  const rememberPromptsFocus = useCallback((focusValue: string) => {
+    setRoute(prev => {
+      if (prev.kind !== 'prompts' || prev.focusValue === focusValue) return prev
+      return { ...prev, focusValue }
+    })
+  }, [])
+
   const rememberResourcesFocus = useCallback((focusValue: string) => {
     setRoute(prev => {
       if (prev.kind !== 'resources' || prev.focusValue === focusValue)
@@ -589,6 +617,16 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
           kind: 'tools',
           serverName: route.serverName,
           focusValue: route.tool.name,
+        })
+        return
+      case 'prompts':
+        setRoute({ kind: 'server', serverName: route.serverName })
+        return
+      case 'prompt':
+        setRoute({
+          kind: 'prompts',
+          serverName: route.serverName,
+          focusValue: route.prompt.name,
         })
         return
       case 'resources':
@@ -704,6 +742,41 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
   }, [
     route.kind,
     route.kind === 'tools' ? route.serverName : null,
+    activeServerName,
+    mcpListChangedTick,
+  ])
+
+  useEffect(() => {
+    if (route.kind !== 'prompts') return
+    if (activeServerName === null) return
+
+    let didCancel = false
+
+    setPrompts([])
+    setPromptsLoading(true)
+    setPromptsError(null)
+    ;(async () => {
+      try {
+        const allPrompts = await getMCPCommands()
+        const promptsForServer = allPrompts.filter(prompt =>
+          prompt.userFacingName().startsWith(`${activeServerName}:`),
+        )
+        if (didCancel) return
+        setPrompts(promptsForServer)
+      } catch (err) {
+        if (didCancel) return
+        setPromptsError(err instanceof Error ? err.message : String(err))
+      } finally {
+        if (!didCancel) setPromptsLoading(false)
+      }
+    })()
+
+    return () => {
+      didCancel = true
+    }
+  }, [
+    route.kind,
+    route.kind === 'prompts' ? route.serverName : null,
     activeServerName,
     mcpListChangedTick,
   ])
@@ -941,6 +1014,9 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
       if (counts?.tools && counts.tools > 0) {
         actions.push({ label: 'View tools', value: 'tools' })
       }
+      if (counts?.prompts && counts.prompts > 0) {
+        actions.push({ label: 'View prompts', value: 'prompts' })
+      }
       if (counts?.resources && counts.resources > 0) {
         actions.push({ label: 'View resources', value: 'resources' })
       }
@@ -1046,6 +1122,13 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
                 <Text dimColor>{counts.resources} resources</Text>
               </Text>
             ) : null}
+
+            {counts?.prompts && counts.prompts > 0 ? (
+              <Text wrap="truncate-end">
+                <Text bold>Prompts: </Text>
+                <Text dimColor>{counts.prompts} prompts</Text>
+              </Text>
+            ) : null}
           </Box>
 
           {activeServerCountsError ? (
@@ -1085,6 +1168,10 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
                 }
                 if (value === 'resources') {
                   setRoute({ kind: 'resources', serverName: activeServer.name })
+                  return
+                }
+                if (value === 'prompts') {
+                  setRoute({ kind: 'prompts', serverName: activeServer.name })
                   return
                 }
                 if (value === 'auth' || value === 'reauth') {
@@ -1171,6 +1258,124 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
               }}
             />
           )}
+        </Box>
+
+        <Box marginTop={tightLayout ? 0 : 1}>
+          <Text dimColor wrap="truncate-end">
+            {exitState.pending
+              ? `Press ${exitState.keyName} again to exit`
+              : 'Esc to go back'}
+          </Text>
+        </Box>
+      </Box>
+    )
+  })()
+
+  const promptsView = (() => {
+    if (!activeServer) return null
+
+    const options: Option[] = prompts.map(prompt => ({
+      label: promptTitleForList(activeServer.name, prompt),
+      value: prompt.name,
+    }))
+
+    return (
+      <Box flexDirection="column" gap={gap}>
+        <Box flexDirection="column" borderStyle="round" paddingX={1}>
+          <Box marginBottom={1}>
+            <Text bold wrap="truncate-end">
+              Prompts for {activeServer.name}{' '}
+              <Text dimColor>({prompts.length} prompts)</Text>
+            </Text>
+          </Box>
+
+          {promptsLoading ? (
+            <Text dimColor wrap="truncate-end">
+              Loading prompts...
+            </Text>
+          ) : promptsError ? (
+            <Text color={theme.error} wrap="wrap">
+              Error: {promptsError}
+            </Text>
+          ) : prompts.length === 0 ? (
+            <Text dimColor wrap="truncate-end">
+              No prompts available
+            </Text>
+          ) : (
+            <Select
+              options={options}
+              visibleOptionCount={Math.min(12, Math.max(3, options.length))}
+              focusValue={
+                route.kind === 'prompts' ? route.focusValue : undefined
+              }
+              onFocus={rememberPromptsFocus}
+              onChange={value => {
+                const prompt = prompts.find(item => item.name === value)
+                if (prompt)
+                  setRoute({
+                    kind: 'prompt',
+                    serverName: activeServer.name,
+                    prompt,
+                  })
+              }}
+            />
+          )}
+        </Box>
+
+        <Box marginTop={tightLayout ? 0 : 1}>
+          <Text dimColor wrap="truncate-end">
+            {exitState.pending
+              ? `Press ${exitState.keyName} again to exit`
+              : 'Esc to go back'}
+          </Text>
+        </Box>
+      </Box>
+    )
+  })()
+
+  const promptView = (() => {
+    if (route.kind !== 'prompt') return null
+    const prompt = route.prompt
+    const title = promptTitleForList(route.serverName, prompt)
+
+    return (
+      <Box flexDirection="column" gap={gap}>
+        <Box flexDirection="column" borderStyle="round" paddingX={1}>
+          <Box marginBottom={1}>
+            <Text bold wrap="truncate-end">
+              {title} <Text dimColor>({route.serverName})</Text>
+            </Text>
+          </Box>
+
+          <Text wrap="truncate-end">
+            <Text bold>Prompt command: </Text>
+            <Text dimColor>{prompt.name}</Text>
+          </Text>
+
+          {prompt.argNames.length > 0 ? (
+            <Text wrap="wrap">
+              <Text bold>Arguments: </Text>
+              <Text dimColor>{prompt.argNames.join(', ')}</Text>
+            </Text>
+          ) : (
+            <Text wrap="truncate-end">
+              <Text bold>Arguments: </Text>
+              <Text dimColor>none</Text>
+            </Text>
+          )}
+
+          {prompt.description ? (
+            <Box flexDirection="column" marginTop={1}>
+              <Text bold>Description:</Text>
+              <Text wrap="wrap">{prompt.description}</Text>
+            </Box>
+          ) : null}
+
+          <Box flexDirection="column" marginTop={1}>
+            <Text dimColor wrap="wrap">
+              Use this prompt from slash commands as /{prompt.name}.
+            </Text>
+          </Box>
         </Box>
 
         <Box marginTop={tightLayout ? 0 : 1}>
@@ -1489,13 +1694,17 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
             ? toolsView
             : route.kind === 'tool'
               ? toolView
-              : route.kind === 'resources'
-                ? resourcesView
-                : route.kind === 'resource'
-                  ? resourceView
-                  : route.kind === 'auth'
-                    ? authView
-                    : null}
+              : route.kind === 'prompts'
+                ? promptsView
+                : route.kind === 'prompt'
+                  ? promptView
+                  : route.kind === 'resources'
+                    ? resourcesView
+                    : route.kind === 'resource'
+                      ? resourceView
+                      : route.kind === 'auth'
+                        ? authView
+                        : null}
     </ScreenFrame>
   )
 }

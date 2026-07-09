@@ -154,12 +154,38 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
     }
   })
 
-  test('McpServersScreen: resources can be opened from a connected server', async () => {
+  test('McpServersScreen: resources and prompts can be opened from a connected server', async () => {
     let reconnectCount = 0
     let getClientsCallCount = 0
+    let promptsEnabled = false
+    let promptRevision = 0
     let resourceRevision = 0
     let listChangedListener:
       ((event: { kind: string; server: string }) => void) | null = null
+
+    const reviewPrompt = {
+      type: 'prompt',
+      name: 'mcp__srv__review',
+      description: 'Review the current diff',
+      isEnabled: true,
+      isHidden: false,
+      progressMessage: 'running',
+      argNames: ['scope'],
+      userFacingName: () => 'srv:Review Diff (MCP)',
+      getPromptForCommand: async () => [],
+    }
+
+    const summarizePrompt = {
+      type: 'prompt',
+      name: 'mcp__srv__summarize',
+      description: 'Summarize recent project changes',
+      isEnabled: true,
+      isHidden: false,
+      progressMessage: 'running',
+      argNames: [],
+      userFacingName: () => 'srv:Summarize Changes (MCP)',
+      getPromptForCommand: async () => [],
+    }
 
     const readmeResource = {
       server: 'srv',
@@ -204,7 +230,12 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
             return [{ type: 'connected', name: 'srv' }]
           },
           getMcpAuthSnapshot: () => ({ isAuthenticated: false }),
-          getMCPCommands: async () => [],
+          getMCPCommands: async () =>
+            !promptsEnabled
+              ? []
+              : promptRevision === 0
+                ? [reviewPrompt]
+                : [reviewPrompt, summarizePrompt],
           getMCPResources: async () => {
             await new Promise(resolve => setTimeout(resolve, 220))
             return resourceRevision === 0
@@ -286,7 +317,8 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
       expect(reenteredLoadingOutput).toContain('Capabilities:')
       expect(reenteredLoadingOutput).toContain('loading...')
       expect(reenteredLoadingOutput).not.toContain('Resources: 1 resources')
-      expect(reenteredLoadingOutput).not.toContain('1. View resources')
+      expect(reenteredLoadingOutput).not.toContain('Prompts: 1 prompts')
+      expect(reenteredLoadingOutput).not.toContain('1. View prompts')
 
       h.stdin.write('\r')
       await h.wait(150)
@@ -375,6 +407,44 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
       expect(latestFrame).not.toContain('failed')
       expect(latestFrame).toContain('❯2. Reconnect')
       expect(reconnectCount).toBe(2)
+
+      h.unmount()
+      promptsEnabled = true
+      promptRevision = 0
+      listChangedListener = null
+
+      const promptHarness = createInkTestHarness(
+        <KeypressProvider>
+          <McpServersScreen onDone={() => {}} />
+        </KeypressProvider>,
+      )
+      harnessManager.track(promptHarness)
+
+      await promptHarness.wait(250)
+      expect(promptHarness.getOutput()).toContain('srv')
+
+      promptHarness.stdin.write('\r')
+      await promptHarness.wait(300)
+      expect(promptHarness.getOutput()).toContain('Prompts: 1 prompts')
+      expect(promptHarness.getOutput()).toContain('1. View prompts')
+
+      promptHarness.stdin.write('\r')
+      await promptHarness.wait(120)
+      expect(promptHarness.getOutput()).toContain('Prompts for srv')
+      expect(promptHarness.getOutput()).toContain('Review Diff')
+
+      promptRevision = 1
+      listChangedListener?.({ kind: 'prompts', server: 'srv' })
+      await promptHarness.wait(120)
+      expect(promptHarness.getOutput()).toContain('Summarize Changes')
+
+      promptHarness.stdin.write('\r')
+      await promptHarness.wait(80)
+      expect(promptHarness.getOutput()).toContain(
+        'Prompt command: mcp__srv__review',
+      )
+      expect(promptHarness.getOutput()).toContain('Arguments: scope')
+      expect(promptHarness.getOutput()).toContain('Review the current diff')
     } finally {
       mock.restore()
     }
