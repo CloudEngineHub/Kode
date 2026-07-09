@@ -22,6 +22,36 @@ import {
   getCurrentOutputStyleDefinition,
 } from '#cli-services/outputStyles'
 
+export function appendMessagesForReplState(
+  oldMessages: MessageType[],
+  newMessages: MessageType[],
+): MessageType[] {
+  if (newMessages.length === 0) return oldMessages
+
+  let next: MessageType[] | null = null
+  const getNext = () => {
+    next ??= [...oldMessages]
+    return next
+  }
+
+  for (const message of newMessages) {
+    if (message.type === 'progress') {
+      const current = next ?? oldMessages
+      const existingIndex = current.findIndex(
+        item => item.type === 'progress' && item.toolUseID === message.toolUseID,
+      )
+      if (existingIndex >= 0) {
+        getNext()[existingIndex] = message
+        continue
+      }
+    }
+
+    getNext().push(message)
+  }
+
+  return next ?? oldMessages
+}
+
 export function useReplQuery(args: {
   disableSlashCommands: boolean
   systemPromptOverride?: string
@@ -101,7 +131,9 @@ export function useReplQuery(args: {
           newMessages[0].type === 'user' &&
           newMessages[0].options?.isKodingRequest === true
 
-        setMessages(oldMessages => [...oldMessages, ...newMessages])
+        setMessages(oldMessages =>
+          appendMessagesForReplState(oldMessages, newMessages),
+        )
 
         markProjectOnboardingComplete()
 
@@ -164,7 +196,9 @@ export function useReplQuery(args: {
           },
           getBinaryFeedbackResponse,
         })) {
-          setMessages(oldMessages => [...oldMessages, message])
+          setMessages(oldMessages =>
+            appendMessagesForReplState(oldMessages, [message]),
+          )
           if (message.type === 'assistant') {
             lastAssistantMessage = message
           }
