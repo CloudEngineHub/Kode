@@ -98,4 +98,20 @@ describe('InputArea accessibility', () => {
       }),
     ).toBeNull()
   })
+
+  test('renders an enabled stop control while a request is running', () => {
+    const html = renderToStaticMarkup(
+      <InputArea
+        value=""
+        onChange={() => {}}
+        onSubmit={() => {}}
+        onCancel={() => {}}
+        isSending
+      />,
+    )
+
+    const stopButton = html.match(/<button[^>]+aria-label="Stop"[^>]*>/)?.[0]
+    expect(stopButton).toBeTruthy()
+    expect(stopButton).not.toMatch(/\sdisabled(?:=|\s|>)/)
+  })
 })

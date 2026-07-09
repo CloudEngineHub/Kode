@@ -227,11 +227,13 @@ export default function App() {
                 onInputChange={chat.setInput}
                 onPasteText={chat.insertPastedText}
                 onSend={() => void chat.send()}
+                onCancel={chat.cancel}
                 disabled={!client}
                 sending={chat.sending}
                 permissionRequest={chat.permissionRequest}
                 runtimeAttached={runtimeAttached}
                 runtimeStatus={runtimeStatus}
+                sessionKey={chat.selectedSessionId}
                 sessionTitle={selectedSessionTitle}
                 workspacePath={currentWorkspace?.path ?? null}
               />

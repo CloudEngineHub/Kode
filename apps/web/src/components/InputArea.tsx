@@ -1,5 +1,5 @@
 import React from 'react'
-import { SendHorizontal } from 'lucide-react'
+import { SendHorizontal, Square } from 'lucide-react'
 
 import { Button } from './ui/button'
 import { Spinner } from './ui/spinner'
@@ -50,6 +50,7 @@ export function InputArea(props: {
   value: string
   onChange: (value: string) => void
   onSubmit: () => void
+  onCancel?: () => void
   onPasteText?: (args: {
     text: string
     selectionStart: number | null
@@ -65,7 +66,8 @@ export function InputArea(props: {
   const inputId = React.useId()
   const hintId = React.useId()
   const isBusy = props.isSending === true
-  const isSubmitDisabled = props.disabled || isBusy || !props.value.trim()
+  const isSubmitDisabled =
+    props.disabled || (isBusy ? !props.onCancel : !props.value.trim())
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     const historyDirection = getPromptHistoryDirection({
@@ -168,19 +170,24 @@ export function InputArea(props: {
         disabled={props.disabled}
       />
       <Button
-        type="submit"
+        type={isBusy ? 'button' : 'submit'}
         className="h-12 w-12 rounded-md border border-[hsl(var(--kode-terminal-border))] bg-[hsl(var(--kode-terminal-elevated))] text-[hsl(var(--kode-terminal-text))] hover:bg-[hsl(var(--kode-terminal-border))]"
         size="icon"
         disabled={isSubmitDisabled}
-        aria-label={isBusy ? 'Sending' : 'Send'}
+        aria-label={isBusy ? 'Stop' : 'Send'}
         aria-busy={isBusy}
+        onClick={isBusy ? props.onCancel : undefined}
       >
         {props.isSending ? (
-          <Spinner
-            size={16}
-            className="h-4 w-4 text-current"
-            aria-hidden="true"
-          />
+          props.onCancel ? (
+            <Square className="h-4 w-4 fill-current" aria-hidden="true" />
+          ) : (
+            <Spinner
+              size={16}
+              className="h-4 w-4 text-current"
+              aria-hidden="true"
+            />
+          )
         ) : (
           <SendHorizontal className="h-4 w-4" />
         )}

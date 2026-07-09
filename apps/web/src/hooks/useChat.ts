@@ -1,6 +1,6 @@
 import React from 'react'
 
-import type { KodeClient } from '@kode/client'
+import type { KodeClient, SessionAwareKodeClient } from '@kode/client'
 import type {
   AgentEvent,
   PermissionRequestEvent,
@@ -19,6 +19,22 @@ function isPermissionRequest(
   return event.type === 'permission_request'
 }
 
+function isSessionAwareClient(
+  client: KodeClient | null,
+): client is SessionAwareKodeClient {
+  return Boolean(
+    client &&
+    'attachSession' in client &&
+    typeof client.attachSession === 'function' &&
+    'startSession' in client &&
+    typeof client.startSession === 'function' &&
+    'subscribeEvents' in client &&
+    typeof client.subscribeEvents === 'function' &&
+    'getAttachedSessionId' in client &&
+    typeof client.getAttachedSessionId === 'function',
+  )
+}
+
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
@@ -31,6 +47,42 @@ function createErrorLogEvent(error: unknown): AgentEvent {
       message: getErrorMessage(error),
     },
   }
+}
+
+function getEventSessionId(event: AgentEvent): string | null {
+  if (event.type === 'history_begin' || event.type === 'history_end') {
+    return event.sessionId
+  }
+  if ('session_id' in event && typeof event.session_id === 'string') {
+    return event.session_id
+  }
+  return null
+}
+
+function getEventIdentity(event: AgentEvent): string | null {
+  if ('uuid' in event && typeof event.uuid === 'string' && event.uuid) {
+    return `${event.type}:${event.uuid}`
+  }
+  if (event.type === 'permission_request') {
+    return `${event.type}:${event.request_id}`
+  }
+  return null
+}
+
+function getTurnStateSending(event: AgentEvent): boolean | null {
+  if (event.type !== 'turn_state') return null
+  return event.state === 'running'
+}
+
+function appendUniqueEvent(
+  events: AgentEvent[],
+  event: AgentEvent,
+): AgentEvent[] {
+  const identity = getEventIdentity(event)
+  if (!identity) return [...events, event]
+  return events.some(candidate => getEventIdentity(candidate) === identity)
+    ? events
+    : [...events, event]
 }
 
 const EVENT_FLUSH_DELAY_MS = 50
@@ -53,10 +105,13 @@ export function useChat(args: {
   }) => { cursorOffset: number } | null
   sending: boolean
   send: () => Promise<void>
+  cancel: () => void
   startNewSession: () => void
   selectSession: (id: string) => Promise<void>
   clearPermissionRequest: () => void
 } {
+  const onNewSession = args.onNewSession
+  const sessionClient = isSessionAwareClient(args.client) ? args.client : null
   const [sessions, setSessions] = React.useState<Session[]>([])
   const [selectedSessionId, setSelectedSessionId] = React.useState<
     string | null
@@ -70,6 +125,10 @@ export function useChat(args: {
   const pastedTextCounterRef = React.useRef(1)
   const pastedTextSegmentsRef = React.useRef<WebPastedTextSegment[]>([])
   const eventBufferRef = React.useRef<AgentEvent[]>([])
+  const historyBufferRef = React.useRef<AgentEvent[] | null>(null)
+  const selectedSessionIdRef = React.useRef<string | null>(null)
+  const selectionEpochRef = React.useRef(0)
+  const sessionRefreshEpochRef = React.useRef(0)
   const eventFlushTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(
     null,
   )
@@ -78,7 +137,9 @@ export function useChat(args: {
     const buffered = eventBufferRef.current
     if (buffered.length === 0) return
     eventBufferRef.current = []
-    setEvents(prev => [...prev, ...buffered])
+    setEvents(prev =>
+      buffered.reduce((next, event) => appendUniqueEvent(next, event), prev),
+    )
   }, [])
 
   const clearEventFlushTimer = React.useCallback(() => {
@@ -95,6 +156,7 @@ export function useChat(args: {
   const clearBufferedEvents = React.useCallback(() => {
     clearEventFlushTimer()
     eventBufferRef.current = []
+    historyBufferRef.current = null
   }, [clearEventFlushTimer])
 
   const scheduleEventFlush = React.useCallback(() => {
@@ -114,20 +176,122 @@ export function useChat(args: {
   )
 
   const refreshSessions = React.useCallback(async () => {
-    if (!args.client) return
+    const client = args.client
+    const refreshEpoch = ++sessionRefreshEpochRef.current
+    if (!client) {
+      setSessions([])
+      return
+    }
     try {
-      const next = await args.client.listSessions()
-      setSessions(next)
+      const next = await client.listSessions()
+      if (sessionRefreshEpochRef.current === refreshEpoch) {
+        setSessions(next)
+      }
     } catch {
       // ignore
     }
   }, [args.client])
 
+  const handleEvent = React.useCallback(
+    (event: AgentEvent) => {
+      if (event.type === 'session_list') {
+        sessionRefreshEpochRef.current += 1
+        setSessions(event.sessions)
+        return
+      }
+
+      if (
+        event.type === 'system' &&
+        event.subtype === 'init' &&
+        typeof event.session_id === 'string'
+      ) {
+        selectedSessionIdRef.current = event.session_id
+        setSelectedSessionId(event.session_id)
+        return
+      }
+
+      const authoritativeSending = getTurnStateSending(event)
+      if (authoritativeSending !== null && event.type === 'turn_state') {
+        const selectedId =
+          selectedSessionIdRef.current ??
+          sessionClient?.getAttachedSessionId() ??
+          null
+        if (selectedId && event.session_id !== selectedId) return
+        setSending(authoritativeSending)
+        if (!authoritativeSending) setPermissionRequest(null)
+        return
+      }
+
+      const eventSessionId = getEventSessionId(event)
+      const selectedId =
+        selectedSessionIdRef.current ??
+        sessionClient?.getAttachedSessionId() ??
+        null
+      if (eventSessionId && selectedId && eventSessionId !== selectedId) return
+
+      if (event.type === 'history_begin') {
+        clearBufferedEvents()
+        historyBufferRef.current = []
+        setSending(false)
+        setPermissionRequest(null)
+        return
+      }
+
+      if (event.type === 'history_end') {
+        clearEventFlushTimer()
+        const history = historyBufferRef.current ?? []
+        historyBufferRef.current = null
+        eventBufferRef.current = []
+        setEvents(
+          history.reduce(
+            (next, historyEvent) => appendUniqueEvent(next, historyEvent),
+            [] as AgentEvent[],
+          ),
+        )
+        return
+      }
+
+      if (isPermissionRequest(event)) {
+        setPermissionRequest(event)
+        setSending(true)
+        return
+      }
+
+      if (event.type === 'result') {
+        setSending(false)
+        setPermissionRequest(null)
+      } else if (event.type === 'user' && historyBufferRef.current === null) {
+        setSending(true)
+      }
+
+      if (historyBufferRef.current !== null) {
+        historyBufferRef.current = appendUniqueEvent(
+          historyBufferRef.current,
+          event,
+        )
+        return
+      }
+
+      enqueueEvent(event)
+    },
+    [clearBufferedEvents, clearEventFlushTimer, enqueueEvent, sessionClient],
+  )
+
+  React.useEffect(() => {
+    if (!sessionClient) return
+    return sessionClient.subscribeEvents(handleEvent)
+  }, [handleEvent, sessionClient])
+
   React.useEffect(() => {
     clearBufferedEvents()
+    sessionRefreshEpochRef.current += 1
+    selectionEpochRef.current += 1
+    setSessions([])
+    selectedSessionIdRef.current = null
     setSelectedSessionId(null)
     setEvents([])
     setPermissionRequest(null)
+    setSending(false)
     inputRef.current = ''
     pastedTextCounterRef.current = 1
     pastedTextSegmentsRef.current = []
@@ -142,33 +306,66 @@ export function useChat(args: {
   }, [clearBufferedEvents])
 
   const startNewSession = React.useCallback(() => {
-    args.onNewSession()
-  }, [args.onNewSession])
+    if (sending) return
+    if (!sessionClient) {
+      onNewSession()
+      return
+    }
+
+    const epoch = ++selectionEpochRef.current
+    clearBufferedEvents()
+    selectedSessionIdRef.current = null
+    setSelectedSessionId(null)
+    setEvents([])
+    setPermissionRequest(null)
+    setSending(false)
+
+    void sessionClient.startSession().catch(error => {
+      if (selectionEpochRef.current !== epoch) return
+      setEvents([createErrorLogEvent(error)])
+    })
+  }, [clearBufferedEvents, onNewSession, sending, sessionClient])
 
   const selectSession = React.useCallback(
     async (id: string) => {
-      if (!args.client) return
+      if (!args.client || sending) return
+      const epoch = ++selectionEpochRef.current
       clearBufferedEvents()
+      selectedSessionIdRef.current = id
       setSelectedSessionId(id)
       setEvents([])
       setPermissionRequest(null)
+      setSending(false)
 
       try {
-        const loaded = await args.client.loadSession(id)
-        setEvents(loaded.events ?? [])
+        if (sessionClient) {
+          await sessionClient.attachSession(id)
+        } else {
+          const loaded = await args.client.loadSession(id)
+          if (selectionEpochRef.current === epoch) {
+            setEvents(loaded.events ?? [])
+          }
+        }
       } catch (error) {
-        setEvents([createErrorLogEvent(error)])
+        if (selectionEpochRef.current === epoch) {
+          clearBufferedEvents()
+          setEvents([createErrorLogEvent(error)])
+        }
       } finally {
-        void refreshSessions()
+        if (selectionEpochRef.current === epoch) void refreshSessions()
       }
     },
-    [args.client, clearBufferedEvents, refreshSessions],
+    [args.client, clearBufferedEvents, refreshSessions, sending, sessionClient],
   )
 
   const clearPermissionRequest = React.useCallback(
     () => setPermissionRequest(null),
     [],
   )
+
+  const cancel = React.useCallback(() => {
+    args.client?.cancelRequest()
+  }, [args.client])
 
   const setInputValue = React.useCallback((value: string) => {
     inputRef.current = value
@@ -214,14 +411,25 @@ export function useChat(args: {
     }).trim()
     if (!text || !args.client || sending) return
 
+    const sendEpoch = selectionEpochRef.current
+    const sendSessionId = sessionClient?.getAttachedSessionId() ?? null
+    const isCurrentSelection = () =>
+      selectionEpochRef.current === sendEpoch &&
+      (sendSessionId === null ||
+        sessionClient?.getAttachedSessionId() === sendSessionId)
+
     inputRef.current = ''
     pastedTextSegmentsRef.current = []
     setInput('')
     setSending(true)
     setPermissionRequest(null)
 
+    const receivesPersistentEvents = Boolean(sessionClient)
+
     try {
       for await (const ev of args.client.sendMessage(text)) {
+        if (!isCurrentSelection()) continue
+        if (receivesPersistentEvents) continue
         if (isPermissionRequest(ev)) {
           setPermissionRequest(ev)
           continue
@@ -230,13 +438,22 @@ export function useChat(args: {
         enqueueEvent(ev)
       }
     } catch (error) {
-      enqueueEvent(createErrorLogEvent(error))
+      if (isCurrentSelection()) enqueueEvent(createErrorLogEvent(error))
     } finally {
-      flushBufferedEvents()
-      setSending(false)
-      void refreshSessions()
+      if (isCurrentSelection()) {
+        flushBufferedEvents()
+        setSending(false)
+        void refreshSessions()
+      }
     }
-  }, [args.client, enqueueEvent, flushBufferedEvents, refreshSessions, sending])
+  }, [
+    args.client,
+    enqueueEvent,
+    flushBufferedEvents,
+    refreshSessions,
+    sending,
+    sessionClient,
+  ])
 
   return {
     sessions,
@@ -248,6 +465,7 @@ export function useChat(args: {
     insertPastedText,
     sending,
     send,
+    cancel,
     startNewSession,
     selectSession,
     clearPermissionRequest,
@@ -255,5 +473,8 @@ export function useChat(args: {
 }
 
 export const __useChatForTests = {
+  appendUniqueEvent,
   createErrorLogEvent,
+  getEventSessionId,
+  getTurnStateSending,
 }

@@ -294,14 +294,19 @@ export function ChatPage(props: {
     selectionEnd: number | null
   }) => { cursorOffset: number } | null
   onSend: () => void
+  onCancel?: () => void
   disabled?: boolean
   sending?: boolean
   permissionRequest?: PermissionRequestEvent | null
   runtimeAttached?: boolean
   runtimeStatus?: RuntimeStatus | null
+  sessionKey?: string | null
   sessionTitle?: string
   workspacePath?: string | null
 }) {
+  const input = props.input
+  const onInputChange = props.onInputChange
+  const onSend = props.onSend
   const transcriptId = React.useId()
   const inputRef = React.useRef<HTMLTextAreaElement | null>(null)
   const bottomRef = React.useRef<HTMLDivElement | null>(null)
@@ -355,7 +360,7 @@ export function ChatPage(props: {
     setHistoryCursor(null)
     draftBeforeHistoryRef.current = ''
     inputRef.current?.focus()
-  }, [props.sessionTitle, props.workspacePath])
+  }, [props.sessionKey, props.workspacePath])
 
   React.useEffect(() => {
     if (!props.disabled && !props.sending) inputRef.current?.focus()
@@ -400,34 +405,34 @@ export function ChatPage(props: {
     (value: string) => {
       setHistoryCursor(null)
       draftBeforeHistoryRef.current = ''
-      props.onInputChange(value)
+      onInputChange(value)
     },
-    [props.onInputChange],
+    [onInputChange],
   )
 
   const handlePromptSubmit = React.useCallback(() => {
     setHistoryCursor(null)
     draftBeforeHistoryRef.current = ''
-    props.onSend()
-  }, [props.onSend])
+    onSend()
+  }, [onSend])
 
   const navigatePromptHistory = React.useCallback(
     (direction: PromptHistoryDirection) => {
       setHistoryCursor(currentCursor => {
         const next = resolvePromptHistoryNavigation({
           history: promptHistory,
-          currentValue: props.input,
+          currentValue: input,
           cursor: currentCursor,
           draftValue: draftBeforeHistoryRef.current,
           direction,
         })
         if (!next) return currentCursor
         draftBeforeHistoryRef.current = next.draftValue
-        props.onInputChange(next.value)
+        onInputChange(next.value)
         return next.cursor
       })
     },
-    [promptHistory, props.input, props.onInputChange],
+    [input, onInputChange, promptHistory],
   )
 
   const handleTranscriptClick = React.useCallback(
@@ -450,6 +455,7 @@ export function ChatPage(props: {
             value={props.input}
             onChange={handlePromptChange}
             onSubmit={handlePromptSubmit}
+            onCancel={props.onCancel}
             onPasteText={props.onPasteText}
             onHistoryPrevious={() => navigatePromptHistory('previous')}
             onHistoryNext={() => navigatePromptHistory('next')}
