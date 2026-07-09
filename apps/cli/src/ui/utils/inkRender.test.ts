@@ -1,8 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import {
-  isWindowsConptyLikeTerminal,
-  resolveTuiMaxFps,
-} from './inkRender'
+import { isWindowsConptyLikeTerminal, resolveTuiMaxFps } from './inkRender'
 
 describe('Ink render option helpers', () => {
   test('uses a conservative default frame rate for Windows-like terminals', () => {
@@ -101,7 +98,10 @@ describe('Ink render option helpers', () => {
   test('detects Windows Terminal from env or platform', () => {
     expect(isWindowsConptyLikeTerminal({}, 'win32')).toBe(true)
     expect(
-      isWindowsConptyLikeTerminal({ TERM_PROGRAM: 'Windows_Terminal' }, 'linux'),
+      isWindowsConptyLikeTerminal(
+        { TERM_PROGRAM: 'Windows_Terminal' },
+        'linux',
+      ),
     ).toBe(true)
     expect(isWindowsConptyLikeTerminal({}, 'linux')).toBe(false)
   })

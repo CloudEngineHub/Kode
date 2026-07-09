@@ -81,9 +81,7 @@ describe('cli parser (commander)', () => {
     expect(shouldRunHeadlessMode({ print: true })).toBe(true)
     expect(shouldRunHeadlessMode({ outputFormat: 'json' })).toBe(true)
     expect(shouldRunHeadlessMode({ outputFormat: ' JSON ' })).toBe(true)
-    expect(shouldRunHeadlessMode({ outputFormat: ' STREAM-JSON ' })).toBe(
-      true,
-    )
+    expect(shouldRunHeadlessMode({ outputFormat: ' STREAM-JSON ' })).toBe(true)
     expect(shouldRunHeadlessMode({ inputFormat: 'stream-json' })).toBe(true)
     expect(shouldRunHeadlessMode({ inputFormat: ' STREAM-JSON ' })).toBe(true)
     expect(

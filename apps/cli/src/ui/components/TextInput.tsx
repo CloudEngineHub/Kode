@@ -222,12 +222,15 @@ export default function TextInput({
     terminalColumns: columns,
   })
 
-  const resetPasteTimeout = React.useCallback((delayMs: number) => {
-    if (pasteTimeoutRef.current) {
-      clearTimeout(pasteTimeoutRef.current)
-    }
-    pasteTimeoutRef.current = setTimeout(flushAggregatedPaste, delayMs)
-  }, [flushAggregatedPaste])
+  const resetPasteTimeout = React.useCallback(
+    (delayMs: number) => {
+      if (pasteTimeoutRef.current) {
+        clearTimeout(pasteTimeoutRef.current)
+      }
+      pasteTimeoutRef.current = setTimeout(flushAggregatedPaste, delayMs)
+    },
+    [flushAggregatedPaste],
+  )
 
   const wrappedOnInput = (input: string, key: Key): void => {
     if (key.name === PASTE_PROTECTION_RETURN_KEY_NAME) {

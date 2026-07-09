@@ -85,10 +85,7 @@ export function parseNonStreamingResponse(response: any): UnifiedResponse {
       (item: any) => item.type === 'message',
     )
     if (messageItems.length > 0) {
-      content = messageItems
-        .map(getMessageText)
-        .filter(Boolean)
-        .join('\n\n')
+      content = messageItems.map(getMessageText).filter(Boolean).join('\n\n')
     }
 
     // Extract reasoning content

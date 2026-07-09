@@ -33,12 +33,7 @@ export const useSelect = ({ isDisabled = false, state }: UseSelectProps) => {
         return true
       }
 
-      if (
-        key.insertable &&
-        !key.ctrl &&
-        !key.meta &&
-        /^[1-9]$/.test(input)
-      ) {
+      if (key.insertable && !key.ctrl && !key.meta && /^[1-9]$/.test(input)) {
         const selectableOptionIndex = Number.parseInt(input, 10) - 1
         const option = state.visibleOptions.filter(
           visibleOption => 'value' in visibleOption,

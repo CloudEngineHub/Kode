@@ -288,7 +288,8 @@ describe('Compatibility: filesystem permission engine', () => {
       expect(kodeWriteDenied.result).toBe(false)
     } finally {
       setKodeAgentSessionId(previousSessionId)
-      if (previousKodeConfigDir === undefined) delete process.env.KODE_CONFIG_DIR
+      if (previousKodeConfigDir === undefined)
+        delete process.env.KODE_CONFIG_DIR
       else process.env.KODE_CONFIG_DIR = previousKodeConfigDir
       if (previousClaudeConfigDir === undefined)
         delete process.env.CLAUDE_CONFIG_DIR

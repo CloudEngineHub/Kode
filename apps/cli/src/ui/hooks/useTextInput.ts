@@ -54,9 +54,9 @@ export function useTextInput({
   const lastComplexInsertRef = useRef(0)
   const imagePasteInFlightRef = useRef(false)
   const isMountedRef = useRef(true)
-  const imagePasteErrorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  )
+  const imagePasteErrorTimeoutRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null)
 
   useEffect(() => {
     isMountedRef.current = true

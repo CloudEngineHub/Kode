@@ -6,9 +6,10 @@ import {
 
 describe('prepareAssistantMarkdownTextForRender', () => {
   test('folds very long final assistant output before markdown rendering', () => {
-    const text = Array.from({ length: 300 }, (_, index) => `line-${index}`).join(
-      '\n',
-    )
+    const text = Array.from(
+      { length: 300 },
+      (_, index) => `line-${index}`,
+    ).join('\n')
 
     const prepared = prepareAssistantMarkdownTextForRender(text)
 
@@ -23,7 +24,10 @@ describe('prepareAssistantMarkdownTextForRender', () => {
   test('closes a visible fenced code block before adding the folded indicator', () => {
     const code = [
       '```ts',
-      ...Array.from({ length: 300 }, (_, index) => `const v${index} = ${index}`),
+      ...Array.from(
+        { length: 300 },
+        (_, index) => `const v${index} = ${index}`,
+      ),
     ].join('\n')
 
     const prepared = prepareAssistantMarkdownTextForRender(code)

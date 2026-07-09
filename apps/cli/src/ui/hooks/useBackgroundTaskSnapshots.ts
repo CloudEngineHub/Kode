@@ -27,8 +27,8 @@ function buildSnapshotSignature(
         task.description,
         task.taskType === 'local_bash' ? task.stdoutLineCount : '',
         task.taskType === 'local_bash' ? task.stderrLineCount : '',
-        task.taskType === 'local_agent' ? task.error ?? '' : '',
-        task.taskType === 'local_agent' ? task.resultText?.length ?? '' : '',
+        task.taskType === 'local_agent' ? (task.error ?? '') : '',
+        task.taskType === 'local_agent' ? (task.resultText?.length ?? '') : '',
         task.status === 'running' || task.status === 'pending'
           ? runningTick
           : '',

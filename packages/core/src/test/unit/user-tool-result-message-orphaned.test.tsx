@@ -250,7 +250,10 @@ describe('UserToolResultMessage orphaned fallback', () => {
       { length: 85 },
       (_, index) => `line ${index + 1}`,
     ).join('\n')
-    const param = makeToolResultParam('tool-use-long-string', 'assistant content')
+    const param = makeToolResultParam(
+      'tool-use-long-string',
+      'assistant content',
+    )
     const message = makeToolResultMessage(param, { value: longResult })
     const toolUse = makeToolUseMessage('tool-use-long-string', 'FakeTool')
     const tool = makeTool({

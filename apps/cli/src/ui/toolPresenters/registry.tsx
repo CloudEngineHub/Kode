@@ -145,15 +145,9 @@ function normalizeInkToolRenderOutput(
 
   if (Array.isArray(node)) {
     return node.map((child, index) =>
-      typeof child === 'string' || typeof child === 'number' ? (
-        normalizePrimitiveInkToolRenderOutput(
-          child,
-          options,
-          `text-${index}`,
-        )
-      ) : (
-        normalizeInkToolRenderChild(child, options)
-      ),
+      typeof child === 'string' || typeof child === 'number'
+        ? normalizePrimitiveInkToolRenderOutput(child, options, `text-${index}`)
+        : normalizeInkToolRenderChild(child, options),
     )
   }
 

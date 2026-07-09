@@ -7,8 +7,7 @@ import { getClients } from './clients'
 import type { ConnectedClient, WrappedClient } from './types'
 
 export type McpCompletionRef =
-  | { type: 'ref/prompt'; name: string }
-  | { type: 'ref/resource'; uri: string }
+  { type: 'ref/prompt'; name: string } | { type: 'ref/resource'; uri: string }
 
 export type McpCompletionRequest = {
   server: string

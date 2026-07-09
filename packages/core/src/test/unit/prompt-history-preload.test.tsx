@@ -3,7 +3,10 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Box, Text } from 'ink'
 
 import { useArrowKeyHistory } from '#ui-ink/hooks/useArrowKeyHistory'
-import { createInkHarnessManager, createInkTestHarness } from '../e2e/inkTestHarness'
+import {
+  createInkHarnessManager,
+  createInkTestHarness,
+} from '../e2e/inkTestHarness'
 
 describe('prompt history preload', () => {
   const harnessManager = createInkHarnessManager()

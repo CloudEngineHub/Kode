@@ -140,7 +140,7 @@ export function AssistantTextMessage({
     return (
       <Box flexDirection="column">
         <Box flexDirection="row">
-          <Text color={theme.secondaryText}>  Progress </Text>
+          <Text color={theme.secondaryText}> Progress </Text>
           <Text color={theme.secondaryText} wrap="truncate-end">
             {prepared.summary}
           </Text>

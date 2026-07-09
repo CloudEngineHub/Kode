@@ -77,5 +77,10 @@ export function useQuickModelSwitch(args: {
     }
 
     showTimedModelSwitchMessage({ show: true, text: errorMessage }, 6000)
-  }, [messages, onModelChange, onSubmitCountChange, showTimedModelSwitchMessage])
+  }, [
+    messages,
+    onModelChange,
+    onSubmitCountChange,
+    showTimedModelSwitchMessage,
+  ])
 }

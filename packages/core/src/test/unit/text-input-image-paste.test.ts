@@ -9,9 +9,8 @@ describe('text input image paste', () => {
         getImageFromClipboardAsync: async () => null,
       }))
 
-      const { resolveImagePastePlaceholder } = await import(
-        '#ui-ink/hooks/useTextInputTryImagePaste'
-      )
+      const { resolveImagePastePlaceholder } =
+        await import('#ui-ink/hooks/useTextInputTryImagePaste')
 
       const messages: Array<{ show: boolean; message?: string }> = []
       let clearCount = 0

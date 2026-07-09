@@ -6,7 +6,9 @@ import { cn } from '../../lib/utils'
 type ResizablePanelGroupProps = React.ComponentProps<
   typeof ResizablePrimitive.Group
 > & {
-  direction?: React.ComponentProps<typeof ResizablePrimitive.Group>['orientation']
+  direction?: React.ComponentProps<
+    typeof ResizablePrimitive.Group
+  >['orientation']
 }
 
 const ResizablePanelGroup = ({

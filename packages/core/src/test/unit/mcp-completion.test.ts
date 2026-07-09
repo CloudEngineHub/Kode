@@ -1,9 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 
-import {
-  __setMcpClientsForTests,
-  completeMCPArgument,
-} from '#core/mcp/client'
+import { __setMcpClientsForTests, completeMCPArgument } from '#core/mcp/client'
 
 describe('MCP completions', () => {
   afterEach(() => {

@@ -1131,5 +1131,4 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
     const out = h.getOutput()
     expect(out).toContain('RAW:\"abX\\ncd\"')
   })
-
 })

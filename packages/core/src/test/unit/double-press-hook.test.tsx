@@ -6,7 +6,10 @@ import {
   DOUBLE_PRESS_TIMEOUT_MS,
   useDoublePress,
 } from '#ui-ink/hooks/useDoublePress'
-import { createInkHarnessManager, createInkTestHarness } from '../e2e/inkTestHarness'
+import {
+  createInkHarnessManager,
+  createInkTestHarness,
+} from '../e2e/inkTestHarness'
 
 describe('useDoublePress', () => {
   const harnessManager = createInkHarnessManager()
@@ -26,11 +29,7 @@ describe('useDoublePress', () => {
     onDoublePress: () => void
     onFirstPress?: () => void
   }) {
-    const handlePress = useDoublePress(
-      setPending,
-      onDoublePress,
-      onFirstPress,
-    )
+    const handlePress = useDoublePress(setPending, onDoublePress, onFirstPress)
     const handlePressRef = useRef(handlePress)
     handlePressRef.current = handlePress
 
