@@ -18,6 +18,7 @@ import { createInkHarnessManager, createInkTestHarness } from './inkTestHarness'
 import { Select } from '#ui-ink/components/CustomSelect/select'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { useMouse } from '#ui-ink/hooks/useMouse'
+import { useScopedIndexState } from '#ui-ink/hooks/useScopedIndexState'
 
 const harnessManager = createInkHarnessManager()
 
@@ -1413,6 +1414,76 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     expect(output).toContain('Alpha')
     expect(output).toContain('Gamma')
     expect(output).not.toContain('Delta')
+  })
+
+  test('Scoped index: hand-rolled list keeps down-arrow position across keep-alive remounts', async () => {
+    let focused = ''
+    const scope = `test:scoped-index-remount:${Date.now()}:${Math.random()}`
+
+    function ScopedIndexList(): React.ReactNode {
+      const items = ['first', 'second', 'third']
+      const [selectedIndex, setSelectedIndex] = useScopedIndexState({
+        scope,
+        itemCount: items.length,
+      })
+
+      useEffect(() => {
+        focused = items[selectedIndex] ?? ''
+      }, [items, selectedIndex])
+
+      useKeypress((_, key) => {
+        if (!key.downArrow) return
+        setSelectedIndex(prev => Math.min(items.length - 1, prev + 1))
+        return true
+      })
+
+      return (
+        <Box flexDirection="column">
+          {items.map((item, index) => (
+            <Text key={item}>
+              {index === selectedIndex ? '>' : ' '} {item}
+            </Text>
+          ))}
+        </Box>
+      )
+    }
+
+    function KeepAliveRemountHarness(): React.ReactNode {
+      const [showList, setShowList] = useState(true)
+
+      useKeypress(
+        (_, key) => {
+          if (!key.downArrow) return
+
+          setTimeout(() => {
+            setShowList(false)
+            setTimeout(() => setShowList(true), 0)
+          }, 0)
+          return false
+        },
+        { priority: 10 },
+      )
+
+      return showList ? <ScopedIndexList /> : <Text>Loading list...</Text>
+    }
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <KeepAliveRemountHarness />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(40)
+    expect(focused).toBe('first')
+
+    h.stdin.write('\u001B[B')
+    await h.wait(80)
+    expect(focused).toBe('second')
+
+    h.stdin.write('\u001B[B')
+    await h.wait(80)
+    expect(focused).toBe('third')
   })
 
   test('KeypressProvider: priority can fall back to default on rerender', async () => {

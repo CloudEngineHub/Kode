@@ -38,6 +38,7 @@ import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import { computeAvailableColumns } from '#ui-ink/primitives/layout/viewportColumns'
 import { getWindowedList } from '#ui-ink/primitives/list/windowedList'
 import { wrapLines } from '#ui-ink/primitives/text/wrapLines'
+import { useScopedIndexState } from '#ui-ink/hooks/useScopedIndexState'
 import { z } from 'zod'
 
 type ViewMode = 'list' | 'search' | 'rename' | 'preview' | 'crossProject'
@@ -574,7 +575,10 @@ export function ResumeSessionSelector(props: {
   >(null)
   const [branchFilterEnabled, setBranchFilterEnabled] = useState(false)
   const [currentBranch, setCurrentBranch] = useState<string | null>(null)
-  const [selectedIndex, setSelectedIndex] = useState(0)
+  const [selectedIndex, setSelectedIndex] = useScopedIndexState({
+    scope: 'resume-session-selector',
+    itemCount: sessionList.length,
+  })
   const resetSelection = useCallback(() => {
     setSelectedIndex(prev => (prev === 0 ? prev : 0))
   }, [])

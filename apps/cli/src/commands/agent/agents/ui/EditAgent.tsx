@@ -18,6 +18,7 @@ import {
 } from './utils'
 import { ToolPicker } from './wizard/ToolPicker'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
+import { useScopedIndexState } from '#ui-ink/hooks/useScopedIndexState'
 
 export function EditAgent(props: {
   agent: AgentWithOverride
@@ -28,7 +29,6 @@ export function EditAgent(props: {
   const [mode, setMode] = useState<
     'menu' | 'edit-tools' | 'edit-model' | 'edit-color'
   >('menu')
-  const [selectedIndex, setSelectedIndex] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [isOpeningEditor, setIsOpeningEditor] = useState(false)
   const isOpeningEditorRef = useRef(false)
@@ -42,6 +42,10 @@ export function EditAgent(props: {
     ],
     [],
   )
+  const [selectedIndex, setSelectedIndex] = useScopedIndexState({
+    scope: `agent-edit:${props.agent.source}:${props.agent.agentType}:menu`,
+    itemCount: menuItems.length,
+  })
 
   const doOpen = async () => {
     if (isOpeningEditorRef.current) return

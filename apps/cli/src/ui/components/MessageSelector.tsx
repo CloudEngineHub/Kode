@@ -1,6 +1,6 @@
 import { Box, Text } from 'ink'
 import * as React from 'react'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import figures from 'figures'
 import { getTheme } from '#core/utils/theme'
 import { randomUUID } from 'crypto'
@@ -10,6 +10,7 @@ import type { Message as MessageType, UserMessage } from '#core/query'
 import { useExitOnCtrlCD } from '#ui-ink/hooks/useExitOnCtrlCD'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
+import { useScopedIndexState } from '#ui-ink/hooks/useScopedIndexState'
 
 type Props = {
   erroredToolUseIDs: Set<string>
@@ -89,14 +90,11 @@ export function MessageSelector({
       { ...createUserMessage(''), uuid: currentUUID } as UserMessage,
     ]
   }, [messages, currentUUID])
-  const [selectedIndex, setSelectedIndex] = useState(allItems.length - 1)
-
-  useEffect(() => {
-    setSelectedIndex(previous => {
-      if (allItems.length === 0) return 0
-      return Math.min(previous, allItems.length - 1)
-    })
-  }, [allItems.length])
+  const [selectedIndex, setSelectedIndex] = useScopedIndexState({
+    scope: 'message-selector',
+    itemCount: allItems.length,
+    initialIndex: allItems.length - 1,
+  })
 
   const exitState = useExitOnCtrlCD(() => process.exit(0))
 

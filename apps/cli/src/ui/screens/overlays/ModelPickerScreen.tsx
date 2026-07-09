@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { Box, Text } from 'ink'
 import figures from 'figures'
 
@@ -8,6 +8,7 @@ import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
+import { useScopedIndexState } from '#ui-ink/hooks/useScopedIndexState'
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
@@ -37,12 +38,12 @@ export function ModelPickerScreen({
     return idx >= 0 ? idx : 0
   }, [currentMainModelName, models])
 
-  const [selectedIndex, setSelectedIndex] = useState(initialIndex)
+  const [selectedIndex, setSelectedIndex] = useScopedIndexState({
+    scope: 'model-picker',
+    itemCount: models.length,
+    initialIndex,
+  })
   const [status, setStatus] = useState<string | null>(null)
-
-  useEffect(() => {
-    setSelectedIndex(prev => clamp(prev, 0, Math.max(0, models.length - 1)))
-  }, [models.length])
 
   const confirm = useCallback(() => {
     const selected = models[selectedIndex]

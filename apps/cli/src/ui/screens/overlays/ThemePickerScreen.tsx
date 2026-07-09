@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useMemo, useRef } from 'react'
 import { Box, Text } from 'ink'
 import figures from 'figures'
 import type { ThemeNames } from '#core/utils/theme'
@@ -7,6 +7,7 @@ import { getGlobalConfig, saveGlobalConfig } from '#core/utils/config'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
+import { useScopedIndexState } from '#ui-ink/hooks/useScopedIndexState'
 
 type Props = {
   onDone: (result?: string) => void
@@ -73,7 +74,11 @@ export function ThemePickerScreen({ onDone }: Props): React.ReactNode {
 
   const initialTheme = getGlobalConfig().theme ?? 'dark'
   const initialIndex = Math.max(0, THEME_OPTIONS.indexOf(initialTheme))
-  const [selectedIndex, setSelectedIndex] = useState(initialIndex)
+  const [selectedIndex, setSelectedIndex] = useScopedIndexState({
+    scope: 'theme-picker',
+    itemCount: THEME_OPTIONS.length,
+    initialIndex,
+  })
 
   const applySelectedTheme = useCallback(() => {
     const selected = THEME_OPTIONS[selectedIndex] ?? 'dark'

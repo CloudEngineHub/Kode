@@ -10,6 +10,7 @@ import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import { getWindowedList } from '#ui-ink/primitives/list/windowedList'
+import { useScopedIndexState } from '#ui-ink/hooks/useScopedIndexState'
 
 function WorkTasksEmptyView({
   message,
@@ -76,7 +77,10 @@ function WorkTasksListView({
 }): React.ReactNode {
   const theme = getTheme()
   const layout = useScreenLayout()
-  const [selectedIndex, setSelectedIndex] = useState(0)
+  const [selectedIndex, setSelectedIndex] = useScopedIndexState({
+    scope: 'work-tasks:list',
+    itemCount: items.length,
+  })
 
   const reservedLines =
     (layout.tightLayout ? 7 : layout.compactLayout ? 9 : 11) +

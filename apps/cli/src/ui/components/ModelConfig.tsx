@@ -16,6 +16,7 @@ import { Select } from '#ui-ink/components/CustomSelect/select'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { ModelListManager } from './ModelListManager'
+import { useScopedIndexState } from '#ui-ink/hooks/useScopedIndexState'
 
 type Props = {
   onClose: () => void
@@ -89,7 +90,6 @@ export function ModelConfig({ onClose }: Props): React.ReactNode {
   const paddingX = tightLayout || compactLayout ? 1 : 2
 
   const [refreshKey, setRefreshKey] = useState(0)
-  const [selectedIndex, setSelectedIndex] = useState(0)
   const [showModelListManager, setShowModelListManager] = useState(false)
   const [activePointer, setActivePointer] = useState<ModelPointerType | null>(
     null,
@@ -121,10 +121,10 @@ export function ModelConfig({ onClose }: Props): React.ReactNode {
     ],
     [],
   )
-
-  React.useEffect(() => {
-    setSelectedIndex(prev => clampIndex(prev, menuItems.length))
-  }, [menuItems.length])
+  const [selectedIndex, setSelectedIndex] = useScopedIndexState({
+    scope: 'model-config:pointers',
+    itemCount: menuItems.length,
+  })
 
   const closePointerPicker = useCallback(() => {
     setActivePointer(null)

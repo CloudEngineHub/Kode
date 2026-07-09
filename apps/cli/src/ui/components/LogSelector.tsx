@@ -10,6 +10,7 @@ import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import { getWindowedList } from '#ui-ink/primitives/list/windowedList'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { useExitOnCtrlCD } from '#ui-ink/hooks/useExitOnCtrlCD'
+import { useScopedIndexState } from '#ui-ink/hooks/useScopedIndexState'
 
 type LogSelectorProps = {
   logs: LogOption[]
@@ -26,7 +27,10 @@ export function LogSelector({
   const layout = useScreenLayout()
   const exitState = useExitOnCtrlCD(onCancel)
 
-  const [selectedIndex, setSelectedIndex] = React.useState(0)
+  const [selectedIndex, setSelectedIndex] = useScopedIndexState({
+    scope: 'log-selector',
+    itemCount: logs.length,
+  })
 
   const reservedLines =
     (layout.tightLayout ? 7 : layout.compactLayout ? 9 : 11) +

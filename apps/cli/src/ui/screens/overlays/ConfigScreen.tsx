@@ -13,6 +13,7 @@ import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
+import { useScopedIndexState } from '#ui-ink/hooks/useScopedIndexState'
 
 // All available themes
 const THEME_OPTIONS: ThemeNames[] = [
@@ -74,7 +75,6 @@ type Setting =
 export function ConfigScreen({ onClose }: Props): React.ReactNode {
   const [globalConfig, setGlobalConfig] = useState(getGlobalConfig())
   const initialConfig = React.useRef(getGlobalConfig())
-  const [selectedIndex, setSelectedIndex] = useState(0)
   const exitState = { pending: false, keyName: null } as const
   const [editingString, setEditingString] = useState(false)
   const [currentInput, setCurrentInput] = useState('')
@@ -197,6 +197,10 @@ export function ConfigScreen({ onClose }: Props): React.ReactNode {
       type: 'boolean',
     },
   ]
+  const [selectedIndex, setSelectedIndex] = useScopedIndexState({
+    scope: 'config-screen:settings',
+    itemCount: settings.length,
+  })
 
   const theme = getTheme()
 

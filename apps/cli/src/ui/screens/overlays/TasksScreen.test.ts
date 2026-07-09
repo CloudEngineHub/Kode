@@ -10,7 +10,7 @@ describe('TasksScreen helpers', () => {
   test('renders a nested task tree with status + error hints', () => {
     const parentTask = {
       type: 'async_agent',
-      agentId: 'agent-parent',
+      taskId: 'agent-parent',
       description: 'Research the repo',
       prompt: 'do it',
       status: 'running',
@@ -20,8 +20,8 @@ describe('TasksScreen helpers', () => {
 
     const childTask = {
       type: 'async_agent',
-      agentId: 'agent-child',
-      parentAgentId: 'agent-parent',
+      taskId: 'agent-child',
+      parentTaskId: 'agent-parent',
       description: 'Subtask: permissions',
       prompt: 'do it',
       status: 'failed',
@@ -64,7 +64,7 @@ describe('TasksScreen helpers', () => {
   test('collapse hides children and switches caret', () => {
     const parentTask = {
       type: 'async_agent',
-      agentId: 'agent-parent',
+      taskId: 'agent-parent',
       description: 'Parent',
       prompt: 'do it',
       status: 'running',
@@ -74,8 +74,8 @@ describe('TasksScreen helpers', () => {
 
     const childTask = {
       type: 'async_agent',
-      agentId: 'agent-child',
-      parentAgentId: 'agent-parent',
+      taskId: 'agent-child',
+      parentTaskId: 'agent-parent',
       description: 'Child',
       prompt: 'do it',
       status: 'completed',
@@ -114,7 +114,7 @@ describe('TasksScreen helpers', () => {
   test('collapsing a group hides all descendants', () => {
     const task = {
       type: 'async_agent',
-      agentId: 'agent-1',
+      taskId: 'agent-1',
       description: 'Task',
       prompt: 'do it',
       status: 'running',
@@ -147,7 +147,7 @@ describe('TasksScreen helpers', () => {
   test('prefers leaf details when there is only one task', () => {
     const task = {
       type: 'async_agent',
-      agentId: 'agent-1',
+      taskId: 'agent-1',
       description: 'Only task',
       prompt: 'do it',
       status: 'running',
@@ -177,7 +177,7 @@ describe('TasksScreen helpers', () => {
   test('prefers the only running task when multiple tasks exist', () => {
     const completed = {
       type: 'async_agent',
-      agentId: 'agent-completed',
+      taskId: 'agent-completed',
       description: 'Completed',
       prompt: 'do it',
       status: 'completed',
@@ -187,7 +187,7 @@ describe('TasksScreen helpers', () => {
 
     const running = {
       type: 'async_agent',
-      agentId: 'agent-running',
+      taskId: 'agent-running',
       description: 'Running',
       prompt: 'do it',
       status: 'running',

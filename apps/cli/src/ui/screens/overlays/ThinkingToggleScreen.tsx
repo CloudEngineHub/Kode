@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useMemo } from 'react'
 import { Box, Text } from 'ink'
 import figures from 'figures'
 
@@ -7,6 +7,7 @@ import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
+import { useScopedIndexState } from '#ui-ink/hooks/useScopedIndexState'
 
 type ThinkingToggleOption = {
   value: boolean
@@ -50,11 +51,11 @@ export function ThinkingToggleScreen({
   )
 
   const initialIndex = currentValue ? 0 : 1
-  const [selectedIndex, setSelectedIndex] = useState(initialIndex)
-
-  useEffect(() => {
-    setSelectedIndex(prev => clamp(prev, 0, Math.max(0, options.length - 1)))
-  }, [options.length])
+  const [selectedIndex, setSelectedIndex] = useScopedIndexState({
+    scope: 'thinking-toggle',
+    itemCount: options.length,
+    initialIndex,
+  })
 
   const confirm = useCallback(() => {
     const option = options[selectedIndex]

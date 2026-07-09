@@ -20,6 +20,7 @@ import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
+import { useScopedIndexState } from '#ui-ink/hooks/useScopedIndexState'
 
 const VIEWPORT_SAFE_MARGIN_ROWS = 1
 const INDICATOR_ROWS = 2
@@ -396,7 +397,6 @@ export function TasksScreen({
 
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set())
   const [status, setStatus] = useState<string | null>(null)
-  const [selectedIndex, setSelectedIndex] = useState(0)
   const [scrollTop, setScrollTop] = useState(0)
   const [detailTarget, setDetailTarget] = useState<DetailTarget | null>(null)
   const userMovedSelectionRef = useRef(false)
@@ -437,6 +437,10 @@ export function TasksScreen({
       }),
     [collapsedIds, nodes],
   )
+  const [selectedIndex, setSelectedIndex] = useScopedIndexState({
+    scope: 'tasks-screen:list',
+    itemCount: flatItems.length,
+  })
 
   const frameHeaderRows = 1
   const frameRows = frameHeaderRows + 1 + layout.gap * 2 + layout.paddingY * 2
