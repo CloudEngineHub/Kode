@@ -5,16 +5,23 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import {
+  __resetMcpRootsForTests,
   __setMcpRootsTrustOverrideForTests,
   createMcpRootsForCwd,
   getMcpClientCapabilities,
   registerMcpClientRequestHandlers,
+  unregisterMcpClientRequestHandlers,
 } from '#core/mcp/client/roots'
-import { getCwd, setCwd } from '#core/utils/state'
+import {
+  __resetCwdChangedListenersForTests,
+  getCwd,
+  setCwd,
+} from '#core/utils/state'
 
 describe('MCP client roots', () => {
   afterEach(() => {
-    __setMcpRootsTrustOverrideForTests(null)
+    __resetMcpRootsForTests()
+    __resetCwdChangedListenersForTests()
   })
 
   test('creates file URI roots from the current workspace path', () => {
@@ -29,7 +36,7 @@ describe('MCP client roots', () => {
 
     __setMcpRootsTrustOverrideForTests(true)
     expect(getMcpClientCapabilities()).toEqual({
-      roots: { listChanged: false },
+      roots: { listChanged: true },
     })
   })
 
@@ -53,6 +60,55 @@ describe('MCP client roots', () => {
         roots: createMcpRootsForCwd(projectDir),
       })
     } finally {
+      await setCwd(originalCwd)
+      rmSync(projectDir, { recursive: true, force: true })
+    }
+  })
+
+  test('notifies connected roots clients when cwd changes', async () => {
+    const originalCwd = getCwd()
+    const projectDir = mkdtempSync(join(tmpdir(), 'kode-mcp-roots-change-'))
+    const notifications: string[] = []
+
+    try {
+      __setMcpRootsTrustOverrideForTests(true)
+
+      registerMcpClientRequestHandlers({
+        setRequestHandler: () => {},
+        sendRootsListChanged: async () => {
+          notifications.push('roots/list_changed')
+        },
+      } as any)
+
+      await setCwd(projectDir)
+      expect(notifications).toEqual(['roots/list_changed'])
+    } finally {
+      __resetMcpRootsForTests()
+      await setCwd(originalCwd)
+      rmSync(projectDir, { recursive: true, force: true })
+    }
+  })
+
+  test('does not notify unregistered roots clients after cwd changes', async () => {
+    const originalCwd = getCwd()
+    const projectDir = mkdtempSync(join(tmpdir(), 'kode-mcp-roots-unregister-'))
+    const notifications: string[] = []
+    const client = {
+      setRequestHandler: () => {},
+      sendRootsListChanged: async () => {
+        notifications.push('roots/list_changed')
+      },
+    } as any
+
+    try {
+      __setMcpRootsTrustOverrideForTests(true)
+      registerMcpClientRequestHandlers(client)
+      unregisterMcpClientRequestHandlers(client)
+
+      await setCwd(projectDir)
+      expect(notifications).toEqual([])
+    } finally {
+      __resetMcpRootsForTests()
       await setCwd(originalCwd)
       rmSync(projectDir, { recursive: true, force: true })
     }

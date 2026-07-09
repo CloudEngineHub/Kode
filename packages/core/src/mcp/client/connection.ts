@@ -28,6 +28,7 @@ import { getMcpServerConnectionBatchSize } from './settings'
 import {
   getMcpClientCapabilities,
   registerMcpClientRequestHandlers,
+  unregisterMcpClientRequestHandlers,
 } from './roots'
 import type { WrappedClient } from './types'
 
@@ -458,6 +459,7 @@ export async function connectToServer(
       return client
     } catch (error) {
       lastError = error
+      unregisterMcpClientRequestHandlers(client)
       try {
         await client.close()
       } catch {}

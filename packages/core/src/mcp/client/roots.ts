@@ -9,9 +9,12 @@ import {
 } from '@modelcontextprotocol/sdk/types.js'
 
 import { checkHasTrustDialogAccepted } from '#core/utils/config'
-import { getCwd } from '#core/utils/state'
+import { logMCPError } from '#core/utils/log'
+import { getCwd, subscribeCwdChanged } from '#core/utils/state'
 
 let exposeRootsOverrideForTests: boolean | null = null
+const rootsClients = new Set<Client>()
+let unsubscribeCwdChanged: (() => void) | null = null
 
 export function createMcpRootsForCwd(cwd: string): Root[] {
   const rootPath = resolve(cwd)
@@ -37,7 +40,27 @@ export function shouldExposeMcpRoots(): boolean {
 export function getMcpClientCapabilities(): ClientCapabilities {
   if (!shouldExposeMcpRoots()) return {}
   return {
-    roots: { listChanged: false },
+    roots: { listChanged: true },
+  }
+}
+
+function ensureCwdChangedSubscription(): void {
+  if (unsubscribeCwdChanged) return
+
+  unsubscribeCwdChanged = subscribeCwdChanged(() => {
+    notifyMcpRootsListChanged()
+  })
+}
+
+export function notifyMcpRootsListChanged(): void {
+  for (const client of rootsClients) {
+    void client.sendRootsListChanged().catch(error => {
+      rootsClients.delete(client)
+      logMCPError(
+        'roots',
+        `Failed to notify MCP roots list change: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    })
   }
 }
 
@@ -47,10 +70,24 @@ export function registerMcpClientRequestHandlers(client: Client): void {
   client.setRequestHandler(ListRootsRequestSchema, async () => ({
     roots: getMcpRoots(),
   }))
+
+  rootsClients.add(client)
+  ensureCwdChangedSubscription()
+}
+
+export function unregisterMcpClientRequestHandlers(client: Client): void {
+  rootsClients.delete(client)
 }
 
 export function __setMcpRootsTrustOverrideForTests(
   value: boolean | null,
 ): void {
   exposeRootsOverrideForTests = value
+}
+
+export function __resetMcpRootsForTests(): void {
+  exposeRootsOverrideForTests = null
+  rootsClients.clear()
+  unsubscribeCwdChanged?.()
+  unsubscribeCwdChanged = null
 }

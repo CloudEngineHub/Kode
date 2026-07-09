@@ -1,11 +1,13 @@
 import { getClients } from './clients'
 import { getMCPCommands } from './commands'
 import { getMCPResources, getMCPResourceTemplates } from './resources'
+import { unregisterMcpClientRequestHandlers } from './roots'
 import { getMCPTools } from './tools'
 import type { WrappedClient } from './types'
 
 async function closeClient(client: WrappedClient): Promise<void> {
   if (client.type !== 'connected') return
+  unregisterMcpClientRequestHandlers(client.client)
   try {
     await client.client.close()
   } catch {
