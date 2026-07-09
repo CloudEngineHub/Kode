@@ -1,6 +1,14 @@
 import React from 'react'
-import { Activity, CircleDot, History, Plug, Unplug } from 'lucide-react'
+import {
+  Activity,
+  CircleDot,
+  History,
+  Plug,
+  Server,
+  Unplug,
+} from 'lucide-react'
 
+import type { RuntimeStatus } from '@kode/client'
 import { cn } from '../lib/utils'
 
 function shortSessionId(sessionId: string | null): string {
@@ -36,13 +44,29 @@ function StatusPill(props: {
 }
 
 export function RuntimeStatusBar(props: {
+  runtimeStatus: RuntimeStatus | null
   runtimeAttached: boolean
   running: boolean
   selectedSessionId: string | null
   eventCount: number
 }) {
+  const daemonOnline = props.runtimeStatus?.ok === true
+
   return (
     <div className="hidden min-w-0 items-center gap-2 xl:flex">
+      <StatusPill
+        tone={
+          props.runtimeStatus ? (daemonOnline ? 'success' : 'warn') : 'muted'
+        }
+        icon={<Server className="h-3.5 w-3.5 shrink-0" />}
+        label={
+          props.runtimeStatus
+            ? daemonOnline
+              ? 'daemon online'
+              : 'daemon offline'
+            : 'daemon checking'
+        }
+      />
       <StatusPill
         tone={props.runtimeAttached ? 'success' : 'muted'}
         icon={

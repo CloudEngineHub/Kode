@@ -3,6 +3,7 @@ import { AgentEventSchema } from '@kode/protocol'
 
 import type {
   KodeClient,
+  RuntimeStatus,
   ToolPermissionDecision,
   ToolPermissionInputUpdate,
 } from './types'
@@ -47,6 +48,18 @@ function isSessionListResponse(
 ): value is { sessions: Session[] } {
   if (!isRecord(value)) return false
   return Array.isArray(value.sessions) && value.sessions.every(isSession)
+}
+
+function isRuntimeStatus(value: unknown): value is RuntimeStatus {
+  if (!isRecord(value)) return false
+  const transport = value.transport
+  return (
+    typeof value.ok === 'boolean' &&
+    (transport === 'direct' || transport === 'daemon') &&
+    (typeof value.pid === 'number' || value.pid === null) &&
+    (typeof value.version === 'string' || value.version === null) &&
+    (typeof value.activeSessions === 'number' || value.activeSessions === null)
+  )
 }
 
 function resolveBaseUrl(baseUrl: string): URL {
@@ -313,6 +326,26 @@ export class HttpClient implements KodeClient {
     }
 
     return json.sessions
+  }
+
+  async getRuntimeStatus(): Promise<RuntimeStatus> {
+    const url = this.toApiUrl('/api/health')
+    const response = await this.getFetchImpl()(url, {
+      headers: {
+        authorization: `Bearer ${this.options.token}`,
+      },
+    })
+
+    if (!response.ok) {
+      throw new Error(`Failed to read runtime status (${response.status})`)
+    }
+
+    const json: unknown = await response.json()
+    if (!isRuntimeStatus(json)) {
+      throw new Error('Invalid runtime status response')
+    }
+
+    return json
   }
 
   async loadSession(sessionId: string): Promise<Session> {

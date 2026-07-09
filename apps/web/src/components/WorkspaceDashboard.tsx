@@ -9,10 +9,12 @@ import {
   Plug,
   MessageSquareText,
   ShieldQuestion,
+  Server,
   Terminal,
   Unplug,
 } from 'lucide-react'
 
+import type { RuntimeStatus } from '@kode/client'
 import type {
   AgentEvent,
   PermissionRequestEvent,
@@ -237,6 +239,29 @@ function phaseBadgeVariant(
   return 'secondary'
 }
 
+function runtimeStatusTitle(status: RuntimeStatus | null): string {
+  if (!status) return 'Daemon checking'
+  return status.ok ? 'Daemon online' : 'Daemon unavailable'
+}
+
+function runtimeStatusDetail(status: RuntimeStatus | null): string {
+  if (!status) return 'Waiting for the daemon health check.'
+  if (!status.ok)
+    return 'History remains visible when the live runtime is down.'
+
+  const details = [
+    status.pid === null ? null : `pid ${status.pid}`,
+    status.activeSessions === null
+      ? null
+      : `${status.activeSessions} live session${
+          status.activeSessions === 1 ? '' : 's'
+        }`,
+    status.version ? `v${status.version}` : null,
+  ].filter(Boolean)
+
+  return details.length > 0 ? details.join(' · ') : 'Daemon runtime is ready.'
+}
+
 function ToneDot(props: { tone: ActivityTone }) {
   return (
     <span
@@ -289,6 +314,7 @@ function Panel(props: {
 }
 
 export function WorkspaceDashboard(props: {
+  runtimeStatus: RuntimeStatus | null
   runtimeAttached: boolean
   running: boolean
   workspace: WorkspaceInfo | null
@@ -331,6 +357,25 @@ export function WorkspaceDashboard(props: {
         <div className="grid gap-3 p-3">
           <Panel title="Agent backend">
             <div className="grid gap-2">
+              <div className="flex items-start gap-3 rounded-lg bg-background/65 p-3">
+                <Server
+                  className={cn(
+                    'mt-0.5 h-4 w-4 shrink-0',
+                    props.runtimeStatus?.ok === true
+                      ? 'text-emerald-600 dark:text-emerald-300'
+                      : 'text-muted-foreground',
+                  )}
+                />
+                <div className="min-w-0">
+                  <div className="text-sm font-medium">
+                    {runtimeStatusTitle(props.runtimeStatus)}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {runtimeStatusDetail(props.runtimeStatus)}
+                  </div>
+                </div>
+              </div>
+
               <div className="flex items-start gap-3 rounded-lg bg-background/65 p-3">
                 {props.runtimeAttached ? (
                   <Plug className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
@@ -484,6 +529,8 @@ export const __workspaceDashboardForTests = {
   phaseBadgeVariant,
   phaseLabel,
   phaseTone,
+  runtimeStatusDetail,
+  runtimeStatusTitle,
   sessionTitle,
   shortId,
   summarizeAgentEvents,

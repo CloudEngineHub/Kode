@@ -239,6 +239,75 @@ describe('HttpClient', () => {
     )
   })
 
+  test('getRuntimeStatus reads daemon status over HTTP', async () => {
+    FakeWebSocket.instances = []
+    const fetchCalls: Array<{ url: string; headers: Record<string, string> }> =
+      []
+    const client = new HttpClient({
+      baseUrl: 'http://localhost:32123',
+      token: 'token',
+      workspaceId: 'workspace-a',
+      webSocketImpl: FakeWebSocket,
+      fetchImpl: async (input, init) => {
+        fetchCalls.push({
+          url: String(input),
+          headers: init?.headers ?? {},
+        })
+        return Response.json({
+          ok: true,
+          transport: 'daemon',
+          pid: 123,
+          version: '2.2.1',
+          activeSessions: 2,
+        })
+      },
+    })
+
+    const status = await client.getRuntimeStatus()
+
+    expect(FakeWebSocket.instances).toHaveLength(0)
+    expect(fetchCalls).toEqual([
+      {
+        url: 'http://localhost:32123/api/health?workspace=workspace-a',
+        headers: { authorization: 'Bearer token' },
+      },
+    ])
+    expect(status).toEqual({
+      ok: true,
+      transport: 'daemon',
+      pid: 123,
+      version: '2.2.1',
+      activeSessions: 2,
+    })
+  })
+
+  test('getRuntimeStatus rejects failed HTTP status responses', async () => {
+    const client = new HttpClient({
+      baseUrl: 'http://localhost:32123',
+      token: 'token',
+      webSocketImpl: FakeWebSocket,
+      fetchImpl: async () =>
+        Response.json({ ok: false, error: 'missing' }, { status: 503 }),
+    })
+
+    await expect(client.getRuntimeStatus()).rejects.toThrow(
+      'Failed to read runtime status (503)',
+    )
+  })
+
+  test('getRuntimeStatus rejects malformed HTTP status responses', async () => {
+    const client = new HttpClient({
+      baseUrl: 'http://localhost:32123',
+      token: 'token',
+      webSocketImpl: FakeWebSocket,
+      fetchImpl: async () => Response.json({ ok: true }),
+    })
+
+    await expect(client.getRuntimeStatus()).rejects.toThrow(
+      'Invalid runtime status response',
+    )
+  })
+
   test('loadSession reads history over HTTP without resuming websocket session', async () => {
     FakeWebSocket.instances = []
     const fetchCalls: Array<{ url: string; headers: Record<string, string> }> =

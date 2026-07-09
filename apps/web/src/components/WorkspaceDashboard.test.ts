@@ -92,6 +92,44 @@ describe('WorkspaceDashboard helpers', () => {
     )
   })
 
+  test('summarizes daemon runtime health separately from attachment', () => {
+    expect(__workspaceDashboardForTests.runtimeStatusTitle(null)).toBe(
+      'Daemon checking',
+    )
+    expect(__workspaceDashboardForTests.runtimeStatusDetail(null)).toBe(
+      'Waiting for the daemon health check.',
+    )
+
+    expect(
+      __workspaceDashboardForTests.runtimeStatusTitle({
+        ok: true,
+        transport: 'daemon',
+        pid: 123,
+        version: '2.2.1',
+        activeSessions: 1,
+      }),
+    ).toBe('Daemon online')
+    expect(
+      __workspaceDashboardForTests.runtimeStatusDetail({
+        ok: true,
+        transport: 'daemon',
+        pid: 123,
+        version: '2.2.1',
+        activeSessions: 1,
+      }),
+    ).toBe('pid 123 · 1 live session · v2.2.1')
+
+    expect(
+      __workspaceDashboardForTests.runtimeStatusTitle({
+        ok: false,
+        transport: 'daemon',
+        pid: null,
+        version: null,
+        activeSessions: null,
+      }),
+    ).toBe('Daemon unavailable')
+  })
+
   test('uses stable compact labels', () => {
     expect(__workspaceDashboardForTests.shortId('1234567890')).toBe('12345678')
     expect(__workspaceDashboardForTests.sessionTitle(null)).toBe('New session')

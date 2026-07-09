@@ -1,5 +1,6 @@
 export type {
   KodeClient,
+  RuntimeStatus,
   ToolPermissionDecision,
   ToolPermissionInputUpdate,
 } from './types'

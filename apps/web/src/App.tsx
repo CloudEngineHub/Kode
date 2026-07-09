@@ -54,11 +54,12 @@ export default function App() {
     loading: workspacesLoading,
   } = useWorkspaces({ token })
 
-  const { client, restartClient, runtimeAttached } = useRuntimeClient({
-    baseUrl: baseUrlForClient(),
-    token,
-    workspaceId,
-  })
+  const { client, restartClient, runtimeAttached, runtimeStatus } =
+    useRuntimeClient({
+      baseUrl: baseUrlForClient(),
+      token,
+      workspaceId,
+    })
 
   const chat = useChat({
     client,
@@ -192,6 +193,7 @@ export default function App() {
             </Tabs>
 
             <RuntimeStatusBar
+              runtimeStatus={runtimeStatus}
               runtimeAttached={runtimeAttached}
               running={chat.sending}
               selectedSessionId={chat.selectedSessionId}
@@ -244,6 +246,7 @@ export default function App() {
 
         <div className="hidden min-h-0 2xl:block">
           <WorkspaceDashboard
+            runtimeStatus={runtimeStatus}
             runtimeAttached={runtimeAttached}
             running={chat.sending}
             workspace={currentWorkspace}

@@ -4,6 +4,14 @@ export type ToolPermissionDecision = 'allow_once' | 'allow_always' | 'deny'
 
 export type ToolPermissionInputUpdate = Record<string, unknown>
 
+export type RuntimeStatus = {
+  ok: boolean
+  transport: 'direct' | 'daemon'
+  pid: number | null
+  version: string | null
+  activeSessions: number | null
+}
+
 /**
  * KodeClient is the UI-facing SDK for driving a Kode session.
  *
@@ -49,6 +57,11 @@ export interface KodeClient {
    * List known sessions for the current workspace.
    */
   listSessions(): Promise<Session[]>
+
+  /**
+   * Read backend runtime availability without attaching a live session.
+   */
+  getRuntimeStatus(): Promise<RuntimeStatus>
 
   /**
    * Load a session. Implementations may return metadata-only if full message

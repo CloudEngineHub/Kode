@@ -2,6 +2,7 @@ import type { AgentEvent, Session } from '@kode/protocol'
 
 import type {
   KodeClient,
+  RuntimeStatus,
   ToolPermissionDecision,
   ToolPermissionInputUpdate,
 } from './types'
@@ -21,6 +22,7 @@ export interface DirectEngine {
     reason?: string,
     options?: { updatedInput?: ToolPermissionInputUpdate | null },
   ): Promise<void>
+  getRuntimeStatus?(): Promise<RuntimeStatus>
   listSessions(): Promise<Session[]>
   loadSession(sessionId: string): Promise<Session>
   deleteSession(sessionId: string): Promise<void>
@@ -63,6 +65,19 @@ export class DirectClient implements KodeClient {
 
   listSessions(): Promise<Session[]> {
     return this.engine.listSessions()
+  }
+
+  getRuntimeStatus(): Promise<RuntimeStatus> {
+    return (
+      this.engine.getRuntimeStatus?.() ??
+      Promise.resolve({
+        ok: this.engine.isConnected(),
+        transport: 'direct',
+        pid: null,
+        version: null,
+        activeSessions: null,
+      })
+    )
   }
 
   loadSession(sessionId: string): Promise<Session> {

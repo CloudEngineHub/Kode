@@ -61,7 +61,13 @@ export function createRoutes(args: {
       if (url.pathname === '/api/health') {
         if (!args.checkToken(req))
           return new Response('Unauthorized', { status: 401 })
-        return Response.json({ ok: true })
+        return Response.json({
+          ok: true,
+          transport: 'daemon',
+          version: process.env.npm_package_version ?? null,
+          pid: process.pid,
+          activeSessions: args.sessions.size,
+        })
       }
 
       if (url.pathname.startsWith('/api/')) {
