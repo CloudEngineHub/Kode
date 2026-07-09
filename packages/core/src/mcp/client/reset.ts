@@ -1,5 +1,6 @@
 import { getClients } from './clients'
 import { getMCPCommands } from './commands'
+import { getMCPResources, getMCPResourceTemplates } from './resources'
 import { getMCPTools } from './tools'
 import type { WrappedClient } from './types'
 
@@ -28,4 +29,6 @@ export async function resetMcpConnections(): Promise<void> {
   ;(getClients as any).cache?.clear?.()
   ;(getMCPTools as any).cache?.clear?.()
   ;(getMCPCommands as any).cache?.clear?.()
+  ;(getMCPResources as any).cache?.clear?.()
+  ;(getMCPResourceTemplates as any).cache?.clear?.()
 }

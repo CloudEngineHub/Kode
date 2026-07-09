@@ -4,7 +4,13 @@ import {
   getMcpConnectionTimeoutMs,
 } from '#core/mcp/client/connection'
 import { getMcpServerConnectionBatchSize } from '#core/mcp/client/settings'
-import { getClients, getMCPCommands, getMCPTools } from '#core/mcp/client'
+import {
+  getClients,
+  getMCPCommands,
+  getMCPResources,
+  getMCPResourceTemplates,
+  getMCPTools,
+} from '#core/mcp/client'
 
 describe('MCP connection internals', () => {
   const originalBatchSize = process.env.MCP_SERVER_CONNECTION_BATCH_SIZE
@@ -73,5 +79,9 @@ describe('MCP connection internals', () => {
     expect(typeof (getClients as any).cache?.clear).toBe('function')
     expect(typeof (getMCPTools as any).cache?.clear).toBe('function')
     expect(typeof (getMCPCommands as any).cache?.clear).toBe('function')
+    expect(typeof (getMCPResources as any).cache?.clear).toBe('function')
+    expect(typeof (getMCPResourceTemplates as any).cache?.clear).toBe(
+      'function',
+    )
   })
 })

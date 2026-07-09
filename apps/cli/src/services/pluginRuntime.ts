@@ -248,14 +248,23 @@ export async function configureSessionPlugins(args: {
     await import('#cli-services/customCommands')
   await reloadCustomCommandsForSession()
 
-  // Ensure MCP client/tool caches pick up plugin changes.
-  const { getClients, getMCPTools } = await import('#core/mcp/client')
+  // Ensure MCP discovery caches pick up plugin changes.
+  const {
+    getClients,
+    getMCPCommands,
+    getMCPResources,
+    getMCPResourceTemplates,
+    getMCPTools,
+  } = await import('#core/mcp/client')
   const clearMemoizeCache = (value: unknown) => {
     const record = value as { cache?: { clear?: () => void } }
     record.cache?.clear?.()
   }
   clearMemoizeCache(getClients)
   clearMemoizeCache(getMCPTools)
+  clearMemoizeCache(getMCPCommands)
+  clearMemoizeCache(getMCPResources)
+  clearMemoizeCache(getMCPResourceTemplates)
 
   // Ensure output styles pick up plugin changes.
   const { clearOutputStyleCache } = await import('#cli-services/outputStyles')
