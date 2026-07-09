@@ -60,5 +60,7 @@ describe('TerminalFrame helpers', () => {
     expect(html).toContain(
       'running | 100x24 viewport | daemon online | agent running | Enter send',
     )
+    expect(html).not.toContain('<span>100x24</span>')
+    expect(html).not.toContain('>daemon online</span>')
   })
 })

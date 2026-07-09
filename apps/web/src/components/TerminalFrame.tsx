@@ -106,24 +106,6 @@ export function TerminalStatusLine(props: {
         <span className="text-[hsl(var(--kode-terminal-prompt))]">$</span>
         <span>{props.leading ?? 'ready'}</span>
       </div>
-      {props.viewportSize ? (
-        <div className="hidden shrink-0 items-center gap-1.5 xl:flex">
-          <span className="text-[hsl(var(--kode-terminal-prompt))]">:</span>
-          <span>{viewportText}</span>
-        </div>
-      ) : null}
-      {props.segments?.length ? (
-        <div className="hidden min-w-0 shrink items-center gap-2 lg:flex">
-          {props.segments.map(segment => (
-            <span
-              key={segment.key}
-              className="min-w-0 truncate text-[hsl(var(--kode-terminal-muted))]"
-            >
-              {segment.label}
-            </span>
-          ))}
-        </div>
-      ) : null}
       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
         {props.hints.map(hint => (
           <span
