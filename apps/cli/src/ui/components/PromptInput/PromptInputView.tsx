@@ -150,12 +150,15 @@ export function PromptInputView({
 }): React.ReactNode {
   const rows = terminalRows
   const columns = terminalColumns
+  const normalizedRows = normalizeTerminalDimension(rows, 0)
+  const isMicroViewport = normalizedRows > 0 && normalizedRows <= 4
   const compact = isCompactViewportHeight(rows, {
     microRows: 12,
     tightRows: 15,
     compactRows: 15,
   })
-  const showStatusLine = normalizeTerminalDimension(rows, 0) > 8
+  const showStatusLine = normalizedRows > 8
+  const showAuxiliaryRows = !isMicroViewport
   const modePrefix = getPromptModePrefix({ mode, theme, isLoading })
   const contextLimitLabel = formatContextLimit(modelInfo?.contextLength)
   const hasPriorityStatusMessage =
@@ -194,13 +197,19 @@ export function PromptInputView({
     : statusContentColumns
   const statusRowWidth = Math.max(1, columns)
 
+  if (normalizedRows <= 0) return null
+
   return (
-    <Box flexDirection="column">
-      {pendingPrompts.length > 0 && (
+    <Box
+      flexDirection="column"
+      height={isMicroViewport ? normalizedRows : undefined}
+      overflow={isMicroViewport ? 'hidden' : undefined}
+    >
+      {showAuxiliaryRows && pendingPrompts.length > 0 && (
         <PendingPrompts pendingPrompts={pendingPrompts} width={columns} />
       )}
 
-      {queuedPrompts.length > 0 && (
+      {showAuxiliaryRows && queuedPrompts.length > 0 && (
         <QueuedPrompts queuedPrompts={queuedPrompts} width={columns} />
       )}
 
@@ -208,8 +217,8 @@ export function PromptInputView({
       <Box
         alignItems="flex-start"
         justifyContent="flex-start"
-        borderTop={true}
-        borderBottom={true}
+        borderTop={showAuxiliaryRows}
+        borderBottom={showAuxiliaryRows}
         borderLeft={false}
         borderRight={false}
         borderColor={getPromptModeBorderColor(mode, theme)}
@@ -258,7 +267,7 @@ export function PromptInputView({
       </Box>
 
       {/* PWD line - first line below input */}
-      {!compact && (
+      {showAuxiliaryRows && !compact && (
         <Box flexDirection="row" paddingX={1}>
           <Text dimColor wrap="truncate-end">
             {currentPwd}
@@ -267,7 +276,10 @@ export function PromptInputView({
       )}
 
       {/* Status line - below PWD */}
-      {!completionActive && suggestions.length === 0 && showStatusLine && (
+      {showAuxiliaryRows &&
+        !completionActive &&
+        suggestions.length === 0 &&
+        showStatusLine && (
         <Box flexDirection="column">
           <Box
             flexDirection="row"
@@ -349,9 +361,9 @@ export function PromptInputView({
             </Box>
           )}
         </Box>
-      )}
+        )}
 
-      {completionActive && suggestions.length > 0 && (
+      {showAuxiliaryRows && completionActive && suggestions.length > 0 && (
         <PromptInputCompletionPanel
           theme={theme}
           suggestions={suggestions}

@@ -43,6 +43,7 @@ function renderReplView(args: {
   startupHeader?: React.ReactNode
   startupHeaderKey?: string
   showStartupHeader?: boolean
+  transientItems?: TranscriptItem[]
   isLoading?: boolean
   shouldShowPromptInput?: boolean
   promptInputProps?: React.ComponentProps<typeof PromptInput>
@@ -57,7 +58,7 @@ function renderReplView(args: {
       startupHeader={args.startupHeader}
       startupHeaderKey={args.startupHeaderKey}
       showStartupHeader={args.showStartupHeader}
-      transientItems={[]}
+      transientItems={args.transientItems ?? []}
       toolJSX={null}
       toolUseConfirm={null}
       setToolUseConfirm={() => {}}
@@ -114,7 +115,10 @@ function makePromptInputProps(
   }
 }
 
-function createHarness(element: React.ReactElement): TestHarness {
+function createHarness(
+  element: React.ReactElement,
+  options: { columns?: number; rows?: number } = {},
+): TestHarness {
   const stdin = new PassThrough() as PassThrough & {
     isTTY?: boolean
     isRaw?: boolean
@@ -136,8 +140,8 @@ function createHarness(element: React.ReactElement): TestHarness {
     rows?: number
   }
   stdout.isTTY = true
-  stdout.columns = 100
-  stdout.rows = 30
+  stdout.columns = options.columns ?? 100
+  stdout.rows = options.rows ?? 30
 
   let rawOutput = ''
   stdout.on('data', chunk => {
@@ -387,5 +391,26 @@ describe('REPLView Static output epoch', () => {
     expect(output).toContain('Welcome')
     expect(output).toContain('Input:')
     expect(output).not.toMatch(/Welcome[\s\S]*?(?:\n\s*){6,}[\s\S]*?Input:/)
+  })
+
+  test('uses a micro layout in tiny viewports without printing transcript regions', async () => {
+    const harness = createHarness(
+      renderReplView({
+        staticOutputEpoch: 0,
+        staticItems: [makeStaticItem('static-a')],
+        startupHeader: <Text>KODE CLI</Text>,
+        startupHeaderKey: 'startup-kode',
+        showStartupHeader: true,
+        transientItems: [makeStaticItem('transient-a')],
+      }),
+      { columns: 80, rows: 4 },
+    )
+
+    await harness.wait(80)
+    const output = harness.getOutput()
+
+    expect(output).not.toContain('static-a')
+    expect(output).not.toContain('KODE CLI')
+    expect(output).not.toContain('transient-a')
   })
 })

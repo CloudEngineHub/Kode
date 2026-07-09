@@ -115,7 +115,11 @@ export function useTerminalSize(): TerminalSize {
     if (!streamState.attached) {
       streamState.attached = true
       stream.setMaxListeners?.(20)
-      stream.on?.('resize', streamState.onResize)
+      if (typeof stream.prependListener === 'function') {
+        stream.prependListener('resize', streamState.onResize)
+      } else {
+        stream.on?.('resize', streamState.onResize)
+      }
     }
 
     return () => {

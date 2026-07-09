@@ -13,6 +13,7 @@ import { MessageSelector } from '#ui-ink/components/MessageSelector'
 import { PermissionProvider } from '#ui-ink/contexts/PermissionContext'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import { useFlickerDetector } from '#ui-ink/hooks/useFlickerDetector'
+import { normalizeTerminalDimension } from '#ui-ink/primitives/layout/viewportRows'
 import type { NormalizedMessage } from '#core/utils/messages'
 import type { Message as MessageType } from '#core/query'
 import type { Tool } from '#core/tooling/Tool'
@@ -97,6 +98,7 @@ export function REPLView({
   const lastMeasureKeyRef = useRef('')
   const lastMeasureAtRef = useRef(0)
   const { rows, columns } = useTerminalSize()
+  const normalizedRows = normalizeTerminalDimension(rows, 0)
   const theme = getTheme()
   useFlickerDetector(
     rootUiRef,
@@ -121,6 +123,7 @@ export function REPLView({
   const shouldRenderStartupHeader =
     Boolean(startupHeader) &&
     showStartupHeader &&
+    normalizedRows > 4 &&
     !toolJSX &&
     !toolUseConfirm &&
     !isMessageSelectorVisible &&
@@ -233,15 +236,19 @@ export function REPLView({
     messageSelectorMessages.length,
   ])
 
+  const isMinimizedViewport = normalizedRows <= 0
+  const isMicroViewport = normalizedRows > 0 && normalizedRows <= 4
   const transientMaxHeight = Math.max(
-    1,
-    rows -
+    0,
+    normalizedRows -
       mainControlsHeight -
       messageSelectorHeight -
       VIEWPORT_SAFE_MARGIN_ROWS,
   )
-  const showTransientRegion = transientItems.length > 0
+  const showTransientRegion =
+    !isMicroViewport && transientItems.length > 0 && transientMaxHeight > 0
   const showInlineRequestStatus =
+    !isMicroViewport &&
     !showTransientRegion &&
     !toolJSX &&
     !toolUseConfirm &&
@@ -257,6 +264,71 @@ export function REPLView({
     () => ({ maxHeight: transientMaxHeight }),
     [transientMaxHeight],
   )
+  const shouldRenderMicroPrompt =
+    !toolJSX &&
+    !toolUseConfirm &&
+    !isMessageSelectorVisible &&
+    !binaryFeedbackContext &&
+    !showingCostDialog &&
+    !toolJSX?.shouldHidePromptInput &&
+    shouldShowPromptInput
+  const microStatus = toolUseConfirm
+    ? 'Permission request - expand terminal'
+    : toolJSX
+      ? 'Tool view active - expand terminal'
+      : isMessageSelectorVisible
+        ? 'Message selector - expand terminal'
+        : binaryFeedbackContext
+          ? 'Feedback prompt - expand terminal'
+          : showingCostDialog
+            ? 'Cost notice - expand terminal'
+            : isLoading
+              ? 'Working... Esc to interrupt'
+              : null
+
+  if (isMinimizedViewport) {
+    return (
+      <TransientViewportProvider value={transientViewportValue}>
+        <PermissionProvider
+          conversationKey={conversationKey}
+          isBypassPermissionsModeAvailable={!safeMode}
+        >
+          <Box ref={rootUiRef} flexDirection="column" width="100%" />
+        </PermissionProvider>
+      </TransientViewportProvider>
+    )
+  }
+
+  if (isMicroViewport) {
+    return (
+      <TransientViewportProvider value={transientViewportValue}>
+        <PermissionProvider
+          conversationKey={conversationKey}
+          isBypassPermissionsModeAvailable={!safeMode}
+        >
+          <Box
+            ref={rootUiRef}
+            flexDirection="column"
+            height={normalizedRows}
+            overflow="hidden"
+            width="100%"
+          >
+            {microStatus && (
+              <Text dimColor wrap="truncate-end">
+                {microStatus}
+              </Text>
+            )}
+            {shouldRenderMicroPrompt && (
+              <PromptInput
+                key={`prompt-${conversationKey}`}
+                {...promptInputProps}
+              />
+            )}
+          </Box>
+        </PermissionProvider>
+      </TransientViewportProvider>
+    )
+  }
 
   return (
     <TransientViewportProvider value={transientViewportValue}>

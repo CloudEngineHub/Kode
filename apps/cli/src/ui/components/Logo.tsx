@@ -1,14 +1,17 @@
 import { Box, Text } from 'ink'
 import * as React from 'react'
 import { getTheme } from '#core/utils/theme'
-import { ASCII_LOGO } from '#core/constants/product'
+import { ASCII_LOGO, PRODUCT_NAME } from '#core/constants/product'
 
 export const MIN_LOGO_WIDTH = 70
 const DEFAULT_TERMINAL_COLUMNS = 80
 const DEFAULT_TERMINAL_ROWS = 24
 const FULL_LOGO_MIN_ROWS = 10
+const MCP_DETAIL_MIN_ROWS = 6
+const SHORT_HELP_MIN_ROWS = 4
 const DISPLAY_ASCII_LOGO = ASCII_LOGO.trimStart()
 const DISPLAY_ASCII_LOGO_LINES = DISPLAY_ASCII_LOGO.trimEnd().split(/\r?\n/)
+const PRODUCT_NAME_FALLBACK = `${PRODUCT_NAME.toUpperCase()} CLI`
 
 function normalizeDimension(value: number | undefined, fallback: number) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return fallback
@@ -35,6 +38,9 @@ export function Logo({
   const columns = normalizeDimension(terminalColumns, DEFAULT_TERMINAL_COLUMNS)
   const rows = normalizeDimension(terminalRows, DEFAULT_TERMINAL_ROWS)
   const isCompact = columns < MIN_LOGO_WIDTH || rows < FULL_LOGO_MIN_ROWS
+  const useShortLogo = rows < FULL_LOGO_MIN_ROWS
+  const showShortHelp = rows >= SHORT_HELP_MIN_ROWS
+  const showMcpDetails = rows >= MCP_DETAIL_MIN_ROWS
 
   // Generate separator that fits terminal width
   const separatorWidth = isCompact
@@ -43,6 +49,62 @@ export function Logo({
   const separator = (isCompact ? '-' : '─').repeat(
     Math.max(separatorWidth, isCompact ? 0 : 20),
   )
+
+  if (useShortLogo) {
+    return (
+      <Box flexDirection="column" width={columns} overflow="hidden">
+        {updateBannerVersion && rows >= SHORT_HELP_MIN_ROWS && (
+          <Text color="yellow" wrap="truncate-end">
+            Update {updateBannerVersion} available
+          </Text>
+        )}
+
+        <Text color={theme.kode} bold wrap="truncate-end">
+          {PRODUCT_NAME_FALLBACK}
+        </Text>
+
+        {showShortHelp && (
+          <Text dimColor wrap="truncate-end">
+            /help{'  '}
+            <Text color={theme.notingBorder}>/note</Text>
+            {'  '}
+            @file{'  '}opt+m
+          </Text>
+        )}
+
+        {showMcpDetails ? (
+          <Text dimColor wrap="truncate-end">
+            MCP Servers:{' '}
+            {mcpClients.length === 0 ? (
+              'none'
+            ) : (
+              <>
+                {connected.map((c, index) => (
+                  <React.Fragment key={c.name}>
+                    {index > 0 ? <Text dimColor>, </Text> : null}
+                    <Text color={theme.success}>{c.name}</Text>
+                  </React.Fragment>
+                ))}
+                {failed.map((c, index) => (
+                  <React.Fragment key={c.name}>
+                    {connected.length > 0 || index > 0 ? (
+                      <Text dimColor>, </Text>
+                    ) : null}
+                    <Text color={theme.error}>{c.name}</Text>
+                  </React.Fragment>
+                ))}
+              </>
+            )}
+          </Text>
+        ) : rows >= SHORT_HELP_MIN_ROWS ? (
+          <Text dimColor wrap="truncate-end">
+            MCP: {connected.length} connected
+            {failed.length > 0 ? `, ${failed.length} failed` : ''}
+          </Text>
+        ) : null}
+      </Box>
+    )
+  }
 
   return (
     <Box flexDirection="column" width={columns} overflow="hidden">

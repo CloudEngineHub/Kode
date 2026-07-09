@@ -325,4 +325,23 @@ describe('PromptInputView status line layout', () => {
       Math.max(...finalStatusRows.map(line => line.length)),
     ).toBeLessThanOrEqual(90)
   })
+
+  test('uses a single input row in micro-height terminals', async () => {
+    const harness = createHarness(
+      renderPromptInputView({
+        customStatusLineActive: false,
+        statusLine: 'Input: Chat',
+        terminalRows: 4,
+        terminalColumns: 80,
+      }),
+      { columns: 80, rows: 4 },
+    )
+
+    await harness.wait(20)
+    const output = harness.getOutput()
+
+    expect(output).not.toContain('C:/repo')
+    expect(output).not.toContain('Input: Chat')
+    expect(output).not.toContain('[custom-openai] mimo-v2.5-pro')
+  })
 })

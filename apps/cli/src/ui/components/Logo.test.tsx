@@ -139,4 +139,42 @@ describe('Logo', () => {
     expect(output).toContain(firstLogoPrefix)
     expect(output).not.toContain(productNameFallback)
   })
+
+  test('uses a short startup header on low-height terminals', async () => {
+    const harness = createHarness(
+      <Logo
+        mcpClients={[{ type: 'connected', name: 'codegraph' }]}
+        terminalColumns={80}
+        terminalRows={8}
+      />,
+    )
+
+    await harness.wait(20)
+    const output = harness.getOutput().trimEnd()
+
+    expect(output).toContain(productNameFallback)
+    expect(output).not.toContain(firstLogoPrefix)
+    expect(output).toContain('/help')
+    expect(output).toContain('MCP Servers:')
+    expect(output).toContain('codegraph')
+    expect(output.split(/\r?\n/).filter(Boolean)).toHaveLength(3)
+  })
+
+  test('hides MCP server names on very low-height terminals', async () => {
+    const harness = createHarness(
+      <Logo
+        mcpClients={[{ type: 'connected', name: 'codegraph' }]}
+        terminalColumns={80}
+        terminalRows={5}
+      />,
+    )
+
+    await harness.wait(20)
+    const output = harness.getOutput().trimEnd()
+
+    expect(output).toContain(productNameFallback)
+    expect(output).toContain('MCP: 1 connected')
+    expect(output).not.toContain('codegraph')
+    expect(output.split(/\r?\n/).filter(Boolean)).toHaveLength(3)
+  })
 })
