@@ -15,7 +15,6 @@ import { ThemeToggle } from './components/ThemeToggle'
 import { PermissionModal } from './components/PermissionModal'
 import { RuntimeStatusBar } from './components/RuntimeStatusBar'
 import { TerminalPlaceholder } from './components/TerminalFrame'
-import { WorkspaceDashboard } from './components/WorkspaceDashboard'
 import { Button } from './components/ui/button'
 import { Sheet, SheetContent, SheetTrigger } from './components/ui/sheet'
 import { Tabs, TabsList, TabsTrigger } from './components/ui/tabs'
@@ -127,7 +126,7 @@ export default function App() {
 
   return (
     <div className="kode-web-root bg-background text-foreground">
-      <div className="grid h-full grid-cols-1 lg:grid-cols-[304px_minmax(0,1fr)] 2xl:grid-cols-[304px_minmax(0,1fr)_320px]">
+      <div className="grid h-full grid-cols-1 lg:grid-cols-[304px_minmax(0,1fr)]">
         <div className="hidden lg:block">{sidebar}</div>
 
         <div className="flex h-full min-h-0 flex-col overflow-hidden">
@@ -279,18 +278,6 @@ export default function App() {
               />
             )}
           </div>
-        </div>
-
-        <div className="hidden min-h-0 2xl:block">
-          <WorkspaceDashboard
-            runtimeStatus={runtimeStatus}
-            runtimeAttached={runtimeAttached}
-            running={chat.sending}
-            workspace={currentWorkspace}
-            selectedSession={selectedSession}
-            events={chat.events}
-            permissionRequest={chat.permissionRequest}
-          />
         </div>
       </div>
 
