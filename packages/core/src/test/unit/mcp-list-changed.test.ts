@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import {
   __resetMcpListChangedForTests,
   __setMcpClientsForTests,
+  getMCPCommands,
   getMCPResourceTemplates,
   getMCPResources,
   getMCPTools,
@@ -12,6 +13,7 @@ import {
 describe('MCP list_changed cache invalidation', () => {
   beforeEach(() => {
     getMCPTools.cache.clear?.()
+    getMCPCommands.cache.clear?.()
     getMCPResources.cache.clear?.()
     getMCPResourceTemplates.cache.clear?.()
     __resetMcpListChangedForTests()
@@ -20,6 +22,7 @@ describe('MCP list_changed cache invalidation', () => {
   afterEach(() => {
     __setMcpClientsForTests(null)
     getMCPTools.cache.clear?.()
+    getMCPCommands.cache.clear?.()
     getMCPResources.cache.clear?.()
     getMCPResourceTemplates.cache.clear?.()
     __resetMcpListChangedForTests()
@@ -65,6 +68,51 @@ describe('MCP list_changed cache invalidation', () => {
     const refreshed = await getMCPTools()
     expect(refreshed.map(t => t.name)).toContain('mcp__test__beta')
     expect(refreshed.map(t => t.name)).not.toContain('mcp__test__alpha')
+  })
+
+  test('getMCPCommands refreshes after notifications/prompts/list_changed', async () => {
+    let promptNames = ['alpha']
+
+    const client: any = {
+      request: async (req: any) => {
+        if (req?.method === 'prompts/list') {
+          return {
+            prompts: promptNames.map(name => ({
+              name,
+              description: `${name} prompt`,
+            })),
+          }
+        }
+        throw new Error(`Unexpected method: ${String(req?.method)}`)
+      },
+    }
+
+    __setMcpClientsForTests([
+      {
+        type: 'connected',
+        name: 'test',
+        client,
+        capabilities: { prompts: { listChanged: true } },
+      } as any,
+    ])
+
+    const first = await getMCPCommands()
+    expect(first.map(prompt => prompt.name)).toContain('mcp__test__alpha')
+
+    promptNames = ['beta']
+    const stillCached = await getMCPCommands()
+    expect(stillCached.map(prompt => prompt.name)).toContain('mcp__test__alpha')
+    expect(stillCached.map(prompt => prompt.name)).not.toContain(
+      'mcp__test__beta',
+    )
+
+    notifyMcpListChanged({ kind: 'prompts', server: 'test' })
+
+    const refreshed = await getMCPCommands()
+    expect(refreshed.map(prompt => prompt.name)).toContain('mcp__test__beta')
+    expect(refreshed.map(prompt => prompt.name)).not.toContain(
+      'mcp__test__alpha',
+    )
   })
 
   test('getMCPResources refreshes after notifications/resources/list_changed', async () => {

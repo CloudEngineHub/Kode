@@ -17,6 +17,7 @@ import {
   getMcpServer,
   listMCPServers,
   resetMcpConnections,
+  subscribeMcpListChanged,
   type McpResource,
 } from '#core/mcp/client'
 import {
@@ -69,9 +70,9 @@ type ServerCounts = {
 type Route =
   | { kind: 'list'; focusValue?: string }
   | { kind: 'server'; serverName: string; actionFocusValue?: string }
-  | { kind: 'tools'; serverName: string }
+  | { kind: 'tools'; serverName: string; focusValue?: string }
   | { kind: 'tool'; serverName: string; tool: Tool }
-  | { kind: 'resources'; serverName: string }
+  | { kind: 'resources'; serverName: string; focusValue?: string }
   | { kind: 'resource'; serverName: string; resource: McpResource }
   | { kind: 'auth'; serverName: string }
 
@@ -355,6 +356,7 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
   const [resourcesLoading, setResourcesLoading] = useState(false)
   const [resources, setResources] = useState<McpResource[]>([])
   const [resourcesError, setResourcesError] = useState<string | null>(null)
+  const [mcpListChangedTick, setMcpListChangedTick] = useState(0)
 
   const [authInProgress, setAuthInProgress] = useState(false)
   const [authUrl, setAuthUrl] = useState<string | null>(null)
@@ -467,6 +469,13 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
     }
   }, [refreshServers])
 
+  useEffect(() => {
+    return subscribeMcpListChanged(() => {
+      if (!mountedRef.current) return
+      setMcpListChangedTick(tick => tick + 1)
+    })
+  }, [])
+
   const serversByScope = useMemo(() => {
     const out = new Map<McpUiScope, McpUiServer[]>()
     for (const server of servers) {
@@ -546,6 +555,21 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
     })
   }, [])
 
+  const rememberToolsFocus = useCallback((focusValue: string) => {
+    setRoute(prev => {
+      if (prev.kind !== 'tools' || prev.focusValue === focusValue) return prev
+      return { ...prev, focusValue }
+    })
+  }, [])
+
+  const rememberResourcesFocus = useCallback((focusValue: string) => {
+    setRoute(prev => {
+      if (prev.kind !== 'resources' || prev.focusValue === focusValue)
+        return prev
+      return { ...prev, focusValue }
+    })
+  }, [])
+
   useKeypress((input, key) => {
     if (!key.escape) return
 
@@ -561,13 +585,21 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
         setRoute({ kind: 'server', serverName: route.serverName })
         return
       case 'tool':
-        setRoute({ kind: 'tools', serverName: route.serverName })
+        setRoute({
+          kind: 'tools',
+          serverName: route.serverName,
+          focusValue: route.tool.name,
+        })
         return
       case 'resources':
         setRoute({ kind: 'server', serverName: route.serverName })
         return
       case 'resource':
-        setRoute({ kind: 'resources', serverName: route.serverName })
+        setRoute({
+          kind: 'resources',
+          serverName: route.serverName,
+          focusValue: route.resource.uri,
+        })
         return
       case 'auth':
         authAbortControllerRef.current?.abort()
@@ -638,6 +670,7 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
     route.kind === 'server' ? route.serverName : null,
     activeServerName,
     activeServerStatus,
+    mcpListChangedTick,
   ])
 
   useEffect(() => {
@@ -672,6 +705,7 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
     route.kind,
     route.kind === 'tools' ? route.serverName : null,
     activeServerName,
+    mcpListChangedTick,
   ])
 
   useEffect(() => {
@@ -706,6 +740,7 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
     route.kind,
     route.kind === 'resources' ? route.serverName : null,
     activeServerName,
+    mcpListChangedTick,
   ])
 
   useEffect(() => {
@@ -1092,9 +1127,9 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
   const toolsView = (() => {
     if (!activeServer) return null
 
-    const options: Option[] = tools.map((tool, idx) => ({
+    const options: Option[] = tools.map(tool => ({
       label: toolTitleForList(activeServer.name, tool),
-      value: String(idx),
+      value: tool.name,
     }))
 
     return (
@@ -1123,9 +1158,10 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
             <Select
               options={options}
               visibleOptionCount={Math.min(12, Math.max(3, options.length))}
+              focusValue={route.kind === 'tools' ? route.focusValue : undefined}
+              onFocus={rememberToolsFocus}
               onChange={value => {
-                const idx = Number.parseInt(value, 10)
-                const tool = tools[idx]
+                const tool = tools.find(item => item.name === value)
                 if (tool)
                   setRoute({
                     kind: 'tool',
@@ -1151,9 +1187,9 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
   const resourcesView = (() => {
     if (!activeServer) return null
 
-    const options: Option[] = resources.map((resource, idx) => ({
+    const options: Option[] = resources.map(resource => ({
       label: resourceTitleForList(resource),
-      value: String(idx),
+      value: resource.uri,
     }))
 
     return (
@@ -1182,9 +1218,12 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
             <Select
               options={options}
               visibleOptionCount={Math.min(12, Math.max(3, options.length))}
+              focusValue={
+                route.kind === 'resources' ? route.focusValue : undefined
+              }
+              onFocus={rememberResourcesFocus}
               onChange={value => {
-                const idx = Number.parseInt(value, 10)
-                const resource = resources[idx]
+                const resource = resources.find(item => item.uri === value)
                 if (resource)
                   setRoute({
                     kind: 'resource',

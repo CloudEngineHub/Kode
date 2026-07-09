@@ -157,6 +157,34 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
   test('McpServersScreen: resources can be opened from a connected server', async () => {
     let reconnectCount = 0
     let getClientsCallCount = 0
+    let resourceRevision = 0
+    let listChangedListener:
+      ((event: { kind: string; server: string }) => void) | null = null
+
+    const readmeResource = {
+      server: 'srv',
+      uri: 'file:///project/README.md',
+      name: 'README.md',
+      title: 'Project README',
+      description: 'Primary project documentation',
+      mimeType: 'text/markdown',
+      size: 2048,
+      annotations: {
+        audience: ['user'],
+        priority: 0.7,
+        lastModified: '2026-07-08T00:00:00Z',
+      },
+    }
+
+    const guideResource = {
+      server: 'srv',
+      uri: 'file:///project/GUIDE.md',
+      name: 'GUIDE.md',
+      title: 'Project Guide',
+      description: 'Updated project guide',
+      mimeType: 'text/markdown',
+      size: 1024,
+    }
 
     try {
       mock.module('#core/mcp/client', () => {
@@ -179,22 +207,9 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
           getMCPCommands: async () => [],
           getMCPResources: async () => {
             await new Promise(resolve => setTimeout(resolve, 220))
-            return [
-              {
-                server: 'srv',
-                uri: 'file:///project/README.md',
-                name: 'README.md',
-                title: 'Project README',
-                description: 'Primary project documentation',
-                mimeType: 'text/markdown',
-                size: 2048,
-                annotations: {
-                  audience: ['user'],
-                  priority: 0.7,
-                  lastModified: '2026-07-08T00:00:00Z',
-                },
-              },
-            ]
+            return resourceRevision === 0
+              ? [readmeResource]
+              : [readmeResource, guideResource]
           },
           getMCPTools: async () => [],
           getMcprcServerStatus: () => 'approved',
@@ -207,6 +222,14 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
           }),
           resetMcpConnections: async () => {
             reconnectCount += 1
+          },
+          subscribeMcpListChanged: (
+            listener: (event: { kind: string; server: string }) => void,
+          ) => {
+            listChangedListener = listener
+            return () => {
+              if (listChangedListener === listener) listChangedListener = null
+            }
           },
         }
       })
@@ -276,6 +299,11 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
       await h.wait(300)
       expect(h.getOutput()).toContain('Resources for srv')
       expect(h.getOutput()).toContain('Project README')
+
+      resourceRevision = 1
+      listChangedListener?.({ kind: 'resources', server: 'srv' })
+      await h.wait(300)
+      expect(h.getOutput()).toContain('Project Guide')
 
       h.stdin.write('\r')
       await h.wait(80)
