@@ -452,6 +452,65 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     expect(focused).toBe('second')
   })
 
+  test('Select: down-arrow focus is not pulled back when keep-alive clears and restores stale focusValue', async () => {
+    let focused = ''
+
+    function SelectRestoredStaleFocusHarness(): React.ReactNode {
+      const [tick, setTick] = useState(0)
+      const [observedFocus, setObservedFocus] = useState('')
+      const [focusValue, setFocusValue] = useState<string | undefined>('first')
+
+      useEffect(() => {
+        const intervalId = setInterval(() => {
+          setTick(prev => prev + 1)
+        }, 30)
+        return () => clearInterval(intervalId)
+      }, [])
+
+      useEffect(() => {
+        if (observedFocus !== 'second') return
+
+        const timers = [
+          setTimeout(() => setFocusValue(undefined), 20),
+          setTimeout(() => setFocusValue('first'), 60),
+        ]
+        return () => {
+          for (const timer of timers) clearTimeout(timer)
+        }
+      }, [observedFocus])
+
+      return (
+        <Select
+          focusValue={focusValue}
+          options={[
+            { label: `First ${tick}`, value: 'first' },
+            { label: `Second ${tick}`, value: 'second' },
+            { label: `Third ${tick}`, value: 'third' },
+          ]}
+          onFocus={value => {
+            focused = value
+            setObservedFocus(value)
+          }}
+        />
+      )
+    }
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <SelectRestoredStaleFocusHarness />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(60)
+    expect(focused).toBe('first')
+
+    h.stdin.write('\u001B[B')
+    await h.wait(180)
+
+    expect(focused).toBe('second')
+  })
+
   test('Select: down-arrow focus survives transient empty keep-alive options', async () => {
     let focused = ''
 

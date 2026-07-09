@@ -467,7 +467,6 @@ export const useSelectState = ({
   const appliedFocusValueRef = useRef<string | undefined>(undefined)
   useEffect(() => {
     if (!focusValue) {
-      appliedFocusValueRef.current = undefined
       return
     }
 
