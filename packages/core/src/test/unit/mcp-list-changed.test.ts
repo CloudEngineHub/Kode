@@ -9,6 +9,10 @@ import {
   getMCPTools,
   notifyMcpListChanged,
 } from '#core/mcp/client'
+import {
+  clearNotifications,
+  getNotifications,
+} from '#core/services/notificationCenter'
 
 describe('MCP list_changed cache invalidation', () => {
   beforeEach(() => {
@@ -17,6 +21,7 @@ describe('MCP list_changed cache invalidation', () => {
     getMCPResources.cache.clear?.()
     getMCPResourceTemplates.cache.clear?.()
     __resetMcpListChangedForTests()
+    clearNotifications()
   })
 
   afterEach(() => {
@@ -26,6 +31,7 @@ describe('MCP list_changed cache invalidation', () => {
     getMCPResources.cache.clear?.()
     getMCPResourceTemplates.cache.clear?.()
     __resetMcpListChangedForTests()
+    clearNotifications()
   })
 
   test('getMCPTools refreshes after notifications/tools/list_changed', async () => {
@@ -195,5 +201,18 @@ describe('MCP list_changed cache invalidation', () => {
     const refreshed = await getMCPResourceTemplates()
     expect(refreshed.map(template => template.name)).toContain('beta')
     expect(refreshed.map(template => template.name)).not.toContain('alpha')
+  })
+
+  test('records list_changed events in the notification center', () => {
+    notifyMcpListChanged({ kind: 'tools', server: 'test' })
+
+    expect(getNotifications()).toHaveLength(1)
+    expect(getNotifications()[0]).toMatchObject({
+      title: 'MCP list changed',
+      message: 'test: tools',
+      kind: 'info',
+      source: 'system',
+      channel: 'mcp:list-changed',
+    })
   })
 })

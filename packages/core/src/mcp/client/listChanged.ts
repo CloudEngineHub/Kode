@@ -1,3 +1,5 @@
+import { addNotification } from '#core/services/notificationCenter'
+
 export type McpListKind = 'tools' | 'prompts' | 'resources'
 
 export type McpListChangedEvent = {
@@ -26,6 +28,14 @@ export function subscribeMcpListChanged(listener: Listener): () => void {
 
 export function notifyMcpListChanged(event: McpListChangedEvent): void {
   versions[event.kind] += 1
+
+  addNotification({
+    title: 'MCP list changed',
+    message: `${event.server}: ${event.kind}`,
+    kind: 'info',
+    source: 'system',
+    channel: 'mcp:list-changed',
+  })
 
   for (const listener of listeners) {
     try {
