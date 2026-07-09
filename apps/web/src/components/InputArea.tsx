@@ -24,17 +24,17 @@ export function InputArea(props: {
   }
 
   return (
-    <div className="flex gap-2 rounded-xl border border-border bg-background p-2 shadow-sm">
+    <div className="flex gap-2 rounded-lg border border-border bg-background p-2 shadow-sm shadow-black/5">
       <Textarea
         value={props.value}
         onChange={e => props.onChange(e.target.value)}
         onKeyDown={onKeyDown}
-        placeholder="Ask Kode to help with your code… (@ to reference files)"
-        className="min-h-[48px] resize-none border-0 shadow-none focus-visible:ring-0"
+        placeholder="Message Kode"
+        className="min-h-[48px] resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
         disabled={props.disabled || isBusy}
       />
       <Button
-        className="h-[48px] w-[48px] rounded-lg"
+        className="h-12 w-12 rounded-md"
         size="icon"
         onClick={props.onSubmit}
         disabled={isSubmitDisabled}

@@ -144,11 +144,11 @@ function ToolBlockCard(props: { block: SdkContentBlock }) {
     type === 'tool_use'
       ? `Tool Use: ${name || 'Unknown'}`
       : type === 'tool_result'
-        ? `Tool Result`
+        ? 'Tool Result'
         : `Block: ${type}`
 
   return (
-    <Card className="border-muted/60">
+    <Card className="border-muted/60 shadow-none">
       <CardHeader className="py-3">
         <CardTitle className="flex items-center gap-2 text-sm font-medium">
           <Badge variant="secondary">{type}</Badge>
@@ -159,7 +159,7 @@ function ToolBlockCard(props: { block: SdkContentBlock }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="pb-4 pt-0 text-xs">
-        <pre className="max-h-64 overflow-auto rounded-md bg-muted/40 p-3 leading-relaxed">
+        <pre className="max-h-64 overflow-auto rounded-md bg-muted/45 p-3 leading-relaxed">
           {JSON.stringify(input ?? props.block, null, 2)}
         </pre>
       </CardContent>
@@ -185,7 +185,7 @@ function renderBlocks(blocks: SdkContentBlock[] | undefined) {
         return (
           <AccordionItem value={key} key={key} className="border-none">
             <AccordionTrigger className="py-2 text-sm">
-              <span className="flex items-center gap-2">
+              <span className="flex min-w-0 items-center gap-2">
                 <Badge variant="outline">{block.type}</Badge>
                 <span className="truncate">
                   {typeof block.name === 'string' ? block.name : 'Tool'}
@@ -202,6 +202,49 @@ function renderBlocks(blocks: SdkContentBlock[] | undefined) {
   )
 }
 
+function MarkdownBody(props: { text: string }) {
+  return (
+    <ReactMarkdown
+      remarkPlugins={MARKDOWN_PLUGINS}
+      components={{
+        pre: ({ children }) => (
+          <pre className="my-3 max-h-96 overflow-auto rounded-md bg-muted/65 p-3 text-xs leading-relaxed">
+            {children}
+          </pre>
+        ),
+        code: ({ className, children, ...codeProps }) => (
+          <code
+            className={cn(
+              'rounded bg-muted/65 px-1 py-0.5 font-mono text-[0.92em]',
+              className,
+            )}
+            {...codeProps}
+          >
+            {children}
+          </code>
+        ),
+        table: ({ children }) => (
+          <div className="my-3 max-w-full overflow-x-auto">
+            <table className="w-full border-collapse text-sm">{children}</table>
+          </div>
+        ),
+        th: ({ children }) => (
+          <th className="border border-border bg-muted/45 px-2 py-1 text-left font-medium">
+            {children}
+          </th>
+        ),
+        td: ({ children }) => (
+          <td className="border border-border px-2 py-1 align-top">
+            {children}
+          </td>
+        ),
+      }}
+    >
+      {props.text}
+    </ReactMarkdown>
+  )
+}
+
 export const MessageBubble = React.memo(function MessageBubble(props: {
   event: AgentEvent
 }) {
@@ -214,26 +257,26 @@ export const MessageBubble = React.memo(function MessageBubble(props: {
   if (!msg) return null
   const isUser = msg.role === 'user'
   const bubbleClass = cn(
-    'max-w-[min(740px,100%)] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm',
+    'max-w-[min(760px,100%)] rounded-lg px-4 py-3 text-sm leading-relaxed shadow-sm shadow-black/5',
     isUser
       ? 'bg-primary text-primary-foreground'
-      : 'bg-card text-foreground border border-border',
+      : 'border border-border bg-card text-foreground',
   )
 
   return (
     <div
       className={cn('flex w-full', isUser ? 'justify-end' : 'justify-start')}
     >
-      <div className="flex w-full max-w-[min(820px,100%)] flex-col gap-2">
+      <div className="flex w-full max-w-[min(860px,100%)] flex-col gap-2">
         <div className={bubbleClass}>
           {msg.text ? (
-            <ReactMarkdown remarkPlugins={MARKDOWN_PLUGINS}>
-              {msg.text}
-            </ReactMarkdown>
+            <div className="prose prose-sm max-w-none dark:prose-invert prose-p:my-2 prose-ul:my-2 prose-ol:my-2">
+              <MarkdownBody text={msg.text} />
+            </div>
           ) : (
             <div className="flex flex-col gap-2">
               {isUser ? (
-                <span className="text-muted-foreground">…</span>
+                <span className="text-muted-foreground">Empty message</span>
               ) : (
                 <>
                   <Skeleton className="h-4 w-40 bg-muted/60" />

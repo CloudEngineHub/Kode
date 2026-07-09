@@ -14,6 +14,7 @@ import { Sidebar } from './components/Sidebar'
 import { ThemeToggle } from './components/ThemeToggle'
 import { PermissionModal } from './components/PermissionModal'
 import { RuntimeStatusBar } from './components/RuntimeStatusBar'
+import { WorkspaceDashboard } from './components/WorkspaceDashboard'
 import { Button } from './components/ui/button'
 import { Sheet, SheetContent, SheetTrigger } from './components/ui/sheet'
 import { Tabs, TabsList, TabsTrigger } from './components/ui/tabs'
@@ -65,6 +66,15 @@ export default function App() {
     onNewSession: restartClient,
   })
 
+  const currentWorkspace =
+    workspaces.find(w => w.id === workspaceId) ??
+    workspaces.find(w => w.isCurrent) ??
+    workspaces[0] ??
+    null
+
+  const selectedSession =
+    chat.sessions.find(s => s.sessionId === chat.selectedSessionId) ?? null
+
   if (!token) {
     return (
       <ConnectPage
@@ -105,30 +115,32 @@ export default function App() {
 
   return (
     <div className="h-screen bg-background text-foreground">
-      <div className="grid h-full grid-cols-1 md:grid-cols-[320px_1fr]">
+      <div className="grid h-full grid-cols-1 md:grid-cols-[304px_minmax(0,1fr)] 2xl:grid-cols-[304px_minmax(0,1fr)_320px]">
         <div className="hidden md:block">{sidebar}</div>
 
         <div className="flex h-full min-h-0 flex-col">
-          <div className="flex items-center gap-2 border-b border-border bg-background/80 px-3 py-2 backdrop-blur">
+          <div className="flex min-h-14 items-center gap-2 border-b border-border bg-card/95 px-3 py-2 shadow-sm shadow-black/5 backdrop-blur">
             <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
               <SheetTrigger asChild className="md:hidden">
                 <Button variant="ghost" size="icon" aria-label="Open sidebar">
                   <Menu className="h-4 w-4" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="w-[320px] p-0">
+              <SheetContent side="left" className="w-[304px] p-0">
                 {sidebar}
               </SheetContent>
             </Sheet>
 
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold">
-                {chat.selectedSessionId ? 'Chat' : 'New Session'}
+                {selectedSession?.customTitle ||
+                  selectedSession?.slug ||
+                  (chat.selectedSessionId ? 'Chat' : 'New session')}
               </div>
               <div className="truncate text-xs text-muted-foreground">
                 {workspacesLoading
-                  ? 'Loading workspaces…'
-                  : (workspaces.find(w => w.id === workspaceId)?.title ?? '—')}
+                  ? 'Loading workspaces...'
+                  : (currentWorkspace?.path ?? 'No workspace')}
               </div>
             </div>
 
@@ -196,7 +208,7 @@ export default function App() {
             <ThemeToggle />
           </div>
 
-          <div className="flex-1 min-h-0">
+          <div className="min-h-0 flex-1">
             {view === 'settings' ? (
               <SettingsPage
                 token={token}
@@ -220,12 +232,21 @@ export default function App() {
               />
             ) : (
               <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
-                {view === 'shell'
-                  ? 'Shell UI is coming soon.'
-                  : 'File browser is coming soon.'}
+                {view === 'shell' ? 'Shell' : 'Files'}
               </div>
             )}
           </div>
+        </div>
+
+        <div className="hidden min-h-0 2xl:block">
+          <WorkspaceDashboard
+            connected={connected}
+            running={chat.sending}
+            workspace={currentWorkspace}
+            selectedSession={selectedSession}
+            events={chat.events}
+            permissionRequest={chat.permissionRequest}
+          />
         </div>
       </div>
 

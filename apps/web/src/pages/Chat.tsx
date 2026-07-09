@@ -29,9 +29,7 @@ function getMcpProgressEventKey(event: AgentEvent): string | null {
   }
 
   const parentToolUseId =
-    typeof event.parent_tool_use_id === 'string'
-      ? event.parent_tool_use_id
-      : ''
+    typeof event.parent_tool_use_id === 'string' ? event.parent_tool_use_id : ''
   const toolUseId =
     typeof streamEvent.toolUseId === 'string' ? streamEvent.toolUseId : ''
   const server =
@@ -109,16 +107,16 @@ export function ChatPage(props: {
   )
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <ScrollArea className="flex-1">
+    <div className="flex h-full min-h-0 flex-col bg-background">
+      <ScrollArea className="flex-1 bg-muted/10">
         <div
           className={cn(
-            'mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-6',
+            'mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-6 md:px-6',
           )}
         >
           {chatEvents.length === 0 ? (
-            <div className="py-16 text-center text-sm text-muted-foreground">
-              Start a new conversation.
+            <div className="flex min-h-[42vh] items-center justify-center text-sm text-muted-foreground">
+              New session
             </div>
           ) : (
             chatEvents.map((event, idx) => (
@@ -129,7 +127,7 @@ export function ChatPage(props: {
         </div>
       </ScrollArea>
 
-      <div className="border-t border-border bg-background/80 p-4 backdrop-blur">
+      <div className="border-t border-border bg-card/95 p-3 shadow-sm shadow-black/5 backdrop-blur md:p-4">
         <div className="mx-auto w-full max-w-5xl">
           <InputArea
             value={props.input}
@@ -138,9 +136,6 @@ export function ChatPage(props: {
             disabled={props.disabled}
             isSending={props.sending}
           />
-          <div className="mt-2 text-center text-xs text-muted-foreground">
-            Press Enter to send · Shift+Enter for new line
-          </div>
         </div>
       </div>
     </div>
