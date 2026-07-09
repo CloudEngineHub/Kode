@@ -43,26 +43,60 @@ export function reorderMessages(
   messages: NormalizedMessage[],
 ): NormalizedMessage[] {
   const ms: NormalizedMessage[] = []
-  const toolUseMessages: ToolUseRequestMessage[] = []
+  const toolUseMessageIndexes = new Map<string, number>()
+  const progressMessageIndexes = new Map<string, number>()
+
+  const shiftIndexesFrom = (index: number) => {
+    for (const [toolUseID, currentIndex] of toolUseMessageIndexes) {
+      if (currentIndex >= index) {
+        toolUseMessageIndexes.set(toolUseID, currentIndex + 1)
+      }
+    }
+    for (const [toolUseID, currentIndex] of progressMessageIndexes) {
+      if (currentIndex >= index) {
+        progressMessageIndexes.set(toolUseID, currentIndex + 1)
+      }
+    }
+  }
+
+  const getToolUseRequestID = (message: ToolUseRequestMessage): string | null =>
+    message.message.content.find(isToolUseLikeBlockParam)?.id ?? null
+
+  const rememberMessageIndex = (message: NormalizedMessage, index: number) => {
+    if (message.type === 'progress') {
+      progressMessageIndexes.set(message.toolUseID, index)
+      return
+    }
+    if (isToolUseRequestMessage(message)) {
+      const toolUseID = getToolUseRequestID(message)
+      if (toolUseID) toolUseMessageIndexes.set(toolUseID, index)
+    }
+  }
+
+  const pushMessage = (message: NormalizedMessage) => {
+    const index = ms.push(message) - 1
+    rememberMessageIndex(message, index)
+  }
+
+  const insertMessage = (index: number, message: NormalizedMessage) => {
+    shiftIndexesFrom(index)
+    ms.splice(index, 0, message)
+    rememberMessageIndex(message, index)
+  }
 
   for (const message of messages) {
-    if (isToolUseRequestMessage(message)) {
-      toolUseMessages.push(message)
-    }
-
     if (message.type === 'progress') {
-      const existingProgressMessage = ms.find(
-        _ => _.type === 'progress' && _.toolUseID === message.toolUseID,
+      const existingProgressIndex = progressMessageIndexes.get(
+        message.toolUseID,
       )
-      if (existingProgressMessage) {
-        ms[ms.indexOf(existingProgressMessage)] = message
+      if (existingProgressIndex !== undefined) {
+        ms[existingProgressIndex] = message
+        progressMessageIndexes.set(message.toolUseID, existingProgressIndex)
         continue
       }
-      const toolUseMessage = toolUseMessages.find(
-        _ => _.message.content[0]?.id === message.toolUseID,
-      )
-      if (toolUseMessage) {
-        ms.splice(ms.indexOf(toolUseMessage) + 1, 0, message)
+      const toolUseMessageIndex = toolUseMessageIndexes.get(message.toolUseID)
+      if (toolUseMessageIndex !== undefined) {
+        insertMessage(toolUseMessageIndex + 1, message)
         continue
       }
     }
@@ -75,23 +109,19 @@ export function reorderMessages(
       const toolUseID = (message.message.content[0] as ToolResultBlockParam)
         ?.tool_use_id
 
-      const lastProgressMessage = ms.find(
-        _ => _.type === 'progress' && _.toolUseID === toolUseID,
-      )
-      if (lastProgressMessage) {
-        ms.splice(ms.indexOf(lastProgressMessage) + 1, 0, message)
+      const lastProgressIndex = progressMessageIndexes.get(toolUseID)
+      if (lastProgressIndex !== undefined) {
+        insertMessage(lastProgressIndex + 1, message)
         continue
       }
 
-      const toolUseMessage = toolUseMessages.find(
-        _ => _.message.content[0]?.id === toolUseID,
-      )
-      if (toolUseMessage) {
-        ms.splice(ms.indexOf(toolUseMessage) + 1, 0, message)
+      const toolUseMessageIndex = toolUseMessageIndexes.get(toolUseID)
+      if (toolUseMessageIndex !== undefined) {
+        insertMessage(toolUseMessageIndex + 1, message)
         continue
       }
     } else {
-      ms.push(message)
+      pushMessage(message)
     }
   }
 
