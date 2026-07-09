@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { launchExternalEditor } from '#cli-utils/externalEditor'
-import { terminalCapabilityManager } from '#ui-ink/utils/terminalCapabilityManager'
 
 type InlineMessageState = { show: boolean; text?: string }
 
@@ -57,7 +56,6 @@ export function useExternalEdit(args: {
 
     try {
       const result = await launchExternalEditor(input)
-      terminalCapabilityManager.enableSupportedModes()
       if (!mountedRef.current) return
 
       if (result.text !== null) {

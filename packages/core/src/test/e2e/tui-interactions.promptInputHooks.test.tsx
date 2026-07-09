@@ -30,9 +30,8 @@ describe('TUI E2E regression (Ink render): PromptInput hooks', () => {
       }),
     }))
 
-    const { useQuickModelSwitch } = await import(
-      '#ui-ink/components/PromptInput/useQuickModelSwitch'
-    )
+    const { useQuickModelSwitch } =
+      await import('#ui-ink/components/PromptInput/useQuickModelSwitch')
 
     const messages: Array<{ show: boolean; text?: string }> = []
     let submitCount = 0
@@ -60,24 +59,19 @@ describe('TUI E2E regression (Ink render): PromptInput hooks', () => {
     harnessManager.track(h)
 
     await h.wait(50)
-    expect(messages).toEqual([
-      { show: true, text: 'Switched to next-model' },
-    ])
+    expect(messages).toEqual([{ show: true, text: 'Switched to next-model' }])
     expect(submitCount).toBe(1)
 
     h.unmount()
     await h.wait(3200)
 
-    expect(messages).toEqual([
-      { show: true, text: 'Switched to next-model' },
-    ])
+    expect(messages).toEqual([{ show: true, text: 'Switched to next-model' }])
   })
 
   test('external edit ignores editor result after unmount', async () => {
     let resolveEditor:
-      | ((value: { text: string | null; editorLabel?: string }) => void)
-      | null = null
-    let terminalRestoreCount = 0
+      ((value: { text: string | null; editorLabel?: string }) => void) | null =
+      null
 
     mock.module('#cli-utils/externalEditor', () => ({
       launchExternalEditor: () =>
@@ -85,17 +79,9 @@ describe('TUI E2E regression (Ink render): PromptInput hooks', () => {
           resolveEditor = resolve
         }),
     }))
-    mock.module('#ui-ink/utils/terminalCapabilityManager', () => ({
-      terminalCapabilityManager: {
-        enableSupportedModes: () => {
-          terminalRestoreCount += 1
-        },
-      },
-    }))
 
-    const { useExternalEdit } = await import(
-      '#ui-ink/components/PromptInput/useExternalEdit'
-    )
+    const { useExternalEdit } =
+      await import('#ui-ink/components/PromptInput/useExternalEdit')
 
     const messages: Array<{ show: boolean; text?: string }> = []
     const inputs: string[] = []
@@ -139,7 +125,6 @@ describe('TUI E2E regression (Ink render): PromptInput hooks', () => {
     resolveEditor?.({ text: 'edited text', editorLabel: 'test-editor' })
     await h.wait(50)
 
-    expect(terminalRestoreCount).toBe(1)
     expect(inputs).toEqual([])
     expect(offsets).toEqual([])
     expect(messages).toEqual([
