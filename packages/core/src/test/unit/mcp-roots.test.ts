@@ -118,6 +118,27 @@ describe('MCP client roots', () => {
     }
   })
 
+  test('removes roots/list handler only for registered roots clients', () => {
+    const removedMethods: string[] = []
+    const client = {
+      setRequestHandler: () => {},
+      removeRequestHandler: (method: string) => {
+        removedMethods.push(method)
+      },
+      sendRootsListChanged: async () => {},
+    } as any
+
+    __setMcpRootsTrustOverrideForTests(false)
+    registerMcpClientRequestHandlers(client)
+    unregisterMcpClientRequestHandlers(client)
+    expect(removedMethods).toEqual([])
+
+    __setMcpRootsTrustOverrideForTests(true)
+    registerMcpClientRequestHandlers(client)
+    unregisterMcpClientRequestHandlers(client)
+    expect(removedMethods).toEqual(['roots/list'])
+  })
+
   test('stops watching cwd after a roots notification failure removes the last client', async () => {
     __setMcpRootsTrustOverrideForTests(true)
 

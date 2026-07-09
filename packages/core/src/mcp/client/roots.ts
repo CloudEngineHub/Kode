@@ -15,6 +15,11 @@ import { getCwd, subscribeCwdChanged } from '#core/utils/state'
 let exposeRootsOverrideForTests: boolean | null = null
 const rootsClients = new Set<Client>()
 let unsubscribeCwdChanged: (() => void) | null = null
+const MCP_ROOTS_LIST_METHOD = 'roots/list'
+
+type ClientWithOptionalRemoveRequestHandler = Client & {
+  removeRequestHandler?: (method: string) => void
+}
 
 export function createMcpRootsForCwd(cwd: string): Root[] {
   const rootPath = resolve(cwd)
@@ -59,6 +64,12 @@ function cleanupCwdChangedSubscriptionIfIdle(): void {
   unsubscribeCwdChanged = null
 }
 
+function removeMcpRootsListRequestHandler(client: Client): void {
+  const clientWithRemove = client as ClientWithOptionalRemoveRequestHandler
+
+  clientWithRemove.removeRequestHandler?.(MCP_ROOTS_LIST_METHOD)
+}
+
 export function notifyMcpRootsListChanged(): void {
   for (const client of rootsClients) {
     void client.sendRootsListChanged().catch(error => {
@@ -84,7 +95,11 @@ export function registerMcpClientRequestHandlers(client: Client): void {
 }
 
 export function unregisterMcpClientRequestHandlers(client: Client): void {
-  rootsClients.delete(client)
+  const wasRegistered = rootsClients.delete(client)
+  if (wasRegistered) {
+    removeMcpRootsListRequestHandler(client)
+  }
+
   cleanupCwdChangedSubscriptionIfIdle()
 }
 
