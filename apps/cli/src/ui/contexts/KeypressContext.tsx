@@ -237,6 +237,16 @@ function bufferFastReturn(
   let lastKey: ParsedKey | null = null
   return (key: ParsedKey) => {
     const now = Date.now()
+    const isFastDuplicateReturn =
+      key.name === 'return' &&
+      !key.ctrl &&
+      !key.meta &&
+      !key.shift &&
+      lastKey?.name === 'return' &&
+      !lastKey.ctrl &&
+      !lastKey.meta &&
+      !lastKey.shift &&
+      now - lastKeyTime <= FAST_RETURN_TIMEOUT
     const previousLooksLikePaste =
       lastKey?.insertable === true &&
       !lastKey.ctrl &&
@@ -244,6 +254,14 @@ function bufferFastReturn(
       (lastKey.sequence.includes('\n') ||
         lastKey.sequence.includes('\r') ||
         lastKey.sequence.length >= FAST_RETURN_PASTE_LIKE_CHARS)
+
+    if (isFastDuplicateReturn) {
+      // Windows/ConPTY can deliver one Return burst in adjacent stdin chunks.
+      // Keep one logical Enter so async submit handlers cannot see the same text twice.
+      lastKey = key
+      lastKeyTime = now
+      return
+    }
 
     if (
       shouldProtectFastReturn() &&
@@ -312,6 +330,63 @@ function bufferPaste(keypressHandler: (key: ParsedKey) => void) {
   return (key: ParsedKey) => bufferer.next(key)
 }
 
+type StdinChunkSegment = {
+  data: string
+  bulk: boolean
+}
+
+function segmentStdinChunk(data: string): StdinChunkSegment[] {
+  if (data.length === 0) return []
+
+  const hasEsc = data.includes(ESC)
+  const hasDisallowedControlChars =
+    // eslint-disable-next-line no-control-regex
+    /[\x00-\x08\x0b\x0c\x0e-\x1a\x1c-\x1f\x7f]/.test(data)
+  const looksLikeEscapeContinuation =
+    (data.startsWith('[') && /^\[[0-9;]*[~^$uA-Za-z]$/.test(data)) ||
+    (data.startsWith('O') && /^O[0-9]?[A-Za-z]$/.test(data))
+
+  const trailingReturns = /(?:\r\n|\r|\n)+$/.exec(data)?.[0]
+  const textBeforeReturns = trailingReturns
+    ? data.slice(0, -trailingReturns.length)
+    : ''
+  const canSplitTrailingReturnBurst =
+    data.length > 1 &&
+    !hasEsc &&
+    !hasDisallowedControlChars &&
+    !looksLikeEscapeContinuation &&
+    trailingReturns !== undefined &&
+    trailingReturns.includes('\r') &&
+    !textBeforeReturns.includes('\r') &&
+    !textBeforeReturns.includes('\n')
+
+  if (canSplitTrailingReturnBurst) {
+    const segments: StdinChunkSegment[] = []
+    if (textBeforeReturns.length > 0) {
+      segments.push({
+        data: textBeforeReturns,
+        bulk: textBeforeReturns.length > 1,
+      })
+    }
+    segments.push({
+      data: trailingReturns.replace(/\r\n|\n/g, '\r'),
+      bulk: false,
+    })
+    return segments
+  }
+
+  return [
+    {
+      data,
+      bulk:
+        data.length > 1 &&
+        !hasEsc &&
+        !hasDisallowedControlChars &&
+        !looksLikeEscapeContinuation,
+    },
+  ]
+}
+
 function createDataListener(
   keypressHandler: (key: ParsedKey) => void,
   mouseHandler?: (event: TerminalMouseEvent) => void,
@@ -323,39 +398,17 @@ function createDataListener(
   return (data: string) => {
     clearTimeout(timeoutId)
 
-    // Fast-path: treat non-ESC multi-char chunks as a single "insertable" key.
-    // This is critical for legacy terminals that don't support bracketed paste:
-    // - Multi-line paste would otherwise arrive as a sequence of Return keys, causing accidental submits.
-    // - IME commits and large pastes become dramatically cheaper (fewer renders).
-    const hasEsc = data.includes(ESC)
-    const hasDisallowedControlChars =
-      // eslint-disable-next-line no-control-regex
-      /[\x00-\x08\x0b\x0c\x0e-\x1a\x1c-\x1f\x7f]/.test(data)
-
-    const looksLikeEscapeContinuation =
-      (data.startsWith('[') && /^\[[0-9;]*[~^$uA-Za-z]$/.test(data)) ||
-      (data.startsWith('O') && /^O[0-9]?[A-Za-z]$/.test(data))
-    const lineBreakCount = (data.match(/\r\n|\r|\n/g) ?? []).length
-    const hasSingleTrailingReturn =
-      lineBreakCount === 1 &&
-      (data.endsWith('\r') || data.endsWith('\n')) &&
-      !data.slice(0, -1).includes('\r') &&
-      !data.slice(0, -1).includes('\n')
-
-    const canBulkInsert =
-      data.length > 1 &&
-      !hasEsc &&
-      !hasDisallowedControlChars &&
-      !looksLikeEscapeContinuation &&
-      !hasSingleTrailingReturn
-
-    if (canBulkInsert) {
-      // Flush any pending ESC prefix before injecting a bulk insert.
-      parser.next('')
-      parser.next(data)
-    } else {
-      for (const char of data) {
-        parser.next(char)
+    // Preserve bulk insertion for multiline paste and IME commits, but split a
+    // terminal Return burst so its leading text and Enter keep distinct semantics.
+    for (const segment of segmentStdinChunk(data)) {
+      if (segment.bulk) {
+        // Flush any pending ESC prefix before injecting a bulk insert.
+        parser.next('')
+        parser.next(segment.data)
+      } else {
+        for (const char of segment.data) {
+          parser.next(char)
+        }
       }
     }
 
@@ -363,6 +416,18 @@ function createDataListener(
       timeoutId = setTimeout(() => parser.next(''), ESC_TIMEOUT)
     }
   }
+}
+
+function createKeypressDataListener(
+  keypressHandler: (key: ParsedKey) => void,
+  mouseHandler: ((event: TerminalMouseEvent) => void) | undefined,
+  shouldProtectFastReturn: () => boolean,
+): (data: string) => void {
+  let processor = bufferFastReturn(keypressHandler, shouldProtectFastReturn)
+  processor = bufferBackslashEnter(processor)
+  processor = bufferPaste(processor)
+
+  return createDataListener(processor, mouseHandler)
 }
 
 function parseSgrMouseEvent(
@@ -515,7 +580,7 @@ function* emitKeys(
           sequence += ch
         }
 
-        if (ch === ';') {
+        while (ch === ';') {
           ch = yield
           sequence += ch
 
@@ -529,13 +594,15 @@ function* emitKeys(
         let match: RegExpExecArray | null
 
         if ((match = /^(\d+)(?:;(\d+))?(?:;(\d+))?([~^$u])$/.exec(cmd))) {
-          if (
+          const isReleaseEvent =
             // kitty keyboard protocol can include an event type as the 3rd param: 1=press, 2=repeat, 3=release.
             // Ignore release events to avoid double-triggering shortcuts.
+            match[4] === 'u' && match[3] === '3' && match[1] !== '27'
+          const isReturnRepeatEvent =
             match[4] === 'u' &&
-            match[3] === '3' &&
-            match[1] !== '27'
-          ) {
+            match[3] === '2' &&
+            (match[1] === '13' || match[1] === '57414')
+          if (isReleaseEvent || isReturnRepeatEvent) {
             continue
           }
           if (match[1] === '27' && match[3] && match[4] === '~') {
@@ -733,6 +800,19 @@ function keyToInput(parsed: ParsedKey): string {
     return parsed.sequence
   }
   return ''
+}
+
+export function __createKeypressDataListenerForTests(
+  handler: (input: string, key: Key) => void,
+  options: { protectFastReturn?: boolean } = {},
+): (data: string) => void {
+  return createKeypressDataListener(
+    parsed => {
+      handler(keyToInput(parsed), buildKey(parsed))
+    },
+    undefined,
+    () => options.protectFastReturn ?? false,
+  )
 }
 
 interface KeypressContextValue {
@@ -968,14 +1048,11 @@ export function KeypressProvider({
       })
     }
 
-    let processor = bufferFastReturn(
+    let dataListener = createKeypressDataListener(
       broadcast,
+      broadcastMouse,
       () => !terminalCapabilityManager.isBracketedPasteEnabled(),
     )
-    processor = bufferBackslashEnter(processor)
-    processor = bufferPaste(processor)
-
-    let dataListener = createDataListener(processor, broadcastMouse)
 
     if (debugKeystrokeLogging) {
       const old = dataListener
