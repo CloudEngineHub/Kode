@@ -105,7 +105,10 @@ export function createRoutes(args: {
       })
       if (chatResponse) return chatResponse
 
-      const sessionResponse = await routeSession(req, { cwd: args.cwd })
+      const sessionResponse = await routeSession(req, {
+        cwd: args.cwd,
+        listWorkspaces: args.listWorkspaces,
+      })
       if (sessionResponse) return sessionResponse
 
       if (url.pathname === '/ws') {
@@ -126,7 +129,7 @@ export function createRoutes(args: {
           ''
         const existing =
           isUuid(requestedSessionId) && args.sessions.has(requestedSessionId)
-            ? args.sessions.get(requestedSessionId) ?? null
+            ? (args.sessions.get(requestedSessionId) ?? null)
             : null
         const canAttachExisting =
           existing !== null && resolve(existing.cwd) === resolve(selectedCwd)

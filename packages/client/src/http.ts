@@ -24,6 +24,12 @@ type WebSocketLike = {
 }
 
 type IncomingMessageEvent = Event & { data?: unknown }
+type FetchLike = (
+  input: string | URL,
+  init?: {
+    headers?: Record<string, string>
+  },
+) => Promise<Response>
 
 type SessionListMessage = { type: 'session_list'; sessions: Session[] }
 type ConnectionListener = (connected: boolean) => void
@@ -36,6 +42,11 @@ function isSessionListMessage(value: unknown): value is SessionListMessage {
   if (!isRecord(value)) return false
   if (value.type !== 'session_list') return false
   return Array.isArray(value.sessions)
+}
+
+function isSession(value: unknown): value is Session {
+  if (!isRecord(value)) return false
+  return typeof value.sessionId === 'string'
 }
 
 function resolveBaseUrl(baseUrl: string): URL {
@@ -80,6 +91,7 @@ export class HttpClient implements KodeClient {
       token: string
       workspaceId?: string
       webSocketImpl?: new (url: string) => WebSocketLike
+      fetchImpl?: FetchLike
     },
   ) {}
 
@@ -226,6 +238,27 @@ export class HttpClient implements KodeClient {
     this.ws.send(JSON.stringify(payload))
   }
 
+  private getFetchImpl(): FetchLike {
+    const fetchImpl =
+      this.options.fetchImpl ??
+      ((globalThis as unknown as { fetch?: unknown }).fetch as
+        FetchLike | undefined)
+    if (!fetchImpl) {
+      throw new Error('Fetch implementation not found')
+    }
+    return fetchImpl
+  }
+
+  private toApiUrl(pathname: string): URL {
+    const url = resolveBaseUrl(this.options.baseUrl)
+    url.pathname = pathname
+    url.search = ''
+    if (this.options.workspaceId) {
+      url.searchParams.set('workspace', this.options.workspaceId)
+    }
+    return url
+  }
+
   cancelRequest(): void {
     if (!this.ws || this.ws.readyState !== 1) return
     this.send({ type: 'cancel' })
@@ -310,87 +343,30 @@ export class HttpClient implements KodeClient {
   }
 
   async loadSession(sessionId: string): Promise<Session> {
-    await this.ensureConnected()
-
-    const baseSession = (await this.listSessions()).find(
-      s => s.sessionId === sessionId,
-    ) ?? {
-      sessionId,
-      slug: null,
-      customTitle: null,
-      tag: null,
-      summary: null,
-      cwd: null,
-      createdAt: null,
-      modifiedAt: null,
-    }
-
-    const events: AgentEvent[] = []
-    const ws = this.ws
-
-    await new Promise<void>((resolve, reject) => {
-      let capturing = false
-      let settled = false
-      let unsubscribe = () => {}
-      let unwatchFailure = () => {}
-
-      const cleanup = () => {
-        unsubscribe()
-        unwatchFailure()
-      }
-      const complete = () => {
-        if (settled) return
-        settled = true
-        cleanup()
-        resolve()
-      }
-      const fail = (message: string) => {
-        if (settled) return
-        settled = true
-        cleanup()
-        reject(new Error(message))
-      }
-      unwatchFailure = this.watchSocketFailure({
-        ws,
-        onClose: () =>
-          fail(
-            'WebSocket connection closed before session history was received',
-          ),
-        onError: () =>
-          fail('WebSocket connection error before session history was received'),
-      })
-
-      unsubscribe = this.onMessage(msg => {
-        if (isRecord(msg) && msg.type === 'history_begin') {
-          const sid = typeof msg.sessionId === 'string' ? msg.sessionId : ''
-          if (sid === sessionId) capturing = true
-          return
-        }
-
-        if (isRecord(msg) && msg.type === 'history_end') {
-          const sid = typeof msg.sessionId === 'string' ? msg.sessionId : ''
-          if (sid === sessionId) {
-            capturing = false
-            complete()
-          }
-          return
-        }
-
-        if (!capturing) return
-
-        const validated = AgentEventSchema.safeParse(msg)
-        if (validated.success) events.push(validated.data)
-      })
-
-      try {
-        this.send({ type: 'resume', session_id: sessionId })
-      } catch (error) {
-        cleanup()
-        reject(error)
-      }
+    const url = this.toApiUrl(`/api/sessions/${encodeURIComponent(sessionId)}`)
+    const response = await this.getFetchImpl()(url, {
+      headers: {
+        authorization: `Bearer ${this.options.token}`,
+      },
     })
 
-    return { ...baseSession, events }
+    if (!response.ok) {
+      throw new Error(`Failed to load session (${response.status})`)
+    }
+
+    const json: unknown = await response.json()
+    if (!isSession(json)) {
+      throw new Error('Invalid session response')
+    }
+
+    const events = Array.isArray(json.events)
+      ? json.events
+          .map(event => AgentEventSchema.safeParse(event))
+          .filter(result => result.success)
+          .map(result => result.data)
+      : undefined
+
+    return { ...json, events }
   }
 
   async deleteSession(_sessionId: string): Promise<void> {

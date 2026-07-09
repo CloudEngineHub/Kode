@@ -174,44 +174,80 @@ describe('HttpClient', () => {
     )
   })
 
-  test('loadSession rejects when the websocket closes before history_end', async () => {
+  test('loadSession reads history over HTTP without resuming websocket session', async () => {
     FakeWebSocket.instances = []
+    const fetchCalls: Array<{ url: string; headers: Record<string, string> }> =
+      []
+    const client = new HttpClient({
+      baseUrl: 'http://localhost:32123',
+      token: 'token',
+      workspaceId: 'workspace-a',
+      webSocketImpl: FakeWebSocket,
+      fetchImpl: async (input, init) => {
+        fetchCalls.push({
+          url: String(input),
+          headers: init?.headers ?? {},
+        })
+        return Response.json({
+          sessionId: '11111111-1111-4111-8111-111111111111',
+          slug: 'saved-session',
+          customTitle: null,
+          tag: null,
+          summary: null,
+          cwd: '/repo',
+          createdAt: null,
+          modifiedAt: null,
+          events: [
+            {
+              type: 'user',
+              uuid: 'user-1',
+              message: { role: 'user', content: 'hello' },
+            },
+          ],
+        })
+      },
+    })
+
+    const session = await client.loadSession(
+      '11111111-1111-4111-8111-111111111111',
+    )
+
+    expect(FakeWebSocket.instances).toHaveLength(0)
+    expect(fetchCalls).toEqual([
+      {
+        url: 'http://localhost:32123/api/sessions/11111111-1111-4111-8111-111111111111?workspace=workspace-a',
+        headers: { authorization: 'Bearer token' },
+      },
+    ])
+    expect(session.slug).toBe('saved-session')
+    expect(session.events).toHaveLength(1)
+    expect(session.events?.[0]?.type).toBe('user')
+  })
+
+  test('loadSession rejects failed HTTP history responses', async () => {
     const client = new HttpClient({
       baseUrl: 'http://localhost:32123',
       token: 'token',
       webSocketImpl: FakeWebSocket,
+      fetchImpl: async () =>
+        Response.json({ ok: false, error: 'missing' }, { status: 404 }),
     })
 
-    const session = client.loadSession('session-a')
-    const ws = FakeWebSocket.instances[0]!
-    ws.open()
-    await waitTick()
-    ws.message({
-      type: 'session_list',
-      sessions: [
-        {
-          sessionId: 'session-a',
-          slug: null,
-          customTitle: null,
-          tag: null,
-          summary: null,
-          cwd: null,
-          createdAt: null,
-          modifiedAt: null,
-        },
-      ],
-    })
-    await waitTick()
+    await expect(
+      client.loadSession('11111111-1111-4111-8111-111111111111'),
+    ).rejects.toThrow('Failed to load session (404)')
+  })
 
-    expect(JSON.parse(ws.sent[1] ?? '{}')).toEqual({
-      type: 'resume',
-      session_id: 'session-a',
+  test('loadSession rejects malformed HTTP history responses', async () => {
+    const client = new HttpClient({
+      baseUrl: 'http://localhost:32123',
+      token: 'token',
+      webSocketImpl: FakeWebSocket,
+      fetchImpl: async () => Response.json({ ok: true }),
     })
 
-    ws.close()
-
-    await expect(session).rejects.toThrow(
-      'WebSocket connection closed before session history was received',
-    )
+    await expect(
+      client.loadSession('11111111-1111-4111-8111-111111111111'),
+    ).rejects.toThrow('Invalid session response')
   })
 })
