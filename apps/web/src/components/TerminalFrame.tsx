@@ -98,7 +98,7 @@ export function TerminalStatusLine(props: {
 
   return (
     <div
-      className="flex min-h-8 items-center gap-3 border-t border-[hsl(var(--kode-terminal-border))] bg-[hsl(var(--kode-terminal-panel))] px-3 py-1 font-mono text-[11px] text-[hsl(var(--kode-terminal-muted))]"
+      className="flex h-8 items-center gap-3 overflow-hidden border-t border-[hsl(var(--kode-terminal-border))] bg-[hsl(var(--kode-terminal-panel))] px-3 py-1 font-mono text-[11px] text-[hsl(var(--kode-terminal-muted))]"
       role="status"
       aria-label={ariaParts.join(' | ')}
     >
@@ -106,11 +106,11 @@ export function TerminalStatusLine(props: {
         <span className="text-[hsl(var(--kode-terminal-prompt))]">$</span>
         <span>{props.leading ?? 'ready'}</span>
       </div>
-      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
+      <div className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden whitespace-nowrap">
         {props.hints.map(hint => (
           <span
             key={`${hint.key}:${hint.label}`}
-            className="inline-flex min-w-0 items-center gap-1.5"
+            className="inline-flex min-w-0 shrink-0 items-center gap-1.5"
           >
             <kbd className="rounded-[4px] border border-[hsl(var(--kode-terminal-border))] bg-[hsl(var(--kode-terminal-bg))] px-1.5 py-0.5 text-[10px] font-normal text-[hsl(var(--kode-terminal-text))]">
               {hint.key}

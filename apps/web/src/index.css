@@ -100,20 +100,7 @@
 
 @layer components {
   .kode-terminal-surface {
-    background-image:
-      linear-gradient(
-        hsl(var(--kode-terminal-text) / 0.035) 1px,
-        transparent 1px
-      ),
-      linear-gradient(
-        90deg,
-        hsl(var(--kode-terminal-text) / 0.025) 1px,
-        transparent 1px
-      );
-    background-size:
-      24px 24px,
-      24px 24px;
-    background-position: -1px -1px;
+    background: hsl(var(--kode-terminal-bg));
   }
 
   .kode-terminal-scroll [data-radix-scroll-area-viewport] {
