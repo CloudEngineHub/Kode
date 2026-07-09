@@ -1188,6 +1188,72 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     expect(selected).toBe('third')
   })
 
+  test('Select: scoped focus is not pulled back when keep-alive restores stale focusValue after remount', async () => {
+    let focused = ''
+    let selected = ''
+
+    function SelectScopedRestoredStaleFocusRemountHarness(): React.ReactNode {
+      const [showSelect, setShowSelect] = useState(true)
+      const [focusValue, setFocusValue] = useState<string | undefined>('first')
+
+      useKeypress(
+        (_input, key) => {
+          if (!key.downArrow) return
+
+          setFocusValue(undefined)
+          setTimeout(() => {
+            setShowSelect(false)
+            setTimeout(() => {
+              setShowSelect(true)
+              setTimeout(() => setFocusValue('first'), 20)
+            }, 0)
+          }, 0)
+          return false
+        },
+        { priority: 10 },
+      )
+
+      if (!showSelect) return <Text>Loading actions...</Text>
+
+      return (
+        <Select
+          focusScope="test:scoped-restored-stale-focus-remount"
+          focusValue={focusValue}
+          options={[
+            { label: 'First', value: 'first' },
+            { label: 'Second', value: 'second' },
+            { label: 'Third', value: 'third' },
+          ]}
+          onFocus={value => {
+            focused = value
+          }}
+          onChange={value => {
+            selected = value
+          }}
+        />
+      )
+    }
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <SelectScopedRestoredStaleFocusRemountHarness />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(40)
+    expect(focused).toBe('first')
+
+    h.stdin.write('\u001B[B')
+    await h.wait(140)
+    expect(focused).toBe('second')
+
+    h.stdin.write('\r')
+    await h.wait(40)
+
+    expect(selected).toBe('second')
+  })
+
   test('Select: lagging focusValue echo does not pull down-arrow focus backward', async () => {
     let focused = ''
     let selected = ''

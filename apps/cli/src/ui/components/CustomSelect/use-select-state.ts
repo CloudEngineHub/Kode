@@ -33,6 +33,7 @@ function optionStructureKey(
 
 type ScopedFocusSnapshot = {
   value: string
+  recentValues: string[]
   structureKey: string
   updatedAt: number
 }
@@ -55,9 +56,13 @@ function getInitialFocusValue(args: {
   structureKey: string
   flatOptions: ReturnType<typeof flattenOptions>
   requestedValue?: string
-}): { value?: string; usedScopedSnapshot: boolean } {
+}): { value?: string; recentValues: string[]; usedScopedSnapshot: boolean } {
   if (!args.focusScope) {
-    return { value: args.requestedValue, usedScopedSnapshot: false }
+    return {
+      value: args.requestedValue,
+      recentValues: [],
+      usedScopedSnapshot: false,
+    }
   }
 
   const snapshot = scopedFocusSnapshots.get(args.focusScope)
@@ -67,10 +72,18 @@ function getInitialFocusValue(args: {
     Date.now() - snapshot.updatedAt <= SCOPED_FOCUS_TTL_MS &&
     hasSelectableValue(args.flatOptions, snapshot.value)
   ) {
-    return { value: snapshot.value, usedScopedSnapshot: true }
+    return {
+      value: snapshot.value,
+      recentValues: snapshot.recentValues,
+      usedScopedSnapshot: true,
+    }
   }
 
-  return { value: args.requestedValue, usedScopedSnapshot: false }
+  return {
+    value: args.requestedValue,
+    recentValues: [],
+    usedScopedSnapshot: false,
+  }
 }
 
 function rememberScopedFocus(args: {
@@ -79,8 +92,15 @@ function rememberScopedFocus(args: {
   value?: string
 }): void {
   if (!args.focusScope || !args.value) return
+  const previous = scopedFocusSnapshots.get(args.focusScope)
+  const recentValues =
+    previous?.structureKey === args.structureKey
+      ? previous.recentValues.filter(value => value !== args.value)
+      : []
+  recentValues.push(args.value)
   scopedFocusSnapshots.set(args.focusScope, {
     value: args.value,
+    recentValues: recentValues.slice(-5),
     structureKey: args.structureKey,
     updatedAt: Date.now(),
   })
@@ -550,10 +570,16 @@ export const useSelectState = ({
   const appliedFocusValueRef = useRef<string | undefined>(
     initialFocusValue.usedScopedSnapshot ? focusValue : undefined,
   )
+  const initialScopedRecentValuesRef = useRef<Set<string>>(
+    initialFocusValue.usedScopedSnapshot
+      ? new Set(initialFocusValue.recentValues)
+      : new Set(),
+  )
   const ignoredFocusEchoRef = useRef<string | undefined>(undefined)
   const previousFocusValuePropRef = useRef<string | undefined>(focusValue)
   useEffect(() => {
-    if (previousFocusValuePropRef.current !== focusValue) {
+    const previousFocusValue = previousFocusValuePropRef.current
+    if (previousFocusValue !== focusValue) {
       previousFocusValuePropRef.current = focusValue
       ignoredFocusEchoRef.current = undefined
     }
@@ -568,6 +594,17 @@ export const useSelectState = ({
 
     const currentFocusedValue = stateRef.current.focusedValue
     if (ignoredFocusEchoRef.current === focusValue) {
+      return
+    }
+
+    if (
+      initialFocusValue.usedScopedSnapshot &&
+      previousFocusValue === undefined &&
+      currentFocusedValue !== focusValue &&
+      initialScopedRecentValuesRef.current.has(focusValue)
+    ) {
+      ignoredFocusEchoRef.current = focusValue
+      appliedFocusValueRef.current = focusValue
       return
     }
 
