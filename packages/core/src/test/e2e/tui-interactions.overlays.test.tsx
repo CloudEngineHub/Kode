@@ -124,6 +124,8 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
     try {
       mock.module('#core/history', () => {
         return {
+          addToHistory: () => {},
+          getHistoryWithPastes: () => [],
           getGlobalHistoryWithPastes: () => [
             { display: 'hello', pastedTexts: [] },
             { display: '!ls', pastedTexts: [] },
@@ -371,6 +373,7 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
             return [connectedClient]
           },
           getMcpAuthSnapshot: () => ({ isAuthenticated: false }),
+          getMcpListChangedVersion: () => 0,
           getMCPCommands: async () =>
             !promptsEnabled
               ? []
