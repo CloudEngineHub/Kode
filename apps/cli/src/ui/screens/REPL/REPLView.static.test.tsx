@@ -205,6 +205,49 @@ describe('REPLView Static output epoch', () => {
     expect(harness.getOutput()).not.toMatch(/(?:\n\s*){4,}/)
   })
 
+  test('renders transient items immediately on initial layout', async () => {
+    const harness = createHarness(
+      renderReplView({
+        staticOutputEpoch: 0,
+        staticItems: [],
+        transientItems: [makeStaticItem('transient-a')],
+      }),
+    )
+
+    await harness.wait(40)
+
+    expect(harness.getOutput()).toContain('transient-a')
+  })
+
+  test('pauses transient output during resize measurement and restores it after', async () => {
+    const harness = createHarness(
+      renderReplView({
+        staticOutputEpoch: 0,
+        staticItems: [],
+        transientItems: [makeStaticItem('transient-a')],
+      }),
+      { columns: 100, rows: 30 },
+    )
+
+    await harness.wait(480)
+    expect(harness.getOutput()).toContain('transient-a')
+
+    harness.clearOutput()
+    harness.resize(80, 24)
+    harness.rerender(
+      renderReplView({
+        staticOutputEpoch: 0,
+        staticItems: [],
+        transientItems: [makeStaticItem('transient-b')],
+      }),
+    )
+    await harness.wait(80)
+    expect(harness.getOutput()).not.toContain('transient-b')
+
+    await harness.wait(450)
+    expect(harness.getOutput()).toContain('transient-b')
+  })
+
   test('updates startup header without reprinting static history', async () => {
     const staticItems = [makeStaticItem('static-a')]
     const harness = createHarness(

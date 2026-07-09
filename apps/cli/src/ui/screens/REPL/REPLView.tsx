@@ -113,7 +113,6 @@ export function REPLView({
   const hasToolUseConfirm = Boolean(toolUseConfirm)
   const hasBinaryFeedback = Boolean(binaryFeedbackContext)
   const hasToast = Boolean(toast)
-  const lastTransientItemKey = transientItems.at(-1)?.key ?? ''
   const promptInputMeasureSignature = shouldShowPromptInput
     ? [
         promptInputProps.input.length,
@@ -175,31 +174,56 @@ export function REPLView({
 
   const [mainControlsHeight, setMainControlsHeight] = useState(0)
   const [messageSelectorHeight, setMessageSelectorHeight] = useState(0)
-
-  useEffect(() => {
-    if (rows <= 0 || columns <= 0) return
-    const measureKey = [
+  const [isLayoutMeasurementPending, setIsLayoutMeasurementPending] =
+    useState(false)
+  const layoutMeasureKey = useMemo(
+    () =>
+      [
+        rows,
+        columns,
+        isMessageSelectorVisible ? 1 : 0,
+        isFullScreenToolView ? 1 : 0,
+        hasToolJSX ? 1 : 0,
+        hasToolUseConfirm ? 1 : 0,
+        hasBinaryFeedback ? 1 : 0,
+        showingCostDialog ? 1 : 0,
+        shouldShowPromptInput ? 1 : 0,
+        hasToast ? 1 : 0,
+        isLoading ? 1 : 0,
+        promptInputMeasureSignature,
+        messageSelectorMessages.length,
+      ].join(':'),
+    [
       rows,
       columns,
-      isMessageSelectorVisible ? 1 : 0,
-      isFullScreenToolView ? 1 : 0,
-      hasToolJSX ? 1 : 0,
-      hasToolUseConfirm ? 1 : 0,
-      hasBinaryFeedback ? 1 : 0,
-      showingCostDialog ? 1 : 0,
-      shouldShowPromptInput ? 1 : 0,
-      hasToast ? 1 : 0,
-      isLoading ? 1 : 0,
-      transientItems.length,
-      lastTransientItemKey,
+      isMessageSelectorVisible,
+      isFullScreenToolView,
+      hasToolJSX,
+      hasToolUseConfirm,
+      hasBinaryFeedback,
+      showingCostDialog,
+      shouldShowPromptInput,
+      hasToast,
+      isLoading,
       promptInputMeasureSignature,
       messageSelectorMessages.length,
-    ].join(':')
+    ],
+  )
+  const isLayoutMeasurementStale =
+    lastMeasureKeyRef.current !== '' &&
+    layoutMeasureKey !== lastMeasureKeyRef.current
+
+  useEffect(() => {
+    if (rows <= 0 || columns <= 0) {
+      setIsLayoutMeasurementPending(prev => (prev ? false : prev))
+      return
+    }
 
     if (
-      measureKey === lastMeasureKeyRef.current &&
+      layoutMeasureKey === lastMeasureKeyRef.current &&
       measureTimerRef.current === null
     ) {
+      setIsLayoutMeasurementPending(prev => (prev ? false : prev))
       return
     }
 
@@ -208,11 +232,14 @@ export function REPLView({
       measureTimerRef.current = null
     }
 
-    scheduledMeasureKeyRef.current = measureKey
+    scheduledMeasureKeyRef.current = layoutMeasureKey
+    if (lastMeasureKeyRef.current !== '') {
+      setIsLayoutMeasurementPending(prev => (prev ? prev : true))
+    }
     measureTimerRef.current = setTimeout(() => {
       measureTimerRef.current = null
-      if (scheduledMeasureKeyRef.current !== measureKey) return
-      lastMeasureKeyRef.current = measureKey
+      if (scheduledMeasureKeyRef.current !== layoutMeasureKey) return
+      lastMeasureKeyRef.current = layoutMeasureKey
 
       if (mainControlsRef.current) {
         const measured = measureElement(mainControlsRef.current).height
@@ -227,6 +254,8 @@ export function REPLView({
       } else {
         setMessageSelectorHeight(prev => (prev === 0 ? prev : 0))
       }
+
+      setIsLayoutMeasurementPending(prev => (prev ? false : prev))
     }, MEASURE_DEBOUNCE_MS)
 
     return () => {
@@ -238,19 +267,7 @@ export function REPLView({
   }, [
     rows,
     columns,
-    isMessageSelectorVisible,
-    isFullScreenToolView,
-    hasToolJSX,
-    hasToolUseConfirm,
-    hasBinaryFeedback,
-    showingCostDialog,
-    shouldShowPromptInput,
-    hasToast,
-    isLoading,
-    transientItems.length,
-    lastTransientItemKey,
-    promptInputMeasureSignature,
-    messageSelectorMessages.length,
+    layoutMeasureKey,
   ])
 
   const isMinimizedViewport = normalizedRows <= 0
@@ -263,7 +280,11 @@ export function REPLView({
       VIEWPORT_SAFE_MARGIN_ROWS,
   )
   const showTransientRegion =
-    !isMicroViewport && transientItems.length > 0 && transientMaxHeight > 0
+    !isLayoutMeasurementStale &&
+    !isLayoutMeasurementPending &&
+    !isMicroViewport &&
+    transientItems.length > 0 &&
+    transientMaxHeight > 0
   const showInlineRequestStatus =
     !isMicroViewport &&
     !showTransientRegion &&
