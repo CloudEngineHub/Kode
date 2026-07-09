@@ -13,12 +13,18 @@ export type OpenAIStreamDegradedCompletion = OpenAI.ChatCompletion & {
   __streamDegradationReason?: string
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
 function messageReducer(
   previous: OpenAI.ChatCompletionMessage,
   item: OpenAI.ChatCompletionChunk,
 ): OpenAI.ChatCompletionMessage {
-  const reduce = (acc: any, delta: OpenAI.ChatCompletionChunk.Choice.Delta) => {
+  const reduce = (acc: any, delta: unknown) => {
     acc = { ...acc }
+    if (!isRecord(delta)) return acc
+
     for (const [key, value] of Object.entries(delta)) {
       if (acc[key] === undefined || acc[key] === null) {
         acc[key] = value
@@ -43,7 +49,7 @@ function messageReducer(
           }
           accArray[index] = reduce(accArray[index], chunkTool)
         }
-      } else if (typeof acc[key] === 'object' && typeof value === 'object') {
+      } else if (isRecord(acc[key]) && isRecord(value)) {
         acc[key] = reduce(acc[key], value)
       }
     }
@@ -55,6 +61,7 @@ function messageReducer(
     // chunk contains information about usage and token counts
     return previous
   }
+  if (!isRecord(choice.delta)) return previous
   return reduce(previous, choice.delta) as OpenAI.ChatCompletionMessage
 }
 

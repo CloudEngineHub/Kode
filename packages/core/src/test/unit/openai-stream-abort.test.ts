@@ -7,14 +7,18 @@ import { convertOpenAIResponseToAnthropic } from '#core/ai/llm/openai/conversion
 import { API_ERROR_MESSAGE_PREFIX } from '#core/ai/llm/constants'
 import { createStreamProcessor } from '#core/ai/openai/stream'
 
-function chunk(delta: Record<string, unknown>) {
+function rawChunk(choice: Record<string, unknown>) {
   return {
     id: 'chatcmpl_test',
     model: 'gpt-4',
     created: 1,
     object: 'chat.completion.chunk',
-    choices: [{ index: 0, delta, finish_reason: null }],
+    choices: [{ index: 0, finish_reason: null, ...choice }],
   }
+}
+
+function chunk(delta: Record<string, unknown>) {
+  return rawChunk({ delta })
 }
 
 function sseBody(lines: string[]): ReadableStream<Uint8Array> {
@@ -193,5 +197,50 @@ describe('OpenAI stream degradation', () => {
 
     expect(message.content.some(block => block.type === 'tool_use')).toBe(false)
     expect(textBlocks[0]?.text).toContain('Partial tool calls were discarded')
+  })
+
+  test('ignores empty deltas without degrading completed tool calls', async () => {
+    const toolChunk = JSON.stringify(
+      chunk({
+        tool_calls: [
+          {
+            index: 0,
+            id: 'call_1',
+            type: 'function',
+            function: {
+              name: 'Task',
+              arguments: '{"description":"test"}',
+            },
+          },
+        ],
+      }),
+    )
+    const nullDeltaChunk = JSON.stringify(rawChunk({ delta: null }))
+    const missingDeltaChunk = JSON.stringify(
+      rawChunk({ finish_reason: 'tool_calls' }),
+    )
+    const body = sseBody([
+      `data: ${toolChunk}`,
+      `data: ${nullDeltaChunk}`,
+      `data: ${missingDeltaChunk}`,
+      'data: [DONE]',
+    ])
+
+    const result = await handleMessageStream(
+      createStreamProcessor(body as any) as any,
+      undefined,
+    )
+    const message = convertOpenAIResponseToAnthropic(result, [])
+
+    expect(isOpenAIStreamDegradedResponse(result)).toBe(false)
+    expect(message.stop_reason).toBe('tool_use')
+    expect(message.content.some(block => block.type === 'tool_use')).toBe(true)
+    expect(
+      message.content.some(
+        block =>
+          block.type === 'text' &&
+          block.text.startsWith(API_ERROR_MESSAGE_PREFIX),
+      ),
+    ).toBe(false)
   })
 })
