@@ -6,6 +6,7 @@ import stripAnsi from 'strip-ansi'
 import PromptInput from '#ui-ink/components/PromptInput'
 import type { PromptMode } from '#ui-ink/components/PromptInput/types'
 import { KeypressProvider } from '#ui-ink/contexts/KeypressContext'
+import { setRequestStatus } from '#core/utils/requestStatus'
 import { REPLView } from './REPLView'
 import type { TranscriptItem } from './useTranscriptItems'
 
@@ -24,6 +25,7 @@ afterEach(async () => {
   while (mounted.length > 0) {
     mounted.pop()?.unmount()
   }
+  setRequestStatus({ kind: 'idle' })
 })
 
 function makeStaticItem(key: string, label = key): TranscriptItem {
@@ -251,6 +253,44 @@ describe('REPLView Static output epoch', () => {
 
     await harness.wait(450)
     expect(harness.getOutput()).toContain('transient-b')
+  })
+
+  test('suppresses request status while resize measurement is settling', async () => {
+    setRequestStatus({ kind: 'streaming' })
+
+    const harness = createHarness(
+      renderReplView({
+        staticOutputEpoch: 0,
+        staticItems: [],
+        transientItems: [makeStaticItem('transient-a')],
+        isLoading: true,
+      }),
+      { columns: 100, rows: 30 },
+    )
+
+    await harness.wait(480)
+    expect(harness.getOutput()).toContain('Decoding')
+
+    harness.clearOutput()
+    harness.resize(80, 24)
+    harness.rerender(
+      renderReplView({
+        staticOutputEpoch: 0,
+        staticItems: [],
+        transientItems: [makeStaticItem('transient-b')],
+        isLoading: true,
+      }),
+    )
+    await harness.wait(80)
+    const settlingStatusCount = countOccurrences(
+      harness.getOutput(),
+      'Decoding',
+    )
+
+    await harness.wait(450)
+    expect(countOccurrences(harness.getOutput(), 'Decoding')).toBeGreaterThan(
+      settlingStatusCount,
+    )
   })
 
   test('keeps transient output visible when prompt text changes within the same height', async () => {

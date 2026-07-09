@@ -319,8 +319,11 @@ export function REPLView({
     !isMicroViewport &&
     transientItems.length > 0 &&
     transientMaxHeight > 0
+  const isLayoutSettling =
+    isLayoutMeasurementPending || isLayoutMeasurementStale
   const showRequestStatus =
     !isMicroViewport &&
+    !isLayoutSettling &&
     !toolJSX &&
     !toolUseConfirm &&
     !binaryFeedbackContext &&
@@ -496,6 +499,7 @@ export function REPLView({
                 !toolJSX &&
                 !binaryFeedbackContext &&
                 !isMessageSelectorVisible &&
+                !isLayoutSettling &&
                 !showingCostDialog && (
                   <RunningTasksPanel
                     maxWidth={columns}
@@ -553,9 +557,7 @@ export function REPLView({
                   <PromptInput
                     key={`prompt-${conversationKey}`}
                     {...promptInputProps}
-                    suppressStatusLine={
-                      isLayoutMeasurementPending || isLayoutMeasurementStale
-                    }
+                    suppressStatusLine={isLayoutSettling}
                   />
                 )}
             </Box>
