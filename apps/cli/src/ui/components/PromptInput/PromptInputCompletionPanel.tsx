@@ -3,7 +3,6 @@ import * as React from 'react'
 import { SentryErrorBoundary } from '#ui-ink/components/SentryErrorBoundary'
 import { TokenWarning } from '#ui-ink/components/TokenWarning'
 import type { Theme } from '#core/utils/theme'
-import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import { computeResponsiveRows } from '#ui-ink/primitives/layout/viewportRows'
 import wrapAnsi from 'wrap-ansi'
 
@@ -238,6 +237,8 @@ export const PromptInputCompletionPanel = React.memo(
     tokenUsage,
     contextLimit,
     reservedRows = 10,
+    rows,
+    columns,
   }: {
     theme: Theme
     suggestions: Suggestion[]
@@ -246,8 +247,9 @@ export const PromptInputCompletionPanel = React.memo(
     tokenUsage: number
     contextLimit?: number
     reservedRows?: number
+    rows: number
+    columns: number
   }): React.ReactNode {
-    const { rows, columns } = useTerminalSize()
     const panelWidth = Math.max(1, columns)
     const horizontalPadding = panelWidth >= 8 ? 2 : panelWidth >= 4 ? 1 : 0
     const innerWidth = Math.max(1, panelWidth - horizontalPadding * 2)
@@ -340,7 +342,9 @@ export const PromptInputCompletionPanel = React.memo(
       prevProps.emptyDirMessage === nextProps.emptyDirMessage &&
       prevProps.tokenUsage === nextProps.tokenUsage &&
       prevProps.contextLimit === nextProps.contextLimit &&
-      prevProps.reservedRows === nextProps.reservedRows
+      prevProps.reservedRows === nextProps.reservedRows &&
+      prevProps.rows === nextProps.rows &&
+      prevProps.columns === nextProps.columns
     )
   },
 )

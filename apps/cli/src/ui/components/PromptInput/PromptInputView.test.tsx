@@ -9,6 +9,7 @@ import { PromptInputView } from './PromptInputView'
 
 type TestHarness = {
   unmount: () => void
+  rerender: (element: React.ReactElement) => void
   getOutput: () => string
   clearOutput: () => void
   resize: (columns: number, rows?: number) => void
@@ -64,6 +65,7 @@ function createHarness(
 
   const harness: TestHarness = {
     unmount: () => instance.unmount(),
+    rerender: next => instance.rerender(next),
     getOutput: () => stripAnsi(rawOutput),
     clearOutput: () => {
       rawOutput = ''
@@ -84,8 +86,12 @@ function renderPromptInputView(args: {
   statusLine: string
   message?: { show: boolean; text?: string }
   tokenUsage?: number
+  terminalRows?: number
+  terminalColumns?: number
 }) {
   const tokenUsage = args.tokenUsage ?? 0
+  const terminalRows = args.terminalRows ?? 24
+  const terminalColumns = args.terminalColumns ?? 120
 
   return (
     <KeypressProvider>
@@ -143,6 +149,8 @@ function renderPromptInputView(args: {
         textInputColumns={80}
         textInputMaxHeight={1}
         completionReservedRows={4}
+        terminalRows={terminalRows}
+        terminalColumns={terminalColumns}
       />
     </KeypressProvider>
   )
@@ -230,9 +238,21 @@ describe('PromptInputView status line layout', () => {
     )
 
     await harness.wait(20)
-    harness.resize(90)
+    harness.rerender(
+      renderPromptInputView({
+        customStatusLineActive: false,
+        statusLine: longDefaultStatusLine,
+        terminalColumns: 90,
+      }),
+    )
     await harness.wait(180)
-    harness.resize(120)
+    harness.rerender(
+      renderPromptInputView({
+        customStatusLineActive: false,
+        statusLine: longDefaultStatusLine,
+        terminalColumns: 120,
+      }),
+    )
     await harness.wait(180)
 
     const output = harness.getOutput()
@@ -264,7 +284,14 @@ describe('PromptInputView status line layout', () => {
 
     await harness.wait(220)
     harness.clearOutput()
-    harness.resize(90)
+    harness.rerender(
+      renderPromptInputView({
+        customStatusLineActive: false,
+        statusLine: 'Input: Chat',
+        tokenUsage: 1_000_000,
+        terminalColumns: 90,
+      }),
+    )
     await harness.wait(180)
 
     const output = harness.getOutput()

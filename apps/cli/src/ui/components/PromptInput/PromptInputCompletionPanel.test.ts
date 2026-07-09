@@ -12,6 +12,7 @@ import {
 
 type TestHarness = {
   unmount: () => void
+  rerender: (element: React.ReactElement) => void
   getOutput: () => string
   clearOutput: () => void
   resize: (columns: number, rows?: number) => void
@@ -51,6 +52,7 @@ function createHarness(
 
   const harness: TestHarness = {
     unmount: () => instance.unmount(),
+    rerender: next => instance.rerender(next),
     getOutput: () => stripAnsi(rawOutput),
     clearOutput: () => {
       rawOutput = ''
@@ -149,13 +151,35 @@ describe('__getSuggestionWindowForTests', () => {
         tokenUsage: 990_000,
         contextLimit: 1_000_000,
         reservedRows: 4,
+        rows: 30,
+        columns: 100,
       }),
       { columns: 100, rows: 30 },
     )
 
     await harness.wait(50)
     harness.clearOutput()
-    harness.resize(56, 12)
+    harness.rerender(
+      React.createElement(PromptInputCompletionPanel, {
+        theme: getTheme(),
+        suggestions: [
+          {
+            type: 'command',
+            value: longCommand,
+            displayValue: longCommand,
+            description:
+              'Open an MCP resource template with a very long description that should be truncated inside the current terminal width.',
+          },
+        ],
+        selectedIndex: 0,
+        emptyDirMessage: '',
+        tokenUsage: 990_000,
+        contextLimit: 1_000_000,
+        reservedRows: 4,
+        rows: 12,
+        columns: 56,
+      }),
+    )
     await harness.wait(250)
 
     const output = harness.getOutput()

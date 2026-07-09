@@ -1220,6 +1220,8 @@ export function PromptInput({
       textInputColumns={textInputColumns}
       textInputMaxHeight={textInputMaxHeight}
       completionReservedRows={completionReservedRows}
+      terminalRows={rows}
+      terminalColumns={columns}
     />
   )
 }

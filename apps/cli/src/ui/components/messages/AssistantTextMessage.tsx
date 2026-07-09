@@ -1,5 +1,5 @@
 import { TextBlockParam } from '@anthropic-ai/sdk/resources/index.mjs'
-import React from 'react'
+import React, { useMemo } from 'react'
 import { AssistantBashOutputMessage } from './AssistantBashOutputMessage'
 import { AssistantBackgroundTaskOutputMessage } from './AssistantBackgroundTaskOutputMessage'
 import { AssistantLocalCommandOutputMessage } from './AssistantLocalCommandOutputMessage'
@@ -239,36 +239,70 @@ export function AssistantTextMessage({
       )
 
     default:
-      const content = applyMarkdown(text)
       return (
-        <Box
-          alignItems="flex-start"
-          flexDirection="row"
-          justifyContent="space-between"
-          marginTop={addMargin ? 1 : 0}
-          width="100%"
-        >
-          <Box flexDirection="row">
-            {shouldShowDot && (
-              <Box minWidth={2}>
-                <Text color={getTheme().kode}>{CIRCLE}</Text>
-              </Box>
-            )}
-            <Box flexDirection="column" width={contentWidth}>
-              {maxHeight ? (
-                <MaxSizedText
-                  text={content}
-                  maxWidth={contentWidth}
-                  maxHeight={maxHeight}
-                  overflowDirection="bottom"
-                />
-              ) : (
-                <Text>{content}</Text>
-              )}
-            </Box>
-          </Box>
-          <Cost costUSD={costUSD} durationMs={durationMs} debug={debug} />
-        </Box>
+        <AssistantMarkdownContent
+          text={text}
+          contentWidth={contentWidth}
+          maxHeight={maxHeight}
+          addMargin={addMargin}
+          shouldShowDot={shouldShowDot}
+          costUSD={costUSD}
+          durationMs={durationMs}
+          debug={debug}
+        />
       )
   }
+}
+
+function AssistantMarkdownContent({
+  text,
+  contentWidth,
+  maxHeight,
+  addMargin,
+  shouldShowDot,
+  costUSD,
+  durationMs,
+  debug,
+}: {
+  text: string
+  contentWidth: number
+  maxHeight?: number
+  addMargin: boolean
+  shouldShowDot: boolean
+  costUSD: number
+  durationMs: number
+  debug: boolean
+}): React.ReactNode {
+  const content = useMemo(() => applyMarkdown(text), [text])
+
+  return (
+    <Box
+      alignItems="flex-start"
+      flexDirection="row"
+      justifyContent="space-between"
+      marginTop={addMargin ? 1 : 0}
+      width="100%"
+    >
+      <Box flexDirection="row">
+        {shouldShowDot && (
+          <Box minWidth={2}>
+            <Text color={getTheme().kode}>{CIRCLE}</Text>
+          </Box>
+        )}
+        <Box flexDirection="column" width={contentWidth}>
+          {maxHeight ? (
+            <MaxSizedText
+              text={content}
+              maxWidth={contentWidth}
+              maxHeight={maxHeight}
+              overflowDirection="bottom"
+            />
+          ) : (
+            <Text>{content}</Text>
+          )}
+        </Box>
+      </Box>
+      <Cost costUSD={costUSD} durationMs={durationMs} debug={debug} />
+    </Box>
+  )
 }

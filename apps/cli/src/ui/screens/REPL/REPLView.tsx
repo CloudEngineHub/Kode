@@ -109,6 +109,15 @@ export function REPLView({
   const hasToolUseConfirm = Boolean(toolUseConfirm)
   const hasBinaryFeedback = Boolean(binaryFeedbackContext)
   const hasToast = Boolean(toast)
+  const lastTransientItemKey = transientItems.at(-1)?.key ?? ''
+  const promptInputMeasureSignature = shouldShowPromptInput
+    ? [
+        promptInputProps.input.length,
+        promptInputProps.input.split('\n').length,
+        promptInputProps.mode,
+        promptInputProps.submitCount,
+      ].join(':')
+    : ''
   const shouldRenderStartupHeader =
     Boolean(startupHeader) &&
     showStartupHeader &&
@@ -177,6 +186,8 @@ export function REPLView({
       hasToast ? 1 : 0,
       isLoading ? 1 : 0,
       transientItems.length,
+      lastTransientItemKey,
+      promptInputMeasureSignature,
       messageSelectorMessages.length,
     ].join(':')
 
@@ -217,6 +228,8 @@ export function REPLView({
     hasToast,
     isLoading,
     transientItems.length,
+    lastTransientItemKey,
+    promptInputMeasureSignature,
     messageSelectorMessages.length,
   ])
 
@@ -254,6 +267,14 @@ export function REPLView({
         {isFullScreenToolView && toolJSX ? (
           <Box ref={rootUiRef} flexDirection="column" width="100%">
             {toolJSX.jsx}
+          </Box>
+        ) : toolUseConfirm ? (
+          <Box ref={rootUiRef} flexDirection="column" width="100%">
+            <PermissionRequest
+              toolUseConfirm={toolUseConfirm}
+              onDone={() => setToolUseConfirm(null)}
+              verbose={verbose}
+            />
           </Box>
         ) : (
           <Box ref={rootUiRef} flexDirection="column" width="100%">
@@ -324,17 +345,6 @@ export function REPLView({
                     erroredToolUseIDs={erroredToolUseIDs}
                     inProgressToolUseIDs={inProgressToolUseIDs}
                     unresolvedToolUseIDs={unresolvedToolUseIDs}
-                  />
-                )}
-
-              {!toolJSX &&
-                toolUseConfirm &&
-                !isMessageSelectorVisible &&
-                !binaryFeedbackContext && (
-                  <PermissionRequest
-                    toolUseConfirm={toolUseConfirm}
-                    onDone={() => setToolUseConfirm(null)}
-                    verbose={verbose}
                   />
                 )}
 

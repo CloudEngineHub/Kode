@@ -8,7 +8,6 @@ import { CompactModeIndicator } from '#ui-ink/components/ModeIndicator'
 import { SentryErrorBoundary } from '#ui-ink/components/SentryErrorBoundary'
 import TextInput from '#ui-ink/components/TextInput'
 import { TokenWarning } from '#ui-ink/components/TokenWarning'
-import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import type { Key } from '#ui-ink/hooks/useKeypress'
 import {
   formatContextLimit,
@@ -97,6 +96,8 @@ export function PromptInputView({
   textInputColumns,
   textInputMaxHeight,
   completionReservedRows,
+  terminalRows,
+  terminalColumns,
 }: {
   mode: PromptMode
   theme: Theme
@@ -144,8 +145,11 @@ export function PromptInputView({
   textInputColumns: number
   textInputMaxHeight: number
   completionReservedRows: number
+  terminalRows: number
+  terminalColumns: number
 }): React.ReactNode {
-  const { rows, columns } = useTerminalSize()
+  const rows = terminalRows
+  const columns = terminalColumns
   const compact = isCompactViewportHeight(rows, {
     microRows: 12,
     tightRows: 15,
@@ -356,6 +360,8 @@ export function PromptInputView({
           tokenUsage={tokenUsage}
           contextLimit={modelInfo?.contextLength}
           reservedRows={completionReservedRows}
+          rows={rows}
+          columns={columns}
         />
       )}
     </Box>

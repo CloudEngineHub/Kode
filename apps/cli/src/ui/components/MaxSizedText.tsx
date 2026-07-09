@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { Text } from 'ink'
 import chalk from 'chalk'
 import { wrapLines } from '#ui-ink/primitives/text/wrapLines'
@@ -23,7 +23,28 @@ export function MaxSizedText({
     return <Text>{text}</Text>
   }
 
-  const lines = wrapLines(text.split('\n'), width)
+  return (
+    <BoundedMaxSizedText
+      text={text}
+      height={height}
+      width={width}
+      overflowDirection={overflowDirection}
+    />
+  )
+}
+
+function BoundedMaxSizedText({
+  text,
+  height,
+  width,
+  overflowDirection,
+}: {
+  text: string
+  height: number
+  width: number
+  overflowDirection: 'top' | 'bottom'
+}): React.ReactNode {
+  const lines = useMemo(() => wrapLines(text.split('\n'), width), [text, width])
   const wrapped = lines.join('\n')
 
   if (lines.length <= height) {
