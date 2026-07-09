@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react'
-import { Box, Text } from 'ink'
+import React, { useMemo, useState } from 'react'
+import { Box, Text, useIsScreenReaderEnabled } from 'ink'
 import { getTheme } from '#core/utils/theme'
 import { applyMarkdown } from '#core/utils/markdown'
+import { useInterval } from '#ui-ink/hooks/useInterval'
 import {
   ThinkingBlock,
   ThinkingBlockParam,
@@ -13,23 +14,29 @@ const PROGRESS_FRAMES = ['/', '-', '\\', '|']
 type Props = {
   param: ThinkingBlock | ThinkingBlockParam
   addMargin: boolean
+  shouldAnimate?: boolean
 }
 
 export function AssistantThinkingMessage({
   param: { thinking },
   addMargin = false,
+  shouldAnimate = true,
 }: Props): React.ReactNode {
   const [progressFrame, setProgressFrame] = useState(0)
+  const isScreenReaderEnabled = useIsScreenReaderEnabled()
   const theme = getTheme()
+  const hasThinking = Boolean(thinking && thinking.trim().length > 0)
+  const formattedThinking = useMemo(
+    () => (hasThinking ? applyMarkdown(thinking) : ''),
+    [hasThinking, thinking],
+  )
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setProgressFrame(f => (f + 1) % PROGRESS_FRAMES.length)
-    }, 150)
-    return () => clearInterval(timer)
-  }, [])
+  useInterval(
+    () => setProgressFrame(f => (f + 1) % PROGRESS_FRAMES.length),
+    shouldAnimate && !isScreenReaderEnabled && hasThinking ? 150 : null,
+  )
 
-  if (!thinking || thinking.trim().length === 0) {
+  if (!hasThinking) {
     return null
   }
 
@@ -49,7 +56,7 @@ export function AssistantThinkingMessage({
       </Text>
       <Box paddingLeft={2}>
         <Text color={theme.secondaryText} italic>
-          {applyMarkdown(thinking)}
+          {formattedThinking}
         </Text>
       </Box>
     </Box>

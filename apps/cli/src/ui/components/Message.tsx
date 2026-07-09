@@ -269,6 +269,7 @@ function AssistantMessage({
         <AssistantThinkingMessage
           addMargin={addMargin}
           param={param as ThinkingBlockParam}
+          shouldAnimate={shouldAnimate}
         />
       )
     default:
