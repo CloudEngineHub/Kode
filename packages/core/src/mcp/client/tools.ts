@@ -8,6 +8,7 @@ import {
   type ListToolsResult,
   ListToolsResultSchema,
 } from '@modelcontextprotocol/sdk/types.js'
+import Ajv, { type ValidateFunction } from 'ajv'
 import { memoize } from 'lodash-es'
 import { z } from 'zod'
 
@@ -28,6 +29,8 @@ import { getMcpListChangedVersion } from './listChanged'
 
 const MCP_PROGRESS_MESSAGE_MAX_LENGTH = 240
 const MCP_PROGRESS_LABEL_MAX_LENGTH = 80
+const mcpOutputSchemaValidators = new WeakMap<object, ValidateFunction>()
+const mcpOutputSchemaAjv = new Ajv({ allErrors: true, strict: false })
 
 type AnthropicImageMediaType = Extract<
   ImageBlockParam['source'],
@@ -81,6 +84,26 @@ function renderResultForAssistant(content: unknown): string | unknown[] {
   } catch {
     return String(content)
   }
+}
+
+function getMcpToolOutputSchema(tool: unknown): Record<string, unknown> | null {
+  if (!isRecord(tool)) return null
+  return isRecord(tool.outputSchema) ? tool.outputSchema : null
+}
+
+function getMcpOutputSchemaValidator(
+  outputSchema: Record<string, unknown>,
+): ValidateFunction {
+  const cached = mcpOutputSchemaValidators.get(outputSchema)
+  if (cached) return cached
+
+  const validator = mcpOutputSchemaAjv.compile(outputSchema)
+  mcpOutputSchemaValidators.set(outputSchema, validator)
+  return validator
+}
+
+function formatMcpSchemaValidationErrors(validator: ValidateFunction): string {
+  return mcpOutputSchemaAjv.errorsText(validator.errors, { separator: '; ' })
 }
 
 function formatProgressNumber(value: unknown): string | null {
@@ -228,6 +251,7 @@ export const getMCPTools = memoize(
                 client,
                 tool: tool.name,
                 args,
+                outputSchema: getMcpToolOutputSchema(tool),
                 toolUseId: context.toolUseId,
                 signal: context.abortController.signal,
                 onProgress: progress => {
@@ -316,10 +340,54 @@ function createMcpToolMeta(
   }
 }
 
+function convertMcpContentToToolResultBlocks(
+  content: Array<Record<string, unknown>>,
+): Array<{ type: 'text'; text: string } | ImageBlockParam> {
+  const blocks: Array<{ type: 'text'; text: string } | ImageBlockParam> = []
+
+  for (const item of content) {
+    switch (item.type) {
+      case 'text':
+        if (typeof item.text === 'string') {
+          blocks.push({ type: 'text', text: item.text })
+        }
+        break
+      case 'image':
+        if (
+          typeof item.data === 'string' &&
+          typeof item.mimeType === 'string'
+        ) {
+          blocks.push({
+            type: 'image',
+            source: {
+              type: 'base64',
+              data: item.data,
+              media_type: item.mimeType as AnthropicImageMediaType,
+            },
+          })
+        }
+        break
+      default: {
+        let text = ''
+        try {
+          text = JSON.stringify(item)
+        } catch {
+          text = String(item)
+        }
+        blocks.push({ type: 'text', text })
+        break
+      }
+    }
+  }
+
+  return blocks
+}
+
 async function callMcpTool({
   client: { client, name },
   tool,
   args,
+  outputSchema,
   toolUseId,
   signal,
   onProgress,
@@ -327,6 +395,7 @@ async function callMcpTool({
   client: ConnectedClient
   tool: string
   args: Record<string, unknown>
+  outputSchema?: Record<string, unknown> | null
   toolUseId?: string
   signal?: AbortSignal
   onProgress?: (progress: unknown) => void
@@ -382,41 +451,50 @@ async function callMcpTool({
           : undefined
     if (toolResult !== undefined) return String(toolResult)
 
+    let blocks: Array<{ type: 'text'; text: string } | ImageBlockParam> | null =
+      null
+    const getBlocks = () => {
+      blocks ??= convertMcpContentToToolResultBlocks(
+        result.content as Array<Record<string, unknown>>,
+      )
+      return blocks
+    }
+
     if (result.structuredContent !== undefined) {
+      if (outputSchema) {
+        let validate: ValidateFunction
+        try {
+          validate = getMcpOutputSchemaValidator(outputSchema)
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          logMCPError(
+            name,
+            `Unable to validate structured content from tool ${tool}: ${message}`,
+          )
+          const fallbackBlocks = getBlocks()
+          if (fallbackBlocks.length > 0) return fallbackBlocks
+          throw error
+        }
+
+        if (!validate(result.structuredContent)) {
+          const errorText = formatMcpSchemaValidationErrors(validate)
+          logMCPError(
+            name,
+            `Structured content from tool ${tool} failed outputSchema validation: ${errorText}`,
+          )
+          const fallbackBlocks = getBlocks()
+          if (fallbackBlocks.length > 0) return fallbackBlocks
+          throw new Error(
+            `Structured content from MCP tool ${tool} failed outputSchema validation: ${errorText}`,
+          )
+        }
+      }
+
       return JSON.stringify(result.structuredContent)
     }
 
-    const blocks: Array<{ type: 'text'; text: string } | ImageBlockParam> = []
-
-    for (const item of result.content) {
-      switch (item.type) {
-        case 'text':
-          blocks.push({ type: 'text', text: item.text })
-          break
-        case 'image':
-          blocks.push({
-            type: 'image',
-            source: {
-              type: 'base64',
-              data: item.data,
-              media_type: item.mimeType as AnthropicImageMediaType,
-            },
-          })
-          break
-        default: {
-          let text = ''
-          try {
-            text = JSON.stringify(item)
-          } catch {
-            text = String(item)
-          }
-          blocks.push({ type: 'text', text })
-          break
-        }
-      }
-    }
-
-    return blocks.length > 0 ? blocks : '(No content)'
+    const fallbackBlocks = getBlocks()
+    return fallbackBlocks.length > 0 ? fallbackBlocks : '(No content)'
   } finally {
     merged?.cleanup()
     timeoutSignal?.cleanup()
