@@ -626,7 +626,6 @@ export function PromptInput({
     onHistoryDown,
     onUserInput,
     historyIndex,
-    isInFastBrowseMode,
   } = useArrowKeyHistory({
     current: {
       text: input,
@@ -1198,7 +1197,6 @@ export function PromptInput({
       textInputColumns={textInputColumns}
       textInputMaxHeight={textInputMaxHeight}
       completionReservedRows={completionReservedRows}
-      isInFastBrowseMode={isInFastBrowseMode}
     />
   )
 }

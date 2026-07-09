@@ -136,7 +136,6 @@ function renderPromptInputView(args: {
         textInputColumns={80}
         textInputMaxHeight={1}
         completionReservedRows={4}
-        isInFastBrowseMode={() => false}
       />
     </KeypressProvider>
   )

@@ -97,7 +97,6 @@ export function PromptInputView({
   textInputColumns,
   textInputMaxHeight,
   completionReservedRows,
-  isInFastBrowseMode,
 }: {
   mode: PromptMode
   theme: Theme
@@ -145,7 +144,6 @@ export function PromptInputView({
   textInputColumns: number
   textInputMaxHeight: number
   completionReservedRows: number
-  isInFastBrowseMode: () => boolean
 }): React.ReactNode {
   const { rows, columns } = useTerminalSize()
   const compact = isCompactViewportHeight(rows, {
@@ -244,8 +242,7 @@ export function PromptInputView({
             disableCursorMovementForUpDownKeys={() =>
               completionActive ||
               historyIndex > 0 ||
-              !input.includes('\n') ||
-              isInFastBrowseMode()
+              !input.includes('\n')
             }
             cursorOffset={cursorOffset}
             onChangeCursorOffset={setCursorOffset}

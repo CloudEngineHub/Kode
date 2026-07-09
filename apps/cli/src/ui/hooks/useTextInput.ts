@@ -19,7 +19,6 @@ const DEL_CODE = 127 // \x7f
 // IME (especially CJK) can emit cursor-navigation-like sequences around commits.
 // A slightly longer guard helps prevent cursor jumps / wrong insertion points.
 const IME_NAVIGATION_GUARD_MS = 150
-const IME_ENTER_GUARD_MS = 150
 
 // Helper to check if input is a backspace character
 function isBackspaceChar(input: string): boolean {
@@ -53,7 +52,6 @@ export function useTextInput({
   const setOffset = onOffsetChange
   const cursorRef = useRef(Cursor.fromText(originalValue, columns, offset))
   const lastComplexInsertRef = useRef(0)
-  const lastNonAsciiInsertRef = useRef(0)
   const imagePasteInFlightRef = useRef(false)
   const isMountedRef = useRef(true)
   const imagePasteErrorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -272,17 +270,6 @@ export function useTextInput({
       return getCursor().insert('\n')
     }
 
-    // Heuristic IME guard: many CJK IMEs commit text with Enter, which can also
-    // reach the app as a Return keypress. If we just inserted non-ASCII text
-    // very recently, treat this Enter as "commit" (no-op) rather than submit.
-    const now = Date.now()
-    if (
-      lastNonAsciiInsertRef.current > 0 &&
-      now - lastNonAsciiInsertRef.current < IME_ENTER_GUARD_MS
-    ) {
-      return
-    }
-
     onSubmit?.(getCursor().text)
   }
 
@@ -354,9 +341,6 @@ export function useTextInput({
     if (isInsertable) {
       const now = Date.now()
       const hasNonAscii = /[^\x00-\x7f]/.test(input)
-      if (hasNonAscii) {
-        lastNonAsciiInsertRef.current = now
-      }
       const isComplexInsert = input.length > 1 || hasNonAscii
       if (isComplexInsert) {
         lastComplexInsertRef.current = now
