@@ -15,6 +15,7 @@ import {
   formatTerminalAppearanceLines,
   withTerminalReadability,
 } from '#ui-ink/utils/terminalAppearance'
+import { resolveTuiMaxFps } from '#ui-ink/utils/inkRender'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import {
@@ -196,9 +197,16 @@ export function Doctor({
     lines.push(
       `- syncOutput: ${enabledDisabled(syncEffective)} (env: ${syncEnv ?? 'default'})`,
     )
-    if (process.env.KODE_TUI_MAX_FPS) {
-      lines.push(`- maxFps: ${process.env.KODE_TUI_MAX_FPS} (env override)`)
-    }
+    const maxFpsEffective = resolveTuiMaxFps({
+      incrementalRendering: incrementalEffective,
+      isScreenReaderEnabled: isScreenReader,
+      isTty: Boolean(process.stdout.isTTY),
+    })
+    lines.push(
+      `- maxFps: ${
+        maxFpsEffective ?? 'Ink default'
+      } (env: ${process.env.KODE_TUI_MAX_FPS ?? 'default'})`,
+    )
 
     if (unreachableRules.length > 0) {
       lines.push('')
