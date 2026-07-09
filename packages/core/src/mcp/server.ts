@@ -12,7 +12,6 @@ import {
   type Tool,
   type ToolUseContext,
 } from '#core/tooling/Tool'
-import { lastX } from '#core/utils/generators'
 import { MACRO } from '#core/constants/macros'
 import { splitLegacyTool } from '#core/tooling/splitTool'
 import {
@@ -28,6 +27,122 @@ const state: {
 }
 
 const MCP_COMMANDS: unknown[] = []
+const MCP_SERVER_PROGRESS_MESSAGE_MAX_LENGTH = 240
+const MCP_SERVER_PROGRESS_MIN_INTERVAL_MS = 250
+
+type McpProgressToken = string | number
+type McpProgressNotification = {
+  method: 'notifications/progress'
+  params: {
+    progressToken: McpProgressToken
+    progress: number
+    message?: string
+  }
+}
+
+type McpProgressExtra = {
+  _meta?: { progressToken?: unknown }
+  sendNotification(notification: McpProgressNotification): Promise<void>
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+}
+
+function getMcpProgressToken(extra: McpProgressExtra): McpProgressToken | null {
+  const token = extra._meta?.progressToken
+  return typeof token === 'string' || typeof token === 'number' ? token : null
+}
+
+function sanitizeMcpProgressMessage(value: string): string | undefined {
+  const cleaned = value
+    .replace(/<\/?tool-progress>/g, '')
+    .replace(/\u001B\[[0-?]*[ -/]*[@-~]/g, '')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (!cleaned) return undefined
+  if (cleaned.length <= MCP_SERVER_PROGRESS_MESSAGE_MAX_LENGTH) return cleaned
+  return `${cleaned.slice(0, MCP_SERVER_PROGRESS_MESSAGE_MAX_LENGTH)}...`
+}
+
+function extractText(value: unknown, depth = 0): string | null {
+  if (depth > 4) return null
+  if (typeof value === 'string') return value
+  if (Array.isArray(value)) {
+    const text = value
+      .map(item => extractText(item, depth + 1))
+      .filter((item): item is string => Boolean(item))
+      .join('\n')
+    return text || null
+  }
+  if (!isRecord(value)) return null
+
+  if (typeof value.text === 'string') return value.text
+
+  for (const key of ['content', 'message', 'event']) {
+    const nested = extractText(value[key], depth + 1)
+    if (nested) return nested
+  }
+
+  return null
+}
+
+function formatMcpProgressMessage(update: unknown, toolName: string): string {
+  const record = isRecord(update) ? update : null
+  const candidate = record?.content ?? record?.event ?? update
+  const text =
+    extractText(candidate) ??
+    (() => {
+      try {
+        return JSON.stringify(candidate)
+      } catch {
+        return String(candidate)
+      }
+    })()
+
+  return sanitizeMcpProgressMessage(text) ?? `Tool ${toolName} is running`
+}
+
+function createMcpProgressReporter(
+  extra: McpProgressExtra,
+  toolName: string,
+): (update: unknown) => Promise<void> {
+  const progressToken = getMcpProgressToken(extra)
+  if (progressToken === null) return async () => {}
+
+  let progress = 0
+  let lastSentAt = 0
+
+  return async update => {
+    const now = Date.now()
+    if (
+      lastSentAt > 0 &&
+      now - lastSentAt < MCP_SERVER_PROGRESS_MIN_INTERVAL_MS
+    ) {
+      return
+    }
+
+    progress += 1
+    lastSentAt = now
+
+    try {
+      await extra.sendNotification({
+        method: 'notifications/progress',
+        params: {
+          progressToken,
+          progress,
+          message: formatMcpProgressMessage(update, toolName),
+        },
+      })
+    } catch (error) {
+      logError(error)
+    }
+  }
+}
+
+export const __createMcpProgressReporterForTests = createMcpProgressReporter
 
 function createLinkedMcpAbortController(signal: AbortSignal): {
   abortController: AbortController
@@ -172,7 +287,15 @@ export async function startMCPServer(
       }
 
       const result = tool.call(toolInput as never, toolUseContext)
-      const finalResult = await lastX(result)
+      const reportProgress = createMcpProgressReporter(extra, name)
+      let finalResult: Awaited<ReturnType<typeof result.next>>['value']
+
+      for await (const update of result) {
+        if (isRecord(update) && update.type === 'progress') {
+          await reportProgress(update)
+        }
+        finalResult = update
+      }
 
       if (!finalResult || finalResult.type !== 'result') {
         throw new Error(`Tool ${name} did not return a result`)
