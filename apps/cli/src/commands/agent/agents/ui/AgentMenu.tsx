@@ -45,6 +45,7 @@ export function AgentMenu(props: {
       <Panel title={props.agent.agentType}>
         <Box flexDirection="column" marginTop={1}>
           <Select
+            focusScope={`agent-menu:${props.agent.source}:${props.agent.agentType}`}
             options={options}
             onChange={value => {
               if (isAgentMenuChoice(value)) props.onChoose(value)

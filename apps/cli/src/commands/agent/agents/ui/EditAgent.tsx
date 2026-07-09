@@ -154,6 +154,7 @@ export function EditAgent(props: {
               speed.
             </Text>
             <Select
+              focusScope={`agent-edit:${props.agent.source}:${props.agent.agentType}:model`}
               options={modelOptions()}
               defaultValue={props.agent.model ?? DEFAULT_AGENT_MODEL}
               onChange={value => {

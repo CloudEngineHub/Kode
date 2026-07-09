@@ -23,6 +23,7 @@ import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import { PermissionRequestDetails } from '#ui-ink/components/permissions/PermissionRequestDetails'
 import { applyToolPermissionUpdatesToLiveToolUseContext } from '../liveToolPermissionContext'
 import { computeAvailableColumns } from '#ui-ink/primitives/layout/viewportColumns'
+import { permissionSelectFocusScope } from '#ui-ink/components/permissions/permissionFocusScope'
 
 function getOptions(args: {
   path: string
@@ -204,6 +205,7 @@ export function FileEditPermissionRequest({
               Allow this edit to <Text bold>{basename(file_path)}</Text>?
             </Text>
             <Select
+              focusScope={permissionSelectFocusScope(toolUseConfirm, 'choice')}
               options={getOptions({
                 path: file_path,
                 modeCycleShortcut: modeCycleShortcut.displayText,

@@ -12,6 +12,7 @@ export function AskUserQuestionSubmitView(props: {
   questions: Question[]
   answers: Record<string, string>
   allQuestionsAnswered: boolean
+  focusScope: string
   onCancel: () => void
   onSubmit: () => void
 }): React.ReactNode {
@@ -50,6 +51,7 @@ export function AskUserQuestionSubmitView(props: {
 
       <Box marginTop={1}>
         <Select
+          focusScope={props.focusScope}
           options={[
             { label: 'Submit answers', value: 'submit' },
             { label: 'Cancel', value: 'cancel' },

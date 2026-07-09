@@ -27,6 +27,7 @@ export function StepChooseLocation({ ctx }: { ctx: WizardContextValue }) {
         </Text>
         <Select
           key="location-select"
+          focusScope="agent-wizard:choose-location"
           options={[
             {
               label: 'Project (recommended) - saved in .kode/agents/',

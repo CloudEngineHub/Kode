@@ -114,6 +114,7 @@ export function ModelSelectionScreen({
         <Box flexDirection="column" minHeight={listMinHeight}>
           {modelOptions.length > 0 ? (
             <Select
+              focusScope="model-selector:model-selection"
               options={modelOptions}
               onChange={handleModelSelection}
               visibleOptionCount={visibleOptionCount}

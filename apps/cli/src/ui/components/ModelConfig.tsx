@@ -303,6 +303,7 @@ export function ModelConfig({ onClose }: Props): React.ReactNode {
 
           {options.length > 0 ? (
             <Select
+              focusScope={`model-config:${activePointer}`}
               options={options}
               defaultValue={currentValue || undefined}
               highlightText={query || undefined}

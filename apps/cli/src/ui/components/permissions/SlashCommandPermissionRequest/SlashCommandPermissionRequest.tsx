@@ -18,6 +18,7 @@ import { env } from '#core/utils/env'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import { PermissionRequestDetails } from '#ui-ink/components/permissions/PermissionRequestDetails'
+import { permissionSelectFocusScope } from '#ui-ink/components/permissions/permissionFocusScope'
 
 function parsePrefix(command: string): string | null {
   const trimmed = command.trim()
@@ -80,6 +81,7 @@ export function SlashCommandPermissionRequest({
           <Box flexDirection="column">
             <Text>Allow this command?</Text>
             <Select
+              focusScope={permissionSelectFocusScope(toolUseConfirm, 'choice')}
               options={[
                 { label: 'Allow once', value: 'yes' },
                 {

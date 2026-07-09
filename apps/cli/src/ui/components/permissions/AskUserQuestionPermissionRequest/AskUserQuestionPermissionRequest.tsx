@@ -10,6 +10,7 @@ import { AskUserQuestionSubmitView } from './SubmitView'
 import { useAskUserQuestionKeyboard } from './useAskUserQuestionKeyboard'
 import type { Question, QuestionState } from './types'
 import { getTabHeaders } from './utils'
+import { permissionSelectFocusScope } from '#ui-ink/components/permissions/permissionFocusScope'
 
 export {
   applyMultiSelectNav as __applyMultiSelectNavForTests,
@@ -172,6 +173,7 @@ export function AskUserQuestionPermissionRequest({
             questions={questions}
             answers={answers}
             allQuestionsAnswered={allQuestionsAnswered}
+            focusScope={permissionSelectFocusScope(toolUseConfirm, 'submit')}
             onCancel={cancel}
             onSubmit={() => allowWithAnswers(answers)}
           />

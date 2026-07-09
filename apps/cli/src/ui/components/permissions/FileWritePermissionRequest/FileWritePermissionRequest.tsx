@@ -24,6 +24,7 @@ import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import { PermissionRequestDetails } from '#ui-ink/components/permissions/PermissionRequestDetails'
 import { applyToolPermissionUpdatesToLiveToolUseContext } from '../liveToolPermissionContext'
 import { computeAvailableColumns } from '#ui-ink/primitives/layout/viewportColumns'
+import { permissionSelectFocusScope } from '#ui-ink/components/permissions/permissionFocusScope'
 
 type Props = {
   toolUseConfirm: ToolUseConfirm
@@ -176,6 +177,7 @@ export function FileWritePermissionRequest({
               <Text bold>{basename(file_path)}</Text>?
             </Text>
             <Select
+              focusScope={permissionSelectFocusScope(toolUseConfirm, 'choice')}
               options={[
                 {
                   label: 'Allow once',

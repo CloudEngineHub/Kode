@@ -16,6 +16,7 @@ import { toolUseOptions } from '#ui-ink/components/permissions/toolUseOptions'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import { PermissionRequestDetails } from '#ui-ink/components/permissions/PermissionRequestDetails'
+import { permissionSelectFocusScope } from '#ui-ink/components/permissions/permissionFocusScope'
 
 type Props = {
   toolUseConfirm: ToolUseConfirm
@@ -67,6 +68,7 @@ export function BashPermissionRequest({
           <Box flexDirection="column">
             <Text>Allow this command?</Text>
             <Select
+              focusScope={permissionSelectFocusScope(toolUseConfirm, 'choice')}
               options={toolUseOptions({ toolUseConfirm, command })}
               onChange={newValue => {
                 switch (newValue) {

@@ -29,6 +29,7 @@ export function StepChooseMethod({ ctx }: { ctx: WizardContextValue }) {
         </Text>
         <Select
           key="method-select"
+          focusScope="agent-wizard:choose-method"
           options={[
             {
               label: 'Quick draft (recommended) - describe, review, save',

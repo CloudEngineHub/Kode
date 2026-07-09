@@ -407,6 +407,7 @@ export function OpenFileScreen({
 
         {options.length > 0 && visibleOptionCount > 0 ? (
           <Select
+            focusScope="open-file"
             options={options}
             highlightText={normalizedQuery || undefined}
             visibleOptionCount={visibleOptionCount}

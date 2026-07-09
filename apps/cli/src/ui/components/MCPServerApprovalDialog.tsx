@@ -89,6 +89,7 @@ export function MCPServerApprovalDialog({
         <Text wrap="truncate-end">Do you want to approve this MCP server?</Text>
 
         <Select
+          focusScope={`mcp-approval:${serverName}`}
           options={[
             { label: 'Yes, approve this server', value: 'yes' },
             { label: 'No, reject this server', value: 'no' },

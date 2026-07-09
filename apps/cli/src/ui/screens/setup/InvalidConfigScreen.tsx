@@ -73,6 +73,7 @@ function InvalidConfigScreen({
         <Box flexDirection="column" gap={layout.gap}>
           <Text bold>Choose an option:</Text>
           <Select
+            focusScope="setup:invalid-config"
             options={[
               { label: 'Exit and fix manually', value: 'exit' },
               { label: 'Reset with default configuration', value: 'reset' },

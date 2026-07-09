@@ -82,6 +82,7 @@ export function TrustScreen({ onDone }: Props): React.ReactNode {
         </Box>
 
         <Select
+          focusScope="setup:trust"
           options={[
             { label: 'Yes, proceed', value: 'yes' },
             { label: 'No, exit', value: 'no' },

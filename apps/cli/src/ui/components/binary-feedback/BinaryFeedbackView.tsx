@@ -160,6 +160,7 @@ export function BinaryFeedbackView({
         <Box flexDirection="column" paddingTop={1}>
           <Text>How do you want to proceed?</Text>
           <Select
+            focusScope={`binary-feedback:${m1.message.id}:${m2.message.id}`}
             options={getOptions()}
             onFocus={setFocus}
             focusValue={focusValue}
