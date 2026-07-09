@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import {
   __clearPastedImageDataForTests,
   releasePastedImageAttachments,
+  releaseStalePastedImageAttachments,
   resolvePastedImageAttachments,
   storePastedImageAttachment,
 } from '#ui-ink/components/PromptInput/pastes'
@@ -38,5 +39,37 @@ describe('prompt image paste store', () => {
 
     releasePastedImageAttachments([attachment])
     expect(resolvePastedImageAttachments([attachment])).toEqual([])
+  })
+
+  test('releases only image data no longer referenced by prompt state', () => {
+    const firstData = Buffer.from('first-image').toString('base64')
+    const secondData = Buffer.from('second-image').toString('base64')
+    const first = storePastedImageAttachment({
+      placeholder: '[Image #1]',
+      image: {
+        data: firstData,
+        mediaType: 'image/png',
+      },
+    })
+    const second = storePastedImageAttachment({
+      placeholder: '[Image #2]',
+      image: {
+        data: secondData,
+        mediaType: 'image/png',
+      },
+    })
+
+    releaseStalePastedImageAttachments({
+      previous: [first, second],
+      next: [second],
+    })
+
+    expect(resolvePastedImageAttachments([first])).toEqual([])
+    expect(resolvePastedImageAttachments([second])).toEqual([
+      {
+        ...second,
+        data: secondData,
+      },
+    ])
   })
 })

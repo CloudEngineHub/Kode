@@ -90,6 +90,17 @@ export function releasePastedImageAttachments(
   }
 }
 
+export function releaseStalePastedImageAttachments(args: {
+  previous: PastedImageAttachment[]
+  next: PastedImageAttachment[]
+}): void {
+  if (args.previous.length === 0) return
+
+  const nextIds = new Set(args.next.map(image => image.id))
+  const staleImages = args.previous.filter(image => !nextIds.has(image.id))
+  releasePastedImageAttachments(staleImages)
+}
+
 export function __clearPastedImageDataForTests(): void {
   pastedImageDataStore.clear()
   pastedImageStoreId = 1
@@ -245,6 +256,7 @@ export function usePromptPastes(args: {
         }
 
         if (arePastedImageAttachmentsEqual(prev, resolved)) return prev
+        releaseStalePastedImageAttachments({ previous: prev, next: resolved })
         return resolved
       })
     },
