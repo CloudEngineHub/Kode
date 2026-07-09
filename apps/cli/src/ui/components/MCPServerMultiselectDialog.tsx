@@ -1,7 +1,6 @@
 import React from 'react'
 import { Box, Text } from 'ink'
 import { getTheme } from '#core/utils/theme'
-import { MultiSelect } from '@inkjs/ui'
 import {
   saveCurrentProjectConfig,
   getCurrentProjectConfig,
@@ -12,6 +11,7 @@ import { useExitOnCtrlCD } from '#ui-ink/hooks/useExitOnCtrlCD'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
+import { ScopedMultiSelect } from '#ui-ink/components/CustomSelect/multi-select'
 
 type Props = {
   serverNames: string[]
@@ -103,7 +103,8 @@ export function MCPServerMultiselectDialog({
           Select the servers you want to enable (space toggles):
         </Text>
 
-        <MultiSelect
+        <ScopedMultiSelect
+          focusScope={`mcp-project-approval:${serverNames.join('\u0000')}`}
           options={serverNames.map(server => ({
             label: server,
             value: server,

@@ -22,6 +22,7 @@ import { MessageResponse } from '#ui-ink/components/MessageResponse'
 import { KeypressProvider } from '#ui-ink/contexts/KeypressContext'
 import { createInkHarnessManager, createInkTestHarness } from './inkTestHarness'
 import { Select } from '#ui-ink/components/CustomSelect/select'
+import { ScopedMultiSelect } from '#ui-ink/components/CustomSelect/multi-select'
 import { useModelSelectorInput } from '#ui-ink/components/ModelSelector/useModelSelectorInput'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { useMouse } from '#ui-ink/hooks/useMouse'
@@ -761,6 +762,62 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     await h.wait(150)
 
     expect(focused).toBe('second')
+  })
+
+  test('ScopedMultiSelect: down-arrow focus survives keep-alive remount', async () => {
+    let submitted: string[] = []
+    const scope = `test:scoped-multiselect-remount:${Date.now()}:${Math.random()}`
+
+    function ScopedMultiSelectKeepAliveHarness(): React.ReactNode {
+      const [showSelect, setShowSelect] = useState(true)
+
+      useKeypress(
+        (_input, key) => {
+          if (!key.downArrow) return
+
+          setTimeout(() => {
+            setShowSelect(false)
+            setTimeout(() => setShowSelect(true), 0)
+          }, 0)
+          return false
+        },
+        { priority: 10 },
+      )
+
+      if (!showSelect) return <Text>Loading servers...</Text>
+
+      return (
+        <ScopedMultiSelect
+          focusScope={scope}
+          options={[
+            { label: 'First', value: 'first' },
+            { label: 'Second', value: 'second' },
+            { label: 'Third', value: 'third' },
+          ]}
+          defaultValue={['first', 'second', 'third']}
+          onSubmit={values => {
+            submitted = values
+          }}
+        />
+      )
+    }
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <ScopedMultiSelectKeepAliveHarness />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(40)
+    h.stdin.write('\u001B[B')
+    await h.wait(100)
+    h.stdin.write(' ')
+    await h.wait(40)
+    h.stdin.write('\r')
+    await h.wait(40)
+
+    expect(submitted).toEqual(['first', 'third'])
   })
 
   test('Select: down-arrow focus is not pulled back by stale focusValue during keep-alive rerenders', async () => {
