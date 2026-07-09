@@ -154,4 +154,64 @@ describe('HttpClient', () => {
 
     expect(states).toEqual([true, false])
   })
+
+  test('listSessions rejects when the websocket closes before session_list', async () => {
+    FakeWebSocket.instances = []
+    const client = new HttpClient({
+      baseUrl: 'http://localhost:32123',
+      token: 'token',
+      webSocketImpl: FakeWebSocket,
+    })
+
+    const sessions = client.listSessions()
+    const ws = FakeWebSocket.instances[0]!
+    ws.open()
+    await waitTick()
+    ws.close()
+
+    await expect(sessions).rejects.toThrow(
+      'WebSocket connection closed before session list was received',
+    )
+  })
+
+  test('loadSession rejects when the websocket closes before history_end', async () => {
+    FakeWebSocket.instances = []
+    const client = new HttpClient({
+      baseUrl: 'http://localhost:32123',
+      token: 'token',
+      webSocketImpl: FakeWebSocket,
+    })
+
+    const session = client.loadSession('session-a')
+    const ws = FakeWebSocket.instances[0]!
+    ws.open()
+    await waitTick()
+    ws.message({
+      type: 'session_list',
+      sessions: [
+        {
+          sessionId: 'session-a',
+          slug: null,
+          customTitle: null,
+          tag: null,
+          summary: null,
+          cwd: null,
+          createdAt: null,
+          modifiedAt: null,
+        },
+      ],
+    })
+    await waitTick()
+
+    expect(JSON.parse(ws.sent[1] ?? '{}')).toEqual({
+      type: 'resume',
+      session_id: 'session-a',
+    })
+
+    ws.close()
+
+    await expect(session).rejects.toThrow(
+      'WebSocket connection closed before session history was received',
+    )
+  })
 })

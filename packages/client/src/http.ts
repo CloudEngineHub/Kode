@@ -237,18 +237,51 @@ export class HttpClient implements KodeClient {
 
   async listSessions(): Promise<Session[]> {
     await this.ensureConnected()
+    const ws = this.ws
 
     return await new Promise<Session[]>((resolve, reject) => {
-      const unsubscribe = this.onMessage(msg => {
-        if (!isSessionListMessage(msg)) return
+      let settled = false
+      let unsubscribe = () => {}
+
+      const cleanup = () => {
         unsubscribe()
-        resolve(msg.sessions)
+        try {
+          ws?.removeEventListener?.('close', onClose)
+          ws?.removeEventListener?.('error', onError)
+        } catch {}
+      }
+      const complete = (sessions: Session[]) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        resolve(sessions)
+      }
+      const fail = (message: string) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        reject(new Error(message))
+      }
+      const onClose = () => {
+        this.ws = null
+        fail('WebSocket connection closed before session list was received')
+      }
+      const onError = () => {
+        fail('WebSocket connection error before session list was received')
+      }
+
+      ws?.addEventListener('close', onClose)
+      ws?.addEventListener('error', onError)
+
+      unsubscribe = this.onMessage(msg => {
+        if (!isSessionListMessage(msg)) return
+        complete(msg.sessions)
       })
 
       try {
         this.send({ type: 'list_sessions' })
       } catch (error) {
-        unsubscribe()
+        cleanup()
         reject(error)
       }
     })
@@ -271,11 +304,44 @@ export class HttpClient implements KodeClient {
     }
 
     const events: AgentEvent[] = []
+    const ws = this.ws
 
     await new Promise<void>((resolve, reject) => {
       let capturing = false
+      let settled = false
+      let unsubscribe = () => {}
 
-      const unsubscribe = this.onMessage(msg => {
+      const cleanup = () => {
+        unsubscribe()
+        try {
+          ws?.removeEventListener?.('close', onClose)
+          ws?.removeEventListener?.('error', onError)
+        } catch {}
+      }
+      const complete = () => {
+        if (settled) return
+        settled = true
+        cleanup()
+        resolve()
+      }
+      const fail = (message: string) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        reject(new Error(message))
+      }
+      const onClose = () => {
+        this.ws = null
+        fail('WebSocket connection closed before session history was received')
+      }
+      const onError = () => {
+        fail('WebSocket connection error before session history was received')
+      }
+
+      ws?.addEventListener('close', onClose)
+      ws?.addEventListener('error', onError)
+
+      unsubscribe = this.onMessage(msg => {
         if (isRecord(msg) && msg.type === 'history_begin') {
           const sid = typeof msg.sessionId === 'string' ? msg.sessionId : ''
           if (sid === sessionId) capturing = true
@@ -286,8 +352,7 @@ export class HttpClient implements KodeClient {
           const sid = typeof msg.sessionId === 'string' ? msg.sessionId : ''
           if (sid === sessionId) {
             capturing = false
-            unsubscribe()
-            resolve()
+            complete()
           }
           return
         }
@@ -301,7 +366,7 @@ export class HttpClient implements KodeClient {
       try {
         this.send({ type: 'resume', session_id: sessionId })
       } catch (error) {
-        unsubscribe()
+        cleanup()
         reject(error)
       }
     })
