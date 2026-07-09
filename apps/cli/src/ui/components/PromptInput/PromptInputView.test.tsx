@@ -355,6 +355,8 @@ describe('PromptInputView status line layout', () => {
     expect(output).not.toContain('Input: Chat')
     expect(output).not.toContain('[custom-openai] mimo-v2.5-pro')
     expect(output).not.toContain('Context low')
+    expect(output).not.toContain('C:/repo')
+    expect(output).not.toContain('─')
   })
 
   test('keeps priority status messages visible while status chrome is suppressed', async () => {

@@ -161,6 +161,8 @@ export function PromptInputView({
     clearInputPending ||
     modelSwitchMessage.show ||
     toastMessage.show
+  const suppressNonessentialChrome =
+    suppressStatusLine && !hasPriorityStatusMessage
   const showStatusLine =
     normalizedRows > 8 && (!suppressStatusLine || hasPriorityStatusMessage)
   const showModelInfo =
@@ -212,8 +214,8 @@ export function PromptInputView({
       <Box
         alignItems="flex-start"
         justifyContent="flex-start"
-        borderTop={showAuxiliaryRows}
-        borderBottom={showAuxiliaryRows}
+        borderTop={showAuxiliaryRows && !suppressNonessentialChrome}
+        borderBottom={showAuxiliaryRows && !suppressNonessentialChrome}
         borderLeft={false}
         borderRight={false}
         borderColor={getPromptModeBorderColor(mode, theme)}
@@ -260,7 +262,7 @@ export function PromptInputView({
       </Box>
 
       {/* PWD line - first line below input */}
-      {showAuxiliaryRows && !compact && (
+      {showAuxiliaryRows && !compact && !suppressNonessentialChrome && (
         <Box flexDirection="row" paddingX={1}>
           <Text dimColor wrap="truncate-end">
             {currentPwd}
