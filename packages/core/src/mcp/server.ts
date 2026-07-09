@@ -2,6 +2,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import {
   CallToolRequestSchema,
+  type ContentBlock,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js'
 import { setCwd } from '#core/utils/state'
@@ -45,10 +46,6 @@ type McpProgressExtra = {
   sendNotification(notification: McpProgressNotification): Promise<void>
 }
 
-type McpToolContentBlock =
-  | { type: 'text'; text: string }
-  | { type: 'image'; data: string; mimeType: string }
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
 }
@@ -64,14 +61,34 @@ function stringifyForMcpText(value: unknown): string {
   }
 }
 
+function optionalRecord(value: unknown): Record<string, unknown> | undefined {
+  return isRecord(value) ? value : undefined
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined
+}
+
+function addCommonMcpContentFields<T extends ContentBlock>(
+  block: T,
+  source: Record<string, unknown>,
+): T {
+  const annotations = optionalRecord(source.annotations)
+  const meta = optionalRecord(source._meta)
+  const writable = block as T & Record<string, unknown>
+  if (annotations) writable.annotations = annotations
+  if (meta) writable._meta = meta
+  return block
+}
+
 function convertToolPayloadItemToMcpContent(
   item: unknown,
-): McpToolContentBlock | null {
+): ContentBlock | null {
   if (typeof item === 'string') return { type: 'text', text: item }
   if (!isRecord(item)) return { type: 'text', text: stringifyForMcpText(item) }
 
   if (item.type === 'text' && typeof item.text === 'string') {
-    return { type: 'text', text: item.text }
+    return addCommonMcpContentFields({ type: 'text', text: item.text }, item)
   }
 
   const source = isRecord(item.source) ? item.source : null
@@ -80,11 +97,91 @@ function convertToolPayloadItemToMcpContent(
     source?.type === 'base64' &&
     typeof source.data === 'string'
   ) {
-    return {
-      type: 'image',
-      data: source.data,
-      mimeType:
-        typeof source.media_type === 'string' ? source.media_type : 'image/png',
+    return addCommonMcpContentFields(
+      {
+        type: 'image',
+        data: source.data,
+        mimeType:
+          typeof source.media_type === 'string'
+            ? source.media_type
+            : 'image/png',
+      },
+      item,
+    )
+  }
+
+  if (
+    item.type === 'image' &&
+    typeof item.data === 'string' &&
+    typeof item.mimeType === 'string'
+  ) {
+    return addCommonMcpContentFields(
+      { type: 'image', data: item.data, mimeType: item.mimeType },
+      item,
+    )
+  }
+
+  if (
+    item.type === 'audio' &&
+    typeof item.data === 'string' &&
+    typeof item.mimeType === 'string'
+  ) {
+    return addCommonMcpContentFields(
+      { type: 'audio', data: item.data, mimeType: item.mimeType },
+      item,
+    )
+  }
+
+  if (item.type === 'resource_link' && typeof item.uri === 'string') {
+    return addCommonMcpContentFields(
+      {
+        type: 'resource_link',
+        uri: item.uri,
+        title: optionalString(item.title),
+        name: optionalString(item.name),
+        description: optionalString(item.description),
+        mimeType: optionalString(item.mimeType),
+      },
+      item,
+    )
+  }
+
+  const resource = isRecord(item.resource) ? item.resource : null
+  if (
+    item.type === 'resource' &&
+    resource &&
+    typeof resource.uri === 'string'
+  ) {
+    const mimeType = optionalString(resource.mimeType)
+    const commonResource = {
+      uri: resource.uri,
+      ...(mimeType ? { mimeType } : {}),
+    }
+
+    if (typeof resource.text === 'string') {
+      return addCommonMcpContentFields(
+        {
+          type: 'resource',
+          resource: {
+            ...commonResource,
+            text: resource.text,
+          },
+        },
+        item,
+      )
+    }
+
+    if (typeof resource.blob === 'string') {
+      return addCommonMcpContentFields(
+        {
+          type: 'resource',
+          resource: {
+            ...commonResource,
+            blob: resource.blob,
+          },
+        },
+        item,
+      )
     }
   }
 
@@ -94,7 +191,7 @@ function convertToolPayloadItemToMcpContent(
 function convertToolPayloadToMcpContent(args: {
   payload: unknown
   fallback: unknown
-}): McpToolContentBlock[] {
+}): ContentBlock[] {
   const { payload, fallback } = args
 
   if (typeof payload === 'string') return [{ type: 'text', text: payload }]
@@ -102,7 +199,7 @@ function convertToolPayloadToMcpContent(args: {
   if (Array.isArray(payload)) {
     const blocks = payload
       .map(convertToolPayloadItemToMcpContent)
-      .filter((block): block is McpToolContentBlock => block !== null)
+      .filter((block): block is ContentBlock => block !== null)
 
     return blocks.length > 0
       ? blocks

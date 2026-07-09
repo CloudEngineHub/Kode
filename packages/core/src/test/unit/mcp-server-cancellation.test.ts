@@ -30,16 +30,79 @@ describe('MCP server cancellation', () => {
     ])
   })
 
+  test('preserves MCP-native media and resource payload blocks', () => {
+    const content = __convertToolPayloadToMcpContentForTests({
+      payload: [
+        { type: 'audio', data: 'YXVkaW8=', mimeType: 'audio/wav' },
+        {
+          type: 'resource_link',
+          uri: 'file:///tmp/a.txt',
+          name: 'a.txt',
+          description: 'Temporary file',
+          mimeType: 'text/plain',
+        },
+        {
+          type: 'resource',
+          resource: {
+            uri: 'file:///tmp/b.txt',
+            mimeType: 'text/plain',
+            text: 'embedded text',
+          },
+        },
+        {
+          type: 'resource',
+          resource: {
+            uri: 'file:///tmp/c.bin',
+            mimeType: 'application/octet-stream',
+            blob: 'AAEC',
+          },
+        },
+      ],
+      fallback: 'fallback',
+    })
+
+    expect(content).toEqual([
+      {
+        type: 'audio',
+        data: 'YXVkaW8=',
+        mimeType: 'audio/wav',
+      },
+      {
+        type: 'resource_link',
+        uri: 'file:///tmp/a.txt',
+        name: 'a.txt',
+        description: 'Temporary file',
+        mimeType: 'text/plain',
+      },
+      {
+        type: 'resource',
+        resource: {
+          uri: 'file:///tmp/b.txt',
+          mimeType: 'text/plain',
+          text: 'embedded text',
+        },
+      },
+      {
+        type: 'resource',
+        resource: {
+          uri: 'file:///tmp/c.bin',
+          mimeType: 'application/octet-stream',
+          blob: 'AAEC',
+        },
+      },
+    ])
+  })
+
   test('keeps unknown tool payload blocks inspectable as text', () => {
     const content = __convertToolPayloadToMcpContentForTests({
-      payload: [{ type: 'resource_link', uri: 'file:///tmp/a.txt' }],
+      payload: [{ type: 'custom_content', uri: 'file:///tmp/a.txt' }],
       fallback: 'fallback',
     })
 
     expect(content).toEqual([
       {
         type: 'text',
-        text: '{"type":"resource_link","uri":"file:///tmp/a.txt"}',
+        text: '{"type":"custom_content","uri":"file:///tmp/a.txt"}',
       },
     ])
   })
