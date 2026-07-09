@@ -5,13 +5,51 @@ import { Button } from './ui/button'
 import { Spinner } from './ui/spinner'
 import { Textarea } from './ui/textarea'
 
+type PromptKeyEvent = {
+  key: string
+  shiftKey?: boolean
+  altKey?: boolean
+  ctrlKey?: boolean
+  metaKey?: boolean
+}
+
+type PromptHistoryKeyArgs = PromptKeyEvent & {
+  selectionStart: number | null
+  selectionEnd: number | null
+  valueLength: number
+}
+
+function hasPromptKeyModifier(event: PromptKeyEvent): boolean {
+  return Boolean(
+    event.shiftKey || event.altKey || event.ctrlKey || event.metaKey,
+  )
+}
+
+function shouldSubmitPromptKey(event: PromptKeyEvent): boolean {
+  return event.key === 'Enter' && !event.shiftKey
+}
+
+function getPromptHistoryDirection(
+  args: PromptHistoryKeyArgs,
+): 'previous' | 'next' | null {
+  if (hasPromptKeyModifier(args)) return null
+  if (args.key === 'ArrowUp' && args.selectionStart === 0) return 'previous'
+  if (args.key === 'ArrowDown' && args.selectionEnd === args.valueLength) {
+    return 'next'
+  }
+  return null
+}
+
 export function InputArea(props: {
   value: string
   onChange: (value: string) => void
   onSubmit: () => void
+  onHistoryPrevious?: () => void
+  onHistoryNext?: () => void
   disabled?: boolean
   isSending?: boolean
   controlsId?: string
+  textareaRef?: React.Ref<HTMLTextAreaElement>
 }) {
   const inputId = React.useId()
   const hintId = React.useId()
@@ -19,8 +57,29 @@ export function InputArea(props: {
   const isSubmitDisabled = props.disabled || isBusy || !props.value.trim()
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key !== 'Enter') return
-    if (e.shiftKey) return
+    const historyDirection = getPromptHistoryDirection({
+      key: e.key,
+      shiftKey: e.shiftKey,
+      altKey: e.altKey,
+      ctrlKey: e.ctrlKey,
+      metaKey: e.metaKey,
+      selectionStart: e.currentTarget.selectionStart,
+      selectionEnd: e.currentTarget.selectionEnd,
+      valueLength: e.currentTarget.value.length,
+    })
+
+    if (historyDirection === 'previous' && props.onHistoryPrevious) {
+      e.preventDefault()
+      props.onHistoryPrevious()
+      return
+    }
+    if (historyDirection === 'next' && props.onHistoryNext) {
+      e.preventDefault()
+      props.onHistoryNext()
+      return
+    }
+
+    if (!shouldSubmitPromptKey(e)) return
     e.preventDefault()
     if (isSubmitDisabled) return
     props.onSubmit()
@@ -40,7 +99,8 @@ export function InputArea(props: {
         Prompt
       </label>
       <p id={hintId} className="sr-only">
-        Press Enter to send. Press Shift+Enter for a new line.
+        Press Enter to send. Press Shift+Enter for a new line. Press ArrowUp and
+        ArrowDown at prompt boundaries to move through prompt history.
       </p>
       <div
         aria-hidden="true"
@@ -51,6 +111,7 @@ export function InputArea(props: {
       </div>
       <Textarea
         id={inputId}
+        ref={props.textareaRef}
         name="prompt"
         value={props.value}
         onChange={e => props.onChange(e.target.value)}
@@ -81,4 +142,9 @@ export function InputArea(props: {
       </Button>
     </form>
   )
+}
+
+export const __inputAreaForTests = {
+  getPromptHistoryDirection,
+  shouldSubmitPromptKey,
 }

@@ -2,7 +2,7 @@ import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, test } from 'bun:test'
 
-import { InputArea } from './InputArea'
+import { InputArea, __inputAreaForTests } from './InputArea'
 
 describe('InputArea accessibility', () => {
   test('associates the terminal prompt textarea with a label and shortcut hint', () => {
@@ -28,6 +28,53 @@ describe('InputArea accessibility', () => {
     expect(describedByMatch?.[1]).toBeTruthy()
     expect(controlsMatch?.[1]).toBe('terminal-log')
     expect(html).toContain('Press Enter to send.')
+    expect(html).toContain('ArrowUp')
     expect(html).toContain('aria-hidden="true"')
+  })
+
+  test('classifies terminal prompt keyboard shortcuts without keyCode', () => {
+    expect(__inputAreaForTests.shouldSubmitPromptKey({ key: 'Enter' })).toBe(
+      true,
+    )
+    expect(
+      __inputAreaForTests.shouldSubmitPromptKey({
+        key: 'Enter',
+        shiftKey: true,
+      }),
+    ).toBe(false)
+
+    expect(
+      __inputAreaForTests.getPromptHistoryDirection({
+        key: 'ArrowUp',
+        selectionStart: 0,
+        selectionEnd: 0,
+        valueLength: 8,
+      }),
+    ).toBe('previous')
+    expect(
+      __inputAreaForTests.getPromptHistoryDirection({
+        key: 'ArrowDown',
+        selectionStart: 8,
+        selectionEnd: 8,
+        valueLength: 8,
+      }),
+    ).toBe('next')
+    expect(
+      __inputAreaForTests.getPromptHistoryDirection({
+        key: 'ArrowUp',
+        selectionStart: 2,
+        selectionEnd: 2,
+        valueLength: 8,
+      }),
+    ).toBeNull()
+    expect(
+      __inputAreaForTests.getPromptHistoryDirection({
+        key: 'ArrowDown',
+        ctrlKey: true,
+        selectionStart: 8,
+        selectionEnd: 8,
+        valueLength: 8,
+      }),
+    ).toBeNull()
   })
 })

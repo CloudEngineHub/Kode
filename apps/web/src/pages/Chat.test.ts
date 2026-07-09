@@ -125,6 +125,102 @@ describe('ChatPage event normalization', () => {
     ).toBe(false)
   })
 
+  test('extracts prompt history from user events without duplicating repeats', () => {
+    const events: AgentEvent[] = [
+      {
+        type: 'user',
+        uuid: 'user-1',
+        message: { role: 'user', content: 'first prompt' },
+      },
+      {
+        type: 'assistant',
+        uuid: 'assistant-1',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'reply' }],
+        },
+      },
+      {
+        type: 'user',
+        uuid: 'user-2',
+        message: { role: 'user', content: 'first prompt' },
+      },
+      {
+        type: 'user',
+        uuid: 'user-3',
+        message: {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'second' },
+            { type: 'image', source: {} },
+          ],
+        },
+      },
+    ]
+
+    expect(__chatPageForTests.extractUserPromptHistory(events)).toEqual([
+      'first prompt',
+      'second',
+    ])
+  })
+
+  test('navigates prompt history and restores draft text', () => {
+    const history = ['first', 'second']
+
+    const previous = __chatPageForTests.resolvePromptHistoryNavigation({
+      history,
+      currentValue: 'draft',
+      cursor: null,
+      draftValue: '',
+      direction: 'previous',
+    })
+    expect(previous).toEqual({
+      cursor: 1,
+      value: 'second',
+      draftValue: 'draft',
+    })
+
+    const older = __chatPageForTests.resolvePromptHistoryNavigation({
+      history,
+      currentValue: 'second',
+      cursor: previous!.cursor,
+      draftValue: previous!.draftValue,
+      direction: 'previous',
+    })
+    expect(older).toEqual({
+      cursor: 0,
+      value: 'first',
+      draftValue: 'draft',
+    })
+
+    const newer = __chatPageForTests.resolvePromptHistoryNavigation({
+      history,
+      currentValue: 'first',
+      cursor: older!.cursor,
+      draftValue: older!.draftValue,
+      direction: 'next',
+    })
+    expect(newer).toEqual({
+      cursor: 1,
+      value: 'second',
+      draftValue: 'draft',
+    })
+
+    expect(
+      __chatPageForTests.resolvePromptHistoryNavigation({
+        history,
+        currentValue: 'second',
+        cursor: newer!.cursor,
+        draftValue: newer!.draftValue,
+        direction: 'next',
+      }),
+    ).toEqual({
+      cursor: null,
+      value: 'draft',
+      draftValue: '',
+    })
+  })
+
   test('renders a terminal transcript controlled by the prompt input', () => {
     const html = renderToStaticMarkup(
       React.createElement(ChatPage, {
@@ -151,10 +247,12 @@ describe('ChatPage event normalization', () => {
     expect(html).toContain('role="log"')
     expect(html).toContain('Permission pending')
     expect(html).toContain('Enter')
+    expect(html).toContain('Up/Down')
     expect(html).toContain('/help')
     expect(__chatPageForTests.chatTerminalHints.map(hint => hint.key)).toEqual([
       'Enter',
       'Shift+Enter',
+      'Up/Down',
       '/help',
       '@file',
       'Scroll',
