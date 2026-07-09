@@ -26,6 +26,7 @@ type WebSocketLike = {
 type IncomingMessageEvent = Event & { data?: unknown }
 
 type SessionListMessage = { type: 'session_list'; sessions: Session[] }
+type ConnectionListener = (connected: boolean) => void
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -71,6 +72,7 @@ export class HttpClient implements KodeClient {
   private ws: WebSocketLike | null = null
   private sessionId: string | null = null
   private readonly listeners = new Set<(msg: unknown) => void>()
+  private readonly connectionListeners = new Set<ConnectionListener>()
 
   constructor(
     private readonly options: {
@@ -92,6 +94,7 @@ export class HttpClient implements KodeClient {
     this.ws = null
     this.sessionId = null
     this.listeners.clear()
+    this.emitConnectionChange(false)
   }
 
   private emit(msg: unknown): void {
@@ -99,6 +102,21 @@ export class HttpClient implements KodeClient {
       try {
         listener(msg)
       } catch {}
+    }
+  }
+
+  private emitConnectionChange(connected: boolean): void {
+    for (const listener of this.connectionListeners) {
+      try {
+        listener(connected)
+      } catch {}
+    }
+  }
+
+  onConnectionChange(listener: ConnectionListener): () => void {
+    this.connectionListeners.add(listener)
+    return () => {
+      this.connectionListeners.delete(listener)
     }
   }
 
@@ -133,6 +151,7 @@ export class HttpClient implements KodeClient {
     await new Promise<void>((resolve, reject) => {
       const onOpen = () => {
         cleanup()
+        this.emitConnectionChange(true)
         resolve()
       }
       const onError = () => {
@@ -169,6 +188,7 @@ export class HttpClient implements KodeClient {
 
     ws.addEventListener('close', () => {
       this.ws = null
+      this.emitConnectionChange(false)
     })
   }
 

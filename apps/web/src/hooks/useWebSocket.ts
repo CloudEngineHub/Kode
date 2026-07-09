@@ -23,12 +23,6 @@ export function useWebSocket(args: {
     })
   }, [args.baseUrl, args.token, args.workspaceId, nonce])
 
-  React.useEffect(() => {
-    return () => {
-      client?.disconnect()
-    }
-  }, [client])
-
   const [connected, setConnected] = React.useState(false)
   React.useEffect(() => {
     if (!client) {
@@ -37,10 +31,11 @@ export function useWebSocket(args: {
     }
 
     setConnected(client.isConnected())
-    const id = window.setInterval(() => {
-      setConnected(client.isConnected())
-    }, 500)
-    return () => window.clearInterval(id)
+    const unsubscribe = client.onConnectionChange(setConnected)
+    return () => {
+      unsubscribe()
+      client.disconnect()
+    }
   }, [client])
 
   return { client, connected, restartClient }

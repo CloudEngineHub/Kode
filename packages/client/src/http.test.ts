@@ -129,4 +129,29 @@ describe('HttpClient', () => {
     })
     expect(await iterator.next()).toMatchObject({ done: true })
   })
+
+  test('notifies subscribers when the websocket opens and closes', async () => {
+    FakeWebSocket.instances = []
+    const client = new HttpClient({
+      baseUrl: 'http://localhost:32123',
+      token: 'token',
+      webSocketImpl: FakeWebSocket,
+    })
+    const states: boolean[] = []
+    const unsubscribe = client.onConnectionChange(connected => {
+      states.push(connected)
+    })
+
+    const sessions = client.listSessions()
+    const ws = FakeWebSocket.instances[0]!
+    ws.open()
+    await waitTick()
+    ws.message({ type: 'session_list', sessions: [] })
+    await sessions
+
+    ws.close()
+    unsubscribe()
+
+    expect(states).toEqual([true, false])
+  })
 })
