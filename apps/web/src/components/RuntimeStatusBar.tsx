@@ -1,5 +1,5 @@
 import React from 'react'
-import { Activity, CircleDot, History, Wifi, WifiOff } from 'lucide-react'
+import { Activity, CircleDot, History, Plug, Unplug } from 'lucide-react'
 
 import { cn } from '../lib/utils'
 
@@ -44,15 +44,15 @@ export function RuntimeStatusBar(props: {
   return (
     <div className="hidden min-w-0 items-center gap-2 xl:flex">
       <StatusPill
-        tone={props.connected ? 'success' : 'warn'}
+        tone={props.connected ? 'success' : 'muted'}
         icon={
           props.connected ? (
-            <Wifi className="h-3.5 w-3.5 shrink-0" />
+            <Plug className="h-3.5 w-3.5 shrink-0" />
           ) : (
-            <WifiOff className="h-3.5 w-3.5 shrink-0" />
+            <Unplug className="h-3.5 w-3.5 shrink-0" />
           )
         }
-        label={props.connected ? 'online' : 'offline'}
+        label={props.connected ? 'attached' : 'detached'}
       />
       <StatusPill
         tone={props.running ? 'default' : 'muted'}

@@ -65,6 +65,33 @@ describe('WorkspaceDashboard helpers', () => {
     ).toBe('permission')
   })
 
+  test('distinguishes runtime attachment from backend availability', () => {
+    const detached = __workspaceDashboardForTests.getRuntimePhase({
+      connected: false,
+      running: false,
+      permissionRequest: null,
+    })
+    const attached = __workspaceDashboardForTests.getRuntimePhase({
+      connected: true,
+      running: false,
+      permissionRequest: null,
+    })
+
+    expect(detached).toBe('detached')
+    expect(__workspaceDashboardForTests.phaseLabel(detached)).toBe('Detached')
+    expect(__workspaceDashboardForTests.phaseTone(detached)).toBe('muted')
+    expect(__workspaceDashboardForTests.phaseBadgeVariant(detached)).toBe(
+      'secondary',
+    )
+
+    expect(attached).toBe('attached')
+    expect(__workspaceDashboardForTests.phaseLabel(attached)).toBe('Attached')
+    expect(__workspaceDashboardForTests.phaseTone(attached)).toBe('success')
+    expect(__workspaceDashboardForTests.phaseBadgeVariant(attached)).toBe(
+      'success',
+    )
+  })
+
   test('uses stable compact labels', () => {
     expect(__workspaceDashboardForTests.shortId('1234567890')).toBe('12345678')
     expect(__workspaceDashboardForTests.sessionTitle(null)).toBe('New session')

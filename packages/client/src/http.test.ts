@@ -142,12 +142,25 @@ describe('HttpClient', () => {
       states.push(connected)
     })
 
-    const sessions = client.listSessions()
+    const iterator = client.sendMessage('hello')
+    const first = iterator.next()
     const ws = FakeWebSocket.instances[0]!
     ws.open()
     await waitTick()
-    ws.message({ type: 'session_list', sessions: [] })
-    await sessions
+    ws.message({
+      type: 'result',
+      subtype: 'success',
+      result: 'ok',
+      num_turns: 1,
+      total_cost_usd: 0,
+      duration_ms: 1,
+      duration_api_ms: 0,
+      is_error: false,
+      session_id: 'session',
+      uuid: 'result-1',
+    })
+    await first
+    await iterator.next()
 
     ws.close()
     unsubscribe()
@@ -155,22 +168,74 @@ describe('HttpClient', () => {
     expect(states).toEqual([true, false])
   })
 
-  test('listSessions rejects when the websocket closes before session_list', async () => {
+  test('listSessions reads sessions over HTTP without opening a websocket', async () => {
     FakeWebSocket.instances = []
+    const fetchCalls: Array<{ url: string; headers: Record<string, string> }> =
+      []
+    const client = new HttpClient({
+      baseUrl: 'http://localhost:32123',
+      token: 'token',
+      workspaceId: 'workspace-a',
+      webSocketImpl: FakeWebSocket,
+      fetchImpl: async (input, init) => {
+        fetchCalls.push({
+          url: String(input),
+          headers: init?.headers ?? {},
+        })
+        return Response.json({
+          sessions: [
+            {
+              sessionId: '11111111-1111-4111-8111-111111111111',
+              slug: 'saved-session',
+              customTitle: null,
+              tag: null,
+              summary: null,
+              cwd: '/repo',
+              createdAt: null,
+              modifiedAt: null,
+            },
+          ],
+        })
+      },
+    })
+
+    const sessions = await client.listSessions()
+
+    expect(FakeWebSocket.instances).toHaveLength(0)
+    expect(fetchCalls).toEqual([
+      {
+        url: 'http://localhost:32123/api/sessions?workspace=workspace-a',
+        headers: { authorization: 'Bearer token' },
+      },
+    ])
+    expect(sessions).toHaveLength(1)
+    expect(sessions[0]?.slug).toBe('saved-session')
+  })
+
+  test('listSessions rejects failed HTTP session list responses', async () => {
     const client = new HttpClient({
       baseUrl: 'http://localhost:32123',
       token: 'token',
       webSocketImpl: FakeWebSocket,
+      fetchImpl: async () =>
+        Response.json({ ok: false, error: 'missing' }, { status: 503 }),
     })
 
-    const sessions = client.listSessions()
-    const ws = FakeWebSocket.instances[0]!
-    ws.open()
-    await waitTick()
-    ws.close()
+    await expect(client.listSessions()).rejects.toThrow(
+      'Failed to list sessions (503)',
+    )
+  })
 
-    await expect(sessions).rejects.toThrow(
-      'WebSocket connection closed before session list was received',
+  test('listSessions rejects malformed HTTP session list responses', async () => {
+    const client = new HttpClient({
+      baseUrl: 'http://localhost:32123',
+      token: 'token',
+      webSocketImpl: FakeWebSocket,
+      fetchImpl: async () => Response.json({ sessions: [{ slug: 'missing' }] }),
+    })
+
+    await expect(client.listSessions()).rejects.toThrow(
+      'Invalid sessions response',
     )
   })
 

@@ -203,7 +203,9 @@ export default function App() {
                 'h-2 w-2 shrink-0 rounded-full xl:hidden',
                 connected ? 'bg-emerald-500' : 'bg-muted-foreground/40',
               )}
-              aria-label="Connection status"
+              aria-label={connected ? 'Runtime attached' : 'Runtime detached'}
+              role="status"
+              title={connected ? 'Runtime attached' : 'Runtime detached'}
             />
             <ThemeToggle />
           </div>

@@ -6,11 +6,11 @@ import {
   Clock3,
   GitBranch,
   History,
+  Plug,
   MessageSquareText,
   ShieldQuestion,
   Terminal,
-  Wifi,
-  WifiOff,
+  Unplug,
 } from 'lucide-react'
 
 import type {
@@ -24,7 +24,7 @@ import { cn } from '../lib/utils'
 import { Badge } from './ui/badge'
 import { ScrollArea } from './ui/scroll-area'
 
-type RuntimePhase = 'offline' | 'permission' | 'running' | 'online'
+type RuntimePhase = 'detached' | 'permission' | 'running' | 'attached'
 
 type EventSummary = {
   messages: number
@@ -74,10 +74,10 @@ function getRuntimePhase(args: {
   running: boolean
   permissionRequest: PermissionRequestEvent | null
 }): RuntimePhase {
-  if (!args.connected) return 'offline'
+  if (!args.connected) return 'detached'
   if (args.permissionRequest) return 'permission'
   if (args.running) return 'running'
-  return 'online'
+  return 'attached'
 }
 
 function summarizeAgentEvents(events: AgentEvent[]): EventSummary {
@@ -216,17 +216,25 @@ function getRecentActivity(events: AgentEvent[], limit = 6): ActivityItem[] {
 }
 
 function phaseLabel(phase: RuntimePhase): string {
-  if (phase === 'offline') return 'Offline'
+  if (phase === 'detached') return 'Detached'
   if (phase === 'permission') return 'Needs approval'
   if (phase === 'running') return 'Running'
-  return 'Ready'
+  return 'Attached'
 }
 
 function phaseTone(phase: RuntimePhase): ActivityTone {
-  if (phase === 'offline') return 'danger'
+  if (phase === 'detached') return 'muted'
   if (phase === 'permission') return 'warning'
   if (phase === 'running') return 'default'
   return 'success'
+}
+
+function phaseBadgeVariant(
+  phase: RuntimePhase,
+): React.ComponentProps<typeof Badge>['variant'] {
+  if (phase === 'attached') return 'success'
+  if (phase === 'detached') return 'secondary'
+  return 'secondary'
 }
 
 function ToneDot(props: { tone: ActivityTone }) {
@@ -313,10 +321,7 @@ export function WorkspaceDashboard(props: {
               {props.workspace?.title ?? 'Workspace'}
             </div>
           </div>
-          <Badge
-            variant={phase === 'offline' ? 'danger' : 'secondary'}
-            className="shrink-0"
-          >
+          <Badge variant={phaseBadgeVariant(phase)} className="shrink-0">
             {phaseLabel(phase)}
           </Badge>
         </div>
@@ -328,16 +333,18 @@ export function WorkspaceDashboard(props: {
             <div className="grid gap-2">
               <div className="flex items-start gap-3 rounded-lg bg-background/65 p-3">
                 {props.connected ? (
-                  <Wifi className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
+                  <Plug className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
                 ) : (
-                  <WifiOff className="mt-0.5 h-4 w-4 shrink-0 text-rose-600 dark:text-rose-300" />
+                  <Unplug className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                 )}
                 <div className="min-w-0">
                   <div className="text-sm font-medium">
-                    {props.connected ? 'Connected' : 'Disconnected'}
+                    {props.connected ? 'Runtime attached' : 'Runtime detached'}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    Web UI is attached to the daemon session layer.
+                    {props.connected
+                      ? 'Web UI is receiving live session updates.'
+                      : 'History can load without starting a live runtime.'}
                   </div>
                 </div>
               </div>
@@ -451,15 +458,15 @@ export function WorkspaceDashboard(props: {
                     phaseTone(phase) === 'default' && 'text-primary',
                   )}
                 />
-                <span>UI client: Web workbench</span>
+                <span>Access: Web workbench client</span>
               </div>
               <div className="flex items-center gap-2">
                 <Terminal className="h-3.5 w-3.5" />
-                <span>Backend: daemon session runtime</span>
+                <span>Runtime: daemon agent process</span>
               </div>
               <div className="flex items-center gap-2">
                 <History className="h-3.5 w-3.5" />
-                <span>Session log: history-backed event stream</span>
+                <span>History: session event log over HTTP</span>
               </div>
             </div>
           </Panel>
@@ -472,6 +479,9 @@ export function WorkspaceDashboard(props: {
 export const __workspaceDashboardForTests = {
   getRecentActivity,
   getRuntimePhase,
+  phaseBadgeVariant,
+  phaseLabel,
+  phaseTone,
   sessionTitle,
   shortId,
   summarizeAgentEvents,

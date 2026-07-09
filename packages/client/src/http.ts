@@ -31,22 +31,22 @@ type FetchLike = (
   },
 ) => Promise<Response>
 
-type SessionListMessage = { type: 'session_list'; sessions: Session[] }
 type ConnectionListener = (connected: boolean) => void
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-function isSessionListMessage(value: unknown): value is SessionListMessage {
-  if (!isRecord(value)) return false
-  if (value.type !== 'session_list') return false
-  return Array.isArray(value.sessions)
-}
-
 function isSession(value: unknown): value is Session {
   if (!isRecord(value)) return false
   return typeof value.sessionId === 'string'
+}
+
+function isSessionListResponse(
+  value: unknown,
+): value is { sessions: Session[] } {
+  if (!isRecord(value)) return false
+  return Array.isArray(value.sessions) && value.sessions.every(isSession)
 }
 
 function resolveBaseUrl(baseUrl: string): URL {
@@ -296,50 +296,23 @@ export class HttpClient implements KodeClient {
   }
 
   async listSessions(): Promise<Session[]> {
-    await this.ensureConnected()
-    const ws = this.ws
-
-    return await new Promise<Session[]>((resolve, reject) => {
-      let settled = false
-      let unsubscribe = () => {}
-      let unwatchFailure = () => {}
-
-      const cleanup = () => {
-        unsubscribe()
-        unwatchFailure()
-      }
-      const complete = (sessions: Session[]) => {
-        if (settled) return
-        settled = true
-        cleanup()
-        resolve(sessions)
-      }
-      const fail = (message: string) => {
-        if (settled) return
-        settled = true
-        cleanup()
-        reject(new Error(message))
-      }
-      unwatchFailure = this.watchSocketFailure({
-        ws,
-        onClose: () =>
-          fail('WebSocket connection closed before session list was received'),
-        onError: () =>
-          fail('WebSocket connection error before session list was received'),
-      })
-
-      unsubscribe = this.onMessage(msg => {
-        if (!isSessionListMessage(msg)) return
-        complete(msg.sessions)
-      })
-
-      try {
-        this.send({ type: 'list_sessions' })
-      } catch (error) {
-        cleanup()
-        reject(error)
-      }
+    const url = this.toApiUrl('/api/sessions')
+    const response = await this.getFetchImpl()(url, {
+      headers: {
+        authorization: `Bearer ${this.options.token}`,
+      },
     })
+
+    if (!response.ok) {
+      throw new Error(`Failed to list sessions (${response.status})`)
+    }
+
+    const json: unknown = await response.json()
+    if (!isSessionListResponse(json)) {
+      throw new Error('Invalid sessions response')
+    }
+
+    return json.sessions
   }
 
   async loadSession(sessionId: string): Promise<Session> {
