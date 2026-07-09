@@ -73,6 +73,16 @@ const AssistantEventSchema = z
   })
   .strict()
 
+const StreamEventSchema = z
+  .object({
+    type: z.literal('stream_event'),
+    event: z.unknown(),
+    session_id: z.string(),
+    parent_tool_use_id: z.string().nullable().optional(),
+    uuid: z.string().optional(),
+  })
+  .strict()
+
 const ResultEventSchema = z
   .object({
     type: z.literal('result'),
@@ -135,6 +145,7 @@ export const AgentEventSchema = z.discriminatedUnion('type', [
   SystemEventSchema,
   UserEventSchema,
   AssistantEventSchema,
+  StreamEventSchema,
   ResultEventSchema,
   LogEventSchema,
   PermissionRequestEventSchema,

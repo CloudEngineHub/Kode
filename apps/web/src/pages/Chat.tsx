@@ -12,7 +12,8 @@ function isChatEvent(event: AgentEvent): boolean {
     event.type === 'user' ||
     event.type === 'assistant' ||
     event.type === 'result' ||
-    event.type === 'log'
+    event.type === 'log' ||
+    event.type === 'stream_event'
   )
 }
 

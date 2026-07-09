@@ -1,4 +1,5 @@
 import type { Message as ApiMessage } from '@anthropic-ai/sdk/resources/index.mjs'
+import { randomUUID } from 'node:crypto'
 
 import {
   createUserMessage,
@@ -15,6 +16,7 @@ import { getTotalCost } from '@kode/core/cost-tracker'
 import {
   kodeMessageToSdkMessage,
   makeSdkResultMessage,
+  makeSdkStreamEventMessage,
 } from '#protocol/utils/kodeAgentStreamJson'
 import { setSessionId } from '@kode/core/utils/sessionId'
 import { setKodeAgentSessionForkInfo } from '#protocol/utils/kodeAgentSessionForkInfo'
@@ -47,6 +49,14 @@ function extractFirstAssistantText(message: ApiMessage): string | null {
     }
   }
   return null
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function shouldForwardStreamEvent(event: unknown): boolean {
+  return isRecord(event) && event.type === 'mcp_progress'
 }
 
 export async function handleChatPrompt(args: {
@@ -240,6 +250,20 @@ export async function handleChatPrompt(args: {
     toolPermissionContext: session.toolPermissionContext,
     mcpClients: [],
     shouldAvoidPermissionPrompts: false,
+    onStreamEvent: (event: unknown) => {
+      if (!shouldForwardStreamEvent(event)) return
+      wsSend(
+        makeSdkStreamEventMessage({
+          sessionId: session.sessionId,
+          event,
+          parentToolUseId:
+            isRecord(event) && typeof event.toolUseId === 'string'
+              ? event.toolUseId
+              : null,
+          uuid: randomUUID(),
+        }),
+      )
+    },
   }
 
   let lastAssistant: AssistantMessage | null = null

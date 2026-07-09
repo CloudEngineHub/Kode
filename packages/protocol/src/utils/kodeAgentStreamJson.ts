@@ -1,8 +1,12 @@
-import { makeSdkInitMessage, makeSdkResultMessage } from '../streamJson'
+import {
+  makeSdkInitMessage,
+  makeSdkResultMessage,
+  makeSdkStreamEventMessage,
+} from '../streamJson'
 import type { SdkContentBlock, SdkMessage } from '../streamJson'
 
 export type { SdkMessage }
-export { makeSdkInitMessage, makeSdkResultMessage }
+export { makeSdkInitMessage, makeSdkResultMessage, makeSdkStreamEventMessage }
 
 export type KodeMessage =
   | ({ type: 'progress' } & Record<string, unknown>)

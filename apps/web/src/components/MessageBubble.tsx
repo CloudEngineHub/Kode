@@ -43,7 +43,45 @@ function extractTextFromBlocks(blocks: SdkContentBlock[]): string {
     .join('\n\n')
 }
 
+function formatStreamEvent(event: unknown): string | null {
+  if (!event || typeof event !== 'object' || Array.isArray(event)) return null
+  const record = event as Record<string, unknown>
+  if (record.type !== 'mcp_progress') return null
+
+  const server = typeof record.server === 'string' ? record.server : 'MCP'
+  const tool = typeof record.tool === 'string' ? record.tool : 'tool'
+  const progress =
+    record.progress && typeof record.progress === 'object'
+      ? (record.progress as Record<string, unknown>)
+      : {}
+  const message =
+    typeof progress.message === 'string' && progress.message.trim()
+      ? progress.message.trim()
+      : 'working'
+  const current =
+    typeof progress.progress === 'number' && Number.isFinite(progress.progress)
+      ? progress.progress
+      : null
+  const total =
+    typeof progress.total === 'number' && Number.isFinite(progress.total)
+      ? progress.total
+      : null
+  const amount =
+    current !== null && total !== null
+      ? ` (${current}/${total})`
+      : current !== null
+        ? ` (${current})`
+        : ''
+
+  return `**MCP progress**: \`${server}/${tool}\` ${message}${amount}`
+}
+
 function toBubbleMessage(event: AgentEvent): BubbleMessage | null {
+  if (event.type === 'stream_event') {
+    const text = formatStreamEvent(event.event)
+    return text ? { role: 'assistant', text } : null
+  }
+
   if (event.type === 'log') {
     const level = event.log.level
     const message = event.log.message
