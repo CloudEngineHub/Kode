@@ -142,9 +142,6 @@ function renderPromptInputView(args: {
         statusLine={args.statusLine}
         customStatusLineActive={args.customStatusLineActive}
         statusLinePadding={0}
-        currentMode="default"
-        modeCycleShortcutText="shift+tab"
-        showQuickModelSwitchShortcut={false}
         tokenUsage={tokenUsage}
         textInputColumns={80}
         textInputMaxHeight={1}
@@ -224,6 +221,21 @@ describe('PromptInputView status line layout', () => {
 
     expect(output).toContain(pasteGuardMessage)
     expect(output).not.toContain('[custom-openai] mimo-v2.5-pro')
+  })
+
+  test('renders tool permission state in the status line only once', async () => {
+    const harness = createHarness(
+      renderPromptInputView({
+        customStatusLineActive: false,
+        statusLine: 'Input: Chat · Tools: Plan first (shift+tab)',
+      }),
+    )
+
+    await harness.wait(20)
+    const output = harness.getOutput()
+
+    expect(output).toContain('Tools: Plan first (shift+tab)')
+    expect(output).not.toContain('Tool permissions:')
   })
 
   test('keeps long default status and model info on one bounded row after resize', async () => {

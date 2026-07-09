@@ -169,7 +169,6 @@ export function PromptInput({
   const { cycleMode, currentMode, toolPermissionContext } =
     usePermissionContext()
   const modeCycleShortcut = useMemo(() => getPermissionModeCycleShortcut(), [])
-  const showQuickModelSwitchShortcut = modeCycleShortcut.displayText !== 'alt+m'
 
   const handleExitMessage = useCallback((show: boolean, key?: string) => {
     setExitMessage(prev =>
@@ -1200,9 +1199,6 @@ export function PromptInput({
       statusLine={effectiveStatusLine}
       customStatusLineActive={isStatusLineConfigured}
       statusLinePadding={statusLinePadding}
-      currentMode={currentMode}
-      modeCycleShortcutText={modeCycleShortcut.displayText}
-      showQuickModelSwitchShortcut={showQuickModelSwitchShortcut}
       tokenUsage={tokenUsage}
       textInputColumns={textInputColumns}
       textInputMaxHeight={textInputMaxHeight}

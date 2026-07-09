@@ -4,7 +4,6 @@ import {
   normalizeTerminalDimension,
 } from '#ui-ink/primitives/layout/viewportRows'
 import * as React from 'react'
-import { CompactModeIndicator } from '#ui-ink/components/ModeIndicator'
 import { SentryErrorBoundary } from '#ui-ink/components/SentryErrorBoundary'
 import TextInput from '#ui-ink/components/TextInput'
 import { TokenWarning } from '#ui-ink/components/TokenWarning'
@@ -13,7 +12,6 @@ import {
   formatContextLimit,
   formatTokenCount,
 } from '#ui-ink/utils/tokenDisplay'
-import type { PermissionMode } from '#core/types/PermissionMode'
 import type { Theme } from '#core/utils/theme'
 import type { ClipboardImage } from '#core/utils/image/media'
 import type { PromptMode } from './types'
@@ -89,9 +87,6 @@ export function PromptInputView({
   statusLine,
   customStatusLineActive,
   statusLinePadding,
-  currentMode,
-  modeCycleShortcutText,
-  showQuickModelSwitchShortcut,
   tokenUsage,
   textInputColumns,
   textInputMaxHeight,
@@ -138,9 +133,6 @@ export function PromptInputView({
   statusLine: string | null
   customStatusLineActive: boolean
   statusLinePadding: number
-  currentMode: PermissionMode
-  modeCycleShortcutText: string
-  showQuickModelSwitchShortcut: boolean
   tokenUsage: number
   textInputColumns: number
   textInputMaxHeight: number
@@ -355,11 +347,6 @@ export function PromptInputView({
               />
             )}
           </Box>
-          {!compact && mode === 'prompt' && currentMode !== 'default' && (
-            <Box paddingX={1}>
-              <CompactModeIndicator />
-            </Box>
-          )}
         </Box>
         )}
 

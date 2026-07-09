@@ -674,7 +674,7 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
     expect(h.getOutput()).toContain('SUBMIT_COUNT:1')
   })
 
-  test('shift+tab cycles permission mode and renders CompactModeIndicator', async () => {
+  test('shift+tab cycles permission mode in the prompt status line', async () => {
     const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
     const h = createInkTestHarness(
       <PromptInputHarness conversationKey={conversationKey} />,
@@ -687,8 +687,8 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
     h.stdin.write('\u001B[Z')
     await h.wait(50)
 
-    expect(h.getOutput()).toContain('Plan first')
-    expect(h.getOutput()).toContain('shift+tab to change')
+    expect(h.getOutput()).toContain('Tools: Plan first (shift+tab)')
+    expect(h.getOutput()).not.toContain('Tool permissions:')
   })
 
   test('shift+enter inserts newline (CSI-u)', async () => {
