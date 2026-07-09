@@ -1,6 +1,7 @@
 export type {
   KodeClient,
   RuntimeStatus,
+  SessionAwareKodeClient,
   ToolPermissionDecision,
   ToolPermissionInputUpdate,
 } from './types'

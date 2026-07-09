@@ -84,3 +84,23 @@ export interface KodeClient {
    */
   disconnect(): void
 }
+
+/**
+ * Optional session-aware capabilities exposed by remote clients.
+ *
+ * This is a separate interface so existing in-process `KodeClient`
+ * implementations, including `DirectClient`, remain source compatible.
+ */
+export interface SessionAwareKodeClient extends KodeClient {
+  /** Attach to an existing session and wait for init plus history replay. */
+  attachSession(sessionId: string): Promise<void>
+
+  /** Start a new session and return the id announced by its init event. */
+  startSession(): Promise<string>
+
+  /** Subscribe to all validated agent events for the attached session. */
+  subscribeEvents(listener: (event: AgentEvent) => void): () => void
+
+  /** Return the session id most recently confirmed by the server. */
+  getAttachedSessionId(): string | null
+}

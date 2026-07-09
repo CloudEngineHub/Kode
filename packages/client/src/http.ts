@@ -2,8 +2,8 @@ import type { AgentEvent, Session } from '@kode/protocol'
 import { AgentEventSchema } from '@kode/protocol'
 
 import type {
-  KodeClient,
   RuntimeStatus,
+  SessionAwareKodeClient,
   ToolPermissionDecision,
   ToolPermissionInputUpdate,
 } from './types'
@@ -92,10 +92,17 @@ function safeJsonParse(text: string): unknown {
   }
 }
 
-export class HttpClient implements KodeClient {
+export class HttpClient implements SessionAwareKodeClient {
   private ws: WebSocketLike | null = null
-  private sessionId: string | null = null
-  private readonly listeners = new Set<(msg: unknown) => void>()
+  private desiredSessionId: string | null = null
+  private attachedSessionId: string | null = null
+  private connectPromise: Promise<void> | null = null
+  private connectionEpoch = 0
+  private sendInFlight = false
+  private cancelRequested = false
+  private promptSent = false
+  private cancelPendingSend: (() => void) | null = null
+  private readonly eventListeners = new Set<(event: AgentEvent) => void>()
   private readonly connectionListeners = new Set<ConnectionListener>()
 
   constructor(
@@ -105,6 +112,8 @@ export class HttpClient implements KodeClient {
       workspaceId?: string
       webSocketImpl?: new (url: string) => WebSocketLike
       fetchImpl?: FetchLike
+      connectTimeoutMs?: number
+      historySyncTimeoutMs?: number
     },
   ) {}
 
@@ -113,19 +122,63 @@ export class HttpClient implements KodeClient {
   }
 
   disconnect(): void {
-    try {
-      this.ws?.close()
-    } catch {}
-    this.ws = null
-    this.sessionId = null
-    this.listeners.clear()
-    this.emitConnectionChange(false)
+    this.closeCurrentSocket()
+    this.desiredSessionId = null
+    this.attachedSessionId = null
   }
 
-  private emit(msg: unknown): void {
-    for (const listener of this.listeners) {
+  getAttachedSessionId(): string | null {
+    return this.attachedSessionId
+  }
+
+  subscribeEvents(listener: (event: AgentEvent) => void): () => void {
+    this.eventListeners.add(listener)
+    return () => {
+      this.eventListeners.delete(listener)
+    }
+  }
+
+  async attachSession(sessionId: string): Promise<void> {
+    const requestedSessionId = sessionId.trim()
+    if (!requestedSessionId) {
+      throw new Error('Session id is required')
+    }
+
+    if (this.desiredSessionId !== requestedSessionId) {
+      this.closeCurrentSocket()
+      this.desiredSessionId = requestedSessionId
+      this.attachedSessionId = null
+    }
+
+    await this.ensureConnected()
+
+    if (this.attachedSessionId !== requestedSessionId) {
+      const attached = this.attachedSessionId
+      this.closeCurrentSocket()
+      this.attachedSessionId = null
+      throw new Error(
+        `Server attached unexpected session (${attached ?? 'missing'}; expected ${requestedSessionId})`,
+      )
+    }
+  }
+
+  async startSession(): Promise<string> {
+    this.closeCurrentSocket()
+    this.desiredSessionId = null
+    this.attachedSessionId = null
+
+    await this.ensureConnected()
+
+    if (!this.attachedSessionId) {
+      throw new Error('Server did not initialize a session')
+    }
+    return this.attachedSessionId
+  }
+
+  private emitEvent(event: AgentEvent): void {
+    for (const listener of this.eventListeners) {
       try {
-        listener(msg)
+        listener(event)
       } catch {}
     }
   }
@@ -145,13 +198,6 @@ export class HttpClient implements KodeClient {
     }
   }
 
-  private onMessage(listener: (msg: unknown) => void): () => void {
-    this.listeners.add(listener)
-    return () => {
-      this.listeners.delete(listener)
-    }
-  }
-
   private watchSocketFailure(args: {
     ws: WebSocketLike | null
     onClose: () => void
@@ -161,7 +207,6 @@ export class HttpClient implements KodeClient {
     if (!ws) return () => {}
 
     const onClose = () => {
-      if (this.ws === ws) this.ws = null
       args.onClose()
     }
     const onError = () => {
@@ -179,15 +224,56 @@ export class HttpClient implements KodeClient {
     }
   }
 
-  private async ensureConnected(): Promise<void> {
-    if (this.ws?.readyState === 1) return
+  private closeCurrentSocket(): void {
+    const socket = this.ws
+    const wasConnected = socket?.readyState === 1
 
+    this.connectionEpoch += 1
+    this.connectPromise = null
+    this.ws = null
+
+    try {
+      socket?.close()
+    } catch {}
+
+    if (wasConnected) this.emitConnectionChange(false)
+  }
+
+  private async ensureConnected(): Promise<void> {
+    if (
+      this.ws?.readyState === 1 &&
+      this.attachedSessionId &&
+      this.attachedSessionId === this.desiredSessionId
+    ) {
+      return
+    }
+    if (this.connectPromise) return await this.connectPromise
+
+    const epoch = ++this.connectionEpoch
+    const desiredSessionId = this.desiredSessionId
+    const promise = this.openSocket({ epoch, desiredSessionId })
+    this.connectPromise = promise
+
+    const clearConnectPromise = () => {
+      if (this.connectionEpoch === epoch && this.connectPromise === promise) {
+        this.connectPromise = null
+      }
+    }
+    void promise.then(clearConnectPromise, clearConnectPromise)
+
+    return await promise
+  }
+
+  private async openSocket(args: {
+    epoch: number
+    desiredSessionId: string | null
+  }): Promise<void> {
     const baseUrl = resolveBaseUrl(this.options.baseUrl)
     const wsUrl = toWebSocketUrl({
       baseUrl,
       token: this.options.token,
       workspaceId: this.options.workspaceId,
-      sessionId: this.sessionId ?? undefined,
+      sessionId: args.desiredSessionId ?? undefined,
     })
 
     const WebSocketImpl =
@@ -201,46 +287,138 @@ export class HttpClient implements KodeClient {
     this.ws = ws
 
     await new Promise<void>((resolve, reject) => {
-      const onOpen = () => {
-        cleanup()
-        this.emitConnectionChange(true)
-        resolve()
-      }
-      const onError = () => {
-        cleanup()
-        reject(new Error('WebSocket connection error'))
-      }
+      let opened = false
+      let initialized = false
+      let historyComplete = args.desiredSessionId === null
+      let settled = false
+      let connectTimeout: ReturnType<typeof setTimeout> | null = null
+      let historySyncTimeout: ReturnType<typeof setTimeout> | null = null
 
-      const cleanup = () => {
+      const isCurrentSocket = () =>
+        this.connectionEpoch === args.epoch && this.ws === ws
+
+      const cleanupHandshake = () => {
+        if (connectTimeout) clearTimeout(connectTimeout)
+        if (historySyncTimeout) clearTimeout(historySyncTimeout)
         try {
           ws.removeEventListener?.('open', onOpen)
-          ws.removeEventListener?.('error', onError)
         } catch {}
       }
 
-      ws.addEventListener('open', onOpen, { once: true })
-      ws.addEventListener('error', onError, { once: true })
-    })
+      const completeIfReady = () => {
+        if (settled || !opened || !initialized) return
+        if (connectTimeout) {
+          clearTimeout(connectTimeout)
+          connectTimeout = null
+        }
+        if (!historyComplete) {
+          historySyncTimeout ??= setTimeout(() => {
+            fail(new Error('WebSocket history synchronization timeout'))
+          }, this.options.historySyncTimeoutMs ?? 60_000)
+          return
+        }
+        settled = true
+        cleanupHandshake()
+        resolve()
+      }
 
-    ws.addEventListener('message', ev => {
-      const raw = (ev as IncomingMessageEvent).data
-      const text = typeof raw === 'string' ? raw : String(raw ?? '')
-      const parsed = safeJsonParse(text)
+      const fail = (error: Error) => {
+        if (settled) return
+        settled = true
+        cleanupHandshake()
+        if (isCurrentSocket()) {
+          this.ws = null
+          this.emitConnectionChange(false)
+        }
+        try {
+          ws.close()
+        } catch {}
+        reject(error)
+      }
 
-      const validated = AgentEventSchema.safeParse(parsed)
-      if (validated.success) {
-        const msg = validated.data
-        if (msg.type === 'system' && msg.subtype === 'init') {
-          this.sessionId = msg.session_id ?? null
+      const onMessage = (ev: Event) => {
+        if (!isCurrentSocket()) return
+
+        const raw = (ev as IncomingMessageEvent).data
+        const text = typeof raw === 'string' ? raw : String(raw ?? '')
+        const parsed = safeJsonParse(text)
+        const validated = AgentEventSchema.safeParse(parsed)
+        if (!validated.success) return
+
+        const event = validated.data
+        if (event.type === 'system' && event.subtype === 'init') {
+          const announcedSessionId = event.session_id?.trim() ?? ''
+          if (!announcedSessionId) {
+            fail(new Error('Session init event is missing session_id'))
+            return
+          }
+
+          if (
+            args.desiredSessionId !== null &&
+            announcedSessionId !== args.desiredSessionId
+          ) {
+            fail(
+              new Error(
+                `Server attached unexpected session (${announcedSessionId}; expected ${args.desiredSessionId})`,
+              ),
+            )
+            return
+          }
+
+          this.attachedSessionId = announcedSessionId
+          if (args.desiredSessionId === null) {
+            this.desiredSessionId = announcedSessionId
+          }
+          initialized = true
+        }
+        if (
+          event.type === 'history_end' &&
+          args.desiredSessionId !== null &&
+          event.sessionId === args.desiredSessionId
+        ) {
+          historyComplete = true
+        }
+
+        this.emitEvent(event)
+        completeIfReady()
+      }
+
+      const onOpen = () => {
+        if (!isCurrentSocket()) {
+          fail(new Error('WebSocket connection attempt was superseded'))
+          return
+        }
+        opened = true
+        this.emitConnectionChange(true)
+        completeIfReady()
+      }
+      const onError = () => {
+        fail(new Error('WebSocket connection error'))
+      }
+      const onClose = () => {
+        if (isCurrentSocket()) {
+          this.ws = null
+          this.emitConnectionChange(false)
+        }
+        if (!settled) {
+          fail(
+            new Error(
+              'WebSocket connection closed before session synchronization completed',
+            ),
+          )
         }
       }
 
-      this.emit(parsed)
-    })
+      // Register message handling before `open` so an immediate init event
+      // cannot be lost between the open callback and an awaited continuation.
+      ws.addEventListener('message', onMessage)
+      ws.addEventListener('open', onOpen, { once: true })
+      ws.addEventListener('error', onError)
+      ws.addEventListener('close', onClose)
 
-    ws.addEventListener('close', () => {
-      this.ws = null
-      this.emitConnectionChange(false)
+      connectTimeout = setTimeout(() => {
+        fail(new Error('WebSocket connect timeout'))
+      }, this.options.connectTimeoutMs ?? 5_000)
     })
   }
 
@@ -273,6 +451,13 @@ export class HttpClient implements KodeClient {
   }
 
   cancelRequest(): void {
+    if (this.sendInFlight) {
+      this.cancelRequested = true
+      if (!this.promptSent) {
+        this.cancelPendingSend?.()
+        return
+      }
+    }
     if (!this.ws || this.ws.readyState !== 1) return
     this.send({ type: 'cancel' })
   }
@@ -380,68 +565,96 @@ export class HttpClient implements KodeClient {
   }
 
   async *sendMessage(message: string): AsyncGenerator<AgentEvent> {
-    await this.ensureConnected()
-    const ws = this.ws
-
-    const queue: AgentEvent[] = []
-    let resolveNext: (() => void) | null = null
-    let done = false
-    let streamError: Error | null = null
-
-    const wake = () => {
-      if (!resolveNext) return
-      const r = resolveNext
-      resolveNext = null
-      r()
+    if (this.sendInFlight) {
+      throw new Error('Another message is already in flight for this client')
     }
-
-    const unsubscribe = this.onMessage(msg => {
-      const validated = AgentEventSchema.safeParse(msg)
-      if (!validated.success) return
-
-      const event = validated.data
-      queue.push(event)
-
-      if (event.type === 'result') {
-        done = true
-      }
-
-      wake()
-    })
-
-    const failStream = (message: string) => {
-      if (done) return
-      streamError = new Error(message)
-      done = true
-      wake()
-    }
-    const unwatchFailure = this.watchSocketFailure({
-      ws,
-      onClose: () =>
-        failStream('WebSocket connection closed before the response completed'),
-      onError: () =>
-        failStream('WebSocket connection error before the response completed'),
-    })
+    this.sendInFlight = true
+    this.cancelRequested = false
+    this.promptSent = false
+    let cancelPendingSend: (() => void) | null = null
 
     try {
-      this.send({ type: 'prompt', prompt: message })
+      const cancelled = new Promise<'cancelled'>(resolve => {
+        cancelPendingSend = () => resolve('cancelled')
+        this.cancelPendingSend = cancelPendingSend
+      })
+      const connected = this.ensureConnected().then(() => 'connected' as const)
+      const connectionOutcome = await Promise.race([connected, cancelled])
+      if (connectionOutcome === 'cancelled') return
+      if (this.cancelPendingSend === cancelPendingSend) {
+        this.cancelPendingSend = null
+      }
+      if (this.cancelRequested) return
+      const ws = this.ws
 
-      while (!done || queue.length > 0) {
-        if (queue.length === 0) {
-          if (streamError) throw streamError
-          await new Promise<void>(resolve => {
-            resolveNext = resolve
-          })
-          continue
+      const queue: AgentEvent[] = []
+      let resolveNext: (() => void) | null = null
+      let done = false
+      let streamError: Error | null = null
+
+      const wake = () => {
+        if (!resolveNext) return
+        const r = resolveNext
+        resolveNext = null
+        r()
+      }
+
+      const unsubscribe = this.subscribeEvents(event => {
+        queue.push(event)
+
+        if (event.type === 'result') {
+          done = true
         }
 
-        const next = queue.shift()
-        if (next) yield next
+        wake()
+      })
+
+      const failStream = (failureMessage: string) => {
+        if (done) return
+        streamError = new Error(failureMessage)
+        done = true
+        wake()
       }
-      if (streamError) throw streamError
+      const unwatchFailure = this.watchSocketFailure({
+        ws,
+        onClose: () =>
+          failStream(
+            'WebSocket connection closed before the response completed',
+          ),
+        onError: () =>
+          failStream(
+            'WebSocket connection error before the response completed',
+          ),
+      })
+
+      try {
+        this.send({ type: 'prompt', prompt: message })
+        this.promptSent = true
+
+        while (!done || queue.length > 0) {
+          if (queue.length === 0) {
+            if (streamError) throw streamError
+            await new Promise<void>(resolve => {
+              resolveNext = resolve
+            })
+            continue
+          }
+
+          const next = queue.shift()
+          if (next) yield next
+        }
+        if (streamError) throw streamError
+      } finally {
+        unsubscribe()
+        unwatchFailure()
+      }
     } finally {
-      unsubscribe()
-      unwatchFailure()
+      if (this.cancelPendingSend === cancelPendingSend) {
+        this.cancelPendingSend = null
+      }
+      this.promptSent = false
+      this.cancelRequested = false
+      this.sendInFlight = false
     }
   }
 }
