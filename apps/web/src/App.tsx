@@ -261,6 +261,7 @@ export default function App() {
                 events={chat.events}
                 input={chat.input}
                 onInputChange={chat.setInput}
+                onPasteText={chat.insertPastedText}
                 onSend={() => void chat.send()}
                 disabled={!client}
                 sending={chat.sending}

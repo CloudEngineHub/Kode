@@ -6,6 +6,12 @@ import type {
   PermissionRequestEvent,
   Session,
 } from '@kode/protocol'
+import {
+  expandWebPastedTextPlaceholders,
+  insertWebPastedTextPlaceholder,
+  retainReferencedWebPastedTextSegments,
+  type WebPastedTextSegment,
+} from '../lib/pastedText'
 
 function isPermissionRequest(
   event: AgentEvent,
@@ -40,6 +46,11 @@ export function useChat(args: {
   permissionRequest: PermissionRequestEvent | null
   input: string
   setInput: (v: string) => void
+  insertPastedText: (args: {
+    text: string
+    selectionStart: number | null
+    selectionEnd: number | null
+  }) => { cursorOffset: number } | null
   sending: boolean
   send: () => Promise<void>
   startNewSession: () => void
@@ -55,6 +66,9 @@ export function useChat(args: {
     React.useState<PermissionRequestEvent | null>(null)
   const [input, setInput] = React.useState('')
   const [sending, setSending] = React.useState(false)
+  const inputRef = React.useRef('')
+  const pastedTextCounterRef = React.useRef(1)
+  const pastedTextSegmentsRef = React.useRef<WebPastedTextSegment[]>([])
   const eventBufferRef = React.useRef<AgentEvent[]>([])
   const eventFlushTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(
     null,
@@ -114,6 +128,9 @@ export function useChat(args: {
     setSelectedSessionId(null)
     setEvents([])
     setPermissionRequest(null)
+    inputRef.current = ''
+    pastedTextCounterRef.current = 1
+    pastedTextSegmentsRef.current = []
     setInput('')
     void refreshSessions()
   }, [args.client, args.resetKey, clearBufferedEvents, refreshSessions])
@@ -153,10 +170,52 @@ export function useChat(args: {
     [],
   )
 
+  const setInputValue = React.useCallback((value: string) => {
+    inputRef.current = value
+    pastedTextSegmentsRef.current = retainReferencedWebPastedTextSegments({
+      input: value,
+      pastedTexts: pastedTextSegmentsRef.current,
+    })
+    setInput(value)
+  }, [])
+
+  const insertPastedText = React.useCallback(
+    (paste: {
+      text: string
+      selectionStart: number | null
+      selectionEnd: number | null
+    }) => {
+      const result = insertWebPastedTextPlaceholder({
+        input: inputRef.current,
+        text: paste.text,
+        id: pastedTextCounterRef.current,
+        selectionStart: paste.selectionStart,
+        selectionEnd: paste.selectionEnd,
+      })
+      pastedTextCounterRef.current += 1
+      inputRef.current = result.input
+      pastedTextSegmentsRef.current = [
+        ...retainReferencedWebPastedTextSegments({
+          input: result.input,
+          pastedTexts: pastedTextSegmentsRef.current,
+        }),
+        result.segment,
+      ]
+      setInput(result.input)
+      return { cursorOffset: result.cursorOffset }
+    },
+    [],
+  )
+
   const send = React.useCallback(async () => {
-    const text = input.trim()
+    const text = expandWebPastedTextPlaceholders({
+      input: inputRef.current,
+      pastedTexts: pastedTextSegmentsRef.current,
+    }).trim()
     if (!text || !args.client || sending) return
 
+    inputRef.current = ''
+    pastedTextSegmentsRef.current = []
     setInput('')
     setSending(true)
     setPermissionRequest(null)
@@ -177,14 +236,7 @@ export function useChat(args: {
       setSending(false)
       void refreshSessions()
     }
-  }, [
-    args.client,
-    enqueueEvent,
-    flushBufferedEvents,
-    input,
-    refreshSessions,
-    sending,
-  ])
+  }, [args.client, enqueueEvent, flushBufferedEvents, refreshSessions, sending])
 
   return {
     sessions,
@@ -192,7 +244,8 @@ export function useChat(args: {
     events,
     permissionRequest,
     input,
-    setInput,
+    setInput: setInputValue,
+    insertPastedText,
     sending,
     send,
     startNewSession,

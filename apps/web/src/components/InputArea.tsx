@@ -4,6 +4,7 @@ import { SendHorizontal } from 'lucide-react'
 import { Button } from './ui/button'
 import { Spinner } from './ui/spinner'
 import { Textarea } from './ui/textarea'
+import { shouldFoldWebTextPaste } from '../lib/pastedText'
 
 type PromptKeyEvent = {
   key: string
@@ -49,6 +50,11 @@ export function InputArea(props: {
   value: string
   onChange: (value: string) => void
   onSubmit: () => void
+  onPasteText?: (args: {
+    text: string
+    selectionStart: number | null
+    selectionEnd: number | null
+  }) => { cursorOffset: number } | null
   onHistoryPrevious?: () => void
   onHistoryNext?: () => void
   disabled?: boolean
@@ -102,6 +108,27 @@ export function InputArea(props: {
     props.onSubmit()
   }
 
+  const onPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (!props.onPasteText) return
+    const text = e.clipboardData.getData('text/plain')
+    if (!text || !shouldFoldWebTextPaste(text)) return
+
+    const cursor = props.onPasteText({
+      text,
+      selectionStart: e.currentTarget.selectionStart,
+      selectionEnd: e.currentTarget.selectionEnd,
+    })
+    if (!cursor) return
+
+    e.preventDefault()
+    window.requestAnimationFrame(() => {
+      e.currentTarget.setSelectionRange(
+        cursor.cursorOffset,
+        cursor.cursorOffset,
+      )
+    })
+  }
+
   return (
     <form
       aria-label="Chat prompt"
@@ -133,6 +160,7 @@ export function InputArea(props: {
         value={props.value}
         onChange={e => props.onChange(e.target.value)}
         onKeyDown={onKeyDown}
+        onPaste={onPaste}
         aria-controls={props.controlsId}
         aria-describedby={hintId}
         placeholder={isBusy ? 'compose next prompt...' : 'type prompt...'}

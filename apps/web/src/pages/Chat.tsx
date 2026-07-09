@@ -288,6 +288,11 @@ export function ChatPage(props: {
   events: AgentEvent[]
   input: string
   onInputChange: (v: string) => void
+  onPasteText?: (args: {
+    text: string
+    selectionStart: number | null
+    selectionEnd: number | null
+  }) => { cursorOffset: number } | null
   onSend: () => void
   disabled?: boolean
   sending?: boolean
@@ -445,6 +450,7 @@ export function ChatPage(props: {
             value={props.input}
             onChange={handlePromptChange}
             onSubmit={handlePromptSubmit}
+            onPasteText={props.onPasteText}
             onHistoryPrevious={() => navigatePromptHistory('previous')}
             onHistoryNext={() => navigatePromptHistory('next')}
             disabled={props.disabled}
