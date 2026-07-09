@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test'
-import type { TextBlockParam } from '@anthropic-ai/sdk/resources/index.mjs'
+import type {
+  TextBlockParam,
+  ToolUseBlockParam,
+} from '@anthropic-ai/sdk/resources/index.mjs'
 import {
   createAssistantMessage,
   createUserMessage,
@@ -82,5 +85,46 @@ describe('incremental message normalization', () => {
     const last = next.normalizedMessages.at(-1)
     const block = last?.type === 'assistant' ? last.message.content[0] : null
     expect(block?.type === 'text' ? block.text : '').toBe('tail after')
+  })
+
+  test('tracks normalized prefix lengths when one source message splits into blocks', () => {
+    const baseAssistant = createAssistantMessage('ignored')
+    const assistant: Message = {
+      ...baseAssistant,
+      message: {
+        ...baseAssistant.message,
+        content: [
+          { type: 'text', text: 'before tool', citations: [] },
+          { type: 'tool_use', id: 'tool-1', name: 'Read', input: {} },
+        ] as Array<TextBlockParam | ToolUseBlockParam>,
+      },
+    }
+    const messages: Message[] = [
+      createUserMessage('hello'),
+      assistant,
+      makeAssistantText('tail'),
+    ]
+
+    const first = normalizeMessagesIncremental({
+      messages,
+      previous: null,
+      tailWindow: 1,
+    })
+
+    expect(first.normalizedPrefixLengths).toEqual([1, 3, 4])
+    expect(first.normalizedMessages).toEqual(normalizeMessages(messages))
+
+    const nextMessages = [...messages, makeAssistantText('new tail')]
+    const next = normalizeMessagesIncremental({
+      messages: nextMessages,
+      previous: first,
+      tailWindow: 1,
+    })
+
+    expect(next.normalizedPrefixLengths).toEqual([1, 3, 4, 5])
+    expect(next.normalizedMessages).toEqual(normalizeMessages(nextMessages))
+    expect(next.normalizedBySourceIndex[1]).toBe(
+      first.normalizedBySourceIndex[1],
+    )
   })
 })

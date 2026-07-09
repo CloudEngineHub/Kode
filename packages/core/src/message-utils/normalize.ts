@@ -66,6 +66,7 @@ export type IncrementalNormalizeMessagesCache = {
   sourceMessages: Message[]
   normalizedBySourceIndex: NormalizedMessage[][]
   normalizedMessages: NormalizedMessage[]
+  normalizedPrefixLengths: number[]
 }
 
 const DEFAULT_INCREMENTAL_NORMALIZE_TAIL_WINDOW = 8
@@ -161,15 +162,33 @@ export function normalizeMessagesIncremental(args: {
 
   const normalizedBySourceIndex =
     previous?.normalizedBySourceIndex.slice(0, reusablePrefixLength) ?? []
+  const normalizedPrefixLengths =
+    previous?.normalizedPrefixLengths?.slice(0, reusablePrefixLength) ?? []
+
+  const reusableNormalizedPrefixLength =
+    reusablePrefixLength > 0
+      ? (previous?.normalizedPrefixLengths?.[reusablePrefixLength - 1] ??
+        normalizedBySourceIndex.reduce((sum, items) => sum + items.length, 0))
+      : 0
+  const normalizedMessages =
+    previous && reusableNormalizedPrefixLength > 0
+      ? previous.normalizedMessages.slice(0, reusableNormalizedPrefixLength)
+      : []
+  let normalizedCount = reusableNormalizedPrefixLength
 
   for (let i = reusablePrefixLength; i < args.messages.length; i++) {
     const message = args.messages[i]
-    normalizedBySourceIndex[i] = message ? normalizeMessage(message) : []
+    const normalized = message ? normalizeMessage(message) : []
+    normalizedBySourceIndex[i] = normalized
+    normalizedCount += normalized.length
+    normalizedPrefixLengths[i] = normalizedCount
+    normalizedMessages.push(...normalized)
   }
 
   return {
     sourceMessages: args.messages,
     normalizedBySourceIndex,
-    normalizedMessages: normalizedBySourceIndex.flat(),
+    normalizedMessages,
+    normalizedPrefixLengths,
   }
 }
