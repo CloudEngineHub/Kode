@@ -15,6 +15,7 @@ type TestHarness = {
 
 const mounted: TestHarness[] = []
 const firstLogoLine = ASCII_LOGO.trim().split(/\r?\n/)[0]
+const firstLogoPrefix = firstLogoLine.slice(0, 24)
 const productNameFallback = `${PRODUCT_NAME.toUpperCase()} CLI`
 
 afterEach(() => {
@@ -66,12 +67,15 @@ describe('Logo', () => {
     await harness.wait(20)
     const output = harness.getOutput().trimEnd()
 
-    expect(output).toContain(firstLogoLine)
+    expect(output).toContain(firstLogoPrefix)
     expect(output).not.toContain(productNameFallback)
     expect(output).toContain('/help')
     expect(output).toContain('MCP Servers')
     expect(output).toContain('codegraph')
     expect(output).not.toMatch(/(?:\n\s*){4,}/)
+    expect(
+      Math.max(...output.split(/\r?\n/).map(line => line.length)),
+    ).toBeLessThanOrEqual(40)
   })
 
   test('keeps the full logo on standard 80x24 terminals', async () => {
@@ -124,7 +128,7 @@ describe('Logo', () => {
     )
 
     await harness.wait(20)
-    expect(harness.getOutput()).toContain(firstLogoLine)
+    expect(harness.getOutput()).toContain(firstLogoPrefix)
 
     harness.rerender(
       <Logo mcpClients={[]} terminalColumns={100} terminalRows={30} />,
@@ -132,7 +136,7 @@ describe('Logo', () => {
     await harness.wait(20)
 
     const output = harness.getOutput()
-    expect(output).toContain(firstLogoLine)
+    expect(output).toContain(firstLogoPrefix)
     expect(output).not.toContain(productNameFallback)
   })
 })

@@ -8,6 +8,7 @@ const DEFAULT_TERMINAL_COLUMNS = 80
 const DEFAULT_TERMINAL_ROWS = 24
 const FULL_LOGO_MIN_ROWS = 10
 const DISPLAY_ASCII_LOGO = ASCII_LOGO.trimStart()
+const DISPLAY_ASCII_LOGO_LINES = DISPLAY_ASCII_LOGO.trimEnd().split(/\r?\n/)
 
 function normalizeDimension(value: number | undefined, fallback: number) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return fallback
@@ -44,7 +45,7 @@ export function Logo({
   )
 
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" width={columns} overflow="hidden">
       {/* Update notice at very top */}
       {updateBannerVersion && (
         <Box marginBottom={1}>
@@ -56,8 +57,16 @@ export function Logo({
       )}
 
       {/* ASCII Logo */}
-      <Box flexDirection="column">
-        <Text color={theme.kode}>{DISPLAY_ASCII_LOGO}</Text>
+      <Box flexDirection="column" width={columns} overflow="hidden">
+        {DISPLAY_ASCII_LOGO_LINES.map((line, index) => (
+          <Text
+            key={`logo-line-${index}`}
+            color={theme.kode}
+            wrap="truncate-end"
+          >
+            {line}
+          </Text>
+        ))}
       </Box>
 
       {/* Quick tips - single line */}
