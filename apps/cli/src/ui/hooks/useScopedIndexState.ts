@@ -62,26 +62,34 @@ export function useScopedIndexState({
   const [index, setIndexState] = useState(initial)
   const itemCountRef = useRef(itemCount)
   const scopeRef = useRef(scope)
+  const indexRef = useRef(index)
   const previousScopeRef = useRef(scope)
 
+  itemCountRef.current = itemCount
+  scopeRef.current = scope
+  indexRef.current = index
+
   useEffect(() => {
-    itemCountRef.current = itemCount
-    scopeRef.current = scope
-    setIndexState(prev => {
-      const scopeChanged = previousScopeRef.current !== scope
-      const next = scopeChanged
-        ? getScopedInitialIndex({ scope, initialIndex, itemCount, ttlMs })
-        : clampIndex(prev, itemCount)
-      previousScopeRef.current = scope
-      rememberScopedIndex(scope, next)
-      return next
-    })
+    const scopeChanged = previousScopeRef.current !== scope
+    previousScopeRef.current = scope
+
+    const currentIndex = indexRef.current
+    const next = scopeChanged
+      ? getScopedInitialIndex({ scope, initialIndex, itemCount, ttlMs })
+      : clampIndex(currentIndex, itemCount)
+
+    rememberScopedIndex(scope, next)
+    if (next === currentIndex) return
+
+    indexRef.current = next
+    setIndexState(next)
   }, [initialIndex, itemCount, scope, ttlMs])
 
   const setIndex = useCallback<Dispatch<SetStateAction<number>>>(next => {
     setIndexState(prev => {
       const raw = typeof next === 'function' ? next(prev) : next
       const clamped = clampIndex(raw, itemCountRef.current)
+      indexRef.current = clamped
       rememberScopedIndex(scopeRef.current, clamped)
       return clamped
     })

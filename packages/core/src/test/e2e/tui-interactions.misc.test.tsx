@@ -1486,6 +1486,70 @@ describe('TUI E2E regression (Ink render): Misc', () => {
     expect(focused).toBe('third')
   })
 
+  test('Scoped index: keep-alive initial index churn does not pull focus backward', async () => {
+    let focused = ''
+    const scope = `test:scoped-index-initial-churn:${Date.now()}:${Math.random()}`
+
+    function ScopedIndexChurnList(): React.ReactNode {
+      const items = ['first', 'second', 'third']
+      const [tick, setTick] = useState(0)
+
+      useEffect(() => {
+        const intervalId = setInterval(() => {
+          setTick(prev => prev + 1)
+        }, 20)
+        return () => clearInterval(intervalId)
+      }, [])
+
+      const [selectedIndex, setSelectedIndex] = useScopedIndexState({
+        scope,
+        itemCount: items.length,
+        initialIndex: tick % 2,
+      })
+
+      useEffect(() => {
+        focused = items[selectedIndex] ?? ''
+      }, [items, selectedIndex])
+
+      useKeypress((_, key) => {
+        if (!key.downArrow) return
+        setSelectedIndex(prev => Math.min(items.length - 1, prev + 1))
+        return true
+      })
+
+      return (
+        <Box flexDirection="column">
+          {items.map((item, index) => (
+            <Text key={item}>
+              {index === selectedIndex ? '>' : ' '} {item}
+            </Text>
+          ))}
+        </Box>
+      )
+    }
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <ScopedIndexChurnList />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(40)
+    expect(focused).toBe('first')
+
+    h.stdin.write('\u001B[B')
+    await h.wait(40)
+    expect(focused).toBe('second')
+
+    h.stdin.write('\u001B[B')
+    await h.wait(40)
+    expect(focused).toBe('third')
+
+    await h.wait(120)
+    expect(focused).toBe('third')
+  })
+
   test('KeypressProvider: priority can fall back to default on rerender', async () => {
     const handledBy: string[] = []
 
