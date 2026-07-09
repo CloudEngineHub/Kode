@@ -37,6 +37,19 @@
     --kode-shadow-md: 0 4px 12px hsl(220 25% 10% / 0.08);
     --kode-border-subtle: hsl(var(--border) / 0.72);
 
+    /* Terminal workbench */
+    --kode-terminal-bg: 220 32% 8%;
+    --kode-terminal-panel: 220 24% 11%;
+    --kode-terminal-elevated: 220 20% 14%;
+    --kode-terminal-border: 188 30% 28%;
+    --kode-terminal-text: 190 28% 88%;
+    --kode-terminal-muted: 204 12% 60%;
+    --kode-terminal-prompt: 188 68% 52%;
+    --kode-terminal-user: 154 58% 70%;
+    --kode-terminal-assistant: 205 90% 82%;
+    --kode-terminal-tool: 38 84% 68%;
+    --kode-terminal-error: 0 82% 74%;
+
     /* Motion */
     --kode-duration-fast: 120ms;
     --kode-duration-normal: 180ms;

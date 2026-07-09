@@ -16,9 +16,11 @@ import {
 } from './ui/accordion'
 
 type Role = 'user' | 'assistant'
+type MessageKind = 'user' | 'assistant' | 'tool' | 'result' | 'error' | 'log'
 
 type BubbleMessage = {
   role: Role
+  kind: MessageKind
   text: string
   blocks?: SdkContentBlock[]
 }
@@ -79,13 +81,17 @@ function formatStreamEvent(event: unknown): string | null {
 function toBubbleMessage(event: AgentEvent): BubbleMessage | null {
   if (event.type === 'stream_event') {
     const text = formatStreamEvent(event.event)
-    return text ? { role: 'assistant', text } : null
+    return text ? { role: 'assistant', kind: 'tool', text } : null
   }
 
   if (event.type === 'log') {
     const level = event.log.level
     const message = event.log.message
-    return { role: 'assistant', text: `\`[${level}]\` ${message}` }
+    return {
+      role: 'assistant',
+      kind: level === 'error' ? 'error' : 'log',
+      text: `\`[${level}]\` ${message}`,
+    }
   }
 
   if (event.type === 'result') {
@@ -102,36 +108,93 @@ function toBubbleMessage(event: AgentEvent): BubbleMessage | null {
         ? `\n\n${event.result.trim()}`
         : ''
 
-    return { role: 'assistant', text: `${header}\n${details}${resultText}` }
+    return {
+      role: 'assistant',
+      kind: event.is_error ? 'error' : 'result',
+      text: `${header}\n${details}${resultText}`,
+    }
   }
 
   if (event.type === 'user') {
     const content = event.message.content
-    if (typeof content === 'string') return { role: 'user', text: content }
+    if (typeof content === 'string') {
+      return { role: 'user', kind: 'user', text: content }
+    }
     if (isSdkBlockArray(content)) {
       return {
         role: 'user',
+        kind: 'user',
         text: extractTextFromBlocks(content),
         blocks: content,
       }
     }
-    return { role: 'user', text: '' }
+    return { role: 'user', kind: 'user', text: '' }
   }
 
   if (event.type === 'assistant') {
     const content = event.message.content
-    if (typeof content === 'string') return { role: 'assistant', text: content }
+    if (typeof content === 'string') {
+      return { role: 'assistant', kind: 'assistant', text: content }
+    }
     if (!isSdkBlockArray(content)) {
-      return { role: 'assistant', text: '' }
+      return { role: 'assistant', kind: 'assistant', text: '' }
     }
     return {
       role: 'assistant',
+      kind: 'assistant',
       text: extractTextFromBlocks(content),
       blocks: content,
     }
   }
 
   return null
+}
+
+function terminalKindMeta(kind: MessageKind): {
+  label: string
+  marker: string
+  className: string
+} {
+  if (kind === 'user') {
+    return {
+      label: 'user',
+      marker: '$',
+      className: 'text-[hsl(var(--kode-terminal-user))]',
+    }
+  }
+  if (kind === 'tool') {
+    return {
+      label: 'tool',
+      marker: '>',
+      className: 'text-[hsl(var(--kode-terminal-tool))]',
+    }
+  }
+  if (kind === 'result') {
+    return {
+      label: 'result',
+      marker: '=',
+      className: 'text-[hsl(var(--kode-terminal-user))]',
+    }
+  }
+  if (kind === 'error') {
+    return {
+      label: 'error',
+      marker: '!',
+      className: 'text-[hsl(var(--kode-terminal-error))]',
+    }
+  }
+  if (kind === 'log') {
+    return {
+      label: 'log',
+      marker: '#',
+      className: 'text-[hsl(var(--kode-terminal-muted))]',
+    }
+  }
+  return {
+    label: 'kode',
+    marker: '>',
+    className: 'text-[hsl(var(--kode-terminal-assistant))]',
+  }
 }
 
 function ToolBlockCard(props: { block: SdkContentBlock }) {
@@ -148,18 +211,20 @@ function ToolBlockCard(props: { block: SdkContentBlock }) {
         : `Block: ${type}`
 
   return (
-    <Card className="border-muted/60 shadow-none">
+    <Card className="border-[hsl(var(--kode-terminal-border))] bg-[hsl(var(--kode-terminal-panel))] text-[hsl(var(--kode-terminal-text))] shadow-none">
       <CardHeader className="py-3">
-        <CardTitle className="flex items-center gap-2 text-sm font-medium">
+        <CardTitle className="flex items-center gap-2 font-mono text-sm font-medium">
           <Badge variant="secondary">{type}</Badge>
           <span className="truncate">{title}</span>
           {id ? (
-            <span className="ml-auto text-xs text-muted-foreground">{id}</span>
+            <span className="ml-auto text-xs text-[hsl(var(--kode-terminal-muted))]">
+              {id}
+            </span>
           ) : null}
         </CardTitle>
       </CardHeader>
       <CardContent className="pb-4 pt-0 text-xs">
-        <pre className="max-h-64 overflow-auto rounded-md bg-muted/45 p-3 leading-relaxed">
+        <pre className="max-h-64 overflow-auto rounded-md border border-[hsl(var(--kode-terminal-border))] bg-[hsl(var(--kode-terminal-bg))] p-3 leading-relaxed text-[hsl(var(--kode-terminal-text))]">
           {JSON.stringify(input ?? props.block, null, 2)}
         </pre>
       </CardContent>
@@ -184,7 +249,7 @@ function renderBlocks(blocks: SdkContentBlock[] | undefined) {
         const key = id || `${block.type}-${idx}`
         return (
           <AccordionItem value={key} key={key} className="border-none">
-            <AccordionTrigger className="py-2 text-sm">
+            <AccordionTrigger className="py-2 font-mono text-sm text-[hsl(var(--kode-terminal-text))]">
               <span className="flex min-w-0 items-center gap-2">
                 <Badge variant="outline">{block.type}</Badge>
                 <span className="truncate">
@@ -208,14 +273,14 @@ function MarkdownBody(props: { text: string }) {
       remarkPlugins={MARKDOWN_PLUGINS}
       components={{
         pre: ({ children }) => (
-          <pre className="my-3 max-h-96 overflow-auto rounded-md bg-muted/65 p-3 text-xs leading-relaxed">
+          <pre className="my-3 max-h-96 overflow-auto rounded-md border border-[hsl(var(--kode-terminal-border))] bg-[hsl(var(--kode-terminal-bg))] p-3 text-xs leading-relaxed text-[hsl(var(--kode-terminal-text))]">
             {children}
           </pre>
         ),
         code: ({ className, children, ...codeProps }) => (
           <code
             className={cn(
-              'rounded bg-muted/65 px-1 py-0.5 font-mono text-[0.92em]',
+              'rounded bg-[hsl(var(--kode-terminal-elevated))] px-1 py-0.5 font-mono text-[0.92em] text-[hsl(var(--kode-terminal-text))]',
               className,
             )}
             {...codeProps}
@@ -229,12 +294,12 @@ function MarkdownBody(props: { text: string }) {
           </div>
         ),
         th: ({ children }) => (
-          <th className="border border-border bg-muted/45 px-2 py-1 text-left font-medium">
+          <th className="border border-[hsl(var(--kode-terminal-border))] bg-[hsl(var(--kode-terminal-elevated))] px-2 py-1 text-left font-medium">
             {children}
           </th>
         ),
         td: ({ children }) => (
-          <td className="border border-border px-2 py-1 align-top">
+          <td className="border border-[hsl(var(--kode-terminal-border))] px-2 py-1 align-top">
             {children}
           </td>
         ),
@@ -255,39 +320,55 @@ export const MessageBubble = React.memo(function MessageBubble(props: {
   )
 
   if (!msg) return null
-  const isUser = msg.role === 'user'
-  const bubbleClass = cn(
-    'max-w-[min(760px,100%)] rounded-lg px-4 py-3 text-sm leading-relaxed shadow-sm shadow-black/5',
-    isUser
-      ? 'bg-primary text-primary-foreground'
-      : 'border border-border bg-card text-foreground',
-  )
+  const meta = terminalKindMeta(msg.kind)
 
   return (
-    <div
-      className={cn('flex w-full', isUser ? 'justify-end' : 'justify-start')}
-    >
-      <div className="flex w-full max-w-[min(860px,100%)] flex-col gap-2">
-        <div className={bubbleClass}>
-          {msg.text ? (
-            <div className="prose prose-sm max-w-none dark:prose-invert prose-p:my-2 prose-ul:my-2 prose-ol:my-2">
-              <MarkdownBody text={msg.text} />
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {isUser ? (
-                <span className="text-muted-foreground">Empty message</span>
-              ) : (
-                <>
-                  <Skeleton className="h-4 w-40 bg-muted/60" />
-                  <Skeleton className="h-4 w-56 bg-muted/60" />
-                </>
-              )}
-            </div>
-          )}
+    <div className="grid w-full grid-cols-[4.5rem_minmax(0,1fr)] gap-3 rounded-md border border-transparent px-2 py-2 hover:border-[hsl(var(--kode-terminal-border))]/70 hover:bg-[hsl(var(--kode-terminal-panel))]/60">
+      <div
+        className={cn(
+          'select-none pt-0.5 text-right font-mono text-[11px] uppercase tracking-normal',
+          meta.className,
+        )}
+      >
+        {meta.label}
+      </div>
+      <div className="min-w-0">
+        <div className="flex min-w-0 gap-3">
+          <span
+            className={cn(
+              'mt-0.5 shrink-0 font-mono text-[13px]',
+              meta.className,
+            )}
+          >
+            {meta.marker}
+          </span>
+          <div className="min-w-0 flex-1 text-[hsl(var(--kode-terminal-text))]">
+            {msg.text ? (
+              <div className="prose prose-sm prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-headings:text-[hsl(var(--kode-terminal-text))] prose-a:text-[hsl(var(--kode-terminal-assistant))] prose-strong:text-[hsl(var(--kode-terminal-text))]">
+                <MarkdownBody text={msg.text} />
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {msg.role === 'user' ? (
+                  <span className="text-[hsl(var(--kode-terminal-muted))]">
+                    Empty message
+                  </span>
+                ) : (
+                  <>
+                    <Skeleton className="h-4 w-40 bg-[hsl(var(--kode-terminal-elevated))]" />
+                    <Skeleton className="h-4 w-56 bg-[hsl(var(--kode-terminal-elevated))]" />
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </div>
-        {renderedBlocks}
+        {renderedBlocks ? <div className="mt-2">{renderedBlocks}</div> : null}
       </div>
     </div>
   )
 })
+
+export const __messageBubbleForTests = {
+  terminalKindMeta,
+}
