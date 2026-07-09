@@ -41,7 +41,7 @@ function getHelpPath(): string {
   return join(CACHE_PATHS.errors(), `help-${DATE}.txt`)
 }
 
-function buildHelpLines(commands: Command[]): string[] {
+export function __buildHelpLinesForTests(commands: Command[]): string[] {
   const filteredCommands = commands.filter(cmd => !cmd.isHidden)
   const customCommands = filteredCommands.filter(isCustomCommandWithScope)
   const builtInCommands = filteredCommands.filter(
@@ -61,7 +61,9 @@ function buildHelpLines(commands: Command[]): string[] {
 
   lines.push('Usage')
   lines.push(`- REPL: ${PRODUCT_COMMAND}`)
-  lines.push(`- Non-interactive: ${PRODUCT_COMMAND} -p "question"`)
+  lines.push(
+    `- Non-interactive: ${PRODUCT_COMMAND} -p "question" or ${PRODUCT_COMMAND} --headless "question"`,
+  )
   lines.push(`- CLI options: ${PRODUCT_COMMAND} -h`)
   lines.push('')
 
@@ -166,7 +168,7 @@ export function HelpScreen({
   const [status, setStatus] = useState<string | null>(null)
   const [savedPath, setSavedPath] = useState<string | null>(null)
 
-  const rawLines = useMemo(() => buildHelpLines(commands), [commands])
+  const rawLines = useMemo(() => __buildHelpLinesForTests(commands), [commands])
   const wrapped = useMemo(() => {
     const width = Math.max(1, layout.columns - layout.paddingX * 2)
     return wrapLines(rawLines, width)
