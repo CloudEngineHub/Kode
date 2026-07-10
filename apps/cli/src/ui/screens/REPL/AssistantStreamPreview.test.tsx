@@ -1,8 +1,9 @@
-import { expect, test } from 'bun:test'
+import { expect, spyOn, test } from 'bun:test'
 import { Box, Text, render } from 'ink'
 import React from 'react'
 import { PassThrough } from 'node:stream'
 import stripAnsi from 'strip-ansi'
+import * as markdown from '#core/utils/markdown'
 import { AssistantStreamPreview } from './AssistantStreamPreview'
 import { createAssistantStreamStore } from './assistantStreamStore'
 
@@ -57,7 +58,7 @@ test('does not reserve a blank viewport before the first token', async () => {
   expect(betweenSentinels).toBe('\n')
 })
 
-test('renders the first text delta through AssistantTextMessage', async () => {
+test('renders the first text delta in the preview', async () => {
   const store = createAssistantStreamStore()
   const turn = new AbortController()
   store.beginTurn(turn)
@@ -74,4 +75,47 @@ test('renders the first text delta through AssistantTextMessage', async () => {
   )
 
   expect(output).toContain('streamed text')
+})
+
+test('does not reparse the accumulated markdown on every live delta', async () => {
+  const applyMarkdownSpy = spyOn(markdown, 'applyMarkdown')
+  const store = createAssistantStreamStore({ frameIntervalMs: 1 })
+  const turn = new AbortController()
+  store.beginTurn(turn)
+
+  const stdout = new PassThrough() as PassThrough & {
+    isTTY?: boolean
+    columns?: number
+    rows?: number
+  }
+  stdout.isTTY = true
+  stdout.columns = 80
+  stdout.rows = 24
+
+  const instance = render(
+    <AssistantStreamPreview
+      store={store}
+      transientItems={[]}
+      maxHeight={8}
+      isVisible
+      debug={false}
+    />,
+    {
+      stdout: stdout as unknown as NodeJS.WriteStream,
+      exitOnCtrlC: false,
+    },
+  )
+
+  try {
+    await new Promise(resolve => setTimeout(resolve, 0))
+    store.handleUpdate(turn, { type: 'text_delta', delta: '**stream' })
+    await new Promise(resolve => setTimeout(resolve, 10))
+    store.handleUpdate(turn, { type: 'text_delta', delta: ' text**' })
+    await new Promise(resolve => setTimeout(resolve, 10))
+
+    expect(applyMarkdownSpy).not.toHaveBeenCalled()
+  } finally {
+    instance.unmount()
+    applyMarkdownSpy.mockRestore()
+  }
 })
