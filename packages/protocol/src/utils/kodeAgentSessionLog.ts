@@ -372,7 +372,7 @@ export function appendSessionSummaryRecord(args: {
 export function appendSessionCustomTitleRecord(args: {
   cwd: string
   sessionId: string
-  customTitle: string
+  customTitle: string | null
 }): void {
   safeAppendJsonl(
     getSessionLogFilePath({ cwd: args.cwd, sessionId: args.sessionId }),
@@ -390,7 +390,7 @@ export function appendSessionCustomTitleRecord(args: {
 export function appendSessionTagRecord(args: {
   cwd: string
   sessionId: string
-  tag: string
+  tag: string | null
 }): void {
   safeAppendJsonl(
     getSessionLogFilePath({ cwd: args.cwd, sessionId: args.sessionId }),
@@ -403,6 +403,21 @@ export function appendSessionTagRecord(args: {
   if (args.sessionId === getKodeAgentSessionId()) {
     currentSessionTag = args.tag
   }
+}
+
+export function appendSessionSessionSummaryRecord(args: {
+  cwd: string
+  sessionId: string
+  summary: string | null
+}): void {
+  safeAppendJsonl(
+    getSessionLogFilePath({ cwd: args.cwd, sessionId: args.sessionId }),
+    {
+      type: 'session-summary',
+      sessionId: args.sessionId,
+      summary: args.summary,
+    } satisfies SessionJsonlEntry,
+  )
 }
 
 export function getCurrentSessionCustomTitle(): string | null {

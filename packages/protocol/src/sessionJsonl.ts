@@ -28,8 +28,9 @@ export type SessionJsonlEntry =
       isApiErrorMessage?: boolean
     })
   | { type: 'summary'; summary: string; leafUuid: string }
-  | { type: 'custom-title'; sessionId: string; customTitle: string }
-  | { type: 'tag'; sessionId: string; tag: string }
+  | { type: 'custom-title'; sessionId: string; customTitle: string | null }
+  | { type: 'tag'; sessionId: string; tag: string | null }
+  | { type: 'session-summary'; sessionId: string; summary: string | null }
   | {
       type: 'file-history-snapshot'
       messageId: string

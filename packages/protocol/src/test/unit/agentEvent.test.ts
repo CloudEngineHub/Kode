@@ -45,6 +45,22 @@ describe('AgentEventSchema session list contract', () => {
     ).not.toThrow()
   })
 
+  test('accepts optional persistent-session lineage and archive fields', () => {
+    expect(() =>
+      AgentEventSchema.parse({
+        type: 'session_list',
+        sessions: [
+          {
+            ...session,
+            forkedFromSessionId: 'parent-session',
+            forkRootSessionId: 'root-session',
+            archivedAt: null,
+          },
+        ],
+      }),
+    ).not.toThrow()
+  })
+
   test('keeps the event and session objects strict', () => {
     expect(
       AgentEventSchema.safeParse({

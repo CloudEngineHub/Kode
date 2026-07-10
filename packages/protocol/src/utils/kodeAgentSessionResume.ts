@@ -103,6 +103,7 @@ function readSessionListItemBestEffort(args: {
   let lastAssistantUuid: string | null = null
   const summariesByLeaf = new Map<string, string>()
   let lastSummary: string | null = null
+  let sessionSummary: string | null | undefined = undefined
 
   try {
     modifiedAt = new Date(statSync(filePath).mtimeMs)
@@ -210,16 +211,33 @@ function readSessionListItemBestEffort(args: {
 
     if (type === 'custom-title') {
       const id = typeof entry.sessionId === 'string' ? entry.sessionId : ''
-      const title =
-        typeof entry.customTitle === 'string' ? entry.customTitle : ''
-      if (id === sessionId && title) customTitle = title
+      if (id === sessionId) {
+        const title = entry.customTitle
+        if (title === null) customTitle = null
+        else if (typeof title === 'string') customTitle = title.trim() || null
+      }
       continue
     }
 
     if (type === 'tag') {
       const id = typeof entry.sessionId === 'string' ? entry.sessionId : ''
-      const t = typeof entry.tag === 'string' ? entry.tag : ''
-      if (id === sessionId && t) tag = t
+      if (id === sessionId) {
+        const tagValue = entry.tag
+        if (tagValue === null) tag = null
+        else if (typeof tagValue === 'string') tag = tagValue.trim() || null
+      }
+      continue
+    }
+
+    if (type === 'session-summary') {
+      const id = typeof entry.sessionId === 'string' ? entry.sessionId : ''
+      if (id === sessionId) {
+        const summaryValue = entry.summary
+        if (summaryValue === null) sessionSummary = null
+        else if (typeof summaryValue === 'string') {
+          sessionSummary = summaryValue.trim() || null
+        }
+      }
       continue
     }
   }
@@ -228,6 +246,7 @@ function readSessionListItemBestEffort(args: {
   if (lastAssistantUuid) {
     summary = summariesByLeaf.get(lastAssistantUuid) ?? lastSummary
   }
+  if (sessionSummary !== undefined) summary = sessionSummary
 
   const excerptText = [...firstMessages, ...lastMessages]
     .join(' ')

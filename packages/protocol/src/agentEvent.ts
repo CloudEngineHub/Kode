@@ -208,6 +208,9 @@ const SessionSchema = z
     cwd: z.string().nullable(),
     createdAt: z.string().nullable(),
     modifiedAt: z.string().nullable(),
+    forkedFromSessionId: z.string().nullable().optional(),
+    forkRootSessionId: z.string().nullable().optional(),
+    archivedAt: z.string().nullable().optional(),
     events: z.array(z.lazy(() => AgentEventSchema)).optional(),
   })
   .strict() as unknown as z.ZodType<Session>
