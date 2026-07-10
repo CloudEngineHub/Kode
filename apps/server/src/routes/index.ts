@@ -7,6 +7,7 @@ import { isUuid } from '@kode/core/utils/uuid'
 import { maybeServeWebui } from '../server/webui'
 import { routeChat } from './chat'
 import { routeSession } from './session'
+import { PersistentSessionService } from '../persistentSessionService'
 import type { WorkspaceInfo } from '../handlers/workspaces.handler'
 import type { DaemonSession } from '../ws/types'
 import type { SessionRegistry } from '../sessionRegistry'
@@ -31,6 +32,7 @@ export function createRoutes(args: {
     currentId: string
   }>
   sessionRegistry: SessionRegistry
+  sessionService?: PersistentSessionService
   turnGate: DaemonTurnGate
   cwd: string
   echo: boolean
@@ -46,6 +48,9 @@ export function createRoutes(args: {
     server: UpgradeServer<WebSocketData>,
   ) => Promise<Response | undefined>
 } {
+  const sessionService =
+    args.sessionService ?? new PersistentSessionService(args.sessionRegistry)
+
   const resolveWorkspaceCwd = async (url: URL): Promise<string> => {
     const fallback = resolve(args.cwd)
     try {
@@ -122,6 +127,7 @@ export function createRoutes(args: {
 
       const chatResponse = await routeChat(req, {
         sessionRegistry: args.sessionRegistry,
+        sessionService,
         turnGate: args.turnGate,
         resolveCwd: () => resolveWorkspaceCwd(url),
         echo: args.echo,
@@ -137,6 +143,8 @@ export function createRoutes(args: {
       const sessionResponse = await routeSession(req, {
         cwd: args.cwd,
         listWorkspaces: args.listWorkspaces,
+        sessionService,
+        sessionRegistry: args.sessionRegistry,
       })
       if (sessionResponse) return sessionResponse
 
@@ -149,6 +157,9 @@ export function createRoutes(args: {
           url.searchParams.get('session_id') ??
           url.searchParams.get('sessionId') ??
           ''
+        const freshSession = ['1', 'true'].includes(
+          url.searchParams.get('fresh_session')?.trim().toLowerCase() ?? '',
+        )
         const correlatedEvents =
           url.searchParams.get('correlatedEvents') === '1'
         const afterSequenceRaw = url.searchParams.get('afterSequence')
@@ -170,7 +181,7 @@ export function createRoutes(args: {
         let session: DaemonSession
         let replayHistory = false
         let removeOnUpgradeFailure = false
-        if (requestedSessionId) {
+        if (requestedSessionId && !freshSession) {
           if (!isUuid(requestedSessionId)) {
             return new Response('Invalid session id', { status: 400 })
           }
@@ -179,6 +190,14 @@ export function createRoutes(args: {
             sessionId: requestedSessionId,
           })
           if (found.ok === false) {
+            if (found.reason === 'metadata_invalid') {
+              return new Response('Session metadata is invalid', {
+                status: 500,
+              })
+            }
+            if (found.reason === 'archived') {
+              return new Response('Session archived', { status: 410 })
+            }
             return new Response(
               found.reason === 'cwd_mismatch'
                 ? 'Session workspace mismatch'

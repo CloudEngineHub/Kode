@@ -629,6 +629,125 @@ describe('daemon (Bun HTTP+WS)', () => {
     }
   }, 20_000)
 
+  test('persists fork metadata and archive state across daemon restart', async () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'kode-daemon-session-api-'))
+    const projectDir = join(tempRoot, 'project')
+    const configDir = join(tempRoot, 'config')
+    mkdirSync(projectDir, { recursive: true })
+    const previousConfigDir = process.env.KODE_CONFIG_DIR
+    process.env.KODE_CONFIG_DIR = configDir
+
+    let daemon: Awaited<ReturnType<typeof startKodeDaemon>> | null = null
+    let source: Awaited<ReturnType<typeof openDaemonWs>> | null = null
+    let observer: Awaited<ReturnType<typeof openDaemonWs>> | null = null
+    const childSessionId = randomUUID()
+
+    try {
+      daemon = await startKodeDaemon({ cwd: projectDir, port: 0, echo: true })
+      source = await openDaemonWs(daemon)
+      const sourceSessionId = (await waitForInit(source.events)).session_id
+      if (typeof sourceSessionId !== 'string' || !sourceSessionId) {
+        throw new Error('daemon did not provide a session id')
+      }
+
+      source.ws.send(
+        JSON.stringify({ type: 'prompt', prompt: 'fork source prompt' }),
+      )
+      await waitForEvent(
+        'fork source result',
+        source.events,
+        event =>
+          event?.type === 'result' && event.result === 'fork source prompt',
+        5_000,
+      )
+
+      const base = `http://${daemon.host}:${daemon.port}`
+      const forkResponse = await fetch(
+        `${base}/api/sessions/${encodeURIComponent(sourceSessionId)}/fork?token=${encodeURIComponent(daemon.token)}`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            newSessionId: childSessionId,
+            customTitle: 'Restartable fork',
+            tag: 'integration',
+            summary: 'Created from the live daemon session.',
+          }),
+        },
+      )
+      expect(forkResponse.status).toBe(200)
+      await expect(forkResponse.json()).resolves.toMatchObject({
+        ok: true,
+        sessionId: childSessionId,
+      })
+
+      const patchResponse = await fetch(
+        `${base}/api/sessions/${encodeURIComponent(childSessionId)}?token=${encodeURIComponent(daemon.token)}`,
+        {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ summary: 'Updated before restart.' }),
+        },
+      )
+      expect(patchResponse.status).toBe(200)
+
+      await closeWs(source.ws)
+      source = null
+      daemon.stop()
+      daemon = await startKodeDaemon({ cwd: projectDir, port: 0, echo: true })
+
+      const restartedBase = `http://${daemon.host}:${daemon.port}`
+      const detailResponse = await fetch(
+        `${restartedBase}/api/sessions/${encodeURIComponent(childSessionId)}?token=${encodeURIComponent(daemon.token)}`,
+      )
+      expect(detailResponse.status).toBe(200)
+      await expect(detailResponse.json()).resolves.toMatchObject({
+        sessionId: childSessionId,
+        customTitle: 'Restartable fork',
+        tag: 'integration',
+        summary: 'Updated before restart.',
+        forkedFromSessionId: sourceSessionId,
+        forkRootSessionId: sourceSessionId,
+        events: [{ type: 'user' }, { type: 'assistant' }],
+      })
+
+      const deleteResponse = await fetch(
+        `${restartedBase}/api/sessions/${encodeURIComponent(childSessionId)}?token=${encodeURIComponent(daemon.token)}`,
+        { method: 'DELETE' },
+      )
+      expect(deleteResponse.status).toBe(200)
+      const repeatedDelete = await fetch(
+        `${restartedBase}/api/sessions/${encodeURIComponent(childSessionId)}?token=${encodeURIComponent(daemon.token)}`,
+        { method: 'DELETE' },
+      )
+      expect(repeatedDelete.status).toBe(200)
+      const archivedDetail = await fetch(
+        `${restartedBase}/api/sessions/${encodeURIComponent(childSessionId)}?token=${encodeURIComponent(daemon.token)}`,
+      )
+      expect(archivedDetail.status).toBe(410)
+
+      observer = await openDaemonWs(daemon)
+      const observerSessionList = await waitForEvent(
+        'metadata-aware session list',
+        observer.events,
+        event => event?.type === 'session_list',
+        5_000,
+      )
+      expect(
+        observerSessionList.sessions?.map(
+          (session: { sessionId?: string }) => session.sessionId,
+        ),
+      ).not.toContain(childSessionId)
+    } finally {
+      if (source) await closeWs(source.ws)
+      if (observer) await closeWs(observer.ws)
+      daemon?.stop()
+      if (previousConfigDir === undefined) delete process.env.KODE_CONFIG_DIR
+      else process.env.KODE_CONFIG_DIR = previousConfigDir
+      rmSync(tempRoot, { recursive: true, force: true })
+    }
+  }, 30_000)
+
   test('rejects concurrent daemon turns over HTTP and websocket', async () => {
     const daemon = await startKodeDaemon({
       cwd: process.cwd(),

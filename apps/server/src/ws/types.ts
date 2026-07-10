@@ -34,6 +34,10 @@ export type DaemonSessionJournalEntry = {
 export type DaemonSession = {
   sessionId: string
   cwd: string
+  createdAt: string
+  updatedAt: string
+  forkedFromSessionId: string | null
+  forkRootSessionId: string | null
   clients: Set<DaemonClient>
   messages: Message[]
   readFileTimestamps: Record<string, number>

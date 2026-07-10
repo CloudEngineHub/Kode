@@ -44,6 +44,7 @@ import {
   sendSessionEventToClient,
 } from './sessionBroadcaster'
 import { resolveInProjectRoot, toGitPath } from '../server/pathSecurity'
+import { PersistentSessionService } from '../persistentSessionService'
 import type { SessionRegistry } from '../sessionRegistry'
 import type { DaemonTurnGate } from '../turnGate'
 
@@ -98,17 +99,26 @@ function parseGitStatusPorcelain(
   })
 }
 
-function sendSessionListToClient(ws: WsWithSession, session: DaemonSession) {
+function sendSessionListToClient(
+  ws: WsWithSession,
+  session: DaemonSession,
+  sessionService: PersistentSessionService,
+) {
   sendSessionList(ws, {
     cwd: session.cwd,
+    listSessions: () => sessionService.list({ cwd: session.cwd }),
     onError: message => sendJson(ws, log('error', message)),
   })
 }
 
-function broadcastSessionList(session: DaemonSession) {
+function broadcastSessionList(
+  session: DaemonSession,
+  sessionService: PersistentSessionService,
+) {
   for (const client of Array.from(session.clients)) {
     sendSessionList(client, {
       cwd: session.cwd,
+      listSessions: () => sessionService.list({ cwd: session.cwd }),
       onError: message => sendJson(client, log('error', message)),
     })
   }
@@ -214,6 +224,7 @@ function moveClientToSession(
 
 export function createWebSocketHandlers(args: {
   sessionRegistry: SessionRegistry
+  sessionService?: PersistentSessionService
   turnGate: DaemonTurnGate
   toolNames: string[]
   slashCommands: string[]
@@ -227,6 +238,8 @@ export function createWebSocketHandlers(args: {
   const bashTool = args.tools.find(t => t.name === 'Bash') ?? null
   const promptHandler = args.promptHandler ?? handleChatPrompt
   const activeOperationOwners = new Map<DaemonSession, DaemonClient>()
+  const sessionService =
+    args.sessionService ?? new PersistentSessionService(args.sessionRegistry)
 
   const requestToolPermission = async (params: {
     ws: WsWithSession
@@ -375,7 +388,7 @@ export function createWebSocketHandlers(args: {
         session,
         event: makeTurnState(session),
       })
-      sendSessionListToClient(ws, session)
+      sendSessionListToClient(ws, session, sessionService)
     },
 
     async message(ws: WsWithSession, message: RawData) {
@@ -425,7 +438,7 @@ export function createWebSocketHandlers(args: {
       }
 
       if (payload.type === 'list_sessions') {
-        sendSessionListToClient(ws, session)
+        sendSessionListToClient(ws, session, sessionService)
         return
       }
 
@@ -456,7 +469,7 @@ export function createWebSocketHandlers(args: {
           session: nextSession,
           event: makeTurnState(nextSession),
         })
-        sendSessionListToClient(ws, nextSession)
+        sendSessionListToClient(ws, nextSession, sessionService)
         return
       }
 
@@ -484,7 +497,11 @@ export function createWebSocketHandlers(args: {
               'error',
               found.reason === 'cwd_mismatch'
                 ? 'Session workspace mismatch'
-                : `Session not found: ${payload.sessionId}`,
+                : found.reason === 'archived'
+                  ? 'Session archived'
+                  : found.reason === 'metadata_invalid'
+                    ? 'Session metadata is invalid'
+                    : `Session not found: ${payload.sessionId}`,
             ),
           )
           return
@@ -507,7 +524,7 @@ export function createWebSocketHandlers(args: {
           session: found.session,
           event: makeTurnState(found.session),
         })
-        sendSessionListToClient(ws, found.session)
+        sendSessionListToClient(ws, found.session, sessionService)
         return
       }
 
@@ -622,7 +639,7 @@ export function createWebSocketHandlers(args: {
             event: makeTurnState(session),
             turn,
           })
-          broadcastSessionList(session)
+          broadcastSessionList(session, sessionService)
         }
       }
 

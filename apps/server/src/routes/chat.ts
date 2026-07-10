@@ -12,6 +12,7 @@ import {
   getOrCreateSessionTurn,
   publishSessionEvent,
 } from '../ws/sessionBroadcaster'
+import type { PersistentSessionService } from '../persistentSessionService'
 import type { SessionRegistry } from '../sessionRegistry'
 import type { DaemonTurnGate } from '../turnGate'
 
@@ -36,6 +37,7 @@ export async function routeChat(
   req: Request,
   ctx: {
     sessionRegistry: SessionRegistry
+    sessionService?: PersistentSessionService
     turnGate: DaemonTurnGate
     resolveCwd: () => Promise<string>
     echo: boolean
@@ -112,9 +114,22 @@ export async function routeChat(
         error:
           found.reason === 'cwd_mismatch'
             ? 'Session workspace mismatch'
-            : 'Unknown session',
+            : found.reason === 'archived'
+              ? 'Session archived'
+              : found.reason === 'metadata_invalid'
+                ? 'Session metadata is invalid'
+                : 'Unknown session',
       },
-      { status: found.reason === 'cwd_mismatch' ? 409 : 404 },
+      {
+        status:
+          found.reason === 'cwd_mismatch'
+            ? 409
+            : found.reason === 'archived'
+              ? 410
+              : found.reason === 'metadata_invalid'
+                ? 500
+                : 404,
+      },
     )
   }
   const session = found.session
@@ -240,6 +255,12 @@ export async function routeChat(
         try {
           sendSessionList(client, {
             cwd: session.cwd,
+            ...(ctx.sessionService
+              ? {
+                  listSessions: () =>
+                    ctx.sessionService?.list({ cwd: session.cwd }) ?? [],
+                }
+              : {}),
             onError: message => wsSend(log('error', message)),
           })
         } catch {}

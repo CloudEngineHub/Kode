@@ -10,6 +10,7 @@ import { serveNode } from './server/serveNode'
 import { createTokenChecker } from './server/auth'
 import { detectWebuiDir } from './server/webui'
 import { createWorkspaceLister } from './handlers/workspaces.handler'
+import { PersistentSessionService } from './persistentSessionService'
 import { createRoutes } from './routes'
 import { createWebSocketHandlers } from './ws/connection'
 import type { DaemonSession } from './ws/types'
@@ -71,6 +72,7 @@ export async function startKodeDaemon(args: {
 
   const sessions = new Map<string, DaemonSession>()
   const sessionRegistry = new SessionRegistry(sessions)
+  const sessionService = new PersistentSessionService(sessionRegistry)
   const turnGate = processDaemonRuntimeCoordinator
   const checkToken = createTokenChecker({ token })
   const workspaces = createWorkspaceLister({ cwd })
@@ -80,6 +82,7 @@ export async function startKodeDaemon(args: {
     checkToken,
     listWorkspaces: workspaces.listWorkspaces,
     sessionRegistry,
+    sessionService,
     turnGate,
     cwd,
     echo,
@@ -93,6 +96,7 @@ export async function startKodeDaemon(args: {
 
   const websocket = createWebSocketHandlers({
     sessionRegistry,
+    sessionService,
     turnGate,
     toolNames,
     slashCommands,

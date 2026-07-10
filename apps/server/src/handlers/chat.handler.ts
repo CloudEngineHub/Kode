@@ -127,6 +127,7 @@ export async function handleChatPrompt(args: {
   ) => {
     if (message.type === 'progress') return
     session.messages.push(message)
+    session.updatedAt = new Date().toISOString()
     if (options.persist && shouldPersistSession) {
       appendSessionJsonlFromMessage({
         cwd: session.cwd,
@@ -197,7 +198,14 @@ export async function handleChatPrompt(args: {
     }
     grantReadPermissionForOriginalDir()
 
-    setKodeAgentSessionForkInfo(null)
+    setKodeAgentSessionForkInfo(
+      session.forkedFromSessionId && session.forkRootSessionId
+        ? {
+            forkedFromSessionId: session.forkedFromSessionId,
+            forkRootSessionId: session.forkRootSessionId,
+          }
+        : null,
+    )
     setSessionId(session.sessionId)
 
     if (echo) {

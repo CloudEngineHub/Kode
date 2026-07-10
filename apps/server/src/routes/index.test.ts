@@ -181,4 +181,41 @@ describe('createRoutes health endpoint', () => {
     ).rejects.toThrow('upgrade crashed')
     expect(sessionRegistry.size).toBe(0)
   })
+
+  test('starts a fresh empty session when fresh_session=1 accompanies an existing id', async () => {
+    const sessionRegistry = new SessionRegistry()
+    const existing = sessionRegistry.create('C:/repo')
+    const routes = createTestRoutes({ sessionRegistry })
+    let data: Record<string, unknown> | null = null
+
+    const response = await routes.fetch(
+      new Request(
+        `http://localhost/ws?session_id=${existing.sessionId}&fresh_session=1`,
+      ),
+      {
+        upgrade: (_request, options) => {
+          data = options.data as unknown as Record<string, unknown>
+          return true
+        },
+      },
+    )
+
+    expect(response).toBeUndefined()
+    const fresh = data?.session as
+      { sessionId?: string; messages?: unknown[] } | undefined
+    expect(fresh?.sessionId).toBeDefined()
+    expect(fresh?.sessionId).not.toBe(existing.sessionId)
+    expect(fresh?.messages).toEqual([])
+  })
+
+  test('keeps session control routes behind the daemon token gate', async () => {
+    const routes = createTestRoutes({ authorized: false })
+    const response = await routes.fetch(
+      new Request('http://localhost/api/sessions'),
+      { upgrade: () => false },
+    )
+
+    if (!response) throw new Error('missing response')
+    expect(response.status).toBe(401)
+  })
 })
