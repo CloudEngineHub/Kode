@@ -1,6 +1,10 @@
 import React from 'react'
 
-import type { KodeClient, SessionAwareKodeClient } from '@kode/client'
+import type {
+  CorrelatedAgentEvent,
+  KodeClient,
+  SessionAwareKodeClient,
+} from '@kode/client'
 import type {
   AgentEvent,
   PermissionRequestEvent,
@@ -49,7 +53,10 @@ function createErrorLogEvent(error: unknown): AgentEvent {
   }
 }
 
-function getEventSessionId(event: AgentEvent): string | null {
+function getEventSessionId(event: CorrelatableAgentEvent): string | null {
+  const metadataSessionId = getNonEmptyString(event.sessionId)
+  if (metadataSessionId) return metadataSessionId
+
   if (event.type === 'history_begin' || event.type === 'history_end') {
     return event.sessionId
   }
@@ -72,6 +79,185 @@ function getEventIdentity(event: AgentEvent): string | null {
 function getTurnStateSending(event: AgentEvent): boolean | null {
   if (event.type !== 'turn_state') return null
   return event.state === 'running'
+}
+
+type ActiveRequestCorrelation = Readonly<{
+  clientMessageUuid: string
+  turnId: string | null
+}>
+
+type CorrelatableAgentEvent = CorrelatedAgentEvent
+
+type EventRequestCorrelation = Readonly<{
+  clientMessageUuid: string | null
+  hasDaemonMetadata: boolean
+  turnId: string | null
+  replayed: boolean
+}>
+
+type RequestStateUpdate = Readonly<{
+  sending: boolean
+  permission?: PermissionRequestEvent | null
+}>
+
+type EventHandlingMode = 'history-begin' | 'history-end' | 'history' | 'live'
+
+function getNonEmptyString(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim()
+  return normalized || null
+}
+
+/**
+ * Legacy history payloads have no replay metadata. The history frame is the
+ * authoritative replay boundary, so every payload between its markers is
+ * transcript-only regardless of its envelope shape.
+ */
+function getEventHandlingMode(
+  event: AgentEvent,
+  historyReplayInProgress: boolean,
+): EventHandlingMode {
+  if (event.type === 'history_begin') return 'history-begin'
+  if (event.type === 'history_end') return 'history-end'
+  return historyReplayInProgress ? 'history' : 'live'
+}
+
+function getEventRequestCorrelation(
+  event: CorrelatableAgentEvent,
+): EventRequestCorrelation {
+  const sequence = event.sequence
+  return {
+    clientMessageUuid: getNonEmptyString(event.clientMessageUuid),
+    hasDaemonMetadata:
+      getNonEmptyString(event.sessionId) !== null &&
+      typeof sequence === 'number' &&
+      Number.isInteger(sequence) &&
+      sequence >= 0 &&
+      typeof event.replayed === 'boolean',
+    turnId: getNonEmptyString(event.turnId),
+    replayed: event.replayed === true,
+  }
+}
+
+/**
+ * Treat an event without request metadata as a legacy/direct event. Once an
+ * event identifies another request, though, it must never affect this
+ * request's loading or permission UI.
+ */
+function eventBelongsToActiveRequest(
+  event: CorrelatableAgentEvent,
+  activeRequest: ActiveRequestCorrelation,
+): boolean {
+  const correlation = getEventRequestCorrelation(event)
+  if (correlation.replayed) return false
+
+  const hasRequestMetadata = Boolean(
+    correlation.clientMessageUuid || correlation.turnId,
+  )
+  if (!hasRequestMetadata) return !correlation.hasDaemonMetadata
+
+  if (
+    correlation.clientMessageUuid &&
+    correlation.clientMessageUuid !== activeRequest.clientMessageUuid
+  ) {
+    return false
+  }
+
+  if (
+    correlation.turnId &&
+    activeRequest.turnId &&
+    correlation.turnId !== activeRequest.turnId
+  ) {
+    return false
+  }
+
+  if (correlation.clientMessageUuid === activeRequest.clientMessageUuid) {
+    return true
+  }
+
+  return (
+    correlation.turnId !== null && correlation.turnId === activeRequest.turnId
+  )
+}
+
+function observeActiveRequestTurn(
+  activeRequest: ActiveRequestCorrelation,
+  event: CorrelatableAgentEvent,
+): ActiveRequestCorrelation {
+  const correlation = getEventRequestCorrelation(event)
+  if (
+    correlation.clientMessageUuid !== activeRequest.clientMessageUuid ||
+    !correlation.turnId ||
+    correlation.turnId === activeRequest.turnId
+  ) {
+    return activeRequest
+  }
+
+  return { ...activeRequest, turnId: correlation.turnId }
+}
+
+function getRequestStateUpdate(event: AgentEvent): RequestStateUpdate | null {
+  const turnStateSending = getTurnStateSending(event)
+  if (turnStateSending !== null) {
+    return {
+      sending: turnStateSending,
+      ...(turnStateSending ? {} : { permission: null }),
+    }
+  }
+
+  if (isPermissionRequest(event)) {
+    return { sending: true, permission: event }
+  }
+
+  if (event.type === 'result') {
+    return { sending: false, permission: null }
+  }
+
+  if (event.type === 'user') return { sending: true }
+  return null
+}
+
+function getRequestStateUpdateForActiveRequest(
+  event: CorrelatableAgentEvent,
+  activeRequest: ActiveRequestCorrelation | null,
+): RequestStateUpdate | null {
+  if (!activeRequest) {
+    // A correlated daemon envelope belongs to some request, but there is no
+    // local request to associate it with. Keep it in the transcript only.
+    return getEventRequestCorrelation(event).hasDaemonMetadata
+      ? null
+      : getRequestStateUpdate(event)
+  }
+
+  if (!eventBelongsToActiveRequest(event, activeRequest)) return null
+  return getRequestStateUpdate(event)
+}
+
+function createClientMessageUuid(): string {
+  const cryptoApi = globalThis.crypto
+  if (typeof cryptoApi?.randomUUID === 'function') {
+    return cryptoApi.randomUUID()
+  }
+
+  const bytes = new Uint8Array(16)
+  if (typeof cryptoApi?.getRandomValues === 'function') {
+    cryptoApi.getRandomValues(bytes)
+  } else {
+    for (let index = 0; index < bytes.length; index += 1) {
+      bytes[index] = Math.floor(Math.random() * 256)
+    }
+  }
+  bytes[6] = (bytes[6]! & 0x0f) | 0x40
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80
+
+  const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0'))
+  return [
+    hex.slice(0, 4).join(''),
+    hex.slice(4, 6).join(''),
+    hex.slice(6, 8).join(''),
+    hex.slice(8, 10).join(''),
+    hex.slice(10, 16).join(''),
+  ].join('-')
 }
 
 function appendUniqueEvent(
@@ -127,6 +313,7 @@ export function useChat(args: {
   const eventBufferRef = React.useRef<AgentEvent[]>([])
   const historyBufferRef = React.useRef<AgentEvent[] | null>(null)
   const selectedSessionIdRef = React.useRef<string | null>(null)
+  const activeRequestRef = React.useRef<ActiveRequestCorrelation | null>(null)
   const selectionEpochRef = React.useRef(0)
   const sessionRefreshEpochRef = React.useRef(0)
   const eventFlushTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(
@@ -175,6 +362,17 @@ export function useChat(args: {
     [scheduleEventFlush],
   )
 
+  const applyRequestStateUpdate = React.useCallback(
+    (update: RequestStateUpdate | null) => {
+      if (!update) return
+      setSending(update.sending)
+      if (update.permission !== undefined) {
+        setPermissionRequest(update.permission)
+      }
+    },
+    [],
+  )
+
   const refreshSessions = React.useCallback(async () => {
     const client = args.client
     const refreshEpoch = ++sessionRefreshEpochRef.current
@@ -194,31 +392,25 @@ export function useChat(args: {
 
   const handleEvent = React.useCallback(
     (event: AgentEvent) => {
-      if (event.type === 'session_list') {
+      const handlingMode = getEventHandlingMode(
+        event,
+        historyBufferRef.current !== null,
+      )
+
+      if (handlingMode === 'live' && event.type === 'session_list') {
         sessionRefreshEpochRef.current += 1
         setSessions(event.sessions)
         return
       }
 
       if (
+        handlingMode === 'live' &&
         event.type === 'system' &&
         event.subtype === 'init' &&
         typeof event.session_id === 'string'
       ) {
         selectedSessionIdRef.current = event.session_id
         setSelectedSessionId(event.session_id)
-        return
-      }
-
-      const authoritativeSending = getTurnStateSending(event)
-      if (authoritativeSending !== null && event.type === 'turn_state') {
-        const selectedId =
-          selectedSessionIdRef.current ??
-          sessionClient?.getAttachedSessionId() ??
-          null
-        if (selectedId && event.session_id !== selectedId) return
-        setSending(authoritativeSending)
-        if (!authoritativeSending) setPermissionRequest(null)
         return
       }
 
@@ -229,15 +421,13 @@ export function useChat(args: {
         null
       if (eventSessionId && selectedId && eventSessionId !== selectedId) return
 
-      if (event.type === 'history_begin') {
+      if (handlingMode === 'history-begin') {
         clearBufferedEvents()
         historyBufferRef.current = []
-        setSending(false)
-        setPermissionRequest(null)
         return
       }
 
-      if (event.type === 'history_end') {
+      if (handlingMode === 'history-end') {
         clearEventFlushTimer()
         const history = historyBufferRef.current ?? []
         historyBufferRef.current = null
@@ -251,30 +441,47 @@ export function useChat(args: {
         return
       }
 
-      if (isPermissionRequest(event)) {
-        setPermissionRequest(event)
-        setSending(true)
-        return
-      }
-
-      if (event.type === 'result') {
-        setSending(false)
-        setPermissionRequest(null)
-      } else if (event.type === 'user' && historyBufferRef.current === null) {
-        setSending(true)
-      }
-
-      if (historyBufferRef.current !== null) {
+      if (handlingMode === 'history') {
+        // Do not bind turns or update sending/permission from replay. This
+        // also protects legacy raw history events, which lack `replayed`.
         historyBufferRef.current = appendUniqueEvent(
-          historyBufferRef.current,
+          historyBufferRef.current ?? [],
           event,
         )
         return
       }
 
+      const activeRequest = activeRequestRef.current
+      const drivesActiveRequest =
+        activeRequest === null ||
+        eventBelongsToActiveRequest(event, activeRequest)
+      const requestStateUpdate = getRequestStateUpdateForActiveRequest(
+        event,
+        activeRequest,
+      )
+      if (activeRequest && drivesActiveRequest) {
+        activeRequestRef.current = observeActiveRequestTurn(
+          activeRequest,
+          event,
+        )
+      }
+
+      if (event.type === 'turn_state') {
+        applyRequestStateUpdate(requestStateUpdate)
+        return
+      }
+
+      applyRequestStateUpdate(requestStateUpdate)
+
       enqueueEvent(event)
     },
-    [clearBufferedEvents, clearEventFlushTimer, enqueueEvent, sessionClient],
+    [
+      applyRequestStateUpdate,
+      clearBufferedEvents,
+      clearEventFlushTimer,
+      enqueueEvent,
+      sessionClient,
+    ],
   )
 
   React.useEffect(() => {
@@ -288,6 +495,7 @@ export function useChat(args: {
     selectionEpochRef.current += 1
     setSessions([])
     selectedSessionIdRef.current = null
+    activeRequestRef.current = null
     setSelectedSessionId(null)
     setEvents([])
     setPermissionRequest(null)
@@ -315,6 +523,7 @@ export function useChat(args: {
     const epoch = ++selectionEpochRef.current
     clearBufferedEvents()
     selectedSessionIdRef.current = null
+    activeRequestRef.current = null
     setSelectedSessionId(null)
     setEvents([])
     setPermissionRequest(null)
@@ -332,6 +541,7 @@ export function useChat(args: {
       const epoch = ++selectionEpochRef.current
       clearBufferedEvents()
       selectedSessionIdRef.current = id
+      activeRequestRef.current = null
       setSelectedSessionId(id)
       setEvents([])
       setPermissionRequest(null)
@@ -413,6 +623,11 @@ export function useChat(args: {
 
     const sendEpoch = selectionEpochRef.current
     const sendSessionId = sessionClient?.getAttachedSessionId() ?? null
+    const clientMessageUuid = createClientMessageUuid()
+    const activeRequest: ActiveRequestCorrelation = {
+      clientMessageUuid,
+      turnId: null,
+    }
     const isCurrentSelection = () =>
       selectionEpochRef.current === sendEpoch &&
       (sendSessionId === null ||
@@ -423,15 +638,33 @@ export function useChat(args: {
     setInput('')
     setSending(true)
     setPermissionRequest(null)
+    activeRequestRef.current = activeRequest
 
     const receivesPersistentEvents = Boolean(sessionClient)
 
     try {
-      for await (const ev of args.client.sendMessage(text)) {
+      for await (const ev of args.client.sendMessage(text, {
+        clientMessageUuid,
+      })) {
         if (!isCurrentSelection()) continue
+
+        const currentActiveRequest = activeRequestRef.current
+        if (
+          !currentActiveRequest ||
+          currentActiveRequest.clientMessageUuid !== clientMessageUuid ||
+          !eventBelongsToActiveRequest(ev, currentActiveRequest)
+        ) {
+          continue
+        }
+        activeRequestRef.current = observeActiveRequestTurn(
+          currentActiveRequest,
+          ev,
+        )
+        applyRequestStateUpdate(getRequestStateUpdate(ev))
+
         if (receivesPersistentEvents) continue
         if (isPermissionRequest(ev)) {
-          setPermissionRequest(ev)
+          enqueueEvent(ev)
           continue
         }
         if (ev.type === 'history_begin' || ev.type === 'history_end') continue
@@ -440,6 +673,9 @@ export function useChat(args: {
     } catch (error) {
       if (isCurrentSelection()) enqueueEvent(createErrorLogEvent(error))
     } finally {
+      if (activeRequestRef.current?.clientMessageUuid === clientMessageUuid) {
+        activeRequestRef.current = null
+      }
       if (isCurrentSelection()) {
         flushBufferedEvents()
         setSending(false)
@@ -447,6 +683,7 @@ export function useChat(args: {
       }
     }
   }, [
+    applyRequestStateUpdate,
     args.client,
     enqueueEvent,
     flushBufferedEvents,
@@ -475,6 +712,12 @@ export function useChat(args: {
 export const __useChatForTests = {
   appendUniqueEvent,
   createErrorLogEvent,
+  eventBelongsToActiveRequest,
+  getEventHandlingMode,
   getEventSessionId,
+  getEventRequestCorrelation,
+  getRequestStateUpdate,
+  getRequestStateUpdateForActiveRequest,
   getTurnStateSending,
+  observeActiveRequestTurn,
 }
