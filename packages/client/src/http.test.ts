@@ -114,7 +114,7 @@ describe('HttpClient', () => {
     ws!.message(initEvent('session'))
     await waitTick()
 
-    expect(JSON.parse(ws!.sent[0] ?? '{}')).toEqual({
+    expect(JSON.parse(ws!.sent[0] ?? '{}')).toMatchObject({
       type: 'prompt',
       prompt: 'hello',
     })
@@ -497,7 +497,7 @@ describe('HttpClient', () => {
 
     expect(await starting).toBe(sessionId)
     await waitTick()
-    expect(JSON.parse(ws.sent[0] ?? '{}')).toEqual({
+    expect(JSON.parse(ws.sent[0] ?? '{}')).toMatchObject({
       type: 'prompt',
       prompt: 'hello',
     })
@@ -631,10 +631,13 @@ describe('HttpClient', () => {
     await waitTick()
 
     client.cancelRequest()
-    expect(ws.sent.map(message => JSON.parse(message))).toEqual([
-      { type: 'prompt', prompt: 'stop me' },
-      { type: 'cancel' },
-    ])
+    const sent = ws.sent.map(message => JSON.parse(message))
+    expect(sent).toHaveLength(2)
+    expect(sent[0]).toMatchObject({ type: 'prompt', prompt: 'stop me' })
+    expect(sent[1]).toMatchObject({
+      type: 'cancel',
+      clientMessageUuid: sent[0]?.clientMessageUuid,
+    })
 
     ws.message({
       type: 'result',

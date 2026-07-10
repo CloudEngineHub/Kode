@@ -1,14 +1,19 @@
 import type { AgentEvent, Session } from '@kode/protocol'
 
 import type {
+  CorrelatedAgentEvent,
   KodeClient,
   RuntimeStatus,
+  SendMessageOptions,
   ToolPermissionDecision,
   ToolPermissionInputUpdate,
 } from './types'
 
 export interface DirectEngine {
-  sendMessage(message: string): AsyncGenerator<AgentEvent>
+  sendMessage(
+    message: string,
+    options?: SendMessageOptions,
+  ): AsyncGenerator<AgentEvent>
   cancelRequest(): void
   approveToolUse(
     toolUseId: string,
@@ -37,8 +42,14 @@ export interface DirectEngine {
 export class DirectClient implements KodeClient {
   constructor(private readonly engine: DirectEngine) {}
 
-  sendMessage(message: string): AsyncGenerator<AgentEvent> {
-    return this.engine.sendMessage(message)
+  sendMessage(
+    message: string,
+    options?: SendMessageOptions,
+  ): AsyncGenerator<CorrelatedAgentEvent> {
+    return this.engine.sendMessage(
+      message,
+      options,
+    ) as AsyncGenerator<CorrelatedAgentEvent>
   }
 
   cancelRequest(): void {

@@ -1,6 +1,8 @@
 export type {
+  CorrelatedAgentEvent,
   KodeClient,
   RuntimeStatus,
+  SendMessageOptions,
   SessionAwareKodeClient,
   ToolPermissionDecision,
   ToolPermissionInputUpdate,

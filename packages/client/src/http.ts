@@ -1,8 +1,10 @@
-import type { AgentEvent, Session } from '@kode/protocol'
-import { AgentEventSchema } from '@kode/protocol'
+import type { AgentEvent, DaemonEventMetadata, Session } from '@kode/protocol'
+import { DaemonWsEventSchema, normalizeDaemonWsEvent } from '@kode/protocol'
 
 import type {
+  CorrelatedAgentEvent,
   RuntimeStatus,
+  SendMessageOptions,
   SessionAwareKodeClient,
   ToolPermissionDecision,
   ToolPermissionInputUpdate,
@@ -34,8 +36,241 @@ type FetchLike = (
 
 type ConnectionListener = (connected: boolean) => void
 
+type DecodedDaemonEvent = {
+  event: CorrelatedAgentEvent
+  metadata: DaemonEventMetadata | null
+}
+
+type RequestStreamFilter = {
+  accepts: (event: CorrelatedAgentEvent) => boolean
+  turnId: () => string | null
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
+}
+
+function getNonEmptyString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  )
+}
+
+function createRandomUuidV4(): string {
+  const randomUuid = (globalThis as typeof globalThis & { crypto?: Crypto })
+    .crypto?.randomUUID
+  if (typeof randomUuid === 'function') {
+    const value = randomUuid.call(globalThis.crypto)
+    if (isUuid(value)) return value
+  }
+
+  const bytes = new Uint8Array(16)
+  for (let index = 0; index < bytes.length; index++) {
+    bytes[index] = Math.floor(Math.random() * 256)
+  }
+  bytes[6] = (bytes[6]! & 0x0f) | 0x40
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80
+
+  const toHex = (value: number) => value.toString(16).padStart(2, '0')
+  return [
+    toHex(bytes[0]!),
+    toHex(bytes[1]!),
+    toHex(bytes[2]!),
+    toHex(bytes[3]!),
+    '-',
+    toHex(bytes[4]!),
+    toHex(bytes[5]!),
+    '-',
+    toHex(bytes[6]!),
+    toHex(bytes[7]!),
+    '-',
+    toHex(bytes[8]!),
+    toHex(bytes[9]!),
+    '-',
+    toHex(bytes[10]!),
+    toHex(bytes[11]!),
+    toHex(bytes[12]!),
+    toHex(bytes[13]!),
+    toHex(bytes[14]!),
+    toHex(bytes[15]!),
+  ].join('')
+}
+
+function createClientMessageUuid(value: string | undefined): string {
+  const candidate = value?.trim() ?? ''
+  return isUuid(candidate) ? candidate : createRandomUuidV4()
+}
+
+function getEventSessionId(event: CorrelatedAgentEvent): string | null {
+  const metadataSessionId = getNonEmptyString(event.sessionId)
+  if (metadataSessionId) return metadataSessionId
+
+  if (event.type === 'history_begin' || event.type === 'history_end') {
+    return getNonEmptyString(event.sessionId)
+  }
+
+  return getNonEmptyString(
+    (event as unknown as { session_id?: unknown }).session_id,
+  )
+}
+
+function getEventMetadata(
+  event: CorrelatedAgentEvent,
+): DaemonEventMetadata | null {
+  const sequence = event.sequence
+  if (
+    !getNonEmptyString(event.sessionId) ||
+    !Number.isInteger(sequence) ||
+    sequence < 0 ||
+    typeof event.replayed !== 'boolean'
+  ) {
+    return null
+  }
+
+  const turnId = event.turnId
+  const clientMessageUuid = event.clientMessageUuid
+  const snapshot = event.snapshot === true
+  if (
+    (turnId !== null && typeof turnId !== 'string') ||
+    (clientMessageUuid !== null && typeof clientMessageUuid !== 'string')
+  ) {
+    return null
+  }
+
+  return {
+    sessionId: event.sessionId!,
+    turnId: turnId ?? null,
+    clientMessageUuid: clientMessageUuid ?? null,
+    sequence,
+    replayed: event.replayed,
+    snapshot,
+  }
+}
+
+function isHandshakeEvent(event: CorrelatedAgentEvent): boolean {
+  return (
+    (event.type === 'system' && event.subtype === 'init') ||
+    event.type === 'history_begin' ||
+    event.type === 'history_end'
+  )
+}
+
+function advancesReplayCursor(event: CorrelatedAgentEvent): boolean {
+  return (
+    !isHandshakeEvent(event) &&
+    event.type !== 'turn_state' &&
+    event.type !== 'session_list'
+  )
+}
+
+function isRequestScopedEvent(event: CorrelatedAgentEvent): boolean {
+  return (
+    event.type !== 'system' &&
+    event.type !== 'history_begin' &&
+    event.type !== 'history_end' &&
+    event.type !== 'session_list'
+  )
+}
+
+function decodeDaemonEvent(value: unknown): DecodedDaemonEvent | null {
+  const parsed = DaemonWsEventSchema.safeParse(value)
+  if (!parsed.success) return null
+
+  const normalized = normalizeDaemonWsEvent(parsed.data)
+  if (!normalized.metadata) {
+    return { event: normalized.event as CorrelatedAgentEvent, metadata: null }
+  }
+
+  return {
+    event: {
+      ...normalized.event,
+      ...normalized.metadata,
+    } as CorrelatedAgentEvent,
+    metadata: normalized.metadata,
+  }
+}
+
+function createRequestStreamFilter(args: {
+  clientMessageUuid: string
+  sessionId: string | null
+  correlationKnown: boolean
+  onTurnId: (turnId: string) => void
+}): RequestStreamFilter {
+  let activeTurnId: string | null = null
+  let correlationKnown = args.correlationKnown
+  let legacyHistoryDepth = 0
+
+  return {
+    accepts(event) {
+      const metadata = getEventMetadata(event)
+      const eventSessionId = metadata?.sessionId ?? getEventSessionId(event)
+      if (
+        args.sessionId !== null &&
+        eventSessionId !== null &&
+        eventSessionId !== args.sessionId
+      ) {
+        return false
+      }
+
+      if (metadata) {
+        correlationKnown = true
+        if (metadata.replayed) return false
+
+        const matchesClient =
+          metadata.clientMessageUuid === args.clientMessageUuid
+        const matchesTurn =
+          activeTurnId !== null && metadata.turnId === activeTurnId
+
+        // A daemon must never associate the active turn with another client
+        // message UUID. Reject corrupted/inconsistent metadata rather than
+        // letting a matching turn id complete the wrong request.
+        if (
+          metadata.clientMessageUuid !== null &&
+          metadata.clientMessageUuid !== args.clientMessageUuid
+        ) {
+          return false
+        }
+        if (
+          activeTurnId &&
+          metadata.turnId &&
+          metadata.turnId !== activeTurnId
+        ) {
+          return false
+        }
+        if (!matchesClient && !matchesTurn) return false
+
+        if (!activeTurnId && metadata.turnId) {
+          activeTurnId = metadata.turnId
+          args.onTurnId(metadata.turnId)
+        }
+        return isRequestScopedEvent(event)
+      }
+
+      // An opted-in daemon must never let a raw terminal event complete a
+      // correlated request. This is the multi-client safety boundary.
+      if (correlationKnown) return false
+
+      // Legacy daemons have no safe request identifier. Preserve the prior
+      // single-request behavior, but never use timing heuristics to infer an
+      // assistant-first stream and never consume an explicit history replay.
+      if (event.type === 'history_begin') {
+        legacyHistoryDepth += 1
+        return false
+      }
+      if (event.type === 'history_end') {
+        legacyHistoryDepth = Math.max(0, legacyHistoryDepth - 1)
+        return false
+      }
+      if (legacyHistoryDepth > 0 || isHandshakeEvent(event)) return false
+
+      return isRequestScopedEvent(event)
+    },
+    turnId: () => activeTurnId,
+  }
 }
 
 function isSession(value: unknown): value is Session {
@@ -74,13 +309,22 @@ function toWebSocketUrl(args: {
   token: string
   workspaceId?: string
   sessionId?: string
+  afterSequence?: number
 }): URL {
   const wsUrl = new URL(args.baseUrl.toString())
   wsUrl.protocol = wsUrl.protocol === 'https:' ? 'wss:' : 'ws:'
   wsUrl.pathname = '/ws'
   wsUrl.searchParams.set('token', args.token)
+  wsUrl.searchParams.set('correlatedEvents', '1')
   if (args.workspaceId) wsUrl.searchParams.set('workspace', args.workspaceId)
   if (args.sessionId) wsUrl.searchParams.set('session_id', args.sessionId)
+  if (
+    args.afterSequence !== undefined &&
+    Number.isInteger(args.afterSequence) &&
+    args.afterSequence >= 0
+  ) {
+    wsUrl.searchParams.set('afterSequence', String(args.afterSequence))
+  }
   return wsUrl
 }
 
@@ -102,7 +346,15 @@ export class HttpClient implements SessionAwareKodeClient {
   private cancelRequested = false
   private promptSent = false
   private cancelPendingSend: (() => void) | null = null
-  private readonly eventListeners = new Set<(event: AgentEvent) => void>()
+  private activeRequest: {
+    clientMessageUuid: string
+    turnId: string | null
+  } | null = null
+  private readonly highestSequenceBySession = new Map<string, number>()
+  private readonly correlatedSessions = new Set<string>()
+  private readonly eventListeners = new Set<
+    (event: CorrelatedAgentEvent) => void
+  >()
   private readonly connectionListeners = new Set<ConnectionListener>()
 
   constructor(
@@ -131,7 +383,7 @@ export class HttpClient implements SessionAwareKodeClient {
     return this.attachedSessionId
   }
 
-  subscribeEvents(listener: (event: AgentEvent) => void): () => void {
+  subscribeEvents(listener: (event: CorrelatedAgentEvent) => void): () => void {
     this.eventListeners.add(listener)
     return () => {
       this.eventListeners.delete(listener)
@@ -175,12 +427,52 @@ export class HttpClient implements SessionAwareKodeClient {
     return this.attachedSessionId
   }
 
-  private emitEvent(event: AgentEvent): void {
+  private emitEvent(event: CorrelatedAgentEvent): void {
     for (const listener of this.eventListeners) {
       try {
         listener(event)
       } catch {}
     }
+  }
+
+  private consumeIncomingEvent(value: unknown): CorrelatedAgentEvent | null {
+    const decoded = decodeDaemonEvent(value)
+    if (!decoded) return null
+
+    const { event, metadata } = decoded
+    if (!metadata) {
+      if (event.type === 'system' && event.subtype === 'init') {
+        const sessionId = getEventSessionId(event)
+        if (sessionId) this.correlatedSessions.delete(sessionId)
+      }
+      return event
+    }
+
+    this.correlatedSessions.add(metadata.sessionId)
+    if (
+      event.type === 'history_begin' &&
+      metadata.replayed &&
+      metadata.sequence === 0 &&
+      metadata.snapshot
+    ) {
+      // A durable snapshot replaces the daemon's in-memory journal after a
+      // reload. Its sequence-zero boundary invalidates any cursor retained
+      // from the prior daemon lifetime before fresh live events arrive.
+      this.highestSequenceBySession.delete(metadata.sessionId)
+    }
+    // Durable transcript snapshots are intentionally all tagged sequence 0.
+    // They are distinct history entries, not replayed journal records, so they
+    // must reach observers in full and must never change the resume cursor.
+    if (metadata.replayed && metadata.sequence === 0) return event
+    if (!advancesReplayCursor(event)) return event
+
+    const previous = this.highestSequenceBySession.get(metadata.sessionId)
+    const duplicate = previous !== undefined && metadata.sequence <= previous
+    if (previous === undefined || metadata.sequence > previous) {
+      this.highestSequenceBySession.set(metadata.sessionId, metadata.sequence)
+    }
+
+    return duplicate ? null : event
   }
 
   private emitConnectionChange(connected: boolean): void {
@@ -274,6 +566,10 @@ export class HttpClient implements SessionAwareKodeClient {
       token: this.options.token,
       workspaceId: this.options.workspaceId,
       sessionId: args.desiredSessionId ?? undefined,
+      afterSequence:
+        args.desiredSessionId === null
+          ? undefined
+          : this.highestSequenceBySession.get(args.desiredSessionId),
     })
 
     const WebSocketImpl =
@@ -341,11 +637,8 @@ export class HttpClient implements SessionAwareKodeClient {
 
         const raw = (ev as IncomingMessageEvent).data
         const text = typeof raw === 'string' ? raw : String(raw ?? '')
-        const parsed = safeJsonParse(text)
-        const validated = AgentEventSchema.safeParse(parsed)
-        if (!validated.success) return
-
-        const event = validated.data
+        const event = this.consumeIncomingEvent(safeJsonParse(text))
+        if (!event) return
         if (event.type === 'system' && event.subtype === 'init') {
           const announcedSessionId = event.session_id?.trim() ?? ''
           if (!announcedSessionId) {
@@ -459,7 +752,15 @@ export class HttpClient implements SessionAwareKodeClient {
       }
     }
     if (!this.ws || this.ws.readyState !== 1) return
-    this.send({ type: 'cancel' })
+    this.send({
+      type: 'cancel',
+      ...(this.activeRequest?.turnId
+        ? { turnId: this.activeRequest.turnId }
+        : {}),
+      ...(this.activeRequest?.clientMessageUuid
+        ? { clientMessageUuid: this.activeRequest.clientMessageUuid }
+        : {}),
+    })
   }
 
   async approveToolUse(
@@ -552,9 +853,8 @@ export class HttpClient implements SessionAwareKodeClient {
 
     const events = Array.isArray(json.events)
       ? json.events
-          .map(event => AgentEventSchema.safeParse(event))
-          .filter(result => result.success)
-          .map(result => result.data)
+          .map(event => decodeDaemonEvent(event)?.event ?? null)
+          .filter((event): event is CorrelatedAgentEvent => event !== null)
       : undefined
 
     return { ...json, events }
@@ -564,13 +864,20 @@ export class HttpClient implements SessionAwareKodeClient {
     throw new Error('deleteSession is not supported by the daemon yet')
   }
 
-  async *sendMessage(message: string): AsyncGenerator<AgentEvent> {
+  async *sendMessage(
+    message: string,
+    options?: SendMessageOptions,
+  ): AsyncGenerator<CorrelatedAgentEvent> {
     if (this.sendInFlight) {
       throw new Error('Another message is already in flight for this client')
     }
+    const clientMessageUuid = createClientMessageUuid(
+      options?.clientMessageUuid,
+    )
     this.sendInFlight = true
     this.cancelRequested = false
     this.promptSent = false
+    this.activeRequest = { clientMessageUuid, turnId: null }
     let cancelPendingSend: (() => void) | null = null
 
     try {
@@ -587,10 +894,25 @@ export class HttpClient implements SessionAwareKodeClient {
       if (this.cancelRequested) return
       const ws = this.ws
 
-      const queue: AgentEvent[] = []
+      const queue: CorrelatedAgentEvent[] = []
       let resolveNext: (() => void) | null = null
       let done = false
       let streamError: Error | null = null
+      const sessionId = this.attachedSessionId ?? this.desiredSessionId
+      const requestFilter = createRequestStreamFilter({
+        clientMessageUuid,
+        sessionId,
+        correlationKnown:
+          sessionId !== null && this.correlatedSessions.has(sessionId),
+        onTurnId: turnId => {
+          if (
+            this.activeRequest?.clientMessageUuid === clientMessageUuid &&
+            this.activeRequest.turnId === null
+          ) {
+            this.activeRequest.turnId = turnId
+          }
+        },
+      })
 
       const wake = () => {
         if (!resolveNext) return
@@ -600,6 +922,7 @@ export class HttpClient implements SessionAwareKodeClient {
       }
 
       const unsubscribe = this.subscribeEvents(event => {
+        if (!requestFilter.accepts(event)) return
         queue.push(event)
 
         if (event.type === 'result') {
@@ -628,7 +951,11 @@ export class HttpClient implements SessionAwareKodeClient {
       })
 
       try {
-        this.send({ type: 'prompt', prompt: message })
+        this.send({
+          type: 'prompt',
+          prompt: message,
+          clientMessageUuid,
+        })
         this.promptSent = true
 
         while (!done || queue.length > 0) {
@@ -655,6 +982,9 @@ export class HttpClient implements SessionAwareKodeClient {
       this.promptSent = false
       this.cancelRequested = false
       this.sendInFlight = false
+      if (this.activeRequest?.clientMessageUuid === clientMessageUuid) {
+        this.activeRequest = null
+      }
     }
   }
 }
