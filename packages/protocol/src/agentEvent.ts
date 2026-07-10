@@ -32,6 +32,21 @@ export type SessionListEvent = {
   sessions: Session[]
 }
 
+/**
+ * Daemon-only correlation metadata. It deliberately lives outside the raw
+ * stream-json event so CLI print, ACP, and legacy WebSocket clients can keep
+ * consuming their existing wire format unchanged.
+ */
+export type DaemonEventMetadata = {
+  sessionId: string
+  turnId: string | null
+  clientMessageUuid: string | null
+  sequence: number
+  replayed: boolean
+  /** True only when replay establishes a full durable history snapshot. */
+  snapshot: boolean
+}
+
 export type AgentEvent =
   | SdkMessage
   | PermissionRequestEvent
@@ -39,6 +54,23 @@ export type AgentEvent =
   | HistoryEndEvent
   | TurnStateEvent
   | SessionListEvent
+
+/**
+ * Opt-in daemon WebSocket projection of an AgentEvent. Raw AgentEvent values
+ * remain the compatibility format for legacy clients and non-daemon outputs.
+ */
+export type DaemonEventEnvelope = {
+  type: 'daemon_event'
+  event: AgentEvent
+  metadata: DaemonEventMetadata
+}
+
+export type DaemonWsEvent = AgentEvent | DaemonEventEnvelope
+
+export type NormalizedDaemonWsEvent = {
+  event: AgentEvent
+  metadata: DaemonEventMetadata | null
+}
 
 const ContentBlockSchema = z
   .object({
@@ -187,6 +219,19 @@ const SessionListEventSchema = z
   })
   .strict()
 
+export const DaemonEventMetadataSchema: z.ZodType<DaemonEventMetadata> = z
+  .object({
+    sessionId: z.string().min(1),
+    turnId: z.string().min(1).nullable(),
+    clientMessageUuid: z.string().uuid().nullable(),
+    sequence: z.number().int().nonnegative(),
+    replayed: z.boolean(),
+    // Older capability producers did not carry this discriminator. Treat
+    // them as deltas so a new client does not reset a cursor unnecessarily.
+    snapshot: z.boolean().default(false),
+  })
+  .strict() as unknown as z.ZodType<DaemonEventMetadata>
+
 export const AgentEventSchema: z.ZodType<AgentEvent> = z.discriminatedUnion(
   'type',
   [
@@ -203,3 +248,35 @@ export const AgentEventSchema: z.ZodType<AgentEvent> = z.discriminatedUnion(
     SessionListEventSchema,
   ],
 ) as unknown as z.ZodType<AgentEvent>
+
+export const DaemonEventEnvelopeSchema: z.ZodType<DaemonEventEnvelope> = z
+  .object({
+    type: z.literal('daemon_event'),
+    event: AgentEventSchema,
+    metadata: DaemonEventMetadataSchema,
+  })
+  .strict() as unknown as z.ZodType<DaemonEventEnvelope>
+
+export const DaemonWsEventSchema: z.ZodType<DaemonWsEvent> = z.union([
+  AgentEventSchema,
+  DaemonEventEnvelopeSchema,
+])
+
+export function isDaemonEventEnvelope(
+  value: DaemonWsEvent,
+): value is DaemonEventEnvelope {
+  return value.type === 'daemon_event'
+}
+
+/**
+ * Lets clients consume either the legacy raw event or an opted-in daemon
+ * projection without duplicating envelope detection logic.
+ */
+export function normalizeDaemonWsEvent(
+  value: DaemonWsEvent,
+): NormalizedDaemonWsEvent {
+  if (isDaemonEventEnvelope(value)) {
+    return { event: value.event, metadata: value.metadata }
+  }
+  return { event: value, metadata: null }
+}

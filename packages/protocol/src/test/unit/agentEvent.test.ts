@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 
-import { AgentEventSchema } from '#protocol/agentEvent'
+import {
+  AgentEventSchema,
+  DaemonWsEventSchema,
+  normalizeDaemonWsEvent,
+} from '#protocol/agentEvent'
 
 const session = {
   sessionId: 'session-1',
@@ -99,5 +103,73 @@ describe('AgentEventSchema turn state contract', () => {
         unexpected: true,
       }).success,
     ).toBe(false)
+  })
+})
+
+describe('daemon correlated event envelope contract', () => {
+  test('keeps raw events compatible while accepting a strict daemon projection', () => {
+    const raw = {
+      type: 'turn_state' as const,
+      session_id: 'session-1',
+      state: 'running' as const,
+    }
+    expect(AgentEventSchema.parse(raw)).toEqual(raw)
+
+    const projected = DaemonWsEventSchema.parse({
+      type: 'daemon_event',
+      event: raw,
+      metadata: {
+        sessionId: 'session-1',
+        turnId: '11111111-1111-4111-8111-111111111111',
+        clientMessageUuid: '22222222-2222-4222-8222-222222222222',
+        sequence: 12,
+        replayed: false,
+        snapshot: false,
+      },
+    })
+
+    expect(normalizeDaemonWsEvent(projected)).toEqual({
+      event: raw,
+      metadata: {
+        sessionId: 'session-1',
+        turnId: '11111111-1111-4111-8111-111111111111',
+        clientMessageUuid: '22222222-2222-4222-8222-222222222222',
+        sequence: 12,
+        replayed: false,
+        snapshot: false,
+      },
+    })
+  })
+
+  test('rejects malformed or non-canonical correlation metadata', () => {
+    expect(
+      DaemonWsEventSchema.safeParse({
+        type: 'daemon_event',
+        event: { type: 'history_begin', sessionId: 'session-1' },
+        metadata: {
+          sessionId: 'session-1',
+          turnId: null,
+          clientMessageUuid: 'not-a-uuid',
+          sequence: -1,
+          replayed: true,
+        },
+      }).success,
+    ).toBe(false)
+  })
+
+  test('defaults a pre-snapshot envelope to a non-snapshot delta', () => {
+    const event = DaemonWsEventSchema.parse({
+      type: 'daemon_event',
+      event: { type: 'history_begin', sessionId: 'session-1' },
+      metadata: {
+        sessionId: 'session-1',
+        turnId: null,
+        clientMessageUuid: null,
+        sequence: 0,
+        replayed: true,
+      },
+    })
+
+    expect(normalizeDaemonWsEvent(event).metadata?.snapshot).toBe(false)
   })
 })
