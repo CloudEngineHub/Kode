@@ -1,5 +1,6 @@
 import type { Message as ApiMessage } from '@anthropic-ai/sdk/resources/index.mjs'
 import { randomUUID } from 'node:crypto'
+import type { AgentEvent } from '#protocol/agentEvent'
 
 import {
   createUserMessage,
@@ -34,7 +35,7 @@ import type { DaemonSession } from '../ws/types'
 import { waitForPermissionDecision } from '../ws/permissionRequests'
 import type { WrappedClient } from '@kode/core/mcp/client'
 
-type WsSend = (payload: unknown) => void
+type WsSend = (payload: AgentEvent) => void
 
 type PermissionRequest = {
   type: 'permission_request'
@@ -85,6 +86,7 @@ export async function handleChatPrompt(args: {
   wsSend: WsSend
   session: DaemonSession
   prompt: string
+  clientMessageUuid?: string
   echo: boolean
   echoDelayMs: number
   commands: unknown[]
@@ -98,12 +100,14 @@ export async function handleChatPrompt(args: {
     wsSend,
     session,
     prompt,
+    clientMessageUuid: requestedClientMessageUuid,
     echo,
     echoDelayMs,
     commands,
     tools,
     mcpClients,
   } = args
+  const clientMessageUuid = requestedClientMessageUuid ?? crypto.randomUUID()
 
   const abortController = new AbortController()
   session.activeAbortController = abortController
@@ -198,6 +202,7 @@ export async function handleChatPrompt(args: {
 
     if (echo) {
       const userMsg = createUserMessage(prompt)
+      userMsg.uuid = clientMessageUuid as typeof userMsg.uuid
       recordMessage(userMsg, { persist: true })
       userMessageRecorded = true
       const sdkUser = kodeMessageToSdkMessage(userMsg, session.sessionId)
@@ -341,6 +346,7 @@ export async function handleChatPrompt(args: {
     // completed. From here, the engine remains the canonical persistence
     // owner for normal turns (including compaction and sidechain records).
     const userMsg = createUserMessage(prompt)
+    userMsg.uuid = clientMessageUuid as typeof userMsg.uuid
     recordMessage(userMsg)
     userMessageRecorded = true
     const sdkUser = kodeMessageToSdkMessage(userMsg, session.sessionId)

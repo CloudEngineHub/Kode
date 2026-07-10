@@ -1,7 +1,12 @@
 import type { RawData } from 'ws'
+import { isUuid } from '@kode/core/utils/uuid'
 
 export type ClientWsMessage =
-  | { type: 'cancel' }
+  | {
+      type: 'cancel'
+      turnId?: string
+      clientMessageUuid?: string
+    }
   | {
       type: 'permission_response'
       requestId: string
@@ -20,7 +25,7 @@ export type ClientWsMessage =
   | { type: 'list_sessions' }
   | { type: 'new_session' }
   | { type: 'resume'; sessionId: string }
-  | { type: 'prompt'; prompt: string }
+  | { type: 'prompt'; prompt: string; clientMessageUuid?: string }
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
@@ -60,7 +65,28 @@ export function parseClientWsMessage(message: RawData):
   if (!isRecord(payload)) return { ok: false, error: 'Invalid payload' }
 
   const type = payload.type
-  if (type === 'cancel') return { ok: true, value: { type: 'cancel' } }
+  if (type === 'cancel') {
+    const turnId =
+      typeof payload.turnId === 'string' ? payload.turnId.trim() : ''
+    const clientMessageUuid =
+      typeof payload.clientMessageUuid === 'string'
+        ? payload.clientMessageUuid.trim()
+        : ''
+    if (turnId && !isUuid(turnId)) {
+      return { ok: false, error: 'Invalid turnId' }
+    }
+    if (clientMessageUuid && !isUuid(clientMessageUuid)) {
+      return { ok: false, error: 'Invalid clientMessageUuid' }
+    }
+    return {
+      ok: true,
+      value: {
+        type: 'cancel',
+        ...(turnId ? { turnId } : {}),
+        ...(clientMessageUuid ? { clientMessageUuid } : {}),
+      },
+    }
+  }
   if (type === 'list_sessions')
     return { ok: true, value: { type: 'list_sessions' } }
   if (type === 'new_session')
@@ -119,7 +145,21 @@ export function parseClientWsMessage(message: RawData):
   if (type === 'prompt') {
     const prompt = typeof payload.prompt === 'string' ? payload.prompt : ''
     if (!prompt.trim()) return { ok: false, error: 'Missing prompt' }
-    return { ok: true, value: { type: 'prompt', prompt } }
+    const clientMessageUuid =
+      typeof payload.clientMessageUuid === 'string'
+        ? payload.clientMessageUuid.trim()
+        : ''
+    if (clientMessageUuid && !isUuid(clientMessageUuid)) {
+      return { ok: false, error: 'Invalid clientMessageUuid' }
+    }
+    return {
+      ok: true,
+      value: {
+        type: 'prompt',
+        prompt,
+        ...(clientMessageUuid ? { clientMessageUuid } : {}),
+      },
+    }
   }
 
   if (type === 'permission_response') {

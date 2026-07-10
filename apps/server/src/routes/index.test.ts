@@ -130,6 +130,44 @@ describe('createRoutes health endpoint', () => {
     expect(sessionRegistry.size).toBe(0)
   })
 
+  test('passes the opt-in correlation capability and cursor to WebSocket handlers', async () => {
+    const sessionRegistry = new SessionRegistry()
+    const routes = createTestRoutes({ sessionRegistry })
+    let data: Record<string, unknown> | null = null
+
+    const response = await routes.fetch(
+      new Request('http://localhost/ws?correlatedEvents=1&afterSequence=12'),
+      {
+        upgrade: (_request, options) => {
+          data = options.data as unknown as Record<string, unknown>
+          return true
+        },
+      },
+    )
+
+    expect(response).toBeUndefined()
+    expect(data).toMatchObject({
+      correlatedEvents: true,
+      afterSequence: 12,
+      replayHistory: false,
+    })
+  })
+
+  test('rejects invalid correlation cursors before creating an upgrade session', async () => {
+    const sessionRegistry = new SessionRegistry()
+    const routes = createTestRoutes({ sessionRegistry })
+
+    const response = await routes.fetch(
+      new Request('http://localhost/ws?correlatedEvents=1&afterSequence=-1'),
+      { upgrade: () => false },
+    )
+
+    if (!response) throw new Error('missing response')
+    expect(response.status).toBe(400)
+    expect(await response.text()).toBe('Invalid afterSequence')
+    expect(sessionRegistry.size).toBe(0)
+  })
+
   test('cleans a new session before propagating a thrown upgrade error', async () => {
     const sessionRegistry = new SessionRegistry()
     const routes = createTestRoutes({ sessionRegistry })

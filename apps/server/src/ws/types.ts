@@ -1,9 +1,11 @@
 import type { Message } from '@kode/core/query'
 import type { ToolUseContext } from '@kode/core/tooling/Tool'
 import type { ToolPermissionContext } from '@kode/core/types/toolPermissionContext'
+import type { AgentEvent, DaemonEventMetadata } from '#protocol/agentEvent'
 
 export type DaemonClient = {
   send: (data: string) => void
+  data?: Record<string, unknown>
 }
 
 export type InflightPermissionDecision = {
@@ -17,6 +19,18 @@ export type InflightPermissionRequest = {
   resolve: (value: InflightPermissionDecision) => void
 }
 
+export type DaemonTurn = {
+  turnId: string
+  clientMessageUuid: string
+  state: 'running' | 'completed'
+  terminalEvent: AgentEvent | null
+}
+
+export type DaemonSessionJournalEntry = {
+  event: AgentEvent
+  metadata: DaemonEventMetadata
+}
+
 export type DaemonSession = {
   sessionId: string
   cwd: string
@@ -28,4 +42,7 @@ export type DaemonSession = {
   activeAbortController: AbortController | null
   turnInFlight: boolean
   inflightPermissionRequests: Map<string, InflightPermissionRequest>
+  nextSequence: number
+  eventJournal: DaemonSessionJournalEntry[]
+  turnsByClientMessageUuid: Map<string, DaemonTurn>
 }

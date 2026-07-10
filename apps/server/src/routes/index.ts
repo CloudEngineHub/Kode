@@ -19,6 +19,8 @@ type UpgradeServer<TData> = {
 type WebSocketData = {
   session: DaemonSession
   replayHistory: boolean
+  correlatedEvents: boolean
+  afterSequence: number | null
 }
 
 export function createRoutes(args: {
@@ -147,6 +149,24 @@ export function createRoutes(args: {
           url.searchParams.get('session_id') ??
           url.searchParams.get('sessionId') ??
           ''
+        const correlatedEvents =
+          url.searchParams.get('correlatedEvents') === '1'
+        const afterSequenceRaw = url.searchParams.get('afterSequence')
+        const afterSequence =
+          afterSequenceRaw === null || afterSequenceRaw.trim() === ''
+            ? null
+            : Number(afterSequenceRaw)
+        if (
+          afterSequence !== null &&
+          (!Number.isSafeInteger(afterSequence) || afterSequence < 0)
+        ) {
+          return new Response('Invalid afterSequence', { status: 400 })
+        }
+        if (afterSequence !== null && !correlatedEvents) {
+          return new Response('afterSequence requires correlatedEvents=1', {
+            status: 400,
+          })
+        }
         let session: DaemonSession
         let replayHistory = false
         let removeOnUpgradeFailure = false
@@ -177,7 +197,7 @@ export function createRoutes(args: {
         let ok = false
         try {
           ok = server.upgrade(req, {
-            data: { session, replayHistory },
+            data: { session, replayHistory, correlatedEvents, afterSequence },
           })
         } finally {
           if (!ok && removeOnUpgradeFailure) {

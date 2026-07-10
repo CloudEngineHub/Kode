@@ -7,6 +7,7 @@ import {
   makeSdkResultMessage,
   kodeMessageToSdkMessage,
 } from '#protocol/utils/kodeAgentStreamJson'
+import type { AgentEvent } from '#protocol/agentEvent'
 import { isUuid } from '@kode/core/utils/uuid'
 import { setCwd, setOriginalCwd } from '@kode/core/utils/state'
 import { grantReadPermissionForOriginalDir } from '@kode/core/utils/permissions/filesystem'
@@ -25,7 +26,7 @@ import { resolveToolDescription } from '@kode/core/tooling/Tool'
 import { sendSessionList } from '../handlers/session.handler'
 import { handleChatPrompt } from '../handlers/chat.handler'
 import { parseClientWsMessage, sendJson, log } from './events'
-import type { DaemonClient, DaemonSession } from './types'
+import type { DaemonClient, DaemonSession, DaemonTurn } from './types'
 import {
   denyAllPermissionRequests,
   denyPermissionRequestsOwnedBy,
@@ -34,15 +35,25 @@ import {
 } from './permissionRequests'
 import {
   addSessionClient,
-  broadcastSessionJson,
+  allocateSessionSequence,
+  completeSessionTurn,
+  getOrCreateSessionTurn,
+  publishSessionEvent,
+  replaySessionJournalToClient,
   removeSessionClient,
+  sendSessionEventToClient,
 } from './sessionBroadcaster'
 import { resolveInProjectRoot, toGitPath } from '../server/pathSecurity'
 import type { SessionRegistry } from '../sessionRegistry'
 import type { DaemonTurnGate } from '../turnGate'
 
 type WsWithSession = WebSocket & {
-  data: { session: DaemonSession; replayHistory: boolean }
+  data: {
+    session: DaemonSession
+    replayHistory: boolean
+    correlatedEvents: boolean
+    afterSequence: number | null
+  }
 }
 
 type PermissionRequest = {
@@ -104,6 +115,57 @@ function broadcastSessionList(session: DaemonSession) {
 }
 
 function replaySessionHistory(ws: WsWithSession, session: DaemonSession) {
+  if (ws.data.correlatedEvents) {
+    const oldestJournalSequence = session.eventJournal[0]?.metadata.sequence
+    const canReplayFromCursor =
+      ws.data.afterSequence !== null &&
+      oldestJournalSequence !== undefined &&
+      ws.data.afterSequence >= oldestJournalSequence - 1
+    const snapshot = !canReplayFromCursor
+
+    sendSessionEventToClient({
+      client: ws,
+      session,
+      event: { type: 'history_begin', sessionId: session.sessionId },
+      replayed: true,
+      snapshot,
+      sequence: 0,
+    })
+
+    if (canReplayFromCursor) {
+      replaySessionJournalToClient({
+        client: ws,
+        session,
+        afterSequence: ws.data.afterSequence ?? 0,
+      })
+    } else {
+      // A clean attach, daemon reload, or cursor older than the bounded journal
+      // gets a durable message snapshot rather than an incomplete tail.
+      for (const m of session.messages) {
+        const sdk = kodeMessageToSdkMessage(m, session.sessionId)
+        if (!sdk) continue
+        sendSessionEventToClient({
+          client: ws,
+          session,
+          event: sdk,
+          replayed: true,
+          snapshot: true,
+          sequence: 0,
+        })
+      }
+    }
+
+    sendSessionEventToClient({
+      client: ws,
+      session,
+      event: { type: 'history_end', sessionId: session.sessionId },
+      replayed: true,
+      snapshot,
+      sequence: 0,
+    })
+    return
+  }
+
   sendJson(ws, { type: 'history_begin', sessionId: session.sessionId })
   for (const m of session.messages) {
     const sdk = kodeMessageToSdkMessage(m, session.sessionId)
@@ -112,12 +174,25 @@ function replaySessionHistory(ws: WsWithSession, session: DaemonSession) {
   sendJson(ws, { type: 'history_end', sessionId: session.sessionId })
 }
 
-function makeTurnState(session: DaemonSession) {
+function makeTurnState(session: DaemonSession): AgentEvent {
   return {
     type: 'turn_state' as const,
     session_id: session.sessionId,
     state: session.turnInFlight ? ('running' as const) : ('idle' as const),
   }
+}
+
+function makeRecoveredTurnResult(session: DaemonSession): AgentEvent {
+  return makeSdkResultMessage({
+    sessionId: session.sessionId,
+    result:
+      'Request already completed before daemon restart; replayed session history is authoritative.',
+    numTurns: 0,
+    totalCostUsd: 0,
+    durationMs: 0,
+    durationApiMs: 0,
+    isError: true,
+  })
 }
 
 function moveClientToSession(
@@ -133,6 +208,7 @@ function moveClientToSession(
     denyAllPermissionRequests(previousSession, 'Disconnected')
   }
   ws.data.session = nextSession
+  ws.data.afterSequence = null
   addSessionClient(nextSession, ws)
 }
 
@@ -283,17 +359,22 @@ export function createWebSocketHandlers(args: {
     open(ws: WsWithSession) {
       const session = ws.data.session
       addSessionClient(session, ws)
-      sendJson(
-        ws,
-        makeSdkInitMessage({
+      sendSessionEventToClient({
+        client: ws,
+        session,
+        event: makeSdkInitMessage({
           sessionId: session.sessionId,
           cwd: session.cwd,
           tools: args.toolNames,
           slashCommands: args.slashCommands,
         }),
-      )
+      })
       if (ws.data.replayHistory) replaySessionHistory(ws, session)
-      sendJson(ws, makeTurnState(session))
+      sendSessionEventToClient({
+        client: ws,
+        session,
+        event: makeTurnState(session),
+      })
       sendSessionListToClient(ws, session)
     },
 
@@ -308,6 +389,23 @@ export function createWebSocketHandlers(args: {
       const payload = parsed.value
 
       if (payload.type === 'cancel') {
+        const hasTurnSelector = Boolean(
+          payload.turnId || payload.clientMessageUuid,
+        )
+        const selectedTurn = (
+          Array.from(session.turnsByClientMessageUuid.values()) as DaemonTurn[]
+        ).find(turn => {
+          if (turn.state !== 'running') return false
+          if (payload.turnId && turn.turnId !== payload.turnId) return false
+          if (
+            payload.clientMessageUuid &&
+            turn.clientMessageUuid !== payload.clientMessageUuid
+          ) {
+            return false
+          }
+          return true
+        })
+        if (hasTurnSelector && !selectedTurn) return
         try {
           session.activeAbortController?.abort()
         } catch {}
@@ -342,17 +440,22 @@ export function createWebSocketHandlers(args: {
         const nextSession = args.sessionRegistry.create(session.cwd)
         moveClientToSession(ws, nextSession)
         args.sessionRegistry.evictIdleSessions()
-        sendJson(
-          ws,
-          makeSdkInitMessage({
+        sendSessionEventToClient({
+          client: ws,
+          session: nextSession,
+          event: makeSdkInitMessage({
             sessionId: nextSession.sessionId,
             cwd: nextSession.cwd,
             tools: args.toolNames,
             slashCommands: args.slashCommands,
           }),
-        )
+        })
         replaySessionHistory(ws, nextSession)
-        sendJson(ws, makeTurnState(nextSession))
+        sendSessionEventToClient({
+          client: ws,
+          session: nextSession,
+          event: makeTurnState(nextSession),
+        })
         sendSessionListToClient(ws, nextSession)
         return
       }
@@ -388,48 +491,106 @@ export function createWebSocketHandlers(args: {
         }
         moveClientToSession(ws, found.session)
         args.sessionRegistry.evictIdleSessions()
-        sendJson(
-          ws,
-          makeSdkInitMessage({
+        sendSessionEventToClient({
+          client: ws,
+          session: found.session,
+          event: makeSdkInitMessage({
             sessionId: found.session.sessionId,
             cwd: found.session.cwd,
             tools: args.toolNames,
             slashCommands: args.slashCommands,
           }),
-        )
+        })
         replaySessionHistory(ws, found.session)
-        sendJson(ws, makeTurnState(found.session))
+        sendSessionEventToClient({
+          client: ws,
+          session: found.session,
+          event: makeTurnState(found.session),
+        })
         sendSessionListToClient(ws, found.session)
         return
       }
 
       if (payload.type === 'prompt') {
-        const turnLease = args.turnGate.tryAcquire(session)
-        if (!turnLease) {
-          sendJson(
-            ws,
-            makeSdkResultMessage({
-              sessionId: session.sessionId,
-              result: 'Another turn is already active',
-              numTurns: 0,
-              totalCostUsd: 0,
-              durationMs: 0,
-              durationApiMs: 0,
-              isError: true,
-            }),
-          )
+        const clientMessageUuid =
+          payload.clientMessageUuid ?? crypto.randomUUID()
+        const { turn, created } = getOrCreateSessionTurn({
+          session,
+          clientMessageUuid,
+        })
+
+        // A retry with the same client-owned UUID attaches to the existing
+        // daemon turn instead of creating a second optimistic user message.
+        if (!created) {
+          if (ws.data.correlatedEvents) {
+            replaySessionJournalToClient({
+              client: ws,
+              session,
+              afterSequence: ws.data.afterSequence ?? 0,
+            })
+          }
+          if (turn.state === 'completed') {
+            const terminalEvent =
+              turn.terminalEvent ?? makeRecoveredTurnResult(session)
+            if (!turn.terminalEvent) {
+              completeSessionTurn({ session, turn, terminalEvent })
+            }
+            sendSessionEventToClient({
+              client: ws,
+              session,
+              event: terminalEvent,
+              turn,
+              sequence: allocateSessionSequence(session),
+            })
+          } else {
+            sendSessionEventToClient({
+              client: ws,
+              session,
+              event: makeTurnState(session),
+              turn,
+            })
+          }
           return
         }
-        broadcastSessionJson(session, makeTurnState(session))
 
-        const wsSend = (outgoing: unknown) =>
-          broadcastSessionJson(session, outgoing)
+        const turnLease = args.turnGate.tryAcquire(session)
+        if (!turnLease) {
+          const busyResult = makeSdkResultMessage({
+            sessionId: session.sessionId,
+            result: 'Another turn is already active',
+            numTurns: 0,
+            totalCostUsd: 0,
+            durationMs: 0,
+            durationApiMs: 0,
+            isError: true,
+          })
+          completeSessionTurn({ session, turn, terminalEvent: busyResult })
+          sendSessionEventToClient({
+            client: ws,
+            session,
+            event: busyResult,
+            turn,
+            sequence: allocateSessionSequence(session),
+          })
+          return
+        }
+        publishSessionEvent({
+          session,
+          event: makeTurnState(session),
+          turn,
+        })
+
+        const wsSend = (outgoing: AgentEvent) => {
+          if (outgoing.type === 'result') turn.terminalEvent = outgoing
+          publishSessionEvent({ session, event: outgoing, turn })
+        }
 
         try {
           await promptHandler({
             wsSend,
             session,
             prompt: payload.prompt,
+            clientMessageUuid,
             echo: args.echo,
             echoDelayMs: args.echoDelayMs,
             commands: args.commands,
@@ -453,9 +614,14 @@ export function createWebSocketHandlers(args: {
             }),
           )
         } finally {
+          completeSessionTurn({ session, turn })
           turnLease.release()
           args.sessionRegistry.evictIdleSessions()
-          broadcastSessionJson(session, makeTurnState(session))
+          publishSessionEvent({
+            session,
+            event: makeTurnState(session),
+            turn,
+          })
           broadcastSessionList(session)
         }
       }

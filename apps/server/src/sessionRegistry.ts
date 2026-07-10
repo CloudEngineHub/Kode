@@ -11,6 +11,27 @@ export type SessionLookupResult =
   | { ok: false; reason: 'not_found' | 'cwd_mismatch' }
 
 export const DEFAULT_MAX_IDLE_SESSIONS = 100
+export const DEFAULT_RESTORED_TURN_DEDUP_LIMIT = 512
+
+function createRestoredTurnIndex(
+  messages: DaemonSession['messages'],
+): DaemonSession['turnsByClientMessageUuid'] {
+  const turns: DaemonSession['turnsByClientMessageUuid'] = new Map()
+  const restoredUserMessages = messages.filter(
+    message => message.type === 'user',
+  )
+  for (const message of restoredUserMessages.slice(
+    -DEFAULT_RESTORED_TURN_DEDUP_LIMIT,
+  )) {
+    turns.set(message.uuid, {
+      turnId: crypto.randomUUID(),
+      clientMessageUuid: message.uuid,
+      state: 'completed',
+      terminalEvent: null,
+    })
+  }
+  return turns
+}
 
 function isIdleSession(session: DaemonSession): boolean {
   return (
@@ -27,11 +48,12 @@ export function createDaemonSession(args: {
   messages?: DaemonSession['messages']
 }): DaemonSession {
   const cwd = resolve(args.cwd)
+  const messages = args.messages ?? []
   return {
     sessionId: args.sessionId ?? crypto.randomUUID(),
     cwd,
     clients: new Set(),
-    messages: args.messages ?? [],
+    messages,
     readFileTimestamps: {},
     responseState: {},
     toolPermissionContext: loadToolPermissionContextFromDisk({
@@ -42,6 +64,9 @@ export function createDaemonSession(args: {
     activeAbortController: null,
     turnInFlight: false,
     inflightPermissionRequests: new Map(),
+    nextSequence: 1,
+    eventJournal: [],
+    turnsByClientMessageUuid: createRestoredTurnIndex(messages),
   }
 }
 

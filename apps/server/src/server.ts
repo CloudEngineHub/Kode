@@ -19,6 +19,8 @@ import { processDaemonRuntimeCoordinator } from './turnGate'
 type WebSocketData = {
   session: DaemonSession
   replayHistory: boolean
+  correlatedEvents: boolean
+  afterSequence: number | null
 }
 
 export type KodeDaemon = {

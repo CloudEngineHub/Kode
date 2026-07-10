@@ -117,4 +117,65 @@ describe('HTTP chat turn state', () => {
     expect(sessionRegistry.get(session.sessionId)).toBeNull()
     expect(sessionRegistry.get(retained.sessionId)).toBe(retained)
   })
+
+  test('does not leak an HTTP busy result into a legacy WebSocket replay or stream', async () => {
+    const sessionRegistry = new SessionRegistry()
+    const session = sessionRegistry.create(process.cwd())
+    const turnGate = new DaemonTurnGate()
+    const lease = turnGate.tryAcquire(session)
+    if (!lease) throw new Error('expected lease')
+    const legacyEvents: CapturedEvent[] = []
+    const correlatedEvents: CapturedEvent[] = []
+    session.clients.add({
+      send(data) {
+        legacyEvents.push(JSON.parse(data) as CapturedEvent)
+      },
+    })
+    session.clients.add({
+      data: { correlatedEvents: true },
+      send(data) {
+        correlatedEvents.push(JSON.parse(data) as CapturedEvent)
+      },
+    })
+
+    try {
+      const response = await routeChat(
+        new Request('http://localhost/api/chat', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: session.sessionId,
+            prompt: 'busy',
+            clientMessageUuid: '77777777-7777-4777-8777-777777777777',
+          }),
+        }),
+        {
+          sessionRegistry,
+          turnGate,
+          resolveCwd: async () => process.cwd(),
+          echo: true,
+          echoDelayMs: 0,
+          commands: [],
+          tools: [],
+          toolNames: [],
+          slashCommands: [],
+          mcpClients: [],
+        },
+      )
+
+      expect(response?.status).toBe(409)
+      expect(legacyEvents).toEqual([])
+      expect(correlatedEvents).toHaveLength(1)
+      expect(correlatedEvents[0]).toMatchObject({
+        type: 'daemon_event',
+        event: { type: 'result', is_error: true },
+        metadata: {
+          clientMessageUuid: '77777777-7777-4777-8777-777777777777',
+        },
+      })
+      expect(session.eventJournal).toEqual([])
+    } finally {
+      lease.release()
+    }
+  })
 })
