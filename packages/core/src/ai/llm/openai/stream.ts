@@ -127,15 +127,6 @@ function hasAnyAssistantOutput(message: OpenAI.ChatCompletionMessage): boolean {
   )
 }
 
-function hasFinalAssistantOutput(
-  message: OpenAI.ChatCompletionMessage,
-): boolean {
-  return (
-    (typeof message.content === 'string' && message.content.length > 0) ||
-    (Array.isArray(message.tool_calls) && message.tool_calls.length > 0)
-  )
-}
-
 export function isOpenAIStreamDegradedResponse(
   response: OpenAI.ChatCompletion,
 ): response is OpenAIStreamDegradedCompletion {
@@ -272,13 +263,6 @@ export async function handleMessageStream(
       throw new OpenAIStreamError(
         'empty_response',
         'OpenAI stream completed without assistant content or tool calls',
-      )
-    }
-
-    if (!hasFinalAssistantOutput(message)) {
-      throw new OpenAIStreamError(
-        'empty_response',
-        'OpenAI stream completed with reasoning only and no assistant content or tool calls',
       )
     }
 

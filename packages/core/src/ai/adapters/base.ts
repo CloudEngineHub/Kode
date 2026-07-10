@@ -18,6 +18,7 @@ interface TokenUsage {
 // Streaming event types for async generator streaming
 export type StreamingEvent =
   | { type: 'message_start'; message: any; responseId: string }
+  | { type: 'thinking_delta'; delta: string; responseId: string }
   | { type: 'text_delta'; delta: string; responseId: string }
   | { type: 'tool_request'; tool: any }
   | { type: 'usage'; usage: TokenUsage }

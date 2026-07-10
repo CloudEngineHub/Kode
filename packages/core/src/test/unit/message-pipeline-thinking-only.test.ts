@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { createAssistantMessage, createUserMessage } from '#core/utils/messages'
 import type { AssistantMessage, Message } from '@kode/engine/message-pipeline'
 import { __setLlmLazyQueryLLMLoaderForTests } from '#core/ai/llmLazy'
+import { handleMessageStream } from '#core/ai/llm/openai/stream'
+import { convertOpenAIResponseToAnthropic } from '#core/ai/llm/openai/conversion'
 
 type QueryLLMImplementation = (
   messages: Message[],
@@ -33,6 +35,29 @@ function createThinkingOnlyMessage(text: string): AssistantMessage {
       ],
     },
   } as AssistantMessage
+}
+
+async function createCompletedLegacyReasoningOnlyMessage(): Promise<AssistantMessage> {
+  async function* stream() {
+    yield {
+      id: 'chatcmpl_reasoning_only',
+      model: 'reasoning-model',
+      created: 1,
+      object: 'chat.completion.chunk',
+      choices: [
+        {
+          index: 0,
+          delta: { reasoning_content: 'Plan the next step' },
+          finish_reason: null,
+        },
+      ],
+    }
+  }
+
+  const completion = await handleMessageStream(stream() as any)
+  const message = convertOpenAIResponseToAnthropic(completion, [])
+  const base = createAssistantMessage('')
+  return { ...base, message } as AssistantMessage
 }
 
 function createToolUseContext(maxTurns?: number) {
@@ -135,5 +160,38 @@ describe('messagePipeline thinking-only recovery', () => {
       '4 consecutive attempts',
     )
     expect(toolUseContext.turnCount).toBe(1)
+  })
+
+  test('continues after a completed legacy OpenAI reasoning-only stream', async () => {
+    queryLLM.mockClear()
+    let callCount = 0
+    queryLLMImplementation = async () => {
+      callCount += 1
+      if (callCount === 1) {
+        return createCompletedLegacyReasoningOnlyMessage()
+      }
+      return createAssistantMessage('Recovered final response.')
+    }
+
+    const { messagePipeline } = await import('@kode/engine/message-pipeline')
+    const out: Message[] = []
+    for await (const message of messagePipeline(
+      [createUserMessage('Continue the task.')],
+      [],
+      {},
+      (async () => ({ result: true })) as any,
+      createToolUseContext(1),
+    )) {
+      out.push(message)
+    }
+
+    const assistantMessages = out.filter(
+      (message): message is AssistantMessage => message.type === 'assistant',
+    )
+    expect(queryLLM).toHaveBeenCalledTimes(2)
+    expect(assistantMessages[0]?.message.content[0]?.type).toBe('thinking')
+    expect(assistantMessages.at(-1)?.message.content[0]?.text).toBe(
+      'Recovered final response.',
+    )
   })
 })

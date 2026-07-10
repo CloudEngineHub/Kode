@@ -471,6 +471,58 @@ describe('Responses API Tests', () => {
       expect(request.text.verbosity).toBe('high')
     })
 
+    test('keeps streamed reasoning separate before emitting final text', async () => {
+      const adapter = ModelAdapterFactory.createAdapter(testModel)
+      const updates: Array<{ type: string; delta?: string }> = []
+      const streamData = [
+        'data: {"type":"response.created","response":{"id":"resp-thinking-then-text"}}\n\n',
+        'data: {"type":"response.reasoning_summary_part.added","summary_index":0}\n\n',
+        'data: {"type":"response.reasoning_summary_text.delta","delta":"Plan the answer"}\n\n',
+        'data: {"type":"response.output_text.delta","delta":"Final answer"}\n\n',
+        'data: {"type":"response.completed","response":{"id":"resp-thinking-then-text"}}\n\n',
+        'data: [DONE]\n\n',
+      ].join('')
+
+      const response = await adapter.parseResponse(new Response(streamData), {
+        onAssistantStreamUpdate: event => {
+          updates.push(event)
+        },
+      })
+
+      expect(response.content).toEqual([
+        {
+          type: 'thinking',
+          thinking: 'Plan the answer',
+          signature: '',
+        },
+        { type: 'text', text: 'Final answer', citations: [] },
+      ])
+      expect(updates).toEqual([
+        { type: 'start' },
+        { type: 'text_delta', delta: 'Final answer' },
+      ])
+    })
+
+    test('preserves a completed reasoning-only response for turn recovery', async () => {
+      const adapter = ModelAdapterFactory.createAdapter(testModel)
+      const streamData = [
+        'data: {"type":"response.created","response":{"id":"resp-thinking-only"}}\n\n',
+        'data: {"type":"response.reasoning_text.delta","delta":"Need one more step"}\n\n',
+        'data: {"type":"response.completed","response":{"id":"resp-thinking-only"}}\n\n',
+        'data: [DONE]\n\n',
+      ].join('')
+
+      const response = await adapter.parseResponse(new Response(streamData))
+
+      expect(response.content).toEqual([
+        {
+          type: 'thinking',
+          thinking: 'Need one more step',
+          signature: '',
+        },
+      ])
+    })
+
     test('processes real GPT-5 reasoning stream with reasoning items and text deltas', async () => {
       const adapter = ModelAdapterFactory.createAdapter(testModel)
 

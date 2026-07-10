@@ -365,9 +365,9 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
       if (partIndex > 0 && reasoningContext!.thinkingContent) {
         reasoningContext!.thinkingContent += '\n\n'
 
-        // Emit newline separator as thinking delta
+        // Keep provider reasoning separate from user-facing output.
         yield {
-          type: 'text_delta',
+          type: 'thinking_delta',
           delta: '\n\n',
           responseId,
         }
@@ -384,9 +384,10 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
         // Accumulate thinking content
         reasoningContext.thinkingContent += delta
 
-        // Stream thinking delta
+        // Do not turn reasoning into user-facing text. A thinking-only
+        // response must remain detectable by the turn recovery pipeline.
         yield {
-          type: 'text_delta',
+          type: 'thinking_delta',
           delta,
           responseId,
         }
@@ -403,9 +404,10 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
         // Accumulate thinking content
         reasoningContext.thinkingContent += delta
 
-        // Stream thinking delta
+        // Do not turn reasoning into user-facing text. A thinking-only
+        // response must remain detectable by the turn recovery pipeline.
         yield {
-          type: 'text_delta',
+          type: 'thinking_delta',
           delta,
           responseId,
         }
