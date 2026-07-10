@@ -92,7 +92,8 @@ export interface KodeClient {
   loadSession(sessionId: string): Promise<Session>
 
   /**
-   * Delete a session and its persisted history (if supported).
+   * Archive a session when the implementation supports lifecycle controls.
+   * Daemon-backed clients preserve the persisted transcript for recovery.
    */
   deleteSession(sessionId: string): Promise<void>
 
@@ -125,4 +126,32 @@ export interface SessionAwareKodeClient extends KodeClient {
 
   /** Return the session id most recently confirmed by the server. */
   getAttachedSessionId(): string | null
+}
+
+/**
+ * Experimental daemon-only controls for persistent session lifecycle.
+ * Kept separate from KodeClient so in-process clients remain source compatible.
+ */
+export type SessionMetadataUpdate = {
+  customTitle?: string | null
+  tag?: string | null
+  summary?: string | null
+  archived?: boolean
+}
+
+export type ForkSessionOptions = {
+  newSessionId?: string
+  beforeUuid?: string
+  includeUuid?: boolean
+  customTitle?: string | null
+  tag?: string | null
+  summary?: string | null
+}
+
+export interface SessionControlKodeClient {
+  updateSessionMetadata(
+    sessionId: string,
+    update: SessionMetadataUpdate,
+  ): Promise<Session>
+  forkSession(sessionId: string, options?: ForkSessionOptions): Promise<Session>
 }

@@ -3,7 +3,10 @@ export type {
   KodeClient,
   RuntimeStatus,
   SendMessageOptions,
+  ForkSessionOptions,
   SessionAwareKodeClient,
+  SessionControlKodeClient,
+  SessionMetadataUpdate,
   ToolPermissionDecision,
   ToolPermissionInputUpdate,
 } from './types'

@@ -875,4 +875,114 @@ describe('HttpClient', () => {
       client.loadSession('11111111-1111-4111-8111-111111111111'),
     ).rejects.toThrow('Invalid session response')
   })
+
+  test('deleteSession archives a daemon session over authenticated HTTP', async () => {
+    const fetchCalls: Array<{
+      url: string
+      method: string | undefined
+      headers: Record<string, string>
+    }> = []
+    const client = new HttpClient({
+      baseUrl: 'http://localhost:32123',
+      token: 'token',
+      workspaceId: 'workspace-a',
+      webSocketImpl: FakeWebSocket,
+      fetchImpl: async (input, init) => {
+        fetchCalls.push({
+          url: String(input),
+          method: init?.method,
+          headers: init?.headers ?? {},
+        })
+        return Response.json({ ok: true, archived: true })
+      },
+    })
+
+    await client.deleteSession('11111111-1111-4111-8111-111111111111')
+
+    expect(fetchCalls).toEqual([
+      {
+        url: 'http://localhost:32123/api/sessions/11111111-1111-4111-8111-111111111111?workspace=workspace-a',
+        method: 'DELETE',
+        headers: { authorization: 'Bearer token' },
+      },
+    ])
+  })
+
+  test('deleteSession rejects invalid ids before issuing a request', async () => {
+    let calls = 0
+    const client = new HttpClient({
+      baseUrl: 'http://localhost:32123',
+      token: 'token',
+      webSocketImpl: FakeWebSocket,
+      fetchImpl: async () => {
+        calls += 1
+        return Response.json({ ok: true })
+      },
+    })
+
+    await expect(client.deleteSession('not-a-uuid')).rejects.toThrow(
+      'Invalid session id',
+    )
+    expect(calls).toBe(0)
+  })
+
+  test('updates metadata and forks sessions through the experimental control API', async () => {
+    const calls: Array<{
+      url: string
+      method: string | undefined
+      body: string | undefined
+    }> = []
+    const session = {
+      sessionId: '11111111-1111-4111-8111-111111111111',
+      slug: 'forked-session',
+      customTitle: 'Forked',
+      tag: 'work',
+      summary: 'summary',
+      cwd: '/repo',
+      createdAt: null,
+      modifiedAt: null,
+    }
+    const client = new HttpClient({
+      baseUrl: 'http://localhost:32123',
+      token: 'token',
+      webSocketImpl: FakeWebSocket,
+      fetchImpl: async (input, init) => {
+        calls.push({
+          url: String(input),
+          method: init?.method,
+          body: init?.body,
+        })
+        return Response.json({ ok: true, session })
+      },
+    })
+
+    await expect(
+      client.updateSessionMetadata(session.sessionId, {
+        customTitle: null,
+        summary: 'new summary',
+      }),
+    ).resolves.toMatchObject({ customTitle: 'Forked' })
+    await expect(
+      client.forkSession(session.sessionId, {
+        newSessionId: '22222222-2222-4222-8222-222222222222',
+        beforeUuid: '33333333-3333-4333-8333-333333333333',
+      }),
+    ).resolves.toMatchObject({ sessionId: session.sessionId })
+
+    expect(calls).toEqual([
+      {
+        url: `http://localhost:32123/api/sessions/${session.sessionId}`,
+        method: 'PATCH',
+        body: JSON.stringify({ customTitle: null, summary: 'new summary' }),
+      },
+      {
+        url: `http://localhost:32123/api/sessions/${session.sessionId}/fork`,
+        method: 'POST',
+        body: JSON.stringify({
+          newSessionId: '22222222-2222-4222-8222-222222222222',
+          beforeUuid: '33333333-3333-4333-8333-333333333333',
+        }),
+      },
+    ])
+  })
 })

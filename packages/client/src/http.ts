@@ -4,8 +4,11 @@ import { DaemonWsEventSchema, normalizeDaemonWsEvent } from '@kode/protocol'
 import type {
   CorrelatedAgentEvent,
   RuntimeStatus,
+  ForkSessionOptions,
   SendMessageOptions,
   SessionAwareKodeClient,
+  SessionControlKodeClient,
+  SessionMetadataUpdate,
   ToolPermissionDecision,
   ToolPermissionInputUpdate,
 } from './types'
@@ -30,7 +33,9 @@ type IncomingMessageEvent = Event & { data?: unknown }
 type FetchLike = (
   input: string | URL,
   init?: {
+    method?: string
     headers?: Record<string, string>
+    body?: string
   },
 ) => Promise<Response>
 
@@ -336,7 +341,9 @@ function safeJsonParse(text: string): unknown {
   }
 }
 
-export class HttpClient implements SessionAwareKodeClient {
+export class HttpClient
+  implements SessionAwareKodeClient, SessionControlKodeClient
+{
   private ws: WebSocketLike | null = null
   private desiredSessionId: string | null = null
   private attachedSessionId: string | null = null
@@ -860,8 +867,85 @@ export class HttpClient implements SessionAwareKodeClient {
     return { ...json, events }
   }
 
-  async deleteSession(_sessionId: string): Promise<void> {
-    throw new Error('deleteSession is not supported by the daemon yet')
+  async deleteSession(sessionId: string): Promise<void> {
+    const normalizedSessionId = sessionId.trim()
+    if (!isUuid(normalizedSessionId)) {
+      throw new Error('Invalid session id')
+    }
+
+    const url = this.toApiUrl(
+      `/api/sessions/${encodeURIComponent(normalizedSessionId)}`,
+    )
+    const response = await this.getFetchImpl()(url, {
+      method: 'DELETE',
+      headers: {
+        authorization: `Bearer ${this.options.token}`,
+      },
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to delete session (${response.status})`)
+    }
+  }
+
+  async updateSessionMetadata(
+    sessionId: string,
+    update: SessionMetadataUpdate,
+  ): Promise<Session> {
+    const normalizedSessionId = sessionId.trim()
+    if (!isUuid(normalizedSessionId)) {
+      throw new Error('Invalid session id')
+    }
+    const url = this.toApiUrl(
+      `/api/sessions/${encodeURIComponent(normalizedSessionId)}`,
+    )
+    const response = await this.getFetchImpl()(url, {
+      method: 'PATCH',
+      headers: {
+        authorization: `Bearer ${this.options.token}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(update),
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to update session (${response.status})`)
+    }
+    const json: unknown = await response.json()
+    if (!isRecord(json) || !isSession(json.session)) {
+      throw new Error('Invalid session update response')
+    }
+    return json.session
+  }
+
+  async forkSession(
+    sessionId: string,
+    options: ForkSessionOptions = {},
+  ): Promise<Session> {
+    const normalizedSessionId = sessionId.trim()
+    if (!isUuid(normalizedSessionId)) {
+      throw new Error('Invalid session id')
+    }
+    if (options.newSessionId && !isUuid(options.newSessionId.trim())) {
+      throw new Error('Invalid newSessionId')
+    }
+    const url = this.toApiUrl(
+      `/api/sessions/${encodeURIComponent(normalizedSessionId)}/fork`,
+    )
+    const response = await this.getFetchImpl()(url, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${this.options.token}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(options),
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to fork session (${response.status})`)
+    }
+    const json: unknown = await response.json()
+    if (!isRecord(json) || !isSession(json.session)) {
+      throw new Error('Invalid session fork response')
+    }
+    return json.session
   }
 
   async *sendMessage(
