@@ -21,8 +21,10 @@ import {
   setMessagesGetter,
   setMessagesSetter,
   setModelConfigChangeHandler,
+  type MessageStateSetter,
 } from '#core/messages'
 import type { Message as MessageType } from '#core/query'
+import { normalizeMessages } from '#core/utils/messages'
 import { getGlobalConfigCached, saveGlobalConfig } from '#core/utils/config'
 import { getNextAvailableLogForkNumber, logError } from '#core/utils/log'
 import { getOriginalCwd } from '#core/utils/state'
@@ -93,6 +95,18 @@ const batchedUpdates: ((fn: () => void) => void) | null =
           fn: () => void,
         ) => void)
       : null
+
+function isSuppressedTranscriptItem(
+  item: TranscriptItem,
+  suppressedMessageIds: ReadonlySet<string>,
+): boolean {
+  for (const messageId of suppressedMessageIds) {
+    if (item.key === messageId || item.key.startsWith(`${messageId}:`)) {
+      return true
+    }
+  }
+  return false
+}
 
 export function useReplController(props: REPLProps) {
   const debug = props.debug ?? false
@@ -176,6 +190,7 @@ export function useReplController(props: REPLProps) {
   )
   const initialForkNumberRef = useRef(forkNumber)
   const [staticOutputEpoch, setStaticOutputEpoch] = useState(0)
+  const suppressedTranscriptMessageIdsRef = useRef<Set<string>>(new Set())
   const [uiRefreshCounter, setUiRefreshCounter] = useState(0)
 
   const [pendingForkConvoWithMessages, setPendingForkConvoWithMessages] =
@@ -1139,14 +1154,37 @@ export function useReplController(props: REPLProps) {
 
   useCostSummary()
 
-  const setMessagesFromExternalStore = useCallback<
-    React.Dispatch<React.SetStateAction<MessageType[]>>
-  >(update => {
-    if (typeof update !== 'function') {
-      setStaticOutputEpoch(prev => prev + 1)
-    }
-    setMessages(update)
-  }, [])
+  const setMessagesFromExternalStore = useCallback<MessageStateSetter>(
+    (update, options) => {
+      if (options?.preserveTranscript) {
+        setMessages(previous => {
+          const next = typeof update === 'function' ? update(previous) : update
+          const previousMessageIds = new Set(
+            previous.map(message => message.uuid),
+          )
+          const introducedMessages = next.filter(
+            message => !previousMessageIds.has(message.uuid),
+          )
+
+          // Compaction creates summary/recovery messages with new UUIDs. They
+          // belong to model context, not the existing terminal scrollback.
+          // Existing messages stay eligible so an unprinted live message is
+          // never hidden by a context-only rewrite.
+          for (const message of normalizeMessages(introducedMessages)) {
+            suppressedTranscriptMessageIdsRef.current.add(message.uuid)
+          }
+          return next
+        })
+        return
+      }
+
+      if (typeof update !== 'function') {
+        setStaticOutputEpoch(prev => prev + 1)
+      }
+      setMessages(update)
+    },
+    [],
+  )
 
   useEffect(() => {
     setMessagesGetter(() => messages)
@@ -1230,11 +1268,31 @@ export function useReplController(props: REPLProps) {
       lastStaticOutputEpochRef.current = staticOutputEpoch
       staticItemsRef.current = []
       printedKeysRef.current = new Set()
+      suppressedTranscriptMessageIdsRef.current.clear()
+    }
+
+    const activeMessageIds = new Set<string>(
+      transcript.orderedMessages.map(message => message.uuid),
+    )
+    for (const messageId of suppressedTranscriptMessageIdsRef.current) {
+      if (!activeMessageIds.has(messageId)) {
+        suppressedTranscriptMessageIdsRef.current.delete(messageId)
+      }
     }
 
     const items: TranscriptItem[] = []
 
-    items.push(...transcript.items.slice(0, transcript.replStaticPrefixLength))
+    items.push(
+      ...transcript.items
+        .slice(0, transcript.replStaticPrefixLength)
+        .filter(
+          item =>
+            !isSuppressedTranscriptItem(
+              item,
+              suppressedTranscriptMessageIdsRef.current,
+            ),
+        ),
+    )
 
     // Only add items that haven't been printed yet
     const newItems: TranscriptItem[] = []
@@ -1251,10 +1309,24 @@ export function useReplController(props: REPLProps) {
     }
 
     return staticItemsRef.current
-  }, [staticOutputEpoch, transcript.items, transcript.replStaticPrefixLength])
+  }, [
+    staticOutputEpoch,
+    transcript.items,
+    transcript.orderedMessages,
+    transcript.replStaticPrefixLength,
+  ])
 
   const transientItems = useMemo(
-    () => transcript.items.slice(transcript.replStaticPrefixLength),
+    () =>
+      transcript.items
+        .slice(transcript.replStaticPrefixLength)
+        .filter(
+          item =>
+            !isSuppressedTranscriptItem(
+              item,
+              suppressedTranscriptMessageIdsRef.current,
+            ),
+        ),
     [transcript.items, transcript.replStaticPrefixLength],
   )
 

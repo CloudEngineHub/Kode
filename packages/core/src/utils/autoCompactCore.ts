@@ -63,6 +63,10 @@ function getActiveConversationModelPointer(toolUseContext: any): string {
   return 'main'
 }
 
+export function updateAutoCompactedMessages(messages: Message[]): void {
+  getMessagesSetter()?.(messages, { preserveTranscript: true })
+}
+
 const COMPRESSION_PROMPT_BASE = `Please provide a comprehensive summary of our conversation structured as follows:
 
 ## Technical Context
@@ -183,9 +187,10 @@ export async function checkAutoCompact(
       ? [...compactedHistory, pendingUserMessage]
       : compactedHistory
 
-    // Replace the visible transcript in interactive mode so the user sees the
-    // new compressed context (and we keep the pending prompt intact).
-    getMessagesSetter()?.(compactedMessages)
+    // Keep terminal scrollback append-only while the model context is replaced.
+    // Remounting Ink's Static transcript here moves a user who is reading older
+    // output and can make the current viewport appear to disappear.
+    updateAutoCompactedMessages(compactedMessages)
 
     return {
       messages: compactedMessages,

@@ -2,7 +2,22 @@ import type { Message } from './query'
 
 type MessageState = Message[]
 type MessageStateUpdater = MessageState | ((prev: MessageState) => MessageState)
-type MessageStateSetter = (update: MessageStateUpdater) => void
+
+/**
+ * Controls whether a state replacement is also a visual transcript reset.
+ *
+ * Ink's Static output is append-only in the terminal scrollback. Context-only
+ * transforms, such as automatic compaction, must update the model state
+ * without remounting that output and moving the user's scrollback anchor.
+ */
+export type MessageStateUpdateOptions = {
+  preserveTranscript?: boolean
+}
+
+export type MessageStateSetter = (
+  update: MessageStateUpdater,
+  options?: MessageStateUpdateOptions,
+) => void
 
 let getMessages: () => Message[] = () => []
 let setMessages: MessageStateSetter = () => {}

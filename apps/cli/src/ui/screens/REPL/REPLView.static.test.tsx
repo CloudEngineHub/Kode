@@ -6,6 +6,8 @@ import stripAnsi from 'strip-ansi'
 import PromptInput from '#ui-ink/components/PromptInput'
 import type { PromptMode } from '#ui-ink/components/PromptInput/types'
 import { KeypressProvider } from '#ui-ink/contexts/KeypressContext'
+import { getMessagesSetter, setMessagesSetter } from '#core/messages'
+import { createAssistantMessage } from '#core/utils/messages'
 import { setRequestStatus } from '#core/utils/requestStatus'
 import { REPL } from './REPL'
 import { REPLView } from './REPLView'
@@ -29,6 +31,7 @@ afterEach(async () => {
   while (mounted.length > 0) {
     mounted.pop()?.unmount()
   }
+  setMessagesSetter(() => {})
   setRequestStatus({ kind: 'idle' })
 })
 
@@ -663,5 +666,82 @@ describe('REPLView Static output epoch', () => {
     const output = harness.getOutput()
     expect(output).toContain('MCP Servers:')
     expect(output).toContain('codegraph')
+  })
+
+  test('keeps the terminal scrollback anchor during a context-only transcript rewrite', async () => {
+    const original = createAssistantMessage('before context compaction')
+    const compacted = createAssistantMessage('after context compaction')
+    const continued = createAssistantMessage('after context continuation')
+    const messageLogName = `context-rewrite-${Date.now()}-${Math.random()}`
+    const harness = createHarness(
+      <KeypressProvider>
+        <REPL
+          commands={[]}
+          initialMessages={[original]}
+          initialPrompt={undefined}
+          messageLogName={messageLogName}
+          shouldShowPromptInput={false}
+          tools={[]}
+          verbose={false}
+        />
+      </KeypressProvider>,
+    )
+
+    await harness.wait(120)
+    expect(harness.getOutput()).toContain('before context compaction')
+
+    harness.clearOutput()
+    getMessagesSetter()([compacted], { preserveTranscript: true })
+    await harness.wait(80)
+
+    const output = harness.getOutput()
+    expect(output).not.toContain('before context compaction')
+    expect(output).not.toContain('after context compaction')
+
+    harness.clearOutput()
+    getMessagesSetter()(previous => [...previous, continued])
+    await harness.wait(80)
+
+    expect(harness.getOutput()).toContain('after context continuation')
+  })
+
+  test('still resets static output for an explicit transcript replacement', async () => {
+    const original = createAssistantMessage('before explicit reset')
+    const replacement = {
+      ...original,
+      message: {
+        ...original.message,
+        content: [
+          {
+            type: 'text' as const,
+            text: 'after explicit reset',
+            citations: [],
+          },
+        ],
+      },
+    }
+    const messageLogName = `explicit-reset-${Date.now()}-${Math.random()}`
+    const harness = createHarness(
+      <KeypressProvider>
+        <REPL
+          commands={[]}
+          initialMessages={[original]}
+          initialPrompt={undefined}
+          messageLogName={messageLogName}
+          shouldShowPromptInput={false}
+          tools={[]}
+          verbose={false}
+        />
+      </KeypressProvider>,
+    )
+
+    await harness.wait(120)
+    expect(harness.getOutput()).toContain('before explicit reset')
+
+    harness.clearOutput()
+    getMessagesSetter()([replacement])
+    await harness.wait(80)
+
+    expect(harness.getOutput()).toContain('after explicit reset')
   })
 })
