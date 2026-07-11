@@ -5,11 +5,11 @@ import {
 } from '#ui-ink/components/PromptInput/inputModeDisplay'
 
 describe('PromptInput status line', () => {
-  test('keeps chat entry points compact', () => {
+  test('keeps chat status focused on mode and tool policy', () => {
     const display = getInputModeDisplay('prompt')
 
     expect(display.statusText).toBe('Chat')
-    expect(display.helperText).toBe('/ commands \u00b7 & bg')
+    expect(display.helperText).toBe('')
   })
 
   test('uses short return guidance for shell-like modes', () => {
@@ -35,7 +35,7 @@ describe('PromptInput status line', () => {
     })
 
     expect(text).toContain('Chat')
-    expect(text).toContain('/ commands \u00b7 & bg')
+    expect(text).not.toContain('/ commands')
     expect(text).toContain('Tools Auto edits (shift+tab)')
     expect(text).toContain('Tab queue')
     expect(text).toContain('pending 1')

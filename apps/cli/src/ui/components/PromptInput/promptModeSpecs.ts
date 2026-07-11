@@ -22,7 +22,7 @@ export const PROMPT_MODE_SPECS: Record<PromptMode, PromptModeSpec> = {
     label: 'Chat',
     prefix: '',
     statusText: 'Chat',
-    helperText: '/ commands \u00b7 & bg',
+    helperText: '',
     borderColorKey: 'inputBorder',
     shellLike: false,
     returnToPromptAfterSubmit: true,

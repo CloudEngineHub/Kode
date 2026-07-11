@@ -274,7 +274,7 @@ export function PromptInputView({
       {/* PWD line - first line below input */}
       {showAuxiliaryRows && !compact && !suppressNonessentialChrome && (
         <Box flexDirection="row" paddingX={1}>
-          <Text dimColor wrap="truncate-end">
+          <Text color={theme.text} wrap="truncate-end">
             {currentPwd}
           </Text>
         </Box>
@@ -298,19 +298,19 @@ export function PromptInputView({
                 width={statusTextWidth}
               >
                 {exitMessage.show ? (
-                  <Text dimColor wrap="truncate-end">
+                  <Text color={theme.text} wrap="truncate-end">
                     Press {exitMessage.key} again to exit
                   </Text>
                 ) : message.show ? (
-                  <Text dimColor wrap="truncate-end">
+                  <Text color={theme.text} wrap="truncate-end">
                     {message.text}
                   </Text>
                 ) : rewindPending ? (
-                  <Text dimColor wrap="truncate-end">
+                  <Text color={theme.text} wrap="truncate-end">
                     Press Escape again to rewind
                   </Text>
                 ) : clearInputPending ? (
-                  <Text dimColor wrap="truncate-end">
+                  <Text color={theme.text} wrap="truncate-end">
                     Press Escape again to clear input
                   </Text>
                 ) : modelSwitchMessage.show ? (
@@ -326,14 +326,14 @@ export function PromptInputView({
                           ? theme.warning
                           : toastMessage.kind === 'success'
                             ? theme.success
-                            : theme.secondaryText
+                            : theme.text
                     }
                     wrap="truncate-end"
                   >
                     {toastMessage.text}
                   </Text>
                 ) : statusLine ? (
-                  <Text color={theme.secondaryText} wrap="truncate-end">
+                  <Text color={theme.text} wrap="truncate-end">
                     {statusLine}
                   </Text>
                 ) : null}
@@ -350,10 +350,7 @@ export function PromptInputView({
                         overflow="hidden"
                         width={modelStatusWidth}
                       >
-                        <Text
-                          color={theme.secondaryText}
-                          wrap="truncate-middle"
-                        >
+                        <Text color={theme.text} wrap="truncate-middle">
                           {modelStatusText}
                         </Text>
                         <TokenWarning

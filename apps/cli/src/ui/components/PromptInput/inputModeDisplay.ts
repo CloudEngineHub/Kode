@@ -35,7 +35,7 @@ export function buildPromptInputStatusLine(args: {
     inputMode.statusText,
     inputMode.helperText,
     `Tools ${getPermissionModeCompactLabel(args.permissionMode)} (${args.modeCycleShortcutText})`,
-  ]
+  ].filter(Boolean)
 
   if (args.editorMode === 'vim' && args.vimMode === 'INSERT') {
     parts.unshift('-- INSERT --')
