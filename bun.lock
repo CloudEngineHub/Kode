@@ -142,6 +142,7 @@
       "name": "@kode/server",
       "version": "0.0.0",
       "dependencies": {
+        "@kode/agent": "workspace:*",
         "@kode/config": "workspace:*",
         "@kode/context": "workspace:*",
         "@kode/core": "workspace:*",
