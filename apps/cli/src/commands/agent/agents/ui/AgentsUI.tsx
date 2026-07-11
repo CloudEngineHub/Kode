@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Text } from 'ink'
 import chalk from 'chalk'
 import {
@@ -7,7 +7,7 @@ import {
   getAllAgents,
   type AgentConfig,
 } from '@kode/agent'
-import { getAvailableTools, type Tool } from '../tooling'
+import { getAvailableTools, getCoreTools, type Tool } from '../tooling'
 import { deleteAgent } from '../storage'
 import { AgentMenu } from './AgentMenu'
 import { AgentsListView } from './AgentsListView'
@@ -41,8 +41,10 @@ export function AgentsUI({ onExit }: { onExit: (message?: string) => void }) {
   const [loading, setLoading] = useState(true)
   const [allAgents, setAllAgents] = useState<AgentConfig[]>([])
   const [activeAgents, setActiveAgents] = useState<AgentConfig[]>([])
-  const [tools, setTools] = useState<Tool[]>([])
+  const [tools, setTools] = useState<Tool[]>(getCoreTools)
   const [changes, setChanges] = useState<string[]>([])
+  const toolLoadStartedRef = useRef(false)
+  const mountedRef = useRef(true)
 
   const refresh = useCallback(async () => {
     clearAgentCache()
@@ -51,19 +53,32 @@ export function AgentsUI({ onExit }: { onExit: (message?: string) => void }) {
     setActiveAgents(active)
   }, [])
 
+  const loadTools = useCallback(() => {
+    if (toolLoadStartedRef.current) return
+    toolLoadStartedRef.current = true
+
+    void getAvailableTools()
+      .then(toolList => {
+        if (mountedRef.current) setTools(toolList)
+      })
+      .catch(() => {
+        toolLoadStartedRef.current = false
+        // Core tools remain available when optional MCP discovery fails.
+      })
+  }, [])
+
   useEffect(() => {
-    let mounted = true
-    ;(async () => {
-      try {
-        const [toolList] = await Promise.all([getAvailableTools(), refresh()])
-        if (!mounted) return
-        setTools(toolList)
-      } finally {
-        if (mounted) setLoading(false)
-      }
-    })()
+    mountedRef.current = true
+    void refresh()
+      .catch(() => {
+        // Keep the dialog responsive even when a malformed agent file cannot be read.
+      })
+      .finally(() => {
+        if (mountedRef.current) setLoading(false)
+      })
+
     return () => {
-      mounted = false
+      mountedRef.current = false
     }
   }, [refresh])
 
@@ -132,9 +147,10 @@ export function AgentsUI({ onExit }: { onExit: (message?: string) => void }) {
         source={mode.source}
         agents={listAgentsForSource}
         changes={changes}
-        onCreateNew={() =>
+        onCreateNew={() => {
+          loadTools()
           setMode({ mode: 'create-agent', previousMode: mode })
-        }
+        }}
         onSelect={agent =>
           setMode({ mode: 'agent-menu', agent, previousMode: mode })
         }
@@ -171,13 +187,14 @@ export function AgentsUI({ onExit }: { onExit: (message?: string) => void }) {
               agent: mode.agent,
               previousMode: mode,
             })
-          else if (value === 'edit')
+          else if (value === 'edit') {
+            loadTools()
             setMode({
               mode: 'edit-agent',
               agent: mode.agent,
               previousMode: mode,
             })
-          else if (value === 'delete')
+          } else if (value === 'delete')
             setMode({
               mode: 'delete-confirm',
               agent: mode.agent,
