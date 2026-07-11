@@ -64,8 +64,32 @@ function wantsPrintMode(): boolean {
   )
 }
 
+const daemonLifecycleActions = new Set(['start', 'status', 'stop'])
+
 function isDaemonLifecycleCommand(): boolean {
-  return process.argv.slice(1, 4).includes('daemon')
+  const args = process.argv.slice(2)
+  const daemonIndex = args.indexOf('daemon')
+  return (
+    daemonIndex >= 0 && daemonLifecycleActions.has(args[daemonIndex + 1] ?? '')
+  )
+}
+
+function releaseNonInteractiveDaemonStdin(): void {
+  if (process.stdin.isTTY) return
+  process.stdin.pause()
+  process.stdin.destroy()
+}
+
+function flushStream(stream: NodeJS.WriteStream): Promise<void> {
+  return new Promise(resolve => {
+    stream.write('', () => resolve())
+  })
+}
+
+async function exitDaemonLifecycleCommand(): Promise<never> {
+  releaseNonInteractiveDaemonStdin()
+  await Promise.all([flushStream(process.stdout), flushStream(process.stderr)])
+  process.exit(process.exitCode ?? 0)
 }
 
 export async function runCli(): Promise<void> {
@@ -151,9 +175,7 @@ export async function runCli(): Promise<void> {
   }
   const { parseArgs } = await import('#host-cli')
   await parseArgs(inputPrompt, renderContext)
-  if (!process.stdin.isTTY && isDaemonLifecycleCommand()) {
-    process.exit(0)
-  }
+  if (isDaemonLifecycleCommand()) await exitDaemonLifecycleCommand()
 }
 
 // NOTE: stdin is currently buffered; streaming can be added if needed.
