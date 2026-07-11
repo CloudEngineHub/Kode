@@ -64,6 +64,10 @@ function wantsPrintMode(): boolean {
   )
 }
 
+function isDaemonLifecycleCommand(): boolean {
+  return process.argv.slice(1, 4).includes('daemon')
+}
+
 export async function runCli(): Promise<void> {
   ensurePackagedRuntimeEnv()
   ensureYogaWasmPath(import.meta.url)
@@ -127,6 +131,8 @@ export async function runCli(): Promise<void> {
     !process.env.CI &&
     // Input hijacking breaks MCP.
     !process.argv.includes('mcp') &&
+    // Lifecycle commands are explicitly non-interactive and must work in CI.
+    !isDaemonLifecycleCommand() &&
     !wantsStreamJsonStdin
   ) {
     inputPrompt = await stdin()
@@ -145,6 +151,9 @@ export async function runCli(): Promise<void> {
   }
   const { parseArgs } = await import('#host-cli')
   await parseArgs(inputPrompt, renderContext)
+  if (!process.stdin.isTTY && isDaemonLifecycleCommand()) {
+    process.exit(0)
+  }
 }
 
 // NOTE: stdin is currently buffered; streaming can be added if needed.

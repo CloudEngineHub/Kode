@@ -8,6 +8,7 @@ import { MACRO } from '#core/constants/macros'
 
 import { registerConfigCommands } from '../commands/config'
 import { registerContextCommands } from '../commands/context'
+import { registerDaemonCommands } from './commands/daemon'
 import { registerMcpCommands } from '../commands/mcp'
 import { registerModelsCommands } from '../commands/models'
 import { registerAgentsCommands } from './commands/agents'
@@ -313,6 +314,7 @@ export function createCliProgram(
   registerUpdateCommand(program)
   registerLogCommands(program, renderContextWithExitOnCtrlC)
   registerContextCommands(program)
+  registerDaemonCommands(program)
 
   return program
 }

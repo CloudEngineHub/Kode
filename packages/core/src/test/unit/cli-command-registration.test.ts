@@ -20,6 +20,7 @@ describe('CLI command registration', () => {
       'approved-tools',
       'mcp',
       'doctor',
+      'daemon',
       'update',
       'log',
       'resume',
@@ -61,6 +62,7 @@ describe('CLI command registration', () => {
       ['skills', 'Manage skills'],
       ['approved-tools', 'Manage approved tools'],
       ['mcp', 'Configure and manage MCP servers'],
+      ['daemon', 'Manage a workspace-scoped local Kode daemon'],
       ['context', 'Set static context'],
       ['resume', 'Resume a previous conversation'],
     ]
