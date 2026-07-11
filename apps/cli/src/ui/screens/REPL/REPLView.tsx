@@ -43,6 +43,7 @@ export function REPLView({
   staticOutputEpoch,
   staticItems,
   startupHeader,
+  startupHeaderKey,
   showStartupHeader = false,
   transientItems,
   assistantStreamStore,
@@ -168,6 +169,12 @@ export function REPLView({
     !isMessageSelectorVisible &&
     !binaryFeedbackContext &&
     !showingCostDialog
+  // The startup header can grow after mount when asynchronous state (such as
+  // the update check or MCP connection status) resolves. Keep that identity in
+  // the control measurement key so the stream budget is recalculated.
+  const startupHeaderMeasureSignature = shouldRenderStartupHeader
+    ? (startupHeaderKey ?? 'visible')
+    : ''
   const mountedStaticOutputEpochRef = useRef<number | null>(null)
   const staticOutputKey = `static-${staticOutputEpoch}`
   const shouldRenderStartupHeaderInControls = shouldRenderStartupHeader
@@ -190,6 +197,7 @@ export function REPLView({
         shouldShowPromptInput ? 1 : 0,
         hasToast ? 1 : 0,
         runningTasksLayoutSignature,
+        startupHeaderMeasureSignature,
         isLoading ? 1 : 0,
         promptInputMeasureSignature,
         messageSelectorMessages.length,
@@ -206,6 +214,7 @@ export function REPLView({
       shouldShowPromptInput,
       hasToast,
       runningTasksLayoutSignature,
+      startupHeaderMeasureSignature,
       isLoading,
       promptInputMeasureSignature,
       messageSelectorMessages.length,
@@ -282,11 +291,8 @@ export function REPLView({
     !isLayoutMeasurementPending &&
     !isMicroViewport &&
     transientMaxHeight > 0
-  const isLayoutSettling =
-    isLayoutMeasurementPending || isLayoutMeasurementStale
   const showRequestStatus =
     !isMicroViewport &&
-    !isLayoutSettling &&
     !toolJSX &&
     !toolUseConfirm &&
     !binaryFeedbackContext &&
@@ -449,7 +455,6 @@ export function REPLView({
                 !toolJSX &&
                 !binaryFeedbackContext &&
                 !isMessageSelectorVisible &&
-                !isLayoutSettling &&
                 !showingCostDialog && (
                   <RunningTasksPanel
                     maxWidth={columns}

@@ -6,15 +6,22 @@ import stripAnsi from 'strip-ansi'
 import PromptInput from '#ui-ink/components/PromptInput'
 import type { PromptMode } from '#ui-ink/components/PromptInput/types'
 import { KeypressProvider } from '#ui-ink/contexts/KeypressContext'
+import {
+  killBackgroundAgentTask,
+  upsertBackgroundAgentTask,
+  type BackgroundAgentTaskRuntime,
+} from '#core/utils/backgroundTasks'
 import { getMessagesSetter, setMessagesSetter } from '#core/messages'
 import { createAssistantMessage } from '#core/utils/messages'
 import { setRequestStatus } from '#core/utils/requestStatus'
+import { __backgroundTaskSnapshotStoreForTests } from '#ui-ink/hooks/useBackgroundTaskSnapshots'
 import { REPL } from './REPL'
 import { REPLView } from './REPLView'
 import type { TranscriptItem } from './useTranscriptItems'
 import { createAssistantStreamStore } from './assistantStreamStore'
 
 const assistantStreamStore = createAssistantStreamStore()
+const backgroundTaskIds: string[] = []
 
 type TestHarness = {
   unmount: () => void
@@ -31,6 +38,10 @@ afterEach(async () => {
   while (mounted.length > 0) {
     mounted.pop()?.unmount()
   }
+  for (const taskId of backgroundTaskIds.splice(0)) {
+    killBackgroundAgentTask(taskId)
+  }
+  __backgroundTaskSnapshotStoreForTests.refreshSnapshot()
   setMessagesSetter(() => {})
   setRequestStatus({ kind: 'idle' })
 })
@@ -44,6 +55,26 @@ function makeStaticItem(key: string, label = key): TranscriptItem {
       </Box>
     ),
   }
+}
+
+function addRunningBackgroundTask(): void {
+  const taskId = `layout-task-${Date.now()}-${Math.random()}`
+  const task: BackgroundAgentTaskRuntime = {
+    type: 'async_agent',
+    agentId: taskId,
+    description: 'Layout stability check',
+    prompt: 'Keep this task running for the UI test.',
+    status: 'running',
+    cwd: process.cwd(),
+    startedAt: Date.now(),
+    messages: [],
+    abortController: new AbortController(),
+    done: Promise.resolve(),
+  }
+
+  upsertBackgroundAgentTask(task)
+  backgroundTaskIds.push(taskId)
+  __backgroundTaskSnapshotStoreForTests.refreshSnapshot()
 }
 
 function renderReplView(args: {
@@ -263,7 +294,7 @@ describe('REPLView Static output epoch', () => {
     expect(harness.getOutput()).toContain('transient-b')
   })
 
-  test('suppresses request status while resize measurement is settling', async () => {
+  test('keeps request status visible while resize measurement is settling', async () => {
     setRequestStatus({ kind: 'streaming' })
 
     const harness = createHarness(
@@ -290,15 +321,28 @@ describe('REPLView Static output epoch', () => {
       }),
     )
     await harness.wait(80)
-    const settlingStatusCount = countOccurrences(
-      harness.getOutput(),
-      'Decoding',
-    )
+    expect(harness.getOutput()).toContain('Decoding')
 
     await harness.wait(450)
-    expect(countOccurrences(harness.getOutput(), 'Decoding')).toBeGreaterThan(
-      settlingStatusCount,
+    expect(harness.getOutput()).toContain('Decoding')
+  })
+
+  test('keeps running tasks mounted while resize measurement is settling', async () => {
+    addRunningBackgroundTask()
+
+    const harness = createHarness(
+      renderReplView({ staticOutputEpoch: 0, staticItems: [] }),
+      { columns: 100, rows: 30 },
     )
+
+    await harness.wait(480)
+    expect(harness.getOutput()).toContain('Running Tasks')
+
+    harness.clearOutput()
+    harness.resize(80, 24)
+    await harness.wait(80)
+
+    expect(harness.getOutput()).toContain('Running Tasks')
   })
 
   test('keeps transient output visible when prompt text changes within the same height', async () => {
@@ -384,6 +428,47 @@ describe('REPLView Static output epoch', () => {
     const output = harness.getOutput()
     expect(output).not.toContain('static-a')
     expect(output).toContain('Header B')
+  })
+
+  test('remeasures when the live startup header identity changes', async () => {
+    const headerA = <Text>Header A</Text>
+    const headerB = (
+      <Box flexDirection="column">
+        <Text>Header B</Text>
+        <Text>Header B detail</Text>
+      </Box>
+    )
+    const harness = createHarness(
+      renderReplView({
+        staticOutputEpoch: 0,
+        staticItems: [],
+        startupHeader: headerA,
+        startupHeaderKey: 'header-a',
+        showStartupHeader: true,
+        transientItems: [makeStaticItem('transient-a')],
+      }),
+      { columns: 100, rows: 30 },
+    )
+
+    await harness.wait(480)
+    expect(harness.getOutput()).toContain('transient-a')
+
+    harness.clearOutput()
+    harness.rerender(
+      renderReplView({
+        staticOutputEpoch: 0,
+        staticItems: [],
+        startupHeader: headerB,
+        startupHeaderKey: 'header-b',
+        showStartupHeader: true,
+        transientItems: [makeStaticItem('transient-b')],
+      }),
+    )
+    await harness.wait(80)
+    expect(harness.getOutput()).not.toContain('transient-b')
+
+    await harness.wait(450)
+    expect(harness.getOutput()).toContain('transient-b')
   })
 
   test('keeps the same live startup header bounded during ordinary rerenders', async () => {
