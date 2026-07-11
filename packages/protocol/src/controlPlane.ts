@@ -274,3 +274,104 @@ export const DaemonPermissionUpdateResponseSchema = z
     inflightApprovalCount: z.number().int().nonnegative(),
   })
   .strict()
+
+/**
+ * Daemon-managed Agent configuration is deliberately narrower than the
+ * on-disk AgentConfig. `skills`, arbitrary MCP connection details, and other
+ * loader metadata are excluded because they do not yet have an enforceable
+ * subagent runtime contract.
+ */
+export const DaemonAgentSourceSchema = z.enum([
+  'userSettings',
+  'projectSettings',
+])
+export type DaemonAgentSource = 'userSettings' | 'projectSettings'
+
+export const DaemonAgentPermissionModeSchema = z.enum([
+  'default',
+  'acceptEdits',
+  'plan',
+  'bypassPermissions',
+  'dontAsk',
+  'delegate',
+])
+export type DaemonAgentPermissionMode = z.infer<
+  typeof DaemonAgentPermissionModeSchema
+>
+
+const DaemonAgentTypeSchema = z
+  .string()
+  .min(3)
+  .max(50)
+  .regex(/^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$/)
+const DaemonAgentToolSpecSchema = z.string().trim().min(1).max(512)
+export const DaemonAgentToolsSchema = z.union([
+  z.literal('*'),
+  z.array(DaemonAgentToolSpecSchema).max(128),
+])
+
+export const DaemonAgentDefinitionSchema = z
+  .object({
+    agentType: DaemonAgentTypeSchema,
+    whenToUse: z.string().trim().min(1).max(5_000),
+    systemPrompt: z.string().trim().min(1).max(100_000),
+    tools: DaemonAgentToolsSchema,
+    disallowedTools: z.array(DaemonAgentToolSpecSchema).max(128).optional(),
+    model: z.string().trim().min(1).max(512).optional(),
+    permissionMode: DaemonAgentPermissionModeSchema.optional(),
+    forkContext: z.boolean().optional(),
+    color: z.string().trim().min(1).max(64).optional(),
+  })
+  .strict()
+export type DaemonAgentDefinition = z.infer<typeof DaemonAgentDefinitionSchema>
+
+export const DaemonManagedAgentSchema = DaemonAgentDefinitionSchema.extend({
+  source: DaemonAgentSourceSchema,
+  revision: z.string().regex(/^[a-f0-9]{64}$/),
+}).strict()
+export type DaemonManagedAgent = z.infer<typeof DaemonManagedAgentSchema>
+
+export const DaemonAgentListResponseSchema = z
+  .object({ agents: z.array(DaemonManagedAgentSchema) })
+  .strict()
+export type DaemonAgentListResponse = z.infer<
+  typeof DaemonAgentListResponseSchema
+>
+
+export const DaemonAgentDetailResponseSchema = z
+  .object({ agent: DaemonManagedAgentSchema })
+  .strict()
+export type DaemonAgentDetailResponse = z.infer<
+  typeof DaemonAgentDetailResponseSchema
+>
+
+export const DaemonAgentCreateRequestSchema = z
+  .object({
+    source: DaemonAgentSourceSchema,
+    agent: DaemonAgentDefinitionSchema,
+  })
+  .strict()
+export type DaemonAgentCreateRequest = z.infer<
+  typeof DaemonAgentCreateRequestSchema
+>
+
+export const DaemonAgentUpdateRequestSchema = z
+  .object({
+    source: DaemonAgentSourceSchema,
+    expectedRevision: z.string().regex(/^[a-f0-9]{64}$/),
+    agent: DaemonAgentDefinitionSchema,
+  })
+  .strict()
+export type DaemonAgentUpdateRequest = z.infer<
+  typeof DaemonAgentUpdateRequestSchema
+>
+
+export const DaemonAgentMutationResponseSchema = z
+  .object({
+    agent: DaemonManagedAgentSchema,
+    appliesTo: z.literal('new_subagents'),
+  })
+  .strict()
+export type DaemonAgentMutationResponse = z.infer<
+  typeof DaemonAgentMutationResponseSchema
+>
