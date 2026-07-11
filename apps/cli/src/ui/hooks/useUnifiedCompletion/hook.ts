@@ -348,6 +348,7 @@ export function useUnifiedCompletion({
     generateSuggestions,
     completeWith,
     activateCompletion,
+    resetCompletion,
     updateState,
     onInputChange,
     setCursorOffset,

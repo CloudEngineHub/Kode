@@ -24,10 +24,12 @@ import {
   type MessageStateSetter,
 } from '#core/messages'
 import type { Message as MessageType } from '#core/query'
-import { normalizeMessages } from '#core/utils/messages'
+import { createUserMessage, normalizeMessages } from '#core/utils/messages'
 import { getGlobalConfigCached, saveGlobalConfig } from '#core/utils/config'
 import { getNextAvailableLogForkNumber, logError } from '#core/utils/log'
-import { getOriginalCwd } from '#core/utils/state'
+import { getCwd, getOriginalCwd } from '#core/utils/state'
+import { claimDueSchedules } from '#core/goals'
+import { getKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
 import { MACRO } from '#core/constants/macros'
 import { subscribeAgentReloads } from '@kode/agent/events'
 import { subscribeCustomCommandReloads } from '#cli-services/customCommands'
@@ -510,6 +512,7 @@ export function useReplController(props: REPLProps) {
 
   const apiKeyStatusRef = useRef<VerificationStatus>('loading')
   const onQueryRef = useRef<ReplOnQueryFn | null>(null)
+  const scheduleDispatchingRef = useRef(false)
 
   const openHistorySearchScreen = useCallback(() => {
     openToolView({
@@ -692,8 +695,35 @@ export function useReplController(props: REPLProps) {
               onDone={dismissToolView}
               onSelectModel={modelName => {
                 const modelManager = getModelManager()
+                const selectedModel = modelManager
+                  .getAvailableModels()
+                  .find(model => model.modelName === modelName)
                 modelManager.setPointer('main', modelName)
                 triggerModelConfigChange()
+                showToast(`Model: ${selectedModel?.name ?? modelName}`)
+              }}
+              onOpenModelConfig={() => {
+                setToolViewStackWithClear([
+                  ...toolViewStackRef.current.slice(0, -1),
+                  {
+                    jsx: (
+                      <ModelConfig
+                        onClose={() => {
+                          import('#core/utils/model').then(
+                            ({ reloadModelManager }) => {
+                              reloadModelManager()
+                              triggerModelConfigChange()
+                              showToast('Model settings updated')
+                              dismissToolView()
+                            },
+                          )
+                        }}
+                      />
+                    ),
+                    shouldHidePromptInput: true,
+                    displayMode: 'fullscreen',
+                  },
+                ])
               }}
             />
           ),
@@ -780,8 +810,21 @@ export function useReplController(props: REPLProps) {
         openToolView({
           jsx: (
             <CommandPaletteScreen
+              commands={commands}
               onDone={action => {
                 if (!action) {
+                  dismissToolView()
+                  return
+                }
+
+                if (typeof action !== 'string') {
+                  setInputMode('prompt')
+                  setInputValue(`/${action.name} `)
+                  showToast(
+                    action.argumentHint
+                      ? `Command ready: /${action.name} ${action.argumentHint}`
+                      : `Command ready: /${action.name}`,
+                  )
                   dismissToolView()
                   return
                 }
@@ -1130,6 +1173,69 @@ export function useReplController(props: REPLProps) {
   useEffect(() => {
     onQueryRef.current = onQuery
   }, [onQuery])
+
+  // A durable /loop wakes only when this interactive session is genuinely
+  // idle. The schedule is atomically claimed before it becomes an ordinary
+  // REPL turn, so a restart cannot replay missed intervals or double-run it.
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'test') return
+
+    let disposed = false
+    const tick = () => {
+      if (
+        disposed ||
+        scheduleDispatchingRef.current ||
+        isLoading ||
+        apiKeyStatusRef.current !== 'valid' ||
+        toolJSX ||
+        toolUseConfirm ||
+        binaryFeedbackContext ||
+        isMessageSelectorVisible ||
+        inputValue.trim().length > 0
+      ) {
+        return
+      }
+
+      let schedule
+      try {
+        schedule = claimDueSchedules({
+          cwd: getCwd(),
+          sessionId: getKodeAgentSessionId(),
+          limit: 1,
+        })[0]
+      } catch (error) {
+        logError(error)
+        return
+      }
+      if (!schedule) return
+
+      scheduleDispatchingRef.current = true
+      setIsLoading(true)
+      showToast(`Scheduled loop: ${schedule.prompt}`)
+      void onQuery([createUserMessage(schedule.prompt)])
+        .catch(error => logError(error))
+        .finally(() => {
+          scheduleDispatchingRef.current = false
+        })
+    }
+
+    const timer = setInterval(tick, 1_000)
+    timer.unref?.()
+    tick()
+    return () => {
+      disposed = true
+      clearInterval(timer)
+    }
+  }, [
+    binaryFeedbackContext,
+    inputValue,
+    isLoading,
+    isMessageSelectorVisible,
+    onQuery,
+    showToast,
+    toolJSX,
+    toolUseConfirm,
+  ])
 
   const onInit = useReplInit({
     initialPrompt: props.initialPrompt,

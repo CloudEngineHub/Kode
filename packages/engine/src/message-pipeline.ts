@@ -1,5 +1,6 @@
 import { queryLLM } from '#core/ai/llmLazy'
 import { getTotalCost } from '#core/cost-tracker'
+import { finishDurableRun } from '#core/runs'
 import { MaxBudgetUsdExceededError } from '#core/errors/maxBudgetUsd'
 import { MaxTurnsExceededError } from '#protocol/maxTurns'
 import { formatSystemPromptWithContext } from '#core/services/systemPrompt'
@@ -28,6 +29,12 @@ import {
 } from '#runtime/shell'
 import { getCwd } from '#core/utils/state'
 import { getEffectiveSessionId } from '#core/utils/sessionId'
+import {
+  extractLongTermMemories,
+  formatMemoryContext,
+  getRelevantMemories,
+} from '#core/memory'
+import { evaluateActiveGoalAfterTurn, GoalService } from '#core/goals'
 import { checkAutoCompact } from '#core/utils/autoCompactCore'
 import { checkMicroCompact } from '#core/utils/microCompactCore'
 import { asRecord } from '@kode/hooks/types'
@@ -129,6 +136,39 @@ function createThinkingOnlyRetryMetaMessage(): AssistantMessage {
   return { ...message, isMeta: true }
 }
 
+function getAssistantTextForGoalEvaluation(message: AssistantMessage): string {
+  const content = message.message.content
+  if (!Array.isArray(content)) return ''
+  return content
+    .flatMap(block => {
+      if (!isRecord(block) || block.type !== 'text') return []
+      return typeof block.text === 'string' ? [block.text] : []
+    })
+    .join('\n')
+    .trim()
+}
+
+function buildGoalContinuationPrompt(args: {
+  objective: string
+  acceptanceCriteria: string[]
+  continuationPrompt: string
+}): string {
+  const criteria = args.acceptanceCriteria
+    .map((criterion, index) => `${index + 1}. ${criterion}`)
+    .join('\n')
+  return [
+    '<goal_run>',
+    `Active objective: ${args.objective}`,
+    criteria ? `Acceptance criteria:\n${criteria}` : '',
+    'The independent goal evaluator has not accepted the prior response.',
+    `Continue now: ${args.continuationPrompt}`,
+    'Do not claim completion unless you can provide concrete evidence for every acceptance criterion.',
+    '</goal_run>',
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
 export async function* messagePipeline(
   messages: Message[],
   systemPrompt: string[],
@@ -203,6 +243,25 @@ async function* messagePipelineCore(
       }
     }
 
+    // The execution layer needs to distinguish a user-driven foreground turn
+    // from an unattended goal/loop turn, particularly on Windows where local
+    // processes are not claimed to be strongly isolated.
+    if (toolUseContext.agentId === 'main') {
+      try {
+        const activeGoal = new GoalService().findActiveGoal({
+          cwd: getCwd(),
+          sessionId: getEffectiveSessionId(),
+        })
+        toolUseContext.options.automationKind = activeGoal
+          ? activeGoal.schedule.kind === 'interval'
+            ? 'scheduled_loop'
+            : 'goal'
+          : undefined
+      } catch {
+        toolUseContext.options.automationKind = undefined
+      }
+    }
+
     // Micro-compact check (tool-result offload before auto-compact)
     {
       const microOutcome = await checkMicroCompact(messages, toolUseContext)
@@ -231,6 +290,23 @@ async function* messagePipelineCore(
       for (const notification of notifications) {
         const status = notification.status
         const exitCode = notification.exitCode
+        try {
+          finishDurableRun({
+            id: notification.taskId,
+            status:
+              status === 'completed'
+                ? 'completed'
+                : status === 'killed'
+                  ? 'cancelled'
+                  : 'failed',
+            ...(status === 'completed'
+              ? {}
+              : { error: `Background bash ${status}.` }),
+          })
+        } catch {
+          // A shell notification must not fail a normal model turn if its
+          // optional durable journal cannot be updated.
+        }
         const summarySuffix =
           status === 'completed'
             ? `completed${exitCode !== undefined ? ` (exit ${exitCode})` : ''}`
@@ -267,6 +343,8 @@ async function* messagePipelineCore(
     // Hooks: keep an up-to-date transcript for hook scripts.
     updateHookTranscriptForMessages(toolUseContext, messages)
 
+    let latestUserPromptText: string | null = null
+
     // Hooks: UserPromptSubmit
     {
       const last = messages[messages.length - 1]
@@ -290,6 +368,7 @@ async function* messagePipelineCore(
       }
 
       if (userPromptText !== null) {
+        latestUserPromptText = userPromptText
         // Keep a stable copy of the user's last prompt (pre-reminder injection) so
         // tools can do intent-alignment checks against the actual user request.
         toolUseContext.options.lastUserPrompt = userPromptText
@@ -327,6 +406,35 @@ async function* messagePipelineCore(
         context,
         toolUseContext.agentId,
       )
+
+    // Durable memory is deliberately conservative: only explicit preference /
+    // convention-like statements are extracted, and ephemeral calls opt out by
+    // setting persistSession to false. Retrieval stays local and bounded before
+    // becoming a clearly delimited system-prompt addition.
+    if (
+      toolUseContext.agentId === 'main' &&
+      latestUserPromptText !== null &&
+      toolUseContext.options.persistSession !== false
+    ) {
+      try {
+        extractLongTermMemories({
+          cwd: getCwd(),
+          text: latestUserPromptText,
+          source: { kind: 'session', id: getEffectiveSessionId() },
+        })
+        const memoryContext = formatMemoryContext(
+          getRelevantMemories({
+            cwd: getCwd(),
+            query: latestUserPromptText,
+            limit: 6,
+          }),
+        )
+        if (memoryContext) fullSystemPrompt.push(memoryContext)
+      } catch {
+        // Memory must never make a normal turn fail. Storage can be unavailable
+        // on read-only or transient environments.
+      }
+    }
 
     // Default behavior: plan mode reminders are injected as system-level guidance.
     const planModeAdditions = getPlanModeSystemPromptAdditions(
@@ -513,6 +621,59 @@ async function* messagePipelineCore(
             },
           )
           return
+        }
+      }
+
+      if (toolUseContext.agentId === 'main') {
+        const goalOutcome = await evaluateActiveGoalAfterTurn({
+          cwd: getCwd(),
+          sessionId: getEffectiveSessionId(),
+          assistantText: getAssistantTextForGoalEvaluation(assistantMessage),
+          signal: toolUseContext.abortController.signal,
+        })
+
+        if (goalOutcome.action === 'continue' && goalOutcome.goal) {
+          const continuationPrompt = buildGoalContinuationPrompt({
+            objective: goalOutcome.goal.objective,
+            acceptanceCriteria: goalOutcome.goal.acceptanceCriteria,
+            continuationPrompt:
+              goalOutcome.continuationPrompt ??
+              'Continue working toward the active goal.',
+          })
+
+          yield assistantMessage
+          yield* await messagePipelineCore(
+            [...messages, assistantMessage],
+            [...systemPrompt, continuationPrompt],
+            context,
+            canUseTool,
+            toolUseContext,
+            getBinaryFeedbackResponse,
+            {
+              ...hookState,
+              thinkingOnlyAttempts: 0,
+            },
+          )
+          return
+        }
+
+        if (
+          goalOutcome.action === 'complete' ||
+          goalOutcome.action === 'paused' ||
+          goalOutcome.action === 'expired'
+        ) {
+          const status =
+            goalOutcome.action === 'complete'
+              ? 'completed'
+              : goalOutcome.action === 'expired'
+                ? 'expired'
+                : 'paused'
+          addNotification({
+            title: 'Goal run',
+            message: `Goal ${status}${goalOutcome.reason ? `: ${goalOutcome.reason}` : ''}`,
+            source: 'system',
+            kind: status === 'completed' ? 'info' : 'warning',
+          })
         }
       }
 

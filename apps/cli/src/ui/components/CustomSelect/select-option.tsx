@@ -2,7 +2,7 @@ import figures from 'figures'
 import { Box, Text, type DOMElement } from 'ink'
 import React, { type ReactNode } from 'react'
 import { type Theme } from './theme'
-import { getTheme } from '#core/utils/theme'
+import { getReadableTextColor, getTheme } from '#core/utils/theme'
 
 export type SelectOptionProps = {
   /**
@@ -37,13 +37,17 @@ export const SelectOption = React.forwardRef<DOMElement, SelectOptionProps>(
     ref,
   ) {
     const appTheme = getTheme()
+    const focusedTextColor = getReadableTextColor(appTheme.kode, appTheme.text)
     const styles = {
       option: ({ isFocused }: { isFocused: boolean }) => ({
         paddingLeft: 2,
         paddingRight: 1,
+        width: '100%' as const,
+        backgroundColor: isFocused ? appTheme.kode : undefined,
       }),
       focusIndicator: () => ({
-        color: appTheme.kode,
+        color: focusedTextColor,
+        bold: true,
       }),
       label: ({
         isFocused,
@@ -52,15 +56,15 @@ export const SelectOption = React.forwardRef<DOMElement, SelectOptionProps>(
         isFocused: boolean
         isSelected: boolean
       }) => ({
-        color: isSelected
-          ? appTheme.success
-          : isFocused
-            ? appTheme.kode
+        color: isFocused
+          ? focusedTextColor
+          : isSelected
+            ? appTheme.success
             : appTheme.text,
-        bold: isSelected,
+        bold: isSelected || isFocused,
       }),
-      selectedIndicator: () => ({
-        color: appTheme.success,
+      selectedIndicator: ({ isFocused }: { isFocused: boolean }) => ({
+        color: isFocused ? focusedTextColor : appTheme.success,
       }),
     }
 
@@ -77,7 +81,9 @@ export const SelectOption = React.forwardRef<DOMElement, SelectOptionProps>(
         </Text>
 
         {isSelected && (
-          <Text {...styles.selectedIndicator()}>{figures.tick}</Text>
+          <Text {...styles.selectedIndicator({ isFocused })}>
+            {figures.tick}
+          </Text>
         )}
       </Box>
     )

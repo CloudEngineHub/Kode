@@ -88,6 +88,8 @@ export function finishDurableRun(args: {
  * Reconciliation deliberately never attaches an LLM iterator. Agent/goal runs
  * become requeueable after a restart. A shell run is only marked tailable when
  * a caller supplies an exact OS process identity probe (PID alone is unsafe).
+ * Legacy/unverifiable shell records are left untouched rather than incorrectly
+ * orphaning a still-running task from another Kode process.
  */
 export function reconcileDurableRuns(
   args: {
@@ -118,8 +120,10 @@ export function reconcileDurableRuns(
       return { run, action: 'requeueable' }
     }
     const identity = current.process
-    const probe =
-      identity && args.probeProcess ? args.probeProcess(identity) : null
+    if (!identity || !args.probeProcess) {
+      return { run: current, action: 'unchanged' }
+    }
+    const probe = args.probeProcess(identity)
     if (probe?.alive && probe.startToken === identity?.startToken) {
       return { run: current, action: 'tail_only' }
     }

@@ -4,6 +4,7 @@ import { SentryErrorBoundary } from '#ui-ink/components/SentryErrorBoundary'
 import { TokenWarning } from '#ui-ink/components/TokenWarning'
 import type { Theme } from '#core/utils/theme'
 import { computeResponsiveRows } from '#ui-ink/primitives/layout/viewportRows'
+import { resolveAgentColor } from '#ui-ink/utils/agentColor'
 import wrapAnsi from 'wrap-ansi'
 
 type Suggestion = {
@@ -33,7 +34,7 @@ const SuggestionItem = React.memo(
     const displayColor = isSelected
       ? theme.suggestion
       : isAgent && suggestion.metadata?.color
-        ? suggestion.metadata.color
+        ? resolveAgentColor(suggestion.metadata.color)
         : undefined
 
     return (
@@ -81,6 +82,9 @@ const HelpText = React.memo(
       if (!selectedSuggestion) {
         return '↑↓ navigate • → accept • Tab cycle • Esc close'
       }
+      if (selectedSuggestion.type === 'command') {
+        return 'Tab accept • ↑↓ navigate • → accept • Esc close'
+      }
       if (selectedSuggestion.value.endsWith('/')) {
         return '→ enter directory • ↑↓ navigate • Tab cycle • Esc close'
       }
@@ -111,7 +115,7 @@ const HelpText = React.memo(
         lines.length > 1 && firstLine.length > 0 ? `${firstLine}…` : firstLine
       return (
         <Text dimColor wrap="truncate-end">
-          {limited}
+          {`${limited} • Tab accept`}
         </Text>
       )
     }

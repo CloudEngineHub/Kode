@@ -7,7 +7,11 @@ import { getBunShellSandboxPlan } from '#core/sandbox/bunShellSandboxPlan'
 import { getCwd, getOriginalCwd } from '#core/utils/state'
 import { getEffectiveSessionId } from '#core/utils/sessionId'
 import { isBashCommandReadOnly } from '@kode/permissions/bash'
-import { createDurableRun, finishDurableRun } from '#core/runs'
+import {
+  createDurableRun,
+  finishDurableRun,
+  getDurableRunProcessIdentity,
+} from '#core/runs'
 import { getBackgroundTaskOutputFilePath } from '#core/tasks/backgroundRegistry'
 import { decideSystemSandboxForBashTool } from '#core/sandbox/systemSandbox'
 import { getBashDestructiveCommandBlock } from '#core/sandbox/destructiveCommandGuard'
@@ -309,16 +313,14 @@ export async function* callBashTool(
 
   try {
     if (input.run_in_background) {
-      const { bashId, completion } = BunShell.getInstance().execInBackground(
-        input.command,
-        input.timeout,
-        {
+      const { bashId, completion, pid } =
+        BunShell.getInstance().execInBackground(input.command, input.timeout, {
           sandbox: sandboxOptions,
           backgroundTask: {
             sessionId: getEffectiveSessionId(),
           },
-        },
-      )
+        })
+      const durableProcess = getDurableRunProcessIdentity(pid)
       let durableRunCreated = false
       if (process.env.NODE_ENV !== 'test') {
         try {
@@ -329,6 +331,7 @@ export async function* callBashTool(
             command: input.command,
             sessionId: getEffectiveSessionId(),
             outputFile: getBackgroundTaskOutputFilePath(bashId),
+            ...(durableProcess ? { process: durableProcess } : {}),
           })
           durableRunCreated = true
         } catch {

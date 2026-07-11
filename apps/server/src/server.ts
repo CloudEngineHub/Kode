@@ -4,19 +4,22 @@ import { fileURLToPath } from 'node:url'
 import { setCwd, setOriginalCwd } from '@kode/core/utils/state'
 import { grantReadPermissionForOriginalDir } from '@kode/core/utils/permissions/filesystem'
 import { getClients } from '@kode/core/mcp/client'
-import { reconcileDurableRuns } from '@kode/core/runs'
+import { probeDurableRunProcess, reconcileDurableRuns } from '@kode/core/runs'
 import { getTools } from '@kode/tools'
 
 import { serveNode } from './server/serveNode'
 import { createTokenChecker } from './server/auth'
 import { detectWebuiDir } from './server/webui'
 import { createWorkspaceLister } from './handlers/workspaces.handler'
+import { handleChatPrompt } from './handlers/chat.handler'
 import { PersistentSessionService } from './persistentSessionService'
 import { createRoutes } from './routes'
 import { createWebSocketHandlers } from './ws/connection'
 import type { DaemonSession } from './ws/types'
+import { broadcastSessionJson } from './ws/sessionBroadcaster'
 import { SessionRegistry } from './sessionRegistry'
 import { processDaemonRuntimeCoordinator } from './turnGate'
+import { GoalScheduleRunner } from './automation/goalScheduleRunner'
 
 type WebSocketData = {
   session: DaemonSession
@@ -66,7 +69,7 @@ export async function startKodeDaemon(args: {
       await setCwd(cwd)
       grantReadPermissionForOriginalDir()
       try {
-        reconcileDurableRuns()
+        reconcileDurableRuns({ probeProcess: probeDurableRunProcess })
       } catch {
         // A stale journal must not prevent daemon startup.
       }
@@ -113,12 +116,46 @@ export async function startKodeDaemon(args: {
     mcpClients,
   })
 
+  // Scheduled goals only run for an already-connected, idle session. The
+  // normal daemon permission flow remains in charge of every tool action;
+  // the runner merely turns a durable due prompt into a regular chat turn.
+  const goalScheduleRunner = new GoalScheduleRunner({
+    listSessions: () => sessions.values(),
+    canDispatch: session =>
+      session.clients.size > 0 &&
+      session.turnInFlight === false &&
+      turnGate.isIdle(),
+    dispatch: async ({ session, schedule }) => {
+      const lease = turnGate.tryAcquire(session)
+      if (!lease) throw new Error('Daemon runtime is busy.')
+      try {
+        await handleChatPrompt({
+          wsSend: payload => broadcastSessionJson(session, payload),
+          session,
+          prompt: schedule.prompt,
+          echo,
+          echoDelayMs,
+          commands,
+          tools,
+          toolNames,
+          slashCommands,
+          mcpClients,
+        })
+      } finally {
+        lease.release()
+        sessionRegistry.evictIdleSessions()
+      }
+    },
+  })
+
   const server = await serveNode<WebSocketData>({
     hostname: host,
     port,
     fetch: routes.fetch,
     websocket,
   })
+
+  goalScheduleRunner.start()
 
   const displayHost = host === '127.0.0.1' ? 'localhost' : host
 
@@ -131,6 +168,7 @@ export async function startKodeDaemon(args: {
     stop: () => {
       if (stopped) return
       stopped = true
+      goalScheduleRunner.stop()
       try {
         sessionRegistry.cancelActiveWork('Daemon stopped')
       } catch {}

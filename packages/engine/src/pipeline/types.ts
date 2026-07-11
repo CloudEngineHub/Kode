@@ -52,6 +52,7 @@ export interface ExtendedToolUseContext extends ToolUseContext {
      * When false, suppress legacy-compatible session persistence (.jsonl under config/projects).
      */
     persistSession?: boolean
+    automationKind?: 'goal' | 'scheduled_loop'
     /**
      * Optional callback to get custom system prompt additions (e.g., output style).
      * Only called for the main agent.

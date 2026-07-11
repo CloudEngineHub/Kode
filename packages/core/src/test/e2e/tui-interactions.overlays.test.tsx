@@ -8,6 +8,8 @@ import { ConfigScreen } from '#ui-ink/screens/overlays/ConfigScreen'
 import { WorkTasksScreen } from '#ui-ink/screens/overlays/WorkTasksScreen'
 import { TranscriptScreen } from '#ui-ink/screens/overlays/TranscriptScreen'
 import { CommandPaletteScreen } from '#ui-ink/screens/overlays/CommandPaletteScreen'
+import { ThemePickerScreen } from '#ui-ink/screens/overlays/ThemePickerScreen'
+import type { Command } from '#cli-commands'
 import { createInkHarnessManager, createInkTestHarness } from './inkTestHarness'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -172,6 +174,142 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
     }
   })
 
+  test('ModelPickerScreen: typing filters and applies the matching model', async () => {
+    const originalConfig = JSON.parse(JSON.stringify(getGlobalConfig()))
+    saveGlobalConfig({
+      ...getGlobalConfig(),
+      modelProfiles: [
+        {
+          name: 'Code Model',
+          provider: 'custom-openai',
+          modelName: 'code-model',
+          apiKey: 'test-key',
+          maxTokens: 1024,
+          contextLength: 128_000,
+          isActive: true,
+          createdAt: 1,
+          lastUsed: 2,
+        },
+        {
+          name: 'Other Model',
+          provider: 'custom-openai',
+          modelName: 'other-model',
+          apiKey: 'test-key',
+          maxTokens: 1024,
+          contextLength: 128_000,
+          isActive: true,
+          createdAt: 2,
+          lastUsed: 1,
+        },
+      ],
+      modelPointers: {
+        main: 'code-model',
+        task: '',
+        compact: '',
+        quick: '',
+      },
+    })
+    reloadModelManager()
+
+    try {
+      let selectedModel = ''
+      let closed = false
+      const h = createInkTestHarness(
+        <KeypressProvider>
+          <ModelPickerScreen
+            onDone={() => {
+              closed = true
+            }}
+            onSelectModel={modelName => {
+              selectedModel = modelName
+            }}
+          />
+        </KeypressProvider>,
+      )
+      harnessManager.track(h)
+
+      await h.wait(25)
+      for (const character of 'other') {
+        h.stdin.write(character)
+        await h.wait(25)
+      }
+      await h.wait(100)
+
+      expect(h.getOutput()).toContain('Filter: other')
+      expect(h.getOutput()).toContain(
+        '1 match · Enter applies the highlighted model',
+      )
+
+      h.stdin.write('\r')
+      await h.wait(25)
+
+      expect(selectedModel).toBe('other-model')
+      expect(closed).toBe(true)
+    } finally {
+      saveGlobalConfig(originalConfig)
+      reloadModelManager()
+    }
+  })
+
+  test('ModelPickerScreen: Ctrl+O opens model configuration directly', async () => {
+    let openedConfig = false
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <ModelPickerScreen
+          onDone={() => {}}
+          onSelectModel={() => {}}
+          onOpenModelConfig={() => {
+            openedConfig = true
+          }}
+        />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    h.stdin.write('\x0f')
+    await h.wait(25)
+
+    expect(openedConfig).toBe(true)
+  })
+
+  test('ThemePickerScreen: typing filters and applies the matching theme', async () => {
+    const originalConfig = JSON.parse(JSON.stringify(getGlobalConfig()))
+    saveGlobalConfig({ ...getGlobalConfig(), theme: 'dark' })
+
+    try {
+      let result = ''
+      const h = createInkTestHarness(
+        <KeypressProvider>
+          <ThemePickerScreen onDone={value => (result = value ?? '')} />
+        </KeypressProvider>,
+      )
+      harnessManager.track(h)
+
+      await h.wait(25)
+      expect(h.getOutput()).toContain('Current: Dark')
+
+      for (const character of 'nord') {
+        h.stdin.write(character)
+        await h.wait(25)
+      }
+      await h.wait(50)
+
+      expect(h.getOutput()).toContain('Filter: nord')
+      expect(h.getOutput()).toContain(
+        '1 match · Enter applies the highlighted theme',
+      )
+
+      h.stdin.write('\r')
+      await h.wait(25)
+
+      expect(result).toBe('Theme set to nord')
+      expect(getGlobalConfig().theme).toBe('nord')
+    } finally {
+      saveGlobalConfig(originalConfig)
+    }
+  })
+
   test('ThinkingToggleScreen: Alt+T closes', async () => {
     let closed = false
     const h = createInkTestHarness(
@@ -324,6 +462,47 @@ describe('TUI E2E regression (Ink render): Overlays', () => {
 
     expect(h.getOutput()).toContain('helpopenx')
     expect(h.getOutput()).not.toContain('helpxopen')
+  })
+
+  test('CommandPaletteScreen: filters slash commands by alias and returns a draft', async () => {
+    const command = {
+      type: 'local',
+      name: 'deploy',
+      description: 'Deploy the current project',
+      argumentHint: '<environment>',
+      aliases: ['ship'],
+      isEnabled: true,
+      isHidden: false,
+      userFacingName: () => 'deploy',
+      call: async () => '',
+    } satisfies Command
+    let result: unknown
+
+    const h = createInkTestHarness(
+      <KeypressProvider>
+        <CommandPaletteScreen
+          commands={[command]}
+          onDone={value => (result = value)}
+        />
+      </KeypressProvider>,
+    )
+    harnessManager.track(h)
+
+    await h.wait(50)
+    h.stdin.write('/ship')
+    await h.wait(50)
+
+    expect(h.getOutput()).toContain('/deploy <environment>')
+    expect(h.getOutput()).toContain('Aliases: /ship')
+
+    h.stdin.write('\r')
+    await h.wait(25)
+
+    expect(result).toEqual({
+      kind: 'command',
+      name: 'deploy',
+      argumentHint: '<environment>',
+    })
   })
 
   test('LogList: Enter returns selected log JSON through callback', async () => {

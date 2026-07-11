@@ -8,6 +8,10 @@ export class DaemonTurnGate {
   private activeLease: symbol | null = null
   private readonly startupWaiters: Array<(lease: TurnLease) => void> = []
 
+  isIdle(): boolean {
+    return this.activeLease === null && this.startupWaiters.length === 0
+  }
+
   tryAcquire(session: DaemonSession): TurnLease | null {
     if (
       this.activeLease ||

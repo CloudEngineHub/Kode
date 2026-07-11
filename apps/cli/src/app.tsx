@@ -1,6 +1,7 @@
 import '#core/utils/sanitizeAnthropicEnv'
 import { initDebugLogger } from '#core/utils/debugLogger'
 import { logError } from '#core/utils/log'
+import { probeDurableRunProcess, reconcileDurableRuns } from '#core/runs'
 import { ConfigParseError } from '#core/utils/errors'
 import { BunShell } from '#runtime/shell'
 import {
@@ -102,6 +103,14 @@ export async function runCli(): Promise<void> {
   // Validate configs are valid and enable configuration system
   try {
     enableConfigs()
+
+    queueMicrotask(() => {
+      try {
+        reconcileDurableRuns({ probeProcess: probeDurableRunProcess })
+      } catch (error) {
+        logError(error)
+      }
+    })
 
     // 🔧 Validate and auto-repair GPT-5 model profiles (best-effort, non-blocking)
     // Avoid printing during interactive render; log to file on failure.

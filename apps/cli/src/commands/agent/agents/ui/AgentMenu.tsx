@@ -28,10 +28,11 @@ export function AgentMenu(props: {
     }
   })
 
-  const isBuiltIn = props.agent.source === 'built-in'
+  const isReadOnly =
+    props.agent.location === 'built-in' || props.agent.location === 'plugin'
   const options = [
     { label: 'View agent', value: 'view' },
-    ...(isBuiltIn
+    ...(isReadOnly
       ? []
       : [
           { label: 'Edit agent', value: 'edit' },
@@ -42,7 +43,10 @@ export function AgentMenu(props: {
 
   return (
     <>
-      <Panel title={props.agent.agentType}>
+      <Panel
+        title={props.agent.agentType}
+        subtitle={isReadOnly ? 'Read-only agent' : undefined}
+      >
         <Box flexDirection="column" marginTop={1}>
           <Select
             focusScope={`agent-menu:${props.agent.source}:${props.agent.agentType}`}

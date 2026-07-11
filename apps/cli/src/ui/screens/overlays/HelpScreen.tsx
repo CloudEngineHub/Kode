@@ -41,6 +41,11 @@ function getHelpPath(): string {
   return join(CACHE_PATHS.errors(), `help-${DATE}.txt`)
 }
 
+function formatCommandAliases(command: Command): string {
+  if (!command.aliases?.length) return ''
+  return ` (aliases: ${command.aliases.map(alias => `/${alias}`).join(', ')})`
+}
+
 export function __buildHelpLinesForTests(commands: Command[]): string[] {
   const filteredCommands = commands.filter(cmd => !cmd.isHidden)
   const customCommands = filteredCommands.filter(isCustomCommandWithScope)
@@ -75,17 +80,20 @@ export function __buildHelpLinesForTests(commands: Command[]): string[] {
   lines.push('- F4: Console (captured stdout/stderr)')
   lines.push('- F5: Notifications')
   lines.push('- F6: Transcript (scroll/copy)')
-  lines.push('- F7: Command palette')
+  lines.push('- F7: Command palette (search actions and commands)')
   lines.push('- F8: Tasks (background tasks)')
   lines.push('- Ctrl+O: Toggle verbose transcript')
   lines.push('- Ctrl+T: Work tasks')
   lines.push('- Ctrl+R: History search')
-  lines.push('- Alt+P: Model picker')
+  lines.push(
+    '- Alt+P: Model picker (type to filter; Ctrl+O opens model settings)',
+  )
   lines.push('- Ctrl+G: External editor')
   lines.push('- Ctrl+S: Stash prompt')
   lines.push('- Ctrl+_: Undo')
   lines.push('- Double Esc: Clear input')
   lines.push('- Shift+Tab: Cycle permission mode')
+  lines.push('- / + Tab: Accept command completion')
   lines.push('- Down Arrow (empty input): Tasks (when available)')
   lines.push('')
 
@@ -100,7 +108,10 @@ export function __buildHelpLinesForTests(commands: Command[]): string[] {
 
   lines.push('Commands')
   for (const cmd of builtInCommands) {
-    lines.push(`- /${cmd.name} — ${cmd.description}`)
+    const argumentHint = cmd.argumentHint ? ` ${cmd.argumentHint}` : ''
+    lines.push(
+      `- /${cmd.userFacingName()}${argumentHint} — ${cmd.description}${formatCommandAliases(cmd)}`,
+    )
   }
 
   if (customCommands.length > 0) {
@@ -108,11 +119,10 @@ export function __buildHelpLinesForTests(commands: Command[]): string[] {
     lines.push('Custom commands')
     for (const cmd of customCommands) {
       const scope = cmd.scope ? ` [${cmd.scope}]` : ''
-      const aliases =
-        cmd.aliases && cmd.aliases.length > 0
-          ? ` (aliases: ${cmd.aliases.join(', ')})`
-          : ''
-      lines.push(`- /${cmd.name}${scope} — ${cmd.description}${aliases}`)
+      const argumentHint = cmd.argumentHint ? ` ${cmd.argumentHint}` : ''
+      lines.push(
+        `- /${cmd.userFacingName()}${scope}${argumentHint} — ${cmd.description}${formatCommandAliases(cmd)}`,
+      )
     }
   }
 

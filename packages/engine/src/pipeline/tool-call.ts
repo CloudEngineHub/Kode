@@ -1,4 +1,5 @@
 import type { Tool, ToolUseContext } from '@kode/tool-interface/Tool'
+import { assessWindowsExecution } from '#runtime/execution'
 import { getCwd } from '#core/utils/state'
 import { logError } from '#core/utils/log'
 import type { ToolResultBlockParam } from '@anthropic-ai/sdk/resources/index.mjs'
@@ -41,6 +42,40 @@ function toToolResultContent(value: unknown): ToolResultBlockParam['content'] {
   return String(value)
 }
 
+function getWindowsAutomationPolicyBlock(
+  tool: Tool,
+  input: Record<string, unknown>,
+  context: ToolUseContext,
+): string | null {
+  const automationKind = context.options?.automationKind
+  const platform = context.options?.__sandboxPlatform ?? process.platform
+  if (
+    !automationKind ||
+    platform !== 'win32' ||
+    tool.isReadOnly(input as never)
+  ) {
+    return null
+  }
+
+  // A goal/loop is unattended execution. Treat every non-read-only tool as a
+  // write-capable side effect so allowlisted filesystem permissions cannot
+  // accidentally turn a local Windows process into a claimed sandbox.
+  const decision = assessWindowsExecution({
+    command: `tool:${tool.name}`,
+    cwd: getCwd(),
+    mode: 'goal',
+    writesFilesystem: true,
+    approvalGranted: true,
+    platform,
+  })
+  if (decision.allowed) return null
+  return [
+    'Blocked by the Windows execution policy.',
+    `Reason: ${decision.reason}.`,
+    `Requirements: ${decision.requirements.join(', ')}.`,
+  ].join(' ')
+}
+
 export async function* checkPermissionsAndCallTool(
   tool: Tool,
   toolUseID: string,
@@ -73,6 +108,23 @@ export async function* checkPermissionsAndCallTool(
   }
 
   let normalizedInput = normalizeToolInput(tool, isValidInput.data)
+
+  const windowsAutomationBlock = getWindowsAutomationPolicyBlock(
+    tool,
+    normalizedInput,
+    context,
+  )
+  if (windowsAutomationBlock) {
+    yield createUserMessage([
+      {
+        type: 'tool_result',
+        content: windowsAutomationBlock,
+        is_error: true,
+        tool_use_id: toolUseID,
+      },
+    ])
+    return
+  }
 
   const builtinOutcome = runBuiltinPreToolUseGuards({
     toolName: tool.name,

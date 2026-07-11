@@ -3,6 +3,8 @@ import { join } from 'path'
 import { Box, Text } from 'ink'
 import figures from 'figures'
 import type { Tool } from '../tooling'
+import { getReadableTextColor, getTheme } from '#core/utils/theme'
+import { resolveAgentColor } from '#ui-ink/utils/agentColor'
 import { themeColor } from './colors'
 import { Instructions, Panel } from './components'
 import type { AgentWithOverride } from './types'
@@ -14,6 +16,8 @@ export function ViewAgent(props: {
   tools: Tool[]
   onBack: () => void
 }) {
+  const theme = getTheme()
+  const agentColor = resolveAgentColor(props.agent.color)
   useKeypress((_input, key) => {
     if (key.escape || key.return) {
       props.onBack()
@@ -102,7 +106,18 @@ export function ViewAgent(props: {
           </Text>
           {props.agent.color ? (
             <Text>
-              <Text bold>Color</Text>: {props.agent.color}
+              <Text bold>Color</Text>:{' '}
+              <Text
+                backgroundColor={agentColor ?? theme.secondaryBorder}
+                color={getReadableTextColor(
+                  agentColor ?? theme.secondaryBorder,
+                  theme.text,
+                )}
+                bold
+              >
+                {' '}
+                {props.agent.color}{' '}
+              </Text>
             </Text>
           ) : null}
           {props.agent.systemPrompt ? (

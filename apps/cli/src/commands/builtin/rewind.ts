@@ -3,7 +3,6 @@ import type { Command } from '../types'
 const rewind = {
   type: 'local',
   name: 'rewind',
-  aliases: ['checkpoint'],
   description: 'Restore the conversation to a previous point',
   isEnabled: true,
   isHidden: false,

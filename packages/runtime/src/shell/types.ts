@@ -109,6 +109,7 @@ export type BackgroundShellCompletion = {
 
 export type BackgroundShellLaunch = {
   bashId: string
+  pid?: number
   completion: Promise<BackgroundShellCompletion>
 }
 

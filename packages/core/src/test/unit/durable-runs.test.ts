@@ -55,6 +55,29 @@ describe('durable run reconciliation', () => {
     }
   })
 
+  test('does not orphan a shell run when no exact process identity exists', () => {
+    const storageRoot = mkdtempSync(join(tmpdir(), 'kode-runs-'))
+    try {
+      createDurableRun({
+        id: 'legacy-shell',
+        kind: 'shell',
+        cwd: storageRoot,
+        storageRoot,
+        now: 1,
+      })
+
+      const result = reconcileDurableRuns({
+        storageRoot,
+        now: 2,
+        probeProcess: () => ({ alive: false }),
+      })
+      expect(result[0]?.action).toBe('unchanged')
+      expect(result[0]?.run.status).toBe('running')
+    } finally {
+      rmSync(storageRoot, { recursive: true, force: true })
+    }
+  })
+
   test('does not overwrite a terminal cancellation when a late completion arrives', () => {
     const storageRoot = mkdtempSync(join(tmpdir(), 'kode-runs-'))
     try {

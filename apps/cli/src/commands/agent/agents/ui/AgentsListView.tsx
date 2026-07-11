@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Box, Text } from 'ink'
 import figures from 'figures'
-import { getTheme } from '#core/utils/theme'
+import { getReadableTextColor, getTheme } from '#core/utils/theme'
+import { resolveAgentColor } from '#ui-ink/utils/agentColor'
 import { Instructions, Panel } from './components'
 import type { AgentSourceFilter, AgentWithOverride } from './types'
 import { formatModelShort, titleForSource } from './utils'
@@ -14,6 +15,26 @@ function agentRowKey(agent: AgentWithOverride): string {
   return `${agent.agentType}-${agent.source}-${location}-${baseDir}-${filename}`
 }
 
+function isReadOnlyAgent(agent: AgentWithOverride): boolean {
+  return agent.location === 'built-in' || agent.location === 'plugin'
+}
+
+function getNavigableAgents(args: {
+  agents: AgentWithOverride[]
+  source: AgentSourceFilter
+}): AgentWithOverride[] {
+  if (args.source !== 'all') return args.agents
+
+  return [
+    ...args.agents.filter(agent => agent.source === 'userSettings'),
+    ...args.agents.filter(agent => agent.source === 'projectSettings'),
+    ...args.agents.filter(agent => agent.source === 'policySettings'),
+    ...args.agents.filter(agent => agent.source === 'plugin'),
+    ...args.agents.filter(agent => agent.source === 'flagSettings'),
+    ...args.agents.filter(agent => agent.source === 'built-in'),
+  ]
+}
+
 export function AgentsListView(props: {
   source: AgentSourceFilter
   agents: AgentWithOverride[]
@@ -24,17 +45,10 @@ export function AgentsListView(props: {
 }) {
   const theme = getTheme()
 
-  const selectableAgents = useMemo(() => {
-    const nonBuiltIn = props.agents.filter(a => a.source !== 'built-in')
-    if (props.source === 'all') {
-      return [
-        ...nonBuiltIn.filter(a => a.source === 'userSettings'),
-        ...nonBuiltIn.filter(a => a.source === 'projectSettings'),
-        ...nonBuiltIn.filter(a => a.source === 'policySettings'),
-      ]
-    }
-    return nonBuiltIn
-  }, [props.agents, props.source])
+  const selectableAgents = useMemo(
+    () => getNavigableAgents({ agents: props.agents, source: props.source }),
+    [props.agents, props.source],
+  )
 
   const [selectedAgent, setSelectedAgent] = useState<AgentWithOverride | null>(
     null,
@@ -47,10 +61,9 @@ export function AgentsListView(props: {
       setSelectedAgent(null)
       return
     }
-    if (!selectedAgent && selectableAgents.length > 0) {
-      setSelectedAgent(selectableAgents[0] ?? null)
-    }
-  }, [props.onCreateNew, selectableAgents, selectedAgent])
+    setOnCreateOption(false)
+    setSelectedAgent(selectableAgents[0] ?? null)
+  }, [props.onCreateNew, selectableAgents])
 
   useKeypress((_input, key) => {
     if (key.escape) {
@@ -107,46 +120,72 @@ export function AgentsListView(props: {
     }
   })
 
-  const renderCreateNew = () => (
-    <Box>
-      <Text color={onCreateOption ? theme.suggestion : undefined}>
-        {onCreateOption ? `${figures.pointer} ` : '  '}
-      </Text>
-      <Text color={onCreateOption ? theme.suggestion : undefined}>
-        Create new agent
-      </Text>
-    </Box>
-  )
-
-  const renderAgentRow = (agent: AgentWithOverride) => {
-    const isBuiltIn = agent.source === 'built-in'
-    const isSelected =
-      !isBuiltIn &&
-      !onCreateOption &&
-      selectedAgent &&
-      agentRowKey(selectedAgent) === agentRowKey(agent)
-
-    const dimmed = Boolean(isBuiltIn || agent.overriddenBy)
-    const rowColor = isSelected ? theme.suggestion : undefined
-    const pointer = isBuiltIn ? '' : isSelected ? `${figures.pointer} ` : '  '
+  const renderCreateNew = () => {
+    const isSelected = onCreateOption
+    const selectedTextColor = getReadableTextColor(theme.kode, theme.text)
+    const rowTextColor = isSelected ? selectedTextColor : theme.secondaryText
 
     return (
-      <Box key={agentRowKey(agent)} flexDirection="row">
-        <Text dimColor={dimmed && !isSelected} color={rowColor}>
+      <Box width="100%" backgroundColor={isSelected ? theme.kode : undefined}>
+        <Text color={rowTextColor} bold={isSelected}>
+          {onCreateOption ? `${figures.pointer} ` : '  '}
+        </Text>
+        <Text color={rowTextColor} bold={isSelected}>
+          Create new agent
+        </Text>
+      </Box>
+    )
+  }
+
+  const renderAgentRow = (agent: AgentWithOverride) => {
+    const isReadOnly = isReadOnlyAgent(agent)
+    const isSelected = Boolean(
+      !onCreateOption &&
+      selectedAgent &&
+      agentRowKey(selectedAgent) === agentRowKey(agent),
+    )
+
+    const dimmed = Boolean(agent.overriddenBy)
+    const selectedTextColor = getReadableTextColor(theme.kode, theme.text)
+    const rowTextColor = isSelected ? selectedTextColor : theme.secondaryText
+    const accentColor = resolveAgentColor(agent.color)
+    const pointer = isSelected ? `${figures.pointer} ` : '  '
+
+    return (
+      <Box
+        key={agentRowKey(agent)}
+        width="100%"
+        flexDirection="row"
+        backgroundColor={isSelected ? theme.kode : undefined}
+      >
+        <Text color={rowTextColor} bold={isSelected}>
           {pointer}
         </Text>
-        <Text dimColor={dimmed && !isSelected} color={rowColor}>
+        {accentColor ? (
+          <Text
+            backgroundColor={accentColor}
+            color={getReadableTextColor(accentColor, theme.text)}
+            bold
+          >
+            {' ● '}
+          </Text>
+        ) : (
+          <Text color={rowTextColor}>{'   '}</Text>
+        )}
+        <Text
+          dimColor={dimmed && !isSelected}
+          color={rowTextColor}
+          bold={isSelected}
+        >
           {agent.agentType}
         </Text>
-        <Text dimColor color={rowColor}>
+        <Text color={rowTextColor}>
           {' - '}
           {formatModelShort(agent.model)}
         </Text>
+        {isReadOnly ? <Text color={rowTextColor}>{' [read-only]'}</Text> : null}
         {agent.overriddenBy ? (
-          <Text
-            dimColor={!isSelected}
-            color={isSelected ? theme.warning : undefined}
-          >
+          <Text color={isSelected ? selectedTextColor : theme.warning}>
             {' '}
             {figures.warning} overridden by {agent.overriddenBy}
           </Text>

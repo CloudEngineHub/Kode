@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react'
 import { Text } from 'ink'
 import { getAgentByType } from '@kode/agent'
 import { getTheme } from '#core/utils/theme'
+import { resolveAgentColor } from '#ui-ink/utils/agentColor'
 
 interface Props {
   agentType: string
@@ -49,7 +50,7 @@ export function TaskToolMessage({ agentType, children, bold = true }: Props) {
 
   // Memoize color calculation to prevent unnecessary re-renders
   const color = useMemo(() => {
-    return agentConfig?.color || theme.text
+    return resolveAgentColor(agentConfig?.color) ?? theme.text
   }, [agentConfig?.color, theme.text])
 
   return (

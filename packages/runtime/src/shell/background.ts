@@ -178,7 +178,11 @@ export function execInBackground(
   )
 
   state.backgroundProcesses.set(bashId, backgroundProcess)
-  return { bashId, completion }
+  return {
+    bashId,
+    ...(typeof childProcess.pid === 'number' ? { pid: childProcess.pid } : {}),
+    completion,
+  }
 }
 
 export function getBackgroundOutput(
