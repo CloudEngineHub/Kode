@@ -1,7 +1,11 @@
 import { Box, Text } from 'ink'
 import * as React from 'react'
-import { getTheme } from '#core/utils/theme'
+import { getTheme, type Theme } from '#core/utils/theme'
 import { ASCII_LOGO, PRODUCT_NAME } from '#core/constants/product'
+import {
+  getCommandShortcutHints,
+  type CommandShortcutHint,
+} from '#ui-ink/utils/commandShortcutHints'
 
 export const MIN_LOGO_WIDTH = 70
 const DEFAULT_TERMINAL_COLUMNS = 80
@@ -16,6 +20,98 @@ const PRODUCT_NAME_FALLBACK = `${PRODUCT_NAME.toUpperCase()} CLI`
 function normalizeDimension(value: number | undefined, fallback: number) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return fallback
   return Math.max(1, Math.floor(value))
+}
+
+function HintGroup({
+  hints,
+  theme,
+  color,
+  showEffects,
+}: {
+  hints: readonly CommandShortcutHint[]
+  theme: Theme
+  color: string
+  showEffects: boolean
+}): React.ReactNode {
+  return hints.map((hint, index) => (
+    <React.Fragment key={hint.trigger}>
+      {index > 0 ? <Text color={theme.secondaryText}> · </Text> : null}
+      <Text color={color} bold>
+        {hint.trigger}
+      </Text>
+      {showEffects ? <Text color={theme.text}>{` ${hint.effect}`}</Text> : null}
+    </React.Fragment>
+  ))
+}
+
+function LogoQuickActions({
+  columns,
+  compact,
+  theme,
+}: {
+  columns: number
+  compact: boolean
+  theme: Theme
+}): React.ReactNode {
+  const { commands, shortcuts } = getCommandShortcutHints()
+  const modelShortcut = shortcuts[0] ?? {
+    trigger: 'Alt+M',
+    effect: 'switch model',
+  }
+
+  if (compact) {
+    const compactCommands =
+      columns >= 55
+        ? commands
+        : columns >= 42
+          ? commands.slice(1, 3)
+          : commands.slice(1, 2)
+
+    return (
+      <Text wrap="truncate-end">
+        <HintGroup
+          hints={compactCommands}
+          theme={theme}
+          color={theme.primary}
+          showEffects={false}
+        />
+        <Text color={theme.secondaryText}> · </Text>
+        <Text color={theme.warning} bold>
+          {modelShortcut.trigger}
+        </Text>
+        <Text color={theme.text}> model</Text>
+      </Text>
+    )
+  }
+
+  return (
+    <Box flexDirection="column">
+      <Text wrap="truncate-end">
+        <Text color={theme.text} bold>
+          Commands{' '}
+        </Text>
+        <HintGroup
+          hints={commands}
+          theme={theme}
+          color={theme.primary}
+          showEffects={columns >= 112}
+        />
+      </Text>
+      <Text wrap="truncate-end">
+        <Text color={theme.text} bold>
+          Keys{' '}
+        </Text>
+        <HintGroup
+          hints={shortcuts}
+          theme={theme}
+          color={theme.warning}
+          showEffects
+        />
+        <Text color={theme.secondaryText}> · </Text>
+        <Text color={theme.text}>? shortcuts</Text>
+      </Text>
+    </Box>
+  )
 }
 
 export function Logo({
@@ -64,12 +160,7 @@ export function Logo({
         </Text>
 
         {showShortHelp && (
-          <Text dimColor wrap="truncate-end">
-            /help{'  '}
-            <Text color={theme.notingBorder}>/note</Text>
-            {'  '}
-            @file{'  '}opt+m
-          </Text>
+          <LogoQuickActions columns={columns} compact theme={theme} />
         )}
 
         {showMcpDetails ? (
@@ -131,17 +222,9 @@ export function Logo({
         ))}
       </Box>
 
-      {/* Quick tips - single line */}
+      {/* High-contrast command and key entry points */}
       <Box marginTop={isCompact ? 0 : 1}>
-        <Text dimColor>
-          {isCompact ? null : <>/init{'  '}</>}
-          /help{'  '}
-          {!isCompact ? <Text color={theme.bashBorder}>/bash</Text> : null}
-          {!isCompact ? ' ' : null}
-          <Text color={theme.notingBorder}>/note</Text>
-          {'  '}
-          @file{'  '}opt+m{isCompact ? null : '  opt+g'}
-        </Text>
+        <LogoQuickActions columns={columns} compact={isCompact} theme={theme} />
       </Box>
 
       {/* MCP Servers section */}

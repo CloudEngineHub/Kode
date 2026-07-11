@@ -16,6 +16,11 @@ import {
 import { copyTextToClipboard } from '#cli-utils/clipboard'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
+import {
+  getCommandShortcutHints,
+  getShortcutModifierLabel,
+} from '#ui-ink/utils/commandShortcutHints'
+import { getPermissionModeCycleShortcut } from '#ui-ink/utils/permissionModeCycleShortcut'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import {
@@ -47,6 +52,17 @@ function formatCommandAliases(command: Command): string {
 }
 
 export function __buildHelpLinesForTests(commands: Command[]): string[] {
+  const quickHints = getCommandShortcutHints()
+  const shortcutModifier = getShortcutModifierLabel()
+  const modelShortcut = quickHints.shortcuts[0] ?? {
+    trigger: 'Alt+M',
+    effect: 'switch model',
+  }
+  const editorShortcut = quickHints.shortcuts[1] ?? {
+    trigger: 'Alt+G',
+    effect: 'open external editor',
+  }
+  const modeCycleShortcut = getPermissionModeCycleShortcut()
   const filteredCommands = commands.filter(cmd => !cmd.isHidden)
   const customCommands = filteredCommands.filter(isCustomCommandWithScope)
   const builtInCommands = filteredCommands.filter(
@@ -86,15 +102,25 @@ export function __buildHelpLinesForTests(commands: Command[]): string[] {
   lines.push('- Ctrl+T: Work tasks')
   lines.push('- Ctrl+R: History search')
   lines.push(
-    '- Alt+P: Model picker (type to filter; Ctrl+O opens model settings)',
+    `- ${shortcutModifier}+P: Model picker (type to filter; Ctrl+O opens model settings)`,
   )
-  lines.push('- Ctrl+G: External editor')
+  lines.push(`- ${modelShortcut.trigger}: ${modelShortcut.effect}`)
+  lines.push(
+    `- ${editorShortcut.trigger}: ${editorShortcut.effect} (Ctrl+G also works)`,
+  )
+  lines.push(`- Ctrl/${shortcutModifier}+B: Prefill /bash`)
   lines.push('- Ctrl+S: Stash prompt')
   lines.push('- Ctrl+_: Undo')
   lines.push('- Double Esc: Clear input')
-  lines.push('- Shift+Tab: Cycle permission mode')
+  lines.push(`- ${modeCycleShortcut.displayText}: Cycle permission mode`)
   lines.push('- / + Tab: Accept command completion')
   lines.push('- Down Arrow (empty input): Tasks (when available)')
+  lines.push('')
+
+  lines.push('Quick commands')
+  for (const command of quickHints.commands) {
+    lines.push(`- ${command.trigger}: ${command.effect}`)
+  }
   lines.push('')
 
   lines.push('Common tasks')

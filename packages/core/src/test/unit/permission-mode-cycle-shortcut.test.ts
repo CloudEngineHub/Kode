@@ -39,15 +39,15 @@ describe('permission mode cycle shortcut', () => {
     expect(shortcut.check('m', makeKey({ meta: true }))).toBe(false)
   })
 
-  test('Windows: Bun <1.2.23 falls back to alt+m', () => {
+  test('Windows: Bun <1.2.23 falls back to F9 without taking Alt+M', () => {
     const shortcut = __getPermissionModeCycleShortcutForTests({
       platform: 'win32',
       bunVersion: '1.2.22',
     })
 
-    expect(shortcut.displayText).toBe('alt+m')
-    expect(shortcut.check('m', makeKey({ meta: true }))).toBe(true)
-    expect(shortcut.check('M', makeKey({ meta: true }))).toBe(true)
+    expect(shortcut.displayText).toBe('F9')
+    expect(shortcut.check('', makeKey({ name: 'f9' }))).toBe(true)
+    expect(shortcut.check('m', makeKey({ meta: true }))).toBe(false)
     expect(shortcut.check('', makeKey({ tab: true, shift: true }))).toBe(false)
   })
 
@@ -71,12 +71,12 @@ describe('permission mode cycle shortcut', () => {
     expect(shortcut.displayText).toBe('shift+tab')
   })
 
-  test('Windows: invalid version strings fall back to alt+m', () => {
+  test('Windows: invalid version strings fall back to F9', () => {
     const shortcut = __getPermissionModeCycleShortcutForTests({
       platform: 'win32',
       bunVersion: 'not-a-version',
     })
 
-    expect(shortcut.displayText).toBe('alt+m')
+    expect(shortcut.displayText).toBe('F9')
   })
 })

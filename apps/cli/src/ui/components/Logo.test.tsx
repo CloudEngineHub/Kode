@@ -4,12 +4,14 @@ import React from 'react'
 import { PassThrough } from 'node:stream'
 import stripAnsi from 'strip-ansi'
 import { ASCII_LOGO, PRODUCT_NAME } from '#core/constants/product'
+import { getCommandShortcutHints } from '#ui-ink/utils/commandShortcutHints'
 import { Logo } from './Logo'
 
 type TestHarness = {
   unmount: () => void
   rerender: (element: React.ReactElement) => void
   getOutput: () => string
+  getRawOutput: () => string
   wait: (ms: number) => Promise<void>
 }
 
@@ -48,6 +50,7 @@ function createHarness(element: React.ReactElement): TestHarness {
     unmount: () => instance.unmount(),
     rerender: element => instance.rerender(element),
     getOutput: () => stripAnsi(rawOutput),
+    getRawOutput: () => rawOutput,
     wait: async ms => new Promise(resolve => setTimeout(resolve, ms)),
   }
   mounted.push(harness)
@@ -107,6 +110,29 @@ describe('Logo', () => {
     expect(output).toContain(firstLogoLine)
     expect(output).not.toContain(productNameFallback)
     expect(output).not.toMatch(/(?:\n\s*){4,}/)
+  })
+
+  test('renders command effects and model/editor keys without dimming them', async () => {
+    const harness = createHarness(
+      <Logo mcpClients={[]} terminalColumns={120} terminalRows={24} />,
+    )
+    const { commands, shortcuts } = getCommandShortcutHints()
+
+    await harness.wait(20)
+    const output = harness.getOutput()
+    const rawCommandLine = harness
+      .getRawOutput()
+      .split(/\r?\n/)
+      .find(line => stripAnsi(line).includes('Commands'))
+
+    for (const command of commands) {
+      expect(output).toContain(`${command.trigger} ${command.effect}`)
+    }
+    for (const shortcut of shortcuts) {
+      expect(output).toContain(`${shortcut.trigger} ${shortcut.effect}`)
+    }
+    expect(rawCommandLine).toBeDefined()
+    expect(rawCommandLine).not.toContain('\u001B[2m')
   })
 
   test('keeps the full logo on tall spacious terminals', async () => {

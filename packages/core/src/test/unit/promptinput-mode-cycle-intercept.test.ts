@@ -63,21 +63,27 @@ describe('PromptInput mode-cycle intercept', () => {
     ).toBe(null)
   })
 
-  test('On older Windows runtimes, Alt+M cycles mode (and blocks model switch)', () => {
+  test('On older Windows runtimes, F9 cycles mode and Alt+M still switches models', () => {
     const shortcut = __getPermissionModeCycleShortcutForTests({
       platform: 'win32',
       nodeVersion: '22.16.0',
     })
 
-    const key = makeKey({ meta: true })
+    expect(
+      __getPromptInputSpecialKeyActionForTests({
+        inputChar: '',
+        key: makeKey({ name: 'f9' }),
+        modeCycleShortcut: shortcut,
+      }),
+    ).toBe('modeCycle')
 
     expect(
       __getPromptInputSpecialKeyActionForTests({
         inputChar: 'm',
-        key,
+        key: makeKey({ meta: true }),
         modeCycleShortcut: shortcut,
       }),
-    ).toBe('modeCycle')
+    ).toBe('modelSwitch')
   })
 
   test('Ctrl+B inserts the /bash command prefix instead of toggling Bash mode', () => {

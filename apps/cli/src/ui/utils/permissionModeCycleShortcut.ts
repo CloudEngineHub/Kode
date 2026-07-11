@@ -42,12 +42,12 @@ export function __getPermissionModeCycleShortcutForTests(
   runtime: RuntimeInfo,
 ): InputShortcut {
   // Compatibility: on older Windows runtimes, Shift+Tab is unreliable in Ink.
-  // In those cases, fall back to Alt+M instead.
+  // Keep Alt+M available for model switching in every supported terminal.
+  // F9 is already decoded by the keypress layer and has no conflicting action.
   if (!supportsShiftTabOnWindows(runtime)) {
     return {
-      displayText: 'alt+m',
-      check: (input, key) =>
-        Boolean(key.meta) && (input === 'm' || input === 'M'),
+      displayText: 'F9',
+      check: (_input, key) => key.name === 'f9',
     }
   }
 

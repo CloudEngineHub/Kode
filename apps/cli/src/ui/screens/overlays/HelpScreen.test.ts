@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 import { __buildHelpLinesForTests } from './HelpScreen'
 import type { Command } from '#cli-commands'
+import { getCommandShortcutHints } from '#ui-ink/utils/commandShortcutHints'
 
 describe('HelpScreen helpers', () => {
   it('surfaces both print and headless non-interactive usage', () => {
@@ -30,5 +31,20 @@ describe('HelpScreen helpers', () => {
       '- /deploy <environment> — Deploy the current project (aliases: /ship)',
     )
     expect(lines).toContain('- / + Tab: Accept command completion')
+  })
+
+  it('surfaces the primary command effects and platform shortcut labels', () => {
+    const lines = __buildHelpLinesForTests([])
+    const hints = getCommandShortcutHints()
+
+    expect(lines).toContain('Quick commands')
+    for (const command of hints.commands) {
+      expect(lines).toContain(`- ${command.trigger}: ${command.effect}`)
+    }
+    for (const shortcut of hints.shortcuts) {
+      expect(
+        lines.some(line => line.startsWith(`- ${shortcut.trigger}:`)),
+      ).toBe(true)
+    }
   })
 })
