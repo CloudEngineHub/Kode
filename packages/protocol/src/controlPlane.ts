@@ -366,6 +366,16 @@ export type DaemonAgentUpdateRequest = z.infer<
   typeof DaemonAgentUpdateRequestSchema
 >
 
+export const DaemonAgentDeleteRequestSchema = z
+  .object({
+    source: DaemonAgentSourceSchema,
+    expectedRevision: z.string().regex(/^[a-f0-9]{64}$/),
+  })
+  .strict()
+export type DaemonAgentDeleteRequest = z.infer<
+  typeof DaemonAgentDeleteRequestSchema
+>
+
 export const DaemonAgentMutationResponseSchema = z
   .object({
     agent: DaemonManagedAgentSchema,
