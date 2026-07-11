@@ -504,10 +504,12 @@ export function REPLView({
                 !isMessageSelectorVisible &&
                 !binaryFeedbackContext &&
                 !showingCostDialog && (
+                  // Keep the prompt's height stable while the transient region
+                  // waits for measurement; hiding its chrome causes a visible
+                  // collapse-and-expand flash at the bottom of the terminal.
                   <PromptInput
                     key={`prompt-${conversationKey}`}
                     {...promptInputProps}
-                    suppressStatusLine={isLayoutSettling}
                   />
                 )}
             </Box>

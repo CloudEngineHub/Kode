@@ -329,6 +329,30 @@ describe('REPLView Static output epoch', () => {
     expect(harness.getOutput()).toContain('transient-b')
   })
 
+  test('keeps prompt chrome visible while a control measurement settles', async () => {
+    const renderWithPrompt = (input: string) => (
+      <KeypressProvider>
+        {renderReplView({
+          staticOutputEpoch: 0,
+          staticItems: [],
+          shouldShowPromptInput: true,
+          promptInputProps: makePromptInputProps({ input }),
+        })}
+      </KeypressProvider>
+    )
+    const harness = createHarness(renderWithPrompt(''), {
+      columns: 100,
+      rows: 30,
+    })
+
+    await harness.wait(480)
+    harness.clearOutput()
+    harness.rerender(renderWithPrompt('x'.repeat(240)))
+    await harness.wait(80)
+
+    expect(harness.getOutput()).toContain('Chat')
+  })
+
   test('updates startup header without reprinting static history', async () => {
     const staticItems = [makeStaticItem('static-a')]
     const harness = createHarness(
@@ -531,9 +555,9 @@ describe('REPLView Static output epoch', () => {
     })
 
     await harness.wait(120)
-    expect(countOccurrences(harness.getOutput(), 'Input:')).toBeLessThanOrEqual(
-      1,
-    )
+    expect(
+      countOccurrences(harness.getOutput(), 'Chat · Tools'),
+    ).toBeLessThanOrEqual(1)
 
     harness.clearOutput()
     harness.resize(100, 4)
@@ -544,8 +568,8 @@ describe('REPLView Static output epoch', () => {
     await harness.wait(520)
 
     const output = harness.getOutput()
-    expect(output).toContain('Input:')
-    expect(countOccurrences(output, 'Input:')).toBeLessThanOrEqual(1)
+    expect(output).toContain('Chat · Tools')
+    expect(countOccurrences(output, 'Chat · Tools')).toBeLessThanOrEqual(1)
   })
 
   test('does not print static history when first rendered in a micro viewport', async () => {
@@ -613,8 +637,10 @@ describe('REPLView Static output epoch', () => {
 
     const output = harness.getOutput()
     expect(output).toContain('Welcome')
-    expect(output).toContain('Input:')
-    expect(output).not.toMatch(/Welcome[\s\S]*?(?:\n\s*){6,}[\s\S]*?Input:/)
+    expect(output).toContain('Chat · Tools')
+    expect(output).not.toMatch(
+      /Welcome[\s\S]*?(?:\n\s*){6,}[\s\S]*?Chat · Tools/,
+    )
   })
 
   test('uses a micro layout in tiny viewports without printing transcript regions', async () => {
