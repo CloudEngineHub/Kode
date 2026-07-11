@@ -83,6 +83,8 @@ export interface ToolUseContext {
     }) => Promise<string>
     disableSlashCommands?: boolean
     persistSession?: boolean
+    /** Marks an engine-managed automation turn for stricter execution policies. */
+    automationKind?: 'goal' | 'scheduled_loop'
     shouldAvoidPermissionPrompts?: boolean
     requestToolUsePermission?: (
       request: {
