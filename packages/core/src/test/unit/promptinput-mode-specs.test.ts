@@ -10,17 +10,18 @@ import {
 import { getTheme } from '#core/utils/theme'
 
 describe('PromptInput mode specs', () => {
-  test('keeps display metadata as the single mode source of truth', () => {
+  test('keeps compact display metadata as the single mode source of truth', () => {
     expect(getPromptModeSpec('prompt')).toMatchObject({
       label: 'Chat',
       prefix: '',
-      statusText: 'Input: Chat',
-      helperText: '/bash command · /note note · & background',
+      statusText: 'Chat',
+      helperText: '/ commands \u00b7 & bg',
     })
     expect(getPromptModeSpec('background')).toMatchObject({
       label: 'Background shell',
       prefix: '&',
-      statusText: 'Input: Background shell',
+      statusText: 'Shell (bg)',
+      helperText: 'Esc chat',
     })
   })
 

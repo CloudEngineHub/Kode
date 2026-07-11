@@ -7,6 +7,7 @@ import * as React from 'react'
 import { SentryErrorBoundary } from '#ui-ink/components/SentryErrorBoundary'
 import TextInput from '#ui-ink/components/TextInput'
 import { TokenWarning } from '#ui-ink/components/TokenWarning'
+import { getCachedStringWidth } from '#cli-utils/textWidth'
 import type { Key } from '#ui-ink/hooks/useKeypress'
 import {
   formatContextLimit,
@@ -173,9 +174,9 @@ export function PromptInputView({
     columns >= 80
   const modelStatusText =
     showModelInfo && modelInfo
-      ? `[${modelInfo.provider}] ${modelInfo.name}${
+      ? `${modelInfo.name}${
           contextLimitLabel
-            ? `: ${formatTokenCount(modelInfo.currentTokens)} / ${contextLimitLabel}`
+            ? ` \u00b7 ${formatTokenCount(modelInfo.currentTokens)}/${contextLimitLabel}`
             : ''
         }`
       : null
@@ -185,7 +186,16 @@ export function PromptInputView({
     columns - horizontalStatusPadding * 2,
   )
   const modelStatusWidth = modelStatusText
-    ? Math.min(52, Math.max(24, Math.floor(statusContentColumns * 0.36)))
+    ? Math.min(
+        40,
+        Math.max(
+          20,
+          Math.min(
+            getCachedStringWidth(modelStatusText) + 2,
+            Math.floor(statusContentColumns * 0.32),
+          ),
+        ),
+      )
     : 0
   const showInlineModelStatus =
     Boolean(modelStatusText) && statusContentColumns - modelStatusWidth > 24
@@ -323,7 +333,7 @@ export function PromptInputView({
                     {toastMessage.text}
                   </Text>
                 ) : statusLine ? (
-                  <Text dimColor wrap="truncate-end">
+                  <Text color={theme.secondaryText} wrap="truncate-end">
                     {statusLine}
                   </Text>
                 ) : null}
@@ -340,7 +350,10 @@ export function PromptInputView({
                         overflow="hidden"
                         width={modelStatusWidth}
                       >
-                        <Text dimColor wrap="truncate-middle">
+                        <Text
+                          color={theme.secondaryText}
+                          wrap="truncate-middle"
+                        >
                           {modelStatusText}
                         </Text>
                         <TokenWarning

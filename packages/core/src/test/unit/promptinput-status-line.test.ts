@@ -5,26 +5,26 @@ import {
 } from '#ui-ink/components/PromptInput/inputModeDisplay'
 
 describe('PromptInput status line', () => {
-  test('chat input explains special prefix entry points', () => {
+  test('keeps chat entry points compact', () => {
     const display = getInputModeDisplay('prompt')
 
-    expect(display.statusText).toBe('Input: Chat')
-    expect(display.helperText).toBe('/bash command · /note note · & background')
+    expect(display.statusText).toBe('Chat')
+    expect(display.helperText).toBe('/ commands \u00b7 & bg')
   })
 
-  test('shell-like modes explain how to return to chat', () => {
+  test('uses short return guidance for shell-like modes', () => {
     expect(getInputModeDisplay('bash')).toMatchObject({
       prefix: '',
-      statusText: 'Input: Shell',
-      helperText: 'Esc back to chat',
+      statusText: 'Shell',
+      helperText: 'Esc chat',
     })
     expect(getInputModeDisplay('background')).toMatchObject({
-      statusText: 'Input: Background shell',
-      helperText: 'Esc back to chat',
+      statusText: 'Shell (bg)',
+      helperText: 'Esc chat',
     })
   })
 
-  test('status line separates input mode from tool permissions', () => {
+  test('keeps mode, tool policy, and queue controls distinct without redundant send help', () => {
     const text = buildPromptInputStatusLine({
       mode: 'prompt',
       permissionMode: 'acceptEdits',
@@ -34,11 +34,26 @@ describe('PromptInput status line', () => {
       queuedPromptCount: 2,
     })
 
-    expect(text).toContain('Input: Chat')
-    expect(text).toContain('/bash command · /note note · & background')
-    expect(text).toContain('Tools: Auto-accept edits (shift+tab)')
-    expect(text).toContain('Enter send · Tab queue')
+    expect(text).toContain('Chat')
+    expect(text).toContain('/ commands \u00b7 & bg')
+    expect(text).toContain('Tools Auto edits (shift+tab)')
+    expect(text).toContain('Tab queue')
     expect(text).toContain('pending 1')
     expect(text).toContain('queued 2')
+    expect(text).not.toContain('Enter send')
+    expect(text).not.toContain('Auto-accept edits')
+  })
+
+  test('retains the safety qualifier for automatic tool execution', () => {
+    const text = buildPromptInputStatusLine({
+      mode: 'prompt',
+      permissionMode: 'yolo',
+      modeCycleShortcutText: 'shift+tab',
+      isLoading: false,
+      pendingPromptCount: 0,
+      queuedPromptCount: 0,
+    })
+
+    expect(text).toContain('Tools Safe auto (shift+tab)')
   })
 })

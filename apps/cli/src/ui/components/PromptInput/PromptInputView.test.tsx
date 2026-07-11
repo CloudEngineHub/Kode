@@ -160,20 +160,23 @@ describe('PromptInputView status line layout', () => {
     const harness = createHarness(
       renderPromptInputView({
         customStatusLineActive: false,
-        statusLine: 'Input: Chat',
+        statusLine: 'Chat',
       }),
     )
 
     await harness.wait(20)
     const output = harness.getOutput()
 
-    expect(output).toContain('[custom-openai] mimo-v2.5-pro: 0 / 1.0M')
-    expect(output).toContain('Input: Chat')
+    expect(output).toContain('mimo-v2.5-pro \u00b7 0/1.0M')
+    expect(output).toContain('Chat')
+    expect(output).not.toContain('[custom-openai]')
+    expect(output).not.toContain('/bash command')
+    expect(output).not.toContain('/note note')
 
     const modelInfoLine = output
       .split('\n')
-      .find(line => line.includes('[custom-openai] mimo-v2.5-pro'))
-    expect(modelInfoLine).toContain('Input: Chat')
+      .find(line => line.includes('mimo-v2.5-pro \u00b7 0/1.0M'))
+    expect(modelInfoLine).toContain('Chat')
   })
 
   test('does not duplicate model info when a custom status line is active', async () => {
@@ -195,14 +198,14 @@ describe('PromptInputView status line layout', () => {
     const harness = createHarness(
       renderPromptInputView({
         customStatusLineActive: true,
-        statusLine: 'Input: Chat',
+        statusLine: 'Chat',
       }),
     )
 
     await harness.wait(20)
     const output = harness.getOutput()
 
-    expect(output).toContain('Input: Chat')
+    expect(output).toContain('Chat')
     expect(output).not.toContain('[custom-openai] mimo-v2.5-pro')
     expect(output).not.toContain('0 / 1.0M')
   })
@@ -213,7 +216,7 @@ describe('PromptInputView status line layout', () => {
     const harness = createHarness(
       renderPromptInputView({
         customStatusLineActive: false,
-        statusLine: 'Input: Chat',
+        statusLine: 'Chat',
         message: { show: true, text: pasteGuardMessage },
       }),
     )
@@ -229,20 +232,20 @@ describe('PromptInputView status line layout', () => {
     const harness = createHarness(
       renderPromptInputView({
         customStatusLineActive: false,
-        statusLine: 'Input: Chat · Tools: Plan first (shift+tab)',
+        statusLine: 'Chat \u00b7 Tools Plan (shift+tab)',
       }),
     )
 
     await harness.wait(20)
     const output = harness.getOutput()
 
-    expect(output).toContain('Tools: Plan first (shift+tab)')
+    expect(output).toContain('Tools Plan (shift+tab)')
     expect(output).not.toContain('Tool permissions:')
   })
 
   test('keeps long default status and model info on one bounded row after resize', async () => {
     const longDefaultStatusLine =
-      'Input: Chat · /bash command · /note note · & background · Tools: Auto-run safe tools (shift+tab) · Enter send'
+      'Chat \u00b7 / commands \u00b7 & bg \u00b7 Tools Safe auto (shift+tab)'
     const harness = createHarness(
       renderPromptInputView({
         customStatusLineActive: false,
@@ -270,18 +273,15 @@ describe('PromptInputView status line layout', () => {
     await harness.wait(180)
 
     const output = harness.getOutput()
-    expect(output).toContain('Input: Chat')
-    expect(output).toContain('[custom-openai] mimo-v2.5-pro')
+    expect(output).toContain('Chat')
+    expect(output).toContain('mimo-v2.5-pro')
 
     const isolatedModelRows = output
       .replace(/\r/g, '\n')
       .split('\n')
       .filter(line => {
         const trimmed = line.trim()
-        return (
-          trimmed.startsWith('[custom-openai] mimo-v2.5-pro') &&
-          !line.includes('Input: Chat')
-        )
+        return trimmed.startsWith('mimo-v2.5-pro') && !line.includes('Chat')
       })
     expect(isolatedModelRows).toHaveLength(0)
   })
@@ -290,7 +290,7 @@ describe('PromptInputView status line layout', () => {
     const harness = createHarness(
       renderPromptInputView({
         customStatusLineActive: false,
-        statusLine: 'Input: Chat',
+        statusLine: 'Chat',
         tokenUsage: 1_000_000,
       }),
       { columns: 120 },
@@ -301,7 +301,7 @@ describe('PromptInputView status line layout', () => {
     harness.rerender(
       renderPromptInputView({
         customStatusLineActive: false,
-        statusLine: 'Input: Chat',
+        statusLine: 'Chat',
         tokenUsage: 1_000_000,
         terminalColumns: 90,
       }),
@@ -314,8 +314,8 @@ describe('PromptInputView status line layout', () => {
       .split('\n')
       .filter(
         line =>
-          line.includes('Input: Chat') ||
-          line.includes('[custom-openai] mimo-v2.5-pro') ||
+          line.includes('Chat') ||
+          line.includes('mimo-v2.5-pro') ||
           line.includes('Context low'),
       )
     expect(statusRows.length).toBeGreaterThan(0)
@@ -324,16 +324,12 @@ describe('PromptInputView status line layout', () => {
     )
 
     const finalStatusRows = statusRows.slice(-2)
-    expect(finalStatusRows.some(line => line.includes('Input: Chat'))).toBe(
-      true,
-    )
+    expect(finalStatusRows.some(line => line.includes('Chat'))).toBe(true)
     expect(finalStatusRows.some(line => line.includes('Context low'))).toBe(
       true,
     )
     expect(
-      finalStatusRows.filter(line =>
-        line.trim().startsWith('[custom-openai] mimo-v2.5-pro'),
-      ),
+      finalStatusRows.filter(line => line.trim().startsWith('mimo-v2.5-pro')),
     ).toHaveLength(0)
     expect(
       Math.max(...finalStatusRows.map(line => line.length)),
@@ -344,7 +340,7 @@ describe('PromptInputView status line layout', () => {
     const harness = createHarness(
       renderPromptInputView({
         customStatusLineActive: false,
-        statusLine: 'Input: Chat',
+        statusLine: 'Chat',
         suppressStatusLine: true,
       }),
     )
@@ -352,7 +348,7 @@ describe('PromptInputView status line layout', () => {
     await harness.wait(20)
     const output = harness.getOutput()
 
-    expect(output).not.toContain('Input: Chat')
+    expect(output).not.toContain('Chat')
     expect(output).not.toContain('[custom-openai] mimo-v2.5-pro')
     expect(output).not.toContain('Context low')
     expect(output).not.toContain('C:/repo')
@@ -363,7 +359,7 @@ describe('PromptInputView status line layout', () => {
     const harness = createHarness(
       renderPromptInputView({
         customStatusLineActive: false,
-        statusLine: 'Input: Chat',
+        statusLine: 'Chat',
         message: { show: true, text: 'Press Escape again to clear input' },
         suppressStatusLine: true,
       }),
@@ -380,7 +376,7 @@ describe('PromptInputView status line layout', () => {
     const harness = createHarness(
       renderPromptInputView({
         customStatusLineActive: false,
-        statusLine: 'Input: Chat',
+        statusLine: 'Chat',
         terminalRows: 4,
         terminalColumns: 80,
       }),
@@ -391,7 +387,7 @@ describe('PromptInputView status line layout', () => {
     const output = harness.getOutput()
 
     expect(output).not.toContain('C:/repo')
-    expect(output).not.toContain('Input: Chat')
+    expect(output).not.toContain('Chat')
     expect(output).not.toContain('[custom-openai] mimo-v2.5-pro')
   })
 })

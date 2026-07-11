@@ -20,6 +20,30 @@ export function getPermissionModeStatusLabel(mode: PermissionMode): string {
   }
 }
 
+/**
+ * A short, unambiguous label for narrow, always-visible UI such as the
+ * prompt status row. Keep the longer labels above for screens that have room
+ * to explain the policy in full.
+ */
+export function getPermissionModeCompactLabel(mode: PermissionMode): string {
+  switch (normalizePermissionMode(mode)) {
+    case 'plan':
+      return 'Plan'
+    case 'acceptEdits':
+      return 'Auto edits'
+    case 'bypassPermissions':
+      return 'Bypass'
+    case 'dontAsk':
+      return 'Deny'
+    case 'cautious':
+      return 'Ask'
+    case 'yolo':
+      return 'Safe auto'
+    default:
+      return 'Ask'
+  }
+}
+
 export function getPermissionModeDetail(mode: PermissionMode): string {
   switch (normalizePermissionMode(mode)) {
     case 'plan':

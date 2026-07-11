@@ -1,6 +1,6 @@
 import type { PermissionMode } from '#core/types/PermissionMode'
 import type { PromptMode } from './types'
-import { getPermissionModeStatusLabel } from '#ui-ink/utils/permissionModeDisplay'
+import { getPermissionModeCompactLabel } from '#ui-ink/utils/permissionModeDisplay'
 import { getPromptModeSpec } from './promptModeSpecs'
 
 export type InputModeDisplay = {
@@ -34,14 +34,16 @@ export function buildPromptInputStatusLine(args: {
   const parts = [
     inputMode.statusText,
     inputMode.helperText,
-    `Tools: ${getPermissionModeStatusLabel(args.permissionMode)} (${args.modeCycleShortcutText})`,
+    `Tools ${getPermissionModeCompactLabel(args.permissionMode)} (${args.modeCycleShortcutText})`,
   ]
 
   if (args.editorMode === 'vim' && args.vimMode === 'INSERT') {
     parts.unshift('-- INSERT --')
   }
 
-  parts.push(args.isLoading ? 'Enter send \u00b7 Tab queue' : 'Enter send')
+  if (args.isLoading) {
+    parts.push('Tab queue')
+  }
 
   if (args.pendingPromptCount > 0) {
     parts.push(`pending ${args.pendingPromptCount}`)
