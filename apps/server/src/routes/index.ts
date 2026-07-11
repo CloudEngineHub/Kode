@@ -3,12 +3,15 @@ import { basename, resolve } from 'node:path'
 import type { Tool } from '@kode/core/tooling/Tool'
 import type { WrappedClient } from '@kode/core/mcp/client'
 import { isUuid } from '@kode/core/utils/uuid'
+import { SUBAGENT_DISALLOWED_TOOL_NAMES } from '@kode/agent'
 
 import { maybeServeWebui } from '../server/webui'
 import { routeChat } from './chat'
 import { routePermission } from './permission'
 import { routeSession } from './session'
 import { routeTask } from './task'
+import { routeAgent } from './agent'
+import { AgentControlService } from '../agentControlService'
 import { PermissionControlService } from '../permissionControlService'
 import { PersistentSessionService } from '../persistentSessionService'
 import { TaskControlService } from '../taskControlService'
@@ -39,6 +42,7 @@ export function createRoutes(args: {
   sessionService?: PersistentSessionService
   taskService?: TaskControlService
   permissionService?: PermissionControlService
+  agentService?: AgentControlService
   turnGate: DaemonTurnGate
   cwd: string
   echo: boolean
@@ -59,6 +63,14 @@ export function createRoutes(args: {
   const taskService = args.taskService ?? new TaskControlService()
   const permissionService =
     args.permissionService ?? new PermissionControlService(args.sessionRegistry)
+  const agentService =
+    args.agentService ??
+    new AgentControlService({
+      listToolNames: () =>
+        args.toolNames.filter(
+          name => !SUBAGENT_DISALLOWED_TOOL_NAMES.has(name),
+        ),
+    })
 
   const resolveWorkspaceCwd = async (url: URL): Promise<string> => {
     const fallback = resolve(args.cwd)
@@ -78,6 +90,13 @@ export function createRoutes(args: {
   return {
     async fetch(req, server) {
       const url = new URL(req.url)
+
+      // Segment-based routes deliberately ignore empty path segments. Reject
+      // non-canonical paths before their `/api/` token gate so `//api/...`
+      // cannot be interpreted as an authenticated API request.
+      if (url.pathname.includes('//')) {
+        return new Response('Not Found', { status: 404 })
+      }
 
       if (args.webuiRoot) {
         const response = maybeServeWebui({ webuiRoot: args.webuiRoot, url })
@@ -170,6 +189,13 @@ export function createRoutes(args: {
         permissionService,
       })
       if (permissionResponse) return permissionResponse
+
+      const agentResponse = await routeAgent(req, {
+        cwd: args.cwd,
+        listWorkspaces: args.listWorkspaces,
+        agentService,
+      })
+      if (agentResponse) return agentResponse
 
       if (url.pathname === '/ws') {
         if (!args.checkToken(req))

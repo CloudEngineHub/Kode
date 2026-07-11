@@ -376,6 +376,13 @@ export type DaemonAgentDeleteRequest = z.infer<
   typeof DaemonAgentDeleteRequestSchema
 >
 
+export const DaemonAgentDeleteResponseSchema = z
+  .object({ deleted: z.literal(true) })
+  .strict()
+export type DaemonAgentDeleteResponse = z.infer<
+  typeof DaemonAgentDeleteResponseSchema
+>
+
 export const DaemonAgentMutationResponseSchema = z
   .object({
     agent: DaemonManagedAgentSchema,

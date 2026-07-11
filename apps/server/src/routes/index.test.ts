@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 
 import { createRoutes } from './index'
+import { AgentControlService } from '../agentControlService'
 import { SessionRegistry } from '../sessionRegistry'
 import { DaemonTurnGate } from '../turnGate'
 
@@ -9,6 +10,7 @@ function createTestRoutes(args?: {
   activeSessions?: number
   sessionRegistry?: SessionRegistry
   includeOtherWorkspace?: boolean
+  agentService?: AgentControlService
 }) {
   return createRoutes({
     webuiRoot: null,
@@ -46,6 +48,7 @@ function createTestRoutes(args?: {
           ]),
         ),
       ),
+    agentService: args?.agentService,
     turnGate: new DaemonTurnGate(),
     cwd: 'C:/repo',
     echo: true,
@@ -87,6 +90,47 @@ describe('createRoutes health endpoint', () => {
     if (!response) throw new Error('missing response')
 
     expect(response.status).toBe(401)
+  })
+
+  test('routes Agent controls behind the shared API token gate', async () => {
+    const agentService = {
+      list: () => [],
+    } as unknown as AgentControlService
+    const authorized = createTestRoutes({ agentService })
+    const allowed = await authorized.fetch(
+      new Request('http://localhost/api/agents?workspace=repo'),
+      { upgrade: () => false },
+    )
+    if (!allowed) throw new Error('missing response')
+    expect(allowed.status).toBe(200)
+    await expect(allowed.json()).resolves.toEqual({ agents: [] })
+
+    const denied = createTestRoutes({ authorized: false, agentService })
+    const rejected = await denied.fetch(
+      new Request('http://localhost/api/agents?workspace=repo'),
+      { upgrade: () => false },
+    )
+    if (!rejected) throw new Error('missing response')
+    expect(rejected.status).toBe(401)
+  })
+
+  test('rejects non-canonical Agent API paths before they can bypass the token gate', async () => {
+    let listCalls = 0
+    const agentService = {
+      list: () => {
+        listCalls += 1
+        return []
+      },
+    } as unknown as AgentControlService
+    const routes = createTestRoutes({ authorized: false, agentService })
+    const response = await routes.fetch(
+      new Request('http://localhost//api/agents?workspace=repo'),
+      { upgrade: () => false },
+    )
+
+    if (!response) throw new Error('missing response')
+    expect(response.status).toBe(404)
+    expect(listCalls).toBe(0)
   })
 
   test('rejects HTTP prompts when an active session belongs to another workspace', async () => {

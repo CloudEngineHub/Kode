@@ -10,6 +10,7 @@ export type {
   TaskControlKodeClient,
   TaskOutputOptions,
   TaskQueryOptions,
+  AgentControlKodeClient,
   PermissionControlKodeClient,
   ToolPermissionDecision,
   ToolPermissionInputUpdate,

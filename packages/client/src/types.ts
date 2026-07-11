@@ -1,6 +1,13 @@
 import type {
   AgentEvent,
   DaemonEventMetadata,
+  DaemonAgentCreateRequest,
+  DaemonAgentDeleteRequest,
+  DaemonAgentDeleteResponse,
+  DaemonAgentMutationResponse,
+  DaemonAgentSource,
+  DaemonAgentUpdateRequest,
+  DaemonManagedAgent,
   DaemonPermissionSnapshot,
   DaemonPermissionUpdate,
   DaemonPermissionUpdateResponse,
@@ -195,4 +202,24 @@ export interface PermissionControlKodeClient {
     sessionId?: string
     update: DaemonPermissionUpdate
   }): Promise<DaemonPermissionUpdateResponse>
+}
+
+/** Daemon-only CRUD for Kode-owned, runtime-backed Agent definitions. */
+export interface AgentControlKodeClient {
+  listAgents(): Promise<DaemonManagedAgent[]>
+  getAgent(
+    agentType: string,
+    source: DaemonAgentSource,
+  ): Promise<DaemonManagedAgent>
+  createAgent(
+    request: DaemonAgentCreateRequest,
+  ): Promise<DaemonAgentMutationResponse>
+  updateAgent(
+    agentType: string,
+    request: DaemonAgentUpdateRequest,
+  ): Promise<DaemonAgentMutationResponse>
+  deleteAgent(
+    agentType: string,
+    request: DaemonAgentDeleteRequest,
+  ): Promise<DaemonAgentDeleteResponse>
 }

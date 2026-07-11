@@ -1,6 +1,13 @@
 import type {
   AgentEvent,
   DaemonEventMetadata,
+  DaemonAgentCreateRequest,
+  DaemonAgentDeleteRequest,
+  DaemonAgentDeleteResponse,
+  DaemonAgentMutationResponse,
+  DaemonAgentSource,
+  DaemonAgentUpdateRequest,
+  DaemonManagedAgent,
   DaemonPermissionSnapshot,
   DaemonPermissionUpdate,
   DaemonPermissionUpdateResponse,
@@ -10,6 +17,14 @@ import type {
   Session,
 } from '@kode/protocol'
 import {
+  DaemonAgentCreateRequestSchema,
+  DaemonAgentDeleteRequestSchema,
+  DaemonAgentDeleteResponseSchema,
+  DaemonAgentDetailResponseSchema,
+  DaemonAgentListResponseSchema,
+  DaemonAgentMutationResponseSchema,
+  DaemonAgentSourceSchema,
+  DaemonAgentUpdateRequestSchema,
   DaemonPermissionSnapshotResponseSchema,
   DaemonPermissionUpdateResponseSchema,
   DaemonPermissionUpdateSchema,
@@ -22,6 +37,7 @@ import {
 } from '@kode/protocol'
 
 import type {
+  AgentControlKodeClient,
   CorrelatedAgentEvent,
   RuntimeStatus,
   ForkSessionOptions,
@@ -91,6 +107,14 @@ function isUuid(value: string): boolean {
 
 function isSafeTaskId(value: string): boolean {
   return /^[A-Za-z0-9_-]{1,120}$/.test(value)
+}
+
+function isSafeAgentType(value: string): boolean {
+  return (
+    value.length >= 3 &&
+    value.length <= 50 &&
+    /^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$/.test(value)
+  )
 }
 
 function appendOptionalSessionId(
@@ -384,7 +408,8 @@ export class HttpClient
     SessionAwareKodeClient,
     SessionControlKodeClient,
     TaskControlKodeClient,
-    PermissionControlKodeClient
+    PermissionControlKodeClient,
+    AgentControlKodeClient
 {
   private ws: WebSocketLike | null = null
   private desiredSessionId: string | null = null
@@ -1134,6 +1159,140 @@ export class HttpClient
     )
     if (!parsed.success) throw new Error('Invalid permission update response')
     return parsed.data as unknown as DaemonPermissionUpdateResponse
+  }
+
+  async listAgents(): Promise<DaemonManagedAgent[]> {
+    const response = await this.getFetchImpl()(this.toApiUrl('/api/agents'), {
+      headers: { authorization: `Bearer ${this.options.token}` },
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to list agents (${response.status})`)
+    }
+    const parsed = DaemonAgentListResponseSchema.safeParse(
+      await response.json(),
+    )
+    if (!parsed.success) throw new Error('Invalid agents response')
+    return parsed.data.agents as DaemonManagedAgent[]
+  }
+
+  async getAgent(
+    agentType: string,
+    source: DaemonAgentSource,
+  ): Promise<DaemonManagedAgent> {
+    const normalizedAgentType = agentType.trim()
+    if (!isSafeAgentType(normalizedAgentType)) {
+      throw new Error('Invalid agent type')
+    }
+    if (!DaemonAgentSourceSchema.safeParse(source).success) {
+      throw new Error('Invalid mutable agent source')
+    }
+    const url = this.toApiUrl(
+      `/api/agents/${encodeURIComponent(normalizedAgentType)}`,
+    )
+    url.searchParams.set('source', source)
+    const response = await this.getFetchImpl()(url, {
+      headers: { authorization: `Bearer ${this.options.token}` },
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to load agent (${response.status})`)
+    }
+    const parsed = DaemonAgentDetailResponseSchema.safeParse(
+      await response.json(),
+    )
+    if (!parsed.success) throw new Error('Invalid agent response')
+    return parsed.data.agent as DaemonManagedAgent
+  }
+
+  async createAgent(
+    request: DaemonAgentCreateRequest,
+  ): Promise<DaemonAgentMutationResponse> {
+    const parsedRequest = DaemonAgentCreateRequestSchema.safeParse(request)
+    if (!parsedRequest.success) throw new Error('Invalid agent create request')
+    const response = await this.getFetchImpl()(this.toApiUrl('/api/agents'), {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${this.options.token}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(parsedRequest.data),
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to create agent (${response.status})`)
+    }
+    const parsed = DaemonAgentMutationResponseSchema.safeParse(
+      await response.json(),
+    )
+    if (!parsed.success) throw new Error('Invalid agent create response')
+    return parsed.data as DaemonAgentMutationResponse
+  }
+
+  async updateAgent(
+    agentType: string,
+    request: DaemonAgentUpdateRequest,
+  ): Promise<DaemonAgentMutationResponse> {
+    const normalizedAgentType = agentType.trim()
+    if (!isSafeAgentType(normalizedAgentType)) {
+      throw new Error('Invalid agent type')
+    }
+    const parsedRequest = DaemonAgentUpdateRequestSchema.safeParse(request)
+    if (
+      !parsedRequest.success ||
+      parsedRequest.data.agent.agentType !== normalizedAgentType
+    ) {
+      throw new Error('Invalid agent update request')
+    }
+    const response = await this.getFetchImpl()(
+      this.toApiUrl(`/api/agents/${encodeURIComponent(normalizedAgentType)}`),
+      {
+        method: 'PATCH',
+        headers: {
+          authorization: `Bearer ${this.options.token}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(parsedRequest.data),
+      },
+    )
+    if (!response.ok) {
+      throw new Error(`Failed to update agent (${response.status})`)
+    }
+    const parsed = DaemonAgentMutationResponseSchema.safeParse(
+      await response.json(),
+    )
+    if (!parsed.success) throw new Error('Invalid agent update response')
+    return parsed.data as DaemonAgentMutationResponse
+  }
+
+  async deleteAgent(
+    agentType: string,
+    request: DaemonAgentDeleteRequest,
+  ): Promise<DaemonAgentDeleteResponse> {
+    const normalizedAgentType = agentType.trim()
+    if (!isSafeAgentType(normalizedAgentType)) {
+      throw new Error('Invalid agent type')
+    }
+    const parsedRequest = DaemonAgentDeleteRequestSchema.safeParse(request)
+    if (!parsedRequest.success) throw new Error('Invalid agent delete request')
+    const response = await this.getFetchImpl()(
+      this.toApiUrl(`/api/agents/${encodeURIComponent(normalizedAgentType)}`),
+      {
+        method: 'DELETE',
+        headers: {
+          authorization: `Bearer ${this.options.token}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(parsedRequest.data),
+      },
+    )
+    if (!response.ok) {
+      throw new Error(`Failed to delete agent (${response.status})`)
+    }
+    const parsed = DaemonAgentDeleteResponseSchema.safeParse(
+      await response.json(),
+    )
+    if (!parsed.success) {
+      throw new Error('Invalid agent delete response')
+    }
+    return parsed.data as DaemonAgentDeleteResponse
   }
 
   async *sendMessage(

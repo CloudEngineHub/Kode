@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 
 import {
   DaemonAgentCreateRequestSchema,
+  DaemonAgentDeleteResponseSchema,
   DaemonAgentDetailResponseSchema,
   DaemonAgentUpdateRequestSchema,
 } from '../../controlPlane'
@@ -67,6 +68,18 @@ describe('daemon Agent control-plane schemas', () => {
           revision,
           baseDir: 'C:/private/path',
         },
+      }).success,
+    ).toBe(false)
+  })
+
+  test('requires an exact delete response', () => {
+    expect(
+      DaemonAgentDeleteResponseSchema.safeParse({ deleted: true }).success,
+    ).toBe(true)
+    expect(
+      DaemonAgentDeleteResponseSchema.safeParse({
+        deleted: true,
+        leaked: 'unexpected',
       }).success,
     ).toBe(false)
   })

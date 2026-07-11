@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import type { DaemonPermissionSnapshot, DaemonTask } from '@kode/protocol'
+import type {
+  DaemonManagedAgent,
+  DaemonPermissionSnapshot,
+  DaemonTask,
+} from '@kode/protocol'
 
 import { HttpClient } from './http'
 
@@ -1121,5 +1125,156 @@ describe('HttpClient', () => {
         }),
       },
     ])
+  })
+
+  test('uses Agent controls with workspace scope, revision bodies, and strict responses', async () => {
+    const revision = 'a'.repeat(64)
+    const agent: DaemonManagedAgent = {
+      source: 'projectSettings',
+      agentType: 'review-agent',
+      whenToUse: 'Review changes for correctness and regressions.',
+      systemPrompt: 'Review the requested change and report findings.',
+      tools: ['Read', 'Grep'],
+      revision,
+    }
+    const calls: Array<{
+      url: string
+      method: string | undefined
+      body: string | undefined
+    }> = []
+    const client = new HttpClient({
+      baseUrl: 'http://localhost:32123',
+      token: 'token',
+      workspaceId: 'workspace-a',
+      webSocketImpl: FakeWebSocket,
+      fetchImpl: async (input, init) => {
+        const url = new URL(String(input))
+        calls.push({
+          url: url.toString(),
+          method: init?.method,
+          body: init?.body,
+        })
+        if (init?.method === 'POST' || init?.method === 'PATCH') {
+          return Response.json({ agent, appliesTo: 'new_subagents' })
+        }
+        if (init?.method === 'DELETE') return Response.json({ deleted: true })
+        if (url.pathname === '/api/agents')
+          return Response.json({ agents: [agent] })
+        return Response.json({ agent })
+      },
+    })
+
+    await expect(client.listAgents()).resolves.toEqual([agent])
+    await expect(
+      client.getAgent('review-agent', 'projectSettings'),
+    ).resolves.toEqual(agent)
+    await expect(
+      client.createAgent({
+        source: 'projectSettings',
+        agent: {
+          agentType: 'review-agent',
+          whenToUse: agent.whenToUse,
+          systemPrompt: agent.systemPrompt,
+          tools: agent.tools,
+        },
+      }),
+    ).resolves.toMatchObject({ appliesTo: 'new_subagents' })
+    await expect(
+      client.updateAgent('review-agent', {
+        source: 'projectSettings',
+        expectedRevision: revision,
+        agent: {
+          agentType: 'review-agent',
+          whenToUse: agent.whenToUse,
+          systemPrompt: agent.systemPrompt,
+          tools: agent.tools,
+          color: 'blue',
+        },
+      }),
+    ).resolves.toMatchObject({ agent: { revision } })
+    await expect(
+      client.deleteAgent('review-agent', {
+        source: 'projectSettings',
+        expectedRevision: revision,
+      }),
+    ).resolves.toEqual({ deleted: true })
+
+    expect(calls).toEqual([
+      {
+        url: 'http://localhost:32123/api/agents?workspace=workspace-a',
+        method: undefined,
+        body: undefined,
+      },
+      {
+        url: 'http://localhost:32123/api/agents/review-agent?workspace=workspace-a&source=projectSettings',
+        method: undefined,
+        body: undefined,
+      },
+      {
+        url: 'http://localhost:32123/api/agents?workspace=workspace-a',
+        method: 'POST',
+        body: JSON.stringify({
+          source: 'projectSettings',
+          agent: {
+            agentType: 'review-agent',
+            whenToUse: agent.whenToUse,
+            systemPrompt: agent.systemPrompt,
+            tools: agent.tools,
+          },
+        }),
+      },
+      {
+        url: 'http://localhost:32123/api/agents/review-agent?workspace=workspace-a',
+        method: 'PATCH',
+        body: JSON.stringify({
+          source: 'projectSettings',
+          expectedRevision: revision,
+          agent: {
+            agentType: 'review-agent',
+            whenToUse: agent.whenToUse,
+            systemPrompt: agent.systemPrompt,
+            tools: agent.tools,
+            color: 'blue',
+          },
+        }),
+      },
+      {
+        url: 'http://localhost:32123/api/agents/review-agent?workspace=workspace-a',
+        method: 'DELETE',
+        body: JSON.stringify({
+          source: 'projectSettings',
+          expectedRevision: revision,
+        }),
+      },
+    ])
+  })
+
+  test('rejects invalid Agent ids locally and malformed delete responses strictly', async () => {
+    const request = {
+      source: 'projectSettings' as const,
+      expectedRevision: 'a'.repeat(64),
+    }
+    let calls = 0
+    const client = new HttpClient({
+      baseUrl: 'http://localhost:32123',
+      token: 'token',
+      fetchImpl: async () => {
+        calls += 1
+        return Response.json({ deleted: true, unexpected: 'field' })
+      },
+    })
+
+    await expect(client.getAgent('ab', 'projectSettings')).rejects.toThrow(
+      'Invalid agent type',
+    )
+    await expect(client.deleteAgent('x'.repeat(51), request)).rejects.toThrow(
+      'Invalid agent type',
+    )
+    expect(calls).toBe(0)
+
+    await expect(client.deleteAgent('review-agent', request)).rejects.toThrow(
+      'Invalid agent delete response',
+    )
+    expect(calls).toBe(1)
   })
 })
