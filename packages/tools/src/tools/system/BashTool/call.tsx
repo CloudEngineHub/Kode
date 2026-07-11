@@ -2,8 +2,13 @@ import * as React from 'react'
 import type { SetToolJSXFn, ToolUseContext } from '@kode/tool-interface/Tool'
 import { createAssistantMessage } from '#core/utils/messages'
 import { BunShell } from '#runtime/shell'
+import { assessWindowsExecution } from '#runtime/execution'
 import { getBunShellSandboxPlan } from '#core/sandbox/bunShellSandboxPlan'
 import { getCwd, getOriginalCwd } from '#core/utils/state'
+import { getEffectiveSessionId } from '#core/utils/sessionId'
+import { isBashCommandReadOnly } from '@kode/permissions/bash'
+import { createDurableRun, finishDurableRun } from '#core/runs'
+import { getBackgroundTaskOutputFilePath } from '#core/tasks/backgroundRegistry'
 import { decideSystemSandboxForBashTool } from '#core/sandbox/systemSandbox'
 import { getBashDestructiveCommandBlock } from '#core/sandbox/destructiveCommandGuard'
 import { getPlanConversationKey } from '#core/utils/planMode'
@@ -56,6 +61,47 @@ export async function* callBashTool(
   const commandDescription =
     typeof input.description === 'string' ? input.description.trim() : ''
   const sandboxDisabled = input.dangerouslyDisableSandbox === true
+  const automationKind = context.options?.automationKind
+  const executionPlatform =
+    context.options?.__sandboxPlatform ?? process.platform
+
+  if (
+    executionPlatform === 'win32' &&
+    (input.run_in_background === true || automationKind !== undefined)
+  ) {
+    const execution = assessWindowsExecution({
+      command: input.command,
+      cwd: getCwd(),
+      mode: automationKind ? 'goal' : 'background',
+      writesFilesystem: !isBashCommandReadOnly(input.command),
+      // The normal tool-permission flow has already reached this call. This
+      // flag does not bypass it; it lets the policy report the remaining
+      // strong-isolation requirement accurately.
+      approvalGranted: true,
+      platform: executionPlatform,
+    })
+    if (!execution.allowed) {
+      const message = [
+        'Blocked by the Windows execution policy.',
+        `Reason: ${execution.reason}.`,
+        `Requirements: ${execution.requirements.join(', ')}.`,
+      ].join(' ')
+      const data: Out = {
+        stdout: '',
+        stdoutLines: 0,
+        stderr: message,
+        stderrLines: 1,
+        interrupted: false,
+        dangerouslyDisableSandbox: sandboxDisabled,
+      }
+      yield {
+        type: 'result',
+        resultForAssistant: renderResultForAssistant(data),
+        data,
+      }
+      return
+    }
+  }
 
   const destructiveBlock = getBashDestructiveCommandBlock({
     command: input.command,
@@ -263,13 +309,50 @@ export async function* callBashTool(
 
   try {
     if (input.run_in_background) {
-      const { bashId } = BunShell.getInstance().execInBackground(
+      const { bashId, completion } = BunShell.getInstance().execInBackground(
         input.command,
         input.timeout,
         {
           sandbox: sandboxOptions,
+          backgroundTask: {
+            sessionId: getEffectiveSessionId(),
+          },
         },
       )
+      let durableRunCreated = false
+      if (process.env.NODE_ENV !== 'test') {
+        try {
+          createDurableRun({
+            id: bashId,
+            kind: 'shell',
+            cwd: getCwd(),
+            command: input.command,
+            sessionId: getEffectiveSessionId(),
+            outputFile: getBackgroundTaskOutputFilePath(bashId),
+          })
+          durableRunCreated = true
+        } catch {
+          // Background execution stays available if the journal is read-only.
+        }
+      }
+      if (durableRunCreated) {
+        void completion.then(result => {
+          try {
+            finishDurableRun({
+              id: bashId,
+              status:
+                result.status === 'completed'
+                  ? 'completed'
+                  : result.status === 'killed'
+                    ? 'cancelled'
+                    : 'failed',
+              ...(result.error ? { error: result.error } : {}),
+            })
+          } catch {
+            // Do not turn a successful task completion into a tool failure.
+          }
+        })
+      }
       const data: Out = {
         stdout: '',
         stdoutLines: 0,

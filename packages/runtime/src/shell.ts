@@ -5,6 +5,8 @@ export type {
   BunShellSandboxOptions,
   BunShellSandboxReadConfig,
   BunShellSandboxWriteConfig,
+  BackgroundShellCompletion,
+  BackgroundShellLaunch,
   BackgroundShellStatusAttachment,
   BashNotification,
 } from './shell/types'

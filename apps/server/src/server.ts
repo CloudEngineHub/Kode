@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { setCwd, setOriginalCwd } from '@kode/core/utils/state'
 import { grantReadPermissionForOriginalDir } from '@kode/core/utils/permissions/filesystem'
 import { getClients } from '@kode/core/mcp/client'
+import { reconcileDurableRuns } from '@kode/core/runs'
 import { getTools } from '@kode/tools'
 
 import { serveNode } from './server/serveNode'
@@ -64,6 +65,11 @@ export async function startKodeDaemon(args: {
       setOriginalCwd(cwd)
       await setCwd(cwd)
       grantReadPermissionForOriginalDir()
+      try {
+        reconcileDurableRuns()
+      } catch {
+        // A stale journal must not prevent daemon startup.
+      }
       return await Promise.all([getTools(), getClients()])
     })
   const toolNames = tools.map(t => t.name)

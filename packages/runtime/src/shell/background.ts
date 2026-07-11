@@ -1,6 +1,8 @@
 import { spawn } from 'node:child_process'
 import type {
   BackgroundProcess,
+  BackgroundShellCompletion,
+  BackgroundShellLaunch,
   BackgroundShellStatusAttachment,
   BashNotification,
   BunShellExecOptions,
@@ -22,7 +24,7 @@ export function execInBackground(
   command: string,
   timeout?: number,
   options?: BunShellExecOptions,
-): { bashId: string } {
+): BackgroundShellLaunch {
   const DEFAULT_TIMEOUT = 120_000
   const commandTimeout = timeout ?? DEFAULT_TIMEOUT
   const abortController = new AbortController()
@@ -87,6 +89,9 @@ export function execInBackground(
     abortController,
     timeoutHandle,
     cwd: executionCwd,
+    ...(options?.backgroundTask?.sessionId
+      ? { sessionId: options.backgroundTask.sessionId }
+      : {}),
     outputFile,
   }
 
@@ -109,53 +114,71 @@ export function execInBackground(
     backgroundProcess.stderrLineCount += countNewlines(chunk)
   })
 
-  exitPromise.then(exitOutcome => {
-    backgroundProcess.code =
-      exitOutcome.kind === 'exit' ? (exitOutcome.code ?? 0) : 2
-    if (exitOutcome.kind === 'error') {
-      const previousStderr = backgroundProcess.stderr
-      backgroundProcess.stderr = [
-        backgroundProcess.stderr,
-        exitOutcome.error.message,
-      ]
-        .filter(Boolean)
-        .join('\n')
-      if (exitOutcome.error.message) {
-        const delta = previousStderr
-          ? `\n${exitOutcome.error.message}`
-          : exitOutcome.error.message
-        appendTaskOutput(bashId, delta)
-        backgroundProcess.stderrLineCount += countNewlines(delta)
-      }
-    }
-    backgroundProcess.interrupted =
-      backgroundProcess.interrupted || abortController.signal.aborted
-    if (sandbox?.enabled === true) {
-      const annotated = annotateStderrWithSandboxViolations({
-        command,
-        stderr: backgroundProcess.stderr,
-        sandbox,
-      })
-      if (annotated !== backgroundProcess.stderr) {
-        const delta = annotated.startsWith(backgroundProcess.stderr)
-          ? annotated.slice(backgroundProcess.stderr.length)
-          : ''
-        if (delta) {
+  const completion = exitPromise.then<BackgroundShellCompletion>(
+    exitOutcome => {
+      backgroundProcess.code =
+        exitOutcome.kind === 'exit' ? (exitOutcome.code ?? 0) : 2
+      if (exitOutcome.kind === 'error') {
+        const previousStderr = backgroundProcess.stderr
+        backgroundProcess.stderr = [
+          backgroundProcess.stderr,
+          exitOutcome.error.message,
+        ]
+          .filter(Boolean)
+          .join('\n')
+        if (exitOutcome.error.message) {
+          const delta = previousStderr
+            ? `\n${exitOutcome.error.message}`
+            : exitOutcome.error.message
           appendTaskOutput(bashId, delta)
           backgroundProcess.stderrLineCount += countNewlines(delta)
         }
-        backgroundProcess.stderr = annotated
       }
-    }
-    if (backgroundProcess.timeoutHandle) {
-      clearTimeout(backgroundProcess.timeoutHandle)
-      backgroundProcess.timeoutHandle = null
-    }
-    backgroundProcess.completedAt = backgroundProcess.completedAt ?? Date.now()
-  })
+      backgroundProcess.interrupted =
+        backgroundProcess.interrupted || abortController.signal.aborted
+      if (sandbox?.enabled === true) {
+        const annotated = annotateStderrWithSandboxViolations({
+          command,
+          stderr: backgroundProcess.stderr,
+          sandbox,
+        })
+        if (annotated !== backgroundProcess.stderr) {
+          const delta = annotated.startsWith(backgroundProcess.stderr)
+            ? annotated.slice(backgroundProcess.stderr.length)
+            : ''
+          if (delta) {
+            appendTaskOutput(bashId, delta)
+            backgroundProcess.stderrLineCount += countNewlines(delta)
+          }
+          backgroundProcess.stderr = annotated
+        }
+      }
+      if (backgroundProcess.timeoutHandle) {
+        clearTimeout(backgroundProcess.timeoutHandle)
+        backgroundProcess.timeoutHandle = null
+      }
+      backgroundProcess.completedAt =
+        backgroundProcess.completedAt ?? Date.now()
+      const status: BackgroundShellCompletion['status'] =
+        backgroundProcess.killed
+          ? 'killed'
+          : backgroundProcess.code === 0
+            ? 'completed'
+            : 'failed'
+      return {
+        taskId: bashId,
+        status,
+        exitCode: backgroundProcess.code,
+        interrupted: backgroundProcess.interrupted,
+        ...(exitOutcome.kind === 'error'
+          ? { error: exitOutcome.error.message }
+          : {}),
+      }
+    },
+  )
 
   state.backgroundProcesses.set(bashId, backgroundProcess)
-  return { bashId }
+  return { bashId, completion }
 }
 
 export function getBackgroundOutput(

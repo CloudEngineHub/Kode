@@ -12,11 +12,19 @@ import {
   type BackgroundAgentTaskRuntime,
 } from '#core/utils/backgroundTasks'
 import { saveAgentTranscript } from '#core/utils/agentTranscripts'
+import { getKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
 import { hasPermissionsToUseTool } from '#core/permissions'
 import {
   appendBackgroundTaskOutput,
+  getBackgroundTaskOutputFilePath,
   touchBackgroundTaskOutputFile,
 } from '#core/tasks/backgroundRegistry'
+import {
+  createDurableRun,
+  finishDurableRun,
+  heartbeatDurableRun,
+} from '#core/runs'
+import { getCwd } from '#core/utils/state'
 
 import type { PreparedTaskToolRun } from './callTypes'
 import type { Input, Output } from './schema'
@@ -47,6 +55,45 @@ export async function* callTaskToolBackground(
 }> {
   const bgAbortController = new AbortController()
   touchBackgroundTaskOutputFile(prepared.agentId)
+  const durableRunEnabled = process.env.NODE_ENV !== 'test'
+  if (durableRunEnabled) {
+    try {
+      createDurableRun({
+        id: prepared.agentId,
+        kind: 'agent',
+        cwd: getCwd(),
+        sessionId: getKodeAgentSessionId(),
+        command: input.description,
+        outputFile: getBackgroundTaskOutputFilePath(prepared.agentId),
+      })
+    } catch {
+      // The in-memory task must remain usable if durable journaling is blocked.
+    }
+  }
+
+  const heartbeatDurableTask = () => {
+    if (!durableRunEnabled) return
+    try {
+      heartbeatDurableRun({ id: prepared.agentId })
+    } catch {
+      // Best-effort only.
+    }
+  }
+  const finishDurableTask = (
+    status: 'completed' | 'failed' | 'cancelled',
+    error?: string,
+  ) => {
+    if (!durableRunEnabled) return
+    try {
+      finishDurableRun({
+        id: prepared.agentId,
+        status,
+        ...(error ? { error } : {}),
+      })
+    } catch {
+      // Best-effort only.
+    }
+  }
 
   const taskRecord: BackgroundAgentTaskRuntime = {
     type: 'async_agent',
@@ -58,6 +105,8 @@ export async function* callTaskToolBackground(
     description: input.description,
     prompt: prepared.effectivePrompt,
     status: 'running',
+    cwd: getCwd(),
+    sessionId: getKodeAgentSessionId(),
     startedAt: Date.now(),
     messages: [...prepared.transcriptMessages],
     abortController: bgAbortController,
@@ -106,6 +155,7 @@ export async function* callTaskToolBackground(
 
         taskRecord.messages = [...bgTranscriptMessages]
         upsertBackgroundAgentTask(taskRecord)
+        heartbeatDurableTask()
       }
 
       const lastAssistant = last(
@@ -133,6 +183,9 @@ export async function* callTaskToolBackground(
       taskRecord.messages = [...bgTranscriptMessages]
       upsertBackgroundAgentTask(taskRecord)
       saveAgentTranscript(prepared.agentId, bgTranscriptMessages)
+      finishDurableTask(
+        taskRecord.status === 'killed' ? 'cancelled' : 'completed',
+      )
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e)
 
@@ -154,6 +207,10 @@ export async function* callTaskToolBackground(
         )
       }
       upsertBackgroundAgentTask(taskRecord)
+      finishDurableTask(
+        taskRecord.status === 'killed' ? 'cancelled' : 'failed',
+        message,
+      )
     }
   })()
 

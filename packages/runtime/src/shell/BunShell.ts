@@ -3,6 +3,7 @@ import { isAbsolute, resolve } from 'path'
 
 import type {
   BackgroundProcess,
+  BackgroundShellLaunch,
   BunShellExecOptions,
   BunShellPromotableExec,
   BackgroundShellStatusAttachment,
@@ -78,7 +79,7 @@ export class BunShell {
     command: string,
     timeout?: number,
     options?: BunShellExecOptions,
-  ): { bashId: string } {
+  ): BackgroundShellLaunch {
     return execInBackground(this.state, command, timeout, options)
   }
 

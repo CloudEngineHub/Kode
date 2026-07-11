@@ -13,6 +13,10 @@ export type BackgroundAgentTask = {
   description: string
   prompt: string
   status: BackgroundAgentStatus
+  /** Canonical workspace captured at task launch, not resolved lazily. */
+  cwd: string
+  /** Optional daemon session owner; absent only for legacy/in-process tasks. */
+  sessionId?: string
   startedAt: number
   completedAt?: number
   error?: string

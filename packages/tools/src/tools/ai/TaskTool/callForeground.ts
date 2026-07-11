@@ -8,6 +8,7 @@ import type { Message as ConversationMessage } from '#core/query'
 import { hasPermissionsToUseTool } from '#core/permissions'
 import type { SetToolJSXFn } from '@kode/tool-interface/Tool'
 import { saveAgentTranscript } from '#core/utils/agentTranscripts'
+import { getKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
 import {
   upsertBackgroundAgentTask,
   type BackgroundAgentTaskRuntime,
@@ -26,6 +27,7 @@ import {
   appendBackgroundTaskOutput,
   touchBackgroundTaskOutputFile,
 } from '#core/tasks/backgroundRegistry'
+import { getCwd } from '#core/utils/state'
 import {
   BashToolRunInBackgroundOverlay,
   createRunInBackgroundKeypressHandler,
@@ -372,6 +374,8 @@ export async function* callTaskToolForeground(
       description: input.description,
       prompt: prepared.effectivePrompt,
       status: 'running',
+      cwd: getCwd(),
+      sessionId: getKodeAgentSessionId(),
       startedAt: prepared.startTime,
       messages: [...prepared.transcriptMessages],
       abortController: runAbortController,

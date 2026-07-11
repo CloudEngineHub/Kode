@@ -24,6 +24,8 @@ type BackgroundTaskSnapshotBase = {
   taskType: BackgroundTaskType
   status: BackgroundTaskStatus
   description: string
+  cwd: string
+  sessionId?: string
   outputFile: string
   startedAt: number
   completedAt?: number
@@ -77,6 +79,8 @@ function toShellTaskSnapshot(
     taskType: 'local_bash',
     status: getBackgroundShellStatus(task),
     description: task.command,
+    cwd: task.cwd,
+    ...(task.sessionId ? { sessionId: task.sessionId } : {}),
     command: task.command,
     exitCode: task.code,
     startedAt: task.startedAt,
@@ -95,6 +99,8 @@ function toAgentTaskSnapshot(
     taskType: 'local_agent',
     status: task.status,
     description: task.description,
+    cwd: task.cwd,
+    ...(task.sessionId ? { sessionId: task.sessionId } : {}),
     outputFile: getTaskOutputFilePath(task.agentId),
     startedAt: task.startedAt,
     completedAt: task.completedAt,
