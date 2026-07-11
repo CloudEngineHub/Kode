@@ -218,4 +218,18 @@ describe('createRoutes health endpoint', () => {
     if (!response) throw new Error('missing response')
     expect(response.status).toBe(401)
   })
+
+  test('keeps task and permission control routes behind the daemon token gate', async () => {
+    const routes = createTestRoutes({ authorized: false })
+    for (const path of ['/api/tasks', '/api/permissions']) {
+      const response = await routes.fetch(
+        new Request(`http://localhost${path}`),
+        {
+          upgrade: () => false,
+        },
+      )
+      if (!response) throw new Error('missing response')
+      expect(response.status).toBe(401)
+    }
+  })
 })

@@ -6,8 +6,12 @@ import { isUuid } from '@kode/core/utils/uuid'
 
 import { maybeServeWebui } from '../server/webui'
 import { routeChat } from './chat'
+import { routePermission } from './permission'
 import { routeSession } from './session'
+import { routeTask } from './task'
+import { PermissionControlService } from '../permissionControlService'
 import { PersistentSessionService } from '../persistentSessionService'
+import { TaskControlService } from '../taskControlService'
 import type { WorkspaceInfo } from '../handlers/workspaces.handler'
 import type { DaemonSession } from '../ws/types'
 import type { SessionRegistry } from '../sessionRegistry'
@@ -33,6 +37,8 @@ export function createRoutes(args: {
   }>
   sessionRegistry: SessionRegistry
   sessionService?: PersistentSessionService
+  taskService?: TaskControlService
+  permissionService?: PermissionControlService
   turnGate: DaemonTurnGate
   cwd: string
   echo: boolean
@@ -50,6 +56,9 @@ export function createRoutes(args: {
 } {
   const sessionService =
     args.sessionService ?? new PersistentSessionService(args.sessionRegistry)
+  const taskService = args.taskService ?? new TaskControlService()
+  const permissionService =
+    args.permissionService ?? new PermissionControlService(args.sessionRegistry)
 
   const resolveWorkspaceCwd = async (url: URL): Promise<string> => {
     const fallback = resolve(args.cwd)
@@ -147,6 +156,20 @@ export function createRoutes(args: {
         sessionRegistry: args.sessionRegistry,
       })
       if (sessionResponse) return sessionResponse
+
+      const taskResponse = await routeTask(req, {
+        cwd: args.cwd,
+        listWorkspaces: args.listWorkspaces,
+        taskService,
+      })
+      if (taskResponse) return taskResponse
+
+      const permissionResponse = await routePermission(req, {
+        cwd: args.cwd,
+        listWorkspaces: args.listWorkspaces,
+        permissionService,
+      })
+      if (permissionResponse) return permissionResponse
 
       if (url.pathname === '/ws') {
         if (!args.checkToken(req))
