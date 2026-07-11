@@ -6,7 +6,11 @@ export {
 } from './service'
 export { GoalStorage, sanitizeGoalId } from './storage'
 export { appendGoalEvent, createGoalEvent } from './events'
-export { GoalScheduler, claimDueSchedules } from './scheduler'
+export {
+  GoalScheduler,
+  claimDueSchedules,
+  getUnstartedGoalRunSchedule,
+} from './scheduler'
 export {
   GOAL_SCHEMA_VERSION,
   systemClock,

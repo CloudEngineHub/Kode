@@ -28,7 +28,12 @@ import { createUserMessage, normalizeMessages } from '#core/utils/messages'
 import { getGlobalConfigCached, saveGlobalConfig } from '#core/utils/config'
 import { getNextAvailableLogForkNumber, logError } from '#core/utils/log'
 import { getCwd, getOriginalCwd } from '#core/utils/state'
-import { claimDueSchedules } from '#core/goals'
+import {
+  claimDueSchedules,
+  getUnstartedGoalRunSchedule,
+  GoalService,
+  type ClaimedSchedule,
+} from '#core/goals'
 import { getKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
 import { MACRO } from '#core/constants/macros'
 import { subscribeAgentReloads } from '@kode/agent/events'
@@ -513,6 +518,7 @@ export function useReplController(props: REPLProps) {
   const apiKeyStatusRef = useRef<VerificationStatus>('loading')
   const onQueryRef = useRef<ReplOnQueryFn | null>(null)
   const scheduleDispatchingRef = useRef(false)
+  const dispatchedUnstartedGoalRunIdsRef = useRef(new Set<string>())
 
   const openHistorySearchScreen = useCallback(() => {
     openToolView({
@@ -1196,22 +1202,43 @@ export function useReplController(props: REPLProps) {
         return
       }
 
-      let schedule
+      let schedule: ClaimedSchedule | undefined
+      let isUnstartedGoalRun = false
       try {
+        const cwd = getCwd()
+        const sessionId = getKodeAgentSessionId()
         schedule = claimDueSchedules({
-          cwd: getCwd(),
-          sessionId: getKodeAgentSessionId(),
+          cwd,
+          sessionId,
           limit: 1,
         })[0]
+        if (!schedule) {
+          schedule =
+            getUnstartedGoalRunSchedule(
+              new GoalService().findActiveGoal({ cwd, sessionId }),
+            ) ?? undefined
+          isUnstartedGoalRun = schedule !== undefined
+        }
       } catch (error) {
         logError(error)
         return
       }
       if (!schedule) return
+      if (
+        isUnstartedGoalRun &&
+        dispatchedUnstartedGoalRunIdsRef.current.has(schedule.runId)
+      ) {
+        return
+      }
 
       scheduleDispatchingRef.current = true
+      if (isUnstartedGoalRun) {
+        dispatchedUnstartedGoalRunIdsRef.current.add(schedule.runId)
+      }
       setIsLoading(true)
-      showToast(`Scheduled loop: ${schedule.prompt}`)
+      showToast(
+        `${schedule.kind === 'interval' ? 'Scheduled loop' : 'Goal run'}: ${schedule.prompt}`,
+      )
       void onQuery([createUserMessage(schedule.prompt)])
         .catch(error => logError(error))
         .finally(() => {

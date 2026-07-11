@@ -1,5 +1,31 @@
 import { GoalService } from './service'
-import { type ClaimedSchedule, type ClaimDueSchedulesInput } from './types'
+import {
+  type ClaimedSchedule,
+  type ClaimDueSchedulesInput,
+  type Goal,
+} from './types'
+
+/**
+ * A direct `/goal` call claims its one-off run immediately so duplicate starts
+ * cannot race. Hosts still need a prompt to begin that claimed run. Surface it
+ * once while it has no completed turn, without changing its fencing token.
+ */
+export function getUnstartedGoalRunSchedule(
+  goal: Goal | null,
+): ClaimedSchedule | null {
+  if (
+    !goal ||
+    goal.status !== 'running' ||
+    goal.schedule.kind !== 'once' ||
+    goal.activeRun?.turnCount !== 0
+  ) {
+    return null
+  }
+
+  const runId = goal.activeRun.id
+  if (goal.lease?.runId !== runId) return null
+  return { ...goal.schedule, runId }
+}
 
 /**
  * Pure, durable schedule claim primitive. It deliberately does not execute an
@@ -47,7 +73,16 @@ export class GoalScheduler {
         cwd: input.cwd,
         sessionId: input.sessionId,
       })
-      return this.service.claimDueSchedules({ ...input, now })
+      const claimed = this.service.claimDueSchedules({ ...input, now })
+      if (claimed.length > 0) return claimed
+
+      const unstarted = getUnstartedGoalRunSchedule(
+        this.service.findActiveGoal({
+          cwd: input.cwd,
+          sessionId: input.sessionId,
+        }),
+      )
+      return unstarted ? [unstarted] : []
     } finally {
       this.ticking = false
     }

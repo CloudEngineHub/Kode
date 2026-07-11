@@ -19,8 +19,9 @@ data lives under the active Kode data root (`~/.kode` by default, or
 /automation status|recover|events <goal-id>
 ```
 
-`/goal` starts a session-scoped `GoalRun` immediately. After each final answer,
-Kode asks the quick model for a strict completion decision. A rejected answer
+`/goal` starts a session-scoped `GoalRun` immediately and dispatches its first
+turn as soon as the interactive session is idle. After each final answer, Kode
+asks the quick model for a strict completion decision. A rejected answer
 receives a bounded continuation prompt; completion, cancellation, pause, and
 lease recovery are recorded as append-only events.
 

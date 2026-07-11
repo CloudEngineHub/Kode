@@ -150,7 +150,7 @@ const goal = {
         `Goal started and is active for this session: ${started.id}`,
         `Objective: ${started.objective}`,
         `Max continuations: ${started.loop.maxIterations}`,
-        'The next assistant final answer will be evaluated against this goal.',
+        'The first goal turn will start automatically when this session is idle.',
       ].join('\n')
     } catch (error) {
       return commandError(error)

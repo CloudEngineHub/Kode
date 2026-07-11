@@ -8,6 +8,7 @@ import {
   GoalStorage,
   claimDueSchedules,
   evaluateActiveGoalAfterTurn,
+  getUnstartedGoalRunSchedule,
   startGoal,
   type Clock,
 } from './index'
@@ -279,6 +280,29 @@ describe('durable goals', () => {
     })
     expect(completed.action).toBe('complete')
     expect(completed.goal?.status).toBe('completed')
+  })
+
+  test('exposes an unstarted direct goal to an interactive dispatcher', () => {
+    const root = makeRoot()
+    const goal = startGoal({
+      rootDir: root,
+      cwd: join(root, 'workspace'),
+      sessionId: 'session-dispatch',
+      objective: 'Start the first goal turn',
+      now: 10_000,
+    })
+
+    expect(getUnstartedGoalRunSchedule(goal)).toMatchObject({
+      goalId: goal.id,
+      prompt: 'Start the first goal turn',
+      runId: goal.activeRun?.id,
+    })
+
+    const continued = new GoalService({ rootDir: root }).recordContinuation(
+      goal.id,
+      { runId: goal.activeRun?.id ?? '' },
+    )
+    expect(getUnstartedGoalRunSchedule(continued)).toBeNull()
   })
 
   test('fences a stale evaluator from completing a reclaimed GoalRun', async () => {

@@ -88,4 +88,41 @@ describe('GoalScheduleRunner', () => {
       rmSync(rootDir, { recursive: true, force: true })
     }
   })
+
+  test('dispatches a direct goal once before its first completed turn', async () => {
+    const rootDir = mkdtempSync(join(tmpdir(), 'kode-goal-direct-runner-'))
+    try {
+      const service = new GoalService({
+        rootDir,
+        clock: { now: () => 1_000 },
+      })
+      const goal = service.startGoal({
+        cwd: '/workspace',
+        sessionId: 'session-1',
+        objective: 'Start immediately',
+        now: 1_000,
+      })
+      const delivered: string[] = []
+      const runner = new GoalScheduleRunner({
+        service,
+        listSessions: () => [session()],
+        canDispatch: () => true,
+        dispatch: async ({ schedule }) => {
+          delivered.push(schedule.prompt)
+          service.recordContinuation(schedule.goalId, {
+            runId: schedule.runId,
+            now: 1_001,
+          })
+        },
+      })
+
+      await runner.tick()
+      await runner.tick()
+
+      expect(delivered).toEqual(['Start immediately'])
+      expect(service.getGoal(goal.id)?.activeRun?.turnCount).toBe(1)
+    } finally {
+      rmSync(rootDir, { recursive: true, force: true })
+    }
+  })
 })
