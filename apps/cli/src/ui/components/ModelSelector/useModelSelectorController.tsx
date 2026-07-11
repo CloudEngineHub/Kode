@@ -77,6 +77,7 @@ export function useModelSelectorController(
   const state = useModelSelectorState({
     skipModelType: props.skipModelType ?? false,
     initialModelProfile: props.initialModelProfile,
+    initialProvider: props.initialProvider,
     providerOptionCount: menus.mainMenuOptions.length,
     partnerProviderOptionCount: menus.partnerProviderOptions.length,
     codingPlanOptionCount: menus.codingPlanOptions.length,

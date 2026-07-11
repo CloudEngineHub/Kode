@@ -69,7 +69,7 @@ import { PARITY_STUB_COMMANDS } from './builtin/parityStubs'
 import { getMCPCommands, getMcpListChangedVersion } from '#core/mcp/client'
 import { loadCustomCommands } from '#cli-services/customCommands'
 import { memoize } from 'lodash-es'
-import { isAnthropicAuthEnabled } from '#core/utils/auth'
+import { isInteractiveLoginEnabled } from '#core/utils/auth'
 import type { Command } from './types'
 
 export type { Command } from './types'
@@ -142,7 +142,7 @@ const COMMANDS = memoize((): Command[] => [
   terminalSetup,
   sandbox,
   ...PARITY_STUB_COMMANDS,
-  ...(isAnthropicAuthEnabled() ? [logout, login()] : []),
+  ...(isInteractiveLoginEnabled() ? [logout, login()] : []),
   ...INTERNAL_ONLY_COMMANDS,
 ])
 

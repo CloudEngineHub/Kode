@@ -8,7 +8,7 @@ import { Text } from 'ink'
 export default {
   type: 'local-jsx',
   name: 'logout',
-  description: 'Sign out from your ShareAI Lab account',
+  description: 'Clear Kode account state (Codex credentials stay separate)',
   isEnabled: true,
   isHidden: false,
   async call() {
@@ -26,7 +26,9 @@ export default {
     saveGlobalConfig(config)
 
     const message = (
-      <Text>Successfully logged out from your ShareAI Lab account.</Text>
+      <Text>
+        Cleared Kode account state. To sign out of Codex, run `codex logout`.
+      </Text>
     )
 
     setTimeout(() => {

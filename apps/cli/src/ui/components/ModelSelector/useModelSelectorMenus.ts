@@ -10,7 +10,9 @@ export function useModelSelectorMenus(args: {
   function getProviderLabel(provider: string, modelCount: number): string {
     if (providers[provider]) {
       const wipTag = '(' + 'WI' + 'P' + ')'
-      return `${providers[provider].name} ${providers[provider].status === 'wip' ? wipTag : ''}`
+      return providers[provider].status === 'wip'
+        ? `${providers[provider].name} ${wipTag}`
+        : providers[provider].name
     }
     return `${provider}`
   }

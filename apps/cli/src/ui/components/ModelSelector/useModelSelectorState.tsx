@@ -25,6 +25,7 @@ import type { ModelInfo } from './flow/types'
 export function useModelSelectorState(opts: {
   skipModelType: boolean
   initialModelProfile?: ModelProfile
+  initialProvider?: ProviderType
   focusScope?: string
   providerOptionCount?: number
   partnerProviderOptionCount?: number
@@ -45,7 +46,9 @@ export function useModelSelectorState(opts: {
   const [screenStack, setScreenStack] = useState<ModelSelectorScreen[]>(() =>
     initialModelProfile
       ? ['modelParams']
-      : createInitialScreenStack({ skipModelType: opts.skipModelType }),
+      : opts.initialProvider
+        ? ['apiKey']
+        : createInitialScreenStack({ skipModelType: opts.skipModelType }),
   )
 
   const currentScreen = getCurrentScreen(screenStack)
@@ -54,7 +57,10 @@ export function useModelSelectorState(opts: {
   }
 
   const [selectedProvider, setSelectedProvider] = useState<ProviderType>(
-    initialModelProfile?.provider ?? config.primaryProvider ?? 'anthropic',
+    initialModelProfile?.provider ??
+      opts.initialProvider ??
+      config.primaryProvider ??
+      'anthropic',
   )
   const [selectedModel, setSelectedModel] = useState<string>(
     initialModelProfile?.modelName ?? '',

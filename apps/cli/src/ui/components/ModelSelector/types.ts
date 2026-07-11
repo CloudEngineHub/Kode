@@ -1,4 +1,8 @@
-import type { ModelPointerType, ModelProfile } from '#core/utils/config'
+import type {
+  ModelPointerType,
+  ModelProfile,
+  ProviderType,
+} from '#core/utils/config'
 
 export type ModelSelectorProps = {
   onDone: () => void
@@ -8,4 +12,6 @@ export type ModelSelectorProps = {
   onCancel?: () => void
   skipModelType?: boolean
   initialModelProfile?: ModelProfile
+  /** Start the setup flow at this provider's API-key screen. */
+  initialProvider?: ProviderType
 }
