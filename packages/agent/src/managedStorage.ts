@@ -214,7 +214,9 @@ function formatAgentFile(input: ManagedAgentInput): string {
   if (input.permissionMode !== undefined) {
     lines.push(`permissionMode: ${stringifyString(input.permissionMode)}`)
   }
-  if (input.forkContext === true) lines.push('forkContext: true')
+  if (input.forkContext === true) {
+    lines.push(`forkContext: ${stringifyString('true')}`)
+  }
   if (input.color !== undefined)
     lines.push(`color: ${stringifyString(input.color)}`)
   lines.push('---', '', input.systemPrompt.trim(), '')

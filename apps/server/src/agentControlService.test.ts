@@ -135,7 +135,7 @@ describe('AgentControlService', () => {
     )
   })
 
-  test('rejects unavailable tools and incompatible fork context before writing', async () => {
+  test('rejects unavailable or malformed tools and incompatible fork context before writing', async () => {
     const harness = createHarness()
     const unavailable = await harness.service.create({
       cwd: '/workspace',
@@ -143,6 +143,13 @@ describe('AgentControlService', () => {
       agent: { ...definition, tools: ['UnknownTool'] },
     })
     expect(unavailable).toEqual({ ok: false, reason: 'invalid' })
+
+    const malformed = await harness.service.create({
+      cwd: '/workspace',
+      source: 'userSettings',
+      agent: { ...definition, tools: ['Read()'] },
+    })
+    expect(malformed).toEqual({ ok: false, reason: 'invalid' })
 
     const incompatible = await harness.service.create({
       cwd: '/workspace',

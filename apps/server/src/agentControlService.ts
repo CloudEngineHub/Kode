@@ -6,6 +6,7 @@ import {
   clearAgentCache,
   createManagedAgent,
   deleteManagedAgent,
+  getToolNameFromSpec,
   listManagedAgents,
   readManagedAgent,
   updateManagedAgent,
@@ -126,15 +127,6 @@ function toStorageInput(input: DaemonAgentDefinition): ManagedAgentInput {
 
 function promptHash(value: string): string {
   return createHash('sha256').update(value).digest('hex')
-}
-
-function toolNameFromSpec(value: string): string | null {
-  const trimmed = value.trim()
-  if (!trimmed) return null
-  const open = trimmed.indexOf('(')
-  if (open < 0) return trimmed
-  if (open === 0 || !trimmed.endsWith(')')) return null
-  return trimmed.slice(0, open).trim() || null
 }
 
 function changedFields(
@@ -388,14 +380,18 @@ export class AgentControlService {
     }
 
     const validTools = new Set(this.deps.listToolNames())
-    if (validTools.size === 0) return null
     const specs = [
       ...(agent.tools === '*' ? [] : agent.tools),
       ...(agent.disallowedTools ?? []),
     ]
     for (const spec of specs) {
-      const name = toolNameFromSpec(spec)
-      if (!name || !validTools.has(name)) return 'invalid'
+      let name: string
+      try {
+        name = getToolNameFromSpec(spec)
+      } catch {
+        return 'invalid'
+      }
+      if (validTools.size > 0 && !validTools.has(name)) return 'invalid'
     }
     return null
   }

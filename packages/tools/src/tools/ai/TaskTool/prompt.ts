@@ -3,19 +3,10 @@ import { getTools, getReadOnlyTools } from '#tools'
 import { FileWriteTool } from '#tools/tools/filesystem/FileWriteTool/FileWriteTool'
 import { GlobTool } from '#tools/tools/filesystem/GlobTool/GlobTool'
 import { FileReadTool } from '#tools/tools/filesystem/FileReadTool/FileReadTool'
-import { getActiveAgents } from '@kode/agent'
+import { getActiveAgents, SUBAGENT_DISALLOWED_TOOL_NAMES } from '@kode/agent'
 
 const TASK_TOOL_NAME = 'Task'
 const TASK_OUTPUT_TOOL_NAME = 'TaskOutput'
-
-const SUBAGENT_DISALLOWED_TOOL_NAMES = new Set<string>([
-  'Task',
-  'TaskOutput',
-  'TaskStop',
-  'EnterPlanMode',
-  'ExitPlanMode',
-  'AskUserQuestion',
-])
 
 export async function getTaskTools(safeMode: boolean): Promise<Tool[]> {
   // No recursive tasks, yet..

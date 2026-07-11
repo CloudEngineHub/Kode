@@ -54,6 +54,42 @@ describe('managed agent storage', () => {
         listManagedAgents({ source: 'userSettings', cwd: workspace }),
       ).toEqual([created])
 
+      const forked = await createManagedAgent({
+        source: 'projectSettings',
+        cwd: workspace,
+        input: { ...baseInput, agentType: 'forked-agent', forkContext: true },
+      })
+      expect(forked.forkContext).toBe(true)
+      expect(
+        readManagedAgent({
+          source: 'projectSettings',
+          cwd: workspace,
+          agentType: 'forked-agent',
+        }),
+      ).toMatchObject({ state: 'found', agent: { forkContext: true } })
+
+      writeFileSync(
+        join(workspace, '.kode', 'agents', 'boolean-fork-agent.md'),
+        [
+          '---',
+          'name: "boolean-fork-agent"',
+          'description: "Accept YAML booleans from existing Agent files."',
+          'tools: ["Read"]',
+          'forkContext: true',
+          '---',
+          '',
+          'Keep the parent context.',
+        ].join('\n'),
+        'utf8',
+      )
+      expect(
+        readManagedAgent({
+          source: 'projectSettings',
+          cwd: workspace,
+          agentType: 'boolean-fork-agent',
+        }),
+      ).toMatchObject({ state: 'found', agent: { forkContext: true } })
+
       await expect(
         updateManagedAgent({
           source: 'userSettings',

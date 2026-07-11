@@ -213,6 +213,8 @@ function parseAgentFromLoadedMarkdown(
     const forkContextValue: unknown = fm.forkContext
     if (
       forkContextValue !== undefined &&
+      forkContextValue !== true &&
+      forkContextValue !== false &&
       forkContextValue !== 'true' &&
       forkContextValue !== 'false'
     ) {
@@ -221,7 +223,7 @@ function parseAgentFromLoadedMarkdown(
         forkContext: String(forkContextValue),
       })
     }
-    const forkContext = forkContextValue === 'true'
+    const forkContext = forkContextValue === true || forkContextValue === 'true'
 
     if (forkContext && model && model !== 'inherit') {
       debugLogger.warn('AGENT_LOADER_FORK_CONTEXT_MODEL_OVERRIDE', {
