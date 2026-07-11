@@ -11,6 +11,7 @@ import { markPhase } from '#core/utils/debugLogger'
 import {
   createAssistantAPIErrorMessage,
   createAssistantMessage,
+  createUserMessage,
 } from './messages/create'
 import {
   INTERRUPT_MESSAGE,
@@ -91,6 +92,27 @@ function createThinkingOnlyRetryPrompt(retryNumber: number): string {
   ].join(' ')
 }
 
+function createThinkingOnlyRecoveryMessage(retryNumber: number): UserMessage {
+  return createUserMessage(
+    [
+      '<thinking-only-recovery>',
+      `Recovery attempt ${retryNumber} of ${MAX_THINKING_ONLY_RETRIES}.`,
+      'Continue the original task now. Do not describe a plan, repeat reasoning, or send a progress update.',
+      'For a task that requires repository work, use an available tool immediately before giving a final response.',
+      'If no tool is needed, return the final user-facing response now.',
+      '</thinking-only-recovery>',
+    ].join('\n'),
+  )
+}
+
+function isThinkingOnlyRecoveryMessage(message: Message): boolean {
+  return (
+    message.type === 'user' &&
+    typeof message.message.content === 'string' &&
+    message.message.content.startsWith('<thinking-only-recovery>')
+  )
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
@@ -129,11 +151,6 @@ function isThinkingOnlyAssistantMessage(message: AssistantMessage): boolean {
   }
 
   return hasThinking
-}
-
-function createThinkingOnlyRetryMetaMessage(): AssistantMessage {
-  const message = createAssistantMessage('<thinking-only-retry />')
-  return { ...message, isMeta: true }
 }
 
 function getAssistantTextForGoalEvaluation(message: AssistantMessage): string {
@@ -540,12 +557,19 @@ async function* messagePipelineCore(
     // If there's no more tool use, we're done
     if (!toolUseMessages.length) {
       if (isThinkingOnlyAssistantMessage(assistantMessage)) {
-        yield assistantMessage
-
         if (thinkingOnlyAttempts < MAX_THINKING_ONLY_RETRIES) {
           const retryNumber = thinkingOnlyAttempts + 1
+          // A reasoning-only response did not make progress. Do not add it to
+          // the transcript or expose repeated internal planning in the UI;
+          // send a concrete follow-up user instruction instead so models that
+          // ignore appended system text receive an actionable next turn.
           yield* await messagePipelineCore(
-            [...messages, createThinkingOnlyRetryMetaMessage()],
+            [
+              ...messages.filter(
+                message => !isThinkingOnlyRecoveryMessage(message),
+              ),
+              createThinkingOnlyRecoveryMessage(retryNumber),
+            ],
             [...systemPrompt, createThinkingOnlyRetryPrompt(retryNumber)],
             context,
             canUseTool,

@@ -117,9 +117,8 @@ describe('messagePipeline thinking-only recovery', () => {
       (message): message is AssistantMessage => message.type === 'assistant',
     )
     expect(queryLLM).toHaveBeenCalledTimes(4)
-    expect(assistantMessages).toHaveLength(4)
-    expect(assistantMessages[0]!.message.content[0]!.type).toBe('thinking')
-    expect(assistantMessages[3]!.message.content[0]!.text).toContain('location')
+    expect(assistantMessages).toHaveLength(1)
+    expect(assistantMessages[0]!.message.content[0]!.text).toContain('location')
     expect(calls[1]!.systemPrompt.join('\n')).toContain(
       'internal reasoning only',
     )
@@ -127,6 +126,14 @@ describe('messagePipeline thinking-only recovery', () => {
       'Recovery attempt 3 of 3',
     )
     expect(calls.every(call => call.messages.length === 1)).toBe(true)
+    const recoveryMessage = calls[1]!.messages[0]
+    expect(recoveryMessage?.type).toBe('user')
+    if (!recoveryMessage || recoveryMessage.type !== 'user') {
+      throw new Error('thinking-only recovery must remain a user message')
+    }
+    expect(JSON.stringify(recoveryMessage.message.content)).toContain(
+      '<thinking-only-recovery>',
+    )
     expect(toolUseContext.turnCount).toBe(1)
   })
 
@@ -154,7 +161,7 @@ describe('messagePipeline thinking-only recovery', () => {
     const lastMessage = assistantMessages.at(-1)
 
     expect(queryLLM).toHaveBeenCalledTimes(4)
-    expect(assistantMessages).toHaveLength(5)
+    expect(assistantMessages).toHaveLength(1)
     expect(lastMessage?.isApiErrorMessage).toBe(true)
     expect(lastMessage?.message.content[0]?.text).toContain(
       '4 consecutive attempts',
@@ -189,8 +196,8 @@ describe('messagePipeline thinking-only recovery', () => {
       (message): message is AssistantMessage => message.type === 'assistant',
     )
     expect(queryLLM).toHaveBeenCalledTimes(2)
-    expect(assistantMessages[0]?.message.content[0]?.type).toBe('thinking')
-    expect(assistantMessages.at(-1)?.message.content[0]?.text).toBe(
+    expect(assistantMessages).toHaveLength(1)
+    expect(assistantMessages[0]?.message.content[0]?.text).toBe(
       'Recovered final response.',
     )
   })

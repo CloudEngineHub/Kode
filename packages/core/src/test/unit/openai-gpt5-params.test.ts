@@ -30,6 +30,33 @@ describe('OpenAI Chat Completions params (GPT-5 branch)', () => {
     expect(params.max_completion_tokens).toBeUndefined()
   })
 
+  test('MiMo tool calls disable thinking and use max_completion_tokens', () => {
+    const params = buildOpenAIChatCompletionCreateParams({
+      model: 'mimo-v2.5-pro',
+      maxTokens: 789,
+      messages: [{ role: 'user', content: 'inspect this repository' }],
+      temperature: 1,
+      stream: true,
+      toolSchemas: [
+        {
+          type: 'function',
+          function: {
+            name: 'Read',
+            description: 'Read a file',
+            parameters: {},
+          },
+        },
+      ],
+    })
+
+    expect(params.max_completion_tokens).toBe(789)
+    expect(params.max_tokens).toBeUndefined()
+    expect(params.tool_choice).toBe('auto')
+    expect((params as { thinking?: unknown }).thinking).toEqual({
+      type: 'disabled',
+    })
+  })
+
   test('stream/tools/stop/reasoning flags are wired', () => {
     const params = buildOpenAIChatCompletionCreateParams({
       model: 'gpt-5',

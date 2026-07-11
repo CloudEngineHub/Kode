@@ -26,7 +26,9 @@ const command = {
 
 The file you create will be given to agentic coding agents (such as yourself) that operate in this repository. Make it about 20 lines long.
 If there's already a ${PROJECT_FILE}, improve it.
-If there are Cursor rules (in .cursor/rules/ or .cursorrules) or Copilot rules (in .github/copilot-instructions.md), make sure to include them.`,
+If there are Cursor rules (in .cursor/rules/ or .cursorrules) or Copilot rules (in .github/copilot-instructions.md), make sure to include them.
+
+Use the available repository tools to inspect the codebase and write the file. Do not only describe a plan; complete the inspection and file update before responding.`,
           },
         ],
       },
