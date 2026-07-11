@@ -139,12 +139,37 @@ describe('DaemonSupervisor', () => {
 
     expect(await harness.supervisor.status(workspacePath)).toMatchObject({
       state: 'unhealthy',
-      availableActions: ['stop'],
+      availableActions: ['force_stop'],
     })
     expect(
       await harness.supervisor.start({ workspacePath, versionSignature: 'v2' }),
     ).toMatchObject({ state: 'unhealthy' })
     expect(harness.launches).toHaveLength(0)
+  })
+
+  test('refuses to stop an unverified PID unless force is explicit', async () => {
+    const harness = createHarness({ healthy: false })
+    const workspacePath = join(harness.root, 'workspace')
+    harness.registry.upsert({
+      workspacePath,
+      pid: 20,
+      url: 'http://127.0.0.1:20',
+      token: 'existing-token',
+      versionSignature: 'v1',
+    })
+
+    await expect(harness.supervisor.stop(workspacePath)).rejects.toThrow(
+      'refusing to terminate an unverified PID',
+    )
+    expect(harness.stoppedPids).toHaveLength(0)
+
+    expect(
+      await harness.supervisor.stop(workspacePath, { force: true }),
+    ).toMatchObject({
+      state: 'stopped',
+      removed: true,
+    })
+    expect(harness.stoppedPids).toEqual([20])
   })
 
   test('stops an unregistered launch when its health check fails', async () => {

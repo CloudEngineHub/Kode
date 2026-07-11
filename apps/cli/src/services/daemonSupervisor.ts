@@ -6,7 +6,8 @@ import {
   type DaemonRegistryLookup,
 } from './daemonRegistry'
 
-export type DaemonSupervisorAction = 'start' | 'stop' | 'remove_stale'
+export type DaemonSupervisorAction =
+  'start' | 'stop' | 'force_stop' | 'remove_stale'
 
 export type DaemonSupervisorStatus = {
   state: 'missing' | 'live' | 'stale' | 'unhealthy' | 'corrupt'
@@ -124,7 +125,7 @@ export class DaemonSupervisor {
     return {
       state: 'unhealthy',
       entry: lookup.entry,
-      availableActions: ['stop'],
+      availableActions: ['force_stop'],
     }
   }
 
@@ -193,28 +194,39 @@ export class DaemonSupervisor {
     }
   }
 
-  async stop(workspacePath: string): Promise<StopDaemonResult> {
-    const lookup = this.registry.lookup(workspacePath)
-    if (lookup.state === 'missing') return { state: 'missing', removed: false }
-    if (lookup.state === 'corrupt') {
+  async stop(
+    workspacePath: string,
+    options: { force?: boolean } = {},
+  ): Promise<StopDaemonResult> {
+    const current = await this.status(workspacePath)
+    if (current.state === 'missing') return { state: 'missing', removed: false }
+    if (current.state === 'corrupt') {
       throw new Error(
         'Daemon registry is corrupt. Repair or remove it before stopping a daemon.',
       )
     }
-    if (lookup.state === 'stale') {
+    if (current.state === 'stale') {
       this.registry.remove(workspacePath)
       return { state: 'stale', removed: true }
     }
+    if (current.state === 'unhealthy' && options.force !== true) {
+      throw new Error(
+        'Daemon health probe failed; refusing to terminate an unverified PID without force.',
+      )
+    }
+    if (!current.entry) {
+      throw new Error('Daemon registry entry is missing.')
+    }
 
-    const stopped = await this.controller.stop({ pid: lookup.entry.pid })
+    const stopped = await this.controller.stop({ pid: current.entry.pid })
     if (!stopped) {
       throw new Error(
-        `Daemon process ${lookup.entry.pid} did not stop; registry was retained.`,
+        `Daemon process ${current.entry.pid} did not stop; registry was retained.`,
       )
     }
 
     this.registry.remove(workspacePath)
-    return { state: 'stopped', removed: true, entry: lookup.entry }
+    return { state: 'stopped', removed: true, entry: current.entry }
   }
 
   private async isHealthy(args: {
