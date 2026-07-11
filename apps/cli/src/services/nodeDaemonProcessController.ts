@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import type { DaemonProcessController } from './daemonSupervisor'
 
@@ -34,18 +35,23 @@ function isBunRuntime(): boolean {
   return typeof process.versions.bun === 'string'
 }
 
-function findPackageRoot(
+function findDaemonPackageRoot(
   startPath: string,
   exists: (path: string) => boolean,
-): string {
+): string | null {
   let current = resolve(startPath)
   for (let depth = 0; depth < 25; depth += 1) {
-    if (exists(join(current, 'package.json'))) return current
+    if (
+      exists(join(current, 'dist', 'entrypoints', 'daemon.js')) ||
+      exists(join(current, 'apps', 'cli', 'src', 'entrypoints', 'daemon.ts'))
+    ) {
+      return current
+    }
     const parent = dirname(current)
     if (parent === current) break
     current = parent
   }
-  return resolve(startPath)
+  return null
 }
 
 /**
@@ -74,7 +80,17 @@ export function resolveDaemonEntrypoint(
   const invocationPath = options.invocationPath ?? process.argv[1]
   const packageRoot = options.packageRoot
     ? resolve(options.packageRoot)
-    : findPackageRoot(dirname(invocationPath || process.cwd()), exists)
+    : [
+        invocationPath ? dirname(invocationPath) : null,
+        dirname(fileURLToPath(import.meta.url)),
+        process.cwd(),
+      ]
+        .filter((candidate): candidate is string => Boolean(candidate))
+        .map(candidate => findDaemonPackageRoot(candidate, exists))
+        .find((candidate): candidate is string => candidate !== null)
+  if (!packageRoot) {
+    throw new Error('Unable to locate a daemon package root.')
+  }
   const compiled = join(packageRoot, 'dist', 'entrypoints', 'daemon.js')
   if (exists(compiled)) return { path: compiled, kind: 'compiled' }
 

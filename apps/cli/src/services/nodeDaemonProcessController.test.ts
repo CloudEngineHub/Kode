@@ -55,6 +55,33 @@ describe('node daemon process controller', () => {
     ).toEqual({ path: source, kind: 'source' })
   })
 
+  test('walks above the nested CLI package to find the source daemon entrypoint', () => {
+    const packageRoot = resolve('kode-package')
+    const source = join(
+      packageRoot,
+      'apps',
+      'cli',
+      'src',
+      'entrypoints',
+      'daemon.ts',
+    )
+    const invocationPath = join(
+      packageRoot,
+      'apps',
+      'cli',
+      'src',
+      'dispatch.ts',
+    )
+
+    expect(
+      resolveDaemonEntrypoint({
+        invocationPath,
+        exists: path => path === source,
+        isBunRuntime: true,
+      }),
+    ).toEqual({ path: source, kind: 'source' })
+  })
+
   test('does not persist a daemon token in the registry URL', () => {
     expect(
       redactDaemonUrl('http://localhost:4321/?token=top-secret&mode=local'),
