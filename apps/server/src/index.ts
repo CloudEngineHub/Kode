@@ -49,7 +49,16 @@ if (process.argv.includes('--acp')) {
     echo,
   })
 
-  console.log(daemon.url)
+  const readyUrl = new URL(daemon.url)
+  readyUrl.hostname = daemon.host
+  readyUrl.search = ''
+  readyUrl.hash = ''
+  console.log(
+    `KODE_DAEMON_READY ${JSON.stringify({
+      type: 'kode-daemon-ready',
+      url: readyUrl.toString(),
+    })}`,
+  )
 
   process.on('SIGINT', () => {
     daemon.stop()

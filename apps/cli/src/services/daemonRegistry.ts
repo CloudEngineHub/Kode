@@ -82,6 +82,24 @@ function isNonEmptyString(value: unknown, maxLength = 16_384): value is string {
   )
 }
 
+function isLoopbackDaemonUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return (
+      url.protocol === 'http:' &&
+      url.hostname === '127.0.0.1' &&
+      Boolean(url.port) &&
+      !url.username &&
+      !url.password &&
+      !url.search &&
+      !url.hash &&
+      (url.pathname === '' || url.pathname === '/')
+    )
+  } catch {
+    return false
+  }
+}
+
 function parseRegistryEntry(value: unknown): DaemonRegistryEntry | null {
   if (!isRecord(value)) return null
   if (value.schemaVersion !== DAEMON_REGISTRY_SCHEMA_VERSION) return null
@@ -98,12 +116,7 @@ function parseRegistryEntry(value: unknown): DaemonRegistryEntry | null {
     return null
   }
 
-  try {
-    const parsed = new URL(value.url)
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null
-  } catch {
-    return null
-  }
+  if (!isLoopbackDaemonUrl(value.url)) return null
 
   return {
     schemaVersion: DAEMON_REGISTRY_SCHEMA_VERSION,
@@ -343,13 +356,10 @@ export class DaemonRegistry {
     if (!isTimestamp(args.updatedAt)) {
       throw new Error('Daemon registry clock returned an invalid timestamp.')
     }
-    try {
-      const parsed = new URL(args.url)
-      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-        throw new Error('unsupported protocol')
-      }
-    } catch {
-      throw new Error('Daemon url must be an HTTP(S) URL.')
+    if (!isLoopbackDaemonUrl(args.url)) {
+      throw new Error(
+        'Daemon url must be a token-free 127.0.0.1 HTTP endpoint.',
+      )
     }
 
     const startedAt = args.startedAt ?? args.updatedAt

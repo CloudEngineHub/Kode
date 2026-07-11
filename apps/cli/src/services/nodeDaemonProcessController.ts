@@ -10,6 +10,15 @@ export type DaemonEntrypoint = {
   kind: 'compiled' | 'source'
 }
 
+const COMPILED_DAEMON_SUFFIX = join('dist', 'entrypoints', 'daemon.js')
+const SOURCE_DAEMON_SUFFIX = join(
+  'apps',
+  'cli',
+  'src',
+  'entrypoints',
+  'daemon.ts',
+)
+
 export type NodeDaemonProcessControllerOptions = {
   daemonEntrypoint?: string
   runtimePath?: string
@@ -91,9 +100,6 @@ export function resolveDaemonEntrypoint(
   if (!packageRoot) {
     throw new Error('Unable to locate a daemon package root.')
   }
-  const compiled = join(packageRoot, 'dist', 'entrypoints', 'daemon.js')
-  if (exists(compiled)) return { path: compiled, kind: 'compiled' }
-
   const source = join(
     packageRoot,
     'apps',
@@ -102,6 +108,21 @@ export function resolveDaemonEntrypoint(
     'entrypoints',
     'daemon.ts',
   )
+  const invokedFromSource = Boolean(
+    !options.packageRoot && invocationPath?.toLowerCase().endsWith('.ts'),
+  )
+  if (invokedFromSource && exists(source)) {
+    if (!(options.isBunRuntime ?? isBunRuntime())) {
+      throw new Error(
+        'The source daemon entrypoint requires Bun. Build the package before using kode daemon.',
+      )
+    }
+    return { path: source, kind: 'source' }
+  }
+
+  const compiled = join(packageRoot, 'dist', 'entrypoints', 'daemon.js')
+  if (exists(compiled)) return { path: compiled, kind: 'compiled' }
+
   if (exists(source)) {
     if (!(options.isBunRuntime ?? isBunRuntime())) {
       throw new Error(
@@ -116,10 +137,82 @@ export function resolveDaemonEntrypoint(
   )
 }
 
+/**
+ * Source entrypoints rely on the package's import aliases, so they must not
+ * inherit the target workspace as their process CWD. The daemon receives the
+ * target workspace explicitly through `--cwd` instead.
+ */
+export function daemonEntrypointWorkingDirectory(
+  entrypoint: DaemonEntrypoint,
+): string {
+  const normalizedPath = resolve(entrypoint.path)
+  const suffix =
+    entrypoint.kind === 'compiled'
+      ? COMPILED_DAEMON_SUFFIX
+      : SOURCE_DAEMON_SUFFIX
+  const comparablePath =
+    process.platform === 'win32' ? normalizedPath.toLowerCase() : normalizedPath
+  const comparableSuffix =
+    process.platform === 'win32' ? suffix.toLowerCase() : suffix
+  if (comparablePath.endsWith(comparableSuffix)) {
+    return resolve(normalizedPath.slice(0, -suffix.length))
+  }
+  return dirname(normalizedPath)
+}
+
 export function redactDaemonUrl(value: string): string {
   const url = new URL(value)
   url.searchParams.delete('token')
   return url.toString()
+}
+
+const DAEMON_READY_PREFIX = 'KODE_DAEMON_READY '
+
+function normalizeLoopbackDaemonUrl(value: string): string | null {
+  try {
+    const url = new URL(value)
+    if (
+      url.protocol !== 'http:' ||
+      url.hostname !== '127.0.0.1' ||
+      !url.port ||
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash ||
+      (url.pathname !== '' && url.pathname !== '/')
+    ) {
+      return null
+    }
+    return url.toString()
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The child daemon emits a single structured readiness line. Restricting it
+ * to an explicit loopback endpoint prevents child stdout from steering a
+ * bearer-token health probe to an arbitrary host.
+ */
+export function parseDaemonReadyUrl(value: string): string | null {
+  const line = value.trim()
+  if (!line.startsWith(DAEMON_READY_PREFIX)) return null
+
+  try {
+    const payload: unknown = JSON.parse(line.slice(DAEMON_READY_PREFIX.length))
+    if (
+      !payload ||
+      typeof payload !== 'object' ||
+      Array.isArray(payload) ||
+      (payload as { type?: unknown }).type !== 'kode-daemon-ready' ||
+      typeof (payload as { url?: unknown }).url !== 'string'
+    ) {
+      return null
+    }
+    return normalizeLoopbackDaemonUrl((payload as { url: string }).url)
+  } catch {
+    return null
+  }
 }
 
 function redactDaemonOutput(value: string): string {
@@ -169,15 +262,11 @@ function waitForDaemonUrl(args: {
     }
 
     const tryReadUrl = () => {
-      const candidates = stdout.match(/https?:\/\/[^\s]+/g) ?? []
-      for (const candidate of candidates) {
-        try {
-          const url = new URL(candidate)
-          if (url.protocol !== 'http:' && url.protocol !== 'https:') continue
-          succeed(redactDaemonUrl(url.toString()))
+      for (const line of stdout.split(/\r?\n/)) {
+        const url = parseDaemonReadyUrl(line)
+        if (url) {
+          succeed(url)
           return
-        } catch {
-          // Continue until the daemon prints a complete URL.
         }
       }
     }
@@ -206,7 +295,7 @@ function waitForDaemonUrl(args: {
     args.child.once('error', onError)
     args.child.once('exit', onExit)
     timer = setTimeout(() => {
-      fail(new Error('Timed out waiting for daemon startup URL.'))
+      fail(new Error('Timed out waiting for daemon readiness record.'))
     }, args.timeoutMs)
   })
 }
@@ -258,14 +347,15 @@ export function createNodeDaemonProcessController(
     async launch(args) {
       const child = spawnProcess(
         runtimePath,
-        [entrypoint.path, '--cwd', args.cwd, '--token', args.token],
+        [entrypoint.path, '--host', '127.0.0.1', '--cwd', args.cwd],
         {
-          cwd: args.cwd,
+          cwd: daemonEntrypointWorkingDirectory(entrypoint),
           detached: true,
           windowsHide: true,
           stdio: ['ignore', 'pipe', 'pipe'],
           env: {
             ...process.env,
+            KODE_DAEMON_TOKEN: args.token,
             KODE_DAEMON_VERSION_SIGNATURE: args.versionSignature,
           },
         },
@@ -295,7 +385,9 @@ export function createNodeDaemonProcessController(
 
     async probe(args) {
       try {
-        const target = new URL('/api/health', args.url)
+        const trustedUrl = normalizeLoopbackDaemonUrl(args.url)
+        if (!trustedUrl) return false
+        const target = new URL('/api/health', trustedUrl)
         target.search = ''
         const response = await fetchWithTimeout({
           fetchImpl,

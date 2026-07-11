@@ -186,4 +186,19 @@ describe('DaemonRegistry', () => {
     ).toThrow('Daemon pid must be a positive integer')
     expect(existsSync(registry.path)).toBe(false)
   })
+
+  test('refuses endpoints that could send a registry token off-device', () => {
+    const { root, registry } = createRegistry()
+
+    expect(() =>
+      registry.upsert({
+        workspacePath: join(root, 'workspace'),
+        pid: 4242,
+        url: 'https://example.test:4242/?token=leak',
+        token: 'local-secret-token',
+        versionSignature: 'v1',
+      }),
+    ).toThrow('token-free 127.0.0.1')
+    expect(existsSync(registry.path)).toBe(false)
+  })
 })
