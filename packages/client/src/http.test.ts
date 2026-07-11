@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import type { DaemonPermissionSnapshot, DaemonTask } from '@kode/protocol'
 
 import { HttpClient } from './http'
 
@@ -981,6 +982,142 @@ describe('HttpClient', () => {
         body: JSON.stringify({
           newSessionId: '22222222-2222-4222-8222-222222222222',
           beforeUuid: '33333333-3333-4333-8333-333333333333',
+        }),
+      },
+    ])
+  })
+
+  test('uses the daemon task and permission control contracts over authenticated HTTP', async () => {
+    const task: DaemonTask = {
+      id: 'shell-1',
+      kind: 'shell',
+      status: 'running',
+      source: 'runtime_and_durable',
+      description: 'run checks',
+      command: 'bun test',
+      sessionId: '11111111-1111-4111-8111-111111111111',
+      startedAt: 1,
+      updatedAt: 2,
+      completedAt: null,
+      outputAvailable: true,
+      error: null,
+    }
+    const permission: DaemonPermissionSnapshot = {
+      source: 'runtime',
+      sessionId: task.sessionId,
+      mode: 'yolo',
+      isBypassPermissionsModeAvailable: true,
+      additionalWorkingDirectories: [],
+      rules: { allow: {}, deny: {}, ask: {} },
+    }
+    const calls: Array<{
+      url: string
+      method: string | undefined
+      body: string | undefined
+    }> = []
+    const client = new HttpClient({
+      baseUrl: 'http://localhost:32123',
+      token: 'token',
+      workspaceId: 'workspace-a',
+      webSocketImpl: FakeWebSocket,
+      fetchImpl: async (input, init) => {
+        const url = new URL(String(input))
+        calls.push({
+          url: url.toString(),
+          method: init?.method,
+          body: init?.body,
+        })
+        if (url.pathname === '/api/tasks')
+          return Response.json({ tasks: [task] })
+        if (url.pathname.endsWith('/output')) {
+          return Response.json({ task, content: 'tail', tailLines: 25 })
+        }
+        if (url.pathname.endsWith('/cancel')) {
+          return Response.json({
+            task,
+            cancelled: true,
+            alreadyTerminal: false,
+          })
+        }
+        if (url.pathname.startsWith('/api/tasks/'))
+          return Response.json({ task })
+        if (init?.method === 'PATCH') {
+          return Response.json({
+            permission,
+            persisted: false,
+            refreshedSessionIds: [task.sessionId],
+            inflightApprovalCount: 0,
+          })
+        }
+        return Response.json({ permission })
+      },
+    })
+
+    await expect(
+      client.listTasks({ sessionId: task.sessionId }),
+    ).resolves.toEqual([task])
+    await expect(client.getTask(task.id)).resolves.toEqual(task)
+    await expect(
+      client.getTaskOutput(task.id, {
+        sessionId: task.sessionId,
+        tailLines: 25,
+      }),
+    ).resolves.toMatchObject({ content: 'tail', tailLines: 25 })
+    await expect(client.cancelTask(task.id)).resolves.toMatchObject({
+      cancelled: true,
+    })
+    await expect(
+      client.getPermissions({ sessionId: task.sessionId }),
+    ).resolves.toEqual(permission)
+    await expect(
+      client.updatePermissions({
+        sessionId: task.sessionId,
+        update: {
+          type: 'addRules',
+          destination: 'session',
+          behavior: 'allow',
+          rules: ['Bash(git status)'],
+        },
+      }),
+    ).resolves.toMatchObject({ persisted: false })
+
+    expect(calls).toEqual([
+      {
+        url: `http://localhost:32123/api/tasks?workspace=workspace-a&sessionId=${task.sessionId}`,
+        method: undefined,
+        body: undefined,
+      },
+      {
+        url: 'http://localhost:32123/api/tasks/shell-1?workspace=workspace-a',
+        method: undefined,
+        body: undefined,
+      },
+      {
+        url: `http://localhost:32123/api/tasks/shell-1/output?workspace=workspace-a&sessionId=${task.sessionId}&tail=25`,
+        method: undefined,
+        body: undefined,
+      },
+      {
+        url: 'http://localhost:32123/api/tasks/shell-1/cancel?workspace=workspace-a',
+        method: 'POST',
+        body: undefined,
+      },
+      {
+        url: `http://localhost:32123/api/permissions?workspace=workspace-a&sessionId=${task.sessionId}`,
+        method: undefined,
+        body: undefined,
+      },
+      {
+        url: 'http://localhost:32123/api/permissions?workspace=workspace-a',
+        method: 'PATCH',
+        body: JSON.stringify({
+          sessionId: task.sessionId,
+          update: {
+            type: 'addRules',
+            destination: 'session',
+            behavior: 'allow',
+            rules: ['Bash(git status)'],
+          },
         }),
       },
     ])

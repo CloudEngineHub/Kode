@@ -7,6 +7,10 @@ export type {
   SessionAwareKodeClient,
   SessionControlKodeClient,
   SessionMetadataUpdate,
+  TaskControlKodeClient,
+  TaskOutputOptions,
+  TaskQueryOptions,
+  PermissionControlKodeClient,
   ToolPermissionDecision,
   ToolPermissionInputUpdate,
 } from './types'

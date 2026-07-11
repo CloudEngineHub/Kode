@@ -1,5 +1,25 @@
-import type { AgentEvent, DaemonEventMetadata, Session } from '@kode/protocol'
-import { DaemonWsEventSchema, normalizeDaemonWsEvent } from '@kode/protocol'
+import type {
+  AgentEvent,
+  DaemonEventMetadata,
+  DaemonPermissionSnapshot,
+  DaemonPermissionUpdate,
+  DaemonPermissionUpdateResponse,
+  DaemonTask,
+  DaemonTaskCancelResponse,
+  DaemonTaskOutputResponse,
+  Session,
+} from '@kode/protocol'
+import {
+  DaemonPermissionSnapshotResponseSchema,
+  DaemonPermissionUpdateResponseSchema,
+  DaemonPermissionUpdateSchema,
+  DaemonTaskCancelResponseSchema,
+  DaemonTaskDetailResponseSchema,
+  DaemonTaskListResponseSchema,
+  DaemonTaskOutputResponseSchema,
+  DaemonWsEventSchema,
+  normalizeDaemonWsEvent,
+} from '@kode/protocol'
 
 import type {
   CorrelatedAgentEvent,
@@ -9,6 +29,10 @@ import type {
   SessionAwareKodeClient,
   SessionControlKodeClient,
   SessionMetadataUpdate,
+  TaskControlKodeClient,
+  TaskOutputOptions,
+  TaskQueryOptions,
+  PermissionControlKodeClient,
   ToolPermissionDecision,
   ToolPermissionInputUpdate,
 } from './types'
@@ -63,6 +87,20 @@ function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value,
   )
+}
+
+function isSafeTaskId(value: string): boolean {
+  return /^[A-Za-z0-9_-]{1,120}$/.test(value)
+}
+
+function appendOptionalSessionId(
+  url: URL,
+  sessionId: string | undefined,
+): void {
+  if (sessionId === undefined) return
+  const normalized = sessionId.trim()
+  if (!isUuid(normalized)) throw new Error('Invalid session id')
+  url.searchParams.set('sessionId', normalized)
 }
 
 function createRandomUuidV4(): string {
@@ -342,7 +380,11 @@ function safeJsonParse(text: string): unknown {
 }
 
 export class HttpClient
-  implements SessionAwareKodeClient, SessionControlKodeClient
+  implements
+    SessionAwareKodeClient,
+    SessionControlKodeClient,
+    TaskControlKodeClient,
+    PermissionControlKodeClient
 {
   private ws: WebSocketLike | null = null
   private desiredSessionId: string | null = null
@@ -946,6 +988,152 @@ export class HttpClient
       throw new Error('Invalid session fork response')
     }
     return json.session
+  }
+
+  async listTasks(options: TaskQueryOptions = {}): Promise<DaemonTask[]> {
+    const url = this.toApiUrl('/api/tasks')
+    appendOptionalSessionId(url, options.sessionId)
+    const response = await this.getFetchImpl()(url, {
+      headers: { authorization: `Bearer ${this.options.token}` },
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to list tasks (${response.status})`)
+    }
+    const parsed = DaemonTaskListResponseSchema.safeParse(await response.json())
+    if (!parsed.success) throw new Error('Invalid tasks response')
+    return (parsed.data as unknown as { tasks: DaemonTask[] }).tasks
+  }
+
+  async getTask(
+    taskId: string,
+    options: TaskQueryOptions = {},
+  ): Promise<DaemonTask> {
+    const normalizedTaskId = taskId.trim()
+    if (!isSafeTaskId(normalizedTaskId)) throw new Error('Invalid task id')
+    const url = this.toApiUrl(
+      `/api/tasks/${encodeURIComponent(normalizedTaskId)}`,
+    )
+    appendOptionalSessionId(url, options.sessionId)
+    const response = await this.getFetchImpl()(url, {
+      headers: { authorization: `Bearer ${this.options.token}` },
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to load task (${response.status})`)
+    }
+    const parsed = DaemonTaskDetailResponseSchema.safeParse(
+      await response.json(),
+    )
+    if (!parsed.success) throw new Error('Invalid task response')
+    return (parsed.data as unknown as { task: DaemonTask }).task
+  }
+
+  async getTaskOutput(
+    taskId: string,
+    options: TaskOutputOptions = {},
+  ): Promise<DaemonTaskOutputResponse> {
+    const normalizedTaskId = taskId.trim()
+    if (!isSafeTaskId(normalizedTaskId)) throw new Error('Invalid task id')
+    if (
+      options.tailLines !== undefined &&
+      (!Number.isSafeInteger(options.tailLines) ||
+        options.tailLines < 1 ||
+        options.tailLines > 1000)
+    ) {
+      throw new Error('tailLines must be an integer between 1 and 1000')
+    }
+    const url = this.toApiUrl(
+      `/api/tasks/${encodeURIComponent(normalizedTaskId)}/output`,
+    )
+    appendOptionalSessionId(url, options.sessionId)
+    if (options.tailLines !== undefined) {
+      url.searchParams.set('tail', String(options.tailLines))
+    }
+    const response = await this.getFetchImpl()(url, {
+      headers: { authorization: `Bearer ${this.options.token}` },
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to read task output (${response.status})`)
+    }
+    const parsed = DaemonTaskOutputResponseSchema.safeParse(
+      await response.json(),
+    )
+    if (!parsed.success) throw new Error('Invalid task output response')
+    return parsed.data as unknown as DaemonTaskOutputResponse
+  }
+
+  async cancelTask(
+    taskId: string,
+    options: TaskQueryOptions = {},
+  ): Promise<DaemonTaskCancelResponse> {
+    const normalizedTaskId = taskId.trim()
+    if (!isSafeTaskId(normalizedTaskId)) throw new Error('Invalid task id')
+    const url = this.toApiUrl(
+      `/api/tasks/${encodeURIComponent(normalizedTaskId)}/cancel`,
+    )
+    appendOptionalSessionId(url, options.sessionId)
+    const response = await this.getFetchImpl()(url, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${this.options.token}` },
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to cancel task (${response.status})`)
+    }
+    const parsed = DaemonTaskCancelResponseSchema.safeParse(
+      await response.json(),
+    )
+    if (!parsed.success) throw new Error('Invalid task cancellation response')
+    return parsed.data as unknown as DaemonTaskCancelResponse
+  }
+
+  async getPermissions(
+    options: TaskQueryOptions = {},
+  ): Promise<DaemonPermissionSnapshot> {
+    const url = this.toApiUrl('/api/permissions')
+    appendOptionalSessionId(url, options.sessionId)
+    const response = await this.getFetchImpl()(url, {
+      headers: { authorization: `Bearer ${this.options.token}` },
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to read permissions (${response.status})`)
+    }
+    const parsed = DaemonPermissionSnapshotResponseSchema.safeParse(
+      await response.json(),
+    )
+    if (!parsed.success) throw new Error('Invalid permission response')
+    return (parsed.data as unknown as { permission: DaemonPermissionSnapshot })
+      .permission
+  }
+
+  async updatePermissions(args: {
+    sessionId?: string
+    update: DaemonPermissionUpdate
+  }): Promise<DaemonPermissionUpdateResponse> {
+    const update = DaemonPermissionUpdateSchema.safeParse(args.update)
+    if (!update.success) throw new Error('Invalid permission update')
+    const sessionId = args.sessionId?.trim()
+    if (sessionId !== undefined && !isUuid(sessionId)) {
+      throw new Error('Invalid session id')
+    }
+    const url = this.toApiUrl('/api/permissions')
+    const response = await this.getFetchImpl()(url, {
+      method: 'PATCH',
+      headers: {
+        authorization: `Bearer ${this.options.token}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        ...(sessionId ? { sessionId } : {}),
+        update: update.data,
+      }),
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to update permissions (${response.status})`)
+    }
+    const parsed = DaemonPermissionUpdateResponseSchema.safeParse(
+      await response.json(),
+    )
+    if (!parsed.success) throw new Error('Invalid permission update response')
+    return parsed.data as unknown as DaemonPermissionUpdateResponse
   }
 
   async *sendMessage(

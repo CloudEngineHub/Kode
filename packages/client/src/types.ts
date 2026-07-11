@@ -1,4 +1,14 @@
-import type { AgentEvent, DaemonEventMetadata, Session } from '@kode/protocol'
+import type {
+  AgentEvent,
+  DaemonEventMetadata,
+  DaemonPermissionSnapshot,
+  DaemonPermissionUpdate,
+  DaemonPermissionUpdateResponse,
+  DaemonTask,
+  DaemonTaskCancelResponse,
+  DaemonTaskOutputResponse,
+  Session,
+} from '@kode/protocol'
 
 export type ToolPermissionDecision = 'allow_once' | 'allow_always' | 'deny'
 
@@ -154,4 +164,35 @@ export interface SessionControlKodeClient {
     update: SessionMetadataUpdate,
   ): Promise<Session>
   forkSession(sessionId: string, options?: ForkSessionOptions): Promise<Session>
+}
+
+/** Daemon-only control surface for workspace-scoped background work. */
+export type TaskQueryOptions = {
+  sessionId?: string
+}
+
+export type TaskOutputOptions = TaskQueryOptions & {
+  tailLines?: number
+}
+
+export interface TaskControlKodeClient {
+  listTasks(options?: TaskQueryOptions): Promise<DaemonTask[]>
+  getTask(taskId: string, options?: TaskQueryOptions): Promise<DaemonTask>
+  getTaskOutput(
+    taskId: string,
+    options?: TaskOutputOptions,
+  ): Promise<DaemonTaskOutputResponse>
+  cancelTask(
+    taskId: string,
+    options?: TaskQueryOptions,
+  ): Promise<DaemonTaskCancelResponse>
+}
+
+/** Daemon-only permission snapshots and explicitly-audited updates. */
+export interface PermissionControlKodeClient {
+  getPermissions(options?: TaskQueryOptions): Promise<DaemonPermissionSnapshot>
+  updatePermissions(args: {
+    sessionId?: string
+    update: DaemonPermissionUpdate
+  }): Promise<DaemonPermissionUpdateResponse>
 }
