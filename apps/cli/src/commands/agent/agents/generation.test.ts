@@ -1,10 +1,28 @@
-import { describe, expect, test } from 'bun:test'
-import {
+import { beforeEach, describe, expect, mock, test } from 'bun:test'
+
+type QueryModelArgs = [string, unknown[], string[], AbortSignal?]
+type QueryModelResult = {
+  isApiErrorMessage?: boolean
+  message: { content: unknown }
+}
+
+let queryModelImpl: (...args: QueryModelArgs) => Promise<QueryModelResult>
+
+mock.module('#core/utils/log', () => ({
+  logError: () => {},
+}))
+
+mock.module('#core/ai/llm', () => ({
+  queryModel: (...args: QueryModelArgs) => queryModelImpl(...args),
+}))
+
+const {
   __parseGeneratedAgentResponseForTests,
+  generateAgentWithModel,
   generateAgentFileContent,
   validateAgentConfig,
   validateAgentType,
-} from './generation'
+} = await import('./generation')
 
 const generatedAgent = {
   identifier: 'code-reviewer',
@@ -14,6 +32,19 @@ const generatedAgent = {
 }
 
 describe('agents/generation', () => {
+  beforeEach(() => {
+    queryModelImpl = async () => ({
+      message: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(generatedAgent),
+          },
+        ],
+      },
+    })
+  })
+
   test('parseGeneratedAgentResponse accepts raw JSON', () => {
     expect(
       __parseGeneratedAgentResponseForTests(JSON.stringify(generatedAgent)),
@@ -128,5 +159,55 @@ describe('agents/generation', () => {
     expect(longDescription.warnings).toContain(
       'No tools selected - agent will have very limited capabilities',
     )
+  })
+
+  test('surfaces model API errors without reporting invalid JSON', async () => {
+    queryModelImpl = async () => ({
+      isApiErrorMessage: true,
+      message: {
+        content: [
+          {
+            type: 'text',
+            text: 'API Error: provider unavailable',
+          },
+        ],
+      },
+    })
+
+    await expect(
+      generateAgentWithModel('review recent changes'),
+    ).rejects.toThrow('API Error: provider unavailable')
+  })
+
+  test('does not time out a prompt model response', async () => {
+    await expect(
+      generateAgentWithModel('review recent changes', { timeoutMs: 5 }),
+    ).resolves.toEqual(generatedAgent)
+  })
+
+  test('aborts and rejects a stalled model request at its deadline', async () => {
+    let requestSignal: AbortSignal | undefined
+    queryModelImpl = async (_model, _messages, _systemPrompt, signal) => {
+      requestSignal = signal
+      return await new Promise<QueryModelResult>(() => {})
+    }
+
+    await expect(
+      generateAgentWithModel('review recent changes', { timeoutMs: 5 }),
+    ).rejects.toThrow('Agent generation timed out after 1 second')
+    expect(requestSignal?.aborted).toBe(true)
+  })
+
+  test('rejects promptly when the caller cancels a stalled request', async () => {
+    const controller = new AbortController()
+    queryModelImpl = async () => await new Promise<QueryModelResult>(() => {})
+
+    const generation = generateAgentWithModel('review recent changes', {
+      signal: controller.signal,
+      timeoutMs: 1_000,
+    })
+    controller.abort()
+
+    await expect(generation).rejects.toThrow('Agent generation cancelled')
   })
 })
