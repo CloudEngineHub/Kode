@@ -32,6 +32,22 @@ export type AgentGenerationOptions = {
   timeoutMs?: number
 }
 
+type AgentGenerationQuery = typeof import('#core/ai/llm').queryModel
+
+let agentGenerationQueryForTests: AgentGenerationQuery | null = null
+
+export function __setAgentGenerationQueryForTests(
+  query: AgentGenerationQuery | null,
+): void {
+  agentGenerationQueryForTests = query
+}
+
+async function getAgentGenerationQuery(): Promise<AgentGenerationQuery> {
+  if (agentGenerationQueryForTests) return agentGenerationQueryForTests
+  const { queryModel } = await import('#core/ai/llm')
+  return queryModel
+}
+
 class AgentGenerationTimeoutError extends Error {
   constructor(timeoutMs: number) {
     super(getAgentGenerationTimeoutMessage(timeoutMs))
@@ -368,7 +384,7 @@ export async function generateAgentWithModel(
   prompt: string,
   options?: AgentGenerationOptions,
 ): Promise<GeneratedAgent> {
-  const { queryModel } = await import('#core/ai/llm')
+  const queryModel = await getAgentGenerationQuery()
 
   const existing = (options?.existingIdentifiers ?? []).filter(Boolean)
   const existingClause =
