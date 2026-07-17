@@ -70,7 +70,7 @@ describe('legacy session import (read-only discover + explicit copy into kodeRoo
             'utf8',
           )
             .replaceAll('{{sessionId}}', sessionId)
-            .replaceAll('{{cwd}}', projectDir)
+            .replaceAll('{{cwd}}', JSON.stringify(projectDir).slice(1, -1))
 
           const sourcePath = join(
             claudeRoot,

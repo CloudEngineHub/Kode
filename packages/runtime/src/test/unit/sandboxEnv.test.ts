@@ -91,4 +91,25 @@ describe('sandbox env (TMPDIR)', () => {
       else process.env.CLAUDE_CODE_TMPDIR = prevClaude
     }
   })
+
+  test('uses target-platform path semantics for legacy temp directories', () => {
+    const prevKode = process.env.KODE_TMPDIR
+    const prevClaudeTmp = process.env.CLAUDE_TMPDIR
+    const prevClaude = process.env.CLAUDE_CODE_TMPDIR
+    delete process.env.KODE_TMPDIR
+    process.env.CLAUDE_TMPDIR = String.raw`C:\Temp\claude`
+    delete process.env.CLAUDE_CODE_TMPDIR
+    try {
+      expect(resolveSandboxTmpDir({ platform: 'win32' })).toBe(
+        String.raw`C:\Temp\kode`,
+      )
+    } finally {
+      if (prevKode === undefined) delete process.env.KODE_TMPDIR
+      else process.env.KODE_TMPDIR = prevKode
+      if (prevClaudeTmp === undefined) delete process.env.CLAUDE_TMPDIR
+      else process.env.CLAUDE_TMPDIR = prevClaudeTmp
+      if (prevClaude === undefined) delete process.env.CLAUDE_CODE_TMPDIR
+      else process.env.CLAUDE_CODE_TMPDIR = prevClaude
+    }
+  })
 })
