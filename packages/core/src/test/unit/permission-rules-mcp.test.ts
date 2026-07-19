@@ -18,6 +18,7 @@ const makeContext = (): ToolUseContext => ({
     verbose: false,
     slowAndCapableModel: undefined,
     safeMode: true,
+    permissionMode: 'default',
     forkNumber: 0,
     messageLogName: 'test',
     maxThinkingTokens: 0,

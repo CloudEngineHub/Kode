@@ -2,6 +2,7 @@ import * as React from 'react'
 import { Text } from 'ink'
 
 import type { Tool } from '#core/tooling/Tool'
+import { truncateTextForDisplay } from '#core/utils/toolOutputDisplay'
 import { FallbackToolUseRejectedMessage } from '#ui-ink/components/FallbackToolUseRejectedMessage'
 
 import { renderGlobToolResultMessage } from './GlobToolPresenter'
@@ -33,6 +34,9 @@ type InkToolPresenter = {
     options: RejectOptions,
   ) => React.ReactNode
 }
+
+const MAX_INLINE_TOOL_RESULT_LINES = 80
+const MAX_INLINE_TOOL_RESULT_CHARS = 8_000
 
 const inkPresentersByToolName: Record<string, InkToolPresenter> = {
   Glob: {
@@ -80,22 +84,78 @@ const inkPresentersByToolName: Record<string, InkToolPresenter> = {
   },
 }
 
-function normalizeInkToolRenderOutput(node: React.ReactNode): React.ReactNode {
+function normalizePrimitiveInkToolRenderOutput(
+  value: string | number,
+  options: ResultOptions,
+  key?: React.Key,
+): React.ReactNode {
+  const text = normalizePrimitiveInkToolRenderChild(value, options)
+
+  return key === undefined ? <Text>{text}</Text> : <Text key={key}>{text}</Text>
+}
+
+function normalizePrimitiveInkToolRenderChild(
+  value: string | number,
+  options: ResultOptions,
+): string {
+  const rawText = String(value)
+  return options.verbose
+    ? rawText
+    : truncateTextForDisplay(rawText, {
+        maxLines: MAX_INLINE_TOOL_RESULT_LINES,
+        maxChars: MAX_INLINE_TOOL_RESULT_CHARS,
+      }).text
+}
+
+function normalizeInkToolRenderChild(
+  node: React.ReactNode,
+  options: ResultOptions,
+): React.ReactNode {
   if (typeof node === 'string' || typeof node === 'number') {
-    return <Text>{node}</Text>
+    return normalizePrimitiveInkToolRenderChild(node, options)
+  }
+
+  if (Array.isArray(node)) {
+    return node.map(child => normalizeInkToolRenderChild(child, options))
+  }
+
+  if (!React.isValidElement(node)) {
+    return node
+  }
+
+  const props = node.props as { children?: React.ReactNode }
+  if (props.children === undefined) {
+    return node
+  }
+
+  return React.cloneElement(
+    node as React.ReactElement<{ children?: React.ReactNode }>,
+    undefined,
+    normalizeInkToolRenderChild(props.children, options),
+  )
+}
+
+function normalizeInkToolRenderOutput(
+  node: unknown,
+  options: ResultOptions,
+): React.ReactNode {
+  if (typeof node === 'string' || typeof node === 'number') {
+    return normalizePrimitiveInkToolRenderOutput(node, options)
   }
 
   if (Array.isArray(node)) {
     return node.map((child, index) =>
-      typeof child === 'string' || typeof child === 'number' ? (
-        <Text key={`text-${index}`}>{child}</Text>
-      ) : (
-        child
-      ),
+      typeof child === 'string' || typeof child === 'number'
+        ? normalizePrimitiveInkToolRenderOutput(child, options, `text-${index}`)
+        : normalizeInkToolRenderChild(child, options),
     )
   }
 
-  return node
+  if (React.isValidElement(node)) {
+    return normalizeInkToolRenderChild(node, options)
+  }
+
+  return node as React.ReactNode
 }
 
 export function renderInkToolResultMessage(
@@ -107,10 +167,12 @@ export function renderInkToolResultMessage(
   if (presenter?.renderToolResultMessage) {
     return normalizeInkToolRenderOutput(
       presenter.renderToolResultMessage(output, options),
+      options,
     )
   }
   return normalizeInkToolRenderOutput(
     tool.renderToolResultMessage?.(output, options) ?? null,
+    options,
   )
 }
 
@@ -124,6 +186,7 @@ export function renderInkToolUseRejectedMessage(
     const node = presenter.renderToolUseRejectedMessage(input, options)
     return normalizeInkToolRenderOutput(
       node ?? <FallbackToolUseRejectedMessage />,
+      options,
     )
   }
 
@@ -131,6 +194,7 @@ export function renderInkToolUseRejectedMessage(
     const node = tool.renderToolUseRejectedMessage(input, options)
     return normalizeInkToolRenderOutput(
       node ?? <FallbackToolUseRejectedMessage />,
+      options,
     )
   }
 

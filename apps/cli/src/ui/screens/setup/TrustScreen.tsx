@@ -8,6 +8,7 @@ import {
 } from '#core/utils/config'
 import { PRODUCT_NAME } from '#core/constants/product'
 import { useExitOnCtrlCD } from '#ui-ink/hooks/useExitOnCtrlCD'
+import { useCliExit } from '#ui-ink/hooks/useCliExit'
 import { homedir } from 'os'
 import { getCwd } from '#core/utils/state'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
@@ -21,6 +22,7 @@ type Props = {
 export function TrustScreen({ onDone }: Props): React.ReactNode {
   const theme = getTheme()
   const layout = useScreenLayout()
+  const requestExit = useCliExit()
   React.useEffect(() => {}, [])
 
   function onChange(value: 'yes' | 'no') {
@@ -39,17 +41,17 @@ export function TrustScreen({ onDone }: Props): React.ReactNode {
         break
       }
       case 'no': {
-        process.exit(1)
+        requestExit(1)
         break
       }
     }
   }
 
-  const exitState = useExitOnCtrlCD(() => process.exit(0))
+  const exitState = useExitOnCtrlCD(() => requestExit(0))
 
   useKeypress((_input, key) => {
     if (key.escape) {
-      process.exit(0)
+      requestExit(0)
       return
     }
   })
@@ -82,6 +84,7 @@ export function TrustScreen({ onDone }: Props): React.ReactNode {
         </Box>
 
         <Select
+          focusScope="setup:trust"
           options={[
             { label: 'Yes, proceed', value: 'yes' },
             { label: 'No, exit', value: 'no' },

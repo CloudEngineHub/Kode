@@ -10,7 +10,7 @@ import {
 import { join } from 'path'
 import { tmpdir } from 'os'
 
-import type { AgentConfig } from '#core/utils/agentLoader'
+import type { AgentConfig } from '@kode/agent'
 import { getCwd, setCwd } from '#core/utils/state'
 
 import { deleteAgent, updateAgent } from './storage'

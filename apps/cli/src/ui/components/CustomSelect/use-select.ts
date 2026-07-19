@@ -17,7 +17,7 @@ export type UseSelectProps = {
 
 export const useSelect = ({ isDisabled = false, state }: UseSelectProps) => {
   useKeypress(
-    (_input, key) => {
+    (input, key) => {
       if (key.downArrow) {
         state.focusNextOption()
         return true
@@ -30,6 +30,19 @@ export const useSelect = ({ isDisabled = false, state }: UseSelectProps) => {
 
       if (key.return) {
         state.selectFocusedOption()
+        return true
+      }
+
+      if (key.insertable && !key.ctrl && !key.meta && /^[1-9]$/.test(input)) {
+        const selectableOptionIndex = Number.parseInt(input, 10) - 1
+        const option = state.visibleOptions.filter(
+          visibleOption => 'value' in visibleOption,
+        )[selectableOptionIndex]
+
+        if (option && 'value' in option) {
+          state.selectOption(option.value)
+        }
+
         return true
       }
     },

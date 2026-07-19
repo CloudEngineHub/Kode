@@ -2,7 +2,7 @@ import type { StructuredPatchHunk } from 'diff'
 import { mkdirSync, readFileSync, statSync } from 'fs'
 import { dirname, isAbsolute, relative, resolve, sep } from 'path'
 import { z } from 'zod'
-import { Tool, ValidationResult } from '#core/tooling/Tool'
+import { Tool, ValidationResult } from '@kode/tool-interface/Tool'
 import {
   addLineNumbers,
   detectFileEncoding,

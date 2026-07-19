@@ -4,7 +4,12 @@ import chalk from 'chalk'
 import { useTextInput } from '#ui-ink/hooks/useTextInput'
 import { getTheme } from '#core/utils/theme'
 import { type Key, useKeypress } from '#ui-ink/hooks/useKeypress'
-import { shouldAggregatePasteChunk } from '#core/utils/paste'
+import { PASTE_PROTECTION_RETURN_KEY_NAME } from '#ui-ink/contexts/KeypressContext'
+import {
+  normalizeLineEndings,
+  shouldAggregatePasteChunk,
+  shouldTreatAsSpecialPaste,
+} from '#core/utils/paste'
 import { terminalCapabilityManager } from '#ui-ink/utils/terminalCapabilityManager'
 import { useBracketedPasteSequences } from './TextInputBracketedPaste'
 import type { Props } from './TextInput.types'
@@ -13,12 +18,51 @@ export type { Props } from './TextInput.types'
 // Character codes - use numeric comparison to survive minification
 const BACKSPACE_CODE = 8 // \x08
 const DEL_CODE = 127 // \x7f
+const PASTE_GUARD_MESSAGE =
+  'Paste detected. Added as a placeholder; press Enter to send.'
+const LEGACY_PASTE_AGGREGATION_DELAY_MS = 75
+const SPECIAL_PASTE_AGGREGATION_DELAY_MS = 32
 
 // Helper to check if input is a backspace character
 function isBackspaceChar(input: string): boolean {
   if (input.length !== 1) return false
   const code = input.charCodeAt(0)
   return code === BACKSPACE_CODE || code === DEL_CODE
+}
+
+function isOptionKeyPressed(key: Key): boolean {
+  const optionValue = (key as unknown as Record<string, unknown>).option
+  return optionValue === true
+}
+
+export function __getLineFeedInputActionForTests(args: {
+  multiline: boolean
+  key: Key
+}): 'newline' | 'submit' {
+  if (!args.multiline) return 'submit'
+  if (
+    args.key.shift ||
+    args.key.meta ||
+    args.key.ctrl ||
+    isOptionKeyPressed(args.key)
+  ) {
+    return 'newline'
+  }
+  return 'submit'
+}
+
+export function __getPasteAggregationDelayForTests(args: {
+  input: string
+  hasPendingPaste: boolean
+  terminalColumns?: number
+}): number | null {
+  const options = { terminalColumns: args.terminalColumns }
+  if (!shouldAggregatePasteChunk(args.input, args.hasPendingPaste, options)) {
+    return null
+  }
+  return shouldTreatAsSpecialPaste(args.input, options)
+    ? SPECIAL_PASTE_AGGREGATION_DELAY_MS
+    : LEGACY_PASTE_AGGREGATION_DELAY_MS
 }
 
 export default function TextInput({
@@ -73,20 +117,26 @@ export default function TextInput({
     onOffsetChange: onChangeCursorOffset,
   })
 
-  // Paste detection state
-  const [pasteState, setPasteState] = React.useState<{
-    chunks: string[]
-    timeoutId: ReturnType<typeof setTimeout> | null
-  }>({ chunks: [], timeoutId: null })
+  // Paste aggregation stays out of React state so large paste bursts don't
+  // trigger a render per chunk.
+  const pasteChunksRef = React.useRef<string[]>([])
+  const pasteTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  )
   const pasteGuardUntilRef = React.useRef<number>(0)
   const pasteWarningTimeoutRef = React.useRef<ReturnType<
     typeof setTimeout
   > | null>(null)
   const onMessageRef = React.useRef<Props['onMessage']>(onMessage)
+  const onPasteRef = React.useRef<Props['onPaste']>(onPaste)
 
   React.useEffect(() => {
     onMessageRef.current = onMessage
   }, [onMessage])
+
+  React.useEffect(() => {
+    onPasteRef.current = onPaste
+  }, [onPaste])
 
   const isPasteTrusted = React.useCallback(() => {
     return (
@@ -106,10 +156,7 @@ export default function TextInput({
   const showPasteWarning = React.useCallback(() => {
     const onMessage = onMessageRef.current
     if (!onMessage) return
-    onMessage(
-      true,
-      'Paste protection unavailable. Press Enter again to submit.',
-    )
+    onMessage(true, PASTE_GUARD_MESSAGE)
     if (pasteWarningTimeoutRef.current) {
       clearTimeout(pasteWarningTimeoutRef.current)
     }
@@ -121,51 +168,79 @@ export default function TextInput({
 
   const armPasteGuard = React.useCallback(() => {
     if (isPasteTrusted()) return
-    pasteGuardUntilRef.current = Date.now() + 40
+    pasteGuardUntilRef.current = Date.now() + 20
   }, [isPasteTrusted])
+
+  React.useEffect(
+    () => () => {
+      clearPasteWarning()
+      if (pasteTimeoutRef.current) {
+        clearTimeout(pasteTimeoutRef.current)
+        pasteTimeoutRef.current = null
+      }
+      pasteChunksRef.current = []
+    },
+    [clearPasteWarning],
+  )
+
+  const flushAggregatedPaste = React.useCallback(() => {
+    if (pasteTimeoutRef.current) {
+      clearTimeout(pasteTimeoutRef.current)
+      pasteTimeoutRef.current = null
+    }
+    pasteGuardUntilRef.current = 0
+    const pastedText = pasteChunksRef.current.join('')
+    pasteChunksRef.current = []
+    if (!pastedText) return
+
+    setTimeout(() => {
+      onPasteRef.current?.(pastedText)
+    }, 0)
+  }, [])
 
   const shouldBlockEnter = React.useCallback(
     (key: Key): boolean => {
       if (!key.return || key.shift || key.meta) return false
       if (isPasteTrusted()) return false
+      if (pasteTimeoutRef.current !== null) {
+        flushAggregatedPaste()
+        showPasteWarning()
+        return true
+      }
       if (!pasteGuardUntilRef.current) return false
       if (Date.now() >= pasteGuardUntilRef.current) return false
       pasteGuardUntilRef.current = 0
       showPasteWarning()
       return true
     },
-    [isPasteTrusted, showPasteWarning],
-  )
-
-  React.useEffect(
-    () => () => {
-      clearPasteWarning()
-    },
-    [clearPasteWarning],
+    [flushAggregatedPaste, isPasteTrusted, showPasteWarning],
   )
 
   const handleBracketedPasteSequences = useBracketedPasteSequences({
     insertText: (text: string) => onInput(text, {} as Key),
     onPaste,
+    terminalColumns: columns,
   })
 
-  const resetPasteTimeout = (
-    currentTimeoutId: ReturnType<typeof setTimeout> | null,
-  ) => {
-    if (currentTimeoutId) {
-      clearTimeout(currentTimeoutId)
-    }
-    return setTimeout(() => {
-      setPasteState(({ chunks }) => {
-        const pastedText = chunks.join('')
-        // Schedule callback after current render to avoid state updates during render
-        Promise.resolve().then(() => onPaste!(pastedText))
-        return { chunks: [], timeoutId: null }
-      })
-    }, 500)
-  }
+  const resetPasteTimeout = React.useCallback(
+    (delayMs: number) => {
+      if (pasteTimeoutRef.current) {
+        clearTimeout(pasteTimeoutRef.current)
+      }
+      pasteTimeoutRef.current = setTimeout(flushAggregatedPaste, delayMs)
+    },
+    [flushAggregatedPaste],
+  )
 
   const wrappedOnInput = (input: string, key: Key): void => {
+    if (key.name === PASTE_PROTECTION_RETURN_KEY_NAME) {
+      if (pasteTimeoutRef.current !== null) {
+        flushAggregatedPaste()
+      }
+      showPasteWarning()
+      return
+    }
+
     // Some terminals (e.g. kitty/wezterm with CSI-u keyboard protocol) encode Enter with modifiers as CSI u sequences.
     // Example: ESC[13;3u (Alt/Option+Enter). Ink may strip the leading ESC.
     if (/^(?:\x1b)?\[13;2(?:u|~)$/.test(input)) {
@@ -188,10 +263,10 @@ export default function TextInput({
       return
     }
 
-    // Some terminals/keybindings emit LF ("\n") for modified Enter. In multiline inputs, insert a newline.
-    // In single-line inputs, treat it as Enter for compatibility.
+    // Some terminals emit LF ("\n") for Enter. Plain LF submits; modified LF
+    // keeps the multiline-newline affordance.
     if (input === '\n') {
-      if (multiline) {
+      if (__getLineFeedInputActionForTests({ multiline, key }) === 'newline') {
         if (shouldBlockEnter({ ...key, return: true } as Key)) return
         onInput('\n', key)
         return
@@ -213,6 +288,20 @@ export default function TextInput({
       } as Key
       if (shouldBlockEnter(nextKey)) return
       onInput('\r', nextKey)
+      return
+    }
+
+    if (key.paste && input) {
+      const normalized = normalizeLineEndings(input)
+      if (
+        onPasteRef.current &&
+        shouldTreatAsSpecialPaste(normalized, { terminalColumns: columns })
+      ) {
+        setTimeout(() => onPasteRef.current?.(normalized), 0)
+        return
+      }
+
+      onInput(normalized, key)
       return
     }
 
@@ -243,24 +332,25 @@ export default function TextInput({
       return
     }
 
-    // Handle pastes (>800 chars)
+    // Handle paste-sized chunks before they enter React-rendered input.
     // Usually we get one or two input characters at a time. If we
-    // get a bunch, the user has probably pasted.
+    // get enough content to wrap across multiple prompt rows, the user has probably pasted.
     // Unfortunately node batches long pastes, so it's possible
     // that we would see e.g. 1024 characters and then just a few
     // more in the next frame that belong with the original paste.
     // This batching number is not consistent.
-    if (
-      onPaste &&
-      shouldAggregatePasteChunk(input, pasteState.timeoutId !== null)
-    ) {
+    const pasteAggregationDelay = onPaste
+      ? __getPasteAggregationDelayForTests({
+          input,
+          hasPendingPaste: pasteTimeoutRef.current !== null,
+          terminalColumns: columns,
+        })
+      : null
+
+    if (onPaste && pasteAggregationDelay !== null) {
       armPasteGuard()
-      setPasteState(({ chunks, timeoutId }) => {
-        return {
-          chunks: [...chunks, input],
-          timeoutId: resetPasteTimeout(timeoutId),
-        }
-      })
+      pasteChunksRef.current.push(input)
+      resetPasteTimeout(pasteAggregationDelay)
       return
     }
 

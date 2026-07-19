@@ -1,7 +1,5 @@
 export type CompletionType =
-  | 'str_replace_single'
-  | 'write_file_single'
-  | 'tool_use_single'
+  'str_replace_single' | 'write_file_single' | 'tool_use_single'
 
 type LogEvent = {
   completion_type: CompletionType

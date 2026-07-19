@@ -5,8 +5,11 @@
   "type": "module",
   "dependencies": {
     "@kode/config": "workspace:*",
+    "@kode/context": "workspace:*",
+    "@kode/hooks": "workspace:*",
+    "@kode/permissions": "workspace:*",
     "@kode/protocol": "workspace:*",
     "@kode/runtime": "workspace:*",
-    "@kode/tools": "workspace:*"
+    "@kode/tool-interface": "workspace:*"
   }
 }

@@ -17,6 +17,7 @@ This directory contains user and developer documentation for Kode.
 
 - Overview: `docs/develop/overview.md`
 - Architecture: `docs/develop/architecture.md`
+- Phase 2 package boundaries: `docs/develop/phase2-package-boundaries.md`
 - Tools system: `docs/develop/tools-system.md`
 - Security model: `docs/develop/security-model.md`
 - Testing: `docs/develop/testing.md`

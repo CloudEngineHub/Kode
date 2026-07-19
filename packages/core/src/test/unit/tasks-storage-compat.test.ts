@@ -11,6 +11,11 @@ import {
   updateTask,
 } from '#core/utils/taskStorage'
 
+function restoreEnv(name: string, value: string | undefined): void {
+  if (value === undefined) delete process.env[name]
+  else process.env[name] = value
+}
+
 describe('tasks storage compat', () => {
   test('createTask picks next id across legacy store and listTasks merges', () => {
     const previousHome = process.env.HOME
@@ -58,9 +63,9 @@ describe('tasks storage compat', () => {
       const tasks = listTasks(taskListId)
       expect(tasks.map(t => t.id)).toEqual(['1', '2'])
     } finally {
-      process.env.HOME = previousHome
-      process.env.KODE_CONFIG_DIR = previousKodeConfigDir
-      process.env.CLAUDE_CONFIG_DIR = previousClaudeConfigDir
+      restoreEnv('HOME', previousHome)
+      restoreEnv('KODE_CONFIG_DIR', previousKodeConfigDir)
+      restoreEnv('CLAUDE_CONFIG_DIR', previousClaudeConfigDir)
       rmSync(homeDir, { recursive: true, force: true })
       rmSync(kodeDir, { recursive: true, force: true })
       rmSync(claudeDir, { recursive: true, force: true })
@@ -112,9 +117,9 @@ describe('tasks storage compat', () => {
       const task = getTask('1', taskListId)
       expect(task?.status).toBe('completed')
     } finally {
-      process.env.HOME = previousHome
-      process.env.KODE_CONFIG_DIR = previousKodeConfigDir
-      process.env.CLAUDE_CONFIG_DIR = previousClaudeConfigDir
+      restoreEnv('HOME', previousHome)
+      restoreEnv('KODE_CONFIG_DIR', previousKodeConfigDir)
+      restoreEnv('CLAUDE_CONFIG_DIR', previousClaudeConfigDir)
       rmSync(homeDir, { recursive: true, force: true })
       rmSync(kodeDir, { recursive: true, force: true })
       rmSync(claudeDir, { recursive: true, force: true })
@@ -162,9 +167,9 @@ describe('tasks storage compat', () => {
       expect(getTask('1', taskListId)).toBe(null)
       expect(listTasks(taskListId).map(t => t.id)).toEqual([])
     } finally {
-      process.env.HOME = previousHome
-      process.env.KODE_CONFIG_DIR = previousKodeConfigDir
-      process.env.CLAUDE_CONFIG_DIR = previousClaudeConfigDir
+      restoreEnv('HOME', previousHome)
+      restoreEnv('KODE_CONFIG_DIR', previousKodeConfigDir)
+      restoreEnv('CLAUDE_CONFIG_DIR', previousClaudeConfigDir)
       rmSync(homeDir, { recursive: true, force: true })
       rmSync(kodeDir, { recursive: true, force: true })
       rmSync(claudeDir, { recursive: true, force: true })

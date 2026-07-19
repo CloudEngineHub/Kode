@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import type {
   CompletionContext,
@@ -37,6 +37,7 @@ export function __computeAutoTriggerActionForTests(args: {
   previousInput: string
   now: number
   lastInputTime: number
+  forceRefresh?: boolean
   isEnabled: boolean
   state: CompletionState
   context: CompletionContext | null
@@ -48,7 +49,7 @@ export function __computeAutoTriggerActionForTests(args: {
   suggestions?: UnifiedSuggestion[]
   context?: CompletionContext
 } {
-  if (args.previousInput === args.input) {
+  if (args.previousInput === args.input && !args.forceRefresh) {
     return {
       nextLastInput: args.previousInput,
       nextLastInputTime: args.lastInputTime,
@@ -168,6 +169,17 @@ export function __computeAutoTriggerActionForTests(args: {
   return { nextLastInput, nextLastInputTime, action: 'none' }
 }
 
+export function __getSuppressWakeDelayForTests(args: {
+  isEnabled: boolean
+  now: number
+  suppressUntil: number
+}): number | null {
+  if (!args.isEnabled) return null
+  if (args.suppressUntil <= 0) return null
+  const delay = args.suppressUntil - args.now
+  return delay > 0 ? delay : null
+}
+
 export function useUnifiedCompletionAutoTrigger(args: {
   input: string
   cursorOffset: number
@@ -183,15 +195,43 @@ export function useUnifiedCompletionAutoTrigger(args: {
 }): void {
   const lastInputRef = useRef('')
   const lastInputTimeRef = useRef(0)
+  const handledSuppressWakeTickRef = useRef(0)
+  const [suppressWakeTick, setSuppressWakeTick] = useState(0)
+
+  useEffect(() => {
+    const delay = __getSuppressWakeDelayForTests({
+      isEnabled: args.isEnabled,
+      now: Date.now(),
+      suppressUntil: args.state.suppressUntil,
+    })
+    if (delay === null) return
+
+    const timeout = setTimeout(() => {
+      setSuppressWakeTick(tick => tick + 1)
+    }, delay)
+
+    return () => clearTimeout(timeout)
+  }, [args.input, args.cursorOffset, args.isEnabled, args.state.suppressUntil])
 
   useEffect(() => {
     const now = Date.now()
     const context = args.getWordAtCursor()
+    const hasUnhandledSuppressWake =
+      suppressWakeTick !== handledSuppressWakeTickRef.current
+    const forceRefresh =
+      hasUnhandledSuppressWake &&
+      args.state.suppressUntil > 0 &&
+      now >= args.state.suppressUntil &&
+      lastInputRef.current === args.input
+    if (hasUnhandledSuppressWake && now >= args.state.suppressUntil) {
+      handledSuppressWakeTickRef.current = suppressWakeTick
+    }
     const result = __computeAutoTriggerActionForTests({
       input: args.input,
       previousInput: lastInputRef.current,
       now,
       lastInputTime: lastInputTimeRef.current,
+      forceRefresh,
       isEnabled: args.isEnabled,
       state: args.state,
       context,
@@ -209,5 +249,12 @@ export function useUnifiedCompletionAutoTrigger(args: {
     if (result.action === 'activate' && result.suggestions && result.context) {
       args.activateCompletion(result.suggestions, result.context)
     }
-  }, [args.input, args.cursorOffset, args.isEnabled, args.state.isActive])
+  }, [
+    args.input,
+    args.cursorOffset,
+    args.isEnabled,
+    args.state.isActive,
+    args.state.suppressUntil,
+    suppressWakeTick,
+  ])
 }

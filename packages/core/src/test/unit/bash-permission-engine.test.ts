@@ -3,7 +3,7 @@ import { createDefaultToolPermissionContext } from '#core/types/toolPermissionCo
 import {
   checkBashPermissions,
   checkBashPermissionsAutoAllowedBySandbox,
-} from '#core/utils/permissions/bashToolPermissionEngine'
+} from '@kode/permissions/bash'
 import { hasPermissionsToUseTool } from '#core/permissions'
 import { BashTool } from '#tools/tools/system/BashTool/BashTool'
 import {

@@ -1,8 +1,10 @@
 import OpenAI from 'openai'
 import { nanoid } from 'nanoid'
-import type { Tool } from '#core/tooling/Tool'
+import type { Tool } from '@kode/tool-interface/Tool'
 import type { AssistantMessage, UserMessage } from '#core/query'
 import { convertAnthropicMessagesToOpenAIMessages as convertAnthropicMessagesToOpenAIMessagesUtil } from '#core/utils/openaiMessageConversion'
+import { API_ERROR_MESSAGE_PREFIX } from '#core/ai/llm/constants'
+import { isOpenAIStreamDegradedResponse } from './stream'
 import { normalizeUsage } from './usage'
 
 function mapFinishReasonToStopReason(
@@ -21,11 +23,18 @@ function mapFinishReasonToStopReason(
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function getToolCalls(message: OpenAI.ChatCompletionMessage): unknown[] {
+  return Array.isArray(message.tool_calls) ? message.tool_calls : []
+}
+
 export function convertAnthropicMessagesToOpenAIMessages(
   messages: (UserMessage | AssistantMessage)[],
 ): (
-  | OpenAI.ChatCompletionMessageParam
-  | OpenAI.ChatCompletionToolMessageParam
+  OpenAI.ChatCompletionMessageParam | OpenAI.ChatCompletionToolMessageParam
 )[] {
   return convertAnthropicMessagesToOpenAIMessagesUtil(messages as any)
 }
@@ -36,13 +45,21 @@ export function convertOpenAIResponseToAnthropic(
 ): AssistantMessage['message'] {
   const normalizedUsage = normalizeUsage(response.usage)
   const contentBlocks: AssistantMessage['message']['content'] = []
+  const streamDegraded = isOpenAIStreamDegradedResponse(response)
   const message = response.choices?.[0]?.message
   if (!message) {
+    if (streamDegraded) {
+      contentBlocks.push({
+        type: 'text',
+        text: formatOpenAIStreamDegradedError(response),
+        citations: [],
+      })
+    }
     return {
       id: nanoid(),
       model: response.model ?? '<openai>',
       role: 'assistant',
-      content: [],
+      content: contentBlocks,
       stop_reason: mapFinishReasonToStopReason(
         response.choices?.[0]?.finish_reason,
       ),
@@ -52,22 +69,48 @@ export function convertOpenAIResponseToAnthropic(
     }
   }
 
-  if (message?.tool_calls) {
-    for (const toolCall of message.tool_calls) {
+  const toolCalls = getToolCalls(message)
+  const droppedToolCalls =
+    streamDegraded && toolCalls.length > 0 ? toolCalls.length : 0
+
+  if (!streamDegraded) {
+    for (const toolCall of toolCalls) {
+      if (!isRecord(toolCall)) continue
+      // Some OpenAI-compatible providers omit `type` after stream merge while
+      // still providing a function payload. Treat that as a function call.
+      const toolCallType =
+        typeof toolCall.type === 'string' ? toolCall.type : 'function'
+      if (toolCallType !== 'function') continue
       const tool = toolCall.function
-      const toolName = tool.name
-      let toolArgs = {}
-      try {
-        toolArgs = tool.arguments ? JSON.parse(tool.arguments) : {}
-      } catch (e) {
-        // Invalid JSON in tool arguments
+      if (!isRecord(tool)) continue
+      const toolName = typeof tool.name === 'string' ? tool.name.trim() : ''
+      if (!toolName) continue
+      const toolArguments =
+        typeof tool.arguments === 'string' ? tool.arguments : ''
+      let toolArgs: Record<string, unknown> = {}
+      if (toolArguments.trim()) {
+        try {
+          const parsed = JSON.parse(toolArguments)
+          if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            // Non-object arguments cannot be executed safely.
+            continue
+          }
+          toolArgs = parsed as Record<string, unknown>
+        } catch {
+          // Incomplete/invalid JSON must not become an empty-object tool call
+          // (that path silently runs tools with wrong input and stalls loops).
+          continue
+        }
       }
 
       contentBlocks.push({
         type: 'tool_use',
         input: toolArgs,
         name: toolName,
-        id: toolCall.id?.length > 0 ? toolCall.id : nanoid(),
+        id:
+          typeof toolCall.id === 'string' && toolCall.id.length > 0
+            ? toolCall.id
+            : nanoid(),
       })
     }
   }
@@ -101,6 +144,14 @@ export function convertOpenAIResponseToAnthropic(
     })
   }
 
+  if (streamDegraded) {
+    contentBlocks.push({
+      type: 'text',
+      text: formatOpenAIStreamDegradedError(response, droppedToolCalls),
+      citations: [],
+    })
+  }
+
   const finalMessage: AssistantMessage['message'] = {
     id: nanoid(),
     model: response.model ?? '<openai>',
@@ -115,4 +166,20 @@ export function convertOpenAIResponseToAnthropic(
   }
 
   return finalMessage
+}
+
+function formatOpenAIStreamDegradedError(
+  response: OpenAI.ChatCompletion,
+  droppedToolCalls = 0,
+): string {
+  const reason = isOpenAIStreamDegradedResponse(response)
+    ? response.__streamDegradationReason
+    : undefined
+  const reasonText =
+    typeof reason === 'string' && reason.length > 0 ? ` (${reason})` : ''
+  const toolText =
+    droppedToolCalls > 0
+      ? ' Partial tool calls were discarded and were not executed.'
+      : ''
+  return `${API_ERROR_MESSAGE_PREFIX}: OpenAI-compatible stream ended before a complete response${reasonText}.${toolText} Please retry.`
 }

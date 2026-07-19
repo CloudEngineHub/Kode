@@ -1,0 +1,11 @@
+{
+  "name": "@kode/permissions",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "dependencies": {
+    "@kode/config": "workspace:*",
+    "@kode/runtime": "workspace:*",
+    "@kode/tool-interface": "workspace:*"
+  }
+}

@@ -3,20 +3,37 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import {
   __resetMcpListChangedForTests,
   __setMcpClientsForTests,
+  getMCPCommands,
+  getMCPResourceTemplates,
+  getMCPResources,
   getMCPTools,
+  getMcpListChangedVersion,
   notifyMcpListChanged,
+  subscribeMcpListChanged,
 } from '#core/mcp/client'
+import {
+  clearNotifications,
+  getNotifications,
+} from '#core/services/notificationCenter'
 
 describe('MCP list_changed cache invalidation', () => {
   beforeEach(() => {
     getMCPTools.cache.clear?.()
+    getMCPCommands.cache.clear?.()
+    getMCPResources.cache.clear?.()
+    getMCPResourceTemplates.cache.clear?.()
     __resetMcpListChangedForTests()
+    clearNotifications()
   })
 
   afterEach(() => {
     __setMcpClientsForTests(null)
     getMCPTools.cache.clear?.()
+    getMCPCommands.cache.clear?.()
+    getMCPResources.cache.clear?.()
+    getMCPResourceTemplates.cache.clear?.()
     __resetMcpListChangedForTests()
+    clearNotifications()
   })
 
   test('getMCPTools refreshes after notifications/tools/list_changed', async () => {
@@ -59,5 +76,168 @@ describe('MCP list_changed cache invalidation', () => {
     const refreshed = await getMCPTools()
     expect(refreshed.map(t => t.name)).toContain('mcp__test__beta')
     expect(refreshed.map(t => t.name)).not.toContain('mcp__test__alpha')
+  })
+
+  test('getMCPCommands refreshes after notifications/prompts/list_changed', async () => {
+    let promptNames = ['alpha']
+
+    const client: any = {
+      request: async (req: any) => {
+        if (req?.method === 'prompts/list') {
+          return {
+            prompts: promptNames.map(name => ({
+              name,
+              description: `${name} prompt`,
+            })),
+          }
+        }
+        throw new Error(`Unexpected method: ${String(req?.method)}`)
+      },
+    }
+
+    __setMcpClientsForTests([
+      {
+        type: 'connected',
+        name: 'test',
+        client,
+        capabilities: { prompts: { listChanged: true } },
+      } as any,
+    ])
+
+    const first = await getMCPCommands()
+    expect(first.map(prompt => prompt.name)).toContain('mcp__test__alpha')
+
+    promptNames = ['beta']
+    const stillCached = await getMCPCommands()
+    expect(stillCached.map(prompt => prompt.name)).toContain('mcp__test__alpha')
+    expect(stillCached.map(prompt => prompt.name)).not.toContain(
+      'mcp__test__beta',
+    )
+
+    notifyMcpListChanged({ kind: 'prompts', server: 'test' })
+
+    const refreshed = await getMCPCommands()
+    expect(refreshed.map(prompt => prompt.name)).toContain('mcp__test__beta')
+    expect(refreshed.map(prompt => prompt.name)).not.toContain(
+      'mcp__test__alpha',
+    )
+  })
+
+  test('getMCPResources refreshes after notifications/resources/list_changed', async () => {
+    let resourceNames = ['alpha']
+
+    const client: any = {
+      request: async (req: any) => {
+        if (req?.method === 'resources/list') {
+          return {
+            resources: resourceNames.map(name => ({
+              uri: `file:///${name}`,
+              name,
+            })),
+          }
+        }
+        throw new Error(`Unexpected method: ${String(req?.method)}`)
+      },
+    }
+
+    __setMcpClientsForTests([
+      {
+        type: 'connected',
+        name: 'test',
+        client,
+        capabilities: { resources: { listChanged: true } },
+      } as any,
+    ])
+
+    const first = await getMCPResources()
+    expect(first.map(resource => resource.name)).toContain('alpha')
+
+    resourceNames = ['beta']
+    const stillCached = await getMCPResources()
+    expect(stillCached.map(resource => resource.name)).toContain('alpha')
+    expect(stillCached.map(resource => resource.name)).not.toContain('beta')
+
+    notifyMcpListChanged({ kind: 'resources', server: 'test' })
+
+    const refreshed = await getMCPResources()
+    expect(refreshed.map(resource => resource.name)).toContain('beta')
+    expect(refreshed.map(resource => resource.name)).not.toContain('alpha')
+  })
+
+  test('getMCPResourceTemplates refreshes after notifications/resources/list_changed', async () => {
+    let templateNames = ['alpha']
+
+    const client: any = {
+      request: async (req: any) => {
+        if (req?.method === 'resources/templates/list') {
+          return {
+            resourceTemplates: templateNames.map(name => ({
+              uriTemplate: `file:///{${name}}`,
+              name,
+            })),
+          }
+        }
+        throw new Error(`Unexpected method: ${String(req?.method)}`)
+      },
+    }
+
+    __setMcpClientsForTests([
+      {
+        type: 'connected',
+        name: 'test',
+        client,
+        capabilities: { resources: { listChanged: true } },
+      } as any,
+    ])
+
+    const first = await getMCPResourceTemplates()
+    expect(first.map(template => template.name)).toContain('alpha')
+
+    templateNames = ['beta']
+    const stillCached = await getMCPResourceTemplates()
+    expect(stillCached.map(template => template.name)).toContain('alpha')
+    expect(stillCached.map(template => template.name)).not.toContain('beta')
+
+    notifyMcpListChanged({ kind: 'resources', server: 'test' })
+
+    const refreshed = await getMCPResourceTemplates()
+    expect(refreshed.map(template => template.name)).toContain('beta')
+    expect(refreshed.map(template => template.name)).not.toContain('alpha')
+  })
+
+  test('records list_changed events in the notification center', () => {
+    notifyMcpListChanged({ kind: 'tools', server: 'test' })
+
+    expect(getNotifications()).toHaveLength(1)
+    expect(getNotifications()[0]).toMatchObject({
+      title: 'MCP list changed',
+      message: 'test: tools',
+      kind: 'info',
+      source: 'system',
+      channel: 'mcp:list-changed',
+    })
+  })
+
+  test('coalesces repeated list_changed notifications without dropping events', () => {
+    const events: unknown[] = []
+    const unsubscribe = subscribeMcpListChanged(event => {
+      events.push(event)
+    })
+
+    notifyMcpListChanged({ kind: 'tools', server: 'test' })
+    notifyMcpListChanged({ kind: 'tools', server: 'test' })
+    unsubscribe()
+
+    expect(getMcpListChangedVersion('tools')).toBe(2)
+    expect(events).toEqual([
+      { kind: 'tools', server: 'test' },
+      { kind: 'tools', server: 'test' },
+    ])
+    expect(getNotifications()).toHaveLength(1)
+    expect(getNotifications()[0]).toMatchObject({
+      id: 'mcp:list-changed:test:tools',
+      message: 'test: tools',
+      channel: 'mcp:list-changed',
+    })
   })
 })

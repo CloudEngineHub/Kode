@@ -5,23 +5,44 @@ import { logError } from '#core/utils/log'
 import { getModelManager } from '#core/utils/model'
 import type { UnifiedSuggestion } from '#cli-utils/completion/types'
 
-export function useModelSuggestions(): UnifiedSuggestion[] {
+type ModelSuggestionsArgs = {
+  enabled: boolean
+  reloadKey?: number
+  getModelNames?: () => string[]
+}
+
+export function __buildModelSuggestionsForTests(
+  modelIds: string[],
+): UnifiedSuggestion[] {
+  return modelIds.map(modelId => ({
+    value: `ask-${modelId}`,
+    displayValue: `ask-${modelId} :: Consult ${modelId} for expert opinion and specialized analysis`,
+    type: 'ask',
+    score: 90,
+    metadata: { modelId },
+  }))
+}
+
+export function useModelSuggestions(args: ModelSuggestionsArgs): {
+  suggestions: UnifiedSuggestion[]
+  isLoading: boolean
+} {
+  const { enabled, getModelNames, reloadKey = 0 } = args
   const [modelSuggestions, setModelSuggestions] = useState<UnifiedSuggestion[]>(
     [],
   )
+  const [loadedKey, setLoadedKey] = useState<number | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const hasLoaded = loadedKey === reloadKey
 
   useEffect(() => {
-    try {
-      const modelManager = getModelManager()
-      const allModels = modelManager.getAllAvailableModelNames()
+    if (!enabled || hasLoaded || isLoading) return
 
-      const suggestions: UnifiedSuggestion[] = allModels.map(modelId => ({
-        value: `ask-${modelId}`,
-        displayValue: `🦜 ask-${modelId} :: Consult ${modelId} for expert opinion and specialized analysis`,
-        type: 'ask',
-        score: 90,
-        metadata: { modelId },
-      }))
+    setIsLoading(true)
+    try {
+      const allModels =
+        getModelNames?.() ?? getModelManager().getAllAvailableModelNames()
+      const suggestions = __buildModelSuggestionsForTests(allModels)
 
       setModelSuggestions(suggestions)
     } catch (error) {
@@ -30,8 +51,18 @@ export function useModelSuggestions(): UnifiedSuggestion[] {
         error: error instanceof Error ? error.message : String(error),
       })
       setModelSuggestions([])
+    } finally {
+      setLoadedKey(reloadKey)
+      setIsLoading(false)
     }
-  }, [])
+  }, [enabled, getModelNames, hasLoaded, isLoading, reloadKey])
 
-  return modelSuggestions
+  if (!enabled) {
+    return { suggestions: [], isLoading: false }
+  }
+
+  return {
+    suggestions: modelSuggestions,
+    isLoading: !hasLoaded || isLoading,
+  }
 }

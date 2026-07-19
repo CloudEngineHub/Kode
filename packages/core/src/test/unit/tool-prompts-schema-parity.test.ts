@@ -4,6 +4,10 @@ import { TaskOutputTool } from '#tools/tools/system/TaskOutputTool/TaskOutputToo
 import { TaskStopTool } from '#tools/tools/system/TaskStopTool/TaskStopTool'
 import { TodoWriteTool } from '#tools/tools/interaction/TodoWriteTool/TodoWriteTool'
 import { WebFetchTool } from '#tools/tools/network/WebFetchTool/WebFetchTool'
+import {
+  getGitCommitMessageFormattingPrompt,
+  getPullRequestBodyFormattingPrompt,
+} from '#tools/tools/system/BashTool/prompt'
 
 describe('Tool prompt/description/schema parity', () => {
   test('BashTool description uses input.description or falls back', async () => {
@@ -30,6 +34,36 @@ describe('Tool prompt/description/schema parity', () => {
     expect(prompt).toContain('# Committing changes with git')
     expect(prompt).toContain('# Creating pull requests')
     expect(prompt).toContain('Git Safety Protocol:')
+  })
+
+  test('BashTool git examples use file-based multiline input on Windows', () => {
+    const commitPrompt = getGitCommitMessageFormattingPrompt(
+      'Generated with Kode',
+      'win32',
+    )
+    const prPrompt = getPullRequestBodyFormattingPrompt(
+      'Generated with Kode',
+      'win32',
+    )
+
+    expect(commitPrompt).toContain('git commit --file')
+    expect(commitPrompt).toContain('Set-Content -LiteralPath $msg')
+    expect(commitPrompt).not.toContain("cat <<'EOF'")
+    expect(prPrompt).toContain(
+      'gh pr create --title "the pr title" --body-file',
+    )
+    expect(prPrompt).toContain('Set-Content -LiteralPath $body')
+    expect(prPrompt).not.toContain("cat <<'EOF'")
+  })
+
+  test('BashTool git examples keep heredocs on POSIX platforms', () => {
+    const commitPrompt = getGitCommitMessageFormattingPrompt('', 'linux')
+    const prPrompt = getPullRequestBodyFormattingPrompt('', 'linux')
+
+    expect(commitPrompt).toContain("cat <<'EOF'")
+    expect(prPrompt).toContain("cat <<'EOF'")
+    expect(commitPrompt).not.toContain('git commit --file')
+    expect(prPrompt).not.toContain('--body-file')
   })
 
   test('BashTool schema description includes examples', () => {

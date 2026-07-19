@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { type Key } from '#ui-ink/hooks/useKeypress'
 import { useDoublePress } from './useDoublePress'
 import { Cursor } from '#cli-utils/Cursor'
@@ -8,7 +8,7 @@ import type {
   UseTextInputResult,
 } from './useTextInput.types'
 import { mapInput } from './useTextInputMapping'
-import { tryImagePaste } from './useTextInputTryImagePaste'
+import { resolveImagePastePlaceholder } from './useTextInputTryImagePaste'
 
 type MaybeCursor = void | Cursor
 
@@ -19,7 +19,6 @@ const DEL_CODE = 127 // \x7f
 // IME (especially CJK) can emit cursor-navigation-like sequences around commits.
 // A slightly longer guard helps prevent cursor jumps / wrong insertion points.
 const IME_NAVIGATION_GUARD_MS = 150
-const IME_ENTER_GUARD_MS = 150
 
 // Helper to check if input is a backspace character
 function isBackspaceChar(input: string): boolean {
@@ -53,9 +52,19 @@ export function useTextInput({
   const setOffset = onOffsetChange
   const cursorRef = useRef(Cursor.fromText(originalValue, columns, offset))
   const lastComplexInsertRef = useRef(0)
-  const lastNonAsciiInsertRef = useRef(0)
-  const [imagePasteErrorTimeout, setImagePasteErrorTimeout] =
-    useState<NodeJS.Timeout | null>(null)
+  const imagePasteInFlightRef = useRef(false)
+  const isMountedRef = useRef(true)
+  const imagePasteErrorTimeoutRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null)
+
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+      maybeClearImagePasteErrorTimeout({ hideMessage: false })
+    }
+  }, [])
 
   // Keep the cursor model in sync with external value/offset/columns updates.
   // Important: avoid recomputing wrapped layout unless the text or column count changed.
@@ -70,13 +79,25 @@ export function useTextInput({
     cursorRef.current = new Cursor(currentCursor.measuredText, offset)
   }
 
-  function maybeClearImagePasteErrorTimeout() {
-    if (!imagePasteErrorTimeout) {
+  function maybeClearImagePasteErrorTimeout(
+    options: { hideMessage?: boolean } = {},
+  ) {
+    if (!imagePasteErrorTimeoutRef.current) {
       return
     }
-    clearTimeout(imagePasteErrorTimeout)
-    setImagePasteErrorTimeout(null)
-    onMessage?.(false)
+    clearTimeout(imagePasteErrorTimeoutRef.current)
+    imagePasteErrorTimeoutRef.current = null
+    if (options.hideMessage !== false && isMountedRef.current) {
+      onMessage?.(false)
+    }
+  }
+
+  function scheduleImagePasteErrorClear() {
+    maybeClearImagePasteErrorTimeout({ hideMessage: false })
+    imagePasteErrorTimeoutRef.current = setTimeout(() => {
+      imagePasteErrorTimeoutRef.current = null
+      if (isMountedRef.current) onMessage?.(false)
+    }, 4000)
   }
 
   function applyCursor(nextCursor: Cursor) {
@@ -138,15 +159,29 @@ export function useTextInput({
     return currentCursor.del()
   }
 
-  function handleImagePaste() {
-    return tryImagePaste({
-      cursor: cursorRef.current,
+  function handleImagePaste(): MaybeCursor {
+    if (imagePasteInFlightRef.current) {
+      return cursorRef.current
+    }
+
+    imagePasteInFlightRef.current = true
+    void resolveImagePastePlaceholder({
       mask,
       onImagePaste,
       onMessage,
-      setImagePasteErrorTimeout,
       clearImagePasteErrorTimeout: maybeClearImagePasteErrorTimeout,
+      scheduleImagePasteErrorClear,
     })
+      .then(placeholder => {
+        imagePasteInFlightRef.current = false
+        if (!isMountedRef.current || !placeholder) return
+        applyCursor(cursorRef.current.insert(placeholder))
+      })
+      .catch(() => {
+        imagePasteInFlightRef.current = false
+      })
+
+    return cursorRef.current
   }
 
   function getCursor(): Cursor {
@@ -197,7 +232,7 @@ export function useTextInput({
 
   function handleEnter(key: Key) {
     if (!multiline) {
-      onSubmit?.(originalValue)
+      onSubmit?.(getCursor().text)
       return
     }
 
@@ -235,18 +270,7 @@ export function useTextInput({
       return getCursor().insert('\n')
     }
 
-    // Heuristic IME guard: many CJK IMEs commit text with Enter, which can also
-    // reach the app as a Return keypress. If we just inserted non-ASCII text
-    // very recently, treat this Enter as "commit" (no-op) rather than submit.
-    const now = Date.now()
-    if (
-      lastNonAsciiInsertRef.current > 0 &&
-      now - lastNonAsciiInsertRef.current < IME_ENTER_GUARD_MS
-    ) {
-      return
-    }
-
-    onSubmit?.(originalValue)
+    onSubmit?.(getCursor().text)
   }
 
   function shouldDisableCursorMovement(): boolean {
@@ -317,9 +341,6 @@ export function useTextInput({
     if (isInsertable) {
       const now = Date.now()
       const hasNonAscii = /[^\x00-\x7f]/.test(input)
-      if (hasNonAscii) {
-        lastNonAsciiInsertRef.current = now
-      }
       const isComplexInsert = input.length > 1 || hasNonAscii
       if (isComplexInsert) {
         lastComplexInsertRef.current = now

@@ -41,6 +41,7 @@ export function CostThresholdDialog({ onDone }: Props): React.ReactNode {
           </Box>
           <Box>
             <Select
+              focusScope="cost-threshold"
               options={[
                 {
                   value: 'ok',

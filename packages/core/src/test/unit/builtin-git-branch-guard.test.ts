@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { runBuiltinPreToolUseGuards } from '#core/hooks/builtin/preToolUse'
+import { runBuiltinPreToolUseGuards } from '@kode/hooks/builtin/preToolUse'
 
 function sanitizeWorkspaceKey(value: string): string {
   return value.replace(/[^a-zA-Z0-9_-]/g, '-')

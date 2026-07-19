@@ -78,6 +78,23 @@ export function makeSdkInitMessage(args: {
   }
 }
 
+export function makeSdkStreamEventMessage(args: {
+  sessionId: string
+  event: unknown
+  parentToolUseId?: string | null
+  uuid?: string
+}): SdkMessage {
+  return {
+    type: 'stream_event',
+    event: args.event,
+    session_id: args.sessionId,
+    ...(args.parentToolUseId !== undefined
+      ? { parent_tool_use_id: args.parentToolUseId }
+      : {}),
+    ...(args.uuid ? { uuid: args.uuid } : {}),
+  }
+}
+
 export function makeSdkResultMessage(args: {
   sessionId: string
   result?: string

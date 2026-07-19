@@ -1,7 +1,7 @@
 import { Message } from '#core/query'
 import { estimateTokens } from './tokens'
 import { getMessagesSetter } from '#core/messages'
-import { getContext } from '#core/context'
+import { getContext } from '@kode/context'
 import { getCodeStyle } from '#core/utils/style'
 import { resetFileFreshnessSession } from '#core/services/fileFreshness'
 import {
@@ -15,10 +15,7 @@ import { getModelManager } from './model'
 import { debug as debugLogger } from '#core/utils/debugLogger'
 import { logError } from '#core/utils/log'
 import { createAnthropicUsage } from '#core/utils/anthropic'
-import {
-  getHookTranscriptPath,
-  runPreCompactHooks,
-} from '#core/utils/kodeHooks'
+import { getHookTranscriptPath, runPreCompactHooks } from '@kode/hooks'
 import {
   formatCompactionMcpSnapshot,
   formatCompactionSkillCommandSnapshot,
@@ -64,6 +61,10 @@ function getActiveConversationModelPointer(toolUseContext: any): string {
   const raw = toolUseContext?.options?.model
   if (typeof raw === 'string' && raw.trim()) return raw.trim()
   return 'main'
+}
+
+export function updateAutoCompactedMessages(messages: Message[]): void {
+  getMessagesSetter()?.(messages, { preserveTranscript: true })
 }
 
 const COMPRESSION_PROMPT_BASE = `Please provide a comprehensive summary of our conversation structured as follows:
@@ -186,9 +187,10 @@ export async function checkAutoCompact(
       ? [...compactedHistory, pendingUserMessage]
       : compactedHistory
 
-    // Replace the visible transcript in interactive mode so the user sees the
-    // new compressed context (and we keep the pending prompt intact).
-    getMessagesSetter()?.(compactedMessages)
+    // Keep terminal scrollback append-only while the model context is replaced.
+    // Remounting Ink's Static transcript here moves a user who is reading older
+    // output and can make the current viewport appear to disappear.
+    updateAutoCompactedMessages(compactedMessages)
 
     return {
       messages: compactedMessages,

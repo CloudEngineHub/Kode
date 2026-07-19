@@ -1,24 +1,37 @@
 import { Box, Static, Text, type DOMElement, measureElement } from 'ink'
 import * as React from 'react'
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import type { ToolUseConfirm } from '#ui-ink/components/permissions/PermissionRequest'
 import { PermissionRequest } from '#ui-ink/components/permissions/PermissionRequest'
 import PromptInput from '#ui-ink/components/PromptInput'
 import { RequestStatusIndicator } from '#ui-ink/components/RequestStatusIndicator'
+import {
+  buildRunningTasksLayoutSignature,
+  RunningTasksPanel,
+} from '#ui-ink/components/RunningTasksPanel'
 import { CostThresholdDialog } from '#ui-ink/components/CostThresholdDialog'
 import { BinaryFeedback } from '#ui-ink/components/binary-feedback/BinaryFeedback'
 import { MessageSelector } from '#ui-ink/components/MessageSelector'
 import { PermissionProvider } from '#ui-ink/contexts/PermissionContext'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
+import { useBackgroundTaskSnapshots } from '#ui-ink/hooks/useBackgroundTaskSnapshots'
 import { useFlickerDetector } from '#ui-ink/hooks/useFlickerDetector'
+import {
+  computeResponsiveRows,
+  normalizeTerminalDimension,
+} from '#ui-ink/primitives/layout/viewportRows'
+import { countWrappedLines } from '#cli-utils/Cursor'
 import type { NormalizedMessage } from '#core/utils/messages'
 import type { Message as MessageType } from '#core/query'
 import type { Tool } from '#core/tooling/Tool'
+import { getTheme } from '#core/utils/theme'
 import type { TranscriptItem } from './useTranscriptItems'
 import type { BinaryFeedbackContext } from './types'
 import { TransientViewportProvider } from '#ui-ink/contexts/TransientViewportContext'
+import { AssistantStreamPreview } from './AssistantStreamPreview'
+import type { AssistantStreamStore } from './assistantStreamStore'
 
 const VIEWPORT_SAFE_MARGIN_ROWS = 1
 const MEASURE_DEBOUNCE_MS = 400
@@ -27,9 +40,13 @@ export function REPLView({
   conversationKey,
   safeMode,
   debug,
-  forkNumber,
+  staticOutputEpoch,
   staticItems,
+  startupHeader,
+  startupHeaderKey,
+  showStartupHeader = false,
   transientItems,
+  assistantStreamStore,
   toolJSX,
   toolUseConfirm,
   setToolUseConfirm,
@@ -55,9 +72,13 @@ export function REPLView({
   conversationKey: string
   safeMode: boolean
   debug: boolean
-  forkNumber: number
+  staticOutputEpoch: number
   staticItems: TranscriptItem[]
+  startupHeader?: ReactNode
+  startupHeaderKey?: string
+  showStartupHeader?: boolean
   transientItems: TranscriptItem[]
+  assistantStreamStore: AssistantStreamStore
   toolJSX: {
     jsx: ReactNode | null
     shouldHidePromptInput: boolean
@@ -88,8 +109,12 @@ export function REPLView({
   const mainControlsRef = useRef<DOMElement | null>(null)
   const messageSelectorRef = useRef<DOMElement | null>(null)
   const lastMeasureKeyRef = useRef('')
-  const lastMeasureAtRef = useRef(0)
+  const scheduledMeasureKeyRef = useRef('')
+  const measureTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { rows, columns } = useTerminalSize()
+  const backgroundTasks = useBackgroundTaskSnapshots()
+  const normalizedRows = normalizeTerminalDimension(rows, 0)
+  const theme = getTheme()
   useFlickerDetector(
     rootUiRef,
     rows,
@@ -101,77 +126,277 @@ export function REPLView({
   const hasToolUseConfirm = Boolean(toolUseConfirm)
   const hasBinaryFeedback = Boolean(binaryFeedbackContext)
   const hasToast = Boolean(toast)
+  const promptInputMeasureSignature = useMemo(() => {
+    if (!shouldShowPromptInput) return ''
+
+    const textInputColumns = Math.max(1, columns - 6)
+    const textInputMaxHeight = computeResponsiveRows({
+      rows,
+      minRows: 1,
+      maxRows: 8,
+      ratio: 1 / 3,
+    })
+    const inputLineCount = countWrappedLines(
+      promptInputProps.input,
+      textInputColumns,
+      textInputMaxHeight + 1,
+    )
+    const inputBoxHeight = Math.min(inputLineCount, textInputMaxHeight) + 2
+
+    return [
+      inputBoxHeight,
+      promptInputProps.mode,
+      promptInputProps.submitCount,
+    ].join(':')
+  }, [
+    columns,
+    promptInputProps.input,
+    promptInputProps.mode,
+    promptInputProps.submitCount,
+    rows,
+    shouldShowPromptInput,
+  ])
+  const runningTasksLayoutSignature = useMemo(
+    () => buildRunningTasksLayoutSignature(backgroundTasks),
+    [backgroundTasks],
+  )
+  const shouldRenderStartupHeader =
+    Boolean(startupHeader) &&
+    showStartupHeader &&
+    normalizedRows > 4 &&
+    !toolJSX &&
+    !toolUseConfirm &&
+    !isMessageSelectorVisible &&
+    !binaryFeedbackContext &&
+    !showingCostDialog
+  // The startup header can grow after mount when asynchronous state (such as
+  // the update check or MCP connection status) resolves. Keep that identity in
+  // the control measurement key so the stream budget is recalculated.
+  const startupHeaderMeasureSignature = shouldRenderStartupHeader
+    ? (startupHeaderKey ?? 'visible')
+    : ''
+  const mountedStaticOutputEpochRef = useRef<number | null>(null)
+  const staticOutputKey = `static-${staticOutputEpoch}`
+  const shouldRenderStartupHeaderInControls = shouldRenderStartupHeader
 
   const [mainControlsHeight, setMainControlsHeight] = useState(0)
   const [messageSelectorHeight, setMessageSelectorHeight] = useState(0)
-
-  useLayoutEffect(() => {
-    if (rows <= 0 || columns <= 0) return
-    const measureKey = [
+  const [isLayoutMeasurementPending, setIsLayoutMeasurementPending] =
+    useState(false)
+  const layoutMeasureKey = useMemo(
+    () =>
+      [
+        rows,
+        columns,
+        isMessageSelectorVisible ? 1 : 0,
+        isFullScreenToolView ? 1 : 0,
+        hasToolJSX ? 1 : 0,
+        hasToolUseConfirm ? 1 : 0,
+        hasBinaryFeedback ? 1 : 0,
+        showingCostDialog ? 1 : 0,
+        shouldShowPromptInput ? 1 : 0,
+        hasToast ? 1 : 0,
+        runningTasksLayoutSignature,
+        startupHeaderMeasureSignature,
+        isLoading ? 1 : 0,
+        promptInputMeasureSignature,
+        messageSelectorMessages.length,
+      ].join(':'),
+    [
       rows,
       columns,
-      isMessageSelectorVisible ? 1 : 0,
-      isFullScreenToolView ? 1 : 0,
-      hasToolJSX ? 1 : 0,
-      hasToolUseConfirm ? 1 : 0,
-      hasBinaryFeedback ? 1 : 0,
-      showingCostDialog ? 1 : 0,
-      shouldShowPromptInput ? 1 : 0,
-      hasToast ? 1 : 0,
-      isLoading ? 1 : 0,
+      isMessageSelectorVisible,
+      isFullScreenToolView,
+      hasToolJSX,
+      hasToolUseConfirm,
+      hasBinaryFeedback,
+      showingCostDialog,
+      shouldShowPromptInput,
+      hasToast,
+      runningTasksLayoutSignature,
+      startupHeaderMeasureSignature,
+      isLoading,
+      promptInputMeasureSignature,
       messageSelectorMessages.length,
-    ].join(':')
+    ],
+  )
+  const isLayoutMeasurementStale =
+    lastMeasureKeyRef.current !== '' &&
+    layoutMeasureKey !== lastMeasureKeyRef.current
 
-    const now = Date.now()
-    if (
-      measureKey === lastMeasureKeyRef.current &&
-      now - lastMeasureAtRef.current < 200
-    ) {
+  useEffect(() => {
+    if (rows <= 0 || columns <= 0) {
+      setIsLayoutMeasurementPending(prev => (prev ? false : prev))
       return
     }
 
-    lastMeasureKeyRef.current = measureKey
-    lastMeasureAtRef.current = now
-
-    if (mainControlsRef.current) {
-      const measured = measureElement(mainControlsRef.current).height
-      setMainControlsHeight(prev => (prev === measured ? prev : measured))
-    } else {
-      setMainControlsHeight(prev => (prev === 0 ? prev : 0))
+    if (
+      layoutMeasureKey === lastMeasureKeyRef.current &&
+      measureTimerRef.current === null
+    ) {
+      setIsLayoutMeasurementPending(prev => (prev ? false : prev))
+      return
     }
 
-    if (messageSelectorRef.current) {
-      const measured = measureElement(messageSelectorRef.current).height
-      setMessageSelectorHeight(prev => (prev === measured ? prev : measured))
-    } else {
-      setMessageSelectorHeight(prev => (prev === 0 ? prev : 0))
+    if (measureTimerRef.current) {
+      clearTimeout(measureTimerRef.current)
+      measureTimerRef.current = null
     }
-  }, [
-    rows,
-    columns,
-    isMessageSelectorVisible,
-    isFullScreenToolView,
-    hasToolJSX,
-    hasToolUseConfirm,
-    hasBinaryFeedback,
-    showingCostDialog,
-    shouldShowPromptInput,
-    hasToast,
-    isLoading,
-    messageSelectorMessages.length,
-  ])
 
+    scheduledMeasureKeyRef.current = layoutMeasureKey
+    if (lastMeasureKeyRef.current !== '') {
+      setIsLayoutMeasurementPending(prev => (prev ? prev : true))
+    }
+    measureTimerRef.current = setTimeout(() => {
+      measureTimerRef.current = null
+      if (scheduledMeasureKeyRef.current !== layoutMeasureKey) return
+      lastMeasureKeyRef.current = layoutMeasureKey
+
+      if (mainControlsRef.current) {
+        const measured = measureElement(mainControlsRef.current).height
+        setMainControlsHeight(prev => (prev === measured ? prev : measured))
+      } else {
+        setMainControlsHeight(prev => (prev === 0 ? prev : 0))
+      }
+
+      if (messageSelectorRef.current) {
+        const measured = measureElement(messageSelectorRef.current).height
+        setMessageSelectorHeight(prev => (prev === measured ? prev : measured))
+      } else {
+        setMessageSelectorHeight(prev => (prev === 0 ? prev : 0))
+      }
+
+      setIsLayoutMeasurementPending(prev => (prev ? false : prev))
+    }, MEASURE_DEBOUNCE_MS)
+
+    return () => {
+      if (measureTimerRef.current) {
+        clearTimeout(measureTimerRef.current)
+        measureTimerRef.current = null
+      }
+    }
+  }, [rows, columns, layoutMeasureKey])
+
+  const isMinimizedViewport = normalizedRows <= 0
+  const isMicroViewport = normalizedRows > 0 && normalizedRows <= 4
   const transientMaxHeight = Math.max(
-    1,
-    rows -
+    0,
+    normalizedRows -
       mainControlsHeight -
       messageSelectorHeight -
       VIEWPORT_SAFE_MARGIN_ROWS,
   )
+  const canShowTransientRegion =
+    !isLayoutMeasurementStale &&
+    !isLayoutMeasurementPending &&
+    !isMicroViewport &&
+    transientMaxHeight > 0
+  const showRequestStatus =
+    !isMicroViewport &&
+    !toolJSX &&
+    !toolUseConfirm &&
+    !binaryFeedbackContext &&
+    isLoading
   const transientViewportValue = useMemo(
     () => ({ maxHeight: transientMaxHeight }),
     [transientMaxHeight],
   )
+  const shouldRenderMicroPrompt =
+    !toolJSX &&
+    !toolUseConfirm &&
+    !isMessageSelectorVisible &&
+    !binaryFeedbackContext &&
+    !showingCostDialog &&
+    !toolJSX?.shouldHidePromptInput &&
+    shouldShowPromptInput
+  const microStatus = toolUseConfirm
+    ? 'Permission request - expand terminal'
+    : toolJSX
+      ? 'Tool view active - expand terminal'
+      : isMessageSelectorVisible
+        ? 'Message selector - expand terminal'
+        : binaryFeedbackContext
+          ? 'Feedback prompt - expand terminal'
+          : showingCostDialog
+            ? 'Cost notice - expand terminal'
+            : isLoading
+              ? 'Working... Esc to interrupt'
+              : null
+  const hasStaticOutput = staticItems.length > 0
+  const shouldMountStaticOutputNormally =
+    !isMinimizedViewport &&
+    !isMicroViewport &&
+    !isFullScreenToolView &&
+    !toolUseConfirm &&
+    hasStaticOutput
+  if (shouldMountStaticOutputNormally) {
+    mountedStaticOutputEpochRef.current = staticOutputEpoch
+  }
+  const shouldPreserveStaticOutputInConstrainedViewport =
+    (isMinimizedViewport || isMicroViewport) &&
+    !isFullScreenToolView &&
+    !toolUseConfirm &&
+    hasStaticOutput &&
+    mountedStaticOutputEpochRef.current === staticOutputEpoch
+  const shouldRenderStaticOutput =
+    shouldMountStaticOutputNormally ||
+    shouldPreserveStaticOutputInConstrainedViewport
+
+  if (isMinimizedViewport) {
+    return (
+      <TransientViewportProvider value={transientViewportValue}>
+        <PermissionProvider
+          conversationKey={conversationKey}
+          isBypassPermissionsModeAvailable={!safeMode}
+        >
+          <Box ref={rootUiRef} flexDirection="column" width="100%">
+            {shouldRenderStaticOutput && (
+              <Static key={staticOutputKey} items={staticItems}>
+                {(item: TranscriptItem) => item.jsx}
+              </Static>
+            )}
+          </Box>
+        </PermissionProvider>
+      </TransientViewportProvider>
+    )
+  }
+
+  if (isMicroViewport) {
+    return (
+      <TransientViewportProvider value={transientViewportValue}>
+        <PermissionProvider
+          conversationKey={conversationKey}
+          isBypassPermissionsModeAvailable={!safeMode}
+        >
+          <Box
+            ref={rootUiRef}
+            flexDirection="column"
+            height={normalizedRows}
+            overflow="hidden"
+            width="100%"
+          >
+            {shouldRenderStaticOutput && (
+              <Static key={staticOutputKey} items={staticItems}>
+                {(item: TranscriptItem) => item.jsx}
+              </Static>
+            )}
+            {microStatus && (
+              <Text dimColor wrap="truncate-end">
+                {microStatus}
+              </Text>
+            )}
+            {shouldRenderMicroPrompt && (
+              <PromptInput
+                key={`prompt-${conversationKey}`}
+                {...promptInputProps}
+                suppressStatusLine
+              />
+            )}
+          </Box>
+        </PermissionProvider>
+      </TransientViewportProvider>
+    )
+  }
 
   return (
     <TransientViewportProvider value={transientViewportValue}>
@@ -183,34 +408,66 @@ export function REPLView({
           <Box ref={rootUiRef} flexDirection="column" width="100%">
             {toolJSX.jsx}
           </Box>
+        ) : toolUseConfirm ? (
+          <Box ref={rootUiRef} flexDirection="column" width="100%">
+            <PermissionRequest
+              toolUseConfirm={toolUseConfirm}
+              onDone={() => setToolUseConfirm(null)}
+              verbose={verbose}
+            />
+          </Box>
         ) : (
           <Box ref={rootUiRef} flexDirection="column" width="100%">
-            <Static key={`static-${forkNumber}`} items={staticItems}>
-              {(item: TranscriptItem) => item.jsx}
-            </Static>
+            {shouldRenderStaticOutput && (
+              <Static key={staticOutputKey} items={staticItems}>
+                {(item: TranscriptItem) => item.jsx}
+              </Static>
+            )}
 
-            <Box flexDirection="column" width="100%">
-              {transientItems.map(item => item.jsx)}
-              {/* Status indicator at bottom of messages, above controls */}
-              {!toolJSX &&
-                !toolUseConfirm &&
-                !binaryFeedbackContext &&
-                isLoading && <RequestStatusIndicator />}
-            </Box>
+            <AssistantStreamPreview
+              store={assistantStreamStore}
+              transientItems={transientItems}
+              maxHeight={transientMaxHeight}
+              isVisible={canShowTransientRegion}
+              debug={debug}
+            />
 
             <Box
               ref={mainControlsRef}
-              borderColor="red"
+              borderColor={theme.error}
               borderStyle={debug ? 'single' : undefined}
               flexDirection="column"
               width="100%"
             >
+              {shouldRenderStartupHeaderInControls && (
+                <Box flexDirection="column" width="100%">
+                  {startupHeader}
+                </Box>
+              )}
+
+              {showRequestStatus && (
+                <Box paddingX={1}>
+                  <RequestStatusIndicator marginTop={0} />
+                </Box>
+              )}
+
+              {!toolUseConfirm &&
+                !toolJSX &&
+                !binaryFeedbackContext &&
+                !isMessageSelectorVisible &&
+                !showingCostDialog && (
+                  <RunningTasksPanel
+                    maxWidth={columns}
+                    tasks={backgroundTasks}
+                  />
+                )}
+
               {toast &&
                 !toolUseConfirm &&
                 !toolJSX &&
                 !binaryFeedbackContext && (
                   <Box paddingX={1} marginTop={1}>
-                    <Text color="yellow" dimColor wrap="truncate-end">
+                    <Text color={theme.warning} wrap="truncate-end">
                       {toast}
                     </Text>
                   </Box>
@@ -239,17 +496,6 @@ export function REPLView({
                 )}
 
               {!toolJSX &&
-                toolUseConfirm &&
-                !isMessageSelectorVisible &&
-                !binaryFeedbackContext && (
-                  <PermissionRequest
-                    toolUseConfirm={toolUseConfirm}
-                    onDone={() => setToolUseConfirm(null)}
-                    verbose={verbose}
-                  />
-                )}
-
-              {!toolJSX &&
                 !toolUseConfirm &&
                 !isMessageSelectorVisible &&
                 !binaryFeedbackContext &&
@@ -263,6 +509,9 @@ export function REPLView({
                 !isMessageSelectorVisible &&
                 !binaryFeedbackContext &&
                 !showingCostDialog && (
+                  // Keep the prompt's height stable while the transient region
+                  // waits for measurement; hiding its chrome causes a visible
+                  // collapse-and-expand flash at the bottom of the terminal.
                   <PromptInput
                     key={`prompt-${conversationKey}`}
                     {...promptInputProps}

@@ -1,7 +1,7 @@
 import { Box, Text } from 'ink'
 import React from 'react'
 import { z } from 'zod'
-import { Tool, ToolUseContext } from '#core/tooling/Tool'
+import { Tool, ToolUseContext } from '@kode/tool-interface/Tool'
 import { getModelManager } from '#core/utils/model'
 import { getAnthropicProviderRuntime } from '#core/utils/anthropicProviderRuntime'
 import { getAnthropicClient } from '#core/ai/llm/anthropic/client'

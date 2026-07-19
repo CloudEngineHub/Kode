@@ -1,6 +1,7 @@
 import '#core/utils/sanitizeAnthropicEnv'
 import { initDebugLogger } from '#core/utils/debugLogger'
 import { logError } from '#core/utils/log'
+import { probeDurableRunProcess, reconcileDurableRuns } from '#core/runs'
 import { ConfigParseError } from '#core/utils/errors'
 import { BunShell } from '#runtime/shell'
 import {
@@ -10,14 +11,15 @@ import {
 } from '#config'
 import { showInvalidConfigDialog } from '#ui-ink/screens/setup/InvalidConfigScreen'
 import { ensurePackagedRuntimeEnv, ensureYogaWasmPath } from './bootstrapEnv'
-import { parseArgs } from '#host-cli'
 import { terminalCapabilityManager } from '#ui-ink/utils/terminalCapabilityManager'
 import {
   enableLineWrapping,
   enterAlternateScreen,
   exitAlternateScreen,
+  resetMouseEvents,
   shouldEnterAlternateScreen,
 } from '#cli-utils/terminal'
+import { setCliExitHandler } from '#cli-utils/exit'
 import {
   restoreTuiStdioPatch,
   writeToStderr,
@@ -36,7 +38,59 @@ import type { RenderOptions } from 'ink'
 let didEnterAlternateScreen = false
 
 function wantsPrintMode(): boolean {
-  return process.argv.includes('-p') || process.argv.includes('--print')
+  const readFlagValue = (flag: string): string | null => {
+    const prefix = `${flag}=`
+    for (let i = 0; i < process.argv.length; i += 1) {
+      const arg = process.argv[i]
+      if (arg === flag) return process.argv[i + 1] ?? null
+      if (arg?.startsWith(prefix)) return arg.slice(prefix.length)
+    }
+    return null
+  }
+
+  const outputFormat = String(readFlagValue('--output-format') ?? 'text')
+    .toLowerCase()
+    .trim()
+  const inputFormat = String(readFlagValue('--input-format') ?? 'text')
+    .toLowerCase()
+    .trim()
+
+  return (
+    process.argv.includes('-p') ||
+    process.argv.includes('--print') ||
+    process.argv.includes('--headless') ||
+    outputFormat === 'json' ||
+    outputFormat === 'stream-json' ||
+    inputFormat === 'stream-json'
+  )
+}
+
+const daemonLifecycleActions = new Set(['start', 'status', 'stop'])
+
+function isDaemonLifecycleCommand(): boolean {
+  const args = process.argv.slice(2)
+  const daemonIndex = args.indexOf('daemon')
+  return (
+    daemonIndex >= 0 && daemonLifecycleActions.has(args[daemonIndex + 1] ?? '')
+  )
+}
+
+function releaseNonInteractiveDaemonStdin(): void {
+  if (process.stdin.isTTY) return
+  process.stdin.pause()
+  process.stdin.destroy()
+}
+
+function flushStream(stream: NodeJS.WriteStream): Promise<void> {
+  return new Promise(resolve => {
+    stream.write('', () => resolve())
+  })
+}
+
+async function exitDaemonLifecycleCommand(): Promise<never> {
+  releaseNonInteractiveDaemonStdin()
+  await Promise.all([flushStream(process.stdout), flushStream(process.stderr)])
+  process.exit(process.exitCode ?? 0)
 }
 
 export async function runCli(): Promise<void> {
@@ -49,6 +103,14 @@ export async function runCli(): Promise<void> {
   // Validate configs are valid and enable configuration system
   try {
     enableConfigs()
+
+    queueMicrotask(() => {
+      try {
+        reconcileDurableRuns({ probeProcess: probeDurableRunProcess })
+      } catch (error) {
+        logError(error)
+      }
+    })
 
     // 🔧 Validate and auto-repair GPT-5 model profiles (best-effort, non-blocking)
     // Avoid printing during interactive render; log to file on failure.
@@ -102,6 +164,8 @@ export async function runCli(): Promise<void> {
     !process.env.CI &&
     // Input hijacking breaks MCP.
     !process.argv.includes('mcp') &&
+    // Lifecycle commands are explicitly non-interactive and must work in CI.
+    !isDaemonLifecycleCommand() &&
     !wantsStreamJsonStdin
   ) {
     inputPrompt = await stdin()
@@ -118,7 +182,9 @@ export async function runCli(): Promise<void> {
     await terminalCapabilityManager.detectCapabilities()
     terminalCapabilityManager.enableSupportedModes()
   }
+  const { parseArgs } = await import('#host-cli')
   await parseArgs(inputPrompt, renderContext)
+  if (isDaemonLifecycleCommand()) await exitDaemonLifecycleCommand()
 }
 
 // NOTE: stdin is currently buffered; streaming can be added if needed.
@@ -139,6 +205,9 @@ process.on('exit', () => {
   try {
     enableLineWrapping()
   } catch {}
+  try {
+    resetMouseEvents()
+  } catch {}
   resetCursor()
   if (didEnterAlternateScreen) {
     exitAlternateScreen()
@@ -156,7 +225,7 @@ async function gracefulExit(code = 0) {
   isGracefulExitInProgress = true
 
   try {
-    const { runSessionEndHooks } = await import('#core/utils/kodeHooks')
+    const { runSessionEndHooks } = await import('@kode/hooks')
     const { getKodeAgentSessionId } =
       await import('#protocol/utils/kodeAgentSessionId')
     const { tmpdir } = await import('os')
@@ -194,6 +263,9 @@ async function gracefulExit(code = 0) {
   try {
     enableLineWrapping()
   } catch {}
+  try {
+    resetMouseEvents()
+  } catch {}
   if (didEnterAlternateScreen) {
     try {
       exitAlternateScreen()
@@ -204,6 +276,8 @@ async function gracefulExit(code = 0) {
   } catch {}
   process.exit(code)
 }
+
+setCliExitHandler(gracefulExit)
 
 function handleProcessSignalExit(code = 0): void {
   if (isPrintModeSignalAbortHandlingActive()) return

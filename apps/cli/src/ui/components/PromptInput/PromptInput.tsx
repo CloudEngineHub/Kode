@@ -8,13 +8,12 @@ import {
   useRef,
   useState,
 } from 'react'
-import { estimateTokens } from '#core/utils/tokens'
 import { getTheme } from '#core/utils/theme'
 import { getModelManager } from '#core/utils/model'
 import { logStartupProfile } from '#core/utils/startupProfile'
 import { MACRO } from '#core/constants/macros'
 import { getCwd, getOriginalCwd } from '#core/utils/state'
-import { getMessagesPath } from '#core/utils/log'
+import { getMessagesPath, logError } from '#core/utils/log'
 import { getTotalAPIDuration, getTotalDuration } from '#core/cost-tracker'
 import {
   getCurrentProjectConfig,
@@ -26,6 +25,11 @@ import { useArrowKeyHistory } from '#ui-ink/hooks/useArrowKeyHistory'
 import { useDoublePress } from '#ui-ink/hooks/useDoublePress'
 import { useStatusLine } from '#ui-ink/hooks/useStatusLine'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
+import {
+  computeAvailableRows,
+  computeResponsiveRows,
+  isCompactViewportHeight,
+} from '#ui-ink/primitives/layout/viewportRows'
 import { useUnifiedCompletion } from '#ui-ink/hooks/useUnifiedCompletion'
 import { useKeypress, type Key } from '#ui-ink/hooks/useKeypress'
 import { useUndoBuffer } from '#ui-ink/hooks/useUndoBuffer'
@@ -35,26 +39,49 @@ import { getPromptInputSpecialKeyAction } from '#ui-ink/utils/promptInputSpecial
 import { setTerminalTitle } from '#cli-utils/terminal'
 import { Cursor, countWrappedLines } from '#cli-utils/Cursor'
 import { getCurrentOutputStyle } from '#cli-services/outputStyles'
-import { BunShell } from '#runtime/shell'
-import { listBackgroundAgentTaskSnapshots } from '#core/utils/backgroundTasks'
-import { computeContextWindowPercentages } from '#core/utils/contextWindowPercentages'
 import { submitPrompt } from './submit'
 import {
+  materializePastedImageAttachments,
+  releasePastedImageAttachments,
+  snapshotPastedImageAttachments,
   usePromptPastes,
   type PastedImageAttachment,
   type PastedTextSegment,
 } from './pastes'
-import { toggleBashMode, type PromptInputProps, type PromptMode } from './types'
+import type { PromptInputProps, PromptMode } from './types'
 import { PromptInputView } from './PromptInputView'
 import { useExternalEdit } from './useExternalEdit'
 import { useQuickModelSwitch } from './useQuickModelSwitch'
 import { getKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
+import { buildPromptInputStatusLine } from './inputModeDisplay'
+import { useThrottledTokenUsage } from './useThrottledTokenUsage'
+import { useCliExit } from '#ui-ink/hooks/useCliExit'
+import {
+  buildPromptStatusLineInput,
+  getPromptStatusLineUsage,
+} from './statusLineModel'
+import {
+  getPromptModeForTypedPrefix,
+  shouldEmptyPromptModeExitToPrompt,
+} from './promptModeSpecs'
 
 const PROMPT_DRAFT_KEY = 'repl'
+const MISSING_IMAGE_MESSAGE =
+  'Image attachment data is unavailable. Paste the image again; the prompt was not sent.'
 
-function exit(): never {
-  setTerminalTitle('')
-  process.exit(0)
+function getDraftPastesSignature(args: {
+  pastedTexts: PastedTextSegment[]
+  pastedImages: PastedImageAttachment[]
+}): string {
+  return [
+    ...args.pastedTexts.map(
+      item => `text:${item.placeholder}:${item.text.length}`,
+    ),
+    ...args.pastedImages.map(
+      item =>
+        `image:${item.id}:${item.placeholder}:${item.mediaType}:${item.byteLength}`,
+    ),
+  ].join('\n')
 }
 
 export function PromptInput({
@@ -84,11 +111,12 @@ export function PromptInput({
   setForkConvoWithMessagesOnTheNextRender,
   readFileTimestamps,
   onModelChange,
-  onManageTasks,
   restorePastes,
   onRestorePastesApplied,
   draftPastes,
   onDraftPastesChange,
+  cancelRequestKey,
+  suppressStatusLine = false,
 }: PromptInputProps): React.ReactNode {
   type QueuedPrompt = {
     seq: number
@@ -135,6 +163,11 @@ export function PromptInput({
   const onHistoryUserInputRef = useRef<() => void>(() => {})
   const editorMode = getGlobalConfigCached().editorMode ?? 'normal'
   const [vimMode, setVimMode] = useState<'INSERT' | 'NORMAL'>('INSERT')
+  const requestExit = useCliExit()
+  const exit = useCallback(() => {
+    setTerminalTitle('')
+    requestExit(0)
+  }, [requestExit])
 
   useEffect(() => {
     if (editorMode !== 'vim') return
@@ -144,7 +177,6 @@ export function PromptInput({
   const { cycleMode, currentMode, toolPermissionContext } =
     usePermissionContext()
   const modeCycleShortcut = useMemo(() => getPermissionModeCycleShortcut(), [])
-  const showQuickModelSwitchShortcut = modeCycleShortcut.displayText !== 'alt+m'
 
   const handleExitMessage = useCallback((show: boolean, key?: string) => {
     setExitMessage(prev =>
@@ -186,7 +218,12 @@ export function PromptInput({
   const textInputColumns = Math.max(1, columns - 6)
   // Prevent the prompt input from growing unbounded and overflowing the viewport,
   // which can cause flicker/ghost lines on small terminals.
-  const textInputMaxHeight = Math.max(1, Math.min(8, Math.floor(rows / 3)))
+  const textInputMaxHeight = computeResponsiveRows({
+    rows,
+    minRows: 1,
+    maxRows: 8,
+    ratio: 1 / 3,
+  })
   const inputLineCount = useMemo(
     () => countWrappedLines(input, textInputColumns, textInputMaxHeight + 1),
     [input, textInputColumns, textInputMaxHeight],
@@ -197,21 +234,10 @@ export function PromptInput({
     (value: string) => {
       onHistoryUserInputRef.current()
 
-      // Only check for mode prefix when in 'prompt' mode
-      // In other modes (bash/koding/background), just update the input directly
-      if (mode === 'prompt') {
-        if (value.startsWith('!') || value.startsWith('$')) {
-          onModeChange('bash')
-          return
-        }
-        if (value.startsWith('&')) {
-          onModeChange('background')
-          return
-        }
-        if (value.startsWith('#')) {
-          onModeChange('koding')
-          return
-        }
+      const nextMode = getPromptModeForTypedPrefix({ mode, value })
+      if (nextMode) {
+        onModeChange(nextMode)
+        return
       }
 
       onInputChange(value)
@@ -220,7 +246,7 @@ export function PromptInput({
   )
 
   const theme = getTheme()
-  const tokenUsage = useMemo(() => estimateTokens(messages), [messages])
+  const tokenUsage = useThrottledTokenUsage(messages)
   const totalCostUSD = useMemo(() => {
     let total = 0
     for (const message of messages) {
@@ -241,121 +267,36 @@ export function PromptInput({
       : null
   }, [submitCount, tokenUsage, uiRefreshCounter])
 
-  const statusLineUsage = useMemo(() => {
-    let totalInputTokens = 0
-    let totalOutputTokens = 0
-
-    let currentUsage: null | {
-      input_tokens: number
-      output_tokens: number
-      cache_creation_input_tokens: number
-      cache_read_input_tokens: number
-    } = null
-
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const message = messages[i]
-      if (!message || message.type !== 'assistant') continue
-      const usage = (message.message as unknown as { usage?: unknown }).usage
-      if (!usage || typeof usage !== 'object') continue
-
-      const rec = usage as Record<string, unknown>
-      const inputTokens = rec.input_tokens
-      const outputTokens = rec.output_tokens
-      if (typeof inputTokens !== 'number' || typeof outputTokens !== 'number') {
-        continue
-      }
-
-      currentUsage = {
-        input_tokens: inputTokens,
-        output_tokens: outputTokens,
-        cache_creation_input_tokens:
-          typeof rec.cache_creation_input_tokens === 'number'
-            ? rec.cache_creation_input_tokens
-            : 0,
-        cache_read_input_tokens:
-          typeof rec.cache_read_input_tokens === 'number'
-            ? rec.cache_read_input_tokens
-            : 0,
-      }
-      break
-    }
-
-    for (const message of messages) {
-      if (!message || message.type !== 'assistant') continue
-      const usage = (message.message as unknown as { usage?: unknown }).usage
-      if (!usage || typeof usage !== 'object') continue
-      const rec = usage as Record<string, unknown>
-      const inputTokens = rec.input_tokens
-      const outputTokens = rec.output_tokens
-      if (typeof inputTokens !== 'number' || typeof outputTokens !== 'number') {
-        continue
-      }
-      totalInputTokens += inputTokens
-      totalOutputTokens += outputTokens
-    }
-
-    return { totalInputTokens, totalOutputTokens, currentUsage }
-  }, [messages])
+  const statusLineUsage = useMemo(
+    () => getPromptStatusLineUsage(messages),
+    [messages],
+  )
 
   const statusLineInput = useMemo(() => {
     const profile = getModelManager().getModel('main')
     const outputStyleName = getCurrentOutputStyle()
     const transcriptPath = getMessagesPath(messageLogName, forkNumber, 0)
 
-    const currentUsage = statusLineUsage.currentUsage
-    const contextWindowSize =
-      typeof profile?.contextLength === 'number' ? profile.contextLength : 0
-
-    const { used_percentage, remaining_percentage } =
-      computeContextWindowPercentages({
-        currentUsage,
-        contextWindowSize,
-      })
-    const exceeds200kTokens = currentUsage
-      ? currentUsage.input_tokens +
-          currentUsage.output_tokens +
-          currentUsage.cache_creation_input_tokens +
-          currentUsage.cache_read_input_tokens >
-        200000
-      : false
-
-    return {
-      session_id: getKodeAgentSessionId(),
-      transcript_path: transcriptPath,
-      cwd: currentPwd,
-      model: {
-        id: profile?.modelName ?? '',
-        display_name: profile?.name ?? profile?.modelName ?? '',
-      },
-      workspace: {
-        current_dir: currentPwd,
-        project_dir: getOriginalCwd(),
-      },
+    return buildPromptStatusLineInput({
+      sessionId: getKodeAgentSessionId(),
+      transcriptPath,
+      currentPwd,
+      originalCwd: getOriginalCwd(),
       version: MACRO.VERSION,
-      output_style: { name: outputStyleName },
-      cost: {
-        total_cost_usd: totalCostUSD,
-        total_duration_ms: getTotalDuration(),
-        total_api_duration_ms: getTotalAPIDuration(),
-      },
-      context_window: {
-        total_input_tokens: statusLineUsage.totalInputTokens,
-        total_output_tokens: statusLineUsage.totalOutputTokens,
-        context_window_size: contextWindowSize,
-        current_usage: currentUsage,
-        used_percentage,
-        remaining_percentage,
-      },
-      exceeds_200k_tokens: exceeds200kTokens,
-      ...(editorMode === 'vim' ? { vim: { mode: vimMode } } : {}),
-      kode: {
-        conversation: { messageLogName, forkNumber },
-        permission_mode: toolPermissionContext.mode,
-        model: {
-          provider: profile?.provider ?? null,
-        },
-      },
-    }
+      outputStyleName,
+      profile,
+      usage: statusLineUsage,
+      currentContextTokens: tokenUsage,
+      totalCostUSD,
+      totalDurationMs: getTotalDuration(),
+      totalAPIDurationMs: getTotalAPIDuration(),
+      messageLogName,
+      forkNumber,
+      mode,
+      permissionMode: toolPermissionContext.mode,
+      editorMode,
+      vimMode,
+    })
   }, [
     currentPwd,
     editorMode,
@@ -363,45 +304,37 @@ export function PromptInput({
     messageLogName,
     statusLineUsage,
     submitCount,
+    tokenUsage,
+    mode,
     toolPermissionContext.mode,
     totalCostUSD,
     uiRefreshCounter,
     vimMode,
   ])
 
-  const { text: statusLineText, padding: statusLinePadding } =
-    useStatusLine(statusLineInput)
+  const {
+    text: statusLineText,
+    padding: statusLinePadding,
+    isConfigured: isStatusLineConfigured,
+  } = useStatusLine(statusLineInput)
 
   const defaultStatusLine = useMemo(() => {
-    const parts: string[] = []
-    if (editorMode === 'vim' && vimMode === 'INSERT') {
-      parts.push('-- INSERT --')
-    } else if (mode === 'bash') {
-      parts.push('$ bash')
-    } else if (mode === 'background') {
-      parts.push('& background')
-    } else if (mode === 'koding') {
-      parts.push('# koding')
-    } else {
-      parts.push('? shortcuts')
-    }
-
-    parts.push(isLoading ? 'Enter send · Tab queue' : 'Enter send')
-
-    if (pendingPrompts.length > 0) {
-      parts.push(`pending ${pendingPrompts.length}`)
-    }
-
-    if (queuedPrompts.length > 0) {
-      parts.push(`queued ${queuedPrompts.length}`)
-      parts.push('Alt+↑ edit')
-    }
-
-    return parts.join(' · ')
+    return buildPromptInputStatusLine({
+      mode,
+      permissionMode: currentMode,
+      modeCycleShortcutText: modeCycleShortcut.displayText,
+      isLoading,
+      pendingPromptCount: pendingPrompts.length,
+      queuedPromptCount: queuedPrompts.length,
+      editorMode,
+      vimMode,
+    })
   }, [
+    currentMode,
     editorMode,
     isLoading,
     mode,
+    modeCycleShortcut.displayText,
     pendingPrompts.length,
     queuedPrompts.length,
     vimMode,
@@ -411,11 +344,19 @@ export function PromptInput({
 
   const toastMessage = useMemo(() => ({ show: false as const }), [])
 
-  const compact = rows < 16
-  const modelInfoRows = !compact && modelInfo ? 1 : 0
+  const compact = isCompactViewportHeight(rows, {
+    microRows: 12,
+    tightRows: 15,
+    compactRows: 15,
+  })
   const pwdRows = compact ? 0 : 1
-  const completionReservedRows = inputBoxHeight + modelInfoRows + pwdRows + 1
-  const completionEnabled = rows >= 10 && rows - completionReservedRows >= 2
+  const completionReservedRows = inputBoxHeight + pwdRows + 1
+  const completionAvailableRows = computeAvailableRows({
+    rows,
+    reservedRows: completionReservedRows,
+    minRows: 0,
+  })
+  const completionEnabled = rows >= 10 && completionAvailableRows >= 2
 
   const {
     suggestions,
@@ -431,6 +372,7 @@ export function PromptInput({
     commands,
     disableSlashCommands,
     isEnabled: completionEnabled,
+    modelReloadKey: uiRefreshCounter ?? 0,
   })
   const completionVisible =
     completionEnabled && completionActive && suggestions.length > 0
@@ -451,7 +393,54 @@ export function PromptInput({
     setCursorOffset,
     onModeChange,
     terminalRows: rows,
+    terminalColumns: textInputColumns,
   })
+
+  const reportMissingImageData = useCallback(
+    (error: unknown) => {
+      logError(error)
+      handleInlineMessage(true, MISSING_IMAGE_MESSAGE)
+    },
+    [handleInlineMessage],
+  )
+
+  const snapshotImagesForDeferredPrompt = useCallback(
+    (images: PastedImageAttachment[]): PastedImageAttachment[] | null => {
+      try {
+        return snapshotPastedImageAttachments(images)
+      } catch (error) {
+        reportMissingImageData(error)
+        return null
+      }
+    },
+    [reportMissingImageData],
+  )
+
+  const deferredImageOwnersRef = useRef({
+    pendingPrompts,
+    queuedPrompts,
+    promptStash,
+  })
+  deferredImageOwnersRef.current = {
+    pendingPrompts,
+    queuedPrompts,
+    promptStash,
+  }
+
+  useEffect(() => {
+    return () => {
+      const owners = deferredImageOwnersRef.current
+      for (const prompt of [
+        ...owners.pendingPrompts,
+        ...owners.queuedPrompts,
+      ]) {
+        releasePastedImageAttachments(prompt.pastedImages)
+      }
+      if (owners.promptStash) {
+        releasePastedImageAttachments(owners.promptStash.pastedImages)
+      }
+    }
+  }, [])
 
   // Codex-style prompt queue shortcuts:
   // - Tab queues while a turn is running (and does not send immediately)
@@ -462,19 +451,6 @@ export function PromptInput({
       if (isDisabled) return
 
       if (key.meta && key.upArrow && !key.shift && !key.ctrl) {
-        const draftForQueue: QueuedPrompt | null =
-          input.trim().length > 0 ||
-          pastedTexts.length > 0 ||
-          pastedImages.length > 0
-            ? {
-                seq: nextQueuedPromptSeqRef.current++,
-                input,
-                mode,
-                pastedTexts: [...pastedTexts],
-                pastedImages: [...pastedImages],
-              }
-            : null
-
         const latest =
           queuedPrompts.length > 0
             ? queuedPrompts.reduce((best, item) =>
@@ -482,6 +458,23 @@ export function PromptInput({
               )
             : null
         if (!latest) return
+
+        let draftForQueue: QueuedPrompt | null = null
+        if (
+          input.trim().length > 0 ||
+          pastedTexts.length > 0 ||
+          pastedImages.length > 0
+        ) {
+          const queuedImages = snapshotImagesForDeferredPrompt(pastedImages)
+          if (!queuedImages) return true
+          draftForQueue = {
+            seq: nextQueuedPromptSeqRef.current++,
+            input,
+            mode,
+            pastedTexts: [...pastedTexts],
+            pastedImages: queuedImages,
+          }
+        }
 
         if (completionActive) resetCompletion()
         clearSavedPromptDraftBestEffort()
@@ -506,6 +499,9 @@ export function PromptInput({
           pastedTexts.length > 0 ||
           pastedImages.length > 0)
       ) {
+        const queuedImages = snapshotImagesForDeferredPrompt(pastedImages)
+        if (!queuedImages) return true
+
         if (completionActive) resetCompletion()
         clearSavedPromptDraftBestEffort()
         clearUndoBuffer()
@@ -516,7 +512,7 @@ export function PromptInput({
             input,
             mode,
             pastedTexts: [...pastedTexts],
-            pastedImages: [...pastedImages],
+            pastedImages: queuedImages,
           },
         ])
         clearPastes()
@@ -529,6 +525,7 @@ export function PromptInput({
   )
 
   const lastRestorePastesIdRef = useRef<number | null>(null)
+  const lastDraftPastesSignatureRef = useRef<string | null>(null)
   useLayoutEffect(() => {
     if (!restorePastes) return
     if (lastRestorePastesIdRef.current === restorePastes.id) return
@@ -536,10 +533,14 @@ export function PromptInput({
 
     setPastedTexts(restorePastes.pastedTexts)
     setPastedImages(restorePastes.pastedImages)
-    onDraftPastesChange?.({
-      pastedTexts: restorePastes.pastedTexts,
-      pastedImages: restorePastes.pastedImages,
-    })
+    const signature = getDraftPastesSignature(restorePastes)
+    if (lastDraftPastesSignatureRef.current !== signature) {
+      lastDraftPastesSignatureRef.current = signature
+      onDraftPastesChange?.({
+        pastedTexts: restorePastes.pastedTexts,
+        pastedImages: restorePastes.pastedImages,
+      })
+    }
     onRestorePastesApplied?.(restorePastes.id)
   }, [
     onDraftPastesChange,
@@ -568,6 +569,7 @@ export function PromptInput({
 
     setPastedTexts(draftPastes.pastedTexts)
     setPastedImages(draftPastes.pastedImages)
+    lastDraftPastesSignatureRef.current = getDraftPastesSignature(draftPastes)
     didRestoreDraftPastesRef.current = true
   }, [
     draftPastes,
@@ -585,6 +587,9 @@ export function PromptInput({
       didSkipDraftPastesSyncRef.current = true
       return
     }
+    const signature = getDraftPastesSignature({ pastedTexts, pastedImages })
+    if (lastDraftPastesSignatureRef.current === signature) return
+    lastDraftPastesSignatureRef.current = signature
     onDraftPastesChange({ pastedTexts, pastedImages })
   }, [onDraftPastesChange, pastedImages, pastedTexts])
 
@@ -703,7 +708,6 @@ export function PromptInput({
     onHistoryDown,
     onUserInput,
     historyIndex,
-    isInFastBrowseMode,
   } = useArrowKeyHistory({
     current: {
       text: input,
@@ -712,6 +716,7 @@ export function PromptInput({
       extra: { pastedTexts, pastedImages },
     },
     emptyExtra: { pastedTexts: [], pastedImages: [] },
+    historyScopeKey: currentPwd,
     onRestore: snapshot => {
       setPastedTexts(snapshot.extra.pastedTexts)
       setPastedImages(snapshot.extra.pastedImages)
@@ -769,21 +774,6 @@ export function PromptInput({
   }
   const handleHistoryDown = () => {
     if (completionActive) resetCompletion()
-
-    if (
-      typeof onManageTasks === 'function' &&
-      historyIndex === 0 &&
-      input.length === 0
-    ) {
-      const hasBackgroundTasks =
-        BunShell.getInstance().listBackgroundShells().length > 0 ||
-        listBackgroundAgentTaskSnapshots().length > 0
-      if (hasBackgroundTasks) {
-        onManageTasks()
-        return
-      }
-    }
-
     onHistoryDown()
   }
 
@@ -818,8 +808,17 @@ export function PromptInput({
         return true
       }
 
-      if (action === 'bashModeToggle') {
-        onModeChange(toggleBashMode(mode))
+      if (action === 'bashCommandPrefix') {
+        const prefix = '/bash '
+        const nextInput =
+          input.trim().length > 0 && !input.startsWith(prefix)
+            ? `${prefix}${input}`
+            : input.startsWith(prefix)
+              ? input
+              : prefix
+        if (mode !== 'prompt') onModeChange('prompt')
+        onInputChange(nextInput)
+        setCursorOffset(nextInput.length)
         return true
       }
 
@@ -964,25 +963,21 @@ export function PromptInput({
     }
   }, [])
 
-  async function onSubmit(value: string, isSubmittingSlashCommand = false) {
+  async function onSubmit(value: string) {
     if (isEditingExternally) return
-
-    if (
-      !isSubmittingSlashCommand &&
-      completionVisible &&
-      suggestions.length > 0
-    ) {
-      return
-    }
 
     if (!value) return
     if (isDisabled) return
     if (!value.trim()) return
 
+    if (completionActive) resetCompletion()
+
     if (isLoading) {
+      const queuedImages = snapshotImagesForDeferredPrompt(pastedImages)
+      if (!queuedImages) return
+
       // Enter always "sends". While a turn is running, treat it as a pending submission
       // (distinct from Tab-queued tasks) and auto-run it when the current turn completes.
-      if (completionActive) resetCompletion()
       clearSavedPromptDraftBestEffort()
       clearUndoBuffer()
       setPendingPrompts(prev => [
@@ -992,12 +987,20 @@ export function PromptInput({
           input: value,
           mode,
           pastedTexts: [...pastedTexts],
-          pastedImages: [...pastedImages],
+          pastedImages: queuedImages,
         },
       ])
       clearPastes()
       onInputChange('')
       setCursorOffset(0)
+      return
+    }
+
+    let imagesForSubmit: PastedImageAttachment[]
+    try {
+      imagesForSubmit = materializePastedImageAttachments(pastedImages)
+    } catch (error) {
+      reportMissingImageData(error)
       return
     }
 
@@ -1007,9 +1010,6 @@ export function PromptInput({
     await submitPrompt({
       input: value,
       mode,
-      completionActive: completionVisible,
-      suggestionCount: completionVisible ? suggestions.length : 0,
-      isSubmittingSlashCommand,
       isDisabled,
       isLoading,
       isEditingExternally,
@@ -1034,7 +1034,7 @@ export function PromptInput({
       onShowMessageSelector,
       readFileTimestamps,
       pastedTexts,
-      pastedImages,
+      pastedImages: imagesForSubmit,
       clearPastes,
       resetHistory,
       setCurrentPwd,
@@ -1043,7 +1043,28 @@ export function PromptInput({
   }
 
   const [isQueueDrainInFlight, setIsQueueDrainInFlight] = useState(false)
+  const lastCancelRequestKeyRef = useRef(cancelRequestKey)
   useEffect(() => {
+    if (lastCancelRequestKeyRef.current !== cancelRequestKey) {
+      lastCancelRequestKeyRef.current = cancelRequestKey
+      setPendingPrompts(prev => {
+        if (prev.length === 0) return prev
+        for (const prompt of prev) {
+          releasePastedImageAttachments(prompt.pastedImages)
+        }
+        return []
+      })
+      setQueuedPrompts(prev => {
+        if (prev.length === 0) return prev
+        for (const prompt of prev) {
+          releasePastedImageAttachments(prompt.pastedImages)
+        }
+        return []
+      })
+      setIsQueueDrainInFlight(false)
+      return
+    }
+
     if (isQueueDrainInFlight) return
     if (isLoading) return
     if (isDisabled) return
@@ -1061,12 +1082,17 @@ export function PromptInput({
 
     void (async () => {
       try {
+        let imagesForSubmit: PastedImageAttachment[]
+        try {
+          imagesForSubmit = materializePastedImageAttachments(next.pastedImages)
+        } catch (error) {
+          reportMissingImageData(error)
+          return
+        }
+
         await submitPrompt({
           input: next.input,
           mode: next.mode,
-          completionActive: false,
-          suggestionCount: 0,
-          isSubmittingSlashCommand: false,
           isDisabled,
           isLoading: false,
           isEditingExternally,
@@ -1092,18 +1118,22 @@ export function PromptInput({
           onShowMessageSelector,
           readFileTimestamps,
           pastedTexts: next.pastedTexts,
-          pastedImages: next.pastedImages,
+          pastedImages: imagesForSubmit,
           clearPastes: () => {},
           resetHistory: () => {},
           setCurrentPwd,
           exit,
         })
+      } catch (error) {
+        logError(error)
       } finally {
+        releasePastedImageAttachments(next.pastedImages)
         setIsQueueDrainInFlight(false)
       }
     })()
   }, [
     abortController,
+    cancelRequestKey,
     commands,
     currentMode,
     disableSlashCommands,
@@ -1118,6 +1148,7 @@ export function PromptInput({
     pendingPrompts,
     queuedPrompts,
     readFileTimestamps,
+    reportMissingImageData,
     isQueueDrainInFlight,
     setAbortController,
     setCurrentPwd,
@@ -1166,12 +1197,20 @@ export function PromptInput({
           pastedTexts.length > 0 ||
           pastedImages.length > 0
         ) {
-          setPromptStash({
-            input,
-            mode,
-            cursorOffset,
-            pastedTexts: [...pastedTexts],
-            pastedImages: [...pastedImages],
+          const stashedImages = snapshotImagesForDeferredPrompt(pastedImages)
+          if (!stashedImages) return true
+
+          setPromptStash(previous => {
+            if (previous) {
+              releasePastedImageAttachments(previous.pastedImages)
+            }
+            return {
+              input,
+              mode,
+              cursorOffset,
+              pastedTexts: [...pastedTexts],
+              pastedImages: stashedImages,
+            }
           })
           clearPastes()
           onInputChange('')
@@ -1199,7 +1238,7 @@ export function PromptInput({
 
       // Handle mode exit when input is empty and user presses backspace/delete/escape
       if (
-        (mode === 'bash' || mode === 'background' || mode === 'koding') &&
+        shouldEmptyPromptModeExitToPrompt(mode) &&
         input === '' &&
         (key.backspace || key.delete || key.escape)
       ) {
@@ -1273,15 +1312,15 @@ export function PromptInput({
       modelSwitchMessage={modelSwitchMessage}
       toastMessage={toastMessage}
       statusLine={effectiveStatusLine}
+      customStatusLineActive={isStatusLineConfigured}
       statusLinePadding={statusLinePadding}
-      currentMode={currentMode}
-      modeCycleShortcutText={modeCycleShortcut.displayText}
-      showQuickModelSwitchShortcut={showQuickModelSwitchShortcut}
+      suppressStatusLine={suppressStatusLine}
       tokenUsage={tokenUsage}
       textInputColumns={textInputColumns}
       textInputMaxHeight={textInputMaxHeight}
       completionReservedRows={completionReservedRows}
-      isInFastBrowseMode={isInFastBrowseMode}
+      terminalRows={rows}
+      terminalColumns={columns}
     />
   )
 }

@@ -23,6 +23,8 @@ import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import { PermissionRequestDetails } from '#ui-ink/components/permissions/PermissionRequestDetails'
 import { applyToolPermissionUpdatesToLiveToolUseContext } from '../liveToolPermissionContext'
+import { computeAvailableColumns } from '#ui-ink/primitives/layout/viewportColumns'
+import { permissionSelectFocusScope } from '#ui-ink/components/permissions/permissionFocusScope'
 
 type Props = {
   toolUseConfirm: ToolUseConfirm
@@ -67,6 +69,10 @@ export function FileWritePermissionRequest({
     [file_path],
   )
   const { columns } = useTerminalSize()
+  const diffWidth = computeAvailableColumns({
+    columns,
+    reservedColumns: layout.paddingX * 2 + 2,
+  })
   usePermissionRequestLogging(toolUseConfirm, unaryEvent)
 
   const handleChoice = useCallback(
@@ -161,7 +167,7 @@ export function FileWritePermissionRequest({
             file_path={file_path}
             content={content}
             verbose={verbose}
-            width={Math.max(10, columns - layout.paddingX * 2 - 2)}
+            width={diffWidth}
             enableScrolling={true}
           />
 
@@ -171,6 +177,7 @@ export function FileWritePermissionRequest({
               <Text bold>{basename(file_path)}</Text>?
             </Text>
             <Select
+              focusScope={permissionSelectFocusScope(toolUseConfirm, 'choice')}
               options={[
                 {
                   label: 'Allow once',

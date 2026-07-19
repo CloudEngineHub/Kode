@@ -29,6 +29,7 @@ export type SessionState = {
   cwd: string
   mcpServers: Protocol.McpServer[]
   mcpClients: WrappedClient[]
+  sessionOwnedMcpClients: WrappedClient[]
 
   commands: AcpCommand[]
   tools: Tool[]

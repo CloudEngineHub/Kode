@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { clearContextCache, getReadme } from '#core/context'
+import { clearContextCache, getReadme } from '@kode/context'
 import { setCwd } from '#core/utils/state'
 
 describe('clearContextCache', () => {

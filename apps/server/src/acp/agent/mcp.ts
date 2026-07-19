@@ -1,16 +1,18 @@
 import type { Buffer } from 'node:buffer'
 
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
-import type { ServerCapabilities } from '@modelcontextprotocol/sdk/types.js'
 
-import { MACRO } from '#core/constants/macros'
-import { PRODUCT_COMMAND } from '#core/constants/product'
 import { logError, logMCPError } from '#core/utils/log'
 import type { WrappedClient } from '#core/mcp/client'
+import {
+  captureMcpCapabilities,
+  closeMcpClient,
+  createMcpClient,
+} from '#core/mcp/client/connection'
 
 import type * as Protocol from '../protocol'
 
@@ -174,10 +176,7 @@ export async function connectAcpMcpServers(
 
     let lastError: unknown
     for (const candidate of candidates) {
-      const client = new Client(
-        { name: PRODUCT_COMMAND, version: MACRO.VERSION || '0.0.0' },
-        { capabilities: {} },
-      )
+      const client = createMcpClient(name)
 
       try {
         await connectWithTimeout(client, candidate.transport, name, timeoutMs)
@@ -189,21 +188,13 @@ export async function connectAcpMcpServers(
           })
         }
 
-        let capabilities: ServerCapabilities | null = null
-        try {
-          capabilities = client.getServerCapabilities() ?? null
-        } catch {
-          capabilities = null
-        }
-
+        const capabilities = captureMcpCapabilities(client)
         results.push({ name, client, capabilities, type: 'connected' as const })
         lastError = null
         break
       } catch (e) {
         lastError = e
-        try {
-          await client.close()
-        } catch {}
+        await closeMcpClient(client)
       }
     }
 

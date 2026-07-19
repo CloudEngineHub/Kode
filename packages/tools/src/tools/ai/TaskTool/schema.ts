@@ -29,6 +29,8 @@ export const inputSchema = z.object({
     ),
   max_turns: z
     .number()
+    .int()
+    .positive()
     .optional()
     .describe(
       'Maximum number of agentic turns (API round-trips) before stopping. Used internally for warmup.',

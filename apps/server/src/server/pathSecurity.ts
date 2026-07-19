@@ -1,23 +1,72 @@
-import { existsSync, realpathSync } from 'node:fs'
-import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
-
-const rootRealpathByCwd = new Map<string, string>()
+import { lstatSync, realpathSync, statSync } from 'node:fs'
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  relative,
+  resolve,
+  sep,
+} from 'node:path'
 
 function getRootRealpath(projectCwd: string): string {
-  const key = projectCwd
-  const cached = rootRealpathByCwd.get(key)
-  if (cached) return cached
-  const resolved = realpathSync(projectCwd)
-  rootRealpathByCwd.set(key, resolved)
-  return resolved
+  // Resolve the root for every request. Caching this value makes a stale
+  // symlink/junction target part of a future authorization decision.
+  return realpathSync(projectCwd)
 }
 
 function isPathWithin(parent: string, child: string): boolean {
   const rel = relative(parent, child)
   if (!rel || rel === '') return true
-  if (rel.startsWith('..')) return false
+  if (rel === '..' || rel.startsWith(`..${sep}`)) return false
   if (isAbsolute(rel)) return false
   return true
+}
+
+function hasGitMetadataSegment(
+  projectRoot: string,
+  candidate: string,
+): boolean {
+  const rel = relative(projectRoot, candidate)
+  return rel.split(/[\\/]+/).some(segment => segment.toLowerCase() === '.git')
+}
+
+function assertWithinProjectRoot(projectRoot: string, candidate: string): void {
+  if (!isPathWithin(projectRoot, candidate)) {
+    throw new Error('Path is outside of the current project directory')
+  }
+  if (hasGitMetadataSegment(projectRoot, candidate)) {
+    throw new Error('Access to .git is not allowed')
+  }
+}
+
+type ExistingParent = {
+  path: string
+  missingSegments: string[]
+}
+
+function findNearestExistingParent(target: string): ExistingParent {
+  let candidate = target
+  const missingSegments: string[] = []
+
+  // lstat, rather than existsSync, also finds a dangling symlink. That lets
+  // us reject it when realpath fails instead of treating its parent as safe.
+  while (true) {
+    try {
+      lstatSync(candidate)
+      return { path: candidate, missingSegments }
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code
+      if (code !== 'ENOENT' && code !== 'ENOTDIR') throw err
+    }
+
+    const parent = dirname(candidate)
+    if (parent === candidate) {
+      throw new Error('Path does not have an existing parent directory')
+    }
+
+    missingSegments.unshift(basename(candidate))
+    candidate = parent
+  }
 }
 
 export function resolveInProjectRoot(projectCwd: string, p: string): string {
@@ -34,23 +83,23 @@ export function resolveInProjectRoot(projectCwd: string, p: string): string {
     : resolve(projectCwd, trimmed)
   const root = getRootRealpath(projectCwd)
 
-  // If the path exists, resolve symlinks and enforce containment against the real project root.
-  if (existsSync(abs)) {
-    const real = realpathSync(abs)
-    if (!isPathWithin(root, real)) {
-      throw new Error('Path is outside of the current project directory')
-    }
-    return real
+  const nearestParent = findNearestExistingParent(abs)
+  const realParent = realpathSync(nearestParent.path)
+  assertWithinProjectRoot(root, realParent)
+
+  if (nearestParent.missingSegments.length === 0) {
+    return realParent
   }
 
-  // For non-existent paths (e.g. creating a new file), validate the real parent directory.
-  const realParent = realpathSync(dirname(abs))
-  if (!isPathWithin(root, realParent)) {
-    throw new Error('Path is outside of the current project directory')
+  if (!statSync(realParent).isDirectory()) {
+    throw new Error('Path parent is not a directory')
   }
 
-  // Return the non-realpath value so callers can create it.
-  return abs
+  // Rebuild from the real parent so callers create through the verified path,
+  // not through a lexical symlink/junction that could point elsewhere.
+  const target = resolve(realParent, ...nearestParent.missingSegments)
+  assertWithinProjectRoot(root, target)
+  return target
 }
 
 export function toGitPath(projectCwd: string, p: string): string {

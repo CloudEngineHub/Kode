@@ -7,6 +7,7 @@ import {
   reloadCustomCommands,
 } from '#cli-services/customCommands'
 import { SkillTool } from '#tools/tools/interaction/SkillTool/SkillTool'
+import { setSkillCommandProvider } from '#tools/tools/interaction/SkillTool/skillCommandProvider'
 import { setCwd } from '#core/utils/state'
 
 async function withEnv<T>(
@@ -38,11 +39,13 @@ describe('Agent Skills compatibility (discovery + prompt)', () => {
   beforeEach(async () => {
     projectDir = mkdtempSync(join(tmpdir(), 'kode-skill-proj-'))
     homeDir = mkdtempSync(join(tmpdir(), 'kode-skill-home-'))
+    setSkillCommandProvider(loadCustomCommands)
     await setCwd(projectDir)
   })
 
   afterEach(async () => {
     await setCwd(runnerCwd)
+    setSkillCommandProvider(null)
     rmSync(projectDir, { recursive: true, force: true })
     rmSync(homeDir, { recursive: true, force: true })
   })

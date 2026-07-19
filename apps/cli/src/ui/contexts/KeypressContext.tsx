@@ -4,11 +4,15 @@ import { useCallback, useEffect, useRef } from 'react'
 import ReactReconciler from 'react-reconciler'
 import { debug as debugLogger } from '#core/utils/debugLogger'
 import { terminalCapabilityManager } from '#ui-ink/utils/terminalCapabilityManager'
+import { disableMouseEvents, enableMouseEvents } from '#cli-utils/terminal'
 
 export const BACKSLASH_ENTER_TIMEOUT = 5
 export const ESC_TIMEOUT = 50
 export const PASTE_TIMEOUT = 30_000
 export const FAST_RETURN_TIMEOUT = 30
+// Only protect fast Return after paste-like chunks; normal typing must submit immediately.
+const FAST_RETURN_PASTE_LIKE_CHARS = 80
+export const PASTE_PROTECTION_RETURN_KEY_NAME = 'paste-protection-return'
 
 const ESC = '\x1b'
 
@@ -166,6 +170,26 @@ type KeypressHandler = (
 ) => boolean | void | Promise<void>
 type KeypressSubscribeOptions = { priority?: number }
 
+export type TerminalMouseButton =
+  'left' | 'middle' | 'right' | 'wheel-up' | 'wheel-down' | 'unknown'
+
+export type TerminalMouseEvent = {
+  type: 'press' | 'release' | 'scroll'
+  button: TerminalMouseButton
+  x: number
+  y: number
+  ctrl: boolean
+  meta: boolean
+  shift: boolean
+  rawCode: number
+  sequence: string
+}
+
+type MouseHandler = (
+  event: TerminalMouseEvent,
+) => boolean | void | Promise<void>
+type MouseSubscribeOptions = { priority?: number }
+
 function bufferBackslashEnter(keypressHandler: (key: ParsedKey) => void) {
   const bufferer = (function* (): Generator<void, void, ParsedKey | null> {
     while (true) {
@@ -205,20 +229,57 @@ function bufferBackslashEnter(keypressHandler: (key: ParsedKey) => void) {
   return (key: ParsedKey) => bufferer.next(key)
 }
 
-function bufferFastReturn(keypressHandler: (key: ParsedKey) => void) {
+function bufferFastReturn(
+  keypressHandler: (key: ParsedKey) => void,
+  shouldProtectFastReturn: () => boolean,
+) {
   let lastKeyTime = 0
+  let lastKey: ParsedKey | null = null
   return (key: ParsedKey) => {
     const now = Date.now()
-    if (key.name === 'return' && now - lastKeyTime <= FAST_RETURN_TIMEOUT) {
+    const isFastDuplicateReturn =
+      key.name === 'return' &&
+      !key.ctrl &&
+      !key.meta &&
+      !key.shift &&
+      lastKey?.name === 'return' &&
+      !lastKey.ctrl &&
+      !lastKey.meta &&
+      !lastKey.shift &&
+      now - lastKeyTime <= FAST_RETURN_TIMEOUT
+    const previousLooksLikePaste =
+      lastKey?.insertable === true &&
+      !lastKey.ctrl &&
+      !lastKey.meta &&
+      (lastKey.sequence.includes('\n') ||
+        lastKey.sequence.includes('\r') ||
+        lastKey.sequence.length >= FAST_RETURN_PASTE_LIKE_CHARS)
+
+    if (isFastDuplicateReturn) {
+      // Windows/ConPTY can deliver one Return burst in adjacent stdin chunks.
+      // Keep one logical Enter so async submit handlers cannot see the same text twice.
+      lastKey = key
+      lastKeyTime = now
+      return
+    }
+
+    if (
+      shouldProtectFastReturn() &&
+      key.name === 'return' &&
+      previousLooksLikePaste &&
+      now - lastKeyTime <= FAST_RETURN_TIMEOUT
+    ) {
       keypressHandler({
         ...key,
-        name: '',
+        name: PASTE_PROTECTION_RETURN_KEY_NAME,
         sequence: '\r',
-        insertable: true,
+        paste: true,
+        insertable: false,
       })
     } else {
       keypressHandler(key)
     }
+    lastKey = key
     lastKeyTime = now
   }
 }
@@ -269,42 +330,85 @@ function bufferPaste(keypressHandler: (key: ParsedKey) => void) {
   return (key: ParsedKey) => bufferer.next(key)
 }
 
+type StdinChunkSegment = {
+  data: string
+  bulk: boolean
+}
+
+function segmentStdinChunk(data: string): StdinChunkSegment[] {
+  if (data.length === 0) return []
+
+  const hasEsc = data.includes(ESC)
+  const hasDisallowedControlChars =
+    // eslint-disable-next-line no-control-regex
+    /[\x00-\x08\x0b\x0c\x0e-\x1a\x1c-\x1f\x7f]/.test(data)
+  const looksLikeEscapeContinuation =
+    (data.startsWith('[') && /^\[[0-9;]*[~^$uA-Za-z]$/.test(data)) ||
+    (data.startsWith('O') && /^O[0-9]?[A-Za-z]$/.test(data))
+
+  const trailingReturns = /(?:\r\n|\r|\n)+$/.exec(data)?.[0]
+  const textBeforeReturns = trailingReturns
+    ? data.slice(0, -trailingReturns.length)
+    : ''
+  const canSplitTrailingReturnBurst =
+    data.length > 1 &&
+    !hasEsc &&
+    !hasDisallowedControlChars &&
+    !looksLikeEscapeContinuation &&
+    trailingReturns !== undefined &&
+    trailingReturns.includes('\r') &&
+    !textBeforeReturns.includes('\r') &&
+    !textBeforeReturns.includes('\n')
+
+  if (canSplitTrailingReturnBurst) {
+    const segments: StdinChunkSegment[] = []
+    if (textBeforeReturns.length > 0) {
+      segments.push({
+        data: textBeforeReturns,
+        bulk: textBeforeReturns.length > 1,
+      })
+    }
+    segments.push({
+      data: trailingReturns.replace(/\r\n|\n/g, '\r'),
+      bulk: false,
+    })
+    return segments
+  }
+
+  return [
+    {
+      data,
+      bulk:
+        data.length > 1 &&
+        !hasEsc &&
+        !hasDisallowedControlChars &&
+        !looksLikeEscapeContinuation,
+    },
+  ]
+}
+
 function createDataListener(
   keypressHandler: (key: ParsedKey) => void,
+  mouseHandler?: (event: TerminalMouseEvent) => void,
 ): (data: string) => void {
-  const parser = emitKeys(keypressHandler)
+  const parser = emitKeys(keypressHandler, mouseHandler)
   parser.next()
 
   let timeoutId: NodeJS.Timeout
   return (data: string) => {
     clearTimeout(timeoutId)
 
-    // Fast-path: treat non-ESC multi-char chunks as a single "insertable" key.
-    // This is critical for legacy terminals that don't support bracketed paste:
-    // - Multi-line paste would otherwise arrive as a sequence of Return keys, causing accidental submits.
-    // - IME commits and large pastes become dramatically cheaper (fewer renders).
-    const hasEsc = data.includes(ESC)
-    const hasDisallowedControlChars =
-      // eslint-disable-next-line no-control-regex
-      /[\x00-\x08\x0b\x0c\x0e-\x1a\x1c-\x1f\x7f]/.test(data)
-
-    const looksLikeEscapeContinuation =
-      (data.startsWith('[') && /^\[[0-9;]*[~^$uA-Za-z]$/.test(data)) ||
-      (data.startsWith('O') && /^O[0-9]?[A-Za-z]$/.test(data))
-
-    const canBulkInsert =
-      data.length > 1 &&
-      !hasEsc &&
-      !hasDisallowedControlChars &&
-      !looksLikeEscapeContinuation
-
-    if (canBulkInsert) {
-      // Flush any pending ESC prefix before injecting a bulk insert.
-      parser.next('')
-      parser.next(data)
-    } else {
-      for (const char of data) {
-        parser.next(char)
+    // Preserve bulk insertion for multiline paste and IME commits, but split a
+    // terminal Return burst so its leading text and Enter keep distinct semantics.
+    for (const segment of segmentStdinChunk(data)) {
+      if (segment.bulk) {
+        // Flush any pending ESC prefix before injecting a bulk insert.
+        parser.next('')
+        parser.next(segment.data)
+      } else {
+        for (const char of segment.data) {
+          parser.next(char)
+        }
       }
     }
 
@@ -314,8 +418,65 @@ function createDataListener(
   }
 }
 
+function createKeypressDataListener(
+  keypressHandler: (key: ParsedKey) => void,
+  mouseHandler: ((event: TerminalMouseEvent) => void) | undefined,
+  shouldProtectFastReturn: () => boolean,
+): (data: string) => void {
+  let processor = bufferFastReturn(keypressHandler, shouldProtectFastReturn)
+  processor = bufferBackslashEnter(processor)
+  processor = bufferPaste(processor)
+
+  return createDataListener(processor, mouseHandler)
+}
+
+function parseSgrMouseEvent(
+  body: string,
+  finalChar: 'M' | 'm',
+  sequence: string,
+): TerminalMouseEvent | null {
+  const parts = body.split(';')
+  if (parts.length !== 3) return null
+
+  const rawCode = Number.parseInt(parts[0] ?? '', 10)
+  const x = Number.parseInt(parts[1] ?? '', 10)
+  const y = Number.parseInt(parts[2] ?? '', 10)
+  if (!Number.isFinite(rawCode) || !Number.isFinite(x) || !Number.isFinite(y)) {
+    return null
+  }
+
+  const isWheel = Boolean(rawCode & 64)
+  const buttonBits = rawCode & 3
+  const button: TerminalMouseButton = isWheel
+    ? buttonBits === 0
+      ? 'wheel-up'
+      : buttonBits === 1
+        ? 'wheel-down'
+        : 'unknown'
+    : buttonBits === 0
+      ? 'left'
+      : buttonBits === 1
+        ? 'middle'
+        : buttonBits === 2
+          ? 'right'
+          : 'unknown'
+
+  return {
+    type: isWheel ? 'scroll' : finalChar === 'm' ? 'release' : 'press',
+    button,
+    x,
+    y,
+    ctrl: Boolean(rawCode & 16),
+    meta: Boolean(rawCode & 8),
+    shift: Boolean(rawCode & 4),
+    rawCode,
+    sequence,
+  }
+}
+
 function* emitKeys(
   keypressHandler: (key: ParsedKey) => void,
+  mouseHandler?: (event: TerminalMouseEvent) => void,
 ): Generator<void, void, string> {
   while (true) {
     let ch = yield
@@ -386,6 +547,32 @@ function* emitKeys(
           sequence += ch
         }
 
+        if (ch === '<') {
+          let mouseBody = ''
+          while (true) {
+            ch = yield
+            if (ch === '') {
+              break
+            }
+            sequence += ch
+
+            if (ch === 'M' || ch === 'm') {
+              const mouseEvent = parseSgrMouseEvent(mouseBody, ch, sequence)
+              if (mouseEvent) mouseHandler?.(mouseEvent)
+              break
+            }
+
+            if ((ch >= '0' && ch <= '9') || ch === ';') {
+              mouseBody += ch
+              continue
+            }
+
+            break
+          }
+
+          continue
+        }
+
         const cmdStart = sequence.length - 1
 
         while (ch >= '0' && ch <= '9') {
@@ -393,7 +580,7 @@ function* emitKeys(
           sequence += ch
         }
 
-        if (ch === ';') {
+        while (ch === ';') {
           ch = yield
           sequence += ch
 
@@ -407,13 +594,15 @@ function* emitKeys(
         let match: RegExpExecArray | null
 
         if ((match = /^(\d+)(?:;(\d+))?(?:;(\d+))?([~^$u])$/.exec(cmd))) {
-          if (
+          const isReleaseEvent =
             // kitty keyboard protocol can include an event type as the 3rd param: 1=press, 2=repeat, 3=release.
             // Ignore release events to avoid double-triggering shortcuts.
+            match[4] === 'u' && match[3] === '3' && match[1] !== '27'
+          const isReturnRepeatEvent =
             match[4] === 'u' &&
-            match[3] === '3' &&
-            match[1] !== '27'
-          ) {
+            match[3] === '2' &&
+            (match[1] === '13' || match[1] === '57414')
+          if (isReleaseEvent || isReturnRepeatEvent) {
             continue
           }
           if (match[1] === '27' && match[3] && match[4] === '~') {
@@ -613,12 +802,30 @@ function keyToInput(parsed: ParsedKey): string {
   return ''
 }
 
+export function __createKeypressDataListenerForTests(
+  handler: (input: string, key: Key) => void,
+  options: { protectFastReturn?: boolean } = {},
+): (data: string) => void {
+  return createKeypressDataListener(
+    parsed => {
+      handler(keyToInput(parsed), buildKey(parsed))
+    },
+    undefined,
+    () => options.protectFastReturn ?? false,
+  )
+}
+
 interface KeypressContextValue {
   subscribe: (
     handler: KeypressHandler,
     options?: KeypressSubscribeOptions,
   ) => void
   unsubscribe: (handler: KeypressHandler) => void
+  subscribeMouse: (
+    handler: MouseHandler,
+    options?: MouseSubscribeOptions,
+  ) => void
+  unsubscribeMouse: (handler: MouseHandler) => void
 }
 
 const KeypressContext = React.createContext<KeypressContextValue | undefined>(
@@ -640,21 +847,33 @@ export function KeypressProvider({
   children: React.ReactNode
   debugKeystrokeLogging?: boolean
 }) {
-  const { stdin, setRawMode } = useStdin()
+  const { stdin, setRawMode, isRawModeSupported } = useStdin()
 
-  type Subscription = {
-    handler: KeypressHandler
+  type Subscription<THandler> = {
+    handler: THandler
     priority: number
     order: number
   }
 
-  const subscriptionsRef = useRef<Map<KeypressHandler, Subscription>>(new Map())
-  const orderedSubscriptionsRef = useRef<Subscription[]>([])
+  const subscriptionsRef = useRef<
+    Map<KeypressHandler, Subscription<KeypressHandler>>
+  >(new Map())
+  const orderedSubscriptionsRef = useRef<Subscription<KeypressHandler>[]>([])
+  const mouseSubscriptionsRef = useRef<
+    Map<MouseHandler, Subscription<MouseHandler>>
+  >(new Map())
+  const orderedMouseSubscriptionsRef = useRef<Subscription<MouseHandler>[]>([])
   const nextOrderRef = useRef(0)
 
   const rebuildOrderedSubscriptions = useCallback(() => {
     orderedSubscriptionsRef.current = [
       ...subscriptionsRef.current.values(),
+    ].sort((a, b) => b.priority - a.priority || b.order - a.order)
+  }, [])
+
+  const rebuildOrderedMouseSubscriptions = useCallback(() => {
+    orderedMouseSubscriptionsRef.current = [
+      ...mouseSubscriptionsRef.current.values(),
     ].sort((a, b) => b.priority - a.priority || b.order - a.order)
   }, [])
 
@@ -664,14 +883,14 @@ export function KeypressProvider({
         // Defensive: if a handler re-subscribes, update its priority.
         const current = subscriptionsRef.current.get(handler)
         if (current) {
-          current.priority = options?.priority ?? current.priority
+          current.priority = options?.priority ?? 0
           subscriptionsRef.current.set(handler, current)
           rebuildOrderedSubscriptions()
         }
         return
       }
 
-      const subscription: Subscription = {
+      const subscription: Subscription<KeypressHandler> = {
         handler,
         priority: options?.priority ?? 0,
         order: nextOrderRef.current++,
@@ -690,6 +909,46 @@ export function KeypressProvider({
       }
     },
     [rebuildOrderedSubscriptions],
+  )
+
+  const subscribeMouse = useCallback(
+    (handler: MouseHandler, options?: MouseSubscribeOptions) => {
+      if (mouseSubscriptionsRef.current.has(handler)) {
+        const current = mouseSubscriptionsRef.current.get(handler)
+        if (current) {
+          current.priority = options?.priority ?? 0
+          mouseSubscriptionsRef.current.set(handler, current)
+          rebuildOrderedMouseSubscriptions()
+        }
+        return
+      }
+
+      if (mouseSubscriptionsRef.current.size === 0) {
+        enableMouseEvents()
+      }
+
+      const subscription: Subscription<MouseHandler> = {
+        handler,
+        priority: options?.priority ?? 0,
+        order: nextOrderRef.current++,
+      }
+      mouseSubscriptionsRef.current.set(handler, subscription)
+      rebuildOrderedMouseSubscriptions()
+    },
+    [rebuildOrderedMouseSubscriptions],
+  )
+
+  const unsubscribeMouse = useCallback(
+    (handler: MouseHandler) => {
+      const didDelete = mouseSubscriptionsRef.current.delete(handler)
+      if (didDelete) {
+        rebuildOrderedMouseSubscriptions()
+        if (mouseSubscriptionsRef.current.size === 0) {
+          disableMouseEvents()
+        }
+      }
+    },
+    [rebuildOrderedMouseSubscriptions],
   )
 
   const broadcast = useCallback((parsed: ParsedKey) => {
@@ -732,10 +991,43 @@ export function KeypressProvider({
     })
   }, [])
 
+  const broadcastMouse = useCallback((event: TerminalMouseEvent) => {
+    if (!batchedUpdates) {
+      for (const subscription of orderedMouseSubscriptionsRef.current) {
+        const handled = subscription.handler(event)
+        if (handled && typeof (handled as Promise<void>).catch === 'function') {
+          ;(handled as Promise<void>).catch(error => {
+            debugLogger.warn('MOUSE_HANDLER_PROMISE_REJECTED', {
+              error: error instanceof Error ? error.message : String(error),
+            })
+          })
+        }
+        if (handled === true) break
+      }
+      return
+    }
+
+    batchedUpdates(() => {
+      for (const subscription of orderedMouseSubscriptionsRef.current) {
+        const handled = subscription.handler(event)
+        if (handled && typeof (handled as Promise<void>).catch === 'function') {
+          ;(handled as Promise<void>).catch(error => {
+            debugLogger.warn('MOUSE_HANDLER_PROMISE_REJECTED', {
+              error: error instanceof Error ? error.message : String(error),
+            })
+          })
+        }
+        if (handled === true) break
+      }
+    })
+  }, [])
+
   useEffect(() => {
     const wasRaw = (stdin as unknown as { isRaw?: boolean } | null)?.isRaw
     const shouldEnableRaw =
-      stdin.isTTY === true && (wasRaw === false || wasRaw === undefined)
+      isRawModeSupported &&
+      stdin.isTTY === true &&
+      (wasRaw === false || wasRaw === undefined)
     if (shouldEnableRaw) {
       try {
         setRawMode(true)
@@ -756,14 +1048,11 @@ export function KeypressProvider({
       })
     }
 
-    let processor = broadcast
-    if (!terminalCapabilityManager.isBracketedPasteEnabled()) {
-      processor = bufferFastReturn(processor)
-    }
-    processor = bufferBackslashEnter(processor)
-    processor = bufferPaste(processor)
-
-    let dataListener = createDataListener(processor)
+    let dataListener = createKeypressDataListener(
+      broadcast,
+      broadcastMouse,
+      () => !terminalCapabilityManager.isBracketedPasteEnabled(),
+    )
 
     if (debugKeystrokeLogging) {
       const old = dataListener
@@ -786,10 +1075,29 @@ export function KeypressProvider({
         }
       }
     }
-  }, [stdin, setRawMode, debugKeystrokeLogging, broadcast])
+  }, [
+    stdin,
+    setRawMode,
+    isRawModeSupported,
+    debugKeystrokeLogging,
+    broadcast,
+    broadcastMouse,
+  ])
+
+  useEffect(() => {
+    return () => {
+      if (mouseSubscriptionsRef.current.size > 0) {
+        mouseSubscriptionsRef.current.clear()
+        orderedMouseSubscriptionsRef.current = []
+        disableMouseEvents()
+      }
+    }
+  }, [])
 
   return (
-    <KeypressContext.Provider value={{ subscribe, unsubscribe }}>
+    <KeypressContext.Provider
+      value={{ subscribe, unsubscribe, subscribeMouse, unsubscribeMouse }}
+    >
       {children}
     </KeypressContext.Provider>
   )

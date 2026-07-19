@@ -4,12 +4,9 @@ import type { Message } from '#core/query'
 import type { SetToolJSXFn } from '#core/tooling/Tool'
 import type { Tool } from '#core/tooling/Tool'
 import type { SetForkConvoWithMessagesOnTheNextRender } from '#ui-ink/types/conversationReset'
+import type { PastedImageAttachment, PastedTextSegment } from './pasteTypes'
 
 export type PromptMode = 'bash' | 'background' | 'prompt' | 'koding'
-
-export function toggleBashMode(current: PromptMode): PromptMode {
-  return current === 'bash' ? 'prompt' : 'bash'
-}
 
 export type PromptInputProps = {
   commands: Command[]
@@ -40,34 +37,23 @@ export type PromptInputProps = {
   setForkConvoWithMessagesOnTheNextRender: SetForkConvoWithMessagesOnTheNextRender
   readFileTimestamps: { [filename: string]: number }
   abortController: AbortController | null
+  cancelRequestKey?: number
   onModelChange?: () => void
   uiRefreshCounter?: number
-  onManageTasks?: () => void
   shortcutsOpen?: boolean
   restorePastes?: {
     id: number
-    pastedTexts: Array<{ placeholder: string; text: string }>
-    pastedImages: Array<{
-      placeholder: string
-      data: string
-      mediaType: string
-    }>
+    pastedTexts: PastedTextSegment[]
+    pastedImages: PastedImageAttachment[]
   }
   onRestorePastesApplied?: (id: number) => void
   draftPastes?: {
-    pastedTexts: Array<{ placeholder: string; text: string }>
-    pastedImages: Array<{
-      placeholder: string
-      data: string
-      mediaType: string
-    }>
+    pastedTexts: PastedTextSegment[]
+    pastedImages: PastedImageAttachment[]
   }
   onDraftPastesChange?: (next: {
-    pastedTexts: Array<{ placeholder: string; text: string }>
-    pastedImages: Array<{
-      placeholder: string
-      data: string
-      mediaType: string
-    }>
+    pastedTexts: PastedTextSegment[]
+    pastedImages: PastedImageAttachment[]
   }) => void
+  suppressStatusLine?: boolean
 }

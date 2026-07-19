@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 
-import { makeSdkResultMessage } from '#protocol/streamJson'
+import {
+  makeSdkResultMessage,
+  makeSdkStreamEventMessage,
+} from '#protocol/streamJson'
 
 describe('stream-json protocol helpers', () => {
   test('makeSdkResultMessage supports subtype override without result', () => {
@@ -34,5 +37,32 @@ describe('stream-json protocol helpers', () => {
     expect(msg.type).toBe('result')
     expect((msg as any).subtype).toBe('success')
     expect((msg as any).result).toBe('ok')
+  })
+
+  test('makeSdkStreamEventMessage wraps peripheral events with session metadata', () => {
+    const msg = makeSdkStreamEventMessage({
+      sessionId: 's3',
+      event: {
+        type: 'mcp_progress',
+        server: 'srv',
+        tool: 'slow',
+        progress: { progress: 1, total: 2, message: 'halfway' },
+      },
+      parentToolUseId: 'tool-use',
+      uuid: 'event-1',
+    })
+
+    expect(msg).toEqual({
+      type: 'stream_event',
+      event: {
+        type: 'mcp_progress',
+        server: 'srv',
+        tool: 'slow',
+        progress: { progress: 1, total: 2, message: 'halfway' },
+      },
+      session_id: 's3',
+      parent_tool_use_id: 'tool-use',
+      uuid: 'event-1',
+    })
   })
 })

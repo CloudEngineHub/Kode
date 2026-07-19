@@ -47,7 +47,7 @@ export function registerLogCommands(
     )
     .action(async (number: number | undefined, options: CwdOption) => {
       await setup(options.cwd, false)
-      renderLogListScreen(
+      await renderLogListScreen(
         { type: 'messages', logNumber: number },
         renderContextWithExitOnCtrlC,
       )
@@ -263,7 +263,7 @@ export function registerLogCommands(
     )
     .action(async (number: number | undefined, options: CwdOption) => {
       await setup(options.cwd, false)
-      renderLogListScreen(
+      await renderLogListScreen(
         { type: 'errors', logNumber: number },
         renderContextWithExitOnCtrlC,
       )

@@ -1,7 +1,8 @@
-import type { McpServerConfig } from '#core/utils/config'
+import { MCP_DEFAULTS, type McpServerConfig } from '#core/utils/config'
 import { debug } from '#core/utils/debugLogger'
 import {
   captureMcpCapabilities,
+  closeMcpClient,
   connectMcpServer,
   getMcpConnectionTimeoutMs,
   getMcpServerConnectionBatchSize,
@@ -15,9 +16,6 @@ type ManagedClientEntry = {
   lastConnectAttemptAt: number
   lastHealthCheckAt: number
 }
-
-const HEALTH_CHECK_INTERVAL_MS = 5_000
-const FAILED_RETRY_INTERVAL_MS = 30_000
 
 function stableStringify(value: unknown): string {
   if (value === undefined) return 'undefined'
@@ -40,9 +38,7 @@ function serverConfigKey(name: string, serverRef: McpServerConfig): string {
 
 async function closeWrappedClient(client: WrappedClient): Promise<void> {
   if (client.type !== 'connected') return
-  try {
-    await client.client.close()
-  } catch {}
+  await closeMcpClient(client.client)
 }
 
 async function pingWrappedClient(client: WrappedClient): Promise<boolean> {
@@ -139,7 +135,10 @@ export class MCPClientManager {
       void closeWrappedClient(existing.wrapped)
     } else if (existing) {
       if (existing.wrapped.type === 'connected') {
-        if (now - existing.lastHealthCheckAt < HEALTH_CHECK_INTERVAL_MS) {
+        if (
+          now - existing.lastHealthCheckAt <
+          MCP_DEFAULTS.healthCheckIntervalMs
+        ) {
           return existing.wrapped
         }
 
@@ -154,7 +153,7 @@ export class MCPClientManager {
         void closeWrappedClient(existing.wrapped)
       } else if (
         now - existing.lastConnectAttemptAt <
-        FAILED_RETRY_INTERVAL_MS
+        MCP_DEFAULTS.failedRetryIntervalMs
       ) {
         return existing.wrapped
       }

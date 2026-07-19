@@ -22,6 +22,7 @@ import {
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import { PermissionRequestDetails } from './PermissionRequestDetails'
+import { permissionSelectFocusScope } from './permissionFocusScope'
 
 type Props = {
   toolUseConfirm: ToolUseConfirm
@@ -67,10 +68,12 @@ export function FallbackPermissionRequest({
           <Box flexDirection="column">
             <Text wrap="truncate-end">
               {userFacingName}(
-              {toolUseConfirm.tool.renderToolUseMessage(
-                toolUseConfirm.input as never,
-                { verbose },
-              )}
+              {
+                toolUseConfirm.tool.renderToolUseMessage(
+                  toolUseConfirm.input as never,
+                  { verbose },
+                ) as React.ReactNode
+              }
               )
               {originalUserFacingName.endsWith(' (MCP)') ? (
                 <Text dimColor> (MCP)</Text>
@@ -87,6 +90,7 @@ export function FallbackPermissionRequest({
           <Box flexDirection="column">
             <Text>Allow this tool use?</Text>
             <Select
+              focusScope={permissionSelectFocusScope(toolUseConfirm, 'choice')}
               options={[
                 {
                   label: 'Allow once',

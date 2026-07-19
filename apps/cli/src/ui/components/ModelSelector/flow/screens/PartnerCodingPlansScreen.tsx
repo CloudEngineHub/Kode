@@ -4,8 +4,8 @@ import {
   ScreenFrame,
   type ScreenExitState,
 } from '#ui-ink/primitives/layout/ScreenFrame'
+import type { Option, WindowedOptionInteractions } from '../../viewTypes'
 
-type Option = { value: string; label: string }
 type WindowedOptionsLayout = {
   visibleOptionCount: number
   showIndicators: boolean
@@ -21,6 +21,8 @@ type Props = {
   codingPlanOptions: Option[]
   codingPlanFocusIndex: number
   codingReservedLines: number
+  onCodingPlanOptionPress: (optionIndex: number) => void
+  onCodingPlanOptionWheel: (direction: 'up' | 'down') => void
   getWindowedOptionsLayout: (
     requestedCount: number,
     optionLength: number,
@@ -30,6 +32,7 @@ type Props = {
     options: Option[],
     focusedIndex: number,
     layout: WindowedOptionsLayout,
+    interactions?: WindowedOptionInteractions,
   ) => React.ReactNode
 }
 
@@ -43,6 +46,8 @@ export function PartnerCodingPlansScreen({
   codingPlanOptions,
   codingPlanFocusIndex,
   codingReservedLines,
+  onCodingPlanOptionPress,
+  onCodingPlanOptionWheel,
   getWindowedOptionsLayout,
   renderWindowedOptions,
 }: Props) {
@@ -83,6 +88,10 @@ export function PartnerCodingPlansScreen({
             codingPlanOptions.length,
             codingReservedLines,
           ),
+          {
+            onOptionPress: onCodingPlanOptionPress,
+            onWheel: onCodingPlanOptionWheel,
+          },
         )}
 
         <Box marginTop={footerMarginTop}>

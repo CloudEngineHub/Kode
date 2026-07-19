@@ -1,12 +1,5 @@
-import { getGlobalConfig } from './config'
-
-export function isAnthropicAuthEnabled(): boolean {
-  // Kode supports interactive OAuth for managed accounts; expose login/logout commands
-  // in the CLI command surface (they are still no-ops unless the user completes auth).
+export function isInteractiveLoginEnabled(): boolean {
+  // Keep the login/logout commands available for provider configuration and
+  // external Codex sign-in discovery.
   return true
-}
-
-export function isLoggedInToAnthropic(): boolean {
-  const config = getGlobalConfig()
-  return Boolean(config.oauthAccount)
 }

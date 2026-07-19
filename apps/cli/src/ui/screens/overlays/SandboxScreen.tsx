@@ -19,6 +19,7 @@ import { SearchBox } from '#ui-ink/components/SearchBox'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import { getWindowedList } from '#ui-ink/primitives/list/windowedList'
+import { useScopedIndexState } from '#ui-ink/hooks/useScopedIndexState'
 
 type Props = {
   context: ToolUseContext
@@ -122,8 +123,6 @@ export function SandboxScreen({ context, onDone }: Props): React.ReactNode {
   const destination = DESTINATIONS[destinationIndex] ?? 'localSettings'
 
   const [mode, setMode] = useState<Mode>({ kind: 'main' })
-  const [selectedIndex, setSelectedIndex] = useState(0)
-  const [excludedSelectedIndex, setExcludedSelectedIndex] = useState(0)
   const [draftExcluded, setDraftExcluded] = useState('')
 
   const loaded = useMemo(
@@ -162,6 +161,16 @@ export function SandboxScreen({ context, onDone }: Props): React.ReactNode {
       { kind: 'nav', id: 'destination' },
     ],
     [],
+  )
+  const [selectedIndex, setSelectedIndex] = useScopedIndexState({
+    scope: 'sandbox-screen:main',
+    itemCount: items.length,
+  })
+  const [excludedSelectedIndex, setExcludedSelectedIndex] = useScopedIndexState(
+    {
+      scope: `sandbox-screen:excluded:${destination}`,
+      itemCount: sandboxSettings.excludedCommands.length + 2,
+    },
   )
 
   const reservedLines =

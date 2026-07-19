@@ -1,18 +1,28 @@
 import { Box, Text } from 'ink'
+import {
+  isCompactViewportHeight,
+  normalizeTerminalDimension,
+} from '#ui-ink/primitives/layout/viewportRows'
 import * as React from 'react'
-import { CompactModeIndicator } from '#ui-ink/components/ModeIndicator'
 import { SentryErrorBoundary } from '#ui-ink/components/SentryErrorBoundary'
 import TextInput from '#ui-ink/components/TextInput'
 import { TokenWarning } from '#ui-ink/components/TokenWarning'
-import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
+import { getCachedStringWidth } from '#cli-utils/textWidth'
 import type { Key } from '#ui-ink/hooks/useKeypress'
-import type { PermissionMode } from '#core/types/PermissionMode'
+import {
+  formatContextLimit,
+  formatTokenCount,
+} from '#ui-ink/utils/tokenDisplay'
 import type { Theme } from '#core/utils/theme'
 import type { ClipboardImage } from '#core/utils/image/media'
 import type { PromptMode } from './types'
 import { PromptInputCompletionPanel } from './PromptInputCompletionPanel'
 import { PendingPrompts } from './PendingPrompts'
 import { QueuedPrompts } from './QueuedPrompts'
+import {
+  getPromptModeBorderColor,
+  getPromptModePrefix,
+} from './promptModeSpecs'
 
 type ModelInfo = {
   name: string
@@ -20,6 +30,8 @@ type ModelInfo = {
   contextLength: number
   currentTokens: number
 } | null
+
+export { formatTokenCount as formatPromptTokenCount }
 
 type ExitMessageState = { show: boolean; key?: string }
 type InlineMessageState = { show: boolean; text?: string }
@@ -74,15 +86,15 @@ export function PromptInputView({
   modelSwitchMessage,
   toastMessage,
   statusLine,
+  customStatusLineActive,
   statusLinePadding,
-  currentMode,
-  modeCycleShortcutText,
-  showQuickModelSwitchShortcut,
+  suppressStatusLine = false,
   tokenUsage,
   textInputColumns,
   textInputMaxHeight,
   completionReservedRows,
-  isInFastBrowseMode,
+  terminalRows,
+  terminalColumns,
 }: {
   mode: PromptMode
   theme: Theme
@@ -91,7 +103,7 @@ export function PromptInputView({
   input: string
   cursorOffset: number
   setCursorOffset: (offset: number) => void
-  onSubmit: (value: string, isSubmittingSlashCommand?: boolean) => void
+  onSubmit: (value: string) => void
   onChange: (value: string) => void
   isEditingExternally: boolean
   isDisabled: boolean
@@ -108,7 +120,7 @@ export function PromptInputView({
   resetHistory: () => void
   placeholder: string
   submitCount: number
-  onExit: () => never
+  onExit: () => void
   onExitMessage: (show: boolean, key?: string) => void
   onMessage: (show: boolean, text?: string) => void
   onImagePaste: (image: ClipboardImage) => string | void
@@ -121,38 +133,90 @@ export function PromptInputView({
   modelSwitchMessage: InlineMessageState
   toastMessage: ToastMessageState
   statusLine: string | null
+  customStatusLineActive: boolean
   statusLinePadding: number
-  currentMode: PermissionMode
-  modeCycleShortcutText: string
-  showQuickModelSwitchShortcut: boolean
+  suppressStatusLine?: boolean
   tokenUsage: number
   textInputColumns: number
   textInputMaxHeight: number
   completionReservedRows: number
-  isInFastBrowseMode: () => boolean
+  terminalRows: number
+  terminalColumns: number
 }): React.ReactNode {
-  const { rows, columns } = useTerminalSize()
-  const compact = rows < 16
-  const showStatusLine = rows > 8
+  const rows = terminalRows
+  const columns = terminalColumns
+  const normalizedRows = normalizeTerminalDimension(rows, 0)
+  const isMicroViewport = normalizedRows > 0 && normalizedRows <= 4
+  const compact = isCompactViewportHeight(rows, {
+    microRows: 12,
+    tightRows: 15,
+    compactRows: 15,
+  })
+  const showAuxiliaryRows = !isMicroViewport
+  const modePrefix = getPromptModePrefix({ mode, theme, isLoading })
+  const contextLimitLabel = formatContextLimit(modelInfo?.contextLength)
+  const hasPriorityStatusMessage =
+    exitMessage.show ||
+    message.show ||
+    rewindPending ||
+    clearInputPending ||
+    modelSwitchMessage.show ||
+    toastMessage.show
+  const suppressNonessentialChrome =
+    suppressStatusLine && !hasPriorityStatusMessage
+  const showStatusLine =
+    normalizedRows > 8 && (!suppressStatusLine || hasPriorityStatusMessage)
+  const showModelInfo =
+    Boolean(modelInfo) &&
+    !compact &&
+    !customStatusLineActive &&
+    !hasPriorityStatusMessage &&
+    columns >= 80
+  const modelStatusText =
+    showModelInfo && modelInfo
+      ? `${modelInfo.name}${
+          contextLimitLabel
+            ? ` \u00b7 ${formatTokenCount(modelInfo.currentTokens)}/${contextLimitLabel}`
+            : ''
+        }`
+      : null
+  const horizontalStatusPadding = 1 + Math.max(0, statusLinePadding)
+  const statusContentColumns = Math.max(
+    1,
+    columns - horizontalStatusPadding * 2,
+  )
+  const modelStatusWidth = modelStatusText
+    ? Math.min(
+        40,
+        Math.max(
+          20,
+          Math.min(
+            getCachedStringWidth(modelStatusText) + 2,
+            Math.floor(statusContentColumns * 0.32),
+          ),
+        ),
+      )
+    : 0
+  const showInlineModelStatus =
+    Boolean(modelStatusText) && statusContentColumns - modelStatusWidth > 24
+  const statusTextWidth = showInlineModelStatus
+    ? Math.max(1, statusContentColumns - modelStatusWidth - 1)
+    : statusContentColumns
+  const statusRowWidth = Math.max(1, columns)
+
+  if (normalizedRows <= 0) return null
 
   return (
-    <Box flexDirection="column">
-      {/* Model info - top right of input */}
-      {modelInfo && !compact && (
-        <Box justifyContent="flex-end" flexDirection="row">
-          <Text dimColor wrap="truncate-end">
-            [{modelInfo.provider}] {modelInfo.name}:{' '}
-            {Math.round(modelInfo.currentTokens / 1000)}k /{' '}
-            {Math.round(modelInfo.contextLength / 1000)}k
-          </Text>
-        </Box>
-      )}
-
-      {pendingPrompts.length > 0 && (
+    <Box
+      flexDirection="column"
+      height={isMicroViewport ? normalizedRows : undefined}
+      overflow={isMicroViewport ? 'hidden' : undefined}
+    >
+      {showAuxiliaryRows && pendingPrompts.length > 0 && (
         <PendingPrompts pendingPrompts={pendingPrompts} width={columns} />
       )}
 
-      {queuedPrompts.length > 0 && (
+      {showAuxiliaryRows && queuedPrompts.length > 0 && (
         <QueuedPrompts queuedPrompts={queuedPrompts} width={columns} />
       )}
 
@@ -160,17 +224,11 @@ export function PromptInputView({
       <Box
         alignItems="flex-start"
         justifyContent="flex-start"
-        borderTop={true}
-        borderBottom={true}
+        borderTop={showAuxiliaryRows && !suppressNonessentialChrome}
+        borderBottom={showAuxiliaryRows && !suppressNonessentialChrome}
         borderLeft={false}
         borderRight={false}
-        borderColor={
-          mode === 'bash' || mode === 'background'
-            ? theme.bashBorder
-            : mode === 'koding'
-              ? theme.notingBorder
-              : theme.inputBorder
-        }
+        borderColor={getPromptModeBorderColor(mode, theme)}
         borderDimColor={false}
         borderStyle="single"
         width="100%"
@@ -182,17 +240,7 @@ export function PromptInputView({
           justifyContent="flex-start"
           width={2}
         >
-          {mode === 'bash' ? (
-            <Text color={theme.bashBorder}>$&nbsp;</Text>
-          ) : mode === 'background' ? (
-            <Text color={theme.bashBorder}>&amp;&nbsp;</Text>
-          ) : mode === 'koding' ? (
-            <Text color={theme.noting}>#&nbsp;</Text>
-          ) : (
-            <Text color={isLoading ? theme.secondaryText : undefined}>
-              {'\u276F'}&nbsp;
-            </Text>
-          )}
+          <Text color={modePrefix.color}>{modePrefix.text}</Text>
         </Box>
         <Box paddingRight={1}>
           <TextInput
@@ -213,10 +261,7 @@ export function PromptInputView({
             maxHeight={textInputMaxHeight}
             isDimmed={isDisabled || isLoading || isEditingExternally}
             disableCursorMovementForUpDownKeys={() =>
-              completionActive ||
-              historyIndex > 0 ||
-              !input.includes('\n') ||
-              isInFastBrowseMode()
+              completionActive || historyIndex > 0 || !input.includes('\n')
             }
             cursorOffset={cursorOffset}
             onChangeCursorOffset={setCursorOffset}
@@ -227,86 +272,100 @@ export function PromptInputView({
       </Box>
 
       {/* PWD line - first line below input */}
-      {!compact && (
+      {showAuxiliaryRows && !compact && !suppressNonessentialChrome && (
         <Box flexDirection="row" paddingX={1}>
-          <Text dimColor wrap="truncate-end">
+          <Text color={theme.text} wrap="truncate-end">
             {currentPwd}
           </Text>
         </Box>
       )}
 
       {/* Status line - below PWD */}
-      {!completionActive && suggestions.length === 0 && showStatusLine && (
-        <Box flexDirection="column">
-          <Box
-            flexDirection="row"
-            justifyContent="space-between"
-            paddingX={1 + Math.max(0, statusLinePadding)}
-          >
-            <Box justifyContent="flex-start" gap={1}>
-              {exitMessage.show ? (
-                <Text dimColor wrap="truncate-end">
-                  Press {exitMessage.key} again to exit
-                </Text>
-              ) : message.show ? (
-                <Text dimColor wrap="truncate-end">
-                  {message.text}
-                </Text>
-              ) : rewindPending ? (
-                <Text dimColor wrap="truncate-end">
-                  Press Escape again to rewind
-                </Text>
-              ) : clearInputPending ? (
-                <Text dimColor wrap="truncate-end">
-                  Press Escape again to clear input
-                </Text>
-              ) : modelSwitchMessage.show ? (
-                <Text color={theme.success} wrap="truncate-end">
-                  {modelSwitchMessage.text}
-                </Text>
-              ) : toastMessage.show ? (
-                <Text
-                  color={
-                    toastMessage.kind === 'error'
-                      ? theme.error
-                      : toastMessage.kind === 'warning'
-                        ? theme.warning
-                        : toastMessage.kind === 'success'
-                          ? theme.success
-                          : theme.secondaryText
-                  }
-                  wrap="truncate-end"
-                >
-                  {toastMessage.text}
-                </Text>
-              ) : statusLine ? (
-                <Text dimColor wrap="truncate-end">
-                  {statusLine}
-                </Text>
-              ) : null}
+      {showAuxiliaryRows &&
+        !completionActive &&
+        suggestions.length === 0 &&
+        showStatusLine && (
+          <Box flexDirection="column">
+            <Box
+              flexDirection="row"
+              overflow="hidden"
+              paddingX={horizontalStatusPadding}
+              width={statusRowWidth}
+            >
+              <Box
+                justifyContent="flex-start"
+                flexShrink={1}
+                width={statusTextWidth}
+              >
+                {exitMessage.show ? (
+                  <Text color={theme.text} wrap="truncate-end">
+                    Press {exitMessage.key} again to exit
+                  </Text>
+                ) : message.show ? (
+                  <Text color={theme.text} wrap="truncate-end">
+                    {message.text}
+                  </Text>
+                ) : rewindPending ? (
+                  <Text color={theme.text} wrap="truncate-end">
+                    Press Escape again to rewind
+                  </Text>
+                ) : clearInputPending ? (
+                  <Text color={theme.text} wrap="truncate-end">
+                    Press Escape again to clear input
+                  </Text>
+                ) : modelSwitchMessage.show ? (
+                  <Text color={theme.success} wrap="truncate-end">
+                    {modelSwitchMessage.text}
+                  </Text>
+                ) : toastMessage.show ? (
+                  <Text
+                    color={
+                      toastMessage.kind === 'error'
+                        ? theme.error
+                        : toastMessage.kind === 'warning'
+                          ? theme.warning
+                          : toastMessage.kind === 'success'
+                            ? theme.success
+                            : theme.text
+                    }
+                    wrap="truncate-end"
+                  >
+                    {toastMessage.text}
+                  </Text>
+                ) : statusLine ? (
+                  <Text color={theme.text} wrap="truncate-end">
+                    {statusLine}
+                  </Text>
+                ) : null}
+              </Box>
+              {!compact &&
+                !hasPriorityStatusMessage &&
+                showInlineModelStatus && (
+                  <SentryErrorBoundary
+                    children={
+                      <Box
+                        flexDirection="column"
+                        flexShrink={0}
+                        marginLeft={1}
+                        overflow="hidden"
+                        width={modelStatusWidth}
+                      >
+                        <Text color={theme.text} wrap="truncate-middle">
+                          {modelStatusText}
+                        </Text>
+                        <TokenWarning
+                          tokenUsage={tokenUsage}
+                          contextLimit={modelInfo?.contextLength}
+                        />
+                      </Box>
+                    }
+                  />
+                )}
             </Box>
-            {!compact && (
-              <SentryErrorBoundary
-                children={
-                  <Box justifyContent="flex-end" gap={1}>
-                    <TokenWarning
-                      tokenUsage={tokenUsage}
-                      contextLimit={modelInfo?.contextLength}
-                    />
-                  </Box>
-                }
-              />
-            )}
           </Box>
-          {!compact && mode === 'prompt' && currentMode !== 'default' && (
-            <Box paddingX={1}>
-              <CompactModeIndicator />
-            </Box>
-          )}
-        </Box>
-      )}
+        )}
 
-      {completionActive && suggestions.length > 0 && (
+      {showAuxiliaryRows && completionActive && suggestions.length > 0 && (
         <PromptInputCompletionPanel
           theme={theme}
           suggestions={suggestions}
@@ -315,6 +374,8 @@ export function PromptInputView({
           tokenUsage={tokenUsage}
           contextLimit={modelInfo?.contextLength}
           reservedRows={completionReservedRows}
+          rows={rows}
+          columns={columns}
         />
       )}
     </Box>

@@ -1,4 +1,5 @@
 import type { WrappedClient } from '#core/mcp/client'
+import { closeMcpClient } from '#core/mcp/client/connection'
 
 export const ACP_MAX_ACTIVE_SESSIONS = 100
 
@@ -7,6 +8,21 @@ export type ManagedAcpSession = {
   activeAbortController?: AbortController | null
   sessionOwnedMcpClients?: WrappedClient[]
 }
+
+export type AcpTurnBusyReason = 'session_busy' | 'global_turn_busy'
+
+export type AcpTurnLease = {
+  sessionId: string
+  release(): void
+}
+
+export type AcpTurnAcquireResult =
+  | { ok: true; lease: AcpTurnLease }
+  | {
+      ok: false
+      reason: AcpTurnBusyReason
+      activeSessionId: string
+    }
 
 type SessionEntry<T extends ManagedAcpSession> = {
   session: T
@@ -19,15 +35,19 @@ export async function closeSessionOwnedMcpClients(
   const clients = session.sessionOwnedMcpClients ?? []
   for (const client of clients) {
     if (client.type !== 'connected') continue
-    try {
-      await client.client.close()
-    } catch {}
+    await closeMcpClient(client.client)
   }
   session.sessionOwnedMcpClients = []
 }
 
 export class AcpSessionManager<T extends ManagedAcpSession> {
   private readonly sessions = new Map<string, SessionEntry<T>>()
+  private activeTurn:
+    | {
+        sessionId: string
+        token: symbol
+      }
+    | undefined
 
   constructor(
     private readonly options: {
@@ -50,6 +70,38 @@ export class AcpSessionManager<T extends ManagedAcpSession> {
 
   values(): T[] {
     return Array.from(this.sessions.values(), entry => entry.session)
+  }
+
+  tryAcquireTurn(sessionId: string): AcpTurnAcquireResult {
+    const activeTurn = this.activeTurn
+    if (activeTurn) {
+      return {
+        ok: false,
+        reason:
+          activeTurn.sessionId === sessionId
+            ? 'session_busy'
+            : 'global_turn_busy',
+        activeSessionId: activeTurn.sessionId,
+      }
+    }
+
+    const token = Symbol(sessionId)
+    this.activeTurn = { sessionId, token }
+    let released = false
+
+    return {
+      ok: true,
+      lease: {
+        sessionId,
+        release: () => {
+          if (released) return
+          released = true
+          if (this.activeTurn?.token === token) {
+            this.activeTurn = undefined
+          }
+        },
+      },
+    }
   }
 
   async set(sessionId: string, session: T): Promise<void> {

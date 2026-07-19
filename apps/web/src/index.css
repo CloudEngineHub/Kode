@@ -9,49 +9,48 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222 47% 11%;
+    --background: 210 20% 98%;
+    --foreground: 220 28% 10%;
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 220 28% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    --primary: 221 83% 53%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
-    --accent: 210 40% 96%;
-    --accent-foreground: 222 47% 11%;
+    --popover-foreground: 220 28% 10%;
+    --primary: 188 78% 34%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 16% 94%;
+    --secondary-foreground: 220 28% 10%;
+    --muted: 210 18% 95%;
+    --muted-foreground: 215 12% 43%;
+    --accent: 188 38% 92%;
+    --accent-foreground: 190 82% 22%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 210 40% 98%;
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 221 83% 53%;
-    --radius: 0.75rem;
+    --border: 214 18% 87%;
+    --input: 214 18% 87%;
+    --ring: 188 78% 34%;
+    --radius: 0.5rem;
   }
 
   .dark {
-    /* Deep navy base with subtle slate surfaces */
-    --background: 222 47% 7%;
-    --foreground: 210 40% 98%;
-    --card: 222 47% 10%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222 47% 10%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217 91% 60%;
-    --primary-foreground: 222 47% 11%;
-    --secondary: 217 33% 17%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217 33% 17%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 217 33% 17%;
-    --accent-foreground: 210 40% 98%;
+    --background: 220 10% 9%;
+    --foreground: 210 24% 92%;
+    --card: 220 9% 13%;
+    --card-foreground: 210 24% 92%;
+    --popover: 220 9% 13%;
+    --popover-foreground: 210 24% 92%;
+    --primary: 188 68% 48%;
+    --primary-foreground: 220 18% 8%;
+    --secondary: 220 8% 18%;
+    --secondary-foreground: 210 22% 88%;
+    --muted: 220 8% 16%;
+    --muted-foreground: 215 10% 66%;
+    --accent: 188 34% 18%;
+    --accent-foreground: 188 52% 78%;
     --destructive: 0 63% 31%;
     --destructive-foreground: 210 40% 98%;
-    --border: 217 33% 20%;
-    --input: 217 33% 20%;
-    --ring: 217 91% 60%;
+    --border: 220 8% 24%;
+    --input: 220 8% 24%;
+    --ring: 188 68% 48%;
   }
 
   * {
@@ -71,7 +70,97 @@
     overflow: hidden;
   }
 
+  .kode-web-root {
+    height: 100vh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  @supports (height: 100dvh) {
+    .kode-web-root {
+      height: 100dvh;
+    }
+  }
+
   ::selection {
     background: hsl(var(--primary) / 0.25);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  .kode-terminal-surface {
+    background: hsl(var(--kode-terminal-bg));
+  }
+
+  .kode-terminal-scroll [data-radix-scroll-area-viewport] {
+    overscroll-behavior: contain;
+    scroll-behavior: smooth;
+    scrollbar-gutter: stable;
+  }
+
+  .kode-terminal-viewport {
+    contain: layout paint;
+  }
+
+  .kode-terminal-message pre,
+  .kode-terminal-message code {
+    font-family: var(--kode-font-mono);
+  }
+
+  .kode-terminal-message pre {
+    scrollbar-color: hsl(var(--kode-terminal-border))
+      hsl(var(--kode-terminal-bg));
+  }
+
+  .kode-terminal-scroll [data-radix-scroll-area-viewport]::-webkit-scrollbar,
+  .kode-terminal-message pre::-webkit-scrollbar {
+    height: 10px;
+    width: 10px;
+  }
+
+  .kode-terminal-scroll
+    [data-radix-scroll-area-viewport]::-webkit-scrollbar-thumb,
+  .kode-terminal-message pre::-webkit-scrollbar-thumb {
+    background: hsl(var(--kode-terminal-border));
+    border: 2px solid hsl(var(--kode-terminal-bg));
+    border-radius: 999px;
+  }
+
+  .kode-terminal-caret {
+    animation: kode-terminal-caret 1s steps(1, end) infinite;
+  }
+
+  @keyframes kode-terminal-caret {
+    0%,
+    48% {
+      opacity: 1;
+    }
+
+    49%,
+    100% {
+      opacity: 0.18;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .kode-terminal-caret {
+      animation: none;
+      opacity: 0.85;
+    }
+
+    .kode-terminal-scroll [data-radix-scroll-area-viewport] {
+      scroll-behavior: auto;
+    }
   }
 }

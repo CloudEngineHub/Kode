@@ -1,11 +1,10 @@
 import { z } from 'zod'
-import { Tool } from '#core/tooling/Tool'
-import { BunShell } from '#runtime/shell'
+import { Tool } from '@kode/tool-interface/Tool'
 import { DESCRIPTION, PROMPT, TOOL_NAME_FOR_PROMPT } from './prompt'
 import {
-  getBackgroundAgentTaskSnapshot,
-  killBackgroundAgentTask,
-} from '#core/utils/backgroundTasks'
+  getBackgroundTaskSnapshot,
+  killBackgroundTask,
+} from '#core/tasks/backgroundRegistry'
 
 const inputSchema = z.strictObject({
   task_id: z
@@ -24,18 +23,6 @@ type Output = {
 
 function resolveTaskId(input: Input): string | null {
   return input.task_id ?? input.shell_id ?? null
-}
-
-type TaskStatus = 'running' | 'pending' | 'completed' | 'failed' | 'killed'
-
-function bashStatusFromRuntime(task: {
-  code: number | null
-  killed: boolean
-  interrupted: boolean
-}): TaskStatus {
-  if (task.killed) return 'killed'
-  if (task.code === null && !task.interrupted) return 'running'
-  return task.code === 0 ? 'completed' : 'failed'
 }
 
 export const TaskStopTool = {
@@ -78,29 +65,15 @@ export const TaskStopTool = {
       }
     }
 
-    const bg = BunShell.getInstance().getBackgroundOutput(taskId)
-    if (bg) {
-      const status = bashStatusFromRuntime(bg)
-      if (status !== 'running') {
-        return {
-          result: false,
-          message: `Task ${taskId} is not running (status: ${status})`,
-          errorCode: 3,
-        }
-      }
-      return { result: true }
-    }
+    const task = getBackgroundTaskSnapshot(taskId)
+    if (task) {
+      if (task.status === 'running') return { result: true }
 
-    const agent = getBackgroundAgentTaskSnapshot(taskId)
-    if (agent) {
-      if (agent.status !== 'running') {
-        return {
-          result: false,
-          message: `Task ${taskId} is not running (status: ${agent.status})`,
-          errorCode: 3,
-        }
+      return {
+        result: false,
+        message: `Task ${taskId} is not running (status: ${task.status})`,
+        errorCode: 3,
       }
-      return { result: true }
     }
 
     return {
@@ -113,50 +86,24 @@ export const TaskStopTool = {
     const taskId = resolveTaskId(input)
     if (!taskId) throw new Error('Missing required parameter: task_id')
 
-    const bg = BunShell.getInstance().getBackgroundOutput(taskId)
-    if (bg) {
-      const status = bashStatusFromRuntime(bg)
-      if (status !== 'running') {
-        throw new Error(
-          `Task ${taskId} is not running, so cannot be stopped (status: ${status})`,
-        )
-      }
-
-      const killed = BunShell.getInstance().killBackgroundShell(taskId)
-      const output: Output = {
-        message: killed
-          ? `Successfully stopped task: ${taskId} (${bg.command})`
-          : `No task found with ID: ${taskId}`,
-        task_id: taskId,
-        task_type: 'local_bash',
-      }
-
-      yield {
-        type: 'result',
-        data: output,
-        resultForAssistant: this.renderResultForAssistant(output),
-      }
-      return
-    }
-
-    const agent = getBackgroundAgentTaskSnapshot(taskId)
-    if (!agent) {
+    const task = getBackgroundTaskSnapshot(taskId)
+    if (!task) {
       throw new Error(`No task found with ID: ${taskId}`)
     }
 
-    if (agent.status !== 'running') {
+    if (task.status !== 'running') {
       throw new Error(
-        `Task ${taskId} is not running, so cannot be stopped (status: ${agent.status})`,
+        `Task ${taskId} is not running, so cannot be stopped (status: ${task.status})`,
       )
     }
 
-    const killed = killBackgroundAgentTask(taskId)
+    const killed = killBackgroundTask(taskId)
     const output: Output = {
       message: killed
-        ? `Successfully stopped task: ${taskId} (${agent.description})`
+        ? `Successfully stopped task: ${taskId} (${task.description})`
         : `No task found with ID: ${taskId}`,
       task_id: taskId,
-      task_type: 'local_agent',
+      task_type: task.taskType,
     }
     yield {
       type: 'result',

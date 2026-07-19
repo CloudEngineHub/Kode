@@ -1,5 +1,5 @@
 import matter from 'gray-matter'
-import yaml from 'js-yaml'
+import { JSON_SCHEMA, load } from 'js-yaml'
 
 import type { CustomCommandFrontmatter } from './types'
 
@@ -7,15 +7,12 @@ export function parseFrontmatter(content: string): {
   frontmatter: CustomCommandFrontmatter
   content: string
 } {
-  const yamlSchema = (yaml as { JSON_SCHEMA?: unknown }).JSON_SCHEMA
   const parsed = matter(content, {
     engines: {
       yaml: {
         parse: (input: string): object => {
-          const loaded = yaml.load(
-            input,
-            yamlSchema ? { schema: yamlSchema } : undefined,
-          )
+          if (input.trim() === '') return {}
+          const loaded = load(input, { schema: JSON_SCHEMA })
           return typeof loaded === 'object' && loaded !== null ? loaded : {}
         },
       },

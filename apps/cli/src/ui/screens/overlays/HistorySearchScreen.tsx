@@ -10,6 +10,8 @@ import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
+import { computeAvailableColumns } from '#ui-ink/primitives/layout/viewportColumns'
+import { useScopedIndexState } from '#ui-ink/hooks/useScopedIndexState'
 
 function normalizeQuery(value: string): string {
   return value.trim().toLowerCase()
@@ -45,10 +47,13 @@ export function HistorySearchScreen({
   const theme = getTheme()
   const layout = useScreenLayout()
   const exitState = { pending: false, keyName: null } as const
+  const inputColumns = computeAvailableColumns({
+    columns: layout.columns,
+    reservedColumns: layout.paddingX * 2 + 4,
+  })
 
   const [query, setQuery] = useState('')
   const [cursorOffset, setCursorOffset] = useState(0)
-  const [selectedIndex, setSelectedIndex] = useState(0)
   const [status, setStatus] = useState<string | null>(null)
 
   const normalizedQuery = useMemo(() => normalizeQuery(query), [query])
@@ -57,6 +62,10 @@ export function HistorySearchScreen({
     () => history.filter(item => matchesQuery(item.display, normalizedQuery)),
     [history, normalizedQuery],
   )
+  const [selectedIndex, setSelectedIndex] = useScopedIndexState({
+    scope: 'history-search',
+    itemCount: filtered.length,
+  })
 
   const clampedSelection = filtered.length
     ? clamp(selectedIndex, 0, filtered.length - 1)
@@ -196,7 +205,7 @@ export function HistorySearchScreen({
             }}
             onSubmit={() => acceptSelection()}
             onExit={() => onDone({ action: 'cancel' })}
-            columns={Math.max(10, layout.columns - layout.paddingX * 2 - 4)}
+            columns={inputColumns}
             cursorOffset={cursorOffset}
             onChangeCursorOffset={setCursorOffset}
             showCursor={true}

@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { estimateTokens } from '#core/utils/tokens'
 import { getModelManager } from '#core/utils/model'
 import type { Message } from '#core/query'
@@ -11,20 +11,52 @@ export function useQuickModelSwitch(args: {
   setModelSwitchMessage: (message: InlineMessageState) => void
   onModelChange?: () => void
 }) {
+  const {
+    messages,
+    onModelChange,
+    onSubmitCountChange,
+    setModelSwitchMessage,
+  } = args
+  const dismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const clearDismissTimeout = useCallback(() => {
+    if (!dismissTimeoutRef.current) return
+    clearTimeout(dismissTimeoutRef.current)
+    dismissTimeoutRef.current = null
+  }, [])
+
+  const showTimedModelSwitchMessage = useCallback(
+    (message: InlineMessageState, delayMs: number) => {
+      clearDismissTimeout()
+      setModelSwitchMessage(message)
+      dismissTimeoutRef.current = setTimeout(() => {
+        dismissTimeoutRef.current = null
+        setModelSwitchMessage({ show: false })
+      }, delayMs)
+    },
+    [clearDismissTimeout, setModelSwitchMessage],
+  )
+
+  useEffect(() => {
+    return () => clearDismissTimeout()
+  }, [clearDismissTimeout])
+
   return useCallback(() => {
     const modelManager = getModelManager()
-    const currentTokens = estimateTokens(args.messages)
+    const currentTokens = estimateTokens(messages)
     const debugInfo = modelManager.getModelSwitchingDebugInfo()
     const switchResult = modelManager.switchToNextModel(currentTokens)
 
     if (switchResult.success && switchResult.modelName) {
-      args.onModelChange?.()
-      args.onSubmitCountChange(prev => prev + 1)
-      args.setModelSwitchMessage({
-        show: true,
-        text: switchResult.message || `Switched to ${switchResult.modelName}`,
-      })
-      setTimeout(() => args.setModelSwitchMessage({ show: false }), 3000)
+      onModelChange?.()
+      onSubmitCountChange(prev => prev + 1)
+      showTimedModelSwitchMessage(
+        {
+          show: true,
+          text: switchResult.message || `Switched to ${switchResult.modelName}`,
+        },
+        3000,
+      )
       return
     }
 
@@ -44,7 +76,11 @@ export function useQuickModelSwitch(args: {
       }
     }
 
-    args.setModelSwitchMessage({ show: true, text: errorMessage })
-    setTimeout(() => args.setModelSwitchMessage({ show: false }), 6000)
-  }, [args])
+    showTimedModelSwitchMessage({ show: true, text: errorMessage }, 6000)
+  }, [
+    messages,
+    onModelChange,
+    onSubmitCountChange,
+    showTimedModelSwitchMessage,
+  ])
 }

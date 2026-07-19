@@ -24,6 +24,7 @@ describe('bypassPermissions safety floor', () => {
     expect(result.result).toBe(false)
     if (result.result !== false) throw new Error('Expected write to be denied')
     expect(result.shouldPromptUser).toBe(false)
+    expect(result.requiresExplicitApproval).toBe(true)
     expect(result.message).toContain('sensitive')
   })
 

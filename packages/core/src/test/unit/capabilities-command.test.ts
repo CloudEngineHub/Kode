@@ -4,7 +4,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 
 import capabilities from '#cli-commands/builtin/capabilities'
-import { clearAgentCache, getAgentByType } from '#core/utils/agentLoader'
+import { clearAgentCache, getAgentByType } from '@kode/agent'
 import { setCwd } from '#core/utils/state'
 
 function extractFirstPromptText(prompt: any[]): string {
@@ -60,8 +60,36 @@ describe('/capabilities (prompt command + built-in agent)', () => {
     const agent = await getAgentByType('capabilities-manager')
     expect(agent).toBeTruthy()
     expect(agent!.location).toBe('built-in')
-    if (Array.isArray(agent!.tools)) {
-      expect(agent!.tools).toContain('Task')
+    expect(agent!.tools).toEqual(['SlashCommand', 'Skill', 'Read', 'Edit'])
+    expect(agent!.systemPrompt).toContain(
+      'perform the statusline setup directly with Read and Edit',
+    )
+    expect(agent!.systemPrompt).toContain('nested Task calls are unavailable')
+  })
+
+  test('Explore and Plan use a hard read-only tool allowlist', async () => {
+    const mutationCapableTools = [
+      'Bash',
+      'TaskCreate',
+      'TaskUpdate',
+      'TodoWrite',
+      'Edit',
+      'Write',
+      'NotebookEdit',
+      'SlashCommand',
+      'Skill',
+      'MCP',
+    ]
+
+    for (const agentType of ['Explore', 'Plan']) {
+      const agent = await getAgentByType(agentType)
+      expect(agent).toBeTruthy()
+      expect(agent!.location).toBe('built-in')
+      expect(agent!.permissionMode).toBe('plan')
+      expect(Array.isArray(agent!.tools)).toBe(true)
+      for (const toolName of mutationCapableTools) {
+        expect(agent!.tools).not.toContain(toolName)
+      }
     }
   })
 })

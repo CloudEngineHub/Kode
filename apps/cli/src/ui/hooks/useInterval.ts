@@ -2,10 +2,11 @@ import { useEffect, useRef } from 'react'
 
 /**
  * A custom hook that runs a callback at a specified interval.
+ * Pass null to disable the interval.
  * The interval is cleared when the component unmounts.
  * The interval is also cleared and restarted if the delay changes.
  */
-export function useInterval(callback: () => void, delay: number): void {
+export function useInterval(callback: () => void, delay: number | null): void {
   const savedCallback = useRef(callback)
 
   // Remember the latest callback
@@ -15,6 +16,10 @@ export function useInterval(callback: () => void, delay: number): void {
 
   // Set up the interval
   useEffect(() => {
+    if (delay === null) {
+      return
+    }
+
     function tick() {
       savedCallback.current()
     }

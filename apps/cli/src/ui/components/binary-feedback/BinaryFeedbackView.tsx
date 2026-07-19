@@ -11,6 +11,7 @@ import { BinaryFeedbackOption } from './BinaryFeedbackOption'
 import type { AssistantMessage } from '#core/query'
 import type { BinaryFeedbackChoose } from './utils'
 import { useExitOnCtrlCD } from '#ui-ink/hooks/useExitOnCtrlCD'
+import { useCliExit } from '#ui-ink/hooks/useCliExit'
 import { BinaryFeedbackChoice } from './utils'
 import { PRODUCT_NAME } from '#core/constants/product'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
@@ -76,7 +77,8 @@ export function BinaryFeedbackView({
   const { rows, columns } = useTerminalSize()
   const [focused, setFocus] = useState('no-preference')
   const [focusValue, setFocusValue] = useState<string | undefined>(undefined)
-  const exitState = useExitOnCtrlCD(() => process.exit(1))
+  const requestExit = useCliExit()
+  const exitState = useExitOnCtrlCD(() => requestExit(1))
 
   // Keep a bottom margin to avoid terminal scroll/flicker when Ink re-renders near the last row.
   // Reserve 1 row for the exit/hint line rendered outside the bordered panel.
@@ -160,6 +162,7 @@ export function BinaryFeedbackView({
         <Box flexDirection="column" paddingTop={1}>
           <Text>How do you want to proceed?</Text>
           <Select
+            focusScope={`binary-feedback:${m1.message.id}:${m2.message.id}`}
             options={getOptions()}
             onFocus={setFocus}
             focusValue={focusValue}

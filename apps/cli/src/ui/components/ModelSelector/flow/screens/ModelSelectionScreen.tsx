@@ -114,16 +114,19 @@ export function ModelSelectionScreen({
         <Box flexDirection="column" minHeight={listMinHeight}>
           {modelOptions.length > 0 ? (
             <Select
+              focusScope="model-selector:model-selection"
               options={modelOptions}
               onChange={handleModelSelection}
               visibleOptionCount={visibleOptionCount}
             />
           ) : availableModels.length > 0 ? (
-            <Text color="yellow">
+            <Text color={theme.warning}>
               No models match your search. Try a different query.
             </Text>
           ) : (
-            <Text color="yellow">No models available for this provider.</Text>
+            <Text color={theme.warning}>
+              No models available for this provider.
+            </Text>
           )}
         </Box>
         {!tightLayout && modelOptions.length > 0 && (

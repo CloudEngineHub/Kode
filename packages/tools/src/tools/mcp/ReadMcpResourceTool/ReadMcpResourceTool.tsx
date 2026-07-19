@@ -1,7 +1,7 @@
 import { Box, Text } from 'ink'
 import React from 'react'
 import { z } from 'zod'
-import type { Tool, ToolUseContext } from '#core/tooling/Tool'
+import type { Tool, ToolUseContext } from '@kode/tool-interface/Tool'
 import { getClients, type WrappedClient } from '#core/mcp/client'
 import { ReadResourceResultSchema } from '@modelcontextprotocol/sdk/types.js'
 import { DESCRIPTION, PROMPT, TOOL_NAME } from './prompt'
@@ -18,6 +18,7 @@ type Output = {
     uri: string
     mimeType?: string
     text?: string
+    blob?: string
   }>
 }
 

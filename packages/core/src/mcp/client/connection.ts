@@ -3,7 +3,11 @@ import { spawn } from 'node:child_process'
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { UnauthorizedError } from '@modelcontextprotocol/sdk/client/auth.js'
-import type { ServerCapabilities } from '@modelcontextprotocol/sdk/types.js'
+import {
+  LoggingMessageNotificationSchema,
+  ResourceUpdatedNotificationSchema,
+  type ServerCapabilities,
+} from '@modelcontextprotocol/sdk/types.js'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
@@ -13,17 +17,114 @@ import {
   checkHasTrustDialogAccepted,
   type McpServerConfig,
 } from '#core/utils/config'
+import { MACRO } from '#core/constants/macros'
 import { PRODUCT_COMMAND } from '#core/constants/product'
 import { logMCPError } from '#core/utils/log'
 import { getCwd } from '#core/utils/state'
 
 import { notifyMcpListChanged } from './listChanged'
+import { handleMcpLoggingMessage } from './logging'
+import { notifyMcpResourceUpdated } from './resourceUpdates'
 import { getMcpOAuthProvider } from './oauth'
 import { getMcpServer } from './config'
 import { getMcpServerConnectionBatchSize } from './settings'
+import {
+  getMcpClientCapabilities,
+  registerMcpClientRequestHandlers,
+  unregisterMcpClientRequestHandlers,
+} from './roots'
 import type { WrappedClient } from './types'
 
 type GlobalWithWebSocket = { WebSocket?: unknown }
+export type McpClientConnectionOptions = { clientVersion?: string }
+
+export function getMcpClientInfo(options?: McpClientConnectionOptions): {
+  name: string
+  version: string
+} {
+  return {
+    name: PRODUCT_COMMAND,
+    version: options?.clientVersion ?? MACRO.VERSION,
+  }
+}
+
+export function createMcpClientSdkOptions(name: string) {
+  return {
+    capabilities: getMcpClientCapabilities(),
+    listChanged: {
+      tools: {
+        onChanged: (error: Error | null) => {
+          if (error) {
+            logMCPError(
+              name,
+              `Failed to refresh tools after list change: ${error.message}`,
+            )
+            return
+          }
+          notifyMcpListChanged({ kind: 'tools', server: name })
+        },
+      },
+      prompts: {
+        onChanged: (error: Error | null) => {
+          if (error) {
+            logMCPError(
+              name,
+              `Failed to refresh prompts after list change: ${error.message}`,
+            )
+            return
+          }
+          notifyMcpListChanged({ kind: 'prompts', server: name })
+        },
+      },
+      resources: {
+        onChanged: (error: Error | null) => {
+          if (error) {
+            logMCPError(
+              name,
+              `Failed to refresh resources after list change: ${error.message}`,
+            )
+            return
+          }
+          notifyMcpListChanged({ kind: 'resources', server: name })
+        },
+      },
+    },
+  }
+}
+
+export function createMcpClient(
+  name: string,
+  options?: McpClientConnectionOptions,
+): Client {
+  const client = new Client(
+    getMcpClientInfo(options),
+    createMcpClientSdkOptions(name),
+  )
+  registerMcpClientRequestHandlers(client)
+  client.setNotificationHandler(
+    LoggingMessageNotificationSchema,
+    notification => {
+      handleMcpLoggingMessage(name, notification)
+    },
+  )
+  client.setNotificationHandler(
+    ResourceUpdatedNotificationSchema,
+    notification => {
+      notifyMcpResourceUpdated({
+        server: name,
+        uri: notification.params.uri,
+      })
+    },
+  )
+  return client
+}
+
+export async function closeMcpClient(client: Client): Promise<void> {
+  unregisterMcpClientRequestHandlers(client)
+  try {
+    await client.close()
+  } catch {}
+}
 
 async function ensureWebSocketGlobal(): Promise<void> {
   const global = globalThis as unknown as GlobalWithWebSocket
@@ -346,6 +447,7 @@ export async function createMcpTransportCandidates(
 export async function connectToServer(
   name: string,
   serverRef: McpServerConfig,
+  options?: McpClientConnectionOptions,
 ): Promise<Client> {
   const candidates = await createMcpTransportCandidates(name, serverRef)
 
@@ -354,50 +456,7 @@ export async function connectToServer(
   let lastError: unknown
 
   for (const candidate of candidates) {
-    const client = new Client(
-      { name: PRODUCT_COMMAND, version: '0.1.0' },
-      {
-        capabilities: {},
-        listChanged: {
-          tools: {
-            onChanged: (error: Error | null) => {
-              if (error) {
-                logMCPError(
-                  name,
-                  `Failed to refresh tools after list change: ${error.message}`,
-                )
-                return
-              }
-              notifyMcpListChanged({ kind: 'tools', server: name })
-            },
-          },
-          prompts: {
-            onChanged: (error: Error | null) => {
-              if (error) {
-                logMCPError(
-                  name,
-                  `Failed to refresh prompts after list change: ${error.message}`,
-                )
-                return
-              }
-              notifyMcpListChanged({ kind: 'prompts', server: name })
-            },
-          },
-          resources: {
-            onChanged: (error: Error | null) => {
-              if (error) {
-                logMCPError(
-                  name,
-                  `Failed to refresh resources after list change: ${error.message}`,
-                )
-                return
-              }
-              notifyMcpListChanged({ kind: 'resources', server: name })
-            },
-          },
-        },
-      },
-    )
+    const client = createMcpClient(name, options)
 
     try {
       const connectPromise = client.connect(candidate.transport)
@@ -440,9 +499,7 @@ export async function connectToServer(
       return client
     } catch (error) {
       lastError = error
-      try {
-        await client.close()
-      } catch {}
+      await closeMcpClient(client)
     }
   }
 
@@ -464,10 +521,10 @@ export function captureMcpCapabilities(
 export async function connectMcpServer(
   name: string,
   serverRef: McpServerConfig,
-  _options?: { clientVersion?: string },
+  options?: McpClientConnectionOptions,
 ): Promise<WrappedClient> {
   try {
-    const client = await connectToServer(name, serverRef)
+    const client = await connectToServer(name, serverRef, options)
     return {
       name,
       client,

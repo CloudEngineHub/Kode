@@ -5,6 +5,10 @@ import { join, resolve } from 'node:path'
 import { safeParseJSON } from '../json'
 import { resolveDataRoots } from '../dataRoots'
 
+/**
+ * @deprecated Legacy Claude JSON config shape is retained only for importing
+ * existing Claude-compatible configuration. Prefer Kode-native config for new code.
+ */
 export type LegacyClaudeJsonConfig = Record<string, unknown>
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -36,6 +40,10 @@ function getDefaultHomeDir(): string {
   return homedir()
 }
 
+/**
+ * @deprecated Used only to discover existing Claude-compatible config files for
+ * migration/import. Prefer Kode-native config paths for new code.
+ */
 export function getLegacyClaudeJsonConfigCandidates(options?: {
   homeDir?: string
 }): string[] {
@@ -62,6 +70,10 @@ export function getLegacyClaudeJsonConfigCandidates(options?: {
   return dedupeStrings(candidates)
 }
 
+/**
+ * @deprecated Used only to read existing Claude-compatible config files for
+ * migration/import. Prefer Kode-native config loading for new code.
+ */
 export function loadLegacyClaudeJsonConfig(options?: { homeDir?: string }): {
   config: LegacyClaudeJsonConfig | null
   usedPath: string | null

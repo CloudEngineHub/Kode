@@ -4,6 +4,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import figures from 'figures'
 import type { Command } from '#cli-commands'
+import { isPrimaryCommandName } from '#cli-commands/discovery'
 import { PRODUCT_COMMAND, PRODUCT_NAME } from '#core/constants/product'
 import { CACHE_PATHS, DATE } from '#core/logging/log/paths'
 import { MACRO } from '#core/constants/macros'
@@ -16,8 +17,17 @@ import {
 import { copyTextToClipboard } from '#cli-utils/clipboard'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
+import {
+  getCommandShortcutHints,
+  getShortcutModifierLabel,
+} from '#ui-ink/utils/commandShortcutHints'
+import { getPermissionModeCycleShortcut } from '#ui-ink/utils/permissionModeCycleShortcut'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
+import {
+  computeAvailableRows,
+  computeScreenFrameReservedRows,
+} from '#ui-ink/primitives/layout/viewportRows'
 import { wrapLines } from '#ui-ink/primitives/text/wrapLines'
 
 const VIEWPORT_SAFE_MARGIN_ROWS = 1
@@ -37,12 +47,35 @@ function getHelpPath(): string {
   return join(CACHE_PATHS.errors(), `help-${DATE}.txt`)
 }
 
-function buildHelpLines(commands: Command[]): string[] {
+function formatCommandAliases(command: Command): string {
+  if (!command.aliases?.length) return ''
+  return ` (aliases: ${command.aliases.map(alias => `/${alias}`).join(', ')})`
+}
+
+export function __buildHelpLinesForTests(commands: Command[]): string[] {
+  const quickHints = getCommandShortcutHints()
+  const shortcutModifier = getShortcutModifierLabel()
+  const modelShortcut = quickHints.shortcuts[0] ?? {
+    trigger: 'Alt+M',
+    effect: 'switch model',
+  }
+  const editorShortcut = quickHints.shortcuts[1] ?? {
+    trigger: 'Alt+G',
+    effect: 'open external editor',
+  }
+  const modeCycleShortcut = getPermissionModeCycleShortcut()
   const filteredCommands = commands.filter(cmd => !cmd.isHidden)
   const customCommands = filteredCommands.filter(isCustomCommandWithScope)
   const builtInCommands = filteredCommands.filter(
     cmd => !isCustomCommandWithScope(cmd),
   )
+  // Keep the default help list focused on primary commands; full catalog stays
+  // available via command search / palette.
+  const primaryBuiltIns = builtInCommands.filter(cmd =>
+    isPrimaryCommandName(cmd.name),
+  )
+  const commandsForHelp =
+    primaryBuiltIns.length > 0 ? primaryBuiltIns : builtInCommands
 
   const dirs = getCustomCommandDirectories()
 
@@ -57,7 +90,9 @@ function buildHelpLines(commands: Command[]): string[] {
 
   lines.push('Usage')
   lines.push(`- REPL: ${PRODUCT_COMMAND}`)
-  lines.push(`- Non-interactive: ${PRODUCT_COMMAND} -p "question"`)
+  lines.push(
+    `- Non-interactive: ${PRODUCT_COMMAND} -p "question" or ${PRODUCT_COMMAND} --headless "question"`,
+  )
   lines.push(`- CLI options: ${PRODUCT_COMMAND} -h`)
   lines.push('')
 
@@ -69,18 +104,31 @@ function buildHelpLines(commands: Command[]): string[] {
   lines.push('- F4: Console (captured stdout/stderr)')
   lines.push('- F5: Notifications')
   lines.push('- F6: Transcript (scroll/copy)')
-  lines.push('- F7: Command palette')
+  lines.push('- F7: Command palette (search actions and commands)')
   lines.push('- F8: Tasks (background tasks)')
   lines.push('- Ctrl+O: Toggle verbose transcript')
   lines.push('- Ctrl+T: Work tasks')
   lines.push('- Ctrl+R: History search')
-  lines.push('- Alt+P: Model picker')
-  lines.push('- Ctrl+G: External editor')
+  lines.push(
+    `- ${shortcutModifier}+P: Model picker (type to filter; Ctrl+O opens model settings)`,
+  )
+  lines.push(`- ${modelShortcut.trigger}: ${modelShortcut.effect}`)
+  lines.push(
+    `- ${editorShortcut.trigger}: ${editorShortcut.effect} (Ctrl+G also works)`,
+  )
+  lines.push(`- Ctrl/${shortcutModifier}+B: Prefill /bash`)
   lines.push('- Ctrl+S: Stash prompt')
   lines.push('- Ctrl+_: Undo')
   lines.push('- Double Esc: Clear input')
-  lines.push('- Shift+Tab: Cycle permission mode')
+  lines.push(`- ${modeCycleShortcut.displayText}: Cycle permission mode`)
+  lines.push('- / + Tab: Accept command completion')
   lines.push('- Down Arrow (empty input): Tasks (when available)')
+  lines.push('')
+
+  lines.push('Quick commands')
+  for (const command of quickHints.commands) {
+    lines.push(`- ${command.trigger}: ${command.effect}`)
+  }
   lines.push('')
 
   lines.push('Common tasks')
@@ -93,8 +141,16 @@ function buildHelpLines(commands: Command[]): string[] {
   lines.push('')
 
   lines.push('Commands')
-  for (const cmd of builtInCommands) {
-    lines.push(`- /${cmd.name} — ${cmd.description}`)
+  for (const cmd of commandsForHelp) {
+    const argumentHint = cmd.argumentHint ? ` ${cmd.argumentHint}` : ''
+    lines.push(
+      `- /${cmd.userFacingName()}${argumentHint} — ${cmd.description}${formatCommandAliases(cmd)}`,
+    )
+  }
+  if (commandsForHelp.length < builtInCommands.length) {
+    lines.push(
+      `- … and ${builtInCommands.length - commandsForHelp.length} more (command palette / search)`,
+    )
   }
 
   if (customCommands.length > 0) {
@@ -102,11 +158,10 @@ function buildHelpLines(commands: Command[]): string[] {
     lines.push('Custom commands')
     for (const cmd of customCommands) {
       const scope = cmd.scope ? ` [${cmd.scope}]` : ''
-      const aliases =
-        cmd.aliases && cmd.aliases.length > 0
-          ? ` (aliases: ${cmd.aliases.join(', ')})`
-          : ''
-      lines.push(`- /${cmd.name}${scope} — ${cmd.description}${aliases}`)
+      const argumentHint = cmd.argumentHint ? ` ${cmd.argumentHint}` : ''
+      lines.push(
+        `- /${cmd.userFacingName()}${scope}${argumentHint} — ${cmd.description}${formatCommandAliases(cmd)}`,
+      )
     }
   }
 
@@ -162,24 +217,29 @@ export function HelpScreen({
   const [status, setStatus] = useState<string | null>(null)
   const [savedPath, setSavedPath] = useState<string | null>(null)
 
-  const rawLines = useMemo(() => buildHelpLines(commands), [commands])
+  const rawLines = useMemo(() => __buildHelpLinesForTests(commands), [commands])
   const wrapped = useMemo(() => {
     const width = Math.max(1, layout.columns - layout.paddingX * 2)
     return wrapLines(rawLines, width)
   }, [layout.columns, layout.paddingX, rawLines])
 
-  const frameHeaderRows = 1
-  const frameRows = frameHeaderRows + 1 + layout.gap * 2 + layout.paddingY * 2
+  const frameRows = computeScreenFrameReservedRows({
+    paddingY: layout.paddingY,
+    gap: layout.gap,
+    exitPromptRows: exitState.pending ? 1 : 0,
+  })
   const innerReservedRows =
     1 + // shortcut line
     1 + // status line
     INDICATOR_ROWS +
     1 // tip line
 
-  const contentRows = Math.max(
-    1,
-    layout.rows - frameRows - innerReservedRows - VIEWPORT_SAFE_MARGIN_ROWS,
-  )
+  const contentRows = computeAvailableRows({
+    rows: layout.rows,
+    reservedRows: frameRows + innerReservedRows,
+    safeMarginRows: VIEWPORT_SAFE_MARGIN_ROWS,
+    minRows: 1,
+  })
 
   const maxScrollTop = Math.max(0, wrapped.length - contentRows)
 

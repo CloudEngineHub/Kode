@@ -8,6 +8,7 @@ import { MACRO } from '#core/constants/macros'
 
 import { registerConfigCommands } from '../commands/config'
 import { registerContextCommands } from '../commands/context'
+import { registerDaemonCommands } from './commands/daemon'
 import { registerMcpCommands } from '../commands/mcp'
 import { registerModelsCommands } from '../commands/models'
 import { registerAgentsCommands } from './commands/agents'
@@ -32,7 +33,7 @@ export function createCliProgram(
   program
     .name(PRODUCT_COMMAND)
     .description(
-      `${PRODUCT_NAME} - starts an interactive session by default, use -p/--print for non-interactive output`,
+      `${PRODUCT_NAME} - starts an interactive session by default; use -p/--print or --headless for non-interactive output`,
     )
     .argument('[prompt]', 'Your prompt', String)
     .option('--cwd <cwd>', 'The current working directory', String, cwd())
@@ -57,8 +58,13 @@ export function createCliProgram(
       () => true,
     )
     .option(
+      '--headless',
+      'Run without the Ink TUI. Equivalent to --print, with text output by default.',
+      () => true,
+    )
+    .option(
       '--output-format <format>',
-      'Output format (only works with --print): "text" (default), "json", or "stream-json"',
+      'Output format (only works with --print/--headless): "text" (default), "json", or "stream-json"',
       String,
       'text',
     )
@@ -69,7 +75,7 @@ export function createCliProgram(
     )
     .option(
       '--input-format <format>',
-      'Input format (only works with --print): "text" (default) or "stream-json"',
+      'Input format (only works with --print/--headless): "text" (default) or "stream-json"',
       String,
       'text',
     )
@@ -91,7 +97,7 @@ export function createCliProgram(
     .addOption(
       new Option(
         '--max-thinking-tokens <tokens>',
-        'Maximum number of thinking tokens.  (only works with --print)',
+        'Maximum number of thinking tokens.  (only works with --print/--headless)',
       )
         .argParser(Number)
         .hideHelp(),
@@ -99,14 +105,14 @@ export function createCliProgram(
     .addOption(
       new Option(
         '--max-turns <turns>',
-        'Maximum number of agentic turns in non-interactive mode. This will early exit the conversation after the specified number of turns. (only works with --print)',
+        'Maximum number of agentic turns in non-interactive mode. This will early exit the conversation after the specified number of turns. (only works with --print/--headless)',
       )
         .argParser(Number)
         .hideHelp(),
     )
     .option(
       '--max-budget-usd <amount>',
-      'Maximum dollar amount to spend on API calls (only works with --print)',
+      'Maximum dollar amount to spend on API calls (only works with --print/--headless)',
       value => {
         const n = Number(value)
         if (!Number.isFinite(n) || n <= 0) {
@@ -119,7 +125,7 @@ export function createCliProgram(
     )
     .option(
       '--include-partial-messages',
-      'Include partial message chunks as they arrive (only works with --print and --output-format=stream-json)',
+      'Include partial message chunks as they arrive (only works with --print/--headless and --output-format=stream-json)',
       () => true,
     )
     .option(
@@ -133,7 +139,7 @@ export function createCliProgram(
     )
     .option(
       '--tools <tools...>',
-      'Specify the list of available tools from the built-in set. Use "" to disable all tools, "default" to use all tools, or specify tool names (e.g. "Bash,Edit,Read"). Only works with --print mode.',
+      'Specify the list of available tools from the built-in set. Use "" to disable all tools, "default" to use all tools, or specify tool names (e.g. "Bash,Edit,Read"). Only works with --print/--headless mode.',
     )
     .option(
       '--disallowedTools, --disallowed-tools <tools...>',
@@ -177,7 +183,7 @@ export function createCliProgram(
     )
     .option(
       '--permission-prompt-tool <tool>',
-      'Permission prompt tool (only works with --print, --output-format=stream-json, and --input-format=stream-json): "stdio"',
+      'Permission prompt tool (only works with --print/--headless, --output-format=stream-json, and --input-format=stream-json): "stdio"',
       String,
     )
     .option(
@@ -216,7 +222,7 @@ export function createCliProgram(
     )
     .option(
       '--fallback-model <model>',
-      'Enable automatic fallback to specified model when default model is overloaded (only works with --print)',
+      'Enable automatic fallback to specified model when default model is overloaded (only works with --print/--headless)',
       String,
     )
     .option(
@@ -282,7 +288,7 @@ export function createCliProgram(
     )
     .option(
       '--no-session-persistence',
-      'Disable session persistence - sessions will not be saved to disk and cannot be resumed (only works with --print)',
+      'Disable session persistence - sessions will not be saved to disk and cannot be resumed (only works with --print/--headless)',
     )
     .option(
       '--session-id <uuid>',
@@ -308,6 +314,7 @@ export function createCliProgram(
   registerUpdateCommand(program)
   registerLogCommands(program, renderContextWithExitOnCtrlC)
   registerContextCommands(program)
+  registerDaemonCommands(program)
 
   return program
 }

@@ -8,6 +8,10 @@ import {
 } from '#core/utils/requestStatus'
 import { debug as debugLogger } from '#core/utils/debugLogger'
 import { parseToolUsePartialJsonOrThrow } from '#core/utils/toolUsePartialJson'
+import {
+  emitAssistantStreamUpdate,
+  type AssistantStreamUpdateOptions,
+} from '@kode/tool-interface/assistantStreamUpdate'
 
 type AnthropicClient = Anthropic | AnthropicBedrock | AnthropicVertex
 
@@ -21,8 +25,12 @@ export async function createAnthropicStreamingMessage(
   anthropic: AnthropicClient,
   params: Anthropic.Beta.Messages.MessageCreateParams,
   signal: AbortSignal,
-  options?: { onStreamEvent?: (event: unknown) => void },
+  options?: AssistantStreamUpdateOptions & {
+    onStreamEvent?: (event: unknown) => void
+  },
 ): Promise<any> {
+  emitAssistantStreamUpdate(options, { type: 'start' })
+
   const stream = await anthropic.beta.messages.create(
     {
       ...params,
@@ -106,6 +114,12 @@ export async function createAnthropicStreamingMessage(
         }
 
         if (event.delta.type === 'text_delta') {
+          if (event.delta.text) {
+            emitAssistantStreamUpdate(options, {
+              type: 'text_delta',
+              delta: event.delta.text,
+            })
+          }
           if (!hasMarkedStreaming) {
             setRequestStatus({ kind: 'streaming' })
             hasMarkedStreaming = true

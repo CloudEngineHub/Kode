@@ -276,12 +276,12 @@ export function ApiKeyScreen({
 
         {modelLoadError && !isLoadingModels && (
           <Box marginTop={tightLayout ? 0 : 1} flexDirection="column">
-            <Text color="red">
+            <Text color={theme.error}>
               Validation failed{tightLayout ? `: ${modelLoadError}` : ''}
             </Text>
             {!tightLayout ? (
               <>
-                <Text color="red">{modelLoadError}</Text>
+                <Text color={theme.error}>{modelLoadError}</Text>
                 <Text color={theme.warning}>
                   Please check your API key and try again.
                 </Text>

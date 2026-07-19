@@ -16,7 +16,7 @@ export const TOOL_CATEGORIES = {
   other: ['TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet', 'AskUserQuestion'],
 } as const
 
-function getCoreTools(): Tool[] {
+export function getCoreTools(): Tool[] {
   const tools: Tool[] = [
     { name: 'Read', description: 'Read files from filesystem' },
     { name: 'Write', description: 'Write files to filesystem' },

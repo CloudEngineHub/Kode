@@ -2,24 +2,23 @@ import { statSync } from 'fs'
 import { EOL } from 'os'
 import { isAbsolute, resolve } from 'path'
 import * as React from 'react'
+import type { SetToolJSXFn } from '@kode/tool-interface/Tool'
 import { createAssistantMessage } from '#core/utils/messages'
 import { isInDirectory } from '#core/utils/file'
 import { logError } from '#core/utils/log'
 import { getCwd, getOriginalCwd } from '#core/utils/state'
 import { BunShell } from '#runtime/shell'
 import type { BunShellSandboxOptions } from '#runtime/shell'
-import { BashToolRunInBackgroundOverlay } from './BashToolRunInBackgroundOverlay'
+import {
+  BashToolRunInBackgroundOverlay,
+  createRunInBackgroundKeypressHandler,
+} from './BashToolRunInBackgroundOverlay'
 import { formatOutput, getCommandFilePaths } from './utils'
 import { countNewlines, formatDuration, normalizeLineEndings } from './text'
 import type { Out } from './BashTool'
 import { maybeSummarizeBashOutput } from './summarizeOutput'
 
-type SetToolJSX = (
-  value: {
-    jsx: React.ReactNode | null
-    shouldHidePromptInput: boolean
-  } | null,
-) => void
+type SetToolJSX = SetToolJSXFn<React.ReactNode>
 
 export async function* executeForegroundBash(options: {
   command: string
@@ -86,6 +85,8 @@ export async function* executeForegroundBash(options: {
       if (!promoted) return
       resolveBackground?.(promoted.bashId)
     }
+    const onBackgroundKeypress =
+      createRunInBackgroundKeypressHandler(requestBackground)
 
     const resultPromise = exec.result
 
@@ -239,10 +240,9 @@ export async function* executeForegroundBash(options: {
       ) {
         overlayShown = true
         setToolJSX({
-          jsx: (
-            <BashToolRunInBackgroundOverlay onBackground={requestBackground} />
-          ),
+          jsx: <BashToolRunInBackgroundOverlay />,
           shouldHidePromptInput: false,
+          onKeypress: onBackgroundKeypress,
         })
       }
 

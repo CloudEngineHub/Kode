@@ -15,6 +15,7 @@ import {
 } from '#protocol/utils/kodeAgentSessionId'
 import { sanitizeProjectNameForSessionStore } from '#protocol/utils/kodeAgentSessionLog'
 import { getOriginalCwd, setCwd, setOriginalCwd } from '#core/utils/state'
+import { setMessagesSetter } from '#core/messages'
 
 function assistantToolUseMessage(args: { id: string; name: string }) {
   const msg = createAssistantMessage('[tool_use]')
@@ -66,6 +67,7 @@ describe('microcompact (tool result offload)', () => {
   })
 
   afterEach(() => {
+    setMessagesSetter(() => {})
     resetKodeAgentSessionIdForTests()
     setOriginalCwd(runnerOriginalCwd)
     if (originalConfigDir === undefined) delete process.env.KODE_CONFIG_DIR
@@ -141,5 +143,38 @@ describe('microcompact (tool result offload)', () => {
 
     expect(readFileSync(path1, 'utf8')).toBe(big)
     expect(readFileSync(path2, 'utf8')).toBe(big)
+  })
+
+  test('updates compacted context without resetting the interactive transcript', async () => {
+    const big = 'x'.repeat(2_000)
+    const messages = [
+      assistantToolUseMessage({ id: 'toolu_1', name: 'Read' }),
+      userToolResultMessage({ toolUseId: 'toolu_1', content: big }),
+      assistantToolUseMessage({ id: 'toolu_2', name: 'Read' }),
+      userToolResultMessage({ toolUseId: 'toolu_2', content: big }),
+      assistantToolUseMessage({ id: 'toolu_3', name: 'Read' }),
+      userToolResultMessage({ toolUseId: 'toolu_3', content: big }),
+      assistantToolUseMessage({ id: 'toolu_4', name: 'Read' }),
+      userToolResultMessage({ toolUseId: 'toolu_4', content: big }),
+      assistantToolUseMessage({ id: 'toolu_5', name: 'Read' }),
+      userToolResultMessage({ toolUseId: 'toolu_5', content: big }),
+    ]
+    let preserveTranscript = false
+    setMessagesSetter((_, options) => {
+      preserveTranscript = options?.preserveTranscript === true
+    })
+
+    await checkMicroCompact(
+      messages as any,
+      { options: { model: 'main' } },
+      {
+        trigger: 'manual',
+        maxUncompactedToolResultTokens: 600,
+        keepLastToolUses: 3,
+        previewChars: 80,
+      },
+    )
+
+    expect(preserveTranscript).toBe(true)
   })
 })

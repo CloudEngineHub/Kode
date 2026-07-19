@@ -1,9 +1,16 @@
-import { LEGACY_ENV } from '#core/compat/legacyEnv'
+import {
+  getAnthropicProviderRuntime,
+  isTruthyAnthropicProviderEnv,
+} from '#core/utils/anthropicProviderRuntime'
 
-export const USE_BEDROCK = !!(
-  process.env.KODE_USE_BEDROCK ?? process.env[LEGACY_ENV.codeUseBedrock]
-)
+export function isBedrockRuntimeEnabled(): boolean {
+  return getAnthropicProviderRuntime() === 'bedrock'
+}
 
-export const USE_VERTEX = !!(
-  process.env.KODE_USE_VERTEX ?? process.env[LEGACY_ENV.codeUseVertex]
-)
+export function isVertexRuntimeEnabled(): boolean {
+  return getAnthropicProviderRuntime() === 'vertex'
+}
+
+export const USE_BEDROCK = isBedrockRuntimeEnabled()
+export const USE_VERTEX = isVertexRuntimeEnabled()
+export { isTruthyAnthropicProviderEnv }

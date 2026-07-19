@@ -6,8 +6,11 @@ import TextInput from '#ui-ink/components/TextInput'
 import type { Key } from '#ui-ink/hooks/useKeypress'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
+import { computeAvailableColumns } from '#ui-ink/primitives/layout/viewportColumns'
+import type { Command } from '#cli-commands'
 
 type PaletteAction = {
+  kind: 'action'
   id:
     | 'help'
     | 'config'
@@ -22,7 +25,37 @@ type PaletteAction = {
   shortcut?: string
 }
 
+type PaletteCommand = {
+  kind: 'command'
+  id: string
+  name: string
+  label: string
+  hint: string
+  argumentHint?: string
+  aliases: string[]
+}
+
+type PaletteItem = PaletteAction | PaletteCommand
+
+export type CommandPaletteResult =
+  | PaletteAction['id']
+  | {
+      kind: 'command'
+      name: string
+      argumentHint?: string
+    }
+
 const VIEWPORT_SAFE_MARGIN_ROWS = 1
+const COMMANDS_WITH_DEDICATED_ACTIONS = new Set([
+  'help',
+  'config',
+  'open',
+  'console',
+  'notifications',
+  'transcript',
+  'model',
+  'doctor',
+])
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
@@ -31,57 +64,117 @@ function clamp(value: number, min: number, max: number): number {
 function getDefaultActions(): PaletteAction[] {
   return [
     {
+      kind: 'action',
       id: 'help',
       label: 'Help',
       shortcut: 'F1',
       hint: 'Keybindings and commands',
     },
-    { id: 'config', label: 'Config', shortcut: 'F2', hint: 'Global settings' },
     {
+      kind: 'action',
+      id: 'config',
+      label: 'Config',
+      shortcut: 'F2',
+      hint: 'Global settings',
+    },
+    {
+      kind: 'action',
       id: 'open',
       label: 'Open File',
       shortcut: 'F3',
       hint: 'Quick open + external editor',
     },
     {
+      kind: 'action',
       id: 'console',
       label: 'Console',
       shortcut: 'F4',
       hint: 'Captured stdout/stderr (TUI guard)',
     },
     {
+      kind: 'action',
       id: 'notifications',
       label: 'Notifications',
       shortcut: 'F5',
       hint: 'In-app inbox',
     },
     {
+      kind: 'action',
       id: 'transcript',
       label: 'Transcript',
       shortcut: 'F6',
       hint: 'Scroll + copy conversation',
     },
-    { id: 'model', label: 'Models', hint: 'Provider + model settings' },
-    { id: 'doctor', label: 'Doctor', hint: 'Terminal capability check' },
+    {
+      kind: 'action',
+      id: 'model',
+      label: 'Models',
+      hint: 'Provider + model settings',
+    },
+    {
+      kind: 'action',
+      id: 'doctor',
+      label: 'Doctor',
+      hint: 'Terminal capability check',
+    },
   ]
 }
 
 function normalizeQuery(value: string): string {
-  return value.trim().toLowerCase()
+  return value.trim().replace(/^\//, '').toLowerCase()
 }
 
-function matchesQuery(action: PaletteAction, query: string): boolean {
+function getCommandItems(commands: Command[]): PaletteCommand[] {
+  return commands
+    .filter(
+      command =>
+        command.isEnabled &&
+        !command.isHidden &&
+        !COMMANDS_WITH_DEDICATED_ACTIONS.has(command.userFacingName()),
+    )
+    .map(command => {
+      const name = command.userFacingName()
+      return {
+        kind: 'command' as const,
+        id: `command:${name}`,
+        name,
+        label: `/${name}${
+          command.argumentHint ? ` ${command.argumentHint}` : ''
+        }`,
+        hint: command.description,
+        argumentHint: command.argumentHint,
+        aliases: command.aliases ?? [],
+      }
+    })
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+function matchesQuery(item: PaletteItem, query: string): boolean {
   if (!query) return true
-  const haystack = `${action.id} ${action.label} ${action.hint ?? ''} ${
-    action.shortcut ?? ''
-  }`.toLowerCase()
+  const haystack =
+    item.kind === 'action'
+      ? `${item.id} ${item.label} ${item.hint ?? ''} ${
+          item.shortcut ?? ''
+        }`.toLowerCase()
+      : `${item.name} ${item.label} ${item.hint} ${item.aliases.join(' ')}`.toLowerCase()
   return haystack.includes(query)
+}
+
+function getSelectedHint(item: PaletteItem): string {
+  if (item.kind === 'action') return item.hint ?? ''
+
+  const aliasHint = item.aliases.length
+    ? `Aliases: ${item.aliases.map(alias => `/${alias}`).join(', ')}`
+    : ''
+  return [item.hint, aliasHint].filter(Boolean).join(' - ')
 }
 
 export function CommandPaletteScreen({
   onDone,
+  commands = [],
 }: {
-  onDone: (result?: PaletteAction['id']) => void
+  onDone: (result?: CommandPaletteResult) => void
+  commands?: Command[]
 }): React.ReactNode {
   const theme = getTheme()
   const layout = useScreenLayout()
@@ -91,6 +184,10 @@ export function CommandPaletteScreen({
   const paddingY = layout.paddingY
   const gap = layout.gap
   const paddingX = layout.paddingX
+  const inputColumns = computeAvailableColumns({
+    columns,
+    reservedColumns: paddingX * 2 + 4,
+  })
 
   const [query, setQuery] = useState('')
   const [cursorOffset, setCursorOffset] = useState(0)
@@ -98,10 +195,15 @@ export function CommandPaletteScreen({
   const [status, setStatus] = useState<string | null>(null)
 
   const actions = useMemo(() => getDefaultActions(), [])
+  const commandItems = useMemo(() => getCommandItems(commands), [commands])
+  const items = useMemo(
+    () => [...actions, ...commandItems],
+    [actions, commandItems],
+  )
   const normalizedQuery = useMemo(() => normalizeQuery(query), [query])
   const filtered = useMemo(
-    () => actions.filter(action => matchesQuery(action, normalizedQuery)),
-    [actions, normalizedQuery],
+    () => items.filter(item => matchesQuery(item, normalizedQuery)),
+    [items, normalizedQuery],
   )
 
   useEffect(() => {
@@ -143,7 +245,15 @@ export function CommandPaletteScreen({
       setStatus(filtered.length === 0 ? 'No matches' : 'Nothing selected')
       return
     }
-    onDone(action.id)
+    onDone(
+      action.kind === 'action'
+        ? action.id
+        : {
+            kind: 'command',
+            name: action.name,
+            argumentHint: action.argumentHint,
+          },
+    )
   }, [clampedFocus, filtered, onDone])
 
   const onSpecialKey = useCallback(
@@ -198,11 +308,11 @@ export function CommandPaletteScreen({
         )
         return true
       }
-      if (key.home || (key.ctrl && inputChar === 'a')) {
+      if (key.home) {
         setFocusedIndex(0)
         return true
       }
-      if (key.end || (key.ctrl && inputChar === 'e')) {
+      if (key.end) {
         setFocusedIndex(filtered.length - 1)
         return true
       }
@@ -217,6 +327,8 @@ export function CommandPaletteScreen({
     [end, filtered, start],
   )
   const selected = filtered[clampedFocus]
+  const actionCount = filtered.filter(item => item.kind === 'action').length
+  const commandCount = filtered.length - actionCount
 
   return (
     <ScreenFrame
@@ -229,21 +341,22 @@ export function CommandPaletteScreen({
       <Box flexDirection="column" gap={gap}>
         <Box flexDirection="column">
           <Text dimColor wrap="truncate-end">
-            Type to filter. Enter to run. Esc to close.
+            Search actions or /commands. Enter opens or inserts. Esc closes.
           </Text>
           <Box flexDirection="row" gap={1}>
             <Text color={theme.secondaryText}>{figures.pointerSmall}</Text>
             <TextInput
-              placeholder="Search…"
+              placeholder="Search actions or /commands"
               value={query}
               onChange={value => {
                 setQuery(value)
                 setCursorOffset(value.length)
+                setFocusedIndex(0)
                 setStatus(null)
               }}
               onSubmit={() => runSelection()}
               onExit={() => onDone()}
-              columns={Math.max(10, columns - paddingX * 2 - 4)}
+              columns={inputColumns}
               cursorOffset={cursorOffset}
               onChangeCursorOffset={setCursorOffset}
               showCursor={true}
@@ -259,7 +372,7 @@ export function CommandPaletteScreen({
             {status ??
               (filtered.length === 0
                 ? 'No matches'
-                : `Showing ${visible.length} of ${filtered.length}`)}
+                : `Showing ${visible.length} of ${filtered.length} (${actionCount} actions, ${commandCount} commands)`)}
           </Text>
           <Box flexDirection="column" width="100%">
             <Text dimColor wrap="truncate-end">
@@ -268,7 +381,10 @@ export function CommandPaletteScreen({
             {visible.map((action, idx) => {
               const absoluteIndex = start + idx
               const isFocused = absoluteIndex === clampedFocus
-              const suffix = action.shortcut ? ` · ${action.shortcut}` : ''
+              const suffix =
+                action.kind === 'action' && action.shortcut
+                  ? ` - ${action.shortcut}`
+                  : ''
               return (
                 <Box key={action.id} flexDirection="row" gap={1}>
                   <Text color={isFocused ? theme.kode : theme.secondaryText}>
@@ -294,14 +410,14 @@ export function CommandPaletteScreen({
         {selected ? (
           <Box flexDirection="column">
             <Text color={theme.secondaryText} wrap="truncate-end">
-              {selected.hint ?? ''}
+              {getSelectedHint(selected)}
             </Text>
           </Box>
         ) : null}
 
         <Box marginTop={layout.tightLayout ? 0 : 1}>
           <Text dimColor wrap="truncate-end">
-            ↑/↓ · PgUp/PgDn · Home/End · Enter run · Esc close
+            Arrows - PgUp/PgDn - Home/End - Enter select - Esc close
           </Text>
         </Box>
       </Box>

@@ -3,11 +3,12 @@ import { extname, relative } from 'path'
 import * as React from 'react'
 import { z } from 'zod'
 import { highlight, supportsLanguage } from 'cli-highlight'
-import type { Tool } from '#core/tooling/Tool'
+import type { Tool } from '@kode/tool-interface/Tool'
 import { NotebookCellType, NotebookContent } from '#core/types/notebook'
 import { readFileBun, fileExistsBun } from '#runtime/file'
 import { safeParseJSON } from '#core/utils/json'
 import { getCwd } from '#core/utils/state'
+import { getTheme } from '#core/utils/theme'
 import { DESCRIPTION, PROMPT } from './prompt'
 import { hasWritePermission } from '#core/utils/permissions/filesystem'
 import { findCellIndex } from './cells'
@@ -93,10 +94,12 @@ export const NotebookEditTool = {
     return `notebook_path: ${verbose ? input.notebook_path : relative(getCwd(), input.notebook_path)}, cell_id: ${cellRef}, content: ${input.new_source.slice(0, 30)}…, cell_type: ${input.cell_type}, edit_mode: ${input.edit_mode ?? 'replace'}`
   },
   renderToolResultMessage({ cell_id, new_source, language, error }) {
+    const theme = getTheme()
+
     if (error) {
       return (
         <Box flexDirection="column">
-          <Text color="red">{error}</Text>
+          <Text color={theme.error}>{error}</Text>
         </Box>
       )
     }

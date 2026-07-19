@@ -11,6 +11,7 @@ import { join, resolve, sep } from 'node:path'
 import * as esbuild from 'esbuild'
 
 const OUT_DIR = 'dist'
+const allowMissingWebUi = process.env.KODE_ALLOW_MISSING_WEBUI === '1'
 
 async function buildNodeRuntime() {
   await esbuild.build({
@@ -157,33 +158,38 @@ async function main() {
     format: 'cjs',
   })
 
-  // Build web UI (Vite) and copy to dist/webui
+  // Release builds require the WebUI. Local diagnostic builds may explicitly
+  // opt out with KODE_ALLOW_MISSING_WEBUI=1.
   try {
-    if (existsSync(join('apps', 'web', 'vite.config.ts'))) {
-      runOrThrow([
-        'bun',
-        'x',
-        'vite',
-        'build',
-        '--config',
-        'apps/web/vite.config.ts',
-      ])
-      const srcWebDist = join('apps', 'web', 'dist')
-      if (existsSync(join(srcWebDist, 'index.html'))) {
-        cpSync(srcWebDist, join(OUT_DIR, 'webui'), { recursive: true })
-        const serverStaticDir = join('apps', 'server', 'static')
-        rmSync(serverStaticDir, { recursive: true, force: true })
-        mkdirSync(serverStaticDir, { recursive: true })
-        cpSync(srcWebDist, serverStaticDir, { recursive: true })
-      } else {
-        console.warn(
-          '⚠️  WebUI build completed but apps/web/dist/index.html was not found',
-        )
-      }
+    const webConfigPath = join('apps', 'web', 'vite.config.ts')
+    if (!existsSync(webConfigPath)) {
+      throw new Error(`${webConfigPath} was not found`)
+    }
+
+    runOrThrow([
+      'bun',
+      'x',
+      'vite',
+      'build',
+      '--config',
+      'apps/web/vite.config.ts',
+    ])
+    const srcWebDist = join('apps', 'web', 'dist')
+    if (existsSync(join(srcWebDist, 'index.html'))) {
+      cpSync(srcWebDist, join(OUT_DIR, 'webui'), { recursive: true })
+      const serverStaticDir = join('apps', 'server', 'static')
+      rmSync(serverStaticDir, { recursive: true, force: true })
+      mkdirSync(serverStaticDir, { recursive: true })
+      cpSync(srcWebDist, serverStaticDir, { recursive: true })
+    } else {
+      throw new Error(
+        'WebUI build completed but apps/web/dist/index.html was not found',
+      )
     }
   } catch (err) {
+    if (!allowMissingWebUi) throw err
     console.warn(
-      '⚠️  Could not build/copy WebUI:',
+      '⚠️  Skipping unavailable WebUI because KODE_ALLOW_MISSING_WEBUI=1:',
       err instanceof Error ? err.message : String(err),
     )
   }
@@ -292,8 +298,8 @@ async function main() {
   console.log('  - dist/sdk/runtime-node.js (+ .cjs)')
   console.log('  - dist/sdk/client.js (+ .cjs)')
   console.log('  - dist/sdk/tools.js (+ .cjs)')
-  console.log('  - dist/webui/* (if available)')
-  console.log('  - apps/server/static/* (if available)')
+  console.log('  - dist/webui/* (required unless explicitly opted out)')
+  console.log('  - apps/server/static/* (required unless explicitly opted out)')
   console.log('  - cli.js')
   console.log('  - cli-acp.js')
   console.log('  - mcp-cli.js')

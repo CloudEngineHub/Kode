@@ -1,5 +1,5 @@
 import { TextBlockParam } from '@anthropic-ai/sdk/resources/index.mjs'
-import React from 'react'
+import React, { useMemo } from 'react'
 import { AssistantBashOutputMessage } from './AssistantBashOutputMessage'
 import { AssistantBackgroundTaskOutputMessage } from './AssistantBackgroundTaskOutputMessage'
 import { AssistantLocalCommandOutputMessage } from './AssistantLocalCommandOutputMessage'
@@ -38,6 +38,83 @@ type Props = {
   isTransient?: boolean
 }
 
+const FINAL_MARKDOWN_FOLD_LINE_THRESHOLD = 220
+const FINAL_MARKDOWN_VISIBLE_LINES = 120
+const FINAL_MARKDOWN_FOLD_CHAR_THRESHOLD = 20000
+const FINAL_MARKDOWN_VISIBLE_CHARS = 12000
+const TOOL_PROGRESS_VISIBLE_LINES = 8
+
+export function prepareToolProgressTextForRender(raw: string): {
+  summary: string
+  details: string[]
+  hiddenLines: number
+} {
+  const lines = raw
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .map(line => line.trimEnd())
+
+  const firstContentIndex = lines.findIndex(line => line.trim().length > 0)
+  if (firstContentIndex < 0) {
+    return { summary: '', details: [], hiddenLines: 0 }
+  }
+
+  const contentLines = lines
+    .slice(firstContentIndex)
+    .filter((line, index, list) => {
+      if (line.trim().length > 0) return true
+      return index < list.length - 1
+    })
+
+  const visibleLines = contentLines.slice(0, TOOL_PROGRESS_VISIBLE_LINES)
+  const hiddenLines = Math.max(0, contentLines.length - visibleLines.length)
+  const [summary = '', ...details] = visibleLines
+
+  return {
+    summary: summary.trim(),
+    details: details.map(line => line.trim()),
+    hiddenLines,
+  }
+}
+
+export function prepareAssistantMarkdownTextForRender(text: string): {
+  text: string
+  folded: boolean
+} {
+  if (
+    text.length <= FINAL_MARKDOWN_FOLD_CHAR_THRESHOLD &&
+    text.split(/\r?\n/, FINAL_MARKDOWN_FOLD_LINE_THRESHOLD + 1).length <=
+      FINAL_MARKDOWN_FOLD_LINE_THRESHOLD
+  ) {
+    return { text, folded: false }
+  }
+
+  const lines = text.split(/\r?\n/)
+  let visibleText: string
+  let hiddenDescription: string
+
+  if (lines.length > FINAL_MARKDOWN_FOLD_LINE_THRESHOLD) {
+    const visibleLines = lines.slice(0, FINAL_MARKDOWN_VISIBLE_LINES)
+    visibleText = visibleLines.join('\n')
+    hiddenDescription = `${lines.length - visibleLines.length} lines hidden`
+  } else {
+    visibleText = text.slice(0, FINAL_MARKDOWN_VISIBLE_CHARS)
+    hiddenDescription = `${text.length - visibleText.length} characters hidden`
+  }
+
+  const fenceCount = visibleText
+    .split(/\r?\n/)
+    .filter(line => line.trimStart().startsWith('```')).length
+  const closedVisibleText =
+    fenceCount % 2 === 1 ? `${visibleText}\n\`\`\`` : visibleText
+
+  return {
+    text: `${closedVisibleText}\n\n[Output folded: ${hiddenDescription}. Full content is available in the transcript.]`,
+    folded: true,
+  }
+}
+
 export function AssistantTextMessage({
   param: { text },
   costUSD,
@@ -57,8 +134,33 @@ export function AssistantTextMessage({
   // Tool progress messages should render as raw text (no markdown parsing).
   if (text.startsWith('<tool-progress>')) {
     const raw = extractTag(text, 'tool-progress') ?? ''
-    if (raw.trim().length === 0) return null
-    return <Text color={getTheme().secondaryText}>{raw}</Text>
+    const prepared = prepareToolProgressTextForRender(raw)
+    if (prepared.summary.length === 0) return null
+    const theme = getTheme()
+    return (
+      <Box flexDirection="column">
+        <Box flexDirection="row">
+          <Text color={theme.secondaryText}> Progress </Text>
+          <Text color={theme.secondaryText} wrap="truncate-end">
+            {prepared.summary}
+          </Text>
+        </Box>
+        {prepared.details.map((line, index) => (
+          <Text
+            key={`${index}:${line}`}
+            color={theme.secondaryText}
+            wrap="truncate-end"
+          >
+            {`    ${line}`}
+          </Text>
+        ))}
+        {prepared.hiddenLines > 0 && (
+          <Text color={theme.secondaryText}>
+            {`    ... ${prepared.hiddenLines} more progress lines`}
+          </Text>
+        )}
+      </Box>
+    )
   }
 
   // Compatibility: background bash completion notification.
@@ -158,7 +260,11 @@ export function AssistantTextMessage({
   // Show background task output
   if (text.startsWith('<background-task-output')) {
     return (
-      <AssistantBackgroundTaskOutputMessage content={text} verbose={verbose} />
+      <AssistantBackgroundTaskOutputMessage
+        content={text}
+        verbose={verbose}
+        maxHeight={maxHeight}
+      />
     )
   }
 
@@ -235,36 +341,83 @@ export function AssistantTextMessage({
       )
 
     default:
-      const content = applyMarkdown(text)
       return (
-        <Box
-          alignItems="flex-start"
-          flexDirection="row"
-          justifyContent="space-between"
-          marginTop={addMargin ? 1 : 0}
-          width="100%"
-        >
-          <Box flexDirection="row">
-            {shouldShowDot && (
-              <Box minWidth={2}>
-                <Text color={getTheme().kode}>{CIRCLE}</Text>
-              </Box>
-            )}
-            <Box flexDirection="column" width={contentWidth}>
-              {maxHeight ? (
-                <MaxSizedText
-                  text={content}
-                  maxWidth={contentWidth}
-                  maxHeight={maxHeight}
-                  overflowDirection="bottom"
-                />
-              ) : (
-                <Text>{content}</Text>
-              )}
-            </Box>
-          </Box>
-          <Cost costUSD={costUSD} durationMs={durationMs} debug={debug} />
-        </Box>
+        <AssistantMarkdownContent
+          text={text}
+          contentWidth={contentWidth}
+          maxHeight={maxHeight}
+          isTransient={Boolean(isTransient)}
+          addMargin={addMargin}
+          shouldShowDot={shouldShowDot}
+          costUSD={costUSD}
+          durationMs={durationMs}
+          debug={debug}
+        />
       )
   }
+}
+
+function AssistantMarkdownContent({
+  text,
+  contentWidth,
+  maxHeight,
+  isTransient,
+  addMargin,
+  shouldShowDot,
+  costUSD,
+  durationMs,
+  debug,
+}: {
+  text: string
+  contentWidth: number
+  maxHeight?: number
+  isTransient: boolean
+  addMargin: boolean
+  shouldShowDot: boolean
+  costUSD: number
+  durationMs: number
+  debug: boolean
+}): React.ReactNode {
+  const renderText = useMemo(
+    () =>
+      isTransient
+        ? { text, folded: false }
+        : prepareAssistantMarkdownTextForRender(text),
+    [isTransient, text],
+  )
+  const content = useMemo(
+    () => applyMarkdown(renderText.text),
+    [renderText.text],
+  )
+
+  return (
+    <Box
+      alignItems="flex-start"
+      flexDirection="row"
+      justifyContent="space-between"
+      marginTop={addMargin ? 1 : 0}
+      width="100%"
+    >
+      <Box flexDirection="row">
+        {shouldShowDot && (
+          <Box minWidth={2}>
+            <Text color={getTheme().kode}>{CIRCLE}</Text>
+          </Box>
+        )}
+        <Box flexDirection="column" width={contentWidth}>
+          {maxHeight ? (
+            <MaxSizedText
+              text={content}
+              maxWidth={contentWidth}
+              maxHeight={maxHeight}
+              overflowDirection="bottom"
+            />
+          ) : (
+            <Text>{content}</Text>
+          )}
+        </Box>
+      </Box>
+      <Cost costUSD={costUSD} durationMs={durationMs} debug={debug} />
+    </Box>
+  )
 }

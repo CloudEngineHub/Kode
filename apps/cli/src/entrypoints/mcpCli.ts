@@ -1,10 +1,22 @@
 import { Command } from 'commander'
 import chalk from 'chalk'
 import { setCwd } from '#core/utils/state'
-import { getClients, type WrappedClient } from '#core/mcp/client'
+import {
+  completeMCPArgument,
+  formatMcpClientCapabilitySummary,
+  getClients,
+  getMcpClientCapabilitySummary,
+  type McpCompletionRef,
+  type WrappedClient,
+} from '#core/mcp/client'
+import { requestClientPages } from '#core/mcp/client/request'
 import {
   CallToolResultSchema,
+  type ListResourceTemplatesResult,
+  ListResourceTemplatesResultSchema,
+  type ListResourcesResult,
   ListResourcesResultSchema,
+  type ListToolsResult,
   ListToolsResultSchema,
   ReadResourceResultSchema,
 } from '@modelcontextprotocol/sdk/types.js'
@@ -19,6 +31,14 @@ type McpCliToolSummary = {
 type McpCliResourceSummary = {
   server: string
   uri: string
+  name: string
+  description?: string
+  mimeType?: string
+}
+
+type McpCliResourceTemplateSummary = {
+  server: string
+  uriTemplate: string
   name: string
   description?: string
   mimeType?: string
@@ -52,6 +72,34 @@ function parseServerResource(input: string): { server: string; uri: string } {
     )
   }
   return { server: trimmed.slice(0, slash), uri: trimmed.slice(slash + 1) }
+}
+
+function parseContextArguments(input?: string): Record<string, string> {
+  if (!input) return {}
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(input)
+  } catch (error) {
+    throw new Error(
+      `Invalid --context JSON: ${error instanceof Error ? error.message : String(error)}`,
+    )
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Invalid --context JSON: expected an object')
+  }
+
+  const out: Record<string, string> = {}
+  for (const [key, value] of Object.entries(parsed)) {
+    if (typeof value !== 'string') {
+      throw new Error(
+        `Invalid --context JSON: value for '${key}' must be a string`,
+      )
+    }
+    out[key] = value
+  }
+  return out
 }
 
 async function readStdinUtf8(): Promise<string> {
@@ -104,11 +152,11 @@ async function listTools(options: {
       wrapped.capabilities = capabilities
     }
     if (!capabilities?.tools) continue
-    const result = await wrapped.client.request(
-      { method: 'tools/list' },
-      ListToolsResultSchema,
-    )
-    for (const tool of result.tools ?? []) {
+    const results = await requestClientPages<
+      ListToolsResult,
+      typeof ListToolsResultSchema
+    >(wrapped, { method: 'tools/list' }, ListToolsResultSchema)
+    for (const tool of results.flatMap(result => result.tools ?? [])) {
       out.push({
         server: wrapped.name,
         name: tool.name,
@@ -146,17 +194,66 @@ async function listResources(options: {
       wrapped.capabilities = capabilities
     }
     if (!capabilities?.resources) continue
-    const result = await wrapped.client.request(
-      { method: 'resources/list' },
-      ListResourcesResultSchema,
-    )
-    for (const resource of result.resources ?? []) {
+    const results = await requestClientPages<
+      ListResourcesResult,
+      typeof ListResourcesResultSchema
+    >(wrapped, { method: 'resources/list' }, ListResourcesResultSchema)
+    for (const resource of results.flatMap(result => result.resources ?? [])) {
       out.push({
         server: wrapped.name,
         uri: resource.uri,
         name: resource.name,
         description: resource.description ?? undefined,
         mimeType: resource.mimeType ?? undefined,
+      })
+    }
+  }
+  return out
+}
+
+async function listResourceTemplates(options: {
+  server?: string
+}): Promise<McpCliResourceTemplateSummary[]> {
+  const clients = await getClients()
+  const selected = options.server
+    ? clients.filter(c => c.name === options.server)
+    : clients
+  if (options.server && selected.length === 0) {
+    throw new Error(
+      `Server '${options.server}' not found. Available servers: ${clients.map(c => c.name).join(', ')}`,
+    )
+  }
+
+  const out: McpCliResourceTemplateSummary[] = []
+  for (const wrapped of selected) {
+    if (wrapped.type !== 'connected') continue
+    let capabilities = wrapped.capabilities ?? null
+    if (!capabilities) {
+      try {
+        capabilities = wrapped.client.getServerCapabilities() ?? null
+      } catch {
+        capabilities = null
+      }
+      wrapped.capabilities = capabilities
+    }
+    if (!capabilities?.resources) continue
+    const results = await requestClientPages<
+      ListResourceTemplatesResult,
+      typeof ListResourceTemplatesResultSchema
+    >(
+      wrapped,
+      { method: 'resources/templates/list' },
+      ListResourceTemplatesResultSchema,
+    )
+    for (const template of results.flatMap(
+      result => result.resourceTemplates ?? [],
+    )) {
+      out.push({
+        server: wrapped.name,
+        uriTemplate: template.uriTemplate,
+        name: template.name,
+        description: template.description ?? undefined,
+        mimeType: template.mimeType ?? undefined,
       })
     }
   }
@@ -226,6 +323,23 @@ export async function runMcpCli(args: {
     })
 
   program
+    .command('client-capabilities')
+    .description('Show Kode MCP client capabilities exposed to servers')
+    .option('--json', 'Output in JSON format')
+    .action(async options => {
+      const summary = getMcpClientCapabilitySummary()
+
+      if (options.json) {
+        console.log(toJson(summary))
+        return
+      }
+
+      for (const line of formatMcpClientCapabilitySummary(summary)) {
+        console.log(line)
+      }
+    })
+
+  program
     .command('tools')
     .description('List all available tools')
     .argument('[server]', 'Filter by server name')
@@ -252,11 +366,13 @@ export async function runMcpCli(args: {
       const { server, tool } = parseServerTool(toolId)
       const clients = await getClients()
       const client = getConnectedClient(clients, server)
-      const result = await client.client.request(
-        { method: 'tools/list' },
-        ListToolsResultSchema,
-      )
-      const found = (result.tools ?? []).find(t => t.name === tool)
+      const results = await requestClientPages<
+        ListToolsResult,
+        typeof ListToolsResultSchema
+      >(client, { method: 'tools/list' }, ListToolsResultSchema)
+      const found = results
+        .flatMap(result => result.tools ?? [])
+        .find(t => t.name === tool)
       if (!found) {
         throw new Error(`Tool '${tool}' not found on server '${server}'`)
       }
@@ -385,6 +501,75 @@ export async function runMcpCli(args: {
     })
 
   program
+    .command('resource-templates')
+    .description('List MCP resource templates')
+    .argument('[server]', 'Filter by server name')
+    .option('--json', 'Output in JSON format')
+    .action(async (server, options) => {
+      const templates = await listResourceTemplates({
+        server: server || undefined,
+      })
+      if (options.json) {
+        console.log(toJson(templates))
+        return
+      }
+      for (const template of templates) {
+        console.log(`${template.server}/${template.uriTemplate}`)
+      }
+    })
+
+  program
+    .command('complete')
+    .description('Request MCP prompt or resource argument completions')
+    .requiredOption('--server <server>', 'MCP server name')
+    .option('--prompt <name>', 'Prompt reference name')
+    .option('--resource <uri>', 'Resource URI or URI template reference')
+    .requiredOption('--argument <name>', 'Argument name to complete')
+    .option('--value <value>', 'Current argument value', '')
+    .option(
+      '--context <json>',
+      'Previously resolved argument values as a JSON object',
+    )
+    .option('--json', 'Output in JSON format')
+    .action(async options => {
+      const prompt = String(options.prompt ?? '').trim()
+      const resource = String(options.resource ?? '').trim()
+      if ((prompt ? 1 : 0) + (resource ? 1 : 0) !== 1) {
+        throw new Error('Provide exactly one of --prompt or --resource')
+      }
+
+      const ref: McpCompletionRef = prompt
+        ? { type: 'ref/prompt', name: prompt }
+        : { type: 'ref/resource', uri: resource }
+      const contextArguments = parseContextArguments(options.context)
+      const completion = await completeMCPArgument({
+        server: String(options.server),
+        ref,
+        argument: {
+          name: String(options.argument),
+          value: String(options.value ?? ''),
+        },
+        ...(Object.keys(contextArguments).length > 0
+          ? { context: { arguments: contextArguments } }
+          : {}),
+      })
+
+      if (options.json) {
+        console.log(toJson(completion))
+        return
+      }
+
+      for (const value of completion.values) console.log(value)
+      if (completion.hasMore) {
+        process.stderr.write(
+          chalk.dim(
+            `More results available${typeof completion.total === 'number' ? ` (${completion.total} total)` : ''}`,
+          ) + '\n',
+        )
+      }
+    })
+
+  program
     .command('read')
     .description('Read an MCP resource')
     .argument('<resource>', 'Resource identifier in format <server>/<uri>')
@@ -407,9 +592,7 @@ export async function runMcpCli(args: {
     })
 
   try {
-    await program.parseAsync(['node', 'mcp-cli', ...args.argv], {
-      from: 'user',
-    })
+    await program.parseAsync(args.argv, { from: 'user' })
     const exitCode =
       typeof process.exitCode === 'number'
         ? process.exitCode

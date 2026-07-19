@@ -31,6 +31,7 @@ export function DeleteConfirm(props: {
           </Box>
           <Box marginTop={1}>
             <Select
+              focusScope={`agent-delete:${props.agent.source}:${props.agent.agentType}`}
               options={[
                 { label: 'Yes, delete', value: 'yes' },
                 { label: 'No, cancel', value: 'no' },

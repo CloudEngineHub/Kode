@@ -10,10 +10,18 @@ import { handleHashCommand } from '#core/utils/hashCommand'
 import { processUserInput } from '#ui-ink/utils/processUserInput'
 import type { PromptMode } from './types'
 import type { PastedImageAttachment, PastedTextSegment } from './pastes'
-import { expandPastedTextPlaceholders } from './pastes'
+import {
+  expandPastedTextPlaceholders,
+  releasePastedImageAttachments,
+  resolvePastedImageAttachments,
+} from './pastes'
 import { interpretHashCommand } from './hashCommand'
 import { getCwd } from '#core/utils/state'
 import type { SetForkConvoWithMessagesOnTheNextRender } from '#ui-ink/types/conversationReset'
+import {
+  isShellPromptMode,
+  shouldPromptModeReturnToPrompt,
+} from './promptModeSpecs'
 
 const EXIT_COMMANDS = new Set(['exit', 'quit', ':q', ':q!', ':wq', ':wq!'])
 
@@ -64,9 +72,6 @@ function getKodingContext(): string {
 export async function submitPrompt(args: {
   input: string
   mode: PromptMode
-  completionActive: boolean
-  suggestionCount: number
-  isSubmittingSlashCommand?: boolean
   isDisabled: boolean
   isLoading: boolean
   isEditingExternally: boolean
@@ -98,17 +103,9 @@ export async function submitPrompt(args: {
   clearPastes: () => void
   resetHistory: () => void
   setCurrentPwd: (pwd: string) => void
-  exit: () => never
+  exit: () => void
 }): Promise<void> {
   if (args.isEditingExternally) return
-
-  if (
-    !args.isSubmittingSlashCommand &&
-    args.completionActive &&
-    args.suggestionCount > 0
-  ) {
-    return
-  }
 
   if (!args.input) return
   if (args.isDisabled) return
@@ -119,19 +116,17 @@ export async function submitPrompt(args: {
 
   if (EXIT_COMMANDS.has(trimmed)) {
     args.exit()
+    return
   }
 
-  const isKoding = args.mode === 'koding' || args.input.startsWith('#')
+  const isKoding = args.mode === 'koding'
   const isKodingActionPrompt =
     isKoding &&
     args.input.match(/^(#\s*)?(put|create|generate|write|give|provide)/i)
 
   if (isKoding && !isKodingActionPrompt) {
     try {
-      const contentToInterpret =
-        args.mode === 'koding' && !args.input.startsWith('#')
-          ? args.input.trim()
-          : args.input.substring(1).trim()
+      const contentToInterpret = args.input.trim()
       const interpreted = await interpretHashCommand(contentToInterpret)
       handleHashCommand(interpreted)
     } catch (error) {
@@ -141,7 +136,7 @@ export async function submitPrompt(args: {
     args.onInputChange('')
     args.setCursorOffset(0)
     addPromptToHistory({
-      display: args.mode === 'koding' ? `#${args.input}` : args.input,
+      display: args.mode === 'koding' ? `/note ${args.input}` : args.input,
       pastedTexts: args.pastedTexts,
     })
     args.resetHistory()
@@ -154,20 +149,18 @@ export async function submitPrompt(args: {
 
   const finalInput = expandPastedTextPlaceholders({
     input:
-      isKodingActionPrompt && args.mode === 'koding'
-        ? args.input.trim()
-        : args.input,
+      isKodingActionPrompt && args.mode === 'koding' ? trimmed : args.input,
     pastedTexts: args.pastedTexts,
   })
 
-  const imagesForMessage = args.pastedImages
+  const imagesForMessage = resolvePastedImageAttachments(args.pastedImages)
 
   args.clearPastes()
   args.onInputChange('')
   args.setCursorOffset(0)
   args.onSubmitCountChange(prev => prev + 1)
 
-  if (effectiveMode !== 'bash' && effectiveMode !== 'background') {
+  if (shouldPromptModeReturnToPrompt(effectiveMode)) {
     args.onModeChange('prompt')
   }
 
@@ -207,7 +200,9 @@ export async function submitPrompt(args: {
       },
       imagesForMessage.length > 0 ? imagesForMessage : null,
     )
+    releasePastedImageAttachments(args.pastedImages)
   } catch (error) {
+    releasePastedImageAttachments(args.pastedImages)
     args.setIsLoading(false)
     logError(error)
     return
@@ -220,14 +215,13 @@ export async function submitPrompt(args: {
     return
   }
 
-  const shouldUpdatePwdAfterBash =
-    effectiveMode === 'bash' || effectiveMode === 'background'
+  const shouldUpdatePwdAfterBash = isShellPromptMode(effectiveMode)
 
   // Save prompt to history immediately after we successfully construct the user messages.
   // This ensures history is preserved even if the query is aborted (e.g. Escape) or errors mid-flight.
   const inputToAdd =
     effectiveMode === 'bash'
-      ? `!${args.input}`
+      ? args.input
       : effectiveMode === 'background'
         ? `&${args.input}`
         : args.input

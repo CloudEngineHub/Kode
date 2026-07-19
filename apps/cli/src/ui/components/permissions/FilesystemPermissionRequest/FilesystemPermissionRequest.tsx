@@ -33,6 +33,7 @@ import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import { PermissionRequestDetails } from '#ui-ink/components/permissions/PermissionRequestDetails'
 import { applyToolPermissionUpdatesToLiveToolUseContext } from '../liveToolPermissionContext'
+import { permissionSelectFocusScope } from '#ui-ink/components/permissions/permissionFocusScope'
 
 function pathArgNameForToolUse(toolUseConfirm: ToolUseConfirm): string | null {
   switch (toolUseConfirm.tool) {
@@ -268,10 +269,12 @@ function FilesystemPermissionRequestImpl({
           <Box flexDirection="column">
             <Text wrap="truncate-end">
               {userFacingName}(
-              {toolUseConfirm.tool.renderToolUseMessage(
-                toolUseConfirm.input as never,
-                { verbose },
-              )}
+              {
+                toolUseConfirm.tool.renderToolUseMessage(
+                  toolUseConfirm.input as never,
+                  { verbose },
+                ) as React.ReactNode
+              }
               )
             </Text>
             <PermissionRequestDetails toolUseConfirm={toolUseConfirm} />
@@ -280,6 +283,7 @@ function FilesystemPermissionRequestImpl({
           <Box flexDirection="column">
             <Text>Allow this action?</Text>
             <Select
+              focusScope={permissionSelectFocusScope(toolUseConfirm, 'choice')}
               options={[
                 {
                   label: 'Allow once',

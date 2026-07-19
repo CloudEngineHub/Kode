@@ -8,6 +8,7 @@ import { getPatch } from '#core/utils/diff'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import { getWindowedList } from '#ui-ink/primitives/list/windowedList'
+import { computeResponsiveRows } from '#ui-ink/primitives/layout/viewportRows'
 import { structuredDiffLines } from '#ui-ink/components/StructuredDiff'
 import figures from 'figures'
 
@@ -67,7 +68,14 @@ export function FileEditToolDiff({
   }, [patch, safeWidth])
 
   const totalRows =
-    maxVisibleRows ?? Math.max(6, Math.min(14, Math.floor(rows * 0.35)))
+    maxVisibleRows ??
+    computeResponsiveRows({
+      rows,
+      reservedRows: enableScrolling ? 6 : 5,
+      minRows: 2,
+      maxRows: 14,
+      ratio: 0.35,
+    })
   const [focusIndex, setFocusIndex] = React.useState(0)
 
   React.useEffect(() => {

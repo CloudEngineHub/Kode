@@ -1,8 +1,5 @@
 export type SupportedImageMediaType =
-  | 'image/png'
-  | 'image/jpeg'
-  | 'image/gif'
-  | 'image/webp'
+  'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp'
 
 export type ClipboardImage = {
   data: string

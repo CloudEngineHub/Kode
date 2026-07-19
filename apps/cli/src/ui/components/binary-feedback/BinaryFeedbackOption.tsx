@@ -9,6 +9,7 @@ import { FileWriteToolDiff } from '#ui-ink/components/permissions/FileWritePermi
 import type { AssistantMessage } from '#core/query'
 import * as React from 'react'
 import { Box } from 'ink'
+import { computeSplitColumns } from '#ui-ink/primitives/layout/viewportColumns'
 
 type Props = {
   debug: boolean
@@ -32,6 +33,11 @@ export function BinaryFeedbackOption({
   verbose,
 }: Props): React.ReactNode {
   const { columns } = useTerminalSize()
+  const messageWidth = computeSplitColumns({
+    columns,
+    segments: 2,
+    reservedColumns: 6,
+  })
   return normalizeMessages([message])
     .filter(_ => _.type !== 'progress')
     .map((_, index) => (
@@ -48,7 +54,7 @@ export function BinaryFeedbackOption({
           tools={tools}
           unresolvedToolUseIDs={unresolvedToolUseIDs}
           verbose={verbose}
-          width={columns / 2 - 6}
+          width={messageWidth}
         />
         <AdditionalContext message={_} verbose={verbose} />
       </Box>
@@ -63,6 +69,11 @@ function AdditionalContext({
   verbose: boolean
 }) {
   const { columns } = useTerminalSize()
+  const diffWidth = computeSplitColumns({
+    columns,
+    segments: 2,
+    reservedColumns: 12,
+  })
   if (message.type !== 'assistant') {
     return null
   }
@@ -81,7 +92,7 @@ function AdditionalContext({
               new_string={input.data.new_string}
               old_string={input.data.old_string}
               verbose={verbose}
-              width={columns / 2 - 12}
+              width={diffWidth}
             />
           )
         }
@@ -95,7 +106,7 @@ function AdditionalContext({
               file_path={input.data.file_path}
               content={input.data.content}
               verbose={verbose}
-              width={columns / 2 - 12}
+              width={diffWidth}
             />
           )
         }

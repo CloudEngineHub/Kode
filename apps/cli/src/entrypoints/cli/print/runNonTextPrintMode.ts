@@ -17,6 +17,7 @@ import {
   getCurrentOutputStyleDefinition,
 } from '#cli-services/outputStyles'
 import { createPrintControlRequestHandler } from './controlRequests'
+import { finishHeadlessRun, startHeadlessRun } from './headlessRunTelemetry'
 import { createStdioPermissionPromptCanUseTool } from './permissionPrompt'
 import { runSingleTurnPrint } from './runSingleTurn'
 
@@ -87,8 +88,9 @@ export async function runNonTextPrintMode(
   const { createUserMessage } = await import('#core/utils/messages')
   const { getTotalCost, getTotalAPIDuration } =
     await import('#core/cost-tracker')
-  const { buildSystemPromptForSession, getSessionContext, runTurn, query } =
-    await import('#core/engine')
+  const { buildSystemPromptForSession, runTurn, query } =
+    await import('@kode/engine')
+  const { getContext } = await import('@kode/context')
   const { getKodeAgentSessionId } =
     await import('#protocol/utils/kodeAgentSessionId')
   const { kodeMessageToSdkMessage, makeSdkInitMessage, makeSdkResultMessage } =
@@ -108,6 +110,19 @@ export async function runNonTextPrintMode(
   const shouldIncludePartialMessages =
     args.normalizedOutputFormat === 'stream-json' &&
     Boolean(args.includePartialMessages)
+  const headlessRun = startHeadlessRun({
+    cwd: args.cwd,
+    inputFormat: args.normalizedInputFormat,
+    outputFormat: args.normalizedOutputFormat,
+    promptChars:
+      args.normalizedInputFormat === 'stream-json'
+        ? 0
+        : args.inputPrompt.length,
+    toolCount: args.toolsForPrint.length,
+    model: args.model,
+    maxTurns: args.maxTurns,
+    maxBudgetUsd: args.maxBudgetUsd,
+  })
 
   const writeSdkLine = (obj: unknown) => {
     process.stdout.write(JSON.stringify(obj) + '\n')
@@ -126,6 +141,11 @@ export async function runNonTextPrintMode(
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
       console.error(`Error: Invalid --json-schema: ${msg}`)
+      finishHeadlessRun(headlessRun, {
+        isError: true,
+        resultSubtype: 'error_invalid_json_schema',
+        error: msg,
+      })
       process.exit(1)
     }
   })()
@@ -140,7 +160,7 @@ export async function runNonTextPrintMode(
     keepCodingInstructions: outputStyle?.keepCodingInstructions,
   })
 
-  const ctx = await getSessionContext()
+  const ctx = await getContext()
 
   const isBypassAvailable =
     !args.safe ||
@@ -218,6 +238,11 @@ export async function runNonTextPrintMode(
       console.error(
         `Error: Invalid --permission-mode "${normalizedPermissionMode}". Expected one of: acceptEdits, bypassPermissions, default, delegate, dontAsk, plan`,
       )
+      finishHeadlessRun(headlessRun, {
+        isError: true,
+        resultSubtype: 'error_invalid_permission_mode',
+        error: `Invalid --permission-mode "${normalizedPermissionMode}"`,
+      })
       process.exit(1)
     }
     updates.push({
@@ -360,6 +385,11 @@ export async function runNonTextPrintMode(
   if (args.normalizedInputFormat === 'stream-json') {
     if (!structured) {
       console.error('Error: Structured stdin is not available')
+      finishHeadlessRun(headlessRun, {
+        isError: true,
+        resultSubtype: 'error_invalid_input',
+        error: 'Structured stdin is not available',
+      })
       process.exit(1)
     }
 
@@ -396,6 +426,13 @@ export async function runNonTextPrintMode(
         process.stderr.write(
           `Exiting after ${exitAfterStopDelayMs}ms of idle time\n`,
         )
+        // Best-effort journal must close before process.exit; otherwise the
+        // durable agent run is left `running` until restart reconciliation.
+        finishHeadlessRun(headlessRun, {
+          totalCostUsd: getTotalCost(),
+          durationMs: Date.now() - startedAt,
+          durationApiMs: getTotalAPIDuration(),
+        })
         process.exit(0)
       }, exitAfterStopDelayMs)
     }
@@ -460,6 +497,11 @@ export async function runNonTextPrintMode(
       initialMessages: args.initialMessages,
     })
 
+    finishHeadlessRun(headlessRun, {
+      totalCostUsd: getTotalCost(),
+      durationMs: Date.now() - startedAt,
+      durationApiMs: getTotalAPIDuration(),
+    })
     process.exit(0)
   }
 
@@ -513,5 +555,6 @@ export async function runNonTextPrintMode(
     maxBudgetUsd: args.maxBudgetUsd,
     jsonSchema: parsedJsonSchema,
     verbose: args.verbose,
+    headlessRun,
   })
 }

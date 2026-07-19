@@ -21,13 +21,22 @@ import {
   setMessagesGetter,
   setMessagesSetter,
   setModelConfigChangeHandler,
+  type MessageStateSetter,
 } from '#core/messages'
 import type { Message as MessageType } from '#core/query'
+import { createUserMessage, normalizeMessages } from '#core/utils/messages'
 import { getGlobalConfigCached, saveGlobalConfig } from '#core/utils/config'
 import { getNextAvailableLogForkNumber, logError } from '#core/utils/log'
-import { getOriginalCwd } from '#core/utils/state'
+import { getCwd, getOriginalCwd } from '#core/utils/state'
+import {
+  claimDueSchedules,
+  getUnstartedGoalRunSchedule,
+  GoalService,
+  type ClaimedSchedule,
+} from '#core/goals'
+import { getKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
 import { MACRO } from '#core/constants/macros'
-import { subscribeAgentReloads } from '#core/agent/events'
+import { subscribeAgentReloads } from '@kode/agent/events'
 import { subscribeCustomCommandReloads } from '#cli-services/customCommands'
 import { HelpScreen } from '#ui-ink/screens/overlays/HelpScreen'
 import { ShortcutsScreen } from '#ui-ink/screens/overlays/ShortcutsScreen'
@@ -45,14 +54,22 @@ import { ThinkingToggleScreen } from '#ui-ink/screens/overlays/ThinkingToggleScr
 import { ModelConfig } from '#ui-ink/components/ModelConfig'
 import { Doctor } from '#ui-ink/screens/Doctor'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
+import { useToolKeypress } from '#ui-ink/hooks/useToolKeypress'
+import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import { submitPrompt } from '#ui-ink/components/PromptInput/submit'
+import { parsePromptHistoryDisplay } from '#ui-ink/hooks/useArrowKeyHistory'
 import { useTranscriptItems, type TranscriptItem } from './useTranscriptItems'
 import { useRequestToolUsePermission } from './useRequestToolUsePermission'
 import { useReplQuery } from './useReplQuery'
 import { useReplInit } from './useReplInit'
 import { buildPromptInputProps } from './promptInputProps'
 import { useMessageSelectorSelect } from './useMessageSelectorSelect'
+import { buildStartupHeaderIdentityKey } from './startupHeaderIdentity'
 import type { BinaryFeedbackContext, REPLProps } from './types'
+import {
+  createAssistantStreamStore,
+  type AssistantStreamStore,
+} from './assistantStreamStore'
 import { ensureLspManagerInitialized } from '#tools/tools/system/LspTool/call'
 import { describeToolPermissionRuleSource } from '#core/permissions/ruleString'
 import { triggerModelConfigChange } from '#core/messages'
@@ -61,15 +78,21 @@ import {
   enterAlternateScreen,
   exitAlternateScreen,
 } from '#cli-utils/terminal'
+import { requestCliExit } from '#cli-utils/exit'
 import { getModelManager } from '#core/utils/model'
 import { getToolPermissionContextForConversationKey } from '#core/utils/toolPermissionContextState'
 import type { PromptMode } from '#ui-ink/components/PromptInput/types'
+import type {
+  PastedImageAttachment,
+  PastedTextSegment,
+} from '#ui-ink/components/PromptInput/pasteTypes'
 import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { terminalCapabilityManager } from '#ui-ink/utils/terminalCapabilityManager'
 import type {
   ForkConvoWithMessagesOptions,
   SetForkConvoWithMessagesOnTheNextRender,
 } from '#ui-ink/types/conversationReset'
+import type { ToolKeypressHandler } from '@kode/tool-interface/Tool'
 
 const batchedUpdates: ((fn: () => void) => void) | null =
   typeof (ReactReconciler as any)?.batchedUpdates === 'function'
@@ -80,12 +103,37 @@ const batchedUpdates: ((fn: () => void) => void) | null =
         ) => void)
       : null
 
+function isSuppressedTranscriptItem(
+  item: TranscriptItem,
+  suppressedMessageIds: ReadonlySet<string>,
+): boolean {
+  for (const messageId of suppressedMessageIds) {
+    if (item.key === messageId || item.key.startsWith(`${messageId}:`)) {
+      return true
+    }
+  }
+  return false
+}
+
 export function useReplController(props: REPLProps) {
   const debug = props.debug ?? false
   const disableSlashCommands = props.disableSlashCommands ?? false
   const safeMode = Boolean(props.safeMode)
   const mcpClients = props.mcpClients ?? []
   const isDefaultModel = props.isDefaultModel ?? true
+  const { rows: terminalRows, columns: terminalColumns } = useTerminalSize()
+  const assistantStreamStoreRef = useRef<AssistantStreamStore | null>(null)
+  if (assistantStreamStoreRef.current === null) {
+    assistantStreamStoreRef.current = createAssistantStreamStore()
+  }
+  const assistantStreamStore = assistantStreamStoreRef.current
+
+  useEffect(
+    () => () => {
+      assistantStreamStore.destroy()
+    },
+    [assistantStreamStore],
+  )
   const [updateAvailableVersion, setUpdateAvailableVersion] = useState<
     string | null
   >(() => props.initialUpdateVersion ?? null)
@@ -148,6 +196,8 @@ export function useReplController(props: REPLProps) {
     ),
   )
   const initialForkNumberRef = useRef(forkNumber)
+  const [staticOutputEpoch, setStaticOutputEpoch] = useState(0)
+  const suppressedTranscriptMessageIdsRef = useRef<Set<string>>(new Set())
   const [uiRefreshCounter, setUiRefreshCounter] = useState(0)
 
   const [pendingForkConvoWithMessages, setPendingForkConvoWithMessages] =
@@ -159,6 +209,15 @@ export function useReplController(props: REPLProps) {
     messages: MessageType[]
     options?: ForkConvoWithMessagesOptions
   } | null>(null)
+  const pendingForkApplySeqRef = useRef(0)
+  const isMountedRef = useRef(true)
+
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
 
   const setForkConvoWithMessagesOnTheNextRender =
     useCallback<SetForkConvoWithMessagesOnTheNextRender>(
@@ -187,13 +246,34 @@ export function useReplController(props: REPLProps) {
     [],
   )
 
-  const [abortController, setAbortController] =
+  const [abortController, setAbortControllerState] =
     useState<AbortController | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
+  const setAbortController = useCallback(
+    (nextController: AbortController | null) => {
+      abortControllerRef.current = nextController
+      setAbortControllerState(nextController)
+    },
+    [],
+  )
+  const clearAbortController = useCallback(
+    (completedController: AbortController) => {
+      if (abortControllerRef.current !== completedController) return false
+      abortControllerRef.current = null
+      setAbortControllerState(currentController =>
+        currentController === completedController ? null : currentController,
+      )
+      return true
+    },
+    [],
+  )
   const [isLoading, setIsLoading] = useState(false)
+  const [cancelRequestKey, setCancelRequestKey] = useState(0)
   type ToolView = {
     jsx: React.ReactNode | null
     shouldHidePromptInput: boolean
     displayMode?: 'inline' | 'fullscreen'
+    onKeypress?: ToolKeypressHandler
   }
 
   const [toolViewStack, setToolViewStack] = useState<ToolView[]>([])
@@ -204,6 +284,8 @@ export function useReplController(props: REPLProps) {
 
   const toolJSX: ToolView | null =
     toolViewStack.length > 0 ? toolViewStack[toolViewStack.length - 1] : null
+
+  useToolKeypress(toolJSX?.onKeypress)
 
   const toolJSXRef = useRef<typeof toolJSX>(toolJSX)
   useEffect(() => {
@@ -229,21 +311,19 @@ export function useReplController(props: REPLProps) {
       const prevFull = prevMode === 'fullscreen'
       const nextFull = nextMode === 'fullscreen'
 
-      const maybeApplyPendingForkConvoWithMessages = (): void => {
+      const maybeApplyPendingForkConvoWithMessages = (
+        afterApply?: () => void,
+      ): boolean => {
         const request = pendingForkConvoWithMessagesRef.current
-        if (!request) return
+        if (!request) return false
+        const applySeq = ++pendingForkApplySeqRef.current
 
         pendingForkConvoWithMessagesRef.current = null
-
-        if (request.options?.clearViewport) {
-          // Don't await; ordering of writes on stdout is preserved and this keeps
-          // the transition to the restored main buffer from flashing.
-          void clearViewport()
-        }
 
         const applyStateUpdates = () => {
           setPendingForkConvoWithMessages(null)
           setForkNumber(prev => prev + 1)
+          setStaticOutputEpoch(prev => prev + 1)
           setMessages(request.messages)
 
           if (request.options?.resetInput) {
@@ -254,11 +334,35 @@ export function useReplController(props: REPLProps) {
           }
         }
 
-        if (batchedUpdates) {
-          batchedUpdates(applyStateUpdates)
-          return
+        const applyAll = () => {
+          if (batchedUpdates) {
+            batchedUpdates(() => {
+              applyStateUpdates()
+              afterApply?.()
+            })
+            return
+          }
+          applyStateUpdates()
+          afterApply?.()
         }
-        applyStateUpdates()
+
+        if (!request.options?.clearViewport) {
+          applyAll()
+          return true
+        }
+
+        void (async () => {
+          await clearViewport()
+          if (
+            !isMountedRef.current ||
+            pendingForkApplySeqRef.current !== applySeq
+          ) {
+            return
+          }
+          applyAll()
+        })()
+
+        return true
       }
 
       const screenReaderEnv =
@@ -285,9 +389,12 @@ export function useReplController(props: REPLProps) {
           // Switching buffers can reset terminal modes (kitty/modifyOtherKeys/bracketed paste)
           // in some terminals; re-assert what we detected at startup so keybindings keep working.
           terminalCapabilityManager.enableSupportedModes()
-          void clearViewport()
-          doSetState()
           ephemeralFullscreenAltScreenRef.current = true
+          void (async () => {
+            await clearViewport()
+            if (!isMountedRef.current) return
+            doSetState()
+          })()
           return
         } else if (prevFull && !nextFull) {
           if (ephemeralFullscreenAltScreenRef.current) {
@@ -299,7 +406,7 @@ export function useReplController(props: REPLProps) {
           // Apply any pending transcript fork/reset immediately when leaving a
           // fullscreen tool view so the restored main buffer doesn't flash the
           // pre-overlay frame (e.g. `/resume`).
-          maybeApplyPendingForkConvoWithMessages()
+          if (maybeApplyPendingForkConvoWithMessages(doSetState)) return
         } else if (
           prevFull &&
           nextFull &&
@@ -314,7 +421,7 @@ export function useReplController(props: REPLProps) {
           // Avoid explicit terminal clears here; the UI should remain within the viewport
           // and rely on Ink's reconciliation to keep transitions stable.
           if (prevFull && !nextFull) {
-            maybeApplyPendingForkConvoWithMessages()
+            if (maybeApplyPendingForkConvoWithMessages(doSetState)) return
           }
           doSetState()
           return
@@ -342,22 +449,14 @@ export function useReplController(props: REPLProps) {
   const [restorePastes, setRestorePastes] = useState<
     | {
         id: number
-        pastedTexts: Array<{ placeholder: string; text: string }>
-        pastedImages: Array<{
-          placeholder: string
-          data: string
-          mediaType: string
-        }>
+        pastedTexts: PastedTextSegment[]
+        pastedImages: PastedImageAttachment[]
       }
     | undefined
   >(undefined)
   const [draftPastes, setDraftPastes] = useState<{
-    pastedTexts: Array<{ placeholder: string; text: string }>
-    pastedImages: Array<{
-      placeholder: string
-      data: string
-      mediaType: string
-    }>
+    pastedTexts: PastedTextSegment[]
+    pastedImages: PastedImageAttachment[]
   }>({ pastedTexts: [], pastedImages: [] })
   const [sessionThinkingMode, setSessionThinkingMode] = useState<
     'enabled' | 'auto' | null
@@ -373,6 +472,14 @@ export function useReplController(props: REPLProps) {
     useState<BinaryFeedbackContext | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const showToast = useCallback((text: string) => {
+    setToast(text)
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current)
+    }
+    toastTimeoutRef.current = setTimeout(() => setToast(null), 6000)
+  }, [])
 
   const dismissToolView = useCallback(() => {
     const current = toolViewStackRef.current
@@ -410,6 +517,8 @@ export function useReplController(props: REPLProps) {
 
   const apiKeyStatusRef = useRef<VerificationStatus>('loading')
   const onQueryRef = useRef<ReplOnQueryFn | null>(null)
+  const scheduleDispatchingRef = useRef(false)
+  const dispatchedUnstartedGoalRunIdsRef = useRef(new Set<string>())
 
   const openHistorySearchScreen = useCallback(() => {
     openToolView({
@@ -422,17 +531,7 @@ export function useReplController(props: REPLProps) {
 
             const selected = result.value
             const pastedTexts = result.pastedTexts
-            const mode: PromptMode = selected.startsWith('!')
-              ? 'bash'
-              : selected.startsWith('&')
-                ? 'background'
-                : selected.startsWith('#')
-                  ? 'koding'
-                  : 'prompt'
-            const text =
-              mode === 'bash' || mode === 'background' || mode === 'koding'
-                ? selected.slice(1)
-                : selected
+            const { mode, text } = parsePromptHistoryDisplay(selected)
 
             if (result.action === 'accept') {
               setInputMode(mode)
@@ -464,16 +563,11 @@ export function useReplController(props: REPLProps) {
                   isBypassPermissionsModeAvailable: !safeMode,
                 })
 
-              const exit = (): never => {
-                process.exit(0)
-              }
+              const exit = () => requestCliExit(0)
 
               await submitPrompt({
                 input: text,
                 mode,
-                completionActive: false,
-                suggestionCount: 0,
-                isSubmittingSlashCommand: false,
                 isDisabled: apiKeyStatusRef.current !== 'valid',
                 isLoading: false,
                 isEditingExternally: false,
@@ -607,8 +701,35 @@ export function useReplController(props: REPLProps) {
               onDone={dismissToolView}
               onSelectModel={modelName => {
                 const modelManager = getModelManager()
+                const selectedModel = modelManager
+                  .getAvailableModels()
+                  .find(model => model.modelName === modelName)
                 modelManager.setPointer('main', modelName)
                 triggerModelConfigChange()
+                showToast(`Model: ${selectedModel?.name ?? modelName}`)
+              }}
+              onOpenModelConfig={() => {
+                setToolViewStackWithClear([
+                  ...toolViewStackRef.current.slice(0, -1),
+                  {
+                    jsx: (
+                      <ModelConfig
+                        onClose={() => {
+                          import('#core/utils/model').then(
+                            ({ reloadModelManager }) => {
+                              reloadModelManager()
+                              triggerModelConfigChange()
+                              showToast('Model settings updated')
+                              dismissToolView()
+                            },
+                          )
+                        }}
+                      />
+                    ),
+                    shouldHidePromptInput: true,
+                    displayMode: 'fullscreen',
+                  },
+                ])
               }}
             />
           ),
@@ -695,8 +816,21 @@ export function useReplController(props: REPLProps) {
         openToolView({
           jsx: (
             <CommandPaletteScreen
+              commands={commands}
               onDone={action => {
                 if (!action) {
+                  dismissToolView()
+                  return
+                }
+
+                if (typeof action !== 'string') {
+                  setInputMode('prompt')
+                  setInputValue(`/${action.name} `)
+                  showToast(
+                    action.argumentHint
+                      ? `Command ready: /${action.name} ${action.argumentHint}`
+                      : `Command ready: /${action.name}`,
+                  )
                   dismissToolView()
                   return
                 }
@@ -836,15 +970,30 @@ export function useReplController(props: REPLProps) {
 
   const onCancel = useCallback(() => {
     if (!isLoading) return
+    setCancelRequestKey(prev => prev + 1)
     setIsLoading(false)
+    if (abortController) {
+      assistantStreamStore.endTurn(abortController)
+    }
     if (toolUseConfirm) {
       toolUseConfirm.onAbort()
+      setAbortController(null)
+      showToast('Interrupted')
       return
     }
     if (abortController && !abortController.signal.aborted) {
       abortController.abort()
     }
-  }, [abortController, isLoading, toolUseConfirm])
+    setAbortController(null)
+    showToast('Interrupted')
+  }, [
+    abortController,
+    assistantStreamStore,
+    isLoading,
+    setAbortController,
+    showToast,
+    toolUseConfirm,
+  ])
 
   useCancelRequest(
     setToolJSXWithClear,
@@ -865,13 +1014,16 @@ export function useReplController(props: REPLProps) {
     if (toolJSX?.displayMode === 'fullscreen') return
 
     const request = pendingForkConvoWithMessages
+    const applySeq = ++pendingForkApplySeqRef.current
     setPendingForkConvoWithMessages(null)
     pendingForkConvoWithMessagesRef.current = null
 
-    // For non-fullscreen forks, handle clearViewport synchronously then update state
-    // This matches the old pattern where clearTerminal was called before state updates
+    // Keep viewport clears ordered before the React state replacement. Otherwise
+    // resize/reflow can interleave with a full transcript replacement and leave
+    // duplicate footer/header frames in scrollback.
     const applyStateUpdates = () => {
       setForkNumber(prev => prev + 1)
+      setStaticOutputEpoch(prev => prev + 1)
       setMessages(request.messages)
 
       if (request.options?.resetInput) {
@@ -882,17 +1034,24 @@ export function useReplController(props: REPLProps) {
       }
     }
 
-    // clearViewport is async but we don't need to await it - the terminal
-    // writes are ordered on stdout, so the clear happens before React renders
-    if (request.options?.clearViewport) {
-      void clearViewport()
-    }
+    void (async () => {
+      if (request.options?.clearViewport) {
+        await clearViewport()
+      }
 
-    if (batchedUpdates) {
-      batchedUpdates(applyStateUpdates)
-    } else {
-      applyStateUpdates()
-    }
+      if (
+        !isMountedRef.current ||
+        pendingForkApplySeqRef.current !== applySeq
+      ) {
+        return
+      }
+
+      if (batchedUpdates) {
+        batchedUpdates(applyStateUpdates)
+      } else {
+        applyStateUpdates()
+      }
+    })()
   }, [pendingForkConvoWithMessages, toolJSX?.displayMode])
 
   useEffect(() => {
@@ -901,14 +1060,6 @@ export function useReplController(props: REPLProps) {
       setShowCostDialog(true)
     }
   }, [messages, showCostDialog, haveShownCostDialog])
-
-  const showToast = useCallback((text: string) => {
-    setToast(text)
-    if (toastTimeoutRef.current) {
-      clearTimeout(toastTimeoutRef.current)
-    }
-    toastTimeoutRef.current = setTimeout(() => setToast(null), 6000)
-  }, [])
 
   const ultrathinkToastActiveRef = useRef(false)
   useEffect(() => {
@@ -1021,11 +1172,97 @@ export function useReplController(props: REPLProps) {
     setToolJSX: setToolJSXWithClear,
     getBinaryFeedbackResponse,
     setAbortController,
+    clearAbortController,
     setIsLoading,
+    assistantStreamStore,
   })
   useEffect(() => {
     onQueryRef.current = onQuery
   }, [onQuery])
+
+  // A durable /loop wakes only when this interactive session is genuinely
+  // idle. The schedule is atomically claimed before it becomes an ordinary
+  // REPL turn, so a restart cannot replay missed intervals or double-run it.
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'test') return
+
+    let disposed = false
+    const tick = () => {
+      if (
+        disposed ||
+        scheduleDispatchingRef.current ||
+        isLoading ||
+        apiKeyStatusRef.current !== 'valid' ||
+        toolJSX ||
+        toolUseConfirm ||
+        binaryFeedbackContext ||
+        isMessageSelectorVisible ||
+        inputValue.trim().length > 0
+      ) {
+        return
+      }
+
+      let schedule: ClaimedSchedule | undefined
+      let isUnstartedGoalRun = false
+      try {
+        const cwd = getCwd()
+        const sessionId = getKodeAgentSessionId()
+        schedule = claimDueSchedules({
+          cwd,
+          sessionId,
+          limit: 1,
+        })[0]
+        if (!schedule) {
+          schedule =
+            getUnstartedGoalRunSchedule(
+              new GoalService().findActiveGoal({ cwd, sessionId }),
+            ) ?? undefined
+          isUnstartedGoalRun = schedule !== undefined
+        }
+      } catch (error) {
+        logError(error)
+        return
+      }
+      if (!schedule) return
+      if (
+        isUnstartedGoalRun &&
+        dispatchedUnstartedGoalRunIdsRef.current.has(schedule.runId)
+      ) {
+        return
+      }
+
+      scheduleDispatchingRef.current = true
+      if (isUnstartedGoalRun) {
+        dispatchedUnstartedGoalRunIdsRef.current.add(schedule.runId)
+      }
+      setIsLoading(true)
+      showToast(
+        `${schedule.kind === 'interval' ? 'Scheduled loop' : 'Goal run'}: ${schedule.prompt}`,
+      )
+      void onQuery([createUserMessage(schedule.prompt)])
+        .catch(error => logError(error))
+        .finally(() => {
+          scheduleDispatchingRef.current = false
+        })
+    }
+
+    const timer = setInterval(tick, 1_000)
+    timer.unref?.()
+    tick()
+    return () => {
+      disposed = true
+      clearInterval(timer)
+    }
+  }, [
+    binaryFeedbackContext,
+    inputValue,
+    isLoading,
+    isMessageSelectorVisible,
+    onQuery,
+    showToast,
+    toolJSX,
+    toolUseConfirm,
+  ])
 
   const onInit = useReplInit({
     initialPrompt: props.initialPrompt,
@@ -1043,16 +1280,49 @@ export function useReplController(props: REPLProps) {
     reverify,
     setIsLoading,
     setAbortController,
+    clearAbortController,
     setHaveShownCostDialog,
     onQuery,
   })
 
   useCostSummary()
 
+  const setMessagesFromExternalStore = useCallback<MessageStateSetter>(
+    (update, options) => {
+      if (options?.preserveTranscript) {
+        setMessages(previous => {
+          const next = typeof update === 'function' ? update(previous) : update
+          const previousMessageIds = new Set(
+            previous.map(message => message.uuid),
+          )
+          const introducedMessages = next.filter(
+            message => !previousMessageIds.has(message.uuid),
+          )
+
+          // Compaction creates summary/recovery messages with new UUIDs. They
+          // belong to model context, not the existing terminal scrollback.
+          // Existing messages stay eligible so an unprinted live message is
+          // never hidden by a context-only rewrite.
+          for (const message of normalizeMessages(introducedMessages)) {
+            suppressedTranscriptMessageIdsRef.current.add(message.uuid)
+          }
+          return next
+        })
+        return
+      }
+
+      if (typeof update !== 'function') {
+        setStaticOutputEpoch(prev => prev + 1)
+      }
+      setMessages(update)
+    },
+    [],
+  )
+
   useEffect(() => {
     setMessagesGetter(() => messages)
-    setMessagesSetter(setMessages)
-  }, [messages])
+    setMessagesSetter(setMessagesFromExternalStore)
+  }, [messages, setMessagesFromExternalStore])
 
   useEffect(() => {
     setModelConfigChangeHandler(() => setUiRefreshCounter(prev => prev + 1))
@@ -1077,38 +1347,85 @@ export function useReplController(props: REPLProps) {
     forkNumber,
   })
 
+  const startupHeaderKey = useMemo(
+    () =>
+      buildStartupHeaderIdentityKey({
+        forkNumber,
+        isDefaultModel,
+        updateAvailableVersion,
+        updateCommands,
+        mcpClients,
+      }),
+    [
+      forkNumber,
+      isDefaultModel,
+      mcpClients,
+      updateAvailableVersion,
+      updateCommands,
+    ],
+  )
+
+  const startupHeader = useMemo(
+    () => (
+      <Box flexDirection="column" key={startupHeaderKey}>
+        <Logo
+          mcpClients={mcpClients}
+          isDefaultModel={isDefaultModel}
+          updateBannerVersion={updateAvailableVersion}
+          updateBannerCommands={updateCommands}
+          terminalColumns={terminalColumns}
+          terminalRows={terminalRows}
+        />
+        <ProjectOnboarding workspaceDir={getOriginalCwd()} />
+      </Box>
+    ),
+    [
+      isDefaultModel,
+      mcpClients,
+      startupHeaderKey,
+      terminalColumns,
+      terminalRows,
+      updateAvailableVersion,
+      updateCommands,
+    ],
+  )
+  const showStartupHeader =
+    messages.length === 0 && transcript.items.length === 0
+
   const staticItemsRef = useRef<TranscriptItem[]>([])
   const printedKeysRef = useRef<Set<string>>(new Set())
-  const lastForkNumberRef = useRef<number>(forkNumber)
+  const lastStaticOutputEpochRef = useRef<number>(staticOutputEpoch)
 
   const staticItems = useMemo(() => {
-    // Reset when forkNumber changes (conversation fork)
-    if (lastForkNumberRef.current !== forkNumber) {
-      lastForkNumberRef.current = forkNumber
+    if (lastStaticOutputEpochRef.current !== staticOutputEpoch) {
+      lastStaticOutputEpochRef.current = staticOutputEpoch
       staticItemsRef.current = []
       printedKeysRef.current = new Set()
+      suppressedTranscriptMessageIdsRef.current.clear()
+    }
+
+    const activeMessageIds = new Set<string>(
+      transcript.orderedMessages.map(message => message.uuid),
+    )
+    for (const messageId of suppressedTranscriptMessageIdsRef.current) {
+      if (!activeMessageIds.has(messageId)) {
+        suppressedTranscriptMessageIdsRef.current.delete(messageId)
+      }
     }
 
     const items: TranscriptItem[] = []
 
-    // Always include logo as first item
-    const logoKey = `logo-${forkNumber}`
-    items.push({
-      key: logoKey,
-      jsx: (
-        <Box flexDirection="column" key={logoKey}>
-          <Logo
-            mcpClients={mcpClients}
-            isDefaultModel={isDefaultModel}
-            updateBannerVersion={updateAvailableVersion}
-            updateBannerCommands={updateCommands}
-          />
-          <ProjectOnboarding workspaceDir={getOriginalCwd()} />
-        </Box>
-      ),
-    })
-
-    items.push(...transcript.items.slice(0, transcript.replStaticPrefixLength))
+    items.push(
+      ...transcript.items
+        .slice(0, transcript.replStaticPrefixLength)
+        .filter(
+          item =>
+            !isSuppressedTranscriptItem(
+              item,
+              suppressedTranscriptMessageIdsRef.current,
+            ),
+        ),
+    )
 
     // Only add items that haven't been printed yet
     const newItems: TranscriptItem[] = []
@@ -1126,17 +1443,23 @@ export function useReplController(props: REPLProps) {
 
     return staticItemsRef.current
   }, [
-    forkNumber,
-    isDefaultModel,
-    mcpClients,
+    staticOutputEpoch,
     transcript.items,
+    transcript.orderedMessages,
     transcript.replStaticPrefixLength,
-    updateAvailableVersion,
-    updateCommands,
   ])
 
   const transientItems = useMemo(
-    () => transcript.items.slice(transcript.replStaticPrefixLength),
+    () =>
+      transcript.items
+        .slice(transcript.replStaticPrefixLength)
+        .filter(
+          item =>
+            !isSuppressedTranscriptItem(
+              item,
+              suppressedTranscriptMessageIdsRef.current,
+            ),
+        ),
     [transcript.items, transcript.replStaticPrefixLength],
   )
 
@@ -1150,45 +1473,80 @@ export function useReplController(props: REPLProps) {
     saveGlobalConfig({ ...projectConfig, hasAcknowledgedCostThreshold: true })
   }, [])
 
-  const promptInputProps = buildPromptInputProps({
-    commands,
-    forkNumber,
-    messageLogName: props.messageLogName,
-    initialPrompt: props.initialPrompt,
-    tools: props.tools,
-    disableSlashCommands,
-    isDisabled: apiKeyStatus !== 'valid',
-    isLoading,
-    onQuery,
-    debug,
-    verbose,
-    messages,
-    setToolJSX: setToolJSXWithClear,
-    input: inputValue,
-    onInputChange: setInputValue,
-    mode: inputMode,
-    onModeChange: setInputMode,
-    submitCount,
-    onSubmitCountChange: setSubmitCount,
-    setIsLoading,
-    setAbortController,
-    uiRefreshCounter,
-    onShowMessageSelector: () => setIsMessageSelectorVisible(prev => !prev),
-    setForkConvoWithMessagesOnTheNextRender,
-    readFileTimestamps: readFileTimestampsRef.current,
-    abortController,
-    onManageTasks: openTasksScreen,
-    restorePastes,
-    onRestorePastesApplied: id => {
-      setRestorePastes(prev => {
-        if (!prev) return prev
-        if (prev.id !== id) return prev
-        return undefined
-      })
-    },
-    draftPastes,
-    onDraftPastesChange: setDraftPastes,
-  })
+  const handleShowMessageSelector = useCallback(() => {
+    setIsMessageSelectorVisible(prev => !prev)
+  }, [])
+
+  const handleRestorePastesApplied = useCallback((id: number) => {
+    setRestorePastes(prev => {
+      if (!prev) return prev
+      if (prev.id !== id) return prev
+      return undefined
+    })
+  }, [])
+
+  const promptInputProps = useMemo(
+    () =>
+      buildPromptInputProps({
+        commands,
+        forkNumber,
+        messageLogName: props.messageLogName,
+        initialPrompt: props.initialPrompt,
+        tools: props.tools,
+        disableSlashCommands,
+        isDisabled: apiKeyStatus !== 'valid',
+        isLoading,
+        onQuery,
+        debug,
+        verbose,
+        messages,
+        setToolJSX: setToolJSXWithClear,
+        input: inputValue,
+        onInputChange: setInputValue,
+        mode: inputMode,
+        onModeChange: setInputMode,
+        submitCount,
+        onSubmitCountChange: setSubmitCount,
+        setIsLoading,
+        setAbortController,
+        cancelRequestKey,
+        uiRefreshCounter,
+        onShowMessageSelector: handleShowMessageSelector,
+        setForkConvoWithMessagesOnTheNextRender,
+        readFileTimestamps: readFileTimestampsRef.current,
+        abortController,
+        restorePastes,
+        onRestorePastesApplied: handleRestorePastesApplied,
+        draftPastes,
+        onDraftPastesChange: setDraftPastes,
+      }),
+    [
+      abortController,
+      apiKeyStatus,
+      cancelRequestKey,
+      commands,
+      debug,
+      disableSlashCommands,
+      draftPastes,
+      forkNumber,
+      handleRestorePastesApplied,
+      handleShowMessageSelector,
+      inputMode,
+      inputValue,
+      isLoading,
+      messages,
+      onQuery,
+      props.initialPrompt,
+      props.messageLogName,
+      props.tools,
+      restorePastes,
+      setForkConvoWithMessagesOnTheNextRender,
+      setToolJSXWithClear,
+      submitCount,
+      uiRefreshCounter,
+      verbose,
+    ],
+  )
 
   const handleMessageSelectorSelect = useMessageSelectorSelect({
     messages,
@@ -1202,9 +1560,13 @@ export function useReplController(props: REPLProps) {
     conversationKey,
     safeMode,
     debug,
-    forkNumber,
+    staticOutputEpoch,
     staticItems,
+    startupHeader,
+    startupHeaderKey,
+    showStartupHeader,
     transientItems,
+    assistantStreamStore,
     toolJSX,
     toolUseConfirm,
     setToolUseConfirm,

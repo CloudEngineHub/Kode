@@ -1,0 +1,13 @@
+{
+  "name": "@kode/hooks",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "dependencies": {
+    "@kode/config": "workspace:*",
+    "@kode/protocol": "workspace:*",
+    "@kode/runtime": "workspace:*",
+    "minimatch": "^10.2.5",
+    "shell-quote": "^1.8.4"
+  }
+}

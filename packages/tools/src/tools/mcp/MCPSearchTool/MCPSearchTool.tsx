@@ -1,7 +1,7 @@
 import { Box, Text } from 'ink'
 import React from 'react'
 import { z } from 'zod'
-import type { Tool, ToolUseContext } from '#core/tooling/Tool'
+import type { Tool, ToolUseContext } from '@kode/tool-interface/Tool'
 import { getTheme } from '#core/utils/theme'
 import { DESCRIPTION, getPrompt, TOOL_NAME_FOR_PROMPT } from './prompt'
 
@@ -132,14 +132,14 @@ export const MCPSearchTool = {
     if (output.matches.length === 0) {
       return (
         <Box flexDirection="row">
-          <Text color={theme.text}>  ⎿  </Text>
+          <Text color={theme.text}>{'  ⎿ '}</Text>
           <Text dimColor>No matching MCP tools found</Text>
         </Box>
       )
     }
     return (
       <Box flexDirection="row">
-        <Text color={theme.text}>  ⎿  </Text>
+        <Text color={theme.text}>{'  ⎿ '}</Text>
         <Text>
           Found <Text bold>{output.matches.length}</Text>{' '}
           {output.matches.length === 1 ? 'tool' : 'tools'}

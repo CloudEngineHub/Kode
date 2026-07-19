@@ -149,13 +149,11 @@ describe('Arrow key navigation logic', () => {
     completionActive: boolean
     historyIndex: number
     input: string
-    isInFastBrowseMode: boolean
   }): boolean {
     return (
       args.completionActive ||
       args.historyIndex > 0 ||
-      !args.input.includes('\n') ||
-      args.isInFastBrowseMode
+      !args.input.includes('\n')
     )
   }
 
@@ -167,7 +165,6 @@ describe('Arrow key navigation logic', () => {
       completionActive: false,
       historyIndex: 0,
       input,
-      isInFastBrowseMode: false,
     })
 
     expect(disableCursor).toBe(false)
@@ -190,7 +187,6 @@ describe('Arrow key navigation logic', () => {
       completionActive: false,
       historyIndex: 0,
       input,
-      isInFastBrowseMode: false,
     })
 
     expect(disableCursor).toBe(false)
@@ -213,7 +209,6 @@ describe('Arrow key navigation logic', () => {
       completionActive: false,
       historyIndex: 0,
       input,
-      isInFastBrowseMode: false,
     })
 
     expect(disableCursor).toBe(false)
@@ -236,7 +231,6 @@ describe('Arrow key navigation logic', () => {
       completionActive: false,
       historyIndex: 0,
       input,
-      isInFastBrowseMode: false,
     })
 
     expect(disableCursor).toBe(false)
@@ -259,7 +253,6 @@ describe('Arrow key navigation logic', () => {
       completionActive: false,
       historyIndex: 0,
       input,
-      isInFastBrowseMode: false,
     })
 
     expect(disableCursor).toBe(true) // No newlines = disable cursor movement
@@ -274,7 +267,7 @@ describe('Arrow key navigation logic', () => {
     expect(upAction).toBe('history')
   })
 
-  test('Fast browse mode overrides line-based logic', () => {
+  test('Multiline input keeps cursor movement when not actively browsing history', () => {
     const input = 'line1\nline2\nline3'
     const cursorOffset = 8 // Middle of line2
 
@@ -282,10 +275,9 @@ describe('Arrow key navigation logic', () => {
       completionActive: false,
       historyIndex: 0,
       input,
-      isInFastBrowseMode: true, // Fast browse mode enabled
     })
 
-    expect(disableCursor).toBe(true)
+    expect(disableCursor).toBe(false)
 
     const action = simulateUpOrHistoryUp({
       text: input,
@@ -294,7 +286,7 @@ describe('Arrow key navigation logic', () => {
       disableCursorMovement: disableCursor,
     })
 
-    expect(action).toBe('history')
+    expect(action).toBe('cursor_move')
   })
 
   test('Browsing history (historyIndex > 0) always navigates history', () => {
@@ -305,7 +297,6 @@ describe('Arrow key navigation logic', () => {
       completionActive: false,
       historyIndex: 1, // Browsing history
       input,
-      isInFastBrowseMode: false,
     })
 
     expect(disableCursor).toBe(true)
@@ -328,7 +319,6 @@ describe('Arrow key navigation logic', () => {
       completionActive: true, // Completion active
       historyIndex: 0,
       input,
-      isInFastBrowseMode: false,
     })
 
     expect(disableCursor).toBe(true)

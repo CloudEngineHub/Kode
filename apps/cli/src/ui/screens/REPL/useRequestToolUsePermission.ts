@@ -12,6 +12,8 @@ type PermissionDecision =
 export function useRequestToolUsePermission(args: {
   setToolUseConfirm: (confirm: ToolUseConfirm | null) => void
 }) {
+  const { setToolUseConfirm } = args
+
   return useCallback(
     async (
       request: {
@@ -56,9 +58,9 @@ export function useRequestToolUsePermission(args: {
           },
         }
 
-        args.setToolUseConfirm(toolUseConfirm)
+        setToolUseConfirm(toolUseConfirm)
       })
     },
-    [args],
+    [setToolUseConfirm],
   )
 }

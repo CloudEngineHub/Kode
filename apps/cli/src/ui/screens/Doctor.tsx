@@ -11,13 +11,23 @@ import { describeToolPermissionRuleSource } from '#core/permissions/ruleString'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { terminalCapabilityManager } from '#ui-ink/utils/terminalCapabilityManager'
+import {
+  formatTerminalAppearanceLines,
+  withTerminalReadability,
+} from '#ui-ink/utils/terminalAppearance'
+import { resolveTuiMaxFps } from '#ui-ink/utils/inkRender'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
+import {
+  computeAvailableRows,
+  computeScreenFrameReservedRows,
+} from '#ui-ink/primitives/layout/viewportRows'
 import { wrapLines } from '#ui-ink/primitives/text/wrapLines'
 
 import { isStdioPatchedForTui } from '#cli-utils/stdio'
 import {
   isAlternateScreenActive,
+  isMouseEventsEnabled,
   shouldEnterAlternateScreen,
 } from '#cli-utils/terminal'
 
@@ -68,6 +78,21 @@ export function Doctor({
     const terminalName = terminalCapabilityManager.getTerminalName()
     const backgroundColor =
       terminalCapabilityManager.getTerminalBackgroundColor()
+    const appearanceSnapshot =
+      terminalCapabilityManager.getTerminalAppearanceSnapshot()
+    const appearance = withTerminalReadability(
+      {
+        ...appearanceSnapshot,
+        terminalName: appearanceSnapshot.terminalName ?? terminalName,
+        terminalBackgroundColor:
+          appearanceSnapshot.terminalBackgroundColor ?? backgroundColor,
+      },
+      {
+        textColor: theme.text,
+        secondaryTextColor: theme.secondaryText,
+        accentColor: theme.kode,
+      },
+    )
     const kittySupported = terminalCapabilityManager.isKittyProtocolSupported()
     const kittyEnabled = terminalCapabilityManager.isKittyProtocolEnabled()
     const mokSupported = terminalCapabilityManager.isModifyOtherKeysSupported()
@@ -87,6 +112,7 @@ export function Doctor({
         ['TERM_PROGRAM', process.env.TERM_PROGRAM],
         ['TERM_PROGRAM_VERSION', process.env.TERM_PROGRAM_VERSION],
         ['WT_SESSION', process.env.WT_SESSION],
+        ['WT_PROFILE_ID', process.env.WT_PROFILE_ID],
         ['VTE_VERSION', process.env.VTE_VERSION],
         ['KITTY_WINDOW_ID', process.env.KITTY_WINDOW_ID],
         ['WEZTERM_EXECUTABLE', process.env.WEZTERM_EXECUTABLE],
@@ -120,6 +146,8 @@ export function Doctor({
     )
     if (envSummary) lines.push(`- env: ${envSummary}`)
     lines.push('')
+    lines.push(...formatTerminalAppearanceLines(appearance))
+    lines.push('')
     lines.push('Capabilities')
     lines.push(
       `- kitty keyboard protocol: ${yesNo(kittySupported)} (${enabledDisabled(kittyEnabled)})`,
@@ -129,6 +157,11 @@ export function Doctor({
     )
     lines.push(
       `- bracketed paste: ${yesNo(bpSupported)} (${enabledDisabled(bpEnabled)})`,
+    )
+    lines.push(
+      `- mouse tracking: ${enabledDisabled(isMouseEventsEnabled())} (env: ${
+        process.env.KODE_TUI_MOUSE ?? 'default'
+      })`,
     )
     lines.push('')
     lines.push('Rendering')
@@ -170,9 +203,16 @@ export function Doctor({
     lines.push(
       `- syncOutput: ${enabledDisabled(syncEffective)} (env: ${syncEnv ?? 'default'})`,
     )
-    if (process.env.KODE_TUI_MAX_FPS) {
-      lines.push(`- maxFps: ${process.env.KODE_TUI_MAX_FPS} (env override)`)
-    }
+    const maxFpsEffective = resolveTuiMaxFps({
+      incrementalRendering: incrementalEffective,
+      isScreenReaderEnabled: isScreenReader,
+      isTty: Boolean(process.stdout.isTTY),
+    })
+    lines.push(
+      `- maxFps: ${
+        maxFpsEffective ?? 'Ink default'
+      } (env: ${process.env.KODE_TUI_MAX_FPS ?? 'default'})`,
+    )
 
     if (unreachableRules.length > 0) {
       lines.push('')
@@ -213,6 +253,9 @@ export function Doctor({
     doctorMode,
     layout.columns,
     layout.rows,
+    theme.kode,
+    theme.secondaryText,
+    theme.text,
     unreachableRules.length,
   ])
 
@@ -223,11 +266,16 @@ export function Doctor({
     )
   }, [layout.columns, layout.paddingX, rawLines])
 
-  const frameRows = 1 + 1 + layout.gap * 2 + layout.paddingY * 2
-  const contentRows = Math.max(
-    1,
-    layout.rows - frameRows - (1 + INDICATOR_ROWS) - VIEWPORT_SAFE_MARGIN_ROWS,
-  )
+  const frameRows = computeScreenFrameReservedRows({
+    paddingY: layout.paddingY,
+    gap: layout.gap,
+  })
+  const contentRows = computeAvailableRows({
+    rows: layout.rows,
+    reservedRows: frameRows + 1 + INDICATOR_ROWS,
+    safeMarginRows: VIEWPORT_SAFE_MARGIN_ROWS,
+    minRows: 1,
+  })
   const maxScrollTop = Math.max(0, wrappedLines.length - contentRows)
 
   useEffect(() => {

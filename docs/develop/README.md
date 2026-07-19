@@ -8,6 +8,8 @@ This comprehensive documentation provides a complete understanding of the Kode c
 
 - **[System Overview](./overview.md)** - Introduction to Kode's design philosophy, capabilities, and core principles
 - **[Architecture](./architecture.md)** - High-level system architecture, component relationships, and data flow
+- **[Phase 2 Package Boundaries](./phase2-package-boundaries.md)** - Current package split contract, import migration rules, verification, and rollback
+- **[Dependency Major Migration Plan](./dependency-major-migration-plan.md)** - Official-docs-based migration order, risk gates, and validation matrix for remaining major dependency upgrades
 - **[Security Model](./security-model.md)** - Comprehensive security architecture, permission system, and threat model
 - **[Configuration System](./configuration.md)** - Multi-level configuration management and settings
 - **[Testing](./testing.md)** - Comprehensive testing guide and infrastructure

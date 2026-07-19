@@ -27,7 +27,7 @@ describe('background task output persistence', () => {
       BunShell.restart()
       const shell = BunShell.getInstance()
 
-      const { bashId } = shell.execInBackground(
+      const { bashId, completion } = shell.execInBackground(
         'echo "tick 1"; echo "tick 2"; echo "err 1" 1>&2',
         10_000,
       )
@@ -40,6 +40,12 @@ describe('background task output persistence', () => {
       expect(content).toContain('tick 1')
       expect(content).toContain('tick 2')
       expect(content).toContain('err 1')
+
+      await expect(completion).resolves.toMatchObject({
+        taskId: bashId,
+        status: 'completed',
+        exitCode: 0,
+      })
     } finally {
       process.chdir(originalCwd)
       if (originalConfigDir === undefined) delete process.env.KODE_CONFIG_DIR

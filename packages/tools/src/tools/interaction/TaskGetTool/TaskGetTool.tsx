@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { Tool } from '#core/tooling/Tool'
+import type { Tool } from '@kode/tool-interface/Tool'
 import { getTask } from '#core/utils/taskStorage'
 import type { Task } from '#core/utils/taskStorage'
 import { DESCRIPTION, PROMPT } from './prompt'

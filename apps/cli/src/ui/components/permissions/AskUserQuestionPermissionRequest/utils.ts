@@ -4,6 +4,7 @@ import { getCachedStringWidth } from '#cli-utils/textWidth'
 import type {
   MultiSelectNavKey,
   MultiSelectNavState,
+  NumericOptionKey,
   Question,
   SingleSelectNavKey,
   TextInputKey,
@@ -21,6 +22,22 @@ export function isTextInputChar(
     if (code < 32 || code === 127) return false
   }
   return true
+}
+
+export function getNumericOptionIndex(args: {
+  input: unknown
+  key: NumericOptionKey
+  optionCount: number
+}): number | null {
+  if (args.key.ctrl || args.key.meta || args.key.tab || args.key.return) {
+    return null
+  }
+  if (typeof args.input !== 'string') return null
+  if (!/^[1-9]$/.test(args.input)) return null
+
+  const index = Number(args.input) - 1
+  if (index < 0 || index >= args.optionCount) return null
+  return index
 }
 
 export function applySingleSelectNav(args: {

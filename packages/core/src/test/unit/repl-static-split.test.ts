@@ -2,10 +2,13 @@ import { describe, expect, test } from 'bun:test'
 import type { ContentBlockParam } from '@anthropic-ai/sdk/resources/index.mjs'
 import {
   createAssistantMessage,
+  createProgressMessage,
   createUserMessage,
+  getToolUseID,
   getUnresolvedToolUseIDs,
   normalizeMessages,
   reorderMessages,
+  type NormalizedMessage,
 } from '#core/utils/messages'
 import { getReplStaticPrefixLength } from '#cli-utils/replStaticSplit'
 
@@ -92,5 +95,107 @@ describe('REPL Static prefix split', () => {
     expect(prefixLengths).toEqual(sorted)
     expect(u2.size).toBe(0)
     expect(u4.size).toBe(0)
+  })
+
+  test('preserves the first progress match when a sibling tool use is missing', () => {
+    const toolUseID = 'resolved'
+    const firstProgress = createProgressMessage(
+      toolUseID,
+      new Set(['missing-sibling']),
+      createAssistantMessage('first'),
+      [],
+      [],
+    )
+    const laterProgress = createProgressMessage(
+      toolUseID,
+      new Set(),
+      createAssistantMessage('later'),
+      [],
+      [],
+    )
+    const normalized = normalizeMessages([
+      makeToolUseAssistant(toolUseID),
+      firstProgress,
+      laterProgress,
+      makeToolResult(toolUseID),
+    ])
+
+    expect(
+      getReplStaticPrefixLength(
+        normalized,
+        normalized,
+        new Set(['missing-sibling']),
+      ),
+    ).toBe(0)
+  })
+
+  test('keeps an orphaned tool result static when its tool use is missing', () => {
+    const normalized = normalizeMessages([makeToolResult('missing-tool-use')])
+
+    expect(getReplStaticPrefixLength(normalized, normalized, new Set())).toBe(1)
+  })
+
+  test('indexes a long tool transcript once while preserving order and boundary', () => {
+    const toolPairCount = 1000
+    const transcript = Array.from({ length: toolPairCount }).flatMap(
+      (_, index) => {
+        const toolUseID = `tool-${index}`
+        return [
+          makeToolUseAssistant(toolUseID),
+          createProgressMessage(
+            toolUseID,
+            new Set([toolUseID]),
+            createAssistantMessage(`progress-${index}`),
+            [],
+            [],
+          ),
+          makeToolResult(toolUseID),
+        ]
+      },
+    )
+    const pendingToolUseID = 'pending'
+    const normalized = normalizeMessages([
+      ...transcript,
+      makeToolUseAssistant(pendingToolUseID),
+      createAssistantMessage('after pending'),
+    ])
+    const ordered = reorderMessages(normalized)
+    const unresolved = getUnresolvedToolUseIDs(normalized)
+    let observedTypeReads = 0
+    const observedAllMessages: NormalizedMessage[] = normalized.map(
+      message =>
+        new Proxy(message, {
+          get(target, property, receiver) {
+            if (property === 'type') observedTypeReads++
+            return Reflect.get(target, property, receiver)
+          },
+        }),
+    )
+
+    const prefixLen = getReplStaticPrefixLength(
+      ordered,
+      observedAllMessages,
+      unresolved,
+    )
+    const expectedOrder = Array.from({ length: toolPairCount }).flatMap(
+      (_, index) => {
+        const toolUseID = `tool-${index}`
+        return [
+          `assistant:${toolUseID}`,
+          `progress:${toolUseID}`,
+          `user:${toolUseID}`,
+        ]
+      },
+    )
+
+    expect(
+      ordered
+        .slice(0, prefixLen)
+        .map(message => `${message.type}:${getToolUseID(message)}`),
+    ).toEqual(expectedOrder)
+    expect(prefixLen).toBe(toolPairCount * 3)
+    expect(getToolUseID(ordered[prefixLen]!)).toBe(pendingToolUseID)
+    expect(getToolUseID(ordered[prefixLen + 1]!)).toBeNull()
+    expect(observedTypeReads).toBe(normalized.length)
   })
 })

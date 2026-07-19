@@ -10,10 +10,28 @@ function intersects<A>(a: Set<A>, b: Set<A>): boolean {
   return false
 }
 
-export function shouldRenderReplMessageStatically(
-  message: NormalizedMessage,
+type ProgressMessageLookup = (toolUseID: string) => ProgressMessage | undefined
+
+function indexProgressMessages(
   messages: NormalizedMessage[],
+): Map<string, ProgressMessage> {
+  const progressMessages = new Map<string, ProgressMessage>()
+  for (const message of messages) {
+    if (
+      message.type === 'progress' &&
+      !progressMessages.has(message.toolUseID)
+    ) {
+      // Preserve Array.find semantics when duplicate progress records exist.
+      progressMessages.set(message.toolUseID, message)
+    }
+  }
+  return progressMessages
+}
+
+function shouldRenderWithProgressLookup(
+  message: NormalizedMessage,
   unresolvedToolUseIDs: Set<string>,
+  getProgressMessage: ProgressMessageLookup,
 ): boolean {
   switch (message.type) {
     case 'user':
@@ -26,9 +44,7 @@ export function shouldRenderReplMessageStatically(
         return false
       }
 
-      const correspondingProgressMessage = messages.find(
-        _ => _.type === 'progress' && _.toolUseID === toolUseID,
-      ) as ProgressMessage | null
+      const correspondingProgressMessage = getProgressMessage(toolUseID)
       if (!correspondingProgressMessage) {
         return true
       }
@@ -41,6 +57,22 @@ export function shouldRenderReplMessageStatically(
     case 'progress':
       return !intersects(unresolvedToolUseIDs, message.siblingToolUseIDs)
   }
+}
+
+export function shouldRenderReplMessageStatically(
+  message: NormalizedMessage,
+  messages: NormalizedMessage[],
+  unresolvedToolUseIDs: Set<string>,
+): boolean {
+  let progressMessages: Map<string, ProgressMessage> | undefined
+  return shouldRenderWithProgressLookup(
+    message,
+    unresolvedToolUseIDs,
+    toolUseID => {
+      progressMessages ??= indexProgressMessages(messages)
+      return progressMessages.get(toolUseID)
+    },
+  )
 }
 
 /**
@@ -58,13 +90,16 @@ export function getReplStaticPrefixLength(
   allMessages: NormalizedMessage[],
   unresolvedToolUseIDs: Set<string>,
 ): number {
+  const progressMessages = indexProgressMessages(allMessages)
+  const getProgressMessage = (toolUseID: string) =>
+    progressMessages.get(toolUseID)
   for (let i = 0; i < orderedMessages.length; i++) {
     const message = orderedMessages[i]!
     if (
-      !shouldRenderReplMessageStatically(
+      !shouldRenderWithProgressLookup(
         message,
-        allMessages,
         unresolvedToolUseIDs,
+        getProgressMessage,
       )
     ) {
       return i

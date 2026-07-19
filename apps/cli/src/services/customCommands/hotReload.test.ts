@@ -13,6 +13,11 @@ import {
 import { __getWatchedDirPathsForTests } from '#cli-services/customCommands/watcher'
 import { getCwd, setCwd } from '#core/utils/state'
 
+function restoreEnv(name: string, value: string | undefined): void {
+  if (value === undefined) delete process.env[name]
+  else process.env[name] = value
+}
+
 function writeSkillFile(args: {
   skillsDir: string
   skillName: string
@@ -119,9 +124,9 @@ test('custom command watcher debounces skill reloads', async () => {
   } finally {
     unsubscribe()
     await stopCustomCommandWatcher()
-    process.env.HOME = originalHome
-    process.env.KODE_CONFIG_DIR = originalKodeDir
-    process.env.CLAUDE_CONFIG_DIR = originalClaudeDir
+    restoreEnv('HOME', originalHome)
+    restoreEnv('KODE_CONFIG_DIR', originalKodeDir)
+    restoreEnv('CLAUDE_CONFIG_DIR', originalClaudeDir)
     await setCwd(originalCwd)
   }
 })
@@ -171,9 +176,9 @@ test('custom command watcher watches skill pack nested directories (depth=2)', a
     expect(watched).toContain(referencesDir)
   } finally {
     await stopCustomCommandWatcher()
-    process.env.HOME = originalHome
-    process.env.KODE_CONFIG_DIR = originalKodeDir
-    process.env.CLAUDE_CONFIG_DIR = originalClaudeDir
+    restoreEnv('HOME', originalHome)
+    restoreEnv('KODE_CONFIG_DIR', originalKodeDir)
+    restoreEnv('CLAUDE_CONFIG_DIR', originalClaudeDir)
     await setCwd(originalCwd)
   }
 })
@@ -214,9 +219,9 @@ test('refreshCustomCommandWatcher rebuilds watched dirs after cwd changes', asyn
     expect(__getWatchedDirPathsForTests()).toContain(skillsDir2)
   } finally {
     await stopCustomCommandWatcher()
-    process.env.HOME = originalHome
-    process.env.KODE_CONFIG_DIR = originalKodeDir
-    process.env.CLAUDE_CONFIG_DIR = originalClaudeDir
+    restoreEnv('HOME', originalHome)
+    restoreEnv('KODE_CONFIG_DIR', originalKodeDir)
+    restoreEnv('CLAUDE_CONFIG_DIR', originalClaudeDir)
     await setCwd(originalCwd)
   }
 })

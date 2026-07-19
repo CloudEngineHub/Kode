@@ -3,8 +3,13 @@ import { describe, expect, test } from 'bun:test'
 import {
   makeSdkInitMessage as legacyMakeSdkInitMessage,
   makeSdkResultMessage as legacyMakeSdkResultMessage,
+  makeSdkStreamEventMessage as legacyMakeSdkStreamEventMessage,
 } from '#protocol/utils/kodeAgentStreamJson'
-import { makeSdkInitMessage, makeSdkResultMessage } from '#protocol/streamJson'
+import {
+  makeSdkInitMessage,
+  makeSdkResultMessage,
+  makeSdkStreamEventMessage,
+} from '#protocol/streamJson'
 import { AgentEventSchema } from '#protocol/agentEvent'
 import { tryParseStructuredInputLine } from '#protocol/structuredStdio'
 
@@ -12,6 +17,7 @@ describe('protocol contracts (compat + stability)', () => {
   test('stream-json helpers are shared with legacy exports', () => {
     expect(legacyMakeSdkInitMessage).toBe(makeSdkInitMessage)
     expect(legacyMakeSdkResultMessage).toBe(makeSdkResultMessage)
+    expect(legacyMakeSdkStreamEventMessage).toBe(makeSdkStreamEventMessage)
 
     expect(makeSdkInitMessage({ sessionId: 's', cwd: '/x' })).toEqual({
       type: 'system',
@@ -131,6 +137,22 @@ describe('protocol contracts (compat + stability)', () => {
 
     expect(() =>
       AgentEventSchema.parse(
+        makeSdkStreamEventMessage({
+          sessionId: 's',
+          event: {
+            type: 'mcp_progress',
+            server: 'srv',
+            tool: 'slow',
+            progress: { progress: 1, total: 2, message: 'halfway' },
+          },
+          parentToolUseId: 'tool-use',
+          uuid: 'e1',
+        }),
+      ),
+    ).not.toThrow()
+
+    expect(() =>
+      AgentEventSchema.parse(
         makeSdkResultMessage({
           sessionId: 's',
           result: 'done',
@@ -139,6 +161,7 @@ describe('protocol contracts (compat + stability)', () => {
           durationMs: 1,
           durationApiMs: 1,
           isError: false,
+          uuid: 'r1',
         }),
       ),
     ).not.toThrow()

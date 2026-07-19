@@ -1,30 +1,52 @@
 import type { Tool } from '@kode/core/tooling/Tool'
+import type { WrappedClient } from '@kode/core/mcp/client'
+import { isUuid } from '@kode/core/utils/uuid'
+import type { AgentEvent } from '#protocol/agentEvent'
+import { makeSdkResultMessage } from '#protocol/utils/kodeAgentStreamJson'
 
 import { handleChatPrompt } from '../handlers/chat.handler'
 import { sendSessionList } from '../handlers/session.handler'
 import { log } from '../ws/events'
-import type { DaemonSession } from '../ws/types'
+import {
+  completeSessionTurn,
+  getOrCreateSessionTurn,
+  publishSessionEvent,
+} from '../ws/sessionBroadcaster'
+import type { PersistentSessionService } from '../persistentSessionService'
+import type { SessionRegistry } from '../sessionRegistry'
+import type { DaemonTurnGate } from '../turnGate'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-function sendJson(
-  ws: { send: (data: string) => void },
-  payload: unknown,
-): void {
-  ws.send(JSON.stringify(payload))
+function makeRecoveredTurnResult(sessionId: string): AgentEvent {
+  return makeSdkResultMessage({
+    sessionId,
+    result:
+      'Request already completed before daemon restart; replayed session history is authoritative.',
+    numTurns: 0,
+    totalCostUsd: 0,
+    durationMs: 0,
+    durationApiMs: 0,
+    isError: true,
+  })
 }
 
 export async function routeChat(
   req: Request,
   ctx: {
-    sessions: Map<string, DaemonSession>
+    sessionRegistry: SessionRegistry
+    sessionService?: PersistentSessionService
+    turnGate: DaemonTurnGate
+    resolveCwd: () => Promise<string>
     echo: boolean
+    echoDelayMs: number
     commands: unknown[]
     tools: Tool[]
     toolNames: string[]
     slashCommands: string[]
+    mcpClients: WrappedClient[]
   },
 ): Promise<Response | undefined> {
   const url = new URL(req.url)
@@ -51,10 +73,20 @@ export async function routeChat(
   const sessionId =
     typeof body.sessionId === 'string' ? body.sessionId.trim() : ''
   const prompt = typeof body.prompt === 'string' ? body.prompt : ''
+  const requestedClientMessageUuid =
+    typeof body.clientMessageUuid === 'string'
+      ? body.clientMessageUuid.trim()
+      : ''
 
   if (!sessionId) {
     return Response.json(
       { ok: false, error: 'Missing sessionId' },
+      { status: 400 },
+    )
+  }
+  if (!isUuid(sessionId)) {
+    return Response.json(
+      { ok: false, error: 'Invalid sessionId' },
       { status: 400 },
     )
   }
@@ -64,33 +96,116 @@ export async function routeChat(
       { status: 400 },
     )
   }
-
-  const session = ctx.sessions.get(sessionId)
-  if (!session) {
+  if (requestedClientMessageUuid && !isUuid(requestedClientMessageUuid)) {
     return Response.json(
-      { ok: false, error: 'Unknown session' },
-      { status: 404 },
+      { ok: false, error: 'Invalid clientMessageUuid' },
+      { status: 400 },
     )
   }
-  const ws = session.ws
-  if (!ws) {
+
+  const found = ctx.sessionRegistry.getOrLoad({
+    cwd: await ctx.resolveCwd(),
+    sessionId,
+  })
+  if (found.ok === false) {
     return Response.json(
-      { ok: false, error: 'No active websocket connection for this session' },
+      {
+        ok: false,
+        error:
+          found.reason === 'cwd_mismatch'
+            ? 'Session workspace mismatch'
+            : found.reason === 'archived'
+              ? 'Session archived'
+              : found.reason === 'metadata_invalid'
+                ? 'Session metadata is invalid'
+                : 'Unknown session',
+      },
+      {
+        status:
+          found.reason === 'cwd_mismatch'
+            ? 409
+            : found.reason === 'archived'
+              ? 410
+              : found.reason === 'metadata_invalid'
+                ? 500
+                : 404,
+      },
+    )
+  }
+  const session = found.session
+  const clientMessageUuid = requestedClientMessageUuid || crypto.randomUUID()
+  const { turn, created } = getOrCreateSessionTurn({
+    session,
+    clientMessageUuid,
+  })
+
+  if (!created) {
+    let recoveredTerminal = false
+    if (turn.state === 'completed' && !turn.terminalEvent) {
+      const terminalEvent = makeRecoveredTurnResult(session.sessionId)
+      completeSessionTurn({ session, turn, terminalEvent })
+      publishSessionEvent({
+        session,
+        event: terminalEvent,
+        turn,
+        audience: 'correlated_only',
+        journal: false,
+      })
+      recoveredTerminal = true
+    }
+    return Response.json({
+      ok: true,
+      duplicate: true,
+      recoveredTerminal,
+      turnId: turn.turnId,
+      clientMessageUuid,
+    })
+  }
+
+  const turnLease = ctx.turnGate.tryAcquire(session)
+  if (!turnLease) {
+    const busyResult = makeSdkResultMessage({
+      sessionId: session.sessionId,
+      result: 'Session already has an active prompt',
+      numTurns: 0,
+      totalCostUsd: 0,
+      durationMs: 0,
+      durationApiMs: 0,
+      isError: true,
+    })
+    completeSessionTurn({ session, turn, terminalEvent: busyResult })
+    publishSessionEvent({
+      session,
+      event: busyResult,
+      turn,
+      // HTTP callers receive the correlated terminal response directly. Do
+      // not inject a foreign raw result into an attached legacy WS stream.
+      audience: 'correlated_only',
+      journal: false,
+    })
+    return Response.json(
+      {
+        ok: false,
+        error: 'Session already has an active prompt',
+        turnId: turn.turnId,
+        clientMessageUuid,
+      },
       { status: 409 },
     )
   }
+  publishSessionEvent({
+    session,
+    event: {
+      type: 'turn_state',
+      session_id: session.sessionId,
+      state: 'running',
+    },
+    turn,
+  })
 
-  if (session.activeAbortController) {
-    return Response.json(
-      { ok: false, error: 'Session already has an active prompt' },
-      { status: 409 },
-    )
-  }
-
-  const wsSend = (payload: unknown) => {
-    try {
-      sendJson(ws, payload)
-    } catch {}
+  const wsSend = (payload: AgentEvent) => {
+    if (payload.type === 'result') turn.terminalEvent = payload
+    publishSessionEvent({ session, event: payload, turn })
   }
 
   void (async () => {
@@ -99,23 +214,59 @@ export async function routeChat(
         wsSend,
         session,
         prompt,
+        clientMessageUuid,
         echo: ctx.echo,
+        echoDelayMs: ctx.echoDelayMs,
         commands: ctx.commands,
         tools: ctx.tools,
         toolNames: ctx.toolNames,
         slashCommands: ctx.slashCommands,
+        mcpClients: ctx.mcpClients,
       })
     } catch (err) {
-      wsSend(log('error', err instanceof Error ? err.message : String(err)))
+      const message = err instanceof Error ? err.message : String(err)
+      session.activeAbortController = null
+      wsSend(
+        makeSdkResultMessage({
+          sessionId: session.sessionId,
+          result: message,
+          numTurns: 0,
+          totalCostUsd: 0,
+          durationMs: 0,
+          durationApiMs: 0,
+          isError: true,
+        }),
+      )
+      wsSend(log('error', message))
     } finally {
-      try {
-        sendSessionList(ws, {
-          cwd: session.cwd,
-          onError: message => wsSend(log('error', message)),
-        })
-      } catch {}
+      completeSessionTurn({ session, turn })
+      turnLease.release()
+      ctx.sessionRegistry.evictIdleSessions()
+      publishSessionEvent({
+        session,
+        event: {
+          type: 'turn_state',
+          session_id: session.sessionId,
+          state: 'idle',
+        },
+        turn,
+      })
+      for (const client of Array.from(session.clients)) {
+        try {
+          sendSessionList(client, {
+            cwd: session.cwd,
+            ...(ctx.sessionService
+              ? {
+                  listSessions: () =>
+                    ctx.sessionService?.list({ cwd: session.cwd }) ?? [],
+                }
+              : {}),
+            onError: message => wsSend(log('error', message)),
+          })
+        } catch {}
+      }
     }
   })()
 
-  return Response.json({ ok: true })
+  return Response.json({ ok: true, turnId: turn.turnId, clientMessageUuid })
 }

@@ -52,7 +52,11 @@ function getTokenDisplay(status: RequestStatus): string {
   return ''
 }
 
-export function RequestStatusIndicator(): React.ReactNode {
+export function RequestStatusIndicator({
+  marginTop = 1,
+}: {
+  marginTop?: number
+} = {}): React.ReactNode {
   const frames = SPINNER_FRAMES
   const theme = getTheme()
 
@@ -61,6 +65,7 @@ export function RequestStatusIndicator(): React.ReactNode {
   const [status, setStatus] = useState<RequestStatus>(() => getRequestStatus())
 
   const requestStartTime = useRef<number>(Date.now())
+  const isVisible = status.kind !== 'tool' && status.kind !== 'idle'
 
   useEffect(() => {
     const initialStatus = getRequestStatus()
@@ -83,25 +88,29 @@ export function RequestStatusIndicator(): React.ReactNode {
   }, [])
 
   useEffect(() => {
+    if (!isVisible) return
+
     const timer = setInterval(() => {
       setFrame(f => (f + 1) % frames.length)
     }, 80)
     return () => clearInterval(timer)
-  }, [frames.length])
+  }, [frames.length, isVisible])
 
   useEffect(() => {
+    if (!isVisible) return
+
     const timer = setInterval(() => {
       setElapsedTime(Math.floor((Date.now() - requestStartTime.current) / 1000))
     }, 1000)
     return () => clearInterval(timer)
-  }, [])
+  }, [isVisible])
 
-  if (status.kind === 'tool' || status.kind === 'idle') {
+  if (!isVisible) {
     return null
   }
 
   return (
-    <Box flexDirection="row" marginTop={1}>
+    <Box flexDirection="row" marginTop={marginTop}>
       <Text color={theme.kode} bold>
         {frames[frame]} {getLabel(status)}
       </Text>

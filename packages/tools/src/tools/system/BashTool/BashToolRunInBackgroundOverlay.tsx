@@ -1,5 +1,6 @@
-import { Box, Text, useInput } from 'ink'
+import { Box, Text, useIsScreenReaderEnabled } from 'ink'
 import React, { useEffect, useRef, useState } from 'react'
+import type { ToolKeypressHandler } from '@kode/tool-interface/Tool'
 import { getTheme } from '#core/utils/theme'
 import {
   getRequestStatus,
@@ -39,12 +40,19 @@ function getTokenDisplay(status: RequestStatus): string {
 
 function RequestStatusIndicator(): React.ReactNode {
   const theme = getTheme()
+  const isScreenReaderEnabled = useIsScreenReaderEnabled()
 
   const [frame, setFrame] = useState(0)
   const [elapsedTime, setElapsedTime] = useState(0)
   const [status, setStatus] = useState<RequestStatus>(() => getRequestStatus())
 
-  const requestStartTime = useRef<number | null>(null)
+  const requestStartTime = useRef<number | null>(
+    status.kind === 'thinking' || status.kind === 'streaming'
+      ? Date.now()
+      : null,
+  )
+  const isVisible = status.kind !== 'tool' && status.kind !== 'idle'
+  const shouldAnimate = isVisible && !isScreenReaderEnabled
 
   useEffect(() => {
     return subscribeRequestStatus(next => {
@@ -60,22 +68,23 @@ function RequestStatusIndicator(): React.ReactNode {
   }, [])
 
   useEffect(() => {
+    if (!shouldAnimate) return
     const timer = setInterval(() => {
       setFrame(f => (f + 1) % SPINNER_FRAMES.length)
     }, 80)
     return () => clearInterval(timer)
-  }, [])
+  }, [shouldAnimate])
 
   useEffect(() => {
+    if (!shouldAnimate || requestStartTime.current === null) return
     const timer = setInterval(() => {
-      if (requestStartTime.current === null) {
-        setElapsedTime(0)
-        return
+      const startTime = requestStartTime.current
+      if (startTime !== null) {
+        setElapsedTime(Math.floor((Date.now() - startTime) / 1000))
       }
-      setElapsedTime(Math.floor((Date.now() - requestStartTime.current) / 1000))
     }, 1000)
     return () => clearInterval(timer)
-  }, [])
+  }, [shouldAnimate])
 
   if (status.kind === 'tool' || status.kind === 'idle') {
     return null
@@ -95,19 +104,22 @@ function RequestStatusIndicator(): React.ReactNode {
   )
 }
 
-export function BashToolRunInBackgroundOverlay({
-  onBackground,
-}: {
-  onBackground: () => void
-}): React.ReactNode {
-  useInput((input, key) => {
-    if (input === 'b' && key.ctrl) {
-      onBackground()
-      return true
-    }
-    return false
-  })
+export function createRunInBackgroundKeypressHandler(
+  onBackground: () => void,
+): ToolKeypressHandler {
+  let hasRequestedBackground = false
 
+  return (input, key) => {
+    if (input !== 'b' || !key.ctrl || key.meta || key.shift) return false
+    if (!hasRequestedBackground) {
+      hasRequestedBackground = true
+      onBackground()
+    }
+    return true
+  }
+}
+
+export function BashToolRunInBackgroundOverlay(): React.ReactNode {
   const shortcut = process.env.TMUX ? 'ctrl+b ctrl+b' : 'ctrl+b'
 
   return (

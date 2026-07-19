@@ -16,4 +16,13 @@ describe('System prompt tool usage policy (compatibility)', () => {
       'When making multiple bash tool calls, you MUST send a single message with multiple tools calls to run the calls in parallel.',
     )
   })
+
+  test('injects runtime environment guidance', async () => {
+    const parts = await getSystemPrompt()
+    const prompt = parts.join('\n')
+
+    expect(prompt).toContain('# Runtime environment')
+    expect(prompt).toContain('You are running on')
+    expect(prompt).toContain('Match shell syntax to this environment')
+  })
 })

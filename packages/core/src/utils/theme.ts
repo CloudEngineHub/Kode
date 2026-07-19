@@ -27,6 +27,61 @@ export interface Theme {
   }
 }
 
+type Rgb = {
+  r: number
+  g: number
+  b: number
+}
+
+type ThemeColorKey = Exclude<keyof Theme, 'diff'>
+
+type ContrastRange = {
+  min: number
+  max?: number
+}
+
+const PRIMARY_TEXT_CONTRAST: ContrastRange = { min: 4.5, max: 10 }
+const STATUS_TEXT_CONTRAST: ContrastRange = { min: 4.5, max: 9 }
+const ACCENT_TEXT_CONTRAST: ContrastRange = { min: 3.6, max: 6.4 }
+const MUTED_TEXT_CONTRAST: ContrastRange = { min: 3, max: 4.2 }
+const CONTROL_BORDER_CONTRAST: ContrastRange = { min: 3, max: 5.5 }
+const SUBTLE_BORDER_CONTRAST: ContrastRange = { min: 2, max: 3.2 }
+
+const PRIMARY_TEXT_FIELDS = [
+  'text',
+  'primary',
+] as const satisfies readonly ThemeColorKey[]
+
+const STATUS_TEXT_FIELDS = [
+  'permission',
+  'success',
+  'error',
+  'warning',
+] as const satisfies readonly ThemeColorKey[]
+
+const ACCENT_TEXT_FIELDS = [
+  'bashBorder',
+  'kode',
+  'notingBorder',
+  'autoAccept',
+  'planMode',
+  'suggestion',
+] as const satisfies readonly ThemeColorKey[]
+
+const MUTED_TEXT_FIELDS = [
+  'noting',
+  'secondaryText',
+  'secondary',
+] as const satisfies readonly ThemeColorKey[]
+
+const CONTROL_BORDER_FIELDS = [
+  'inputBorder',
+] as const satisfies readonly ThemeColorKey[]
+
+const SUBTLE_BORDER_FIELDS = [
+  'secondaryBorder',
+] as const satisfies readonly ThemeColorKey[]
+
 // ============================================================================
 // DARK THEMES
 // ============================================================================
@@ -445,10 +500,274 @@ const themes: Record<ThemeNames, Theme> = {
 
 export type { ThemeNames } from '#config'
 
+let themeContrastBackgroundColor: string | undefined
+const contrastAwareThemeCache = new Map<string, Theme>()
+
+function parseHexColor(value: string | undefined): Rgb | undefined {
+  if (!value) return undefined
+  const match = value.trim().match(/^#([0-9a-fA-F]{3,8})$/)
+  if (!match) return undefined
+
+  const hex = match[1] ?? ''
+  if (hex.length === 3 || hex.length === 4) {
+    return {
+      r: Number.parseInt(hex[0] + hex[0], 16),
+      g: Number.parseInt(hex[1] + hex[1], 16),
+      b: Number.parseInt(hex[2] + hex[2], 16),
+    }
+  }
+
+  if (hex.length === 6 || hex.length === 8) {
+    return {
+      r: Number.parseInt(hex.slice(0, 2), 16),
+      g: Number.parseInt(hex.slice(2, 4), 16),
+      b: Number.parseInt(hex.slice(4, 6), 16),
+    }
+  }
+
+  return undefined
+}
+
+function toHexColor(color: Rgb): string {
+  const toHex = (value: number) =>
+    Math.round(Math.max(0, Math.min(255, value)))
+      .toString(16)
+      .padStart(2, '0')
+
+  return `#${toHex(color.r)}${toHex(color.g)}${toHex(color.b)}`
+}
+
+function normalizeHexColor(value: string | undefined): string | undefined {
+  const color = parseHexColor(value)
+  return color ? toHexColor(color) : undefined
+}
+
+function colorChannelToLinear(value: number): number {
+  const normalized = value / 255
+  if (normalized <= 0.04045) return normalized / 12.92
+  return ((normalized + 0.055) / 1.055) ** 2.4
+}
+
+function relativeLuminance(color: Rgb): number {
+  return (
+    0.2126 * colorChannelToLinear(color.r) +
+    0.7152 * colorChannelToLinear(color.g) +
+    0.0722 * colorChannelToLinear(color.b)
+  )
+}
+
+function contrastRatio(left: Rgb, right: Rgb): number {
+  const leftLuminance = relativeLuminance(left)
+  const rightLuminance = relativeLuminance(right)
+  const lighter = Math.max(leftLuminance, rightLuminance)
+  const darker = Math.min(leftLuminance, rightLuminance)
+  return (lighter + 0.05) / (darker + 0.05)
+}
+
+function mixColor(from: Rgb, to: Rgb, amount: number): Rgb {
+  return {
+    r: from.r + (to.r - from.r) * amount,
+    g: from.g + (to.g - from.g) * amount,
+    b: from.b + (to.b - from.b) * amount,
+  }
+}
+
+function increaseContrast(
+  foregroundValue: string,
+  background: Rgb,
+  minRatio: number,
+): string {
+  const foreground = parseHexColor(foregroundValue)
+  if (!foreground) return foregroundValue
+  if (contrastRatio(foreground, background) >= minRatio) return foregroundValue
+
+  const black: Rgb = { r: 0, g: 0, b: 0 }
+  const white: Rgb = { r: 255, g: 255, b: 255 }
+  const target =
+    contrastRatio(white, background) >= contrastRatio(black, background)
+      ? white
+      : black
+
+  if (contrastRatio(target, background) < minRatio) return toHexColor(target)
+
+  let low = 0
+  let high = 1
+  let best = target
+
+  for (let i = 0; i < 24; i += 1) {
+    const mid = (low + high) / 2
+    const candidate = mixColor(foreground, target, mid)
+    const rounded = parseHexColor(toHexColor(candidate)) ?? candidate
+    if (contrastRatio(rounded, background) >= minRatio) {
+      best = rounded
+      high = mid
+    } else {
+      low = mid
+    }
+  }
+
+  return toHexColor(best)
+}
+
+function reduceContrast(
+  foregroundValue: string,
+  background: Rgb,
+  minRatio: number,
+  maxRatio: number,
+): string {
+  const foreground = parseHexColor(foregroundValue)
+  if (!foreground) return foregroundValue
+  if (contrastRatio(foreground, background) <= maxRatio) return foregroundValue
+
+  let low = 0
+  let high = 1
+  let best = foreground
+
+  for (let i = 0; i < 24; i += 1) {
+    const mid = (low + high) / 2
+    const candidate = mixColor(foreground, background, mid)
+    const rounded = parseHexColor(toHexColor(candidate)) ?? candidate
+    const ratio = contrastRatio(rounded, background)
+
+    if (ratio > maxRatio) {
+      low = mid
+    } else if (ratio >= minRatio) {
+      best = rounded
+      high = mid
+    } else {
+      high = mid
+    }
+  }
+
+  return toHexColor(best)
+}
+
+function adjustContrast(
+  foregroundValue: string,
+  background: Rgb,
+  range: ContrastRange,
+): string {
+  const raised = increaseContrast(foregroundValue, background, range.min)
+  if (!range.max) return raised
+  return reduceContrast(raised, background, range.min, range.max)
+}
+
+function adjustThemeFields(
+  theme: Theme,
+  background: Rgb,
+  fields: readonly ThemeColorKey[],
+  range: ContrastRange,
+): void {
+  for (const field of fields) {
+    theme[field] = adjustContrast(theme[field], background, range)
+  }
+}
+
+export function setThemeContrastBackgroundColor(
+  backgroundColor: string | undefined,
+): void {
+  const normalized = normalizeHexColor(backgroundColor)
+  if (themeContrastBackgroundColor === normalized) return
+
+  themeContrastBackgroundColor = normalized
+  contrastAwareThemeCache.clear()
+}
+
+export function getThemeContrastBackgroundColor(): string | undefined {
+  return themeContrastBackgroundColor
+}
+
+export function createContrastAwareTheme(
+  theme: Theme,
+  backgroundColor: string | undefined,
+): Theme {
+  const background = parseHexColor(backgroundColor)
+  if (!background) return theme
+
+  const adjusted: Theme = { ...theme }
+  adjustThemeFields(
+    adjusted,
+    background,
+    PRIMARY_TEXT_FIELDS,
+    PRIMARY_TEXT_CONTRAST,
+  )
+  adjustThemeFields(
+    adjusted,
+    background,
+    STATUS_TEXT_FIELDS,
+    STATUS_TEXT_CONTRAST,
+  )
+  adjustThemeFields(
+    adjusted,
+    background,
+    ACCENT_TEXT_FIELDS,
+    ACCENT_TEXT_CONTRAST,
+  )
+  adjustThemeFields(
+    adjusted,
+    background,
+    MUTED_TEXT_FIELDS,
+    MUTED_TEXT_CONTRAST,
+  )
+  adjustThemeFields(
+    adjusted,
+    background,
+    CONTROL_BORDER_FIELDS,
+    CONTROL_BORDER_CONTRAST,
+  )
+  adjustThemeFields(
+    adjusted,
+    background,
+    SUBTLE_BORDER_FIELDS,
+    SUBTLE_BORDER_CONTRAST,
+  )
+
+  return adjusted
+}
+
+export function getThemeContrastRatio(
+  foregroundColor: string,
+  backgroundColor: string,
+): number | undefined {
+  const foreground = parseHexColor(foregroundColor)
+  const background = parseHexColor(backgroundColor)
+  if (!foreground || !background) return undefined
+  return contrastRatio(foreground, background)
+}
+
+export function getReadableTextColor(
+  backgroundColor: string,
+  preferredTextColor?: string,
+  minRatio = PRIMARY_TEXT_CONTRAST.min,
+): string {
+  const background = parseHexColor(backgroundColor)
+  if (!background) return preferredTextColor ?? '#ffffff'
+
+  const preferred = parseHexColor(preferredTextColor)
+  if (preferred && contrastRatio(preferred, background) >= minRatio) {
+    return preferredTextColor!
+  }
+
+  const black: Rgb = { r: 0, g: 0, b: 0 }
+  const white: Rgb = { r: 255, g: 255, b: 255 }
+  return contrastRatio(black, background) >= contrastRatio(white, background)
+    ? '#000000'
+    : '#ffffff'
+}
+
 export function getTheme(overrideTheme?: ThemeNames): Theme {
   const config = getGlobalConfig()
   const themeName = overrideTheme ?? config.theme
-  return themes[themeName] ?? darkTheme
+  const theme = themes[themeName] ?? darkTheme
+  if (!themeContrastBackgroundColor) return theme
+
+  const cacheKey = `${themeName}:${themeContrastBackgroundColor}`
+  const cached = contrastAwareThemeCache.get(cacheKey)
+  if (cached) return cached
+
+  const adjusted = createContrastAwareTheme(theme, themeContrastBackgroundColor)
+  contrastAwareThemeCache.set(cacheKey, adjusted)
+  return adjusted
 }
 
 export function getAvailableThemes(): ThemeNames[] {

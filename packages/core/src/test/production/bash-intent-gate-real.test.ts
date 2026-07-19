@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { runBashLlmSafetyGate } from '#tools/tools/system/BashTool/llmSafetyGate'
+import { runBashLlmSafetyGate } from '#core/safety/bash-gate/llmSafetyGate'
 
 // ⚠️  REAL API TEST ⚠️
 // This test makes a real model call via the configured `main` model pointer.

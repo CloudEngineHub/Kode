@@ -4,6 +4,7 @@ import type { Command } from '@commander-js/extra-typings'
 
 import { PRODUCT_NAME } from '#core/constants/product'
 import { startMCPServer } from '#host-mcp'
+import { getAllTools } from '#tools'
 
 import { setup } from '../../setup'
 
@@ -24,7 +25,7 @@ export function registerMcpServeCommand(args: {
 
       try {
         await setup(providedCwd, false)
-        await startMCPServer(providedCwd)
+        await startMCPServer(providedCwd, getAllTools())
       } catch (error) {
         console.error('Error: Failed to start MCP server:', error)
         process.exit(1)

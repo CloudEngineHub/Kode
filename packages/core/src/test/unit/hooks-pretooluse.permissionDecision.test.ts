@@ -4,10 +4,10 @@ import { tmpdir } from 'os'
 import { dirname, join } from 'path'
 import { z } from 'zod'
 import type { Tool } from '#core/tooling/Tool'
-import { runToolUse } from '#core/query'
+import { runToolUse } from '@kode/engine/pipeline/tool-use'
 import { createAssistantMessage } from '#core/utils/messages'
 import { setCwd } from '#core/utils/state'
-import { __resetKodeHooksCacheForTests } from '#core/utils/kodeHooks'
+import { __resetKodeHooksCacheForTests } from '@kode/hooks'
 
 function writeJson(path: string, value: unknown) {
   mkdirSync(dirname(path), { recursive: true })

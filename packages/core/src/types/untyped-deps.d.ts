@@ -16,9 +16,7 @@ declare module 'shell-quote' {
     | 'glob'
 
   export type ParseEntry =
-    | string
-    | { op: ControlOperator; pattern?: string }
-    | { comment: string }
+    string | { op: ControlOperator; pattern?: string } | { comment: string }
 
   export function parse(
     command: string,

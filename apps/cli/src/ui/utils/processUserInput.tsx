@@ -20,7 +20,10 @@ import {
   coerceImageMediaType,
   extractAssistantText,
 } from './processUserInputHelpers'
+import { parseBuiltinInputCommand } from './builtinInputCommands'
 import type { SetForkConvoWithMessagesOnTheNextRender } from '#ui-ink/types/conversationReset'
+import { interpretHashCommand } from '#ui-ink/components/PromptInput/hashCommand'
+import { handleHashCommand } from '#core/utils/hashCommand'
 
 export async function processUserInput(
   input: string,
@@ -40,6 +43,57 @@ export async function processUserInput(
   }> | null,
 ): Promise<Message[]> {
   const inputTrimmedStart = input.trimStart()
+  const builtinCommand =
+    mode === 'prompt' && context.options?.disableSlashCommands !== true
+      ? parseBuiltinInputCommand(inputTrimmedStart)
+      : null
+
+  if (builtinCommand?.name === 'note') {
+    const userMessage = createUserMessage(`<command-name>note</command-name>
+        <command-message>note</command-message>
+        <command-args>${builtinCommand.args}</command-args>`)
+
+    if (!builtinCommand.args.trim()) {
+      return [
+        userMessage,
+        createAssistantMessage(
+          '<local-command-stderr>Usage: /note <text></local-command-stderr>',
+        ),
+      ]
+    }
+
+    try {
+      const interpreted = await interpretHashCommand(builtinCommand.args)
+      handleHashCommand(interpreted)
+      return [
+        userMessage,
+        createAssistantMessage(
+          '<local-command-stdout>Note saved to AGENTS.md.</local-command-stdout>',
+        ),
+      ]
+    } catch (error) {
+      logError(error)
+      return [
+        userMessage,
+        createAssistantMessage(
+          `<local-command-stderr>Note failed: ${error instanceof Error ? error.message : String(error)}</local-command-stderr>`,
+        ),
+      ]
+    }
+  }
+
+  if (builtinCommand?.name === 'bash') {
+    if (!builtinCommand.args.trim()) {
+      return [
+        createAssistantMessage(
+          '<bash-stderr>Usage: /bash <command></bash-stderr>',
+        ),
+      ]
+    }
+
+    mode = 'bash'
+    input = builtinCommand.args
+  }
 
   // Bash commands
   if (mode === 'bash' || mode === 'background') {

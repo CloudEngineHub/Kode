@@ -162,7 +162,9 @@ export function ConnectionTestScreen({
             marginTop={tightLayout ? 0 : 1}
             gap={containerGap}
           >
-            <Text color={connectionTestResult.success ? theme.success : 'red'}>
+            <Text
+              color={connectionTestResult.success ? theme.success : theme.error}
+            >
               {connectionTestResult.message}
             </Text>
 

@@ -426,8 +426,9 @@ export async function checkMicroCompact(
   })
   const tokenUsageAfter = estimateTokens(nextMessages)
 
-  // Ensure the interactive transcript updates before the next model call.
-  getMessagesSetter()?.(nextMessages)
+  // Ensure the model context updates before the next call without remounting
+  // the append-only terminal transcript in the user's current scrollback.
+  getMessagesSetter()?.(nextMessages, { preserveTranscript: true })
 
   if (process.env.NODE_ENV !== 'test') {
     const shouldPersistSession =

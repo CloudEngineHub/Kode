@@ -6,6 +6,7 @@ import stripAnsi from 'strip-ansi'
 import { z } from 'zod'
 import { AssistantToolUseMessage } from '#ui-ink/components/messages/AssistantToolUseMessage'
 import type { Tool } from '#core/tooling/Tool'
+import { TaskTool } from '#tools/tools/ai/TaskTool/TaskTool'
 
 async function renderToText(element: React.ReactElement): Promise<string> {
   const stdin = new PassThrough() as PassThrough & {
@@ -166,5 +167,74 @@ describe('AssistantToolUseMessage (null tool-use message parity)', () => {
 
     expect(out).toContain('Read(file_path:')
     expect(out).toContain('…')
+  })
+
+  test('renders Task tool execution state labels', async () => {
+    const baseParam = {
+      type: 'tool_use' as const,
+      id: 'task_1',
+      name: TaskTool.name,
+      input: {
+        description: 'Refactor auth.ts',
+        prompt: 'Refactor auth.ts',
+        subagent_type: 'general-purpose',
+      },
+    }
+
+    const running = await renderToText(
+      <AssistantToolUseMessage
+        param={baseParam}
+        costUSD={0}
+        durationMs={0}
+        addMargin={false}
+        tools={[TaskTool]}
+        debug={false}
+        verbose={false}
+        erroredToolUseIDs={new Set()}
+        inProgressToolUseIDs={new Set(['task_1'])}
+        unresolvedToolUseIDs={new Set(['task_1'])}
+        shouldAnimate={false}
+        shouldShowDot={false}
+      />,
+    )
+
+    const queued = await renderToText(
+      <AssistantToolUseMessage
+        param={{ ...baseParam, id: 'task_2' }}
+        costUSD={0}
+        durationMs={0}
+        addMargin={false}
+        tools={[TaskTool]}
+        debug={false}
+        verbose={false}
+        erroredToolUseIDs={new Set()}
+        inProgressToolUseIDs={new Set()}
+        unresolvedToolUseIDs={new Set(['task_2'])}
+        shouldAnimate={false}
+        shouldShowDot={false}
+      />,
+    )
+
+    const failed = await renderToText(
+      <AssistantToolUseMessage
+        param={{ ...baseParam, id: 'task_3' }}
+        costUSD={0}
+        durationMs={0}
+        addMargin={false}
+        tools={[TaskTool]}
+        debug={false}
+        verbose={false}
+        erroredToolUseIDs={new Set(['task_3'])}
+        inProgressToolUseIDs={new Set()}
+        unresolvedToolUseIDs={new Set()}
+        shouldAnimate={false}
+        shouldShowDot={false}
+      />,
+    )
+
+    expect(running).toContain('Task [running]')
+    expect(running).toContain('Refactor auth.ts')
+    expect(queued).toContain('Task [queued]')
+    expect(failed).toContain('Task [failed]')
   })
 })

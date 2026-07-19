@@ -1,4 +1,4 @@
-import type { Tool } from '#core/tooling/Tool'
+import type { Tool } from '@kode/tool-interface/Tool'
 
 export const TOOL_NAME_FOR_PROMPT = 'MCPSearch'
 

@@ -4,10 +4,14 @@ import { randomUUID } from 'crypto'
 import type { UUID } from 'crypto'
 import { zodToJsonSchema } from 'zod-to-json-schema'
 import type { TextBlockParam } from '@anthropic-ai/sdk/resources/index.mjs'
-import type { Tool, ToolUseContext } from '#core/tooling/Tool'
+import type { Tool, ToolUseContext } from '@kode/tool-interface/Tool'
 import type { AssistantMessage, UserMessage } from '#core/query'
 import type { ModelProfile } from '#core/utils/config'
-import { getGlobalConfig } from '#core/utils/config'
+import {
+  getGlobalConfig,
+  MODEL_COSTS,
+  resolveModelCostTier,
+} from '#core/utils/config'
 import { getModelManager } from '#core/utils/model'
 import {
   debug as debugLogger,
@@ -35,6 +39,7 @@ import {
 } from '#core/ai/openai'
 import type { UnifiedRequestParams } from '#core/types/modelCapabilities'
 import type { RequestHeadersProfile } from '#core/ai/llm/restrictedClientCompat'
+import type { AssistantStreamUpdateOptions } from '@kode/tool-interface/assistantStreamUpdate'
 
 import {
   convertAnthropicMessagesToOpenAIMessages,
@@ -43,12 +48,11 @@ import {
 import { buildOpenAIChatCompletionCreateParams, isGPT5Model } from './params'
 import { handleMessageStream, isOpenAIStreamDegradedResponse } from './stream'
 import { buildAssistantMessageFromUnifiedResponse } from './unifiedResponse'
-import { getMaxTokensFromProfile, normalizeUsage } from './usage'
-
-const SONNET_COST_PER_MILLION_INPUT_TOKENS = 3
-const SONNET_COST_PER_MILLION_OUTPUT_TOKENS = 15
-const SONNET_COST_PER_MILLION_PROMPT_CACHE_WRITE_TOKENS = 3.75
-const SONNET_COST_PER_MILLION_PROMPT_CACHE_READ_TOKENS = 0.3
+import {
+  estimateCostUSD,
+  getMaxTokensFromProfile,
+  normalizeUsage,
+} from './usage'
 
 export { buildOpenAIChatCompletionCreateParams, isGPT5Model } from './params'
 
@@ -97,14 +101,19 @@ export async function queryOpenAI(
   },
 ): Promise<AssistantMessage> {
   const config = getGlobalConfig()
-  const modelManager = getModelManager()
   const toolUseContext = options?.toolUseContext
 
-  const modelProfile = options?.modelProfile || modelManager.getModel('main')
+  const modelProfile =
+    options?.modelProfile ?? getModelManager().getModel('main')
   let model: string
 
   // 🔍 Debug: 记录模型配置详情
   const currentRequest = getCurrentRequest()
+  const assistantStreamUpdateOptions = {
+    onAssistantStreamUpdate: toolUseContext?.options?.onAssistantStreamUpdate,
+    agentId: toolUseContext?.agentId,
+    requestId: toolUseContext?.requestId ?? currentRequest?.id ?? randomUUID(),
+  } satisfies AssistantStreamUpdateOptions
   debugLogger.api('MODEL_CONFIG_OPENAI', {
     modelProfileFound: !!modelProfile,
     modelProfileId: modelProfile?.modelName,
@@ -185,7 +194,6 @@ export async function queryOpenAI(
   type AdapterExecutionContext = {
     adapter: ReturnType<typeof ModelAdapterFactory.createAdapter>
     request: any
-    shouldUseResponses: boolean
   }
 
   type QueryResult = {
@@ -254,7 +262,6 @@ export async function queryOpenAI(
         adapterContext = {
           adapter,
           request: adapter.createRequest(unifiedParams),
-          shouldUseResponses: true,
         }
       }
     }
@@ -269,60 +276,33 @@ export async function queryOpenAI(
         start = Date.now()
 
         if (adapterContext) {
-          if (adapterContext.shouldUseResponses) {
-            const { callGPT5ResponsesAPI } = await import('#core/ai/openai')
+          const { callGPT5ResponsesAPI } = await import('#core/ai/openai')
 
-            const response = await callGPT5ResponsesAPI(
-              modelProfile,
-              adapterContext.request,
-              signal,
-              options?.requestHeadersProfile,
-            )
-
-            const unifiedResponse =
-              await adapterContext.adapter.parseResponse(response)
-
-            const assistantMessage = buildAssistantMessageFromUnifiedResponse(
-              unifiedResponse,
-              start,
-            )
-            assistantMessage.message.usage = normalizeUsage(
-              assistantMessage.message.usage,
-            )
-
-            return {
-              assistantMessage,
-              rawResponse: unifiedResponse,
-              apiFormat: 'openai',
-            }
-          }
-
-          const s = await getCompletionWithProfile(
+          const response = await callGPT5ResponsesAPI(
             modelProfile,
             adapterContext.request,
-            0,
-            providerMaxAttempts,
             signal,
             options?.requestHeadersProfile,
           )
-          let finalResponse
-          if (config.stream) {
-            finalResponse = await handleMessageStream(
-              s as ChatCompletionStream,
-              signal,
-            )
-          } else {
-            finalResponse = s
-          }
 
-          const assistantMsg = createAssistantMessageFromOpenAIResponse({
-            response: finalResponse,
-            tools,
+          const unifiedResponse = await adapterContext.adapter.parseResponse(
+            response,
+            adapterContext.request.stream === true
+              ? assistantStreamUpdateOptions
+              : undefined,
+          )
+
+          const assistantMessage = buildAssistantMessageFromUnifiedResponse(
+            unifiedResponse,
             start,
-          })
+          )
+          assistantMessage.message.usage = normalizeUsage(
+            assistantMessage.message.usage,
+          )
+
           return {
-            assistantMessage: assistantMsg,
-            rawResponse: finalResponse,
+            assistantMessage,
+            rawResponse: unifiedResponse,
             apiFormat: 'openai',
           }
         }
@@ -340,6 +320,10 @@ export async function queryOpenAI(
           stream: config.stream,
           toolSchemas: toolSchemas,
           stopSequences: options?.stopSequences,
+          provider:
+            typeof modelProfile?.provider === 'string'
+              ? modelProfile.provider
+              : null,
           reasoningEffort: await getReasoningEffort(modelProfile, messages, {
             thinkingTokens: maxThinkingTokens,
           }),
@@ -361,6 +345,7 @@ export async function queryOpenAI(
           finalResponse = await handleMessageStream(
             s as ChatCompletionStream,
             signal,
+            assistantStreamUpdateOptions,
           )
         } else {
           finalResponse = s
@@ -400,13 +385,22 @@ export async function queryOpenAI(
   const cacheCreationInputTokens =
     normalizedUsage.cache_creation_input_tokens ?? 0
 
-  const costUSD =
-    (inputTokens / 1_000_000) * SONNET_COST_PER_MILLION_INPUT_TOKENS +
-    (outputTokens / 1_000_000) * SONNET_COST_PER_MILLION_OUTPUT_TOKENS +
-    (cacheReadInputTokens / 1_000_000) *
-      SONNET_COST_PER_MILLION_PROMPT_CACHE_READ_TOKENS +
-    (cacheCreationInputTokens / 1_000_000) *
-      SONNET_COST_PER_MILLION_PROMPT_CACHE_WRITE_TOKENS
+  const costTier =
+    MODEL_COSTS[
+      resolveModelCostTier(
+        model,
+        typeof modelProfile?.provider === 'string'
+          ? modelProfile.provider
+          : null,
+      )
+    ]
+  const costUSD = estimateCostUSD({
+    inputTokens,
+    outputTokens,
+    cacheReadInputTokens,
+    cacheCreationInputTokens,
+    rates: costTier,
+  })
 
   addToTotalCost(costUSD, durationMsIncludingRetries)
 
@@ -417,6 +411,8 @@ export async function queryOpenAI(
     usage: {
       inputTokens,
       outputTokens,
+      cacheReadInputTokens,
+      cacheCreationInputTokens,
     },
     timing: {
       start,

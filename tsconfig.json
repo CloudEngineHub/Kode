@@ -22,14 +22,30 @@
     "paths": {
       "@kode/client": ["packages/client/src/index.ts"],
       "@kode/client/*": ["packages/client/src/*"],
+      "@kode/agent": ["packages/agent/src/index.ts"],
+      "@kode/agent/*": ["packages/agent/src/*"],
+      "@kode/ai": ["packages/ai/src/index.ts"],
+      "@kode/ai/*": ["packages/ai/src/*"],
       "@kode/config": ["packages/config/src/index.ts"],
       "@kode/config/*": ["packages/config/src/*"],
+      "@kode/context": ["packages/context/src/index.ts"],
+      "@kode/context/*": ["packages/context/src/*"],
       "@kode/core": ["packages/core/src/index.ts"],
       "@kode/core/*": ["packages/core/src/*"],
+      "@kode/engine": ["packages/engine/src/index.ts"],
+      "@kode/engine/*": ["packages/engine/src/*"],
+      "@kode/host": ["packages/host/src/index.ts"],
+      "@kode/host/*": ["packages/host/src/*"],
+      "@kode/hooks": ["packages/hooks/src/index.ts"],
+      "@kode/hooks/*": ["packages/hooks/src/*"],
+      "@kode/permissions": ["packages/permissions/src/index.ts"],
+      "@kode/permissions/*": ["packages/permissions/src/*"],
       "@kode/protocol": ["packages/protocol/src/index.ts"],
       "@kode/protocol/*": ["packages/protocol/src/*"],
       "@kode/runtime": ["packages/runtime/src/index.ts"],
       "@kode/runtime/*": ["packages/runtime/src/*"],
+      "@kode/tool-interface": ["packages/tool-interface/src/index.ts"],
+      "@kode/tool-interface/*": ["packages/tool-interface/src/*"],
       "@kode/tools": ["packages/tools/src/index.ts"],
       "@kode/tools/*": ["packages/tools/src/*"],
       "#config": ["packages/config/src/index.ts"],
@@ -54,6 +70,8 @@
       "#protocol/*": ["packages/protocol/src/*"],
       "#runtime": ["packages/runtime/src/index.ts"],
       "#runtime/*": ["packages/runtime/src/*"],
+      "#tool-interface": ["packages/tool-interface/src/index.ts"],
+      "#tool-interface/*": ["packages/tool-interface/src/*"],
       "#tools": ["packages/tools/src/index.ts"],
       "#tools/*": ["packages/tools/src/*"],
       "#ui-ink/*": ["apps/cli/src/ui/*"]
@@ -61,7 +79,7 @@
     "types": ["bun-types", "node"],
     "allowSyntheticDefaultImports": true,
     "noEmitOnError": false,
-    "ignoreDeprecations": "5.0",
+    "ignoreDeprecations": "6.0",
     "useUnknownInCatchVariables": false,
     "noErrorTruncation": true,
     "noEmit": false,
@@ -86,7 +104,7 @@
     ]
   },
   "include": ["packages/**/*", "apps/**/*"],
-  "exclude": ["node_modules", "dist"],
+  "exclude": ["node_modules", "dist", "apps/**/dist", "packages/**/dist"],
   "ts-node": {
     "esm": true,
     "experimentalSpecifierResolution": "node",
@@ -95,4 +113,4 @@
       "module": "NodeNext"
     }
   }
-} 
+}

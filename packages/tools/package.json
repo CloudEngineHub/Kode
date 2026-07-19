@@ -2,5 +2,15 @@
   "name": "@kode/tools",
   "private": true,
   "version": "0.0.0",
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "@kode/agent": "workspace:*",
+    "@kode/context": "workspace:*",
+    "@kode/core": "workspace:*",
+    "@kode/engine": "workspace:*",
+    "@kode/permissions": "workspace:*",
+    "@kode/protocol": "workspace:*",
+    "@kode/runtime": "workspace:*",
+    "@kode/tool-interface": "workspace:*"
+  }
 }

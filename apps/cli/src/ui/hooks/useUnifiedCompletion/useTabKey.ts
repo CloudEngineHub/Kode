@@ -27,6 +27,7 @@ export function useUnifiedCompletionTabKey(args: {
     suggestions: UnifiedSuggestion[],
     context: CompletionContext,
   ) => void
+  resetCompletion: () => void
   updateState: (updates: Partial<CompletionState>) => void
   onInputChange: (value: string) => void
   setCursorOffset: (offset: number) => void
@@ -41,6 +42,21 @@ export function useUnifiedCompletionTabKey(args: {
       if (!context) return false
 
       if (args.state.isActive && args.state.suggestions.length > 0) {
+        if (
+          args.state.context?.type === 'command' &&
+          context.type === 'command'
+        ) {
+          const selectedSuggestion =
+            args.state.suggestions[args.state.selectedIndex]
+          if (!selectedSuggestion || isLoadingSuggestion(selectedSuggestion)) {
+            return true
+          }
+
+          args.completeWith(selectedSuggestion, args.state.context)
+          args.resetCompletion()
+          return true
+        }
+
         const nextIndex =
           (args.state.selectedIndex + 1) % args.state.suggestions.length
         const nextSuggestion = args.state.suggestions[nextIndex]
@@ -96,6 +112,19 @@ export function useUnifiedCompletionTabKey(args: {
       if (currentSuggestions.length === 0) {
         return false
       }
+
+      if (context.type === 'command') {
+        const firstSuggestion = currentSuggestions[0]
+        if (!firstSuggestion || isLoadingSuggestion(firstSuggestion)) {
+          args.activateCompletion(currentSuggestions, context)
+          return true
+        }
+
+        args.completeWith(firstSuggestion, context)
+        args.resetCompletion()
+        return true
+      }
+
       if (currentSuggestions.length === 1) {
         if (isLoadingSuggestion(currentSuggestions[0])) {
           args.activateCompletion(currentSuggestions, context)
@@ -115,9 +144,7 @@ export function useUnifiedCompletionTabKey(args: {
         wordEnd === -1 ? args.input.length : context.startPos + wordEnd
 
       let preview: string
-      if (context.type === 'command') {
-        preview = `/${firstSuggestion.value}`
-      } else if (context.type === 'agent') {
+      if (context.type === 'agent') {
         preview = `@${firstSuggestion.value}`
       } else if (firstSuggestion.isSmartMatch || context.trigger === '@') {
         preview = `@${firstSuggestion.value}`

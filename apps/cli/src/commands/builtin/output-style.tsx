@@ -74,6 +74,7 @@ function OutputStyleMenu({
         </Text>
 
         <Select
+          focusScope="output-style"
           options={styleNames.map(name => ({ label: name, value: name }))}
           defaultValue={resolvedCurrentStyle}
           visibleOptionCount={Math.min(12, Math.max(5, styleNames.length))}

@@ -2,6 +2,7 @@ import React from 'react'
 import { Box, Text } from 'ink'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import { Divider } from '../components/Divider'
+import { computeFrameHeight } from './viewportRows'
 
 export type ScreenExitState = { pending: boolean; keyName: string }
 
@@ -28,7 +29,7 @@ export function ScreenFrame({
 }): React.ReactNode {
   const { columns, rows } = useTerminalSize()
   const dividerWidth = Math.max(1, columns - paddingX * 2)
-  const frameHeight = Math.max(1, rows - VIEWPORT_SAFE_MARGIN_ROWS)
+  const frameHeight = computeFrameHeight(rows, VIEWPORT_SAFE_MARGIN_ROWS)
 
   return (
     <Box

@@ -1,10 +1,11 @@
-import { getContext } from '#core/context'
+import { getContext } from '@kode/context'
 import { getCurrentProjectConfig } from '#core/utils/config'
 import { cleanupOldMessageFilesInBackground } from '#core/utils/cleanup'
 import { grantReadPermissionForOriginalDir } from '#core/utils/permissions/filesystem'
-import { setCwd, setOriginalCwd } from '#core/utils/state'
+import { getCwd, setCwd, setOriginalCwd } from '#core/utils/state'
 import { debug as debugLogger } from '#core/utils/debugLogger'
 import { LEGACY_ENV } from '#config/compat/legacyEnv'
+import { setCwdProvider } from '#config/cwd'
 
 export async function setup(cwd: string, safeMode?: boolean): Promise<void> {
   process.env.KODE_PROJECT_DIR = cwd
@@ -15,19 +16,13 @@ export async function setup(cwd: string, safeMode?: boolean): Promise<void> {
     setOriginalCwd(cwd)
   }
   await setCwd(cwd)
+  setCwdProvider(getCwd)
 
   // Always grant read permissions for original working dir
   grantReadPermissionForOriginalDir()
 
   // Start watching agent configuration files for changes
-  // Try ESM-friendly path first (compiled dist), then fall back to extensionless (dev/tsx)
-  let agentLoader: any
-  try {
-    agentLoader = await import('#core/utils/agentLoader')
-  } catch {
-    agentLoader = await import('#core/utils/agentLoader')
-  }
-  const { startAgentWatcher } = agentLoader
+  const { startAgentWatcher } = await import('@kode/agent')
   await startAgentWatcher(() => {
     // Cache is already cleared in the watcher, just log
     debugLogger.info('AGENTS_HOT_RELOADED', { ok: true })
@@ -52,8 +47,12 @@ export async function setup(cwd: string, safeMode?: boolean): Promise<void> {
     return
   }
 
-  const { startCustomCommandWatcher } =
+  const { loadCustomCommands, startCustomCommandWatcher } =
     await import('#cli-services/customCommands')
+  const { setSkillCommandProvider } =
+    await import('#tools/tools/interaction/SkillTool/skillCommandProvider')
+  setSkillCommandProvider(loadCustomCommands)
+
   await startCustomCommandWatcher(() => {
     debugLogger.info('CUSTOM_COMMANDS_HOT_RELOADED', { ok: true })
   })

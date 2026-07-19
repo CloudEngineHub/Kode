@@ -32,6 +32,7 @@ export function StepSelectModel({ ctx }: { ctx: WizardContextValue }) {
           reasoning needs.
         </Text>
         <Select
+          focusScope="agent-wizard:select-model"
           options={options}
           defaultValue={defaultValue}
           onChange={value => {

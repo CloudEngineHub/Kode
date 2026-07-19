@@ -1,7 +1,16 @@
 import React from 'react'
 import type { RenderOptions } from 'ink'
 import { KeypressProvider } from '#ui-ink/contexts/KeypressContext'
-import { renderWithTuiStdio } from '#ui-ink/utils/inkRender'
+import {
+  renderWithTuiStdio,
+  type InkRenderInstance,
+} from '#ui-ink/utils/inkRender'
+import type { LogListResult } from '#ui-ink/screens/LogList'
+import {
+  restoreTuiStdioPatch,
+  writeToStderr,
+  writeToStdout,
+} from '#cli-utils/stdio'
 
 type RenderInstance = {
   unmount: () => void
@@ -80,23 +89,39 @@ export async function renderDoctorScreen(): Promise<void> {
 export function renderLogListScreen(
   props: { type: 'messages' | 'errors'; logNumber?: number },
   renderContext: RenderOptions | undefined,
-): void {
+): Promise<void> {
   const context: { unmount?: () => void } = {}
-  ;(async () => {
-    const { render } = await import('ink')
-    const { LogList } = await import('#ui-ink/screens/LogList')
-    const debugKeystrokeLogging = Boolean(process.env.KODE_DEBUG_KEYSTROKES)
-    const instance = renderWithTuiStdio(
-      render,
-      <KeypressProvider debugKeystrokeLogging={debugKeystrokeLogging}>
-        <LogList
-          context={context}
-          type={props.type}
-          logNumber={props.logNumber}
-        />
-      </KeypressProvider>,
-      renderContext,
-    )
-    context.unmount = instance.unmount
-  })()
+  return new Promise<void>((resolve, reject) => {
+    ;(async () => {
+      try {
+        const { render } = await import('ink')
+        const { LogList } = await import('#ui-ink/screens/LogList')
+        const debugKeystrokeLogging = Boolean(process.env.KODE_DEBUG_KEYSTROKES)
+        let instance: InkRenderInstance | undefined
+        instance = renderWithTuiStdio(
+          render,
+          <KeypressProvider debugKeystrokeLogging={debugKeystrokeLogging}>
+            <LogList
+              context={context}
+              type={props.type}
+              logNumber={props.logNumber}
+              onDone={(result: LogListResult) => {
+                instance?.unmount?.()
+                restoreTuiStdioPatch()
+
+                if (result.type === 'stdout') writeToStdout(result.text)
+                if (result.type === 'stderr') writeToStderr(result.text)
+                process.exitCode = result.exitCode
+                resolve()
+              }}
+            />
+          </KeypressProvider>,
+          renderContext,
+        )
+        context.unmount = instance.unmount
+      } catch (error) {
+        reject(error)
+      }
+    })()
+  })
 }

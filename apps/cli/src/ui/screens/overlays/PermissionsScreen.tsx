@@ -26,6 +26,7 @@ import { SearchBox } from '#ui-ink/components/SearchBox'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import { getWindowedList } from '#ui-ink/primitives/list/windowedList'
+import { useScopedIndexState } from '#ui-ink/hooks/useScopedIndexState'
 
 type Props = {
   context: ToolUseContext
@@ -167,7 +168,6 @@ export function PermissionsScreen({
   })
   const [searchQuery, setSearchQuery] = useState('')
   const [isSearchMode, setIsSearchMode] = useState(false)
-  const [selectedIndex, setSelectedIndex] = useState(0)
   const [draftBehaviorIndex, setDraftBehaviorIndex] = useState(0)
   const [draftDestinationIndex, setDraftDestinationIndex] = useState(() => {
     if (!initialDestination) return 0
@@ -188,6 +188,10 @@ export function PermissionsScreen({
     if (!searchQuery.trim()) return allItems
     return allItems.filter(item => matchesQuery(item, searchQuery))
   }, [allItems, searchQuery])
+  const [selectedIndex, setSelectedIndex] = useScopedIndexState({
+    scope: 'permissions-screen:list',
+    itemCount: visibleItems.length,
+  })
 
   const reservedLines =
     (layout.tightLayout ? 7 : layout.compactLayout ? 9 : 11) +

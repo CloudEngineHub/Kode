@@ -1,10 +1,17 @@
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
+import {
+  getViewportHeightClass,
+  isCompactViewportHeight,
+  isTightViewportHeight,
+  type ViewportHeightClass,
+} from './viewportRows'
 
 export type ScreenLayout = {
   rows: number
   columns: number
   tightLayout: boolean
   compactLayout: boolean
+  viewportHeightClass: ViewportHeightClass
   paddingX: number
   paddingY: number
   gap: number
@@ -25,9 +32,17 @@ export function useScreenLayout(
   const compactRows = overrides.compactRows ?? 22
   const compactColumns = overrides.compactColumns ?? 92
 
-  const tightLayout = rows <= tightRows || columns <= tightColumns
+  const viewportHeightClass = getViewportHeightClass(rows, {
+    tightRows,
+    compactRows,
+  })
+  const tightLayout =
+    isTightViewportHeight(rows, { tightRows, compactRows }) ||
+    columns <= tightColumns
   const compactLayout =
-    tightLayout || rows <= compactRows || columns <= compactColumns
+    tightLayout ||
+    isCompactViewportHeight(rows, { tightRows, compactRows }) ||
+    columns <= compactColumns
 
   const paddingY = tightLayout ? 0 : 1
   const gap = tightLayout ? 0 : 1
@@ -38,6 +53,7 @@ export function useScreenLayout(
     columns,
     tightLayout,
     compactLayout,
+    viewportHeightClass,
     paddingX,
     paddingY,
     gap,

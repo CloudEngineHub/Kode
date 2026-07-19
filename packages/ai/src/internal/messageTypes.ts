@@ -1,0 +1,49 @@
+/**
+ * Structural conversation message shapes used by @kode/ai LLM transport.
+ * Hosts may use richer types; these are the fields the AI package reads/writes.
+ */
+
+import type { UUID } from 'crypto'
+import type { AnthropicUsage } from '@kode/protocol/anthropic'
+
+export type AiUserMessage = {
+  type: 'user'
+  uuid?: UUID
+  message: {
+    role: 'user' | 'assistant'
+    content: unknown
+  }
+  [key: string]: unknown
+}
+
+export type AiAssistantApiMessage = {
+  id: string
+  model: string
+  role: 'assistant'
+  type: 'message'
+  content: any[]
+  usage: AnthropicUsage
+  stop_reason?: string | null
+  stop_sequence?: string | null
+  [key: string]: unknown
+}
+
+export type AiAssistantMessage = {
+  type: 'assistant'
+  costUSD: number
+  durationMs: number
+  uuid: UUID
+  message: AiAssistantApiMessage
+  isApiErrorMessage?: boolean
+  isMeta?: boolean
+  requestId?: string
+  responseId?: string
+  [key: string]: unknown
+}
+
+export type {
+  UnifiedRequestParams,
+  UnifiedResponse,
+  ModelCapabilities,
+  ReasoningStreamingContext,
+} from './modelCapabilityTypes'

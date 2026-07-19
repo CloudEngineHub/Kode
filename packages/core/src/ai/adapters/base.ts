@@ -5,6 +5,7 @@ import {
 } from '#core/types/modelCapabilities'
 import { ModelProfile } from '#core/utils/config'
 import { Tool } from '#core/tooling/Tool'
+import type { AssistantStreamUpdateOptions } from '@kode/tool-interface/assistantStreamUpdate'
 
 // Canonical token representation - normalize once at the boundary
 interface TokenUsage {
@@ -17,6 +18,7 @@ interface TokenUsage {
 // Streaming event types for async generator streaming
 export type StreamingEvent =
   | { type: 'message_start'; message: any; responseId: string }
+  | { type: 'thinking_delta'; delta: string; responseId: string }
   | { type: 'text_delta'; delta: string; responseId: string }
   | { type: 'tool_request'; tool: any }
   | { type: 'usage'; usage: TokenUsage }
@@ -68,7 +70,10 @@ export abstract class ModelAPIAdapter {
 
   // Subclasses must implement these methods
   abstract createRequest(params: UnifiedRequestParams): any
-  abstract parseResponse(response: any): Promise<UnifiedResponse>
+  abstract parseResponse(
+    response: any,
+    options?: AssistantStreamUpdateOptions,
+  ): Promise<UnifiedResponse>
   abstract buildTools(tools: Tool[]): any
 
   // Optional: subclasses can implement streaming for real-time updates

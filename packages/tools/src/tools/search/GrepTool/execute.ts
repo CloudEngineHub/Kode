@@ -2,7 +2,7 @@ import { stat as statAsync } from 'fs/promises'
 
 import { getAbsolutePath } from '#core/utils/file'
 import { ripGrep } from '#core/utils/ripgrep'
-import { getBunShellSandboxPlan } from '#core/utils/sandbox/bunShellSandboxPlan'
+import { getBunShellSandboxPlan } from '#core/sandbox/bunShellSandboxPlan'
 import { getCwd } from '#core/utils/state'
 
 import {
@@ -12,7 +12,7 @@ import {
   toProjectRelativeIfPossible,
 } from './helpers'
 import type { GrepToolCallInput, GrepToolOutput } from './types'
-import type { ToolUseContext } from '#core/tooling/Tool'
+import type { ToolUseContext } from '@kode/tool-interface/Tool'
 
 export async function runGrepTool(args: {
   input: GrepToolCallInput

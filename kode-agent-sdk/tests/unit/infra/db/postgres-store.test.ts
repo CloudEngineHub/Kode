@@ -39,20 +39,23 @@ async function checkPostgresAvailable(): Promise<boolean> {
       }
     }
 
-    if (error.code === 'ECONNREFUSED') {
-      console.log(`  ⚠️  PostgreSQL 不可用，跳过测试`);
-      console.log(`  💡 启动测试数据库: docker run --name kode-postgres-test -e POSTGRES_PASSWORD=testpass123 -e POSTGRES_DB=kode_test -p 5433:5432 -d postgres:16-alpine`);
-      console.log(`  📝 注意：测试会显示为"通过"，但实际未执行`);
-    } else {
-      console.log(`  ⚠️  PostgreSQL 连接失败，跳过测试: ${error.message}`);
-      console.log(`  📝 注意：测试会显示为"通过"，但实际未执行`);
-    }
-    return false;
+    console.error(`  PostgreSQL 测试数据库不可用: ${error.message}`);
+    console.error(`  启动测试数据库: docker run --name kode-postgres-test -e POSTGRES_PASSWORD=testpass123 -e POSTGRES_DB=kode_test -p 5433:5432 -d postgres:16-alpine`);
+    throw error;
   }
 }
 
 runner
   .beforeAll(async () => {
+    if (process.env.KODE_SDK_SKIP_POSTGRES_TESTS === '1') {
+      if (process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true') {
+        throw new Error('KODE_SDK_SKIP_POSTGRES_TESTS=1 is not allowed in CI');
+      }
+      skipTests = true;
+      console.log(`\n  ⚠️  KODE_SDK_SKIP_POSTGRES_TESTS=1：显式跳过 PostgreSQL 测试\n`);
+      return;
+    }
+
     skipTests = !(await checkPostgresAvailable());
     if (skipTests) {
       console.log(`\n  ⚠️  以下所有测试将被跳过（因为 PostgreSQL 不可用）\n`);

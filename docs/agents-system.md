@@ -74,7 +74,7 @@ Common optional fields:
     - modelName: e.g. `o3`, `qwen-coder`
     - provider-qualified: `provider:modelName` (or `provider:profileName`), e.g. `openai:o3`
 - `permissionMode`: `default | acceptEdits | plan | bypassPermissions | dontAsk | delegate`
-- `forkContext`: must be the **string** `"true"` or `"false"` (quoted). When `"true"`, the agent runs with a forked snapshot of the main-thread context and `model` is forced to `inherit`.
+- `forkContext`: accepts YAML booleans (`true` / `false`) and the legacy quoted strings (`"true"` / `"false"`). Kode-managed writers emit the quoted form for compatibility. When enabled, the agent runs with a forked snapshot of the main-thread context and `model` is forced to `inherit`.
 
 Model mapping notes (aliases → pointers):
 

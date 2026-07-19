@@ -1,20 +1,14 @@
 import { Box, Text } from 'ink'
-import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { extname, relative } from 'node:path'
 import * as React from 'react'
 import { z } from 'zod'
-import type { Tool } from '#core/tooling/Tool'
+import type { Tool } from '@kode/tool-interface/Tool'
 import { getCwd } from '#core/utils/state'
-import { getOriginalCwd } from '#core/utils/state'
 import { findSimilarFile, normalizeFilePath } from '#core/utils/file'
 import { getTheme } from '#core/utils/theme'
 import { getKodeBaseDir } from '#core/utils/env'
-import { LEGACY_ENV } from '#config/compat/legacyEnv'
-import {
-  getTaskOutputsStoreDir,
-  getTaskOutputsUserFacingDir,
-} from '#runtime/taskOutputStore'
+import { extractBackgroundTaskOutputIdFromPath } from '#core/tasks/outputPaths'
 import { DESCRIPTION, getPrompt } from './prompt'
 import { hasReadPermission } from '#core/utils/permissions/filesystem'
 import { secureFileService } from '#core/utils/secureFile'
@@ -36,55 +30,6 @@ function toPosixPath(value: string): string {
 
 function isPosixPathWithinDir(posixPath: string, dirPosix: string): boolean {
   return posixPath === dirPosix || posixPath.startsWith(`${dirPosix}/`)
-}
-
-function getProjectKeyFromCwd(): string {
-  return getOriginalCwd().replace(/[^a-zA-Z0-9]/g, '-')
-}
-
-function getLegacyTmpBaseDir(): string {
-  const override = process.env[LEGACY_ENV.codeTmpDir]
-  if (typeof override === 'string') {
-    const trimmed = override.trim()
-    if (trimmed) return trimmed
-  }
-  if (process.platform === 'win32') {
-    return process.env.TEMP?.trim() || tmpdir()
-  }
-  return '/tmp'
-}
-
-function getLegacyClaudeTmpDir(): string {
-  const override = process.env[LEGACY_ENV.tmpDir]
-  if (typeof override === 'string') {
-    const trimmed = override.trim().replace(/[\\/]+$/, '')
-    if (trimmed) return trimmed
-  }
-  return path.join(getLegacyTmpBaseDir(), 'claude')
-}
-
-function extractTaskOutputIdFromPath(filePath: string): string | null {
-  const posix = toPosixPath(normalizeFilePath(filePath))
-  const projectKey = getProjectKeyFromCwd()
-
-  const tasksDirs = [
-    toPosixPath(getTaskOutputsStoreDir()),
-    toPosixPath(getTaskOutputsUserFacingDir()),
-    toPosixPath(path.join(getLegacyClaudeTmpDir(), projectKey, 'tasks')),
-  ]
-
-  for (const tasksDir of tasksDirs) {
-    const prefix = `${tasksDir}/`
-    if (!posix.startsWith(prefix)) continue
-    if (!posix.endsWith('.output')) continue
-
-    const id = posix.slice(prefix.length, -'.output'.length)
-    if (id.length === 0 || id.length > 20) continue
-    if (!/^[a-zA-Z0-9_-]+$/.test(id)) continue
-    return id
-  }
-
-  return null
 }
 
 const inputSchema = z.strictObject({
@@ -130,7 +75,7 @@ export const FileReadTool = {
       return 'Reading Plan'
     }
 
-    if (extractTaskOutputIdFromPath(absolutePosix)) {
+    if (extractBackgroundTaskOutputIdFromPath(absolute)) {
       return 'Read agent output'
     }
 

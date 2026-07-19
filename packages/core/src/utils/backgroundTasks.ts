@@ -1,10 +1,7 @@
 import type { Message as ConversationMessage } from '#core/query'
 
 export type BackgroundAgentStatus =
-  | 'running'
-  | 'completed'
-  | 'failed'
-  | 'killed'
+  'running' | 'completed' | 'failed' | 'killed'
 
 export type BackgroundAgentTask = {
   type: 'async_agent'
@@ -16,6 +13,10 @@ export type BackgroundAgentTask = {
   description: string
   prompt: string
   status: BackgroundAgentStatus
+  /** Canonical workspace captured at task launch, not resolved lazily. */
+  cwd: string
+  /** Optional daemon session owner; absent only for legacy/in-process tasks. */
+  sessionId?: string
   startedAt: number
   completedAt?: number
   error?: string

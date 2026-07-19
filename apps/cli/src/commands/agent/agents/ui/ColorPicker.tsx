@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
 import { Box, Text } from 'ink'
 import figures from 'figures'
-import { themeColor } from './colors'
+import { getReadableTextColor, getTheme } from '#core/utils/theme'
+import { resolveAgentColor } from '#ui-ink/utils/agentColor'
 import { COLOR_OPTIONS, type AgentColor } from './types'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 
@@ -10,6 +11,7 @@ export function ColorPicker(props: {
   currentColor: AgentColor
   onConfirm: (color: AgentColor) => void
 }) {
+  const theme = getTheme()
   const [index, setIndex] = useState(
     Math.max(
       0,
@@ -36,20 +38,33 @@ export function ColorPicker(props: {
     <Box flexDirection="column" gap={1}>
       {COLOR_OPTIONS.map((color, i) => {
         const focused = i === index
-        const prefix = focused ? figures.pointer : ' '
+        const pointer = focused ? `${figures.pointer} ` : '  '
+        const swatchColor = resolveAgentColor(color) ?? theme.secondaryBorder
+        const swatchTextColor = getReadableTextColor(swatchColor, theme.text)
+        const focusedTextColor = getReadableTextColor(theme.kode, theme.text)
         const label =
           color === 'automatic'
             ? 'Automatic color'
             : color.charAt(0).toUpperCase() + color.slice(1)
         return (
-          <React.Fragment key={color}>
+          <Box
+            key={color}
+            width="100%"
+            flexDirection="row"
+            backgroundColor={focused ? theme.kode : undefined}
+          >
             <Text
-              color={focused ? themeColor('suggestion') : undefined}
+              color={focused ? focusedTextColor : theme.secondaryText}
               bold={focused}
             >
-              {prefix} {label}
+              {pointer}
             </Text>
-          </React.Fragment>
+            <Text backgroundColor={swatchColor} color={swatchTextColor} bold>
+              {' '}
+              {label}{' '}
+            </Text>
+            {focused ? <Text color={focusedTextColor}> selected</Text> : null}
+          </Box>
         )
       })}
     </Box>

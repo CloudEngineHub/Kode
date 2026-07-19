@@ -1,8 +1,11 @@
 import { Box, Text } from 'ink'
 import React from 'react'
 import { z } from 'zod'
-import type { ToolUseContext, ValidationResult } from '#core/tooling/Tool'
-import { Tool } from '#core/tooling/Tool'
+import type {
+  ToolUseContext,
+  ValidationResult,
+} from '@kode/tool-interface/Tool'
+import { Tool } from '@kode/tool-interface/Tool'
 import { applyMarkdown } from '#core/utils/markdown'
 import { getModelManager } from '#core/utils/model'
 import { getTheme } from '#core/utils/theme'
@@ -128,7 +131,7 @@ export const AskExpertModelTool = {
     if (!verbose) {
       return (
         <Box flexDirection="column">
-          <Text bold color="yellow">
+          <Text bold color={theme.warning}>
             {expert_model}{' '}
           </Text>
           <Text color={theme.secondaryText} dimColor>
@@ -142,7 +145,7 @@ export const AskExpertModelTool = {
       question.length > 300 ? `${question.slice(0, 300)}…` : question
     return (
       <Box flexDirection="column">
-        <Text bold color="yellow">
+        <Text bold color={theme.warning}>
           {expert_model}
         </Text>
         <Text color={theme.secondaryText}>{sessionLabel}</Text>

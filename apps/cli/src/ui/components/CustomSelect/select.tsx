@@ -1,11 +1,12 @@
-import { Box, Text } from 'ink'
-import React, { type ReactNode } from 'react'
+import { Box, Text, type DOMElement } from 'ink'
+import React, { type ReactNode, useRef } from 'react'
 import { SelectOption } from './select-option'
 import { type Theme } from './theme'
 import { useSelectState } from './use-select-state'
 import { useSelect } from './use-select'
 import { Option } from '@inkjs/ui'
-import { getTheme } from '#core/utils/theme'
+import { getReadableTextColor, getTheme } from '#core/utils/theme'
+import { useMousePress, useMouseWheel } from '#ui-ink/hooks/useMouse'
 
 export type OptionSubtree = {
   /**
@@ -72,6 +73,56 @@ export type SelectProps = {
    * Value to focus
    */
   readonly focusValue?: string
+
+  /**
+   * Stable scope used to preserve focus across short keep-alive remounts.
+   */
+  readonly focusScope?: string
+
+  /**
+   * Enable mouse wheel navigation for this select.
+   *
+   * @default false
+   */
+  readonly enableMouseWheel?: boolean
+}
+
+function SelectOptionRow({
+  isDisabled,
+  isFocused,
+  isSelected,
+  smallPointer,
+  value,
+  onSelect,
+  children,
+}: {
+  isDisabled: boolean
+  isFocused: boolean
+  isSelected: boolean
+  smallPointer: boolean
+  value?: string
+  onSelect: (value: string) => void
+  children: ReactNode
+}) {
+  const ref = useRef<DOMElement | null>(null)
+
+  useMousePress(
+    ref,
+    () => {
+      if (value) onSelect(value)
+    },
+    { isActive: !isDisabled && value !== undefined, priority: 20 },
+  )
+
+  return (
+    <SelectOption
+      ref={ref}
+      isFocused={isFocused}
+      isSelected={isSelected}
+      smallPointer={smallPointer}
+      children={children}
+    />
+  )
 }
 
 export function Select({
@@ -83,7 +134,10 @@ export function Select({
   onChange,
   onFocus,
   focusValue,
+  focusScope,
+  enableMouseWheel = false,
 }: SelectProps) {
+  const containerRef = useRef<DOMElement | null>(null)
   const state = useSelectState({
     visibleOptionCount,
     options,
@@ -91,37 +145,50 @@ export function Select({
     onChange,
     onFocus,
     focusValue,
+    focusScope,
   })
 
   useSelect({ isDisabled, state })
+  useMouseWheel(
+    containerRef,
+    direction => {
+      if (direction === 'up') {
+        state.focusPreviousOption()
+      } else {
+        state.focusNextOption()
+      }
+    },
+    { isActive: enableMouseWheel && !isDisabled, priority: 10 },
+  )
 
   const appTheme = getTheme()
+  const highlightedTextColor = getReadableTextColor(
+    appTheme.warning,
+    appTheme.text,
+  )
   const styles = {
     container: () => ({
       flexDirection: 'column' as const,
     }),
     highlightedText: () => ({
-      color: appTheme.text,
+      color: highlightedTextColor,
       backgroundColor: appTheme.warning,
     }),
   }
 
   return (
-    <Box {...styles.container()}>
+    <Box ref={containerRef} {...styles.container()}>
       {state.visibleOptions.map(option => {
         const key = 'value' in option ? option.value : optionHeaderKey(option)
+        const isSelectableOption = 'value' in option
         const isFocused =
           !isDisabled &&
           state.focusedValue !== undefined &&
-          ('value' in option
-            ? state.focusedValue === option.value
-            : option.optionValues.includes(state.focusedValue))
+          isSelectableOption &&
+          state.focusedValue === option.value
         const isSelected =
-          !!state.value &&
-          ('value' in option
-            ? state.value === option.value
-            : option.optionValues.includes(state.value))
-        const smallPointer = 'header' in option
+          !!state.value && isSelectableOption && state.value === option.value
+        const smallPointer = false
         const labelText = 'label' in option ? option.label : option.header
         let label: ReactNode = labelText
 
@@ -138,11 +205,14 @@ export function Select({
         }
 
         return (
-          <SelectOption
+          <SelectOptionRow
             key={key}
+            isDisabled={isDisabled}
             isFocused={isFocused}
             isSelected={isSelected}
             smallPointer={smallPointer}
+            value={'value' in option ? option.value : undefined}
+            onSelect={state.selectOption}
             children={label}
           />
         )

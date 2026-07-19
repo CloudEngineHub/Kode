@@ -1,4 +1,4 @@
-import { fetchCustomModels } from '#core/ai/openai'
+import { fetchCustomModels } from '@kode/ai/openai'
 import { debug as debugLogger } from '#core/utils/debugLogger'
 import type { ModelInfo } from '../types'
 

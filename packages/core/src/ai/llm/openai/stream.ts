@@ -1,6 +1,10 @@
 import type { ChatCompletionStream } from 'openai/lib/ChatCompletionStream'
 import type OpenAI from 'openai'
 import { OpenAIStreamError } from '#core/ai/openai/stream'
+import {
+  emitAssistantStreamUpdate,
+  type AssistantStreamUpdateOptions,
+} from '@kode/tool-interface/assistantStreamUpdate'
 import { debug as debugLogger } from '#core/utils/debugLogger'
 import {
   setRequestStatus,
@@ -13,13 +17,60 @@ export type OpenAIStreamDegradedCompletion = OpenAI.ChatCompletion & {
   __streamDegradationReason?: string
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function getToolCallDeltaIndex(
+  toolCall: Record<string, unknown>,
+  fallbackIndex: number,
+): number {
+  const index = toolCall.index
+  if (index === undefined || index === null) return fallbackIndex
+  if (typeof index === 'number' && Number.isInteger(index) && index >= 0) {
+    return index
+  }
+  throw new Error('OpenAI stream tool_calls delta index must be a number')
+}
+
 function messageReducer(
   previous: OpenAI.ChatCompletionMessage,
   item: OpenAI.ChatCompletionChunk,
 ): OpenAI.ChatCompletionMessage {
-  const reduce = (acc: any, delta: OpenAI.ChatCompletionChunk.Choice.Delta) => {
+  const reduce = (acc: any, delta: unknown) => {
     acc = { ...acc }
+    if (!isRecord(delta)) return acc
+
     for (const [key, value] of Object.entries(delta)) {
+      if (key === 'tool_calls') {
+        if (value === null || value === undefined) continue
+        if (!Array.isArray(value)) {
+          throw new Error('OpenAI stream tool_calls delta must be an array')
+        }
+
+        const accArray = Array.isArray(acc[key]) ? [...acc[key]] : []
+        for (let i = 0; i < value.length; i++) {
+          const toolCall = value[i]
+          if (!isRecord(toolCall)) {
+            throw new Error(
+              'OpenAI stream tool_calls delta entries must be objects',
+            )
+          }
+
+          const index = getToolCallDeltaIndex(toolCall, i)
+          if (index > accArray.length) {
+            throw new Error(
+              `Error: An array has an empty value when tool_calls are constructed. tool_calls: ${accArray}; tool: ${value}`,
+            )
+          }
+
+          const { index: _index, ...chunkTool } = toolCall
+          accArray[index] = reduce(accArray[index], chunkTool)
+        }
+        acc[key] = accArray
+        continue
+      }
+
       if (acc[key] === undefined || acc[key] === null) {
         acc[key] = value
         //  OpenAI.Chat.Completions.ChatCompletionMessageToolCall does not have a key, .index
@@ -43,7 +94,7 @@ function messageReducer(
           }
           accArray[index] = reduce(accArray[index], chunkTool)
         }
-      } else if (typeof acc[key] === 'object' && typeof value === 'object') {
+      } else if (isRecord(acc[key]) && isRecord(value)) {
         acc[key] = reduce(acc[key], value)
       }
     }
@@ -55,6 +106,7 @@ function messageReducer(
     // chunk contains information about usage and token counts
     return previous
   }
+  if (!isRecord(choice.delta)) return previous
   return reduce(previous, choice.delta) as OpenAI.ChatCompletionMessage
 }
 
@@ -64,9 +116,7 @@ function throwIfAborted(signal?: AbortSignal): void {
   }
 }
 
-function hasUsableAssistantOutput(
-  message: OpenAI.ChatCompletionMessage,
-): boolean {
+function hasAnyAssistantOutput(message: OpenAI.ChatCompletionMessage): boolean {
   const record = message as unknown as Record<string, unknown>
   return (
     (typeof message.content === 'string' && message.content.length > 0) ||
@@ -86,7 +136,10 @@ export function isOpenAIStreamDegradedResponse(
 export async function handleMessageStream(
   stream: ChatCompletionStream,
   signal?: AbortSignal,
+  options?: AssistantStreamUpdateOptions,
 ): Promise<OpenAI.ChatCompletion> {
+  emitAssistantStreamUpdate(options, { type: 'start' })
+
   const streamStartTime = Date.now()
   let ttftMs: number | undefined
   let chunkCount = 0
@@ -149,7 +202,12 @@ export async function handleMessageStream(
 
         message = messageReducer(message, chunk)
 
-        if (chunk?.choices?.[0]?.delta?.content) {
+        const textDelta = chunk?.choices?.[0]?.delta?.content
+        if (textDelta) {
+          emitAssistantStreamUpdate(options, {
+            type: 'text_delta',
+            delta: textDelta,
+          })
           if (!hasMarkedStreaming) {
             setRequestStatus({ kind: 'streaming' })
             hasMarkedStreaming = true
@@ -190,7 +248,7 @@ export async function handleMessageStream(
 
     throwIfAborted(signal)
 
-    if (errorCount > 0 && !hasUsableAssistantOutput(message)) {
+    if (errorCount > 0 && !hasAnyAssistantOutput(message)) {
       throw new OpenAIStreamError(
         'unexpected_error',
         `OpenAI stream chunk processing failed before any assistant content: ${
@@ -201,7 +259,7 @@ export async function handleMessageStream(
       )
     }
 
-    if (chunkCount === 0 || !hasUsableAssistantOutput(message)) {
+    if (chunkCount === 0 || !hasAnyAssistantOutput(message)) {
       throw new OpenAIStreamError(
         'empty_response',
         'OpenAI stream completed without assistant content or tool calls',
@@ -221,7 +279,7 @@ export async function handleMessageStream(
         streamError instanceof Error &&
         streamError.message === 'Request was cancelled'
       ) &&
-      hasUsableAssistantOutput(message)
+      hasAnyAssistantOutput(message)
     ) {
       degradationReason =
         streamError instanceof OpenAIStreamError
@@ -266,7 +324,7 @@ export async function handleMessageStream(
       {
         index: 0,
         message,
-        finish_reason: finishReason ?? (degradationReason ? 'length' : 'stop'),
+        finish_reason: finishReason ?? 'stop',
         logprobs: undefined,
       },
     ],

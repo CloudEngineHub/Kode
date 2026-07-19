@@ -68,6 +68,7 @@ export function generateSuggestionsForContext(args: {
   commands: Command[]
   agentSuggestions: UnifiedSuggestion[]
   modelSuggestions: UnifiedSuggestion[]
+  isLoadingMentionSuggestions?: boolean
   systemCommands: string[]
   isLoadingCommands: boolean
   cwd: string
@@ -77,6 +78,7 @@ export function generateSuggestionsForContext(args: {
     commands,
     agentSuggestions,
     modelSuggestions,
+    isLoadingMentionSuggestions = false,
     systemCommands,
     isLoadingCommands,
     cwd,
@@ -94,12 +96,28 @@ export function generateSuggestionsForContext(args: {
         agentSuggestions,
         modelSuggestions,
       })
+      const mentionLoadingSuggestions: UnifiedSuggestion[] =
+        isLoadingMentionSuggestions
+          ? [
+              {
+                value: context.prefix || 'loading',
+                displayValue: 'Loading agents and models...',
+                type: 'agent',
+                score: 0,
+                metadata: { isLoading: true },
+              },
+            ]
+          : []
       const fileSuggestions = generateFileSuggestions({
         prefix: context.prefix,
         cwd,
       })
 
       const weightedSuggestions = [
+        ...mentionLoadingSuggestions.map(s => ({
+          ...s,
+          weightedScore: 1000,
+        })),
         ...mentionSuggestions.map(s => ({
           ...s,
           weightedScore: s.score + 150,

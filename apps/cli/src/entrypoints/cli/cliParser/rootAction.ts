@@ -8,15 +8,12 @@ import { isDefaultSlowAndCapableModel } from '#core/utils/model'
 import { dateToFilename } from '#core/utils/log'
 import { assertMinVersion } from '#core/utils/autoUpdater'
 import { LEGACY_ENV } from '#core/compat/legacyEnv'
-import {
-  clearAgentCache,
-  setFlagAgentsFromCliJson,
-} from '#core/utils/agentLoader'
+import { clearAgentCache, setFlagAgentsFromCliJson } from '@kode/agent'
 import {
   setEnabledSettingSourcesFromCli,
   getCurrentProjectConfig,
 } from '#config'
-import { getClients, getClientsForCliMcpConfig } from '#core/mcp/client'
+import { shouldRunHeadlessMode } from './headlessMode'
 
 import {
   renderRepl,
@@ -31,6 +28,7 @@ type RootCommandOptions = {
   verbose?: boolean
   enableArchitect?: boolean
   print?: boolean
+  headless?: boolean
   outputFormat?: string
   jsonSchema?: string
   inputFormat?: string
@@ -84,6 +82,7 @@ export function createRootAction(args: {
       verbose,
       enableArchitect,
       print,
+      headless,
       outputFormat,
       jsonSchema,
       inputFormat,
@@ -125,11 +124,23 @@ export function createRootAction(args: {
     },
   ) => {
     const cwd = maybeCwd ?? process.cwd()
+    const rawInputPrompt = [prompt, args.stdinContent]
+      .filter(Boolean)
+      .join('\n')
+    const effectiveHeadless = shouldRunHeadlessMode({
+      print,
+      headless,
+      outputFormat,
+      inputFormat,
+      stdoutIsTTY: process.stdout.isTTY,
+      prompt,
+      stdinContent: args.stdinContent,
+    })
     const resolvedEntrypoint =
       process.env.KODE_ENTRYPOINT ?? process.env[LEGACY_ENV.codeEntryPoint]
     if (!resolvedEntrypoint) {
       const isNonInteractive =
-        print === true ||
+        effectiveHeadless ||
         outputFormat === 'stream-json' ||
         inputFormat === 'stream-json' ||
         !process.stdout.isTTY
@@ -243,21 +254,21 @@ export function createRootAction(args: {
     clearAgentCache()
     clearOutputStyleCache()
 
-    if (web && print) {
-      console.error('Error: --web and --print cannot be used together.')
+    if (web && effectiveHeadless) {
+      console.error('Error: --web cannot be used with --print or --headless.')
       process.exit(1)
     }
 
-    if (sessionPersistence === false && !print) {
+    if (sessionPersistence === false && !effectiveHeadless) {
       console.error(
-        'Error: --no-session-persistence can only be used with --print mode.',
+        'Error: --no-session-persistence can only be used with --print or --headless mode.',
       )
       process.exit(1)
     }
 
-    if (includePartialMessages && !print) {
+    if (includePartialMessages && !effectiveHeadless) {
       console.error(
-        'Error: --include-partial-messages requires --print and --output-format=stream-json.',
+        'Error: --include-partial-messages requires --print/--headless and --output-format=stream-json.',
       )
       process.exit(1)
     }
@@ -269,7 +280,10 @@ export function createRootAction(args: {
       await runWebOnlyMode({ cwd, webHost, webPort })
       return
     }
-    const { postSetupInitialPrompt } = await showSetupScreens(safe, print)
+    const { postSetupInitialPrompt } = await showSetupScreens(
+      safe,
+      effectiveHeadless,
+    )
 
     assertMinVersion()
 
@@ -295,22 +309,24 @@ export function createRootAction(args: {
       }
     }
 
-    const [{ ask }, { getTools }, { getCommands }] = await Promise.all([
-      import('#cli-utils/ask'),
-      import('#tools'),
-      import('#cli-commands'),
-    ])
+    const [{ ask }, { getTools }, { getCommands }, mcpClientModule] =
+      await Promise.all([
+        import('#cli-utils/ask'),
+        import('#tools'),
+        import('#cli-commands'),
+        import('#core/mcp/client'),
+      ])
     const commands = await getCommands()
 
     const mcpClientsPromise =
       (Array.isArray(mcpConfig) && mcpConfig.length > 0) ||
       strictMcpConfig === true
-        ? getClientsForCliMcpConfig({
+        ? mcpClientModule.getClientsForCliMcpConfig({
             mcpConfig: Array.isArray(mcpConfig) ? mcpConfig : [],
             strictMcpConfig: strictMcpConfig === true,
             projectDir: cwd,
           })
-        : getClients()
+        : mcpClientModule.getClients()
 
     const [allTools, mcpClients] = await Promise.all([
       getTools(
@@ -322,7 +338,7 @@ export function createRootAction(args: {
       disableSlashCommands === true
         ? allTools.filter(t => t.name !== 'SlashCommand')
         : allTools
-    const inputPrompt = [prompt, args.stdinContent].filter(Boolean).join('\n')
+    const inputPrompt = rawInputPrompt
     const effectiveInitialPrompt =
       inputPrompt.trim().length > 0
         ? inputPrompt
@@ -380,9 +396,9 @@ export function createRootAction(args: {
         resumeSelectorInitialQuery = ''
       } else {
         const identifier = String(resume)
-        if (print && !isUuid(identifier.trim())) {
+        if (effectiveHeadless && !isUuid(identifier.trim())) {
           console.error(
-            'Error: --resume requires a valid session ID when used with --print. Usage: kode -p --resume <session-id>',
+            'Error: --resume requires a valid session ID when used with --print or --headless. Usage: kode --headless --resume <session-id>',
           )
           process.exit(1)
         }
@@ -402,7 +418,7 @@ export function createRootAction(args: {
           )
           process.exit(1)
         } else if (resolved.kind === 'ambiguous') {
-          if (print) {
+          if (effectiveHeadless) {
             console.error(
               `Error: Multiple sessions match "${identifier}": ${resolved.matchingSessionIds.join(
                 ', ',
@@ -413,7 +429,7 @@ export function createRootAction(args: {
           needsResumeSelector = true
           resumeSelectorInitialQuery = identifier.trim() || undefined
         } else {
-          if (print) {
+          if (effectiveHeadless) {
             console.error(
               `No conversation found with session ID: ${identifier.trim()}`,
             )
@@ -425,9 +441,9 @@ export function createRootAction(args: {
       }
     }
 
-    if (needsResumeSelector && print) {
+    if (needsResumeSelector && effectiveHeadless) {
       console.error(
-        'Error: --resume without a value requires interactive mode (no --print).',
+        'Error: --resume without a value requires interactive mode (no --print/--headless).',
       )
       process.exit(1)
     }
@@ -454,7 +470,7 @@ export function createRootAction(args: {
       setSessionId(effectiveSessionId)
     }
 
-    if (print) {
+    if (effectiveHeadless) {
       await runPrintMode({
         prompt,
         stdinContent: args.stdinContent,

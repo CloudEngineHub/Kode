@@ -90,19 +90,20 @@ export function registerMcpImportClaudeDesktopCommand(args: {
 
         const ink = await import('ink')
         const reactModule = await import('react')
-        const inkjsui = await import('@inkjs/ui')
         const utilsTheme = await import('#core/utils/theme')
         const uiFrame = await import('#ui-ink/primitives/layout/ScreenFrame')
         const uiLayout =
           await import('#ui-ink/primitives/layout/useScreenLayout')
+        const uiMultiSelect =
+          await import('#ui-ink/components/CustomSelect/multi-select')
 
         const { render } = ink
         const React = reactModule
-        const { MultiSelect } = inkjsui
         const { Box, Text } = ink
         const { getTheme } = utilsTheme
         const { ScreenFrame } = uiFrame
         const { useScreenLayout } = uiLayout
+        const { ScopedMultiSelect } = uiMultiSelect
 
         await new Promise<void>(resolve => {
           function ClaudeDesktopImport() {
@@ -194,12 +195,17 @@ export function registerMcpImportClaudeDesktopCommand(args: {
 
                   <Text>Select the servers you want to import:</Text>
 
-                  <MultiSelect
+                  <ScopedMultiSelect
+                    focusScope={`mcp-import-claude-desktop:${scope}`}
                     options={serverNames.map(name => ({
                       label: name,
                       value: name,
                     }))}
                     defaultValue={serverNames}
+                    visibleOptionCount={Math.min(
+                      12,
+                      Math.max(3, serverNames.length),
+                    )}
                     onSubmit={handleConfirm}
                   />
 

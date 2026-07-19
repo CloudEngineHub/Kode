@@ -1,22 +1,16 @@
 import React from 'react'
-import {
-  FileText,
-  Menu,
-  MessagesSquare,
-  Settings,
-  Terminal,
-} from 'lucide-react'
+import { CalendarClock, Menu, MessagesSquare, Settings } from 'lucide-react'
 
 import { useChat } from './hooks/useChat'
-import { useWebSocket } from './hooks/useWebSocket'
+import { useRuntimeClient } from './hooks/useRuntimeClient'
 import { useWorkspaces } from './hooks/useWorkspaces'
 import { Sidebar } from './components/Sidebar'
 import { ThemeToggle } from './components/ThemeToggle'
 import { PermissionModal } from './components/PermissionModal'
 import { Button } from './components/ui/button'
 import { Sheet, SheetContent, SheetTrigger } from './components/ui/sheet'
-import { Tabs, TabsList, TabsTrigger } from './components/ui/tabs'
 import { cn } from './lib/utils'
+import { runtimeStatusCompactLabel } from './lib/runtimePresentation'
 import {
   clearToken,
   consumeTokenFromUrl,
@@ -25,9 +19,32 @@ import {
 } from './lib/token'
 import { ChatPage } from './pages/Chat'
 import { ConnectPage } from './pages/Connect'
+import { SchedulesPage } from './pages/Schedules'
 import { SettingsPage } from './pages/Settings'
 
-type View = 'chat' | 'shell' | 'files' | 'settings'
+type View = 'chat' | 'schedules' | 'settings'
+
+const TERMINAL_VIEWS: readonly {
+  value: View
+  label: string
+  icon: typeof MessagesSquare
+}[] = [
+  { value: 'chat', label: 'Chat', icon: MessagesSquare },
+  { value: 'schedules', label: 'Schedules', icon: CalendarClock },
+  { value: 'settings', label: 'Settings', icon: Settings },
+]
+
+function runtimeStatusDotLabel(args: {
+  runtimeAttached: boolean
+  runtimeStatus: string
+  running: boolean
+}): string {
+  return [
+    args.runtimeStatus,
+    args.runtimeAttached ? 'runtime attached' : 'runtime detached',
+    args.running ? 'agent running' : 'agent idle',
+  ].join(' | ')
+}
 
 function getInitialToken(): string {
   return consumeTokenFromUrl() || loadTokenFromStorage()
@@ -52,17 +69,31 @@ export default function App() {
     loading: workspacesLoading,
   } = useWorkspaces({ token })
 
-  const { client, restartClient, connected } = useWebSocket({
-    baseUrl: baseUrlForClient(),
-    token,
-    workspaceId,
-  })
+  const { client, restartClient, runtimeAttached, runtimeStatus } =
+    useRuntimeClient({
+      baseUrl: baseUrlForClient(),
+      token,
+      workspaceId,
+    })
 
   const chat = useChat({
     client,
     resetKey: workspaceId ?? 'none',
     onNewSession: restartClient,
   })
+
+  const currentWorkspace =
+    workspaces.find(w => w.id === workspaceId) ??
+    workspaces.find(w => w.isCurrent) ??
+    workspaces[0] ??
+    null
+
+  const selectedSession =
+    chat.sessions.find(s => s.sessionId === chat.selectedSessionId) ?? null
+  const selectedSessionTitle =
+    selectedSession?.customTitle ||
+    selectedSession?.slug ||
+    (chat.selectedSessionId ? 'Chat' : 'New session')
 
   if (!token) {
     return (
@@ -101,94 +132,84 @@ export default function App() {
       }}
     />
   )
+  const runtimeDotLabel = runtimeStatusDotLabel({
+    runtimeAttached,
+    runtimeStatus: runtimeStatusCompactLabel(runtimeStatus),
+    running: chat.sending,
+  })
 
   return (
-    <div className="h-screen bg-background text-foreground">
-      <div className="grid h-full grid-cols-1 md:grid-cols-[320px_1fr]">
-        <div className="hidden md:block">{sidebar}</div>
+    <div className="kode-web-root bg-background text-foreground">
+      <div className="grid h-full grid-cols-1 lg:grid-cols-[304px_minmax(0,1fr)]">
+        <div className="hidden lg:block">{sidebar}</div>
 
-        <div className="flex h-full min-h-0 flex-col">
-          <div className="flex items-center gap-2 border-b border-border bg-background/80 px-3 py-2 backdrop-blur">
+        <div className="flex h-full min-h-0 flex-col overflow-hidden">
+          <div className="flex min-h-14 items-center gap-2 border-b border-[hsl(var(--kode-terminal-border))] bg-[hsl(var(--kode-terminal-panel))] px-3 py-2 font-mono text-[hsl(var(--kode-terminal-text))] shadow-sm shadow-black/20">
             <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
-              <SheetTrigger asChild className="md:hidden">
+              <SheetTrigger asChild className="lg:hidden">
                 <Button variant="ghost" size="icon" aria-label="Open sidebar">
                   <Menu className="h-4 w-4" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="w-[320px] p-0">
+              <SheetContent side="left" className="w-[min(304px,100vw)] p-0">
                 {sidebar}
               </SheetContent>
             </Sheet>
 
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold">
-                {chat.selectedSessionId ? 'Chat' : 'New Session'}
+                {selectedSessionTitle}
               </div>
-              <div className="truncate text-xs text-muted-foreground">
+              <div className="truncate text-xs text-[hsl(var(--kode-terminal-muted))]">
                 {workspacesLoading
-                  ? 'Loading workspaces…'
-                  : (workspaces.find(w => w.id === workspaceId)?.title ?? '—')}
+                  ? 'Loading workspaces...'
+                  : (currentWorkspace?.path ?? 'No workspace')}
               </div>
             </div>
 
-            <Tabs
-              value={view}
-              onValueChange={v => {
-                if (
-                  v === 'chat' ||
-                  v === 'shell' ||
-                  v === 'files' ||
-                  v === 'settings'
-                ) {
-                  setView(v)
-                }
-              }}
+            <div
+              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[hsl(var(--kode-terminal-border))] bg-[hsl(var(--kode-terminal-bg))] p-1 text-[hsl(var(--kode-terminal-muted))]"
+              role="group"
+              aria-label="View"
             >
-              <TabsList className="hidden sm:inline-flex">
-                <TabsTrigger value="chat">
-                  <MessagesSquare className="h-4 w-4" />
-                  Chat
-                </TabsTrigger>
-                <TabsTrigger value="shell">
-                  <Terminal className="h-4 w-4" />
-                  Shell
-                </TabsTrigger>
-                <TabsTrigger value="files">
-                  <FileText className="h-4 w-4" />
-                  Files
-                </TabsTrigger>
-                <TabsTrigger value="settings">
-                  <Settings className="h-4 w-4" />
-                  Settings
-                </TabsTrigger>
-              </TabsList>
-              <TabsList className="sm:hidden">
-                <TabsTrigger value="chat" aria-label="Chat">
-                  <MessagesSquare className="h-4 w-4" />
-                </TabsTrigger>
-                <TabsTrigger value="shell" aria-label="Shell">
-                  <Terminal className="h-4 w-4" />
-                </TabsTrigger>
-                <TabsTrigger value="files" aria-label="Files">
-                  <FileText className="h-4 w-4" />
-                </TabsTrigger>
-                <TabsTrigger value="settings" aria-label="Settings">
-                  <Settings className="h-4 w-4" />
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
+              {TERMINAL_VIEWS.map(item => {
+                const active = view === item.value
+                const Icon = item.icon
+
+                return (
+                  <button
+                    key={item.value}
+                    type="button"
+                    className={cn(
+                      'inline-flex h-8 min-w-8 items-center justify-center gap-2 rounded-[4px] px-2 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/20 sm:px-3',
+                      active
+                        ? 'bg-[hsl(var(--kode-terminal-elevated))] text-[hsl(var(--kode-terminal-text))]'
+                        : 'text-[hsl(var(--kode-terminal-muted))] hover:bg-[hsl(var(--kode-terminal-elevated))] hover:text-[hsl(var(--kode-terminal-text))]',
+                    )}
+                    aria-pressed={active}
+                    aria-label={item.label}
+                    onClick={() => setView(item.value)}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span className="hidden sm:inline">{item.label}</span>
+                  </button>
+                )
+              })}
+            </div>
 
             <div
               className={cn(
-                'h-2 w-2 rounded-full',
-                connected ? 'bg-emerald-500' : 'bg-muted-foreground/40',
+                'h-2 w-2 shrink-0 rounded-full',
+                runtimeAttached ? 'bg-emerald-500' : 'bg-muted-foreground/40',
               )}
-              aria-label="Connection status"
+              aria-label={runtimeDotLabel}
+              role="status"
+              title={runtimeDotLabel}
             />
             <ThemeToggle />
           </div>
 
-          <div className="flex-1 min-h-0">
+          <div className="min-h-0 flex-1">
             {view === 'settings' ? (
               <SettingsPage
                 token={token}
@@ -201,21 +222,35 @@ export default function App() {
                   setToken('')
                 }}
               />
-            ) : view === 'chat' ? (
+            ) : view === 'schedules' ? (
+              <SchedulesPage
+                client={client}
+                sessionId={chat.selectedSessionId}
+                sessions={chat.sessions}
+                onSelectSession={id => {
+                  void chat.selectSession(id)
+                }}
+                onNewSession={() => {
+                  chat.startNewSession()
+                }}
+              />
+            ) : (
               <ChatPage
                 events={chat.events}
                 input={chat.input}
                 onInputChange={chat.setInput}
+                onPasteText={chat.insertPastedText}
                 onSend={() => void chat.send()}
-                disabled={!client || chat.sending}
+                onCancel={chat.cancel}
+                disabled={!client}
                 sending={chat.sending}
+                permissionRequest={chat.permissionRequest}
+                runtimeAttached={runtimeAttached}
+                runtimeStatus={runtimeStatus}
+                sessionKey={chat.selectedSessionId}
+                sessionTitle={selectedSessionTitle}
+                workspacePath={currentWorkspace?.path ?? null}
               />
-            ) : (
-              <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
-                {view === 'shell'
-                  ? 'Shell UI is coming soon.'
-                  : 'File browser is coming soon.'}
-              </div>
             )}
           </div>
         </div>
@@ -241,4 +276,9 @@ export default function App() {
       />
     </div>
   )
+}
+
+export const __appForTests = {
+  terminalViews: TERMINAL_VIEWS.map(({ value, label }) => ({ value, label })),
+  runtimeStatusDotLabel,
 }

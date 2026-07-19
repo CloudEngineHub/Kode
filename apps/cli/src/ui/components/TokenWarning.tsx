@@ -8,28 +8,26 @@ import {
 } from '#core/utils/autoCompactThreshold'
 import { getModelManager } from '#core/utils/model'
 import { getTheme } from '#core/utils/theme'
+import {
+  formatTokenCount,
+  isRenderableContextLimit,
+} from '#ui-ink/utils/tokenDisplay'
 
 type Props = {
   tokenUsage: number
   contextLimit?: number
 }
 
-const FALLBACK_CONTEXT_LIMIT = 190_000
-
-function getActiveContextLimit(): number {
+function getActiveContextLimit(): number | null {
   try {
     const profile = getModelManager().getModel('main')
-    if (
-      typeof profile?.contextLength === 'number' &&
-      Number.isFinite(profile.contextLength) &&
-      profile.contextLength > 0
-    ) {
+    if (isRenderableContextLimit(profile?.contextLength)) {
       return profile.contextLength
     }
   } catch {
     // fall through
   }
-  return FALLBACK_CONTEXT_LIMIT
+  return null
 }
 
 export function TokenWarning({
@@ -38,11 +36,13 @@ export function TokenWarning({
 }: Props): React.ReactNode {
   const theme = getTheme()
   const contextLimit =
-    typeof contextLimitProp === 'number' &&
-    Number.isFinite(contextLimitProp) &&
-    contextLimitProp > 0
-      ? contextLimitProp
-      : getActiveContextLimit()
+    contextLimitProp === undefined
+      ? getActiveContextLimit()
+      : isRenderableContextLimit(contextLimitProp)
+        ? contextLimitProp
+        : null
+  if (contextLimit === null) return null
+
   const effectiveContextLimit =
     getEffectiveConversationContextLimit(contextLimit)
   const { autoCompactThreshold } = calculateAutoCompactThresholds(
@@ -63,12 +63,15 @@ export function TokenWarning({
     0,
     100 - Math.round((tokenUsage / safeThreshold) * 100),
   )
+  const warningText =
+    `Context low (${percentRemaining}% remaining, ` +
+    `${formatTokenCount(tokenUsage)}/${formatTokenCount(contextLimit)}) ` +
+    `- Run /compact to compact & continue`
 
   return (
     <Box flexDirection="row">
       <Text color={isError ? theme.error : theme.warning} wrap="truncate-end">
-        Context low ({percentRemaining}% remaining) &middot; Run /compact to
-        compact & continue
+        {warningText}
       </Text>
     </Box>
   )

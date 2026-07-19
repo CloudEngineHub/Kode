@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test'
-import { __applySingleSelectNavForTests } from '#ui-ink/components/permissions/AskUserQuestionPermissionRequest/AskUserQuestionPermissionRequest'
+import {
+  __applySingleSelectNavForTests,
+  __getNumericOptionIndexForTests,
+} from '#ui-ink/components/permissions/AskUserQuestionPermissionRequest/AskUserQuestionPermissionRequest'
 
 describe('AskUserQuestion single-select navigation parity', () => {
   test('down then up returns to original index', () => {
@@ -37,5 +40,41 @@ describe('AskUserQuestion single-select navigation parity', () => {
         optionCount: 3,
       }),
     ).toBe(2)
+  })
+})
+
+describe('AskUserQuestion numeric option shortcuts', () => {
+  test('maps 1-based digit keys to zero-based option indexes', () => {
+    expect(
+      __getNumericOptionIndexForTests({
+        input: '1',
+        key: {},
+        optionCount: 4,
+      }),
+    ).toBe(0)
+    expect(
+      __getNumericOptionIndexForTests({
+        input: '4',
+        key: {},
+        optionCount: 4,
+      }),
+    ).toBe(3)
+  })
+
+  test('ignores out-of-range and modified digit keys', () => {
+    expect(
+      __getNumericOptionIndexForTests({
+        input: '5',
+        key: {},
+        optionCount: 4,
+      }),
+    ).toBeNull()
+    expect(
+      __getNumericOptionIndexForTests({
+        input: '2',
+        key: { ctrl: true },
+        optionCount: 4,
+      }),
+    ).toBeNull()
   })
 })

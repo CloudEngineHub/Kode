@@ -58,6 +58,14 @@ function sanitizeWorkspaceKey(value: string): string {
   return value.replace(/[^a-zA-Z0-9_-]/g, '-')
 }
 
+function restoreOptionalEnv(name: string, value: string | undefined) {
+  if (value === undefined) {
+    delete process.env[name]
+    return
+  }
+  process.env[name] = value
+}
+
 describe('daemon git endpoints (WS)', () => {
   const maybeTest = hasGit() ? test : test.skip
 
@@ -202,7 +210,7 @@ describe('daemon git endpoints (WS)', () => {
           daemon.stop()
         }
       } finally {
-        process.env.KODE_CONFIG_DIR = previousKodeConfigDir
+        restoreOptionalEnv('KODE_CONFIG_DIR', previousKodeConfigDir)
         rmSync(kodeRoot, { recursive: true, force: true })
         rmSync(repoDir, { recursive: true, force: true })
       }

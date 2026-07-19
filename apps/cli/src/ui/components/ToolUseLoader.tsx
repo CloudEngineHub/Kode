@@ -1,4 +1,4 @@
-import { Box, Text } from 'ink'
+import { Box, Text, useIsScreenReaderEnabled } from 'ink'
 import React from 'react'
 import { useInterval } from '#ui-ink/hooks/useInterval'
 import { getTheme } from '#core/utils/theme'
@@ -23,13 +23,15 @@ export function ToolUseLoader({
   shouldAnimate,
 }: Props): React.ReactNode {
   const [frameIndex, setFrameIndex] = React.useState(0)
+  const isScreenReaderEnabled = useIsScreenReaderEnabled()
+  const isAnimationEnabled = shouldAnimate && !isScreenReaderEnabled
 
-  useInterval(() => {
-    if (!shouldAnimate) {
-      return
-    }
-    setFrameIndex(i => (i + 1) % SPINNER_FRAMES.length)
-  }, 80)
+  useInterval(
+    () => {
+      setFrameIndex(i => (i + 1) % SPINNER_FRAMES.length)
+    },
+    isAnimationEnabled ? 80 : null,
+  )
 
   const theme = getTheme()
 
@@ -59,7 +61,7 @@ export function ToolUseLoader({
 
   return (
     <Box minWidth={2}>
-      <Text color="green">{CHECKMARK} </Text>
+      <Text color={theme.success}>{CHECKMARK} </Text>
     </Box>
   )
 }

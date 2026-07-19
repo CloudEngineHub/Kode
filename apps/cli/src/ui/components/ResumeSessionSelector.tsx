@@ -14,7 +14,7 @@ import { quote } from 'shell-quote'
 
 import { PRODUCT_COMMAND } from '#core/constants/product'
 import { queryLLM } from '#core/ai/llmLazy'
-import { createUserMessage } from '#core/engine/messages/create'
+import { createUserMessage } from '@kode/engine/messages/create'
 import { getTheme, type Theme } from '#core/utils/theme'
 import { formatDate, logError } from '#core/utils/log'
 import { getBranch } from '#core/utils/git'
@@ -28,6 +28,7 @@ import { loadKodeAgentSessionMessages } from '#protocol/utils/kodeAgentSessionLo
 import { buildTranscriptLines } from '#cli-utils/transcriptText'
 import { copyTextToClipboard } from '#cli-utils/clipboard'
 import { useExitOnCtrlCD } from '#ui-ink/hooks/useExitOnCtrlCD'
+import { useCliExit } from '#ui-ink/hooks/useCliExit'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { SearchBox } from '#ui-ink/components/SearchBox'
@@ -35,8 +36,10 @@ import TextInput from '#ui-ink/components/TextInput'
 import { SimpleSpinner } from '#ui-ink/components/Spinner'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
+import { computeAvailableColumns } from '#ui-ink/primitives/layout/viewportColumns'
 import { getWindowedList } from '#ui-ink/primitives/list/windowedList'
 import { wrapLines } from '#ui-ink/primitives/text/wrapLines'
+import { useScopedIndexState } from '#ui-ink/hooks/useScopedIndexState'
 import { z } from 'zod'
 
 type ViewMode = 'list' | 'search' | 'rename' | 'preview' | 'crossProject'
@@ -531,10 +534,19 @@ export function ResumeSessionSelector(props: {
   const { cwd, sessions, onCancel, onSelect } = props
   const theme = getTheme()
   const layout = useScreenLayout()
-  const exitState = useExitOnCtrlCD(() => process.exit(0))
+  const requestExit = useCliExit()
+  const exitState = useExitOnCtrlCD(() => requestExit(0))
   const compactVertical = layout.rows <= 26
   const frameGap = compactVertical ? 0 : layout.gap
   const framePaddingY = compactVertical ? 0 : layout.paddingY
+  const inputColumns = computeAvailableColumns({
+    columns: layout.columns,
+    reservedColumns: layout.paddingX * 2 + 4,
+  })
+  const contentColumns = computeAvailableColumns({
+    columns: layout.columns,
+    reservedColumns: layout.paddingX * 2,
+  })
   const [sessionList, setSessionList] = useState(() => sessions)
 
   useEffect(() => {
@@ -565,7 +577,10 @@ export function ResumeSessionSelector(props: {
   >(null)
   const [branchFilterEnabled, setBranchFilterEnabled] = useState(false)
   const [currentBranch, setCurrentBranch] = useState<string | null>(null)
-  const [selectedIndex, setSelectedIndex] = useState(0)
+  const [selectedIndex, setSelectedIndex] = useScopedIndexState({
+    scope: 'resume-session-selector',
+    itemCount: sessionList.length,
+  })
   const resetSelection = useCallback(() => {
     setSelectedIndex(prev => (prev === 0 ? prev : 0))
   }, [])
@@ -1572,7 +1587,7 @@ export function ResumeSessionSelector(props: {
               setView('list')
               setSubmitError(null)
             }}
-            columns={Math.max(10, layout.columns - layout.paddingX * 2 - 4)}
+            columns={inputColumns}
             cursorOffset={renameCursorOffset}
             onChangeCursorOffset={setRenameCursorOffset}
             showCursor={true}
@@ -1742,7 +1757,7 @@ export function ResumeSessionSelector(props: {
             isFocused={true}
             isTerminalFocused={true}
             theme={theme}
-            width={Math.max(10, layout.columns - layout.paddingX * 2)}
+            width={contentColumns}
           />
         ) : (
           <SearchBox query={query} isFocused={false} isTerminalFocused={true} />

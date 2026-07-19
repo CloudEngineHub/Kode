@@ -1,0 +1,64 @@
+import type { AgentEvent } from '#protocol/agentEvent'
+import type {
+  AssistantMessage,
+  BinaryFeedbackResult,
+  EngineCanUseToolFn,
+  Message,
+} from './message-pipeline'
+
+import { query } from './orchestrator'
+
+import { messagesToAgentEvents } from '#core/query/agentEvents'
+import { buildSystemPromptForSession } from './systemPrompt'
+
+export type QueryToolUseContext = Parameters<typeof query>[4]
+
+export async function* runTurn(args: {
+  messages: Message[]
+  canUseTool: EngineCanUseToolFn
+  toolUseContext: QueryToolUseContext
+
+  disableSlashCommands?: boolean
+  systemPromptOverride?: string
+  appendSystemPrompt?: string
+  jsonSchema?: Record<string, unknown> | null
+
+  systemPrompt?: string[]
+  context: { [k: string]: string }
+
+  getBinaryFeedbackResponse?: (
+    m1: AssistantMessage,
+    m2: AssistantMessage,
+  ) => Promise<BinaryFeedbackResult>
+}): AsyncGenerator<Message, void> {
+  const [systemPrompt, context] = await Promise.all([
+    args.systemPrompt ??
+      buildSystemPromptForSession({
+        disableSlashCommands: args.disableSlashCommands,
+        systemPromptOverride: args.systemPromptOverride,
+        appendSystemPrompt: args.appendSystemPrompt,
+        jsonSchema: args.jsonSchema,
+      }),
+    args.context,
+  ])
+
+  yield* query(
+    args.messages,
+    systemPrompt,
+    context,
+    args.canUseTool,
+    args.toolUseContext,
+    args.getBinaryFeedbackResponse,
+  )
+}
+
+export async function* runTurnEvents(
+  args: {
+    sessionId: string
+  } & Parameters<typeof runTurn>[0],
+): AsyncGenerator<AgentEvent, void> {
+  yield* messagesToAgentEvents({
+    source: runTurn(args),
+    sessionId: args.sessionId,
+  })
+}

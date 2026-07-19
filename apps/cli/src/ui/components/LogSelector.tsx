@@ -10,23 +10,27 @@ import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import { getWindowedList } from '#ui-ink/primitives/list/windowedList'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { useExitOnCtrlCD } from '#ui-ink/hooks/useExitOnCtrlCD'
+import { useScopedIndexState } from '#ui-ink/hooks/useScopedIndexState'
 
 type LogSelectorProps = {
   logs: LogOption[]
   onSelect: (logValue: number) => void
+  onCancel: () => void
 }
 
 export function LogSelector({
   logs,
   onSelect,
+  onCancel,
 }: LogSelectorProps): React.ReactNode {
   const theme = getTheme()
   const layout = useScreenLayout()
-  const exitState = useExitOnCtrlCD(() => process.exit(0))
+  const exitState = useExitOnCtrlCD(onCancel)
 
-  if (logs.length === 0) return null
-
-  const [selectedIndex, setSelectedIndex] = React.useState(0)
+  const [selectedIndex, setSelectedIndex] = useScopedIndexState({
+    scope: 'log-selector',
+    itemCount: logs.length,
+  })
 
   const reservedLines =
     (layout.tightLayout ? 7 : layout.compactLayout ? 9 : 11) +
@@ -53,7 +57,7 @@ export function LogSelector({
     const inputChar = input.length === 1 ? input : ''
 
     if (key.escape) {
-      process.exit(0)
+      onCancel()
       return true
     }
 
@@ -92,6 +96,8 @@ export function LogSelector({
       return true
     }
   })
+
+  if (logs.length === 0) return null
 
   const topIndicator = window.showUpIndicator ? `${figures.arrowUp} More` : ' '
   const bottomIndicator = window.showDownIndicator

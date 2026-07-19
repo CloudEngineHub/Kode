@@ -3,46 +3,13 @@ import {
   normalizeLineEndings,
   shouldTreatAsSpecialPaste,
 } from '#core/utils/paste'
-import { terminalCapabilityManager } from '#ui-ink/utils/terminalCapabilityManager'
-import { writeToStdout } from '#cli-utils/stdio'
 
-const BRACKETED_PASTE_ENABLE = '\x1b[?2004h'
-const BRACKETED_PASTE_DISABLE = '\x1b[?2004l'
 const BRACKETED_PASTE_START = '\x1b[200~'
 const BRACKETED_PASTE_END = '\x1b[201~'
 // Some input decoders (including Ink in certain terminals) may strip the leading ESC and
 // deliver the CSI sequences as "[200~" / "[201~". Accept both forms to avoid leaking markers into input.
 const BRACKETED_PASTE_START_NO_ESC = '[200~'
 const BRACKETED_PASTE_END_NO_ESC = '[201~'
-
-let bracketedPasteRefCount = 0
-
-function setBracketedPasteEnabled(enabled: boolean) {
-  if (!process.stdout?.isTTY) return
-  if (!terminalCapabilityManager.isBracketedPasteSupported()) return
-  writeToStdout(enabled ? BRACKETED_PASTE_ENABLE : BRACKETED_PASTE_DISABLE)
-}
-
-function acquireBracketedPasteMode() {
-  if (bracketedPasteRefCount === 0) {
-    setBracketedPasteEnabled(true)
-  }
-  bracketedPasteRefCount++
-}
-
-function releaseBracketedPasteMode() {
-  bracketedPasteRefCount = Math.max(0, bracketedPasteRefCount - 1)
-  if (bracketedPasteRefCount === 0) {
-    setBracketedPasteEnabled(false)
-  }
-}
-
-export function useBracketedPasteMode(): void {
-  React.useEffect(() => {
-    acquireBracketedPasteMode()
-    return () => releaseBracketedPasteMode()
-  }, [])
-}
 
 type BracketedPasteState = {
   mode: 'normal' | 'in_paste'
@@ -84,11 +51,13 @@ function getSuffixKeepLength(haystack: string, markers: string[]): number {
 export type BracketedPasteHandlerOptions = {
   insertText: (text: string) => void
   onPaste?: (text: string) => void
+  terminalColumns?: number
 }
 
 export function useBracketedPasteSequences({
   insertText,
   onPaste,
+  terminalColumns,
 }: BracketedPasteHandlerOptions): (input: string) => boolean {
   const stateRef = React.useRef<BracketedPasteState>({
     mode: 'normal',
@@ -99,16 +68,20 @@ export function useBracketedPasteSequences({
   const flushBracketedPasteBuffer = React.useCallback(
     (rawText: string) => {
       const normalized = normalizeLineEndings(rawText)
-      if (onPaste && shouldTreatAsSpecialPaste(normalized)) {
-        // Schedule callback after current render to avoid state updates during render
-        Promise.resolve().then(() => onPaste(normalized))
+      if (
+        onPaste &&
+        shouldTreatAsSpecialPaste(normalized, { terminalColumns })
+      ) {
+        // Schedule callback outside the keypress frame so large paste handling
+        // doesn't block cursor updates.
+        setTimeout(() => onPaste(normalized), 0)
         return
       }
 
       // Normal paste: insert directly into input.
       insertText(normalized)
     },
-    [insertText, onPaste],
+    [insertText, onPaste, terminalColumns],
   )
 
   return React.useCallback(

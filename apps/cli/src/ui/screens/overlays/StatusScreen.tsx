@@ -4,7 +4,7 @@ import figures from 'figures'
 
 import { MACRO } from '#core/constants/macros'
 import type { ToolUseContext } from '#core/tooling/Tool'
-import { getDisableAllHooksState } from '#core/hooks/disableAllHooks'
+import { getDisableAllHooksState } from '@kode/hooks/disableAllHooks'
 import { getModelManager } from '#core/utils/model'
 import { getTheme } from '#core/utils/theme'
 import { getCwd } from '#core/utils/state'
@@ -14,9 +14,14 @@ import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
+import {
+  computeAvailableRows,
+  computeScreenFrameReservedRows,
+} from '#ui-ink/primitives/layout/viewportRows'
 import { wrapLines } from '#ui-ink/primitives/text/wrapLines'
 import type { ConnectionTestResult } from '#ui-ink/components/ModelSelector/flow/actions/connectionTest'
 import { performConnectionTest } from '#ui-ink/components/ModelSelector/flow/actions/connectionTest'
+import { formatContextLimit } from '#ui-ink/utils/tokenDisplay'
 
 type Props = {
   context: ToolUseContext
@@ -102,9 +107,7 @@ function buildModelsLines(): string[] {
       continue
     }
     const provider = profile.provider ? ` (${profile.provider})` : ''
-    const ctx = profile.contextLength
-      ? `${Math.round(profile.contextLength / 1000)}k`
-      : 'unknown'
+    const ctx = formatContextLimit(profile.contextLength) ?? 'unknown'
     const status = profile.isActive ? 'active' : 'inactive'
     lines.push(
       `- ${pointer}: ${profile.name}${provider} · ${profile.modelName} · ctx ${ctx} · ${status}`,
@@ -222,9 +225,16 @@ export function StatusScreen({ context, onDone }: Props): React.ReactNode {
     return wrapLines(tabLines, width)
   }, [layout.columns, layout.paddingX, tabLines])
 
-  const frameHeaderRows = 1 + (exitState.pending ? 1 : 0)
-  const frameRows = frameHeaderRows + 1 + layout.gap * 2 + layout.paddingY * 2
-  const contentRows = Math.max(1, layout.rows - frameRows - 6)
+  const frameRows = computeScreenFrameReservedRows({
+    paddingY: layout.paddingY,
+    gap: layout.gap,
+    exitPromptRows: exitState.pending ? 1 : 0,
+  })
+  const contentRows = computeAvailableRows({
+    rows: layout.rows,
+    reservedRows: frameRows + 6,
+    minRows: 1,
+  })
   const maxScrollTop = Math.max(0, wrapped.length - contentRows)
 
   useKeypress(

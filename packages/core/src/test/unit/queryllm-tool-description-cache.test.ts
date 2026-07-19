@@ -36,6 +36,7 @@ describe('queryLLM tool description pre-resolution', () => {
             apiKey: 'test',
             maxTokens: 1,
             contextLength: 1,
+            createdAt: 0,
             isActive: true,
           },
         }

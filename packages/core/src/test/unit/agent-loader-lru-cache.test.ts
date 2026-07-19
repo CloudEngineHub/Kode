@@ -8,8 +8,13 @@ import {
   __resetAgentFileCacheStatsForTests,
   clearAgentCache,
   getAgentByType,
-} from '#core/agent/loader'
+} from '@kode/agent/loader'
 import { getCwd, setCwd } from '#core/utils/state'
+
+function restoreEnv(name: string, value: string | undefined): void {
+  if (value === undefined) delete process.env[name]
+  else process.env[name] = value
+}
 
 function writeAgentFile(args: {
   dir: string
@@ -104,10 +109,10 @@ test('agent loader LRU memoization reuses unchanged parses and invalidates on fi
     const s3 = __getAgentFileCacheStatsForTests()
     expect(s3.misses).toBeGreaterThan(s2.misses)
   } finally {
-    process.env.HOME = originalHome
-    process.env.KODE_CONFIG_DIR = originalKodeDir
-    process.env.ANYKODE_CONFIG_DIR = originalAnyKodeDir
-    process.env.CLAUDE_CONFIG_DIR = originalClaudeDir
+    restoreEnv('HOME', originalHome)
+    restoreEnv('KODE_CONFIG_DIR', originalKodeDir)
+    restoreEnv('ANYKODE_CONFIG_DIR', originalAnyKodeDir)
+    restoreEnv('CLAUDE_CONFIG_DIR', originalClaudeDir)
     __resetAgentFileCacheStatsForTests()
     clearAgentCache()
     await setCwd(originalCwd)

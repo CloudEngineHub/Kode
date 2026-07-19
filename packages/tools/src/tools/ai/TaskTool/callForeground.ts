@@ -6,8 +6,9 @@ import React from 'react'
 
 import type { Message as ConversationMessage } from '#core/query'
 import { hasPermissionsToUseTool } from '#core/permissions'
-import type { SetToolJSXFn } from '#core/tooling/Tool'
+import type { SetToolJSXFn } from '@kode/tool-interface/Tool'
 import { saveAgentTranscript } from '#core/utils/agentTranscripts'
+import { getKodeAgentSessionId } from '#protocol/utils/kodeAgentSessionId'
 import {
   upsertBackgroundAgentTask,
   type BackgroundAgentTaskRuntime,
@@ -22,8 +23,15 @@ import {
   createAssistantMessage,
   getLastAssistantMessageId,
 } from '#core/utils/messages'
-import { appendTaskOutput, touchTaskOutputFile } from '#runtime/taskOutputStore'
-import { BashToolRunInBackgroundOverlay } from '#tools/tools/system/BashTool/BashToolRunInBackgroundOverlay'
+import {
+  appendBackgroundTaskOutput,
+  touchBackgroundTaskOutputFile,
+} from '#core/tasks/backgroundRegistry'
+import { getCwd } from '#core/utils/state'
+import {
+  BashToolRunInBackgroundOverlay,
+  createRunInBackgroundKeypressHandler,
+} from '#tools/tools/system/BashTool/BashToolRunInBackgroundOverlay'
 
 import { asyncLaunchMessage } from './assistantText'
 import type { PreparedTaskToolRun } from './callTypes'
@@ -248,6 +256,8 @@ export async function* callTaskToolForeground(
     backgroundRequested = true
     resolveBackgroundRequested?.()
   }
+  const onBackgroundKeypress =
+    createRunInBackgroundKeypressHandler(requestBackground)
 
   let backgrounded = false
   const runAbortController = new AbortController()
@@ -263,16 +273,15 @@ export async function* callTaskToolForeground(
       if (backgrounded) return
       if (runAbortController.signal.aborted) return
       setToolJSX({
-        jsx: React.createElement(BashToolRunInBackgroundOverlay, {
-          onBackground: requestBackground,
-        }),
+        jsx: React.createElement(BashToolRunInBackgroundOverlay),
         shouldHidePromptInput: false,
+        onKeypress: onBackgroundKeypress,
       })
     }, PROGRESS_INITIAL_DELAY_MS)
     overlayTimeout.unref?.()
   }
 
-  touchTaskOutputFile(prepared.agentId)
+  touchBackgroundTaskOutputFile(prepared.agentId)
 
   const addRecentAction = (action: string) => {
     const trimmed = action.trim()
@@ -320,7 +329,10 @@ export async function* callTaskToolForeground(
     if (message.type === 'assistant') {
       const assistantText = getAssistantText(message)
       if (assistantText) {
-        appendTaskOutput(prepared.agentId, assistantText.trimEnd() + '\n')
+        appendBackgroundTaskOutput(
+          prepared.agentId,
+          assistantText.trimEnd() + '\n',
+        )
       }
 
       for (const block of message.message.content) {
@@ -331,22 +343,21 @@ export async function* callTaskToolForeground(
     }
   }
 
-  const queryIterator = prepared
-    .queryFn(
-      prepared.messagesForQuery,
-      prepared.systemPrompt,
-      prepared.context,
-      hasPermissionsToUseTool,
-      {
-        abortController: runAbortController,
-        options: prepared.queryOptions,
-        messageId: getLastAssistantMessageId(prepared.messagesForQuery),
-        agentId: prepared.agentId,
-        readFileTimestamps: prepared.readFileTimestamps,
-        setToolJSX: () => {},
-      },
-    )
-    [Symbol.asyncIterator]()
+  const queryStream = prepared.queryFn(
+    prepared.messagesForQuery,
+    prepared.systemPrompt,
+    prepared.context,
+    hasPermissionsToUseTool,
+    {
+      abortController: runAbortController,
+      options: prepared.queryOptions,
+      messageId: getLastAssistantMessageId(prepared.messagesForQuery),
+      agentId: prepared.agentId,
+      readFileTimestamps: prepared.readFileTimestamps,
+      setToolJSX: () => {},
+    },
+  )
+  const queryIterator = queryStream[Symbol.asyncIterator]()
 
   let nextPromise = queryIterator.next()
 
@@ -363,6 +374,8 @@ export async function* callTaskToolForeground(
       description: input.description,
       prompt: prepared.effectivePrompt,
       status: 'running',
+      cwd: getCwd(),
+      sessionId: getKodeAgentSessionId(),
       startedAt: prepared.startTime,
       messages: [...prepared.transcriptMessages],
       abortController: runAbortController,
@@ -395,7 +408,7 @@ export async function* callTaskToolForeground(
         } else {
           taskRecord.completedAt = taskRecord.completedAt ?? Date.now()
           if (resultText) taskRecord.resultText = resultText
-          appendTaskOutput(
+          appendBackgroundTaskOutput(
             prepared.agentId,
             '\n[task killed]\n'.replace(/^\n+/, ''),
           )
@@ -414,7 +427,7 @@ export async function* callTaskToolForeground(
           taskRecord.status = 'killed'
           taskRecord.completedAt = taskRecord.completedAt ?? Date.now()
           taskRecord.error = taskRecord.error ?? (message || 'Killed by user')
-          appendTaskOutput(
+          appendBackgroundTaskOutput(
             prepared.agentId,
             '\n[task killed]\n'.replace(/^\n+/, ''),
           )
@@ -422,7 +435,7 @@ export async function* callTaskToolForeground(
           taskRecord.status = 'failed'
           taskRecord.completedAt = Date.now()
           taskRecord.error = message
-          appendTaskOutput(
+          appendBackgroundTaskOutput(
             prepared.agentId,
             `\n[error] ${message}\n`.replace(/^\n+/, ''),
           )

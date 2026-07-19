@@ -3,7 +3,8 @@ import * as React from 'react'
 import { SentryErrorBoundary } from '#ui-ink/components/SentryErrorBoundary'
 import { TokenWarning } from '#ui-ink/components/TokenWarning'
 import type { Theme } from '#core/utils/theme'
-import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
+import { computeResponsiveRows } from '#ui-ink/primitives/layout/viewportRows'
+import { resolveAgentColor } from '#ui-ink/utils/agentColor'
 import wrapAnsi from 'wrap-ansi'
 
 type Suggestion = {
@@ -22,20 +23,22 @@ const SuggestionItem = React.memo(
     suggestion,
     isSelected,
     theme,
+    maxWidth,
   }: {
     suggestion: Suggestion
     isSelected: boolean
     theme: Theme
+    maxWidth: number
   }) => {
     const isAgent = suggestion.type === 'agent'
     const displayColor = isSelected
       ? theme.suggestion
       : isAgent && suggestion.metadata?.color
-        ? suggestion.metadata.color
+        ? resolveAgentColor(suggestion.metadata.color)
         : undefined
 
     return (
-      <Box flexDirection="row">
+      <Box flexDirection="row" width={maxWidth} overflow="hidden">
         <Text
           bold
           color={displayColor}
@@ -53,7 +56,8 @@ const SuggestionItem = React.memo(
     return (
       prevProps.isSelected === nextProps.isSelected &&
       prevProps.suggestion.value === nextProps.suggestion.value &&
-      prevProps.suggestion.displayValue === nextProps.suggestion.displayValue
+      prevProps.suggestion.displayValue === nextProps.suggestion.displayValue &&
+      prevProps.maxWidth === nextProps.maxWidth
     )
   },
 )
@@ -66,15 +70,20 @@ const HelpText = React.memo(
     emptyDirMessage,
     selectedSuggestion,
     maxWidth,
+    theme,
   }: {
     emptyDirMessage: string
     selectedSuggestion?: Suggestion
     maxWidth: number
+    theme: Theme
   }) => {
     const getHelpMessage = () => {
       if (emptyDirMessage) return emptyDirMessage
       if (!selectedSuggestion) {
         return '↑↓ navigate • → accept • Tab cycle • Esc close'
+      }
+      if (selectedSuggestion.type === 'command') {
+        return 'Tab accept • ↑↓ navigate • → accept • Esc close'
       }
       if (selectedSuggestion.value.endsWith('/')) {
         return '→ enter directory • ↑↓ navigate • Tab cycle • Esc close'
@@ -106,7 +115,7 @@ const HelpText = React.memo(
         lines.length > 1 && firstLine.length > 0 ? `${firstLine}…` : firstLine
       return (
         <Text dimColor wrap="truncate-end">
-          {limited}
+          {`${limited} • Tab accept`}
         </Text>
       )
     }
@@ -114,7 +123,7 @@ const HelpText = React.memo(
     return (
       <Text
         dimColor={!emptyDirMessage}
-        color={emptyDirMessage ? 'yellow' : undefined}
+        color={emptyDirMessage ? theme.warning : undefined}
         wrap="truncate-end"
       >
         {getHelpMessage()}
@@ -128,7 +137,8 @@ const HelpText = React.memo(
         nextProps.selectedSuggestion?.value &&
       prevProps.selectedSuggestion?.description ===
         nextProps.selectedSuggestion?.description &&
-      prevProps.maxWidth === nextProps.maxWidth
+      prevProps.maxWidth === nextProps.maxWidth &&
+      prevProps.theme === nextProps.theme
     )
   },
 )
@@ -141,11 +151,13 @@ export function __getSuggestionWindowForTests(args: {
   suggestionCount: number
   reservedRows?: number
 }) {
-  const reservedRows = Math.max(1, args.reservedRows ?? 10)
-  const panelRows = Math.min(
-    MAX_COMPLETION_PANEL_ROWS,
-    Math.max(1, args.rows - reservedRows),
-  )
+  const reservedRows = Math.max(0, args.reservedRows ?? 10)
+  const panelRows = computeResponsiveRows({
+    rows: args.rows,
+    reservedRows,
+    minRows: 1,
+    maxRows: MAX_COMPLETION_PANEL_ROWS,
+  })
   const showHelp = panelRows >= 4
   const helpRows = showHelp ? 1 : 0
   const listRows = Math.max(1, panelRows - helpRows)
@@ -229,6 +241,8 @@ export const PromptInputCompletionPanel = React.memo(
     tokenUsage,
     contextLimit,
     reservedRows = 10,
+    rows,
+    columns,
   }: {
     theme: Theme
     suggestions: Suggestion[]
@@ -237,9 +251,20 @@ export const PromptInputCompletionPanel = React.memo(
     tokenUsage: number
     contextLimit?: number
     reservedRows?: number
+    rows: number
+    columns: number
   }): React.ReactNode {
-    const { rows, columns } = useTerminalSize()
-    const helpWidth = Math.max(1, columns - 6)
+    const panelWidth = Math.max(1, columns)
+    const horizontalPadding = panelWidth >= 8 ? 2 : panelWidth >= 4 ? 1 : 0
+    const innerWidth = Math.max(1, panelWidth - horizontalPadding * 2)
+    const showTokenWarning = innerWidth >= 20
+    const tokenWarningWidth = showTokenWarning
+      ? Math.min(32, Math.max(16, Math.floor(innerWidth * 0.42)))
+      : 0
+    const leftWidth = Math.max(
+      1,
+      showTokenWarning ? innerWidth - tokenWarningWidth - 1 : innerWidth,
+    )
     const window = __getSuggestionWindowForTests({
       rows,
       selectedIndex,
@@ -254,8 +279,13 @@ export const PromptInputCompletionPanel = React.memo(
     const selectedSuggestion = suggestions[selectedIndex]
 
     return (
-      <Box flexDirection="row" justifyContent="space-between" paddingX={2}>
-        <Box flexDirection="column">
+      <Box
+        width={panelWidth}
+        overflow="hidden"
+        flexDirection="row"
+        paddingX={horizontalPadding}
+      >
+        <Box flexDirection="column" width={leftWidth} overflow="hidden">
           {window.showTopEllipsis && window.hiddenAbove > 0 && (
             <Text
               dimColor
@@ -268,6 +298,7 @@ export const PromptInputCompletionPanel = React.memo(
               suggestion={suggestion}
               isSelected={window.startIndex + index === selectedIndex}
               theme={theme}
+              maxWidth={leftWidth}
             />
           ))}
           {window.showBottomEllipsis && window.hiddenBelow > 0 && (
@@ -280,20 +311,29 @@ export const PromptInputCompletionPanel = React.memo(
             <HelpText
               emptyDirMessage={emptyDirMessage}
               selectedSuggestion={selectedSuggestion}
-              maxWidth={helpWidth}
+              maxWidth={leftWidth}
+              theme={theme}
             />
           )}
         </Box>
-        <SentryErrorBoundary
-          children={
-            <Box justifyContent="flex-end" gap={1}>
-              <TokenWarning
-                tokenUsage={tokenUsage}
-                contextLimit={contextLimit}
-              />
-            </Box>
-          }
-        />
+        {showTokenWarning && (
+          <Box
+            width={tokenWarningWidth}
+            overflow="hidden"
+            justifyContent="flex-end"
+            marginLeft={1}
+            flexShrink={0}
+          >
+            <SentryErrorBoundary
+              children={
+                <TokenWarning
+                  tokenUsage={tokenUsage}
+                  contextLimit={contextLimit}
+                />
+              }
+            />
+          </Box>
+        )}
       </Box>
     )
   },
@@ -306,7 +346,9 @@ export const PromptInputCompletionPanel = React.memo(
       prevProps.emptyDirMessage === nextProps.emptyDirMessage &&
       prevProps.tokenUsage === nextProps.tokenUsage &&
       prevProps.contextLimit === nextProps.contextLimit &&
-      prevProps.reservedRows === nextProps.reservedRows
+      prevProps.reservedRows === nextProps.reservedRows &&
+      prevProps.rows === nextProps.rows &&
+      prevProps.columns === nextProps.columns
     )
   },
 )

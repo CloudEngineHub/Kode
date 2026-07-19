@@ -18,6 +18,7 @@ import { renderWithTuiStdio } from '#ui-ink/utils/inkRender'
 import { ResumeSessionSelector } from '#ui-ink/components/ResumeSessionSelector'
 import { switchCwdForResume } from '#cli-utils/switchCwdForResume'
 import { clearViewport } from '#cli-utils/terminal'
+import { requestCliExit } from '#cli-utils/exit'
 
 type Props = {
   cwd: string
@@ -133,7 +134,7 @@ export function ResumeConversation({
       cwd={cwd}
       sessions={sessions}
       initialQuery={initialQuery}
-      onCancel={() => process.exit(0)}
+      onCancel={() => requestCliExit(0)}
       onSelect={onSelect}
     />
   )

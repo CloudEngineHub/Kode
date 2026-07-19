@@ -1,13 +1,18 @@
 import { z } from 'zod'
-import type { Tool, ToolUseContext, ValidationResult } from '#core/tooling/Tool'
-import { BunShell } from '#runtime/shell'
+import type {
+  Tool,
+  ToolUseContext,
+  ValidationResult,
+} from '@kode/tool-interface/Tool'
 import {
-  getBackgroundAgentTaskSnapshot,
-  waitForBackgroundAgentTask,
-} from '#core/utils/backgroundTasks'
+  getBackgroundTaskOutputFilePath,
+  getBackgroundTaskSnapshot,
+  readBackgroundTaskOutput,
+  type BackgroundTaskSnapshot,
+  waitForBackgroundTaskSnapshot,
+} from '#core/tasks/backgroundRegistry'
 import { createAssistantMessage } from '#core/utils/messages'
 import { DESCRIPTION, PROMPT, TOOL_NAME_FOR_PROMPT } from './prompt'
-import { getTaskOutputFilePath, readTaskOutput } from '#runtime/taskOutputStore'
 
 const inputSchema = z.strictObject({
   task_id: z.string().describe('The task ID to get output from'),
@@ -77,7 +82,7 @@ function truncateTaskOutput(args: { taskId: string; output: string }): {
   if (args.output.length <= limit)
     return { output: args.output, wasTruncated: false }
 
-  const prefix = `[Truncated. Full output: ${getTaskOutputFilePath(args.taskId)}]\n`
+  const prefix = `[Truncated. Full output: ${getBackgroundTaskOutputFilePath(args.taskId)}]\n`
   const remaining = limit - prefix.length
   if (remaining <= 0)
     return { output: prefix.slice(0, limit), wasTruncated: true }
@@ -91,67 +96,34 @@ function normalizeTaskOutputInput(input: Input): Input {
   return input
 }
 
-function taskStatusFromBash(
-  bg: ReturnType<BunShell['getBackgroundOutput']>,
-): TaskStatus {
-  if (!bg) return 'failed'
-  if (bg.killed) return 'killed'
-  if (bg.code === null) return 'running'
-  return bg.code === 0 ? 'completed' : 'failed'
+function buildTaskSummaryFromSnapshot(
+  snapshot: BackgroundTaskSnapshot,
+): TaskSummary {
+  const rawOutput =
+    readBackgroundTaskOutput(snapshot.taskId) ||
+    (snapshot.taskType === 'local_agent' ? snapshot.resultText || '' : '')
+  const { output } = truncateTaskOutput({
+    taskId: snapshot.taskId,
+    output: rawOutput,
+  })
+
+  return {
+    task_id: snapshot.taskId,
+    task_type: snapshot.taskType,
+    status: snapshot.status,
+    description: snapshot.description,
+    output,
+    exitCode:
+      snapshot.taskType === 'local_bash' ? snapshot.exitCode : undefined,
+    prompt: snapshot.taskType === 'local_agent' ? snapshot.prompt : undefined,
+    result: snapshot.taskType === 'local_agent' ? output : undefined,
+    error: snapshot.taskType === 'local_agent' ? snapshot.error : undefined,
+  }
 }
 
 function buildTaskSummary(taskId: string): TaskSummary | null {
-  const bg = BunShell.getInstance().getBackgroundOutput(taskId)
-  if (bg) {
-    const rawOutput = readTaskOutput(taskId)
-    const { output } = truncateTaskOutput({ taskId, output: rawOutput })
-    return {
-      task_id: taskId,
-      task_type: 'local_bash',
-      status: taskStatusFromBash(bg),
-      description: bg.command,
-      output,
-      exitCode: bg.code,
-    }
-  }
-
-  const agent = getBackgroundAgentTaskSnapshot(taskId)
-  if (agent) {
-    const rawOutput = readTaskOutput(taskId) || agent.resultText || ''
-    const { output } = truncateTaskOutput({ taskId, output: rawOutput })
-    return {
-      task_id: taskId,
-      task_type: 'local_agent',
-      status: agent.status,
-      description: agent.description,
-      output,
-      prompt: agent.prompt,
-      result: output,
-      error: agent.error,
-    }
-  }
-
-  return null
-}
-
-async function waitForBashTaskCompletion(args: {
-  taskId: string
-  timeoutMs: number
-  signal: AbortSignal
-}): Promise<TaskSummary | null> {
-  const { taskId, timeoutMs, signal } = args
-  const startedAt = Date.now()
-
-  while (Date.now() - startedAt < timeoutMs) {
-    if (signal.aborted) return null
-    const summary = buildTaskSummary(taskId)
-    if (!summary) return null
-    if (summary.status !== 'running' && summary.status !== 'pending')
-      return summary
-    await new Promise(resolve => setTimeout(resolve, 100))
-  }
-
-  return buildTaskSummary(taskId)
+  const snapshot = getBackgroundTaskSnapshot(taskId)
+  return snapshot ? buildTaskSummaryFromSnapshot(snapshot) : null
 }
 
 export const TaskOutputTool = {
@@ -213,8 +185,8 @@ export const TaskOutputTool = {
       return { result: false, message: 'Task ID is required', errorCode: 1 }
     }
 
-    const task = buildTaskSummary(input.task_id)
-    if (!task) {
+    const snapshot = getBackgroundTaskSnapshot(input.task_id)
+    if (!snapshot) {
       return {
         result: false,
         message: `No task found with ID: ${input.task_id}`,
@@ -259,23 +231,15 @@ export const TaskOutputTool = {
 
     let finalTask: TaskSummary | null = null
 
-    if (initial.task_type === 'local_agent') {
-      try {
-        const task = await waitForBackgroundAgentTask(
-          taskId,
-          timeoutMs,
-          context.abortController.signal,
-        )
-        finalTask = task ? buildTaskSummary(taskId) : null
-      } catch {
-        finalTask = buildTaskSummary(taskId)
-      }
-    } else {
-      finalTask = await waitForBashTaskCompletion({
+    try {
+      const snapshot = await waitForBackgroundTaskSnapshot({
         taskId,
         timeoutMs,
         signal: context.abortController.signal,
       })
+      finalTask = snapshot ? buildTaskSummaryFromSnapshot(snapshot) : null
+    } catch {
+      finalTask = buildTaskSummary(taskId)
     }
 
     if (!finalTask) {

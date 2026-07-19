@@ -22,6 +22,7 @@ import { AssistantThinkingMessage } from './messages/AssistantThinkingMessage'
 import { AssistantRedactedThinkingMessage } from './messages/AssistantRedactedThinkingMessage'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import type { ToolUseLikeBlockParam } from '#core/utils/anthropic'
+import { computeAvailableColumns } from '#ui-ink/primitives/layout/viewportColumns'
 
 type Props = {
   message: UserMessage | AssistantMessage
@@ -61,7 +62,7 @@ export function Message({
       <Box flexDirection="column" width="100%">
         {message.message.content.map((_, index) => (
           <AssistantMessage
-            key={index}
+            key={getContentBlockRenderKey(message, _, index)}
             param={_}
             costUSD={message.costUSD}
             durationMs={message.durationMs}
@@ -92,7 +93,7 @@ export function Message({
     <Box flexDirection="column" width="100%">
       {content.map((_, index) => (
         <UserMessage
-          key={index}
+          key={getContentBlockRenderKey(message, _, index)}
           message={message}
           messages={messages}
           addMargin={addMargin}
@@ -113,6 +114,25 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 function getBlockType(value: unknown): string {
   const record = asRecord(value)
   return record && typeof record.type === 'string' ? record.type : ''
+}
+
+function getContentBlockRenderKey(
+  message: UserMessage | AssistantMessage,
+  block: unknown,
+  index: number,
+): string {
+  const record = asRecord(block)
+  const type = getBlockType(block) || 'block'
+  const blockID =
+    record && typeof record.id === 'string'
+      ? record.id
+      : record && typeof record.tool_use_id === 'string'
+        ? record.tool_use_id
+        : null
+
+  return blockID
+    ? `${message.uuid}:${type}:${blockID}`
+    : `${message.uuid}:${type}:${index}`
 }
 
 function UserMessage({
@@ -139,6 +159,10 @@ function UserMessage({
   key?: React.Key
 }): React.ReactNode {
   const { columns } = useTerminalSize()
+  const toolResultWidth = computeAvailableColumns({
+    columns,
+    reservedColumns: 5,
+  })
   switch (param.type) {
     case 'text':
       return <UserTextMessage addMargin={addMargin} param={param} />
@@ -152,7 +176,7 @@ function UserMessage({
           messages={messages}
           tools={tools}
           verbose={verbose}
-          width={columns - 5}
+          width={toolResultWidth}
         />
       )
   }
@@ -245,6 +269,7 @@ function AssistantMessage({
         <AssistantThinkingMessage
           addMargin={addMargin}
           param={param as ThinkingBlockParam}
+          shouldAnimate={shouldAnimate}
         />
       )
     default:

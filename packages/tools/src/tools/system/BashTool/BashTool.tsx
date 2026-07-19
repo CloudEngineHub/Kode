@@ -4,13 +4,17 @@ import * as React from 'react'
 import { z } from 'zod'
 import { PRODUCT_NAME } from '#core/constants/product'
 import { LEGACY_ENV } from '#core/compat/legacyEnv'
-import { Tool, ValidationResult, ToolUseContext } from '#core/tooling/Tool'
+import {
+  Tool,
+  ValidationResult,
+  ToolUseContext,
+} from '@kode/tool-interface/Tool'
 import { splitCommand } from '#core/utils/commands'
 import { isInDirectory } from '#core/utils/file'
-import { getBunShellSandboxPlan } from '#core/utils/sandbox/bunShellSandboxPlan'
+import { getBunShellSandboxPlan } from '#core/sandbox/bunShellSandboxPlan'
 import { getCwd, getOriginalCwd } from '#core/utils/state'
-import { isBashCommandReadOnly } from '#core/utils/permissions/bashReadOnly'
-import { getTaskOutputFilePath } from '#runtime/taskOutputStore'
+import { isBashCommandReadOnly } from '@kode/permissions/bash'
+import { getBackgroundTaskOutputFilePath } from '#core/tasks/backgroundRegistry'
 import BashToolResultMessage from './BashToolResultMessage'
 import { DEFAULT_TIMEOUT_MS, getBashToolPrompt } from './prompt'
 import { formatDuration } from './text'
@@ -278,7 +282,7 @@ export const BashTool = {
 
     const id = backgroundTaskId ?? bashId
     const backgroundLine = id
-      ? `Command running in background with ID: ${id}. Output is being written to: ${getTaskOutputFilePath(id)}`
+      ? `Command running in background with ID: ${id}. Output is being written to: ${getBackgroundTaskOutputFilePath(id)}`
       : ''
 
     return [trimmedStdout, trimmedStderr, backgroundLine]

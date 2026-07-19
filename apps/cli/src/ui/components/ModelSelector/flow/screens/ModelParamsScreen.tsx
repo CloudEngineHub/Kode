@@ -130,6 +130,7 @@ export function ModelParamsScreen({
                   field.component === 'select' ? (
                     field.name === 'maxTokens' ? (
                       <Select
+                        focusScope={`model-params:${selectedModel}:maxTokens`}
                         options={field.options || []}
                         onChange={value => {
                           const numValue = parseInt(value)
@@ -147,6 +148,7 @@ export function ModelParamsScreen({
                       />
                     ) : field.name === 'reasoningEffort' ? (
                       <Select
+                        focusScope={`model-params:${selectedModel}:reasoningEffort`}
                         options={reasoningEffortOptions}
                         onChange={value => {
                           if (isReasoningEffortOption(value)) {
@@ -163,6 +165,7 @@ export function ModelParamsScreen({
                       />
                     ) : field.name === 'requestStrategy' ? (
                       <Select
+                        focusScope={`model-params:${selectedModel}:requestStrategy`}
                         options={requestStrategyOptions}
                         onChange={value => {
                           setRequestStrategy(value as RequestStrategyOption)

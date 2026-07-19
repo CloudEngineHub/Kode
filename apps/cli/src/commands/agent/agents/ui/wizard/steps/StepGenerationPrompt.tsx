@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react'
 import { Box, Text } from 'ink'
 import TextInput from '#ui-ink/components/TextInput'
-import type { AgentConfig } from '#core/utils/agentLoader'
+import type { AgentConfig } from '@kode/agent'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { generateAgentDraft } from '../../../generation'
 import { themeColor } from '../../colors'

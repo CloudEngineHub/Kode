@@ -14,5 +14,10 @@ export type Session = {
   cwd: string | null
   createdAt: string | null
   modifiedAt: string | null
+  /** Present for sessions created by the persistent-session fork API. */
+  forkedFromSessionId?: string | null
+  forkRootSessionId?: string | null
+  /** A server-owned archive tombstone; omitted for legacy session records. */
+  archivedAt?: string | null
   events?: AgentEvent[]
 }

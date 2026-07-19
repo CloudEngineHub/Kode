@@ -1,6 +1,6 @@
 import { Box, Text } from 'ink'
 import * as React from 'react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import figures from 'figures'
 import { getTheme } from '#core/utils/theme'
 import {
@@ -16,6 +16,7 @@ import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import { getWindowedList } from '#ui-ink/primitives/list/windowedList'
 import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { ModelSelector } from './ModelSelector'
+import { useScopedIndexState } from '#ui-ink/hooks/useScopedIndexState'
 
 type Props = {
   onClose: () => void
@@ -25,7 +26,6 @@ export function ModelListManager({ onClose }: Props): React.ReactNode {
   const config = getGlobalConfigCached()
   const theme = getTheme()
   const layout = useScreenLayout()
-  const [selectedIndex, setSelectedIndex] = useState(0)
   const [showModelSelector, setShowModelSelector] = useState(false)
   const [editingModelProfile, setEditingModelProfile] =
     useState<ModelProfile | null>(null)
@@ -70,13 +70,10 @@ export function ModelListManager({ onClose }: Props): React.ReactNode {
       ...modelItems,
     ]
   }, [availableModels, config.modelPointers, refreshKey])
-
-  useEffect(() => {
-    setSelectedIndex(prev => {
-      if (menuItems.length === 0) return 0
-      return Math.max(0, Math.min(prev, menuItems.length - 1))
-    })
-  }, [menuItems.length])
+  const [selectedIndex, setSelectedIndex] = useScopedIndexState({
+    scope: 'model-list-manager',
+    itemCount: menuItems.length,
+  })
 
   const handleDeleteModel = useCallback(
     (modelName: string) => {

@@ -23,6 +23,17 @@ function getSubagentType(input: unknown): string | null {
   return typeof value === 'string' ? value : null
 }
 
+function getTaskStatusLabel(args: {
+  isQueued: boolean
+  isInProgress: boolean
+  isError: boolean
+}): string | null {
+  if (args.isError) return 'failed'
+  if (args.isInProgress) return 'running'
+  if (args.isQueued) return 'queued'
+  return null
+}
+
 type Props = {
   param: ToolUseLikeBlockParam
   costUSD: number
@@ -63,6 +74,10 @@ export function AssistantToolUseMessage({
     !inProgressToolUseIDs.has(param.id) && unresolvedToolUseIDs.has(param.id)
   const isError = erroredToolUseIDs.has(param.id)
   const isInProgress = inProgressToolUseIDs.has(param.id)
+  const taskStatusLabel =
+    tool.name === 'Task'
+      ? getTaskStatusLabel({ isQueued, isInProgress, isError })
+      : null
 
   // Handle thinking tool with specialized rendering
   if (tool === ThinkTool) {
@@ -123,15 +138,23 @@ export function AssistantToolUseMessage({
             />
           )}
           {tool.name === 'Task' && param.input ? (
-            <TaskToolMessage
-              agentType={
-                parsedInput.success
-                  ? (getSubagentType(parsedInput.data) ?? 'general-purpose')
-                  : 'general-purpose'
-              }
-              bold={!isQueued}
-              children={String(userFacingToolName || '')}
-            />
+            <>
+              <TaskToolMessage
+                agentType={
+                  parsedInput.success
+                    ? (getSubagentType(parsedInput.data) ?? 'general-purpose')
+                    : 'general-purpose'
+                }
+                bold={!isQueued}
+                children={String(userFacingToolName || '')}
+              />
+              {taskStatusLabel && (
+                <Text color={paramColor} dimColor>
+                  {' '}
+                  [{taskStatusLabel}]
+                </Text>
+              )}
+            </>
           ) : (
             hasToolName && (
               <Text color={toolNameColor} bold={!isQueued} wrap="truncate-end">

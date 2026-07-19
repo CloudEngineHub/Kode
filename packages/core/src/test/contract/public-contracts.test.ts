@@ -128,6 +128,7 @@ describe('public contracts (refactor safety net)', () => {
     expect(helpRes.stdout).toContain('Usage: kode')
     expect(helpRes.stdout).toContain('--help')
     expect(helpRes.stdout).toContain('--print')
+    expect(helpRes.stdout).toContain('--headless')
 
     const pkg = JSON.parse(
       readFileSync(join(process.cwd(), 'package.json'), 'utf8'),

@@ -1,6 +1,14 @@
 import { describe, expect, test } from 'bun:test'
 
-import { __computeCompletionRefreshForTests } from './hook'
+import {
+  __computeCompletionActivationForTests,
+  __computeCompletionRefreshForTests,
+  __shouldLoadMentionSuggestionsForTests,
+} from './hook'
+import type {
+  CompletionContext,
+  UnifiedSuggestion,
+} from '#cli-utils/completion/types'
 import type { CompletionState } from './types'
 
 function makeState(overrides: Partial<CompletionState>): CompletionState {
@@ -15,6 +23,62 @@ function makeState(overrides: Partial<CompletionState>): CompletionState {
     ...overrides,
   }
 }
+
+const commandContext: CompletionContext = {
+  type: 'command',
+  prefix: '/h',
+  startPos: 0,
+  endPos: 2,
+  trigger: '/',
+}
+
+const commandSuggestions: UnifiedSuggestion[] = [
+  { value: 'help', displayValue: 'help', type: 'command', score: 10 },
+  {
+    value: 'history',
+    displayValue: 'history',
+    type: 'command',
+    score: 9,
+  },
+]
+
+describe('__computeCompletionActivationForTests', () => {
+  test('does not reset selection for the same active completion list', () => {
+    const result = __computeCompletionActivationForTests({
+      state: makeState({
+        isActive: true,
+        context: commandContext,
+        suggestions: commandSuggestions,
+        selectedIndex: 1,
+      }),
+      context: commandContext,
+      suggestions: commandSuggestions,
+    })
+
+    expect(result.action).toBe('none')
+  })
+
+  test('starts from the first suggestion when the completion context changes', () => {
+    const result = __computeCompletionActivationForTests({
+      state: makeState({
+        isActive: true,
+        context: commandContext,
+        suggestions: commandSuggestions,
+        selectedIndex: 1,
+      }),
+      context: {
+        ...commandContext,
+        prefix: '/hi',
+        endPos: 3,
+      },
+      suggestions: commandSuggestions,
+    })
+
+    expect(result.action).toBe('activate')
+    if (result.action !== 'activate') return
+    expect(result.selectedIndex).toBe(0)
+  })
+})
 
 describe('__computeCompletionRefreshForTests', () => {
   test('refreshes active loading suggestions when new command matches arrive', () => {
@@ -84,5 +148,71 @@ describe('__computeCompletionRefreshForTests', () => {
     })
 
     expect(result.action).toBe('none')
+  })
+})
+
+describe('__shouldLoadMentionSuggestionsForTests', () => {
+  test('does not load mention providers for ordinary prompt text', () => {
+    expect(
+      __shouldLoadMentionSuggestionsForTests({
+        isEnabled: true,
+        currentContext: {
+          type: 'file',
+          prefix: 'hello',
+          startPos: 0,
+          endPos: 5,
+          trigger: null,
+        },
+        activeContext: null,
+      }),
+    ).toBe(false)
+  })
+
+  test('loads mention providers only after agent mention context appears', () => {
+    expect(
+      __shouldLoadMentionSuggestionsForTests({
+        isEnabled: true,
+        currentContext: {
+          type: 'agent',
+          prefix: 'run-agent',
+          startPos: 0,
+          endPos: 10,
+          trigger: '@',
+        },
+        activeContext: null,
+      }),
+    ).toBe(true)
+  })
+
+  test('keeps mention providers enabled while an agent completion panel is active', () => {
+    expect(
+      __shouldLoadMentionSuggestionsForTests({
+        isEnabled: true,
+        currentContext: null,
+        activeContext: {
+          type: 'agent',
+          prefix: '',
+          startPos: 0,
+          endPos: 1,
+          trigger: '@',
+        },
+      }),
+    ).toBe(true)
+  })
+
+  test('does not load mention providers when completion is disabled', () => {
+    expect(
+      __shouldLoadMentionSuggestionsForTests({
+        isEnabled: false,
+        currentContext: {
+          type: 'agent',
+          prefix: '',
+          startPos: 0,
+          endPos: 1,
+          trigger: '@',
+        },
+        activeContext: null,
+      }),
+    ).toBe(false)
   })
 })

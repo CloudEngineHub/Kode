@@ -3,7 +3,7 @@ import {
   loadSettingsWithLegacyFallback,
   saveSettingsToPrimaryAndSyncLegacy,
 } from '#config'
-import { getDisableAllHooksState } from '#core/hooks/disableAllHooks'
+import { getDisableAllHooksState } from '@kode/hooks/disableAllHooks'
 import { getCwd } from '#core/utils/state'
 
 type UserSettings = {

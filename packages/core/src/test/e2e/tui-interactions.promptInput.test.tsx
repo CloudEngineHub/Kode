@@ -5,12 +5,14 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { Box, Text } from 'ink'
 import PromptInput from '#ui-ink/components/PromptInput'
+import type { PastedImageAttachment } from '#ui-ink/components/PromptInput/pasteTypes'
 import type { PromptMode } from '#ui-ink/components/PromptInput/types'
 import { KeypressProvider } from '#ui-ink/contexts/KeypressContext'
 import { PermissionProvider } from '#ui-ink/contexts/PermissionContext'
 import { useCancelRequest } from '#ui-ink/hooks/useCancelRequest'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { setCwd } from '#core/utils/state'
+import { clearConfigCacheForTesting } from '#config'
 import { createInkHarnessManager, createInkTestHarness } from './inkTestHarness'
 
 function PromptInputHarness({
@@ -64,6 +66,7 @@ function PromptInputHarness({
         {showRaw ? (
           <Box flexDirection="column">
             <Text>RAW:{JSON.stringify(input)}</Text>
+            <Text>SUBMIT_COUNT:{submitCount}</Text>
             {prompt}
           </Box>
         ) : (
@@ -105,6 +108,8 @@ function PromptInputCancelHarnessInner({
     useState<AbortController | null>(() => new AbortController())
   const [isLoading, setIsLoading] = useState(initialIsLoading)
   const [cancelled, setCancelled] = useState(false)
+  const [queryCount, setQueryCount] = useState(0)
+  const [cancelRequestKey, setCancelRequestKey] = useState(0)
 
   useCancelRequest(
     () => {},
@@ -112,6 +117,7 @@ function PromptInputCancelHarnessInner({
     () => {},
     () => {
       abortController?.abort()
+      setCancelRequestKey(prev => prev + 1)
       setCancelled(true)
       setIsLoading(false)
     },
@@ -126,13 +132,17 @@ function PromptInputCancelHarnessInner({
       <Text>LOADING:{String(isLoading)}</Text>
       <Text>ABORTED:{String(abortController?.signal.aborted ?? false)}</Text>
       <Text>CANCELLED:{String(cancelled)}</Text>
+      <Text>QUERY_COUNT:{queryCount}</Text>
       <PromptInput
         commands={[]}
         forkNumber={0}
         messageLogName="tui"
         isDisabled={false}
         isLoading={isLoading}
-        onQuery={async () => {}}
+        onQuery={async () => {
+          setQueryCount(prev => prev + 1)
+          setIsLoading(false)
+        }}
         debug={false}
         verbose={false}
         messages={[]}
@@ -150,6 +160,7 @@ function PromptInputCancelHarnessInner({
         setForkConvoWithMessagesOnTheNextRender={() => {}}
         readFileTimestamps={{}}
         abortController={abortController}
+        cancelRequestKey={cancelRequestKey}
       />
     </Box>
   )
@@ -264,11 +275,7 @@ function DraftPastePersistenceHarnessInner(): React.ReactNode {
   const [showPrompt, setShowPrompt] = useState(true)
   const [draftPastes, setDraftPastes] = useState<{
     pastedTexts: Array<{ placeholder: string; text: string }>
-    pastedImages: Array<{
-      placeholder: string
-      data: string
-      mediaType: string
-    }>
+    pastedImages: PastedImageAttachment[]
   }>({
     pastedTexts: [{ placeholder: '[Pasted text #1]', text: 'PASTE' }],
     pastedImages: [],
@@ -279,6 +286,10 @@ function DraftPastePersistenceHarnessInner(): React.ReactNode {
     (inputChar, key) => {
       if (key.ctrl && inputChar === 'g') {
         setShowPrompt(prev => !prev)
+        return true
+      }
+      if (key.ctrl && inputChar === 'r') {
+        setInput('hello world')
         return true
       }
     },
@@ -432,6 +443,22 @@ function PromptQueueAutoDrainHarness({
 
 const harnessManager = createInkHarnessManager()
 
+async function waitForOutput(
+  harness: ReturnType<typeof createInkTestHarness>,
+  expected: string,
+  timeoutMs = 3_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (harness.getOutput().includes(expected)) {
+      await harness.wait(50)
+      return
+    }
+    await harness.wait(20)
+  }
+  throw new Error(`Timed out waiting for prompt input output: ${expected}`)
+}
+
 afterEach(async () => {
   await harnessManager.cleanup()
 })
@@ -463,6 +490,29 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
     expect(out).not.toContain('RAW:\"loading...')
   })
 
+  test('Completion: Enter submits the current input on the first press', async () => {
+    await setCwd(process.cwd())
+
+    const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
+    const h = createInkTestHarness(
+      <PromptInputHarness conversationKey={conversationKey} showRaw={true} />,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    h.clearOutput()
+
+    h.stdin.write('./d')
+    await h.wait(75)
+    expect(h.getOutput()).toContain('RAW:\"./d\"')
+
+    h.clearOutput()
+    h.stdin.write('\r')
+    await h.wait(200)
+
+    expect(h.getOutput()).toContain('RAW:\"\"')
+  })
+
   test('submit clears the input value', async () => {
     const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
     const h = createInkTestHarness(
@@ -484,7 +534,171 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
     expect(h.getOutput()).toContain('RAW:\"\"')
   })
 
-  test('shift+tab cycles permission mode and renders CompactModeIndicator', async () => {
+  test('rapid Enter after typing submits without requiring a second press', async () => {
+    const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
+    const h = createInkTestHarness(
+      <PromptInputHarness conversationKey={conversationKey} showRaw={true} />,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    h.clearOutput()
+
+    h.stdin.write('x')
+    h.stdin.write('\r')
+    await h.wait(200)
+
+    expect(h.getOutput()).toContain('SUBMIT_COUNT:1')
+  })
+
+  test('typing and Enter delivered in the same stdin chunk submits on the first press', async () => {
+    const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
+    const h = createInkTestHarness(
+      <PromptInputHarness conversationKey={conversationKey} showRaw={true} />,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    h.clearOutput()
+
+    h.stdin.write('hello\r')
+    await h.wait(200)
+
+    expect(h.getOutput()).toContain('SUBMIT_COUNT:1')
+    expect(h.getOutput()).toContain('RAW:""')
+  })
+
+  test('non-ASCII input followed by Enter submits on the first intentional press', async () => {
+    const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
+    const h = createInkTestHarness(
+      <PromptInputHarness conversationKey={conversationKey} showRaw={true} />,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    h.clearOutput()
+
+    h.stdin.write('中文')
+    h.stdin.write('\r')
+    await h.wait(200)
+
+    expect(h.getOutput()).toContain('SUBMIT_COUNT:1')
+    expect(h.getOutput()).toContain('RAW:""')
+  })
+
+  test('delayed paste placeholder uses latest cursor position', async () => {
+    await setCwd(process.cwd())
+
+    const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
+    const h = createInkTestHarness(
+      <PromptInputHarness conversationKey={conversationKey} showRaw={true} />,
+    )
+    harnessManager.track(h)
+
+    await waitForOutput(h, 'RAW:""')
+    h.clearOutput()
+
+    h.stdin.write('hi')
+    await waitForOutput(h, 'RAW:"hi"')
+
+    // Long paste chunks are aggregated on a timer; typing during that window
+    // should not be lost or inserted relative to a stale render closure.
+    h.stdin.write('a'.repeat(801))
+    await h.wait(25)
+    h.stdin.write('!')
+    await waitForOutput(h, 'RAW:"hi![Pasted text #1]"')
+
+    expect(h.getOutput()).toContain('RAW:\"hi![Pasted text #1]\"')
+
+    h.stdin.write('\r')
+    await h.wait(150)
+  })
+
+  test('medium single-line paste folds before rendering full text', async () => {
+    await setCwd(process.cwd())
+
+    const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
+    const h = createInkTestHarness(
+      <PromptInputHarness conversationKey={conversationKey} showRaw={true} />,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    h.clearOutput()
+
+    h.stdin.write('hi')
+    await h.wait(75)
+    h.stdin.write('a'.repeat(200))
+    await h.wait(350)
+
+    const output = h.getOutput()
+    expect(output).toContain('RAW:"hi[Pasted text #1]"')
+    expect(output).not.toContain(`RAW:"hi${'a'.repeat(200)}"`)
+
+    h.stdin.write('\r')
+    await h.wait(150)
+  })
+
+  test('bracketed paste folds promptly without waiting for legacy paste aggregation', async () => {
+    await setCwd(process.cwd())
+
+    const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
+    const h = createInkTestHarness(
+      <PromptInputHarness conversationKey={conversationKey} showRaw={true} />,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    h.clearOutput()
+
+    h.stdin.write(`\x1b[200~${'a'.repeat(200)}\x1b[201~`)
+    await h.wait(75)
+
+    const output = h.getOutput()
+    expect(output).toContain('RAW:"[Pasted text #1]"')
+    expect(output).not.toContain(`RAW:"${'a'.repeat(200)}"`)
+
+    h.clearOutput()
+    h.stdin.write('\r')
+    await h.wait(200)
+
+    expect(h.getOutput()).toContain('SUBMIT_COUNT:1')
+  })
+
+  test('rapid Enter after a paste-sized chunk shows paste guard without inserting newline', async () => {
+    await setCwd(process.cwd())
+
+    const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
+    const h = createInkTestHarness(
+      <PromptInputHarness conversationKey={conversationKey} showRaw={true} />,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    h.clearOutput()
+
+    h.stdin.write('a'.repeat(801))
+    h.stdin.write('\r')
+    await h.wait(100)
+
+    const guardedOutput = h.getOutput()
+    expect(guardedOutput).toContain(
+      'Paste detected. Added as a placeholder; press Enter to send.',
+    )
+    expect(guardedOutput).not.toContain('SUBMIT_COUNT:1')
+    expect(guardedOutput).not.toContain('RAW:"\\n')
+
+    await h.wait(200)
+    expect(h.getOutput()).toContain('RAW:"[Pasted text #1]"')
+
+    h.clearOutput()
+    h.stdin.write('\r')
+    await h.wait(200)
+
+    expect(h.getOutput()).toContain('SUBMIT_COUNT:1')
+  })
+
+  test('shift+tab cycles permission mode in the prompt status line', async () => {
     const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
     const h = createInkTestHarness(
       <PromptInputHarness conversationKey={conversationKey} />,
@@ -497,8 +711,8 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
     h.stdin.write('\u001B[Z')
     await h.wait(50)
 
-    expect(h.getOutput()).toContain('plan mode')
-    expect(h.getOutput()).toContain('(shift+tab to cycle)')
+    expect(h.getOutput()).toContain('Tools Plan (shift+tab)')
+    expect(h.getOutput()).not.toContain('Tool permissions:')
   })
 
   test('shift+enter inserts newline (CSI-u)', async () => {
@@ -653,6 +867,7 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
     process.env.USERPROFILE = homeDir
     process.env.KODE_STATUSLINE_ENABLED = '1'
     process.env.KODE_CONFIG_DIR = join(homeDir, '.kode')
+    clearConfigCacheForTesting()
 
     mkdirSync(join(homeDir, '.kode'), { recursive: true })
     const cmd =
@@ -690,6 +905,7 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
       if (originalConfigDir === undefined) delete process.env.KODE_CONFIG_DIR
       else process.env.KODE_CONFIG_DIR = originalConfigDir
 
+      clearConfigCacheForTesting()
       rmSync(homeDir, { recursive: true, force: true })
     }
   })
@@ -697,7 +913,7 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
   test('Ctrl+C cancels running task', async () => {
     const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
     const h = createInkTestHarness(
-      <PromptInputCtrlCCancelHarness
+      <PromptInputCancelHarness
         conversationKey={conversationKey}
         initialIsLoading={true}
       />,
@@ -714,6 +930,7 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
     expect(out).toContain('LOADING:false')
     expect(out).toContain('ABORTED:true')
     expect(out).toContain('CANCELLED:true')
+    expect(out).toContain('QUERY_COUNT:0')
   })
 
   test('alt+up recalls queued/pending prompt for editing', async () => {
@@ -779,6 +996,43 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
     expect(out).toContain('LOADING:false')
     expect(out).toContain('ABORTED:true')
     expect(out).toContain('CANCELLED:true')
+    expect(out).toContain('QUERY_COUNT:0')
+
+    await h.wait(700)
+    expect(h.getOutput()).toContain('QUERY_COUNT:0')
+  })
+
+  test('Ctrl+C cancels running task and discards queued prompts', async () => {
+    const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
+    const h = createInkTestHarness(
+      <PromptInputCancelHarness
+        conversationKey={conversationKey}
+        initialIsLoading={true}
+      />,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    h.clearOutput()
+
+    h.stdin.write('hello')
+    await h.wait(75)
+
+    h.stdin.write('\r')
+    await h.wait(75)
+
+    h.stdin.write('\u0003')
+    await h.wait(100)
+
+    const out = h.getOutput()
+    expect(out).toContain('RAW:\"\"')
+    expect(out).toContain('LOADING:false')
+    expect(out).toContain('ABORTED:true')
+    expect(out).toContain('CANCELLED:true')
+    expect(out).toContain('QUERY_COUNT:0')
+
+    await h.wait(700)
+    expect(h.getOutput()).toContain('QUERY_COUNT:0')
   })
 
   test('Esc cancels running task when no queued prompt exists', async () => {
@@ -831,6 +1085,28 @@ describe('TUI E2E regression (Ink render): PromptInput', () => {
     const out = h.getOutput()
     expect(out).toContain('SUB:\"hello PASTE world\"')
     expect(out).not.toContain('SUB:\"hello [Pasted text #1] world\"')
+  })
+
+  test('removed pasted text placeholders are not expanded on submit', async () => {
+    const conversationKey = `tui:${Math.random().toString(16).slice(2)}`
+    const h = createInkTestHarness(
+      <DraftPastePersistenceHarness conversationKey={conversationKey} />,
+    )
+    harnessManager.track(h)
+
+    await h.wait(25)
+    h.clearOutput()
+
+    // Simulate editing the prompt so the placeholder is no longer present.
+    h.stdin.write('\x12')
+    await h.wait(75)
+
+    h.stdin.write('\r')
+    await h.wait(150)
+
+    const out = h.getOutput()
+    expect(out).toContain('SUB:\"hello world\"')
+    expect(out).not.toContain('SUB:\"hello PASTE world\"')
   })
 
   test('up arrow on middle line moves cursor up (not history)', async () => {

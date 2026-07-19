@@ -3,12 +3,19 @@ import { AssistantMessage } from '#core/query'
 import { setRequestStatus } from '#core/utils/requestStatus'
 import { randomUUID } from 'crypto'
 import { createAnthropicUsage } from '#core/utils/anthropic'
+import {
+  emitAssistantStreamUpdate,
+  type AssistantStreamUpdateOptions,
+} from '@kode/tool-interface/assistantStreamUpdate'
 
 export async function processResponsesStream(
   stream: AsyncGenerator<StreamingEvent>,
   startTime: number,
   fallbackResponseId: string,
+  options?: AssistantStreamUpdateOptions,
 ): Promise<{ assistantMessage: AssistantMessage; rawResponse: any }> {
+  emitAssistantStreamUpdate(options, { type: 'start' })
+
   const contentBlocks: any[] = []
   const usage: any = {
     prompt_tokens: 0,
@@ -18,6 +25,21 @@ export async function processResponsesStream(
   let responseId = fallbackResponseId
   const pendingToolCalls: any[] = []
   let hasMarkedStreaming = false
+  let hasVisibleOutput = false
+  let streamError: string | null = null
+
+  const appendThinkingDelta = (delta: string) => {
+    const last = contentBlocks[contentBlocks.length - 1]
+    if (last?.type === 'thinking') {
+      last.thinking += delta
+      return
+    }
+    contentBlocks.push({
+      type: 'thinking',
+      thinking: delta,
+      signature: '',
+    })
+  }
 
   for await (const event of stream) {
     if (event.type === 'message_start') {
@@ -25,7 +47,36 @@ export async function processResponsesStream(
       continue
     }
 
+    if (event.type === 'message_stop') {
+      const stoppedResponseId = event.message?.responseId ?? event.message?.id
+      if (typeof stoppedResponseId === 'string' && stoppedResponseId) {
+        responseId = stoppedResponseId
+      }
+      continue
+    }
+
+    if (event.type === 'error') {
+      const message = event.error || 'OpenAI stream error'
+      if (!hasVisibleOutput && pendingToolCalls.length === 0) {
+        throw new Error(message)
+      }
+      streamError = message
+      continue
+    }
+
+    if (event.type === 'thinking_delta') {
+      if (event.delta) appendThinkingDelta(event.delta)
+      continue
+    }
+
     if (event.type === 'text_delta') {
+      if (event.delta) {
+        emitAssistantStreamUpdate(options, {
+          type: 'text_delta',
+          delta: event.delta,
+        })
+        hasVisibleOutput = true
+      }
       if (!hasMarkedStreaming) {
         setRequestStatus({ kind: 'streaming' })
         hasMarkedStreaming = true
@@ -42,6 +93,7 @@ export async function processResponsesStream(
     if (event.type === 'tool_request') {
       setRequestStatus({ kind: 'tool', detail: event.tool?.name })
       pendingToolCalls.push(event.tool)
+      hasVisibleOutput = true
       continue
     }
 
@@ -83,7 +135,7 @@ export async function processResponsesStream(
       role: 'assistant',
       content: contentBlocks,
       stop_details: null,
-      stop_reason: 'end_turn',
+      stop_reason: streamError ? 'max_tokens' : 'end_turn',
       stop_sequence: null,
       type: 'message',
       usage: createAnthropicUsage({
@@ -109,6 +161,7 @@ export async function processResponsesStream(
       id: responseId,
       content: contentBlocks,
       usage,
+      ...(streamError ? { error: streamError } : {}),
     },
   }
 }

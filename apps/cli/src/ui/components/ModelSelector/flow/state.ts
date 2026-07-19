@@ -15,9 +15,7 @@ export type ModelSelectorScreen =
 export type ModelSelectorScreenStack = ModelSelectorScreen[]
 
 export type BackEffect =
-  | { type: 'exit' }
-  | { type: 'resetProviderFocus' }
-  | null
+  { type: 'exit' } | { type: 'resetProviderFocus' } | null
 
 export function createInitialScreenStack(_opts?: {
   skipModelType?: boolean

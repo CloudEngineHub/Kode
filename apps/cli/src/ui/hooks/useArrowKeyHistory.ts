@@ -2,7 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { getHistoryWithPastes } from '#core/history'
 import type { PromptMode } from '#ui-ink/components/PromptInput/types'
 
-const FAST_BROWSE_WINDOW_MS = 1500
+const HISTORY_PRELOAD_DELAY_MS = 100
+
+type HistoryEntryWithPastes = {
+  display: string
+  pastedTexts: Array<{ placeholder: string; text: string }>
+}
 
 export type ArrowKeyHistorySnapshot<Extra> = {
   text: string
@@ -11,64 +16,87 @@ export type ArrowKeyHistorySnapshot<Extra> = {
   extra: Extra
 }
 
+export function parsePromptHistoryDisplay(display: string): {
+  text: string
+  mode: PromptMode
+} {
+  if (display.startsWith('&')) {
+    return { mode: 'background', text: display.slice(1) }
+  }
+  if (display.startsWith('#')) {
+    return { mode: 'prompt', text: `/note ${display.slice(1)}` }
+  }
+  return { mode: 'prompt', text: display }
+}
+
 export function useArrowKeyHistory<Extra>(args: {
   current: ArrowKeyHistorySnapshot<Extra>
   emptyExtra: Extra
+  historyScopeKey?: string
+  loadHistory?: () => HistoryEntryWithPastes[]
   onRestore: (snapshot: ArrowKeyHistorySnapshot<Extra>) => void
-  buildExtraFromHistoryEntry?: (entry: {
-    display: string
-    pastedTexts: Array<{ placeholder: string; text: string }>
-  }) => Extra
+  buildExtraFromHistoryEntry?: (entry: HistoryEntryWithPastes) => Extra
 }) {
-  const { current, emptyExtra, onRestore, buildExtraFromHistoryEntry } = args
+  const {
+    current,
+    emptyExtra,
+    historyScopeKey,
+    loadHistory = getHistoryWithPastes,
+    onRestore,
+    buildExtraFromHistoryEntry,
+  } = args
 
   const [historyIndex, setHistoryIndex] = useState(0)
   const historyIndexRef = useRef(0)
-  useEffect(() => {
-    historyIndexRef.current = historyIndex
-  }, [historyIndex])
+  historyIndexRef.current = historyIndex
 
   const draftSnapshotRef = useRef<ArrowKeyHistorySnapshot<Extra> | null>(null)
-  const historySnapshotRef = useRef<Array<{
-    display: string
-    pastedTexts: Array<{ placeholder: string; text: string }>
-  }> | null>(null)
-  const lastHistoryNavTimeRef = useRef(0)
+  const historySnapshotRef = useRef<HistoryEntryWithPastes[] | null>(null)
+  const preloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const currentRef = useRef(current)
+  currentRef.current = current
+  const loadHistoryRef = useRef(loadHistory)
+  loadHistoryRef.current = loadHistory
+
+  const clearPreloadTimer = useCallback(() => {
+    if (!preloadTimerRef.current) return
+    clearTimeout(preloadTimerRef.current)
+    preloadTimerRef.current = null
+  }, [])
+
+  const scheduleHistoryPreload = useCallback(() => {
+    clearPreloadTimer()
+    preloadTimerRef.current = setTimeout(() => {
+      preloadTimerRef.current = null
+      if (historySnapshotRef.current) return
+      historySnapshotRef.current = loadHistoryRef.current()
+    }, HISTORY_PRELOAD_DELAY_MS)
+  }, [clearPreloadTimer])
+
   useEffect(() => {
-    currentRef.current = current
-  }, [current])
+    historyIndexRef.current = 0
+    setHistoryIndex(0)
+    draftSnapshotRef.current = null
+    historySnapshotRef.current = null
+    scheduleHistoryPreload()
+
+    return clearPreloadTimer
+  }, [clearPreloadTimer, historyScopeKey, scheduleHistoryPreload])
 
   const getHistorySnapshot = () => {
     if (!historySnapshotRef.current) {
-      historySnapshotRef.current = getHistoryWithPastes()
+      historySnapshotRef.current = loadHistoryRef.current()
     }
     return historySnapshotRef.current
   }
 
   const updateFromHistoryEntry = (
-    entry:
-      | {
-          display: string
-          pastedTexts: Array<{ placeholder: string; text: string }>
-        }
-      | undefined,
+    entry: HistoryEntryWithPastes | undefined,
     cursor: 'start' | 'end',
   ) => {
     if (entry === undefined) return
-    let mode: PromptMode = 'prompt'
-    let text = entry.display
-    if (entry.display.startsWith('!')) {
-      mode = 'bash'
-      text = entry.display.slice(1)
-    } else if (entry.display.startsWith('&')) {
-      mode = 'background'
-      text = entry.display.slice(1)
-    } else if (entry.display.startsWith('#')) {
-      mode = 'koding'
-      text = entry.display.slice(1)
-    }
+    const { mode, text } = parsePromptHistoryDisplay(entry.display)
     onRestore({
       text,
       mode,
@@ -89,7 +117,6 @@ export function useArrowKeyHistory<Extra>(args: {
 
     const next = prev + 1
     historyIndexRef.current = next
-    lastHistoryNavTimeRef.current = Date.now()
     setHistoryIndex(next)
   }
 
@@ -100,7 +127,6 @@ export function useArrowKeyHistory<Extra>(args: {
       const next = prev - 1
       updateFromHistoryEntry(latestHistory[next - 1], 'end')
       historyIndexRef.current = next
-      lastHistoryNavTimeRef.current = Date.now()
       setHistoryIndex(next)
       return
     }
@@ -109,29 +135,26 @@ export function useArrowKeyHistory<Extra>(args: {
       onRestore(draftSnapshotRef.current ?? currentRef.current)
       draftSnapshotRef.current = null
       historyIndexRef.current = 0
-      lastHistoryNavTimeRef.current = Date.now()
       setHistoryIndex(0)
       return
     }
   }
-
-  const isInFastBrowseMode = useCallback(() => {
-    return Date.now() - lastHistoryNavTimeRef.current < FAST_BROWSE_WINDOW_MS
-  }, [])
 
   const onUserInput = useCallback(() => {
     if (historyIndexRef.current === 0) return
     historyIndexRef.current = 0
     draftSnapshotRef.current = null
     historySnapshotRef.current = null
+    scheduleHistoryPreload()
     setHistoryIndex(0)
-  }, [])
+  }, [scheduleHistoryPreload])
 
   function resetHistory() {
     historyIndexRef.current = 0
     setHistoryIndex(0)
     draftSnapshotRef.current = null
     historySnapshotRef.current = null
+    scheduleHistoryPreload()
   }
 
   return {
@@ -141,6 +164,11 @@ export function useArrowKeyHistory<Extra>(args: {
     onHistoryDown,
     onUserInput,
     resetHistory,
-    isInFastBrowseMode,
   }
+}
+
+export function __parsePromptHistoryDisplayForTests(
+  display: string,
+): ReturnType<typeof parsePromptHistoryDisplay> {
+  return parsePromptHistoryDisplay(display)
 }

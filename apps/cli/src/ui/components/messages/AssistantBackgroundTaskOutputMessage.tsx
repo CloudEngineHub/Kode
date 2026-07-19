@@ -22,9 +22,11 @@ function renderTruncatedContent(
 export function AssistantBackgroundTaskOutputMessage({
   content,
   verbose = false,
+  maxHeight,
 }: {
   content: string
   verbose?: boolean
+  maxHeight?: number
 }): React.ReactNode {
   const message = extractTag(content, 'background-task-output')
   if (!message) {
@@ -38,9 +40,20 @@ export function AssistantBackgroundTaskOutputMessage({
     return null
   }
 
-  const { lines, truncated, hiddenCount } = verbose
-    ? { lines: allLines, truncated: false, hiddenCount: 0 }
-    : renderTruncatedContent(allLines)
+  const viewportMaxLines = maxHeight
+    ? Math.max(1, Math.floor(maxHeight))
+    : undefined
+  const maxRenderedLines =
+    viewportMaxLines === undefined
+      ? MAX_RENDERED_LINES
+      : Math.min(MAX_RENDERED_LINES, viewportMaxLines)
+  const { lines, truncated, hiddenCount } =
+    verbose && viewportMaxLines === undefined
+      ? { lines: allLines, truncated: false, hiddenCount: 0 }
+      : renderTruncatedContent(
+          allLines,
+          verbose ? viewportMaxLines : maxRenderedLines,
+        )
 
   return (
     <Box flexDirection="column">
@@ -48,7 +61,7 @@ export function AssistantBackgroundTaskOutputMessage({
         <Box flexDirection="row">
           <Text color={theme.secondaryText}>
             &nbsp;&nbsp;⎿ &nbsp;... {hiddenCount} lines hidden, showing last{' '}
-            {MAX_RENDERED_LINES} lines
+            {lines.length} lines
           </Text>
         </Box>
       )}

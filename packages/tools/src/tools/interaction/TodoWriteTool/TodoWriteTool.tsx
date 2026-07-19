@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto'
 import { z } from 'zod'
-import { Tool, ValidationResult } from '#core/tooling/Tool'
+import { Tool, ValidationResult } from '@kode/tool-interface/Tool'
 import {
   setTodos,
   getTodos,

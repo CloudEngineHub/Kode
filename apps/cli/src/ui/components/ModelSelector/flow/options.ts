@@ -1,11 +1,7 @@
 export type ReasoningEffortOption = 'low' | 'medium' | 'high'
 
 export type RequestStrategyOption =
-  | 'auto'
-  | 'kode'
-  | 'compat_headers'
-  | 'compat_headers_system'
-  | 'compat_full'
+  'auto' | 'kode' | 'compat_headers' | 'compat_headers_system' | 'compat_full'
 
 export const REQUEST_STRATEGY_OPTIONS: Array<{
   label: string

@@ -18,6 +18,46 @@ export type InkRenderFn = (
   options?: RenderOptions,
 ) => InkRenderInstance
 
+export function isWindowsConptyLikeTerminal(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+): boolean {
+  if (platform === 'win32') return true
+  if (env.WT_SESSION || env.WT_PROFILE_ID) return true
+  return env.TERM_PROGRAM?.toLowerCase() === 'windows_terminal'
+}
+
+function parseTuiMaxFpsEnv(env: NodeJS.ProcessEnv): number | undefined {
+  const raw = env.KODE_TUI_MAX_FPS
+  if (!raw) return undefined
+
+  const parsed = Number.parseInt(raw, 10)
+  if (!Number.isFinite(parsed)) return undefined
+  return Math.max(1, Math.min(240, parsed))
+}
+
+export function resolveTuiMaxFps(options: {
+  env?: NodeJS.ProcessEnv
+  incrementalRendering: boolean
+  isScreenReaderEnabled: boolean
+  isTty: boolean
+  platform?: NodeJS.Platform
+}): number | undefined {
+  const env = options.env ?? process.env
+  const envMaxFps = parseTuiMaxFpsEnv(env)
+  if (envMaxFps !== undefined) return envMaxFps
+
+  if (
+    !options.incrementalRendering ||
+    options.isScreenReaderEnabled ||
+    !options.isTty
+  ) {
+    return undefined
+  }
+
+  return isWindowsConptyLikeTerminal(env, options.platform) ? 30 : 60
+}
+
 function ensureInkStdinSupportsRef(
   stdin: NodeJS.ReadStream,
 ): NodeJS.ReadStream {
@@ -92,18 +132,11 @@ export function renderWithTuiStdio(
     return true
   })()
 
-  const maxFpsEnv = process.env.KODE_TUI_MAX_FPS
-  const maxFpsDefault = (() => {
-    if (maxFpsEnv) {
-      const parsed = Number.parseInt(maxFpsEnv, 10)
-      if (!Number.isFinite(parsed)) return undefined
-      return Math.max(1, Math.min(240, parsed))
-    }
-
-    // Prefer a smoother default when incremental rendering is enabled.
-    // Ink's upstream default is 30fps.
-    return incrementalRenderingDefault ? 60 : undefined
-  })()
+  const maxFpsDefault = resolveTuiMaxFps({
+    incrementalRendering: incrementalRenderingDefault,
+    isScreenReaderEnabled,
+    isTty: stdio.stdout.isTTY,
+  })
 
   const effectiveContext = {
     // Defaults (can be overridden by renderContext)

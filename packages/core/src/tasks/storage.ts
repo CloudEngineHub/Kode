@@ -29,6 +29,14 @@ const LOCK_STALE_MS = 10_000
 const LOCK_RETRIES = 5
 const LOCK_RETRY_DELAY_MS = 50
 
+let taskStorageWriteHookForTests: ((filePath: string) => void) | null = null
+
+export function __setTaskStorageWriteHookForTests(
+  hook: ((filePath: string) => void) | null,
+): void {
+  taskStorageWriteHookForTests = hook
+}
+
 function sleepSync(ms: number): void {
   if (ms <= 0) return
   const buf = new SharedArrayBuffer(4)
@@ -79,10 +87,10 @@ function acquireFileLock(lockPath: string): (() => void) | null {
   return null
 }
 
-function atomicWriteJson(filePath: string, data: unknown): void {
+function atomicWriteText(filePath: string, content: string): void {
+  taskStorageWriteHookForTests?.(filePath)
   safeMkdir(dirname(filePath))
   const tmpPath = `${filePath}.tmp.${process.pid}.${Date.now()}`
-  const content = JSON.stringify(data, null, 2)
   writeFileSync(tmpPath, content, { encoding: 'utf8', mode: 0o600 })
   try {
     renameSync(tmpPath, filePath)
@@ -107,6 +115,10 @@ function atomicWriteJson(filePath: string, data: unknown): void {
       safeUnlink(tmpPath)
     }
   }
+}
+
+function atomicWriteJson(filePath: string, data: unknown): void {
+  atomicWriteText(filePath, JSON.stringify(data, null, 2))
 }
 
 function safeParseJson<T>(raw: string): T | null {
@@ -409,7 +421,7 @@ function getTaskFromNonPrimaryStores(args: {
   return null
 }
 
-function ensureTaskAdopted(args: {
+function getTaskForMutation(args: {
   taskId: string
   taskListId: string
   taskListDir: string
@@ -420,19 +432,12 @@ function ensureTaskAdopted(args: {
   const tombstones = readTombstones(args.taskListDir)
   if (tombstones[args.taskId]) return null
 
+  // Resolve legacy compatibility data without adopting it yet. The caller
+  // writes every validated mutation as one transaction below.
   const legacy = getTaskFromNonPrimaryStores({
     taskId: args.taskId,
     taskListId: args.taskListId,
   })
-  if (!legacy) return null
-
-  atomicWriteJson(getTaskPath(args.taskListDir, legacy.id), legacy)
-
-  const idNum = parseInt(legacy.id, 10)
-  if (Number.isFinite(idNum) && idNum > readMaxId(args.taskListDir)) {
-    writeMaxId(args.taskListDir, idNum)
-  }
-
   return legacy
 }
 
@@ -478,6 +483,107 @@ export function updateTask(args: {
   update: TaskUpdate
   taskListId?: string
 }): { ok: true; updated: Task } | { ok: false; error: string } {
+  const result = updateTaskWithDependencies(args)
+  if (result.ok === false) return result
+  return { ok: true, updated: result.updated }
+}
+
+type TaskDependencyUpdateResult =
+  | {
+      ok: true
+      updated: Task
+      addedBlocks: string[]
+      addedBlockedBy: string[]
+    }
+  | { ok: false; error: string }
+
+function normalizeDependencyIds(values: string[] | undefined): string[] {
+  const bySanitizedId = new Map<string, string>()
+  for (const value of values ?? []) {
+    const trimmed = String(value).trim()
+    if (!trimmed) continue
+    bySanitizedId.set(sanitizeTaskListId(trimmed), trimmed)
+  }
+  return [...bySanitizedId.values()]
+}
+
+function hasDependencyPath(args: {
+  tasksById: Map<string, Task>
+  fromTaskId: string
+  toTaskId: string
+}): boolean {
+  const target = sanitizeTaskListId(args.toTaskId)
+  const stack = [sanitizeTaskListId(args.fromTaskId)]
+  const visited = new Set<string>()
+
+  while (stack.length > 0) {
+    const current = stack.pop()!
+    if (current === target) return true
+    if (visited.has(current)) continue
+    visited.add(current)
+
+    const task = args.tasksById.get(current)
+    if (!task) continue
+    for (const next of task.blocks) {
+      const normalized = sanitizeTaskListId(next)
+      if (!visited.has(normalized)) stack.push(normalized)
+    }
+  }
+
+  return false
+}
+
+function writeTaskMutationsAtomically(args: {
+  taskListDir: string
+  tasks: Task[]
+}): void {
+  const snapshots = args.tasks.map(task => {
+    const filePath = getTaskPath(args.taskListDir, task.id)
+    return {
+      filePath,
+      original: existsSync(filePath) ? readFileSync(filePath, 'utf8') : null,
+    }
+  })
+
+  try {
+    for (const task of args.tasks) {
+      atomicWriteJson(getTaskPath(args.taskListDir, task.id), task)
+    }
+  } catch (error) {
+    // The filesystem has no cross-file rename transaction. Restore every
+    // snapshot while the task-list lock is still held before reporting failure.
+    const rollbackErrors: string[] = []
+    for (const snapshot of [...snapshots].reverse()) {
+      try {
+        if (snapshot.original === null) safeUnlink(snapshot.filePath)
+        else atomicWriteText(snapshot.filePath, snapshot.original)
+      } catch (rollbackError) {
+        rollbackErrors.push(
+          rollbackError instanceof Error
+            ? rollbackError.message
+            : String(rollbackError),
+        )
+      }
+    }
+
+    if (rollbackErrors.length > 0) {
+      const originalMessage =
+        error instanceof Error ? error.message : String(error)
+      throw new Error(
+        `${originalMessage}; task transaction rollback failed: ${rollbackErrors.join('; ')}`,
+      )
+    }
+    throw error
+  }
+}
+
+export function updateTaskWithDependencies(args: {
+  taskId: string
+  update: TaskUpdate
+  addBlocks?: string[]
+  addBlockedBy?: string[]
+  taskListId?: string
+}): TaskDependencyUpdateResult {
   const taskListId = args.taskListId ?? getTaskListId()
   const dir = getTaskListDir(taskListId)
   safeMkdir(dir)
@@ -488,24 +594,151 @@ export function updateTask(args: {
     return { ok: false, error: 'Failed to acquire task store lock.' }
 
   try {
-    const existing = ensureTaskAdopted({
+    const existing = getTaskForMutation({
       taskId: args.taskId,
       taskListId,
       taskListDir: dir,
     })
     if (!existing) return { ok: false, error: 'Task not found' }
 
-    const taskPath = getTaskPath(dir, existing.id)
+    const addBlocks = normalizeDependencyIds(args.addBlocks)
+    const addBlockedBy = normalizeDependencyIds(args.addBlockedBy)
+    const existingId = sanitizeTaskListId(existing.id)
+    if (
+      [...addBlocks, ...addBlockedBy].some(
+        taskId => sanitizeTaskListId(taskId) === existingId,
+      )
+    ) {
+      return {
+        ok: false,
+        error: `Task #${existing.id} cannot depend on itself.`,
+      }
+    }
+
+    const tasksById = new Map(
+      listTasks(taskListId).map(task => [sanitizeTaskListId(task.id), task]),
+    )
+    tasksById.set(existingId, existing)
+
+    const requestedDependencyIds = [...new Set([...addBlocks, ...addBlockedBy])]
+    for (const dependencyId of requestedDependencyIds) {
+      const dependency = getTaskForMutation({
+        taskId: dependencyId,
+        taskListId,
+        taskListDir: dir,
+      })
+      if (!dependency) {
+        return {
+          ok: false,
+          error: `Task not found: ${dependencyId}`,
+        }
+      }
+      tasksById.set(sanitizeTaskListId(dependency.id), dependency)
+    }
+
     const merged: Task = {
       ...existing,
       ...args.update,
       id: existing.id,
-      blocks: existing.blocks,
-      blockedBy: existing.blockedBy,
+      blocks: [...existing.blocks],
+      blockedBy: [...existing.blockedBy],
+    }
+    tasksById.set(existingId, merged)
+
+    const changedTaskIds = new Set<string>()
+    if (Object.keys(args.update).length > 0) changedTaskIds.add(existingId)
+    const addedBlocks: string[] = []
+    const addedBlockedBy: string[] = []
+
+    const addEdge = (
+      sourceId: string,
+      targetId: string,
+    ): { ok: true; changed: boolean } | { ok: false; error: string } => {
+      const normalizedSourceId = sanitizeTaskListId(sourceId)
+      const normalizedTargetId = sanitizeTaskListId(targetId)
+      const source = tasksById.get(normalizedSourceId)
+      const target = tasksById.get(normalizedTargetId)
+      if (!source || !target) {
+        return {
+          ok: false,
+          error: `Task not found: ${!source ? sourceId : targetId}`,
+        }
+      }
+
+      const sourceHasEdge = source.blocks.some(
+        id => sanitizeTaskListId(id) === normalizedTargetId,
+      )
+      const targetHasEdge = target.blockedBy.some(
+        id => sanitizeTaskListId(id) === normalizedSourceId,
+      )
+
+      if (
+        !sourceHasEdge &&
+        hasDependencyPath({
+          tasksById,
+          fromTaskId: target.id,
+          toTaskId: source.id,
+        })
+      ) {
+        return {
+          ok: false,
+          error: `Adding dependency ${source.id} -> ${target.id} would create a cycle.`,
+        }
+      }
+
+      if (!sourceHasEdge) {
+        const nextSource = {
+          ...source,
+          blocks: [...source.blocks, target.id],
+        }
+        tasksById.set(normalizedSourceId, nextSource)
+        changedTaskIds.add(normalizedSourceId)
+      }
+      if (!targetHasEdge) {
+        const nextTarget = {
+          ...target,
+          blockedBy: [...target.blockedBy, source.id],
+        }
+        tasksById.set(normalizedTargetId, nextTarget)
+        changedTaskIds.add(normalizedTargetId)
+      }
+
+      return { ok: true, changed: !sourceHasEdge || !targetHasEdge }
     }
 
-    atomicWriteJson(taskPath, merged)
-    return { ok: true, updated: merged }
+    for (const blockedTaskId of addBlocks) {
+      const edgeResult = addEdge(existing.id, blockedTaskId)
+      if (edgeResult.ok === false) return edgeResult
+      if (edgeResult.changed) addedBlocks.push(blockedTaskId)
+    }
+    for (const blockingTaskId of addBlockedBy) {
+      const edgeResult = addEdge(blockingTaskId, existing.id)
+      if (edgeResult.ok === false) return edgeResult
+      if (edgeResult.changed) addedBlockedBy.push(blockingTaskId)
+    }
+
+    const tasksToWrite = [...changedTaskIds].flatMap(taskId => {
+      const task = tasksById.get(taskId)
+      return task ? [task] : []
+    })
+    if (tasksToWrite.length > 0) {
+      writeTaskMutationsAtomically({ taskListDir: dir, tasks: tasksToWrite })
+      const highestWrittenId = Math.max(
+        0,
+        ...tasksToWrite.map(task => {
+          const parsed = parseInt(task.id, 10)
+          return Number.isFinite(parsed) ? parsed : 0
+        }),
+      )
+      if (highestWrittenId > readMaxId(dir)) writeMaxId(dir, highestWrittenId)
+    }
+
+    return {
+      ok: true,
+      updated: tasksById.get(existingId) ?? merged,
+      addedBlocks,
+      addedBlockedBy,
+    }
   } catch (error) {
     logError(error)
     return {
@@ -581,48 +814,11 @@ export function addDependency(args: {
   blocksTaskId: string
   taskListId?: string
 }): { ok: true } | { ok: false; error: string } {
-  const taskListId = args.taskListId ?? getTaskListId()
-  const dir = getTaskListDir(taskListId)
-  safeMkdir(dir)
-
-  const lockPath = join(dir, LOCK_FILENAME)
-  const release = acquireFileLock(lockPath)
-  if (!release)
-    return { ok: false, error: 'Failed to acquire task store lock.' }
-
-  try {
-    // Mutations must only operate on the primary task store to avoid implicitly
-    // importing legacy compat tasks into the canonical Kode store.
-    const a = ensureTaskAdopted({
-      taskId: args.taskId,
-      taskListId,
-      taskListDir: dir,
-    })
-    const b = ensureTaskAdopted({
-      taskId: args.blocksTaskId,
-      taskListId,
-      taskListDir: dir,
-    })
-    if (!a || !b) return { ok: false, error: 'Task not found' }
-
-    const aBlocks = a.blocks.includes(args.blocksTaskId)
-      ? a.blocks
-      : [...a.blocks, args.blocksTaskId]
-    const bBlockedBy = b.blockedBy.includes(args.taskId)
-      ? b.blockedBy
-      : [...b.blockedBy, args.taskId]
-
-    atomicWriteJson(getTaskPath(dir, a.id), { ...a, blocks: aBlocks })
-    atomicWriteJson(getTaskPath(dir, b.id), { ...b, blockedBy: bBlockedBy })
-
-    return { ok: true }
-  } catch (error) {
-    logError(error)
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    }
-  } finally {
-    release()
-  }
+  const result = updateTaskWithDependencies({
+    taskId: args.taskId,
+    update: {},
+    addBlocks: [args.blocksTaskId],
+    taskListId: args.taskListId,
+  })
+  return result.ok ? { ok: true } : result
 }

@@ -8,10 +8,7 @@ type ExecResult = {
 }
 
 export type BunShellPromotableExecStatus =
-  | 'running'
-  | 'backgrounded'
-  | 'completed'
-  | 'killed'
+  'running' | 'backgrounded' | 'completed' | 'killed'
 
 export type BunShellPromotableExec = {
   get status(): BunShellPromotableExecStatus
@@ -92,6 +89,28 @@ export type BunShellExecOptions = {
   stdin?: string
   onStdoutChunk?: (chunk: string) => void
   onStderrChunk?: (chunk: string) => void
+  /**
+   * Ownership metadata for a background process. It is deliberately separate
+   * from the command/sandbox options so callers cannot accidentally derive it
+   * from process-global cwd/session state after the task has started.
+   */
+  backgroundTask?: {
+    sessionId?: string
+  }
+}
+
+export type BackgroundShellCompletion = {
+  taskId: string
+  status: 'completed' | 'failed' | 'killed'
+  exitCode: number | null
+  interrupted: boolean
+  error?: string
+}
+
+export type BackgroundShellLaunch = {
+  bashId: string
+  pid?: number
+  completion: Promise<BackgroundShellCompletion>
 }
 
 export type BackgroundShellStatusAttachment = {
@@ -136,5 +155,6 @@ export type BackgroundProcess = {
   abortController: AbortController
   timeoutHandle: ReturnType<typeof setTimeout> | null
   cwd: string
+  sessionId?: string
   outputFile: string
 }

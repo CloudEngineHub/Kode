@@ -1,10 +1,10 @@
-import { getBunShellSandboxPlan } from '#core/utils/sandbox/bunShellSandboxPlan'
+import { getBunShellSandboxPlan } from '#core/sandbox/bunShellSandboxPlan'
 import type { Tool, ToolUseContext } from '#core/tooling/Tool'
 import type { ToolPermissionContext } from '#core/types/toolPermissionContext'
 import {
   checkBashPermissions,
   checkBashPermissionsAutoAllowedBySandbox,
-} from '#core/utils/permissions/bashToolPermissionEngine'
+} from '@kode/permissions/bash'
 
 import type { PermissionResult } from '../types'
 import { SAFE_COMMANDS } from './bash'

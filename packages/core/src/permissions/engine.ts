@@ -14,6 +14,7 @@ import { resolveToolNameAlias } from '#core/utils/toolNameAliases'
 
 import {
   createDefaultToolPermissionContext,
+  type ToolPermissionContext,
   type ToolPermissionContextUpdate,
 } from '#core/types/toolPermissionContext'
 import {
@@ -68,6 +69,92 @@ function flattenPermissionRuleGroups(
   return out
 }
 
+function checkBypassSafetyFloor(args: {
+  tool: Tool
+  input: Record<string, unknown>
+  safeMode: boolean
+}): PermissionResult | null {
+  const bypassSafetyFloor =
+    parseBoolLike(process.env.KODE_BYPASS_SAFETY_FLOOR) && !args.safeMode
+
+  if (bypassSafetyFloor) return null
+
+  const denyIfUnsafeWrite = (toolPath: string): PermissionResult | null => {
+    const safety = getWriteSafetyCheckForPath(toolPath)
+    if ('message' in safety) {
+      return {
+        result: false,
+        message: safety.message,
+        shouldPromptUser: false,
+        requiresExplicitApproval: true,
+      }
+    }
+    return null
+  }
+
+  if (args.tool.name === 'Write' || args.tool.name === 'Edit') {
+    const filePath = getStringFromInput(args.input, 'file_path')
+    if (filePath) return denyIfUnsafeWrite(filePath)
+  }
+
+  if (args.tool.name === 'NotebookEdit') {
+    const notebookPath = getStringFromInput(args.input, 'notebook_path')
+    if (notebookPath) return denyIfUnsafeWrite(notebookPath)
+  }
+
+  return null
+}
+
+function buildEffectiveContext(args: {
+  toolPermissionContext: ToolPermissionContext | undefined
+  permissionMode: ReturnType<typeof normalizePermissionMode>
+  safeMode: boolean
+  effectiveAllowedTools: string[]
+  effectiveDeniedTools: string[]
+  effectiveAskedTools: string[]
+  commandAllowedTools: string[]
+}): ToolPermissionContext {
+  let effectiveToolPermissionContext =
+    args.toolPermissionContext ??
+    (() => {
+      const fallback = createDefaultToolPermissionContext({
+        isBypassPermissionsModeAvailable: !args.safeMode,
+      })
+      fallback.mode = args.permissionMode
+      if (args.effectiveAllowedTools.length > 0) {
+        fallback.alwaysAllowRules.localSettings = args.effectiveAllowedTools
+      }
+      if (args.effectiveDeniedTools.length > 0) {
+        fallback.alwaysDenyRules.localSettings = args.effectiveDeniedTools
+      }
+      if (args.effectiveAskedTools.length > 0) {
+        fallback.alwaysAskRules.localSettings = args.effectiveAskedTools
+      }
+      return fallback
+    })()
+
+  if (args.toolPermissionContext) {
+    effectiveToolPermissionContext = {
+      ...args.toolPermissionContext,
+      alwaysAllowRules: { ...args.toolPermissionContext.alwaysAllowRules },
+      alwaysDenyRules: { ...args.toolPermissionContext.alwaysDenyRules },
+      alwaysAskRules: { ...args.toolPermissionContext.alwaysAskRules },
+    }
+  }
+
+  // Per-command allowedTools (e.g. `Read(~/**)`) must participate in the same
+  // rule engine as persisted permission rules.
+  if (args.commandAllowedTools.length > 0) {
+    const existing =
+      effectiveToolPermissionContext.alwaysAllowRules.command ?? []
+    effectiveToolPermissionContext.alwaysAllowRules.command = [
+      ...new Set([...existing, ...args.commandAllowedTools]),
+    ]
+  }
+
+  return effectiveToolPermissionContext
+}
+
 export const hasPermissionsToUseTool: CanUseToolFn = async (
   tool,
   input,
@@ -98,38 +185,8 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
   // Note: YOLO mode auto-approve is applied at the end, after deny/ask rules are checked
 
   if (permissionMode === 'bypassPermissions' && !requiresUserInteraction) {
-    const bypassSafetyFloor =
-      parseBoolLike(process.env.KODE_BYPASS_SAFETY_FLOOR) && !safeMode
-
-    if (!bypassSafetyFloor) {
-      const denyIfUnsafeWrite = (toolPath: string): PermissionResult | null => {
-        const safety = getWriteSafetyCheckForPath(toolPath)
-        if ('message' in safety) {
-          return {
-            result: false,
-            message: safety.message,
-            shouldPromptUser: false,
-          }
-        }
-        return null
-      }
-
-      if (tool.name === 'Write' || tool.name === 'Edit') {
-        const filePath = getStringFromInput(input, 'file_path')
-        if (filePath) {
-          const denied = denyIfUnsafeWrite(filePath)
-          if (denied) return denied
-        }
-      }
-
-      if (tool.name === 'NotebookEdit') {
-        const notebookPath = getStringFromInput(input, 'notebook_path')
-        if (notebookPath) {
-          const denied = denyIfUnsafeWrite(notebookPath)
-          if (denied) return denied
-        }
-      }
-    }
+    const denied = checkBypassSafetyFloor({ tool, input, safeMode })
+    if (denied) return denied
 
     return { result: true }
   }
@@ -188,43 +245,15 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
     return { result: true }
   }
 
-  let effectiveToolPermissionContext =
-    toolPermissionContext ??
-    (() => {
-      const fallback = createDefaultToolPermissionContext({
-        isBypassPermissionsModeAvailable: !(context.options?.safeMode ?? false),
-      })
-      fallback.mode = permissionMode
-      if (effectiveAllowedTools.length > 0) {
-        fallback.alwaysAllowRules.localSettings = effectiveAllowedTools
-      }
-      if (effectiveDeniedTools.length > 0) {
-        fallback.alwaysDenyRules.localSettings = effectiveDeniedTools
-      }
-      if (effectiveAskedTools.length > 0) {
-        fallback.alwaysAskRules.localSettings = effectiveAskedTools
-      }
-      return fallback
-    })()
-
-  if (toolPermissionContext) {
-    effectiveToolPermissionContext = {
-      ...toolPermissionContext,
-      alwaysAllowRules: { ...toolPermissionContext.alwaysAllowRules },
-      alwaysDenyRules: { ...toolPermissionContext.alwaysDenyRules },
-      alwaysAskRules: { ...toolPermissionContext.alwaysAskRules },
-    }
-  }
-
-  // Per-command allowedTools (e.g. `Read(~/**)`) must participate in the same
-  // rule engine as persisted permission rules.
-  if (commandAllowedTools.length > 0) {
-    const existing =
-      effectiveToolPermissionContext.alwaysAllowRules.command ?? []
-    effectiveToolPermissionContext.alwaysAllowRules.command = [
-      ...new Set([...existing, ...commandAllowedTools]),
-    ]
-  }
+  const effectiveToolPermissionContext = buildEffectiveContext({
+    toolPermissionContext,
+    permissionMode,
+    safeMode,
+    effectiveAllowedTools,
+    effectiveDeniedTools,
+    effectiveAskedTools,
+    commandAllowedTools,
+  })
 
   const checkEditPermissionForPath = (toolPath: string): PermissionResult => {
     const candidates = expandSymlinkPaths(toolPath)
@@ -258,6 +287,7 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
         message: safety.message,
         blockedPath: toolPath,
         decisionReason: safety.message,
+        requiresExplicitApproval: true,
       }
     }
 
@@ -274,6 +304,7 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
           message: `${PRODUCT_NAME} requested permissions to write to ${toolPath}, but you haven't granted it yet.`,
           blockedPath: toolPath,
           decisionReason: askedRule,
+          requiresExplicitApproval: true,
         }
       }
     }
@@ -302,6 +333,7 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
       message: `${PRODUCT_NAME} requested permissions to write to ${toolPath}, but you haven't granted it yet.`,
       blockedPath: toolPath,
       decisionReason: 'No allow rule matched (outside working directories)',
+      requiresExplicitApproval: true,
       suggestions: suggestFilePermissionUpdates({
         inputPath: toolPath,
         operation: 'write',
@@ -344,7 +376,8 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
     isYoloMode &&
     !requiresUserInteraction &&
     permissionResult.result === false &&
-    permissionResult.shouldPromptUser !== false
+    permissionResult.shouldPromptUser !== false &&
+    permissionResult.requiresExplicitApproval !== true
   ) {
     return { result: true }
   }

@@ -9,6 +9,11 @@ import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import { wrapLines } from '#ui-ink/primitives/text/wrapLines'
 import { terminalCapabilityManager } from '#ui-ink/utils/terminalCapabilityManager'
+import {
+  formatTerminalAppearanceLines,
+  type TerminalAppearanceSnapshot,
+  withTerminalReadability,
+} from '#ui-ink/utils/terminalAppearance'
 
 type Props = {
   onDone: (result?: string) => void
@@ -31,14 +36,18 @@ type TerminalCapabilities = {
   modifyOtherKeysEnabled: boolean
   bracketedPasteSupported: boolean
   bracketedPasteEnabled: boolean
+  appearance: TerminalAppearanceSnapshot
 }
 
 function snapshotCapabilities(): TerminalCapabilities {
+  const terminalName =
+    terminalCapabilityManager.getTerminalName() ??
+    detectTerminalName() ??
+    undefined
+  const appearance = terminalCapabilityManager.getTerminalAppearanceSnapshot()
+
   return {
-    terminalName:
-      terminalCapabilityManager.getTerminalName() ??
-      detectTerminalName() ??
-      undefined,
+    terminalName,
     tty: Boolean(process.stdin.isTTY && process.stdout.isTTY),
     kittySupported: terminalCapabilityManager.isKittyProtocolSupported(),
     kittyEnabled: terminalCapabilityManager.isKittyProtocolEnabled(),
@@ -49,11 +58,24 @@ function snapshotCapabilities(): TerminalCapabilities {
     bracketedPasteSupported:
       terminalCapabilityManager.isBracketedPasteSupported(),
     bracketedPasteEnabled: terminalCapabilityManager.isBracketedPasteEnabled(),
+    appearance: {
+      ...appearance,
+      terminalName: appearance.terminalName ?? terminalName,
+    },
   }
 }
 
-function buildTerminalSetupLines(capabilities: TerminalCapabilities): string[] {
+function buildTerminalSetupLines(
+  capabilities: TerminalCapabilities,
+  theme: ReturnType<typeof getTheme>,
+): string[] {
   const lines: string[] = []
+  const appearance = withTerminalReadability(capabilities.appearance, {
+    textColor: theme.text,
+    secondaryTextColor: theme.secondaryText,
+    accentColor: theme.kode,
+  })
+
   lines.push('Terminal setup')
   lines.push(`- terminal: ${capabilities.terminalName ?? '(unknown)'}`)
   lines.push(`- tty: ${capabilities.tty ? 'yes' : 'no'}`)
@@ -68,6 +90,9 @@ function buildTerminalSetupLines(capabilities: TerminalCapabilities): string[] {
   lines.push(
     `- bracketed paste: ${capabilities.bracketedPasteSupported ? 'supported' : 'no'} (${capabilities.bracketedPasteEnabled ? 'enabled' : 'disabled'})`,
   )
+
+  lines.push('')
+  lines.push(...formatTerminalAppearanceLines(appearance))
 
   lines.push('')
   lines.push('Multi-line input')
@@ -107,8 +132,8 @@ export function TerminalSetupScreen({ onDone }: Props): React.ReactNode {
   }, [])
 
   const rawLines = useMemo(
-    () => buildTerminalSetupLines(capabilities),
-    [capabilities],
+    () => buildTerminalSetupLines(capabilities, theme),
+    [capabilities, theme],
   )
   const wrapped = useMemo(() => {
     const width = Math.max(1, layout.columns - layout.paddingX * 2)

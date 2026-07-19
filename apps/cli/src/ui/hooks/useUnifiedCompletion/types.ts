@@ -12,7 +12,7 @@ export interface UnifiedCompletionProps {
   commands: Command[]
   disableSlashCommands?: boolean
   isEnabled?: boolean
-  onSubmit?: (value: string, isSubmittingSlashCommand?: boolean) => void
+  modelReloadKey?: number
 }
 
 export interface CompletionState {

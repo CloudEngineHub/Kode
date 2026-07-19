@@ -63,13 +63,19 @@ type JsonlSummaryEntry = {
 type JsonlCustomTitleEntry = {
   type: 'custom-title'
   sessionId?: string
-  customTitle?: string
+  customTitle?: string | null
 }
 
 type JsonlTagEntry = {
   type: 'tag'
   sessionId?: string
-  tag?: string
+  tag?: string | null
+}
+
+type JsonlSessionSummaryEntry = {
+  type: 'session-summary'
+  sessionId?: string
+  summary?: string | null
 }
 
 type JsonlFileHistorySnapshotEntry = {
@@ -85,6 +91,7 @@ type JsonlEntry =
   | JsonlSummaryEntry
   | JsonlCustomTitleEntry
   | JsonlTagEntry
+  | JsonlSessionSummaryEntry
   | JsonlFileHistorySnapshotEntry
   | Record<string, unknown>
 

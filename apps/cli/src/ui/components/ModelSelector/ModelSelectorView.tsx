@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Box, Text } from 'ink'
+import { Box, Text, type DOMElement } from 'ink'
 import figures from 'figures'
 import { ApiKeyScreen } from './flow/screens/ApiKeyScreen'
 import { BaseUrlScreen } from './flow/screens/BaseUrlScreen'
@@ -13,17 +13,116 @@ import { PartnerCodingPlansScreen } from './flow/screens/PartnerCodingPlansScree
 import { PartnerProvidersScreen } from './flow/screens/PartnerProvidersScreen'
 import { ProviderSelectionScreen } from './flow/screens/ProviderSelectionScreen'
 import { ResourceNameScreen } from './flow/screens/ResourceNameScreen'
-import type { Option, ModelSelectorViewProps } from './viewTypes'
+import type {
+  ModelSelectorViewProps,
+  Option,
+  WindowedOptionInteractions,
+} from './viewTypes'
+import { PressableRow } from '#ui-ink/primitives/list/PressableRow'
+import { useMouseWheel } from '#ui-ink/hooks/useMouse'
+
+type WindowedOptionsLayout = {
+  visibleOptionCount: number
+  showIndicators: boolean
+}
+
+function WindowedOptionsList({
+  options,
+  focusedIndex,
+  layout,
+  theme,
+  interactions,
+}: {
+  options: Option[]
+  focusedIndex: number
+  layout: WindowedOptionsLayout
+  theme: ModelSelectorViewProps['theme']
+  interactions?: WindowedOptionInteractions
+}): React.ReactNode {
+  const ref = React.useRef<DOMElement | null>(null)
+
+  useMouseWheel(
+    ref,
+    direction => {
+      interactions?.onWheel?.(direction)
+    },
+    { isActive: interactions?.onWheel !== undefined, priority: 25 },
+  )
+
+  if (options.length === 0) {
+    return <Text color={theme.secondaryText}>No options available.</Text>
+  }
+
+  const visibleCount = Math.max(
+    1,
+    Math.min(layout.visibleOptionCount, options.length),
+  )
+  const clampedFocus =
+    options.length === 0
+      ? 0
+      : Math.max(0, Math.min(focusedIndex, options.length - 1))
+  const half = Math.floor(visibleCount / 2)
+  const start = Math.max(
+    0,
+    Math.min(clampedFocus - half, Math.max(0, options.length - visibleCount)),
+  )
+  const end = Math.min(options.length, start + visibleCount)
+  const showUp = layout.showIndicators && start > 0
+  const showDown = layout.showIndicators && end < options.length
+
+  const visibleOptions = options.slice(start, end)
+  const missingRows = Math.max(0, visibleCount - visibleOptions.length)
+
+  return (
+    <Box ref={ref} flexDirection="column" gap={0}>
+      {layout.showIndicators ? (
+        <Text color={theme.secondaryText}>
+          {showUp ? `${figures.arrowUp} More` : ' '}
+        </Text>
+      ) : null}
+      {visibleOptions.map((opt, idx) => {
+        const absoluteIndex = start + idx
+        const isFocused = absoluteIndex === focusedIndex
+        return (
+          <PressableRow
+            key={opt.value}
+            flexDirection="row"
+            onPress={() => interactions?.onOptionPress?.(absoluteIndex)}
+          >
+            <Text color={isFocused ? theme.kode : theme.secondaryText}>
+              {isFocused ? figures.pointer : ' '}
+            </Text>
+            <Text
+              color={isFocused ? theme.text : theme.secondaryText}
+              bold={isFocused}
+              wrap="truncate-end"
+            >
+              {' '}
+              {opt.label}
+            </Text>
+          </PressableRow>
+        )
+      })}
+      {missingRows > 0
+        ? Array.from({ length: missingRows }).map((_, idx) => (
+            <Box key={`empty-${idx}`} flexDirection="row">
+              <Text> </Text>
+            </Box>
+          ))
+        : null}
+      {layout.showIndicators ? (
+        <Text color={theme.secondaryText}>
+          {showDown ? `${figures.arrowDown} More` : ' '}
+        </Text>
+      ) : null}
+    </Box>
+  )
+}
 
 export function ModelSelectorView(
   props: ModelSelectorViewProps,
 ): React.ReactNode {
   const VIEWPORT_SAFE_MARGIN_ROWS = 2
-
-  type WindowedOptionsLayout = {
-    visibleOptionCount: number
-    showIndicators: boolean
-  }
 
   function getWindowedOptionsLayout(
     requestedCount: number,
@@ -61,74 +160,16 @@ export function ModelSelectorView(
     options: Option[],
     focusedIndex: number,
     layout: WindowedOptionsLayout,
+    interactions?: WindowedOptionInteractions,
   ) {
-    if (options.length === 0) {
-      return (
-        <Text color={props.theme.secondaryText}>No options available.</Text>
-      )
-    }
-
-    const visibleCount = Math.max(
-      1,
-      Math.min(layout.visibleOptionCount, options.length),
-    )
-    const clampedFocus =
-      options.length === 0
-        ? 0
-        : Math.max(0, Math.min(focusedIndex, options.length - 1))
-    const half = Math.floor(visibleCount / 2)
-    const start = Math.max(
-      0,
-      Math.min(clampedFocus - half, Math.max(0, options.length - visibleCount)),
-    )
-    const end = Math.min(options.length, start + visibleCount)
-    const showUp = layout.showIndicators && start > 0
-    const showDown = layout.showIndicators && end < options.length
-
-    const visibleOptions = options.slice(start, end)
-    const missingRows = Math.max(0, visibleCount - visibleOptions.length)
-
     return (
-      <Box flexDirection="column" gap={0}>
-        {layout.showIndicators ? (
-          <Text color={props.theme.secondaryText}>
-            {showUp ? `${figures.arrowUp} More` : ' '}
-          </Text>
-        ) : null}
-        {visibleOptions.map((opt, idx) => {
-          const absoluteIndex = start + idx
-          const isFocused = absoluteIndex === focusedIndex
-          return (
-            <Box key={opt.value} flexDirection="row">
-              <Text
-                color={isFocused ? props.theme.kode : props.theme.secondaryText}
-              >
-                {isFocused ? figures.pointer : ' '}
-              </Text>
-              <Text
-                color={isFocused ? props.theme.text : props.theme.secondaryText}
-                bold={isFocused}
-                wrap="truncate-end"
-              >
-                {' '}
-                {opt.label}
-              </Text>
-            </Box>
-          )
-        })}
-        {missingRows > 0
-          ? Array.from({ length: missingRows }).map((_, idx) => (
-              <Box key={`empty-${idx}`} flexDirection="row">
-                <Text> </Text>
-              </Box>
-            ))
-          : null}
-        {layout.showIndicators ? (
-          <Text color={props.theme.secondaryText}>
-            {showDown ? `${figures.arrowDown} More` : ' '}
-          </Text>
-        ) : null}
-      </Box>
+      <WindowedOptionsList
+        options={options}
+        focusedIndex={focusedIndex}
+        layout={layout}
+        theme={props.theme}
+        interactions={interactions}
+      />
     )
   }
 
@@ -351,6 +392,8 @@ export function ModelSelectorView(
           partnerProviderOptions={props.partnerProviderOptions}
           partnerProviderFocusIndex={props.partnerProviderFocusIndex}
           partnerReservedLines={props.partnerReservedLines}
+          onPartnerProviderOptionPress={props.onPartnerProviderOptionPress}
+          onPartnerProviderOptionWheel={props.onPartnerProviderOptionWheel}
           getWindowedOptionsLayout={getWindowedOptionsLayout}
           renderWindowedOptions={renderWindowedOptions}
         />
@@ -369,6 +412,8 @@ export function ModelSelectorView(
           codingPlanOptions={props.codingPlanOptions}
           codingPlanFocusIndex={props.codingPlanFocusIndex}
           codingReservedLines={props.codingReservedLines}
+          onCodingPlanOptionPress={props.onCodingPlanOptionPress}
+          onCodingPlanOptionWheel={props.onCodingPlanOptionWheel}
           getWindowedOptionsLayout={getWindowedOptionsLayout}
           renderWindowedOptions={renderWindowedOptions}
         />
@@ -386,6 +431,8 @@ export function ModelSelectorView(
         mainMenuOptions={props.mainMenuOptions}
         providerFocusIndex={props.providerFocusIndex}
         providerReservedLines={props.providerReservedLines}
+        onProviderOptionPress={props.onProviderOptionPress}
+        onProviderOptionWheel={props.onProviderOptionWheel}
         getWindowedOptionsLayout={getWindowedOptionsLayout}
         renderWindowedOptions={renderWindowedOptions}
       />

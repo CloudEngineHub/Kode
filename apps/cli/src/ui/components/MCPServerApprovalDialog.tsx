@@ -8,6 +8,7 @@ import {
 } from '#core/utils/config'
 import { MCPServerDialogCopy } from './MCPServerDialogCopy'
 import { useExitOnCtrlCD } from '#ui-ink/hooks/useExitOnCtrlCD'
+import { useCliExit } from '#ui-ink/hooks/useCliExit'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
@@ -57,7 +58,8 @@ export function MCPServerApprovalDialog({
     }
   }
 
-  const exitState = useExitOnCtrlCD(() => process.exit(0))
+  const requestExit = useCliExit()
+  const exitState = useExitOnCtrlCD(() => requestExit(0))
 
   useKeypress((_input, key) => {
     if (key.escape) {
@@ -89,6 +91,7 @@ export function MCPServerApprovalDialog({
         <Text wrap="truncate-end">Do you want to approve this MCP server?</Text>
 
         <Select
+          focusScope={`mcp-approval:${serverName}`}
           options={[
             { label: 'Yes, approve this server', value: 'yes' },
             { label: 'No, reject this server', value: 'no' },

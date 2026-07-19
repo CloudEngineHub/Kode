@@ -9,8 +9,7 @@ const files = {
   isHidden: false,
   async call(_args, context) {
     const timestamps = (context as any)?.readFileTimestamps as
-      | Record<string, number>
-      | undefined
+      Record<string, number> | undefined
 
     const paths = Object.keys(timestamps ?? {}).filter(Boolean)
     if (paths.length === 0) return 'No files in context'

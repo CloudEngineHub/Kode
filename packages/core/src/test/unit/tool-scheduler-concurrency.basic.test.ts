@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { __ToolUseQueueForTests } from '#core/query'
+import { __ToolUseQueueForTests } from '@kode/engine/pipeline/tool-use-queue'
 import { z } from 'zod'
 import type { Tool } from '#core/tooling/Tool'
 import { createAssistantMessage } from '#core/utils/messages'

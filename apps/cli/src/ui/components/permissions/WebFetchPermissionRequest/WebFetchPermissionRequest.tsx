@@ -15,6 +15,7 @@ import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import { PermissionRequestDetails } from '#ui-ink/components/permissions/PermissionRequestDetails'
+import { permissionSelectFocusScope } from '#ui-ink/components/permissions/permissionFocusScope'
 
 function hostnameForUrl(url: unknown): string | null {
   if (typeof url !== 'string') return null
@@ -86,6 +87,7 @@ export function WebFetchPermissionRequest({
           <Box flexDirection="column">
             <Text>Do you want to allow this connection?</Text>
             <Select
+              focusScope={permissionSelectFocusScope(toolUseConfirm, 'choice')}
               options={[
                 { label: 'Allow once', value: 'yes' },
                 ...(hostname

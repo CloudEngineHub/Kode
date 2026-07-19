@@ -9,7 +9,6 @@ import {
 } from '#core/types/toolPermissionContext'
 import type { ToolUseContext } from '#core/tooling/Tool'
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
 import path from 'path'
 import {
   __resetPlanModeForTests,
@@ -21,6 +20,10 @@ import {
   getKodeAgentSessionId,
   setKodeAgentSessionId,
 } from '#protocol/utils/kodeAgentSessionId'
+
+function makeTempDir(prefix: string): string {
+  return mkdtempSync(path.join(path.dirname(process.cwd()), `.tmp-${prefix}-`))
+}
 
 function makeContext(args?: {
   toolPermissionContext?: ReturnType<typeof createDefaultToolPermissionContext>
@@ -67,7 +70,7 @@ describe('Compatibility: filesystem permission engine', () => {
   })
 
   test('asks to read outside working directory and provides suggestions', async () => {
-    const tmp = mkdtempSync(path.join(tmpdir(), 'kode-perm-read-'))
+    const tmp = makeTempDir('kode-perm-read')
     const filePath = path.join(tmp, 'a.txt')
     writeFileSync(filePath, 'hello', 'utf8')
 
@@ -92,6 +95,7 @@ describe('Compatibility: filesystem permission engine', () => {
       expect(result.decisionReason).toBe(
         'No allow rule matched (outside working directories)',
       )
+      expect(result.requiresExplicitApproval).toBe(true)
       expect(result.suggestions?.length ?? 0).toBeGreaterThan(0)
     } finally {
       rmSync(tmp, { recursive: true, force: true })
@@ -99,7 +103,7 @@ describe('Compatibility: filesystem permission engine', () => {
   })
 
   test('applying read suggestions allows subsequent reads', async () => {
-    const tmp = mkdtempSync(path.join(tmpdir(), 'kode-perm-read-apply-'))
+    const tmp = makeTempDir('kode-perm-read-apply')
     const filePath = path.join(tmp, 'a.txt')
     writeFileSync(filePath, 'hello', 'utf8')
 
@@ -120,6 +124,7 @@ describe('Compatibility: filesystem permission engine', () => {
       if (denied.result !== false) {
         throw new Error('Expected permission denied result')
       }
+      expect(denied.requiresExplicitApproval).toBe(true)
       const updates: ToolPermissionContextUpdate[] = denied.suggestions ?? []
       expect(updates.length).toBeGreaterThan(0)
 
@@ -138,7 +143,7 @@ describe('Compatibility: filesystem permission engine', () => {
   })
 
   test('applying write suggestions allows subsequent writes via acceptEdits + addDirectories', async () => {
-    const tmp = mkdtempSync(path.join(tmpdir(), 'kode-perm-write-apply-'))
+    const tmp = makeTempDir('kode-perm-write-apply')
     const filePath = path.join(tmp, 'b.txt')
 
     try {
@@ -180,7 +185,7 @@ describe('Compatibility: filesystem permission engine', () => {
   })
 
   test('allows writing to the plan file for the current conversation', async () => {
-    const tmpConfig = mkdtempSync(path.join(tmpdir(), 'kode-plan-config-'))
+    const tmpConfig = makeTempDir('kode-plan-config')
     const previousConfigDir = process.env.KODE_CONFIG_DIR
     process.env.KODE_CONFIG_DIR = tmpConfig
 
@@ -206,13 +211,14 @@ describe('Compatibility: filesystem permission engine', () => {
       )
       expect(result.result).toBe(true)
     } finally {
-      process.env.KODE_CONFIG_DIR = previousConfigDir
+      if (previousConfigDir === undefined) delete process.env.KODE_CONFIG_DIR
+      else process.env.KODE_CONFIG_DIR = previousConfigDir
       rmSync(tmpConfig, { recursive: true, force: true })
     }
   })
 
   test('allows reading session-memory files for the current session (kode root + claude compat root)', async () => {
-    const tmpRoots = mkdtempSync(path.join(tmpdir(), 'kode-perm-roots-'))
+    const tmpRoots = makeTempDir('kode-perm-roots')
     const tmpKodeRoot = path.join(tmpRoots, '.kode')
     const tmpClaudeRoot = path.join(tmpRoots, '.claude')
     mkdirSync(tmpKodeRoot, { recursive: true })
@@ -282,8 +288,12 @@ describe('Compatibility: filesystem permission engine', () => {
       expect(kodeWriteDenied.result).toBe(false)
     } finally {
       setKodeAgentSessionId(previousSessionId)
-      process.env.KODE_CONFIG_DIR = previousKodeConfigDir
-      process.env.CLAUDE_CONFIG_DIR = previousClaudeConfigDir
+      if (previousKodeConfigDir === undefined)
+        delete process.env.KODE_CONFIG_DIR
+      else process.env.KODE_CONFIG_DIR = previousKodeConfigDir
+      if (previousClaudeConfigDir === undefined)
+        delete process.env.CLAUDE_CONFIG_DIR
+      else process.env.CLAUDE_CONFIG_DIR = previousClaudeConfigDir
       rmSync(tmpRoots, { recursive: true, force: true })
     }
   })
@@ -291,7 +301,7 @@ describe('Compatibility: filesystem permission engine', () => {
   test('allows writing to scratchpad files for the current session (kode tmpdir layout)', async () => {
     if (process.platform === 'win32') return
 
-    const tmpScratchBase = mkdtempSync(path.join(tmpdir(), 'kode-scratchpad-'))
+    const tmpScratchBase = makeTempDir('kode-scratchpad')
     const previousClaudeTmpDir = process.env.CLAUDE_TMPDIR
     const previousTmp = process.env.CLAUDE_CODE_TMPDIR
     const previousSessionId = getKodeAgentSessionId()
@@ -327,7 +337,8 @@ describe('Compatibility: filesystem permission engine', () => {
       setKodeAgentSessionId(previousSessionId)
       if (previousClaudeTmpDir === undefined) delete process.env.CLAUDE_TMPDIR
       else process.env.CLAUDE_TMPDIR = previousClaudeTmpDir
-      process.env.CLAUDE_CODE_TMPDIR = previousTmp
+      if (previousTmp === undefined) delete process.env.CLAUDE_CODE_TMPDIR
+      else process.env.CLAUDE_CODE_TMPDIR = previousTmp
       rmSync(tmpScratchBase, { recursive: true, force: true })
     }
   })
@@ -335,7 +346,7 @@ describe('Compatibility: filesystem permission engine', () => {
   test('allows reading Claude tasks/*.output files (claude tmpdir layout)', async () => {
     if (process.platform === 'win32') return
 
-    const tmpScratchBase = mkdtempSync(path.join(tmpdir(), 'kode-tasks-out-'))
+    const tmpScratchBase = makeTempDir('kode-tasks-out')
     const previousClaudeTmpDir = process.env.CLAUDE_TMPDIR
     const previousTmp = process.env.CLAUDE_CODE_TMPDIR
     delete process.env.CLAUDE_TMPDIR
@@ -368,7 +379,8 @@ describe('Compatibility: filesystem permission engine', () => {
     } finally {
       if (previousClaudeTmpDir === undefined) delete process.env.CLAUDE_TMPDIR
       else process.env.CLAUDE_TMPDIR = previousClaudeTmpDir
-      process.env.CLAUDE_CODE_TMPDIR = previousTmp
+      if (previousTmp === undefined) delete process.env.CLAUDE_CODE_TMPDIR
+      else process.env.CLAUDE_CODE_TMPDIR = previousTmp
       rmSync(tmpScratchBase, { recursive: true, force: true })
     }
   })
@@ -394,6 +406,7 @@ describe('Compatibility: filesystem permission engine', () => {
     expect(result.decisionReason).toBe(
       'UNC/network path requires manual approval',
     )
+    expect(result.requiresExplicitApproval).toBe(true)
     expect(result.suggestions).toBeUndefined()
   })
 
@@ -418,15 +431,16 @@ describe('Compatibility: filesystem permission engine', () => {
     expect(result.decisionReason).toBe(
       'Suspicious Windows path pattern requires manual approval',
     )
+    expect(result.requiresExplicitApproval).toBe(true)
     expect(result.suggestions).toBeUndefined()
   })
 
   test('symlink target outside working dirs requires manual approval unless added to additionalWorkingDirectories', async () => {
-    const outside = mkdtempSync(path.join(tmpdir(), 'kode-perm-symlink-out-'))
+    const outside = makeTempDir('kode-perm-symlink-out')
     const outsideFile = path.join(outside, 'target.txt')
     writeFileSync(outsideFile, 'x', 'utf8')
 
-    const inside = mkdtempSync(path.join(tmpdir(), 'kode-perm-symlink-in-'))
+    const inside = makeTempDir('kode-perm-symlink-in')
     const linkPath = path.join(inside, 'link.txt')
     symlinkSync(outsideFile, linkPath)
 
@@ -450,6 +464,10 @@ describe('Compatibility: filesystem permission engine', () => {
         createAssistantMessage(''),
       )
       expect(denied.result).toBe(false)
+      if (denied.result !== false) {
+        throw new Error('Expected permission denied result')
+      }
+      expect(denied.requiresExplicitApproval).toBe(true)
 
       const updated = applyToolPermissionContextUpdates(withInside, [
         {

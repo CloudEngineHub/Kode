@@ -1,29 +1,36 @@
 import * as React from 'react'
-import type { ToolUseContext } from '#core/tooling/Tool'
+import type { SetToolJSXFn, ToolUseContext } from '@kode/tool-interface/Tool'
 import { createAssistantMessage } from '#core/utils/messages'
 import { BunShell } from '#runtime/shell'
-import { getBunShellSandboxPlan } from '#core/utils/sandbox/bunShellSandboxPlan'
+import { assessWindowsExecution } from '#runtime/execution'
+import { getBunShellSandboxPlan } from '#core/sandbox/bunShellSandboxPlan'
 import { getCwd, getOriginalCwd } from '#core/utils/state'
-import { decideSystemSandboxForBashTool } from '#core/utils/sandbox/systemSandbox'
-import { getBashDestructiveCommandBlock } from '#core/utils/sandbox/destructiveCommandGuard'
+import { getEffectiveSessionId } from '#core/utils/sessionId'
+import { isBashCommandReadOnly } from '@kode/permissions/bash'
+import {
+  createDurableRun,
+  finishDurableRun,
+  getDurableRunProcessIdentity,
+} from '#core/runs'
+import { getBackgroundTaskOutputFilePath } from '#core/tasks/backgroundRegistry'
+import { decideSystemSandboxForBashTool } from '#core/sandbox/systemSandbox'
+import { getBashDestructiveCommandBlock } from '#core/sandbox/destructiveCommandGuard'
 import { getPlanConversationKey } from '#core/utils/planMode'
 import {
   formatBashLlmGateBlockMessage,
   runBashLlmSafetyGate,
-} from './llmSafetyGate'
-import { getBashGateFindings, shouldReviewBashCommand } from './dataLossRules'
+} from '#core/safety/bash-gate/llmSafetyGate'
+import {
+  getBashGateFindings,
+  shouldReviewBashCommand,
+} from '#core/safety/bash-gate/dataLossRules'
 import { getCommandSource } from './commandSource'
 import type { Out } from './BashTool'
 import { executeForegroundBash } from './executeForeground'
 import { maybeAttachSandboxNetworkPorts } from './sandboxNetwork'
 import { LlmGateProgress } from './LlmGateProgress'
 
-type SetToolJSX = (
-  value: {
-    jsx: unknown
-    shouldHidePromptInput: boolean
-  } | null,
-) => void
+type SetToolJSX = SetToolJSXFn<React.ReactNode>
 
 type Input = {
   command: string
@@ -58,6 +65,47 @@ export async function* callBashTool(
   const commandDescription =
     typeof input.description === 'string' ? input.description.trim() : ''
   const sandboxDisabled = input.dangerouslyDisableSandbox === true
+  const automationKind = context.options?.automationKind
+  const executionPlatform =
+    context.options?.__sandboxPlatform ?? process.platform
+
+  if (
+    executionPlatform === 'win32' &&
+    (input.run_in_background === true || automationKind !== undefined)
+  ) {
+    const execution = assessWindowsExecution({
+      command: input.command,
+      cwd: getCwd(),
+      mode: automationKind ? 'goal' : 'background',
+      writesFilesystem: !isBashCommandReadOnly(input.command),
+      // The normal tool-permission flow has already reached this call. This
+      // flag does not bypass it; it lets the policy report the remaining
+      // strong-isolation requirement accurately.
+      approvalGranted: true,
+      platform: executionPlatform,
+    })
+    if (!execution.allowed) {
+      const message = [
+        'Blocked by the Windows execution policy.',
+        `Reason: ${execution.reason}.`,
+        `Requirements: ${execution.requirements.join(', ')}.`,
+      ].join(' ')
+      const data: Out = {
+        stdout: '',
+        stdoutLines: 0,
+        stderr: message,
+        stderrLines: 1,
+        interrupted: false,
+        dangerouslyDisableSandbox: sandboxDisabled,
+      }
+      yield {
+        type: 'result',
+        resultForAssistant: renderResultForAssistant(data),
+        data,
+      }
+      return
+    }
+  }
 
   const destructiveBlock = getBashDestructiveCommandBlock({
     command: input.command,
@@ -265,13 +313,49 @@ export async function* callBashTool(
 
   try {
     if (input.run_in_background) {
-      const { bashId } = BunShell.getInstance().execInBackground(
-        input.command,
-        input.timeout,
-        {
+      const { bashId, completion, pid } =
+        BunShell.getInstance().execInBackground(input.command, input.timeout, {
           sandbox: sandboxOptions,
-        },
-      )
+          backgroundTask: {
+            sessionId: getEffectiveSessionId(),
+          },
+        })
+      const durableProcess = getDurableRunProcessIdentity(pid)
+      let durableRunCreated = false
+      if (process.env.NODE_ENV !== 'test') {
+        try {
+          createDurableRun({
+            id: bashId,
+            kind: 'shell',
+            cwd: getCwd(),
+            command: input.command,
+            sessionId: getEffectiveSessionId(),
+            outputFile: getBackgroundTaskOutputFilePath(bashId),
+            ...(durableProcess ? { process: durableProcess } : {}),
+          })
+          durableRunCreated = true
+        } catch {
+          // Background execution stays available if the journal is read-only.
+        }
+      }
+      if (durableRunCreated) {
+        void completion.then(result => {
+          try {
+            finishDurableRun({
+              id: bashId,
+              status:
+                result.status === 'completed'
+                  ? 'completed'
+                  : result.status === 'killed'
+                    ? 'cancelled'
+                    : 'failed',
+              ...(result.error ? { error: result.error } : {}),
+            })
+          } catch {
+            // Do not turn a successful task completion into a tool failure.
+          }
+        })
+      }
       const data: Out = {
         stdout: '',
         stdoutLines: 0,

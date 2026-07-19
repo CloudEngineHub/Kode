@@ -12,8 +12,8 @@ import {
   listHookConfigurations,
   setDisableAllHooks,
   type HookConfigEntry,
-} from '#core/hooks'
-import type { Hook, HookEventName } from '#core/hooks/types'
+} from '@kode/hooks'
+import type { Hook, HookEventName } from '@kode/hooks/types'
 import type { ToolUseContext } from '#core/tooling/Tool'
 import { getTheme } from '#core/utils/theme'
 import { getCwd } from '#core/utils/state'
@@ -23,6 +23,7 @@ import { KEYPRESS_PRIORITY } from '#ui-ink/constants/keypressPriority'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import { getWindowedList } from '#ui-ink/primitives/list/windowedList'
+import { useScopedIndexState } from '#ui-ink/hooks/useScopedIndexState'
 
 type Props = {
   context: ToolUseContext
@@ -266,7 +267,6 @@ export function HooksScreen({ onDone }: Props): React.ReactNode {
   const projectDir = getCwd()
   const [status, setStatus] = useState<string | null>(null)
   const [mode, setMode] = useState<Mode>({ kind: 'events' })
-  const [selectedIndex, setSelectedIndex] = useState(0)
 
   const [draftEventIndex, setDraftEventIndex] = useState(0)
   const [draftDestinationIndex, setDraftDestinationIndex] = useState(0)
@@ -364,6 +364,18 @@ export function HooksScreen({ onDone }: Props): React.ReactNode {
     mode,
     projectDir,
   ])
+  const selectionScope =
+    mode.kind === 'events'
+      ? 'hooks-screen:events'
+      : mode.kind === 'hooks'
+        ? `hooks-screen:hooks:${mode.event}`
+        : mode.kind === 'addHook'
+          ? `hooks-screen:add:${mode.step}`
+          : `hooks-screen:confirm:${mode.entry.event}`
+  const [selectedIndex, setSelectedIndex] = useScopedIndexState({
+    scope: selectionScope,
+    itemCount: rows.length,
+  })
 
   const reservedLines =
     (layout.tightLayout ? 7 : layout.compactLayout ? 9 : 11) +

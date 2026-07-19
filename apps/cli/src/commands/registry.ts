@@ -1,10 +1,14 @@
 import bug from './builtin/bug'
+import automation from './builtin/automation'
+import browser from './builtin/browser'
 import clear from './builtin/clear'
+import checkpoint from './builtin/checkpoint'
 import compact from './builtin/compact'
 import config from './builtin/config'
 import cost from './builtin/cost'
 import ctx_viz from './debug/ctx_viz'
 import addDir from './builtin/add-dir'
+import bash from './builtin/bash'
 import exit from './builtin/exit'
 import doctor from './builtin/doctor'
 import gateDump from './builtin/gate-dump'
@@ -19,6 +23,8 @@ import messages_debug from './debug/messages_debug'
 import login from './builtin/login'
 import logout from './builtin/logout'
 import lsp from './builtin/lsp'
+import loop from './builtin/loop'
+import memory from './builtin/memory'
 import mcp from './mcp/mcp'
 import plugin from './plugin/plugin'
 import outputStyle from './builtin/output-style'
@@ -27,6 +33,7 @@ import theme from './builtin/theme'
 import vim from './builtin/vim'
 import * as model from './builtin/model'
 import modelstatus from './builtin/modelstatus'
+import note from './builtin/note'
 import onboarding from './builtin/onboarding'
 import open from './builtin/open'
 import copy from './builtin/copy'
@@ -42,12 +49,18 @@ import releaseNotes from './builtin/release-notes'
 import review from './builtin/review'
 import rename from './builtin/rename'
 import resume from './builtin/resume'
+import rollback from './builtin/rollback'
+import runs from './builtin/runs'
 import rewind from './builtin/rewind'
 import status from './builtin/status'
 import statusline from './builtin/statusline'
+import supervisor from './builtin/supervisor'
 import capabilities from './builtin/capabilities'
 import tag from './builtin/tag'
+import goal from './builtin/goal'
+import watch from './builtin/watch'
 import work from './builtin/work'
+import worktree from './builtin/worktree'
 import tasks from './builtin/tasks'
 import terminalSetup from './builtin/terminal-setup'
 import sandbox from './builtin/sandbox'
@@ -56,7 +69,7 @@ import { PARITY_STUB_COMMANDS } from './builtin/parityStubs'
 import { getMCPCommands, getMcpListChangedVersion } from '#core/mcp/client'
 import { loadCustomCommands } from '#cli-services/customCommands'
 import { memoize } from 'lodash-es'
-import { isAnthropicAuthEnabled } from '#core/utils/auth'
+import { isInteractiveLoginEnabled } from '#core/utils/auth'
 import type { Command } from './types'
 
 export type { Command } from './types'
@@ -68,7 +81,11 @@ const INTERNAL_ONLY_COMMANDS = [ctx_viz, listen, messages_debug]
 const COMMANDS = memoize((): Command[] => [
   agents,
   addDir,
+  automation,
+  bash,
+  browser,
   clear,
+  checkpoint,
   compact,
   config,
   cost,
@@ -82,6 +99,8 @@ const COMMANDS = memoize((): Command[] => [
   skills,
   init,
   lsp,
+  loop,
+  memory,
   outputStyle,
   permissions,
   theme,
@@ -92,6 +111,7 @@ const COMMANDS = memoize((): Command[] => [
   plugin,
   model,
   modelstatus,
+  note,
   onboarding,
   open,
   copy,
@@ -104,19 +124,25 @@ const COMMANDS = memoize((): Command[] => [
   pr_comments,
   rename,
   resume,
+  rollback,
+  runs,
   rewind,
   status,
+  supervisor,
   tag,
   refreshCommands,
   releaseNotes,
   bug,
+  goal,
   review,
+  watch,
   work,
+  worktree,
   tasks,
   terminalSetup,
   sandbox,
   ...PARITY_STUB_COMMANDS,
-  ...(isAnthropicAuthEnabled() ? [logout, login()] : []),
+  ...(isInteractiveLoginEnabled() ? [logout, login()] : []),
   ...INTERNAL_ONLY_COMMANDS,
 ])
 

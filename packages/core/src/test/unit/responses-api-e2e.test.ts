@@ -82,6 +82,37 @@ describe('Responses API Tests', () => {
       expect(unifiedResponse.toolCalls.length).toBe(0)
     })
 
+    test('parses nested output_text and refusal content parts', async () => {
+      const adapter = ModelAdapterFactory.createAdapter(testModel)
+
+      const unifiedResponse = await adapter.parseResponse({
+        id: 'resp-nested-output-text',
+        output: [
+          {
+            type: 'message',
+            role: 'assistant',
+            content: [
+              { type: 'output_text', text: 'Visible answer' },
+              { type: 'refusal', refusal: 'Cannot provide that detail' },
+            ],
+          },
+        ],
+        usage: {
+          input_tokens: 3,
+          output_tokens: 7,
+          total_tokens: 10,
+        },
+      })
+
+      const text = Array.isArray(unifiedResponse.content)
+        ? unifiedResponse.content.map((item: any) => item.text).join('\n')
+        : String(unifiedResponse.content)
+
+      expect(text).toContain('Visible answer')
+      expect(text).toContain('Cannot provide that detail')
+      expect(unifiedResponse.responseId).toBe('resp-nested-output-text')
+    })
+
     test('includes reasoning and verbosity parameters when provided', () => {
       const adapter = ModelAdapterFactory.createAdapter(testModel)
 
@@ -241,8 +272,9 @@ describe('Responses API Tests', () => {
       const adapter = ModelAdapterFactory.createAdapter(testModel)
       const encoder = new TextEncoder()
       const streamChunks = [
+        'data: {"type":"response.created","response":{"id":"resp-stream-test"}}\n',
         'data: {"type":"response.output_text.delta","delta":"Hello"}\n',
-        'data: {"type":"response.completed","usage":{"input_tokens":12,"output_tokens":8,"total_tokens":20,"output_tokens_details":{"reasoning_tokens":3}}}\n',
+        'data: {"type":"response.completed","response":{"id":"resp-stream-test","usage":{"input_tokens":12,"output_tokens":8,"total_tokens":20,"output_tokens_details":{"reasoning_tokens":3}}}}\n',
         'data: [DONE]\n',
       ]
 
@@ -294,6 +326,117 @@ describe('Responses API Tests', () => {
       })
       expect(rawResponse.id).toBe('resp-stream-test')
     })
+
+    test('streams function call arguments done events as tool requests', async () => {
+      const adapter = ModelAdapterFactory.createAdapter(testModel)
+      const streamData = [
+        'data: {"type":"response.created","response":{"id":"resp-tool-stream"}}\n\n',
+        'data: {"type":"response.output_item.added","output_index":0,"item":{"id":"fc_123","type":"function_call","status":"in_progress","name":"read_file","arguments":"","call_id":"call_123"}}\n\n',
+        'data: {"type":"response.function_call_arguments.delta","item_id":"fc_123","output_index":0,"delta":"{\\"path\\":"}\n\n',
+        'data: {"type":"response.function_call_arguments.delta","item_id":"fc_123","output_index":0,"delta":"\\"README.md\\"}"}\n\n',
+        'data: {"type":"response.function_call_arguments.done","item_id":"fc_123","output_index":0,"arguments":"{\\"path\\":\\"README.md\\"}"}\n\n',
+        'data: {"type":"response.output_item.done","output_index":0,"item":{"id":"fc_123","type":"function_call","status":"completed","name":"read_file","arguments":"{\\"path\\":\\"README.md\\"}","call_id":"call_123"}}\n\n',
+        'data: {"type":"response.completed","response":{"id":"resp-tool-stream"}}\n\n',
+        'data: [DONE]\n\n',
+      ].join('')
+
+      const events: any[] = []
+      if (!adapter.parseStreamingResponse) {
+        throw new Error('Adapter does not support streaming')
+      }
+      for await (const event of adapter.parseStreamingResponse(
+        new Response(streamData),
+      )) {
+        events.push(event)
+      }
+
+      const toolRequests = events.filter(event => event.type === 'tool_request')
+      expect(toolRequests).toEqual([
+        {
+          type: 'tool_request',
+          tool: {
+            id: 'call_123',
+            name: 'read_file',
+            input: '{"path":"README.md"}',
+          },
+        },
+      ])
+
+      async function* replayEvents(evts: any[]) {
+        for (const evt of evts) {
+          yield evt
+        }
+      }
+
+      const { assistantMessage } = await processResponsesStream(
+        replayEvents(events),
+        Date.now(),
+        'resp-tool-stream-fallback',
+      )
+
+      expect(assistantMessage.message.content).toContainEqual({
+        type: 'tool_use',
+        id: 'call_123',
+        name: 'read_file',
+        input: { path: 'README.md' },
+      })
+      expect(assistantMessage.responseId).toBe('resp-tool-stream')
+    })
+
+    test('streaming failure before assistant output rejects', async () => {
+      const adapter = ModelAdapterFactory.createAdapter(testModel)
+      const streamData = [
+        'data: {"type":"response.created","response":{"id":"resp-failed-before-output"}}\n\n',
+        'data: {"type":"response.failed","response":{"id":"resp-failed-before-output","status":"failed","error":{"message":"quota exceeded"}}}\n\n',
+        'data: [DONE]\n\n',
+      ].join('')
+
+      await expect(
+        adapter.parseResponse(new Response(streamData)),
+      ).rejects.toThrow('quota exceeded')
+    })
+
+    test('streaming failure after assistant output marks partial response degraded', async () => {
+      const adapter = ModelAdapterFactory.createAdapter(testModel)
+      const streamData = [
+        'data: {"type":"response.created","response":{"id":"resp-partial-failed"}}\n\n',
+        'data: {"type":"response.output_text.delta","delta":"partial"}\n\n',
+        'data: {"type":"response.failed","response":{"id":"resp-partial-failed","status":"failed","error":{"message":"socket reset"}}}\n\n',
+        'data: [DONE]\n\n',
+      ].join('')
+
+      const events: any[] = []
+      if (!adapter.parseStreamingResponse) {
+        throw new Error('Adapter does not support streaming')
+      }
+      for await (const event of adapter.parseStreamingResponse(
+        new Response(streamData),
+      )) {
+        events.push(event)
+      }
+
+      async function* replayEvents(evts: any[]) {
+        for (const evt of evts) {
+          yield evt
+        }
+      }
+
+      const { assistantMessage, rawResponse } = await processResponsesStream(
+        replayEvents(events),
+        Date.now(),
+        'resp-fallback',
+      )
+
+      expect(assistantMessage.responseId).toBe('resp-partial-failed')
+      expect(assistantMessage.message.content).toEqual([
+        { type: 'text', text: 'partial', citations: [] },
+      ])
+      expect(assistantMessage.message.stop_reason).toBe('max_tokens')
+      expect(rawResponse).toMatchObject({
+        id: 'resp-partial-failed',
+        error: 'socket reset',
+      })
+    })
   })
 
   describe('Reasoning Support Tests', () => {
@@ -326,6 +469,58 @@ describe('Responses API Tests', () => {
       // Verify verbosity configuration
       expect(request).toHaveProperty('text')
       expect(request.text.verbosity).toBe('high')
+    })
+
+    test('keeps streamed reasoning separate before emitting final text', async () => {
+      const adapter = ModelAdapterFactory.createAdapter(testModel)
+      const updates: Array<{ type: string; delta?: string }> = []
+      const streamData = [
+        'data: {"type":"response.created","response":{"id":"resp-thinking-then-text"}}\n\n',
+        'data: {"type":"response.reasoning_summary_part.added","summary_index":0}\n\n',
+        'data: {"type":"response.reasoning_summary_text.delta","delta":"Plan the answer"}\n\n',
+        'data: {"type":"response.output_text.delta","delta":"Final answer"}\n\n',
+        'data: {"type":"response.completed","response":{"id":"resp-thinking-then-text"}}\n\n',
+        'data: [DONE]\n\n',
+      ].join('')
+
+      const response = await adapter.parseResponse(new Response(streamData), {
+        onAssistantStreamUpdate: event => {
+          updates.push(event)
+        },
+      })
+
+      expect(response.content).toEqual([
+        {
+          type: 'thinking',
+          thinking: 'Plan the answer',
+          signature: '',
+        },
+        { type: 'text', text: 'Final answer', citations: [] },
+      ])
+      expect(updates).toEqual([
+        { type: 'start' },
+        { type: 'text_delta', delta: 'Final answer' },
+      ])
+    })
+
+    test('preserves a completed reasoning-only response for turn recovery', async () => {
+      const adapter = ModelAdapterFactory.createAdapter(testModel)
+      const streamData = [
+        'data: {"type":"response.created","response":{"id":"resp-thinking-only"}}\n\n',
+        'data: {"type":"response.reasoning_text.delta","delta":"Need one more step"}\n\n',
+        'data: {"type":"response.completed","response":{"id":"resp-thinking-only"}}\n\n',
+        'data: [DONE]\n\n',
+      ].join('')
+
+      const response = await adapter.parseResponse(new Response(streamData))
+
+      expect(response.content).toEqual([
+        {
+          type: 'thinking',
+          thinking: 'Need one more step',
+          signature: '',
+        },
+      ])
     })
 
     test('processes real GPT-5 reasoning stream with reasoning items and text deltas', async () => {

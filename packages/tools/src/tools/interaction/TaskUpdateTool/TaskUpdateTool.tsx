@@ -1,11 +1,10 @@
 import { z } from 'zod'
-import type { Tool, ToolUseContext } from '#core/tooling/Tool'
+import type { Tool, ToolUseContext } from '@kode/tool-interface/Tool'
 import { emitReminderEvent } from '#core/services/systemReminder'
 import {
-  addDependency,
   deleteTask,
   getTask,
-  updateTask,
+  updateTaskWithDependencies,
 } from '#core/utils/taskStorage'
 import type { TaskStatus, TaskUpdate } from '#core/utils/taskStorage'
 import { DESCRIPTION, PROMPT } from './prompt'
@@ -14,7 +13,7 @@ const statusSchema = z.enum(['pending', 'in_progress', 'completed'])
 const statusWithDeletedSchema = statusSchema.or(z.literal('deleted'))
 
 const inputSchema = z.strictObject({
-  taskId: z.string().min(1).describe('The ID of the task to update'),
+  taskId: z.string().trim().min(1).describe('The ID of the task to update'),
   subject: z.string().optional().describe('New subject for the task'),
   description: z.string().optional().describe('New description for the task'),
   activeForm: z
@@ -25,11 +24,11 @@ const inputSchema = z.strictObject({
     .optional()
     .describe('New status for the task'),
   addBlocks: z
-    .array(z.string())
+    .array(z.string().trim().min(1))
     .optional()
     .describe('Task IDs that this task blocks'),
   addBlockedBy: z
-    .array(z.string())
+    .array(z.string().trim().min(1))
     .optional()
     .describe('Task IDs that block this task'),
   owner: z.string().optional().describe('New owner for the task'),
@@ -85,7 +84,7 @@ export const TaskUpdateTool = {
     return false
   },
   isConcurrencySafe() {
-    return true
+    return false
   },
   needsPermissions() {
     return false
@@ -221,10 +220,12 @@ export const TaskUpdateTool = {
       updatedFields.push('metadata')
     }
 
-    const updateResult =
-      Object.keys(update).length > 0
-        ? updateTask({ taskId, update })
-        : ({ ok: true, updated: existing } as const)
+    const updateResult = updateTaskWithDependencies({
+      taskId,
+      update,
+      addBlocks: input.addBlocks,
+      addBlockedBy: input.addBlockedBy,
+    })
 
     if (updateResult.ok === false) {
       const output: Output = {
@@ -242,24 +243,8 @@ export const TaskUpdateTool = {
       return
     }
 
-    // Dependencies (best-effort)
-    if (Array.isArray(input.addBlocks) && input.addBlocks.length > 0) {
-      for (const other of input.addBlocks) {
-        if (!other || other === taskId) continue
-        const res = addDependency({ taskId, blocksTaskId: String(other) })
-        if (res.ok) updatedFields.push('blocks')
-      }
-    }
-    if (Array.isArray(input.addBlockedBy) && input.addBlockedBy.length > 0) {
-      for (const blocker of input.addBlockedBy) {
-        if (!blocker || blocker === taskId) continue
-        const res = addDependency({
-          taskId: String(blocker),
-          blocksTaskId: taskId,
-        })
-        if (res.ok) updatedFields.push('blockedBy')
-      }
-    }
+    if (updateResult.addedBlocks.length > 0) updatedFields.push('blocks')
+    if (updateResult.addedBlockedBy.length > 0) updatedFields.push('blockedBy')
 
     const output: Output = {
       success: true,

@@ -38,7 +38,11 @@ describe('BashTool sandbox indicator (compatibility)', () => {
   })
 
   afterEach(() => {
-    process.env.KODE_BASH_SANDBOX_SHOW_INDICATOR = originalIndicator
+    if (originalIndicator === undefined) {
+      delete process.env.KODE_BASH_SANDBOX_SHOW_INDICATOR
+    } else {
+      process.env.KODE_BASH_SANDBOX_SHOW_INDICATOR = originalIndicator
+    }
     if (originalHome === undefined) delete process.env.HOME
     else process.env.HOME = originalHome
     process.chdir(originalCwd)

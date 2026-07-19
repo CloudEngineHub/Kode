@@ -14,6 +14,14 @@ import {
   convertMessagesToInput,
 } from './responsesAPI/messageInput'
 import { parseNonStreamingResponse as parseResponsesApiNonStreamingResponse } from './responsesAPI/nonStreaming'
+import type { AssistantStreamUpdateOptions } from '@kode/tool-interface/assistantStreamUpdate'
+
+type StreamingFunctionCallState = {
+  id?: string
+  callId?: string
+  name?: string
+  arguments: string
+}
 
 export class ResponsesAPIAdapter extends OpenAIAdapter {
   createRequest(params: UnifiedRequestParams): any {
@@ -168,8 +176,137 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
     })
   }
 
+  private getFunctionCallKey(parsed: any, item?: any): string | null {
+    const outputIndex = parsed.output_index
+    if (typeof outputIndex === 'number' || typeof outputIndex === 'string') {
+      return `output:${outputIndex}`
+    }
+
+    const itemId = parsed.item_id || item?.id || item?.call_id
+    if (typeof itemId === 'string' && itemId) {
+      return `item:${itemId}`
+    }
+
+    return null
+  }
+
+  private getFunctionCallMap(
+    reasoningContext?: ReasoningStreamingContext,
+  ): Map<string, StreamingFunctionCallState> | undefined {
+    if (!reasoningContext) return undefined
+    if (!reasoningContext.responseFunctionCalls) {
+      reasoningContext.responseFunctionCalls = new Map()
+    }
+    return reasoningContext.responseFunctionCalls
+  }
+
+  private updateFunctionCallStateFromItem(
+    state: StreamingFunctionCallState,
+    item: any,
+  ): StreamingFunctionCallState {
+    if (typeof item?.id === 'string') state.id = item.id
+    if (typeof item?.call_id === 'string') state.callId = item.call_id
+    if (typeof item?.name === 'string') state.name = item.name
+    if (typeof item?.arguments === 'string') state.arguments = item.arguments
+    return state
+  }
+
+  private toFunctionCallTool(state: StreamingFunctionCallState): {
+    id: string
+    name: string
+    input: string
+  } | null {
+    const callId = state.callId || state.id
+    if (
+      typeof callId !== 'string' ||
+      typeof state.name !== 'string' ||
+      typeof state.arguments !== 'string'
+    ) {
+      return null
+    }
+
+    return {
+      id: callId,
+      name: state.name,
+      input: state.arguments,
+    }
+  }
+
+  private getFunctionCallFromStreamingEvent(
+    parsed: any,
+    reasoningContext?: ReasoningStreamingContext,
+  ): {
+    id: string
+    name: string
+    input: string
+  } | null {
+    const map = this.getFunctionCallMap(reasoningContext)
+
+    if (parsed.type === 'response.output_item.added') {
+      const item = parsed.item || {}
+      if (item.type !== 'function_call') return null
+
+      const key = this.getFunctionCallKey(parsed, item)
+      if (!key || !map) return null
+
+      const state = map.get(key) ?? { arguments: '' }
+      map.set(key, this.updateFunctionCallStateFromItem(state, item))
+      return null
+    }
+
+    if (parsed.type === 'response.function_call_arguments.delta') {
+      const key = this.getFunctionCallKey(parsed)
+      if (!key || !map || typeof parsed.delta !== 'string') return null
+
+      const state = map.get(key) ?? { arguments: '' }
+      state.arguments += parsed.delta
+      map.set(key, state)
+      return null
+    }
+
+    if (parsed.type === 'response.function_call_arguments.done') {
+      const item = parsed.item || {}
+      const key = this.getFunctionCallKey(parsed, item)
+      const state =
+        (key && map?.get(key)) ??
+        (item.type === 'function_call' ? { arguments: '' } : null)
+
+      if (!state) return null
+
+      if (item.type === 'function_call') {
+        this.updateFunctionCallStateFromItem(state, item)
+      }
+      if (typeof parsed.arguments === 'string') {
+        state.arguments = parsed.arguments
+      }
+      if (key && map) map.set(key, state)
+
+      return this.toFunctionCallTool(state)
+    }
+
+    const item =
+      parsed.type === 'response.output_item.done' ? parsed.item : null
+
+    if (!item || item.type !== 'function_call') {
+      return null
+    }
+
+    const key = this.getFunctionCallKey(parsed, item)
+    const state =
+      (key && map?.get(key)) ??
+      ({ arguments: '' } satisfies StreamingFunctionCallState)
+
+    this.updateFunctionCallStateFromItem(state, item)
+    if (key && map) map.set(key, state)
+
+    return this.toFunctionCallTool(state)
+  }
+
   // Override parseResponse to handle Response API directly without double conversion
-  async parseResponse(response: any): Promise<UnifiedResponse> {
+  async parseResponse(
+    response: any,
+    options?: AssistantStreamUpdateOptions,
+  ): Promise<UnifiedResponse> {
     // Check if this is a streaming response (has ReadableStream body)
     if (response?.body instanceof ReadableStream) {
       // Handle streaming directly - don't go through OpenAIAdapter conversion
@@ -177,6 +314,7 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
         this.parseStreamingResponse(response),
         Date.now(),
         response.id ?? `resp_${Date.now()}`,
+        options,
       )
 
       // LINUX WAY: ONE representation only - tool_use blocks in content
@@ -227,9 +365,9 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
       if (partIndex > 0 && reasoningContext!.thinkingContent) {
         reasoningContext!.thinkingContent += '\n\n'
 
-        // Emit newline separator as thinking delta
+        // Keep provider reasoning separate from user-facing output.
         yield {
-          type: 'text_delta',
+          type: 'thinking_delta',
           delta: '\n\n',
           responseId,
         }
@@ -246,9 +384,10 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
         // Accumulate thinking content
         reasoningContext.thinkingContent += delta
 
-        // Stream thinking delta
+        // Do not turn reasoning into user-facing text. A thinking-only
+        // response must remain detectable by the turn recovery pipeline.
         yield {
-          type: 'text_delta',
+          type: 'thinking_delta',
           delta,
           responseId,
         }
@@ -265,9 +404,10 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
         // Accumulate thinking content
         reasoningContext.thinkingContent += delta
 
-        // Stream thinking delta
+        // Do not turn reasoning into user-facing text. A thinking-only
+        // response must remain detectable by the turn recovery pipeline.
         yield {
-          type: 'text_delta',
+          type: 'thinking_delta',
           delta,
           responseId,
         }
@@ -287,39 +427,35 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
       }
     }
 
-    // Handle tool calls (Responses API format)
-    if (parsed.type === 'response.output_item.done') {
-      const item = parsed.item || {}
-      if (item.type === 'function_call') {
-        const callId = item.call_id || item.id
-        const name = item.name
-        const args = item.arguments
+    // Handle tool calls (Responses API streaming format)
+    const functionCall = this.getFunctionCallFromStreamingEvent(
+      parsed,
+      reasoningContext,
+    )
+    if (functionCall) {
+      const seenToolCallIds =
+        reasoningContext?.seenToolCallIds ??
+        (reasoningContext
+          ? (reasoningContext.seenToolCallIds = new Set<string>())
+          : undefined)
 
-        if (
-          typeof callId === 'string' &&
-          typeof name === 'string' &&
-          typeof args === 'string'
-        ) {
-          yield {
-            type: 'tool_request',
-            tool: {
-              id: callId,
-              name: name,
-              input: args,
-            },
-          }
+      if (!seenToolCallIds?.has(functionCall.id)) {
+        seenToolCallIds?.add(functionCall.id)
+        yield {
+          type: 'tool_request',
+          tool: functionCall,
         }
       }
     }
 
     // Handle usage information - normalize to canonical structure
-    if (parsed.usage) {
-      const normalizedUsage = normalizeTokens(parsed.usage)
+    const usage = parsed.usage ?? parsed.response?.usage
+    if (usage) {
+      const normalizedUsage = normalizeTokens(usage)
 
       // Add reasoning tokens if available in Responses API format
-      if (parsed.usage.output_tokens_details?.reasoning_tokens) {
-        normalizedUsage.reasoning =
-          parsed.usage.output_tokens_details.reasoning_tokens
+      if (usage.output_tokens_details?.reasoning_tokens) {
+        normalizedUsage.reasoning = usage.output_tokens_details.reasoning_tokens
       }
 
       yield {
@@ -349,6 +485,7 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
   // Implement abstract method for parsing streaming OpenAI responses
   protected async parseStreamingOpenAIResponse(
     response: any,
+    options?: AssistantStreamUpdateOptions,
   ): Promise<{ assistantMessage: any; rawResponse: any }> {
     // Delegate to the processResponsesStream helper for consistency
     const { processResponsesStream } = await import('./responsesStreaming')
@@ -357,6 +494,7 @@ export class ResponsesAPIAdapter extends OpenAIAdapter {
       this.parseStreamingResponse(response),
       Date.now(),
       response.id ?? `resp_${Date.now()}`,
+      options,
     )
   }
 

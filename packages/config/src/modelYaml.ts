@@ -1,4 +1,4 @@
-import yaml from 'js-yaml'
+import { dump, load } from 'js-yaml'
 import { z } from 'zod'
 
 import type { GlobalConfig, ModelPointers, ModelProfile } from './schema'
@@ -134,7 +134,7 @@ function resolvePointerTarget(
 }
 
 export function parseModelConfigYaml(yamlText: string): ModelConfigYaml {
-  const parsed = yaml.load(yamlText)
+  const parsed = load(yamlText)
   return ModelConfigYamlSchema.parse(parsed)
 }
 
@@ -164,7 +164,7 @@ export function formatModelConfigYamlForSharing(config: GlobalConfig): string {
     ...(pointers ? { pointers } : {}),
   }
 
-  return yaml.dump(exported, {
+  return dump(exported, {
     noRefs: true,
     lineWidth: 120,
   })

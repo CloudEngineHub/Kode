@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
   countLineBreaks,
+  estimatePasteWrappedLineCount,
   getSpecialPasteNewlineThreshold,
   normalizeLineEndings,
   shouldAggregatePasteChunk,
@@ -32,11 +33,27 @@ describe('Regression: paste/newline heuristics', () => {
     expect(shouldAggregatePasteChunk('x\n', false)).toBe(true)
     expect(shouldAggregatePasteChunk('x\ry', false)).toBe(true)
     expect(shouldAggregatePasteChunk('a'.repeat(801), false)).toBe(true)
+    expect(
+      shouldAggregatePasteChunk('a'.repeat(200), false, {
+        terminalColumns: 100,
+      }),
+    ).toBe(true)
+    expect(
+      shouldAggregatePasteChunk('a'.repeat(120), false, {
+        terminalColumns: 100,
+      }),
+    ).toBe(false)
     expect(shouldAggregatePasteChunk('x', false)).toBe(false)
+  })
+
+  test('pending paste aggregation keeps single keypresses responsive', () => {
+    expect(shouldAggregatePasteChunk('x', true)).toBe(false)
+    expect(shouldAggregatePasteChunk('xy', true)).toBe(true)
   })
 
   test('special paste is gated by length or newline threshold', () => {
     expect(getSpecialPasteNewlineThreshold(24)).toBe(2)
+    expect(getSpecialPasteNewlineThreshold(8)).toBe(0)
     expect(shouldTreatAsSpecialPaste('\n')).toBe(false)
     expect(shouldTreatAsSpecialPaste('\r')).toBe(false)
     expect(shouldTreatAsSpecialPaste('a\nb')).toBe(false)
@@ -45,5 +62,20 @@ describe('Regression: paste/newline heuristics', () => {
     expect(shouldTreatAsSpecialPaste('a\nb\nc', { terminalRows: 11 })).toBe(
       true,
     )
+  })
+
+  test('special paste can be gated by visible wrapped rows', () => {
+    expect(estimatePasteWrappedLineCount('a'.repeat(198), 100)).toBe(2)
+    expect(estimatePasteWrappedLineCount('a'.repeat(199), 100)).toBe(3)
+    expect(estimatePasteWrappedLineCount('你'.repeat(100), 100)).toBe(3)
+    expect(
+      shouldTreatAsSpecialPaste('a'.repeat(198), { terminalColumns: 100 }),
+    ).toBe(false)
+    expect(
+      shouldTreatAsSpecialPaste('a'.repeat(199), { terminalColumns: 100 }),
+    ).toBe(true)
+    expect(
+      shouldTreatAsSpecialPaste('你'.repeat(100), { terminalColumns: 100 }),
+    ).toBe(true)
   })
 })

@@ -10,6 +10,8 @@ import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
 import { getWindowedList } from '#ui-ink/primitives/list/windowedList'
 import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { useExitOnCtrlCD } from '#ui-ink/hooks/useExitOnCtrlCD'
+import { useCliExit } from '#ui-ink/hooks/useCliExit'
+import { useScopedIndexState } from '#ui-ink/hooks/useScopedIndexState'
 
 type SessionSelectorProps = {
   sessions: KodeAgentSessionListItem[]
@@ -21,7 +23,12 @@ type SessionSelectorProps = {
   enterLabel?: string
 }
 
-export function SessionSelector({
+export function SessionSelector(props: SessionSelectorProps): React.ReactNode {
+  if (props.sessions.length === 0) return null
+  return <PopulatedSessionSelector {...props} />
+}
+
+function PopulatedSessionSelector({
   sessions,
   onSelect,
   onClose,
@@ -33,12 +40,15 @@ export function SessionSelector({
   const theme = getTheme()
   const layout = useScreenLayout()
   const { rows } = useTerminalSize()
-  if (sessions.length === 0) return null
 
-  const close = onClose ?? (() => process.exit(0))
-  const exitState = useExitOnCtrlCD(() => process.exit(0))
+  const requestExit = useCliExit()
+  const close = onClose ?? (() => requestExit(0))
+  const exitState = useExitOnCtrlCD(() => requestExit(0))
 
-  const [selectedIndex, setSelectedIndex] = React.useState(0)
+  const [selectedIndex, setSelectedIndex] = useScopedIndexState({
+    scope: `session-selector:${title}`,
+    itemCount: sessions.length,
+  })
   const didSubmitRef = React.useRef(false)
   const mountedRef = React.useRef(true)
   const [submitError, setSubmitError] = React.useState<string | null>(null)
@@ -49,13 +59,6 @@ export function SessionSelector({
       mountedRef.current = false
     }
   }, [])
-
-  React.useEffect(() => {
-    setSelectedIndex(prev => {
-      if (sessions.length <= 0) return 0
-      return Math.max(0, Math.min(sessions.length - 1, prev))
-    })
-  }, [sessions.length])
 
   const reservedLines =
     (layout.tightLayout ? 7 : layout.compactLayout ? 9 : 11) +

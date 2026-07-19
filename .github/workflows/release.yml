@@ -16,26 +16,55 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
+    env:
+      KODE_SKIP_BINARY_DOWNLOAD: '1'
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     permissions:
       contents: write
       actions: write
     steps:
+      - name: Require main branch
+        run: |
+          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "Release workflow must be dispatched from main (got ${GITHUB_REF})."
+            exit 1
+          fi
+
       - name: Checkout code
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20.18.1'
+          node-version: '20.19.0'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: '1.3.14'
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Format
+        run: bun run format:check
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Test
+        run: bun run test
+
+      - name: Build
+        run: bun run build
 
       - name: Configure Git
         run: |
@@ -48,10 +77,10 @@ jobs:
           # Get current version
           CURRENT_VERSION=$(node -p "require('./package.json').version")
           echo "Current version: $CURRENT_VERSION"
-          
+
           # Bump version using npm version
           npm version ${{ github.event.inputs.version_type }} --no-git-tag-version
-          
+
           # Get new version
           NEW_VERSION=$(node -p "require('./package.json').version")
           echo "New version: $NEW_VERSION"
@@ -60,13 +89,17 @@ jobs:
       - name: Sync workspace versions
         run: node scripts/set-version.mjs "${{ steps.bump_version.outputs.new_version }}"
 
+      - name: Refresh and verify Bun lockfile
+        run: |
+          bun install --lockfile-only --ignore-scripts
+          bun install --frozen-lockfile --ignore-scripts
+
       - name: Commit changes and tag
         run: |
-          git add package.json packages/kode-bin-*/package.json packages/kode-ripgrep-*/package.json
+          git add package.json bun.lock packages/kode-bin-*/package.json packages/kode-ripgrep-*/package.json
           git commit -m "Release v${{ steps.bump_version.outputs.new_version }}"
           git tag -a v${{ steps.bump_version.outputs.new_version }} -m "Release v${{ steps.bump_version.outputs.new_version }}"
-          git push origin HEAD:main
-          git push origin --tags
+          git push --atomic origin HEAD:main "refs/tags/v${{ steps.bump_version.outputs.new_version }}"
           echo "✅ Tag pushed: v${{ steps.bump_version.outputs.new_version }}"
 
       - name: Dispatch stable release workflow

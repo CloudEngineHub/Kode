@@ -1,19 +1,14 @@
 import * as React from 'react'
 import type { Command } from '../types'
-import { ConsoleOAuthFlow } from '#ui-ink/components/ConsoleOAuthFlow'
+import { LoginScreen } from '#ui-ink/components/LoginScreen'
 import { clearTerminal } from '#cli-utils/terminal'
-import { isLoggedInToAnthropic } from '#core/utils/auth'
-import { useExitOnCtrlCD } from '#ui-ink/hooks/useExitOnCtrlCD'
-import { Box, Text } from 'ink'
 import { clearConversation } from './clear'
 
 export default () =>
   ({
     type: 'local-jsx',
     name: 'login',
-    description: isLoggedInToAnthropic()
-      ? 'Switch ShareAI Lab accounts'
-      : 'Sign in with your ShareAI Lab account',
+    description: 'Configure Codex, OpenAI, or another model provider',
     isEnabled: true,
     isHidden: false,
     ui: { displayMode: 'fullscreen' },
@@ -22,7 +17,7 @@ export default () =>
       return (
         <Login
           onDone={async () => {
-            clearConversation(context)
+            await clearConversation(context)
             onDone()
           }}
         />
@@ -33,20 +28,4 @@ export default () =>
     },
   }) satisfies Command
 
-function Login(props: { onDone: () => void }) {
-  const exitState = useExitOnCtrlCD(props.onDone)
-  return (
-    <Box flexDirection="column">
-      <ConsoleOAuthFlow onDone={props.onDone} />
-      <Box marginLeft={3}>
-        <Text dimColor>
-          {exitState.pending ? (
-            <>Press {exitState.keyName} again to exit</>
-          ) : (
-            ''
-          )}
-        </Text>
-      </Box>
-    </Box>
-  )
-}
+const Login = LoginScreen

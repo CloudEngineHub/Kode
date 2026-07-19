@@ -11,4 +11,6 @@ export const PROMPT = `Reads a specific resource from an MCP server, identified 
 
 Parameters:
 - server (required): The name of the MCP server from which to read the resource
-- uri (required): The URI of the resource to read`
+- uri (required): The URI of the resource to read
+
+Returns resource contents as MCP text parts or base64-encoded blob parts, depending on what the server provides.`

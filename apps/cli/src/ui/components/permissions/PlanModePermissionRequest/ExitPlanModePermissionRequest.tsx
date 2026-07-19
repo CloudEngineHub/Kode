@@ -24,18 +24,22 @@ import { useKeypress } from '#ui-ink/hooks/useKeypress'
 import { useTerminalSize } from '#ui-ink/hooks/useTerminalSize'
 import { ScreenFrame } from '#ui-ink/primitives/layout/ScreenFrame'
 import { useScreenLayout } from '#ui-ink/primitives/layout/useScreenLayout'
+import { computeAvailableColumns } from '#ui-ink/primitives/layout/viewportColumns'
+import { computeResponsiveRows } from '#ui-ink/primitives/layout/viewportRows'
 import { getWindowedList } from '#ui-ink/primitives/list/windowedList'
 import { wrapLines } from '#ui-ink/primitives/text/wrapLines'
 import { getPermissionModeCycleShortcut } from '#ui-ink/utils/permissionModeCycleShortcut'
 import type { PermissionMode } from '#core/types/PermissionMode'
 import { applyToolPermissionContextUpdateForConversationKey } from '#core/utils/toolPermissionContextState'
 import { getMessagesSetter } from '#core/messages'
-import { getContext } from '#core/context'
+import { getContext } from '@kode/context'
 import { getCodeStyle } from '#core/utils/style'
 import { resetReminderSession } from '#core/services/systemReminder'
 import { resetFileFreshnessSession } from '#core/services/fileFreshness'
-import { formatBashPromptRule } from '#core/permissions/bash'
+import { formatBashPromptRule } from '@kode/permissions/bash'
 import { LEGACY_ENV } from '#core/compat/legacyEnv'
+import { permissionSelectFocusScope } from '#ui-ink/components/permissions/permissionFocusScope'
+import { useScopedIndexState } from '#ui-ink/hooks/useScopedIndexState'
 
 type Props = {
   toolUseConfirm: ToolUseConfirm
@@ -127,16 +131,10 @@ export function ExitPlanModePermissionRequest({
   const [planSaved, setPlanSaved] = useState(false)
   const [editorLabel, setEditorLabel] = useState(() => getExternalEditorLabel())
   const [rejectDraft, setRejectDraft] = useState('')
-  const [focusedOptionIndex, setFocusedOptionIndex] = useState(0)
-  const [planFocusIndex, setPlanFocusIndex] = useState(0)
-  const [focusedAllowedPromptIndex, setFocusedAllowedPromptIndex] = useState(0)
   const [selectedAllowedPromptIndices, setSelectedAllowedPromptIndices] =
     useState<number[]>(() =>
       allowedPrompts ? allowedPrompts.map((_, i) => i) : [],
     )
-  const [focusSection, setFocusSection] = useState<'options' | 'permissions'>(
-    'options',
-  )
   const [swarmTeammateCount, setSwarmTeammateCount] = useState(3)
   const [remoteExitState, setRemoteExitState] = useState<
     'default' | 'checking' | 'unavailable'
@@ -151,43 +149,15 @@ export function ExitPlanModePermissionRequest({
     return () => clearTimeout(timeout)
   }, [planSaved])
 
-  useEffect(() => {
-    if (!allowedPrompts) return
-    setFocusedAllowedPromptIndex(prev =>
-      Math.max(0, Math.min(prev, allowedPrompts.length - 1)),
-    )
-    setSelectedAllowedPromptIndices(prev =>
-      prev.filter(idx => idx >= 0 && idx < allowedPrompts.length),
-    )
-  }, [allowedPrompts?.length])
-
-  const planViewportWidth = Math.max(20, columns - layout.paddingX * 2 - 2)
+  const planViewportWidth = computeAvailableColumns({
+    columns,
+    reservedColumns: layout.paddingX * 2 + 2,
+  })
   const planLines = useMemo(
     () => wrapLines(planText.split('\n'), planViewportWidth),
     [planText, planViewportWidth],
   )
-
-  useEffect(() => {
-    setPlanFocusIndex(prev => {
-      if (planLines.length === 0) return 0
-      return Math.max(0, Math.min(prev, planLines.length - 1))
-    })
-  }, [planLines.length])
-
-  const planViewportRows = Math.max(6, Math.min(14, Math.floor(rows * 0.4)))
-  const planWindow = useMemo(
-    () =>
-      getWindowedList({
-        itemCount: planLines.length,
-        focusIndex: planFocusIndex,
-        maxVisible: planViewportRows,
-        indicatorRows: 2,
-      }),
-    [planFocusIndex, planLines.length, planViewportRows],
-  )
-
   const showExitWithoutPlan = !planExists || planText.trim().length === 0
-
   const bypassAvailable =
     toolUseConfirm.toolUseContext.options?.safeMode !== true
   const pushToRemoteAvailable = useMemo(
@@ -208,17 +178,78 @@ export function ExitPlanModePermissionRequest({
     swarmAvailable,
     swarmTeammateCount,
   ])
+  const focusScope = useMemo(
+    () => permissionSelectFocusScope(toolUseConfirm, 'exit-plan-mode'),
+    [toolUseConfirm],
+  )
+  const [focusedOptionIndex, setFocusedOptionIndex] = useScopedIndexState({
+    scope: `${focusScope}:option`,
+    itemCount: Math.max(1, showExitWithoutPlan ? 2 : options.length),
+  })
+  const [planFocusIndex, setPlanFocusIndex] = useScopedIndexState({
+    scope: `${focusScope}:plan-preview`,
+    itemCount: Math.max(1, planLines.length),
+  })
+  const [focusedAllowedPromptIndex, setFocusedAllowedPromptIndex] =
+    useScopedIndexState({
+      scope: `${focusScope}:allowed-prompts`,
+      itemCount: Math.max(1, allowedPrompts?.length ?? 1),
+    })
+  const [focusSectionIndex, setFocusSectionIndex] = useScopedIndexState({
+    scope: `${focusScope}:section`,
+    itemCount: hasAllowedPrompts ? 2 : 1,
+  })
+  const focusSection =
+    hasAllowedPrompts && focusSectionIndex === 1 ? 'permissions' : 'options'
+  const setFocusSection = (next: 'options' | 'permissions') => {
+    setFocusSectionIndex(next === 'permissions' && hasAllowedPrompts ? 1 : 0)
+  }
+
+  useEffect(() => {
+    if (!allowedPrompts) return
+    setFocusedAllowedPromptIndex(prev =>
+      Math.max(0, Math.min(prev, allowedPrompts.length - 1)),
+    )
+    setSelectedAllowedPromptIndices(prev =>
+      prev.filter(idx => idx >= 0 && idx < allowedPrompts.length),
+    )
+  }, [allowedPrompts?.length, setFocusedAllowedPromptIndex])
+
+  useEffect(() => {
+    setPlanFocusIndex(prev => {
+      if (planLines.length === 0) return 0
+      return Math.max(0, Math.min(prev, planLines.length - 1))
+    })
+  }, [planLines.length, setPlanFocusIndex])
 
   useEffect(() => {
     setFocusedOptionIndex(prev =>
       Math.max(0, Math.min(prev, options.length - 1)),
     )
-  }, [options.length])
+  }, [options.length, setFocusedOptionIndex])
 
   useEffect(() => {
     if (!showExitWithoutPlan) return
     setFocusedOptionIndex(prev => Math.max(0, Math.min(prev, 1)))
-  }, [showExitWithoutPlan])
+  }, [showExitWithoutPlan, setFocusedOptionIndex])
+
+  const planViewportRows = computeResponsiveRows({
+    rows,
+    reservedRows: 8,
+    minRows: 2,
+    maxRows: 14,
+    ratio: 0.4,
+  })
+  const planWindow = useMemo(
+    () =>
+      getWindowedList({
+        itemCount: planLines.length,
+        focusIndex: planFocusIndex,
+        maxVisible: planViewportRows,
+        indicatorRows: 2,
+      }),
+    [planFocusIndex, planLines.length, planViewportRows],
+  )
 
   const applyPermissionMode = (nextMode: PermissionMode) => {
     const conversationKey = getPlanConversationKey(
