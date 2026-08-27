@@ -142,7 +142,7 @@ After installation, you can use any of these commands:
 
 For users who prefer a “portable” executable (no npm install), download the Bun-compiled asset from GitHub Releases:
 
-- https://github.com/shareAI-lab/kode/releases
+- https://github.com/shareAI-lab/Kode-CLI/releases
 
 See `docs/binary-distribution.md` for details (asset names, local build).
 
@@ -298,7 +298,7 @@ This mode automatically formats responses as structured documentation and append
 
 ```bash
 # Clone the repository
-git clone https://github.com/shareAI-lab/Kode.git
+git clone https://github.com/shareAI-lab/Kode-CLI.git
 cd Kode
 
 # Build the image locally
@@ -663,7 +663,7 @@ powershell -c "irm bun.sh/install.ps1 | iex"
 
 ```bash
 # Clone the repository
-git clone https://github.com/shareAI-lab/kode.git
+git clone https://github.com/shareAI-lab/Kode-CLI.git
 cd kode
 
 # Install dependencies
@@ -706,5 +706,5 @@ Apache 2.0 License - see [LICENSE](LICENSE) for details.
 ## Support
 
 - 📚 [Documentation](docs/)
-- 🐛 [Report Issues](https://github.com/shareAI-lab/kode/issues)
-- 💬 [Discussions](https://github.com/shareAI-lab/kode/discussions)
+- 🐛 [Report Issues](https://github.com/shareAI-lab/Kode-CLI/issues)
+- 💬 [Discussions](https://github.com/shareAI-lab/Kode-CLI/discussions)

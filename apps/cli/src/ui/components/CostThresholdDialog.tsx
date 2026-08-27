@@ -37,7 +37,7 @@ export function CostThresholdDialog({ onDone }: Props): React.ReactNode {
             <Text dimColor>
               Learn more about monitoring your AI usage costs:
             </Text>
-            <Link url="https://github.com/shareAI-lab/kode/blob/main/README.md" />
+            <Link url="https://github.com/shareAI-lab/Kode-CLI/blob/main/README.md" />
           </Box>
           <Box>
             <Select

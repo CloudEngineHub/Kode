@@ -99,7 +99,7 @@ npm install -g @shareai-lab/kode@dev
 
 如果你希望“绿色运行”（不通过 npm 安装），可以从 GitHub Releases 下载对应平台的 Bun 编译产物：
 
-- https://github.com/shareAI-lab/kode/releases
+- https://github.com/shareAI-lab/Kode-CLI/releases
 
 详见 `docs/binary-distribution.md`（资产命名、本地构建）。
 
@@ -155,7 +155,7 @@ toad acp "kode-acp"
 
 ```bash
 # 克隆仓库
-git clone https://github.com/shareAI-lab/Kode.git
+git clone https://github.com/shareAI-lab/Kode-CLI.git
 cd Kode
 
 # 本地构建镜像
@@ -567,7 +567,7 @@ powershell -c "irm bun.sh/install.ps1 | iex"
 
 ```bash
 # 克隆仓库
-git clone https://github.com/shareAI-lab/kode.git
+git clone https://github.com/shareAI-lab/Kode-CLI.git
 cd kode
 
 # 安装依赖
@@ -604,5 +604,5 @@ Apache 2.0 许可证 - 详见 [LICENSE](LICENSE)。
 ## 支持
 
 - 📚 [文档](docs/)
-- 🐛 [报告问题](https://github.com/shareAI-lab/kode/issues)
-- 💬 [讨论](https://github.com/shareAI-lab/kode/discussions)
+- 🐛 [报告问题](https://github.com/shareAI-lab/Kode-CLI/issues)
+- 💬 [讨论](https://github.com/shareAI-lab/Kode-CLI/discussions)

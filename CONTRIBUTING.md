@@ -11,7 +11,7 @@
 2. **Clone and Install**
 
    ```bash
-   git clone https://github.com/shareAI-lab/kode.git
+   git clone https://github.com/shareAI-lab/Kode-CLI.git
    cd kode
    bun install --frozen-lockfile
    ```

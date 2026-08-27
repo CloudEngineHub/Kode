@@ -4,13 +4,13 @@
   "description": "Bundled ripgrep (rg) binary for Kode (linux-arm64).",
   "license": "Apache-2.0",
   "author": "ShareAI-lab <ai-lab@foxmail.com>",
-  "homepage": "https://github.com/shareAI-lab/kode",
+  "homepage": "https://github.com/shareAI-lab/Kode-CLI",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/shareAI-lab/kode.git"
+    "url": "git+https://github.com/shareAI-lab/Kode-CLI.git"
   },
   "bugs": {
-    "url": "https://github.com/shareAI-lab/kode/issues"
+    "url": "https://github.com/shareAI-lab/Kode-CLI/issues"
   },
   "os": [
     "linux"

@@ -38,13 +38,13 @@
     "provenance": true
   },
   "description": "AI-powered terminal assistant that understands your codebase, edits files, runs commands, and automates development workflows.",
-  "homepage": "https://github.com/shareAI-lab/kode",
+  "homepage": "https://github.com/shareAI-lab/Kode-CLI",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/shareAI-lab/kode.git"
+    "url": "git+https://github.com/shareAI-lab/Kode-CLI.git"
   },
   "bugs": {
-    "url": "https://github.com/shareAI-lab/kode/issues"
+    "url": "https://github.com/shareAI-lab/Kode-CLI/issues"
   },
   "files": [
     "cli.js",
