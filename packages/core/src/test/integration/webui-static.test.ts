@@ -1,33 +1,31 @@
 import { describe, expect, test } from 'bun:test'
-import { spawnSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { startKodeDaemon } from '#daemon/server'
 
-function ensureWebuiBuilt(): void {
-  const index = join(process.cwd(), 'dist', 'webui', 'index.html')
-  if (existsSync(index)) return
-
-  const res = spawnSync(process.execPath, ['run', 'build:web'], {
-    encoding: 'utf8',
-    timeout: 5 * 60 * 1000,
-    env: { ...process.env },
-  })
-  if (res.status !== 0) {
-    throw new Error(`vite build failed: ${res.stdout}\n${res.stderr}`)
-  }
+function createWebuiFixture(): string {
+  const root = mkdtempSync(join(tmpdir(), 'kode-webui-static-'))
+  const assets = join(root, 'assets')
+  mkdirSync(assets)
+  writeFileSync(
+    join(root, 'index.html'),
+    '<!doctype html><title>Kode WebUI</title><link rel="stylesheet" href="/assets/app.css"><script src="/assets/app.js"></script>',
+  )
+  writeFileSync(join(assets, 'app.js'), 'console.log("Kode WebUI")')
+  writeFileSync(join(assets, 'app.css'), 'body { color: black; }')
+  return root
 }
 
 describe('daemon WebUI static hosting', () => {
-  test('serves built WebUI assets (index.html + hashed assets)', async () => {
-    ensureWebuiBuilt()
-
+  test('serves WebUI assets from the configured directory', async () => {
+    const webuiDir = createWebuiFixture()
     const daemon = await startKodeDaemon({
       cwd: process.cwd(),
       port: 0,
       echo: true,
-      webuiDir: join(process.cwd(), 'dist', 'webui'),
+      webuiDir,
     })
 
     try {
@@ -39,18 +37,8 @@ describe('daemon WebUI static hosting', () => {
       const html = await indexRes.text()
       expect(html).toContain('Kode WebUI')
 
-      const scriptMatch = html.match(/<script[^>]+src=\"([^\"]+)\"/i)
-      expect(scriptMatch).toBeTruthy()
-      const scriptSrc = String(scriptMatch?.[1] ?? '')
-
-      const cssMatch = html.match(
-        /<link[^>]+rel=\"stylesheet\"[^>]+href=\"([^\"]+)\"/i,
-      )
-      expect(cssMatch).toBeTruthy()
-      const cssHref = String(cssMatch?.[1] ?? '')
-
       const jsRes = await fetch(
-        `http://${daemon.host}:${daemon.port}${scriptSrc}`,
+        `http://${daemon.host}:${daemon.port}/assets/app.js`,
       )
       expect(jsRes.status).toBe(200)
       expect(String(jsRes.headers.get('content-type') ?? '')).toContain(
@@ -58,7 +46,7 @@ describe('daemon WebUI static hosting', () => {
       )
 
       const cssRes = await fetch(
-        `http://${daemon.host}:${daemon.port}${cssHref}`,
+        `http://${daemon.host}:${daemon.port}/assets/app.css`,
       )
       expect(cssRes.status).toBe(200)
       expect(String(cssRes.headers.get('content-type') ?? '')).toContain(
@@ -66,6 +54,7 @@ describe('daemon WebUI static hosting', () => {
       )
     } finally {
       daemon.stop()
+      rmSync(webuiDir, { recursive: true, force: true })
     }
-  }, 20_000)
+  })
 })
