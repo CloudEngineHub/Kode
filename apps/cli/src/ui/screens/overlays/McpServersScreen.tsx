@@ -39,12 +39,7 @@ import {
 } from '#ui-ink/components/CustomSelect/select'
 
 type McpUiScope =
-  | 'project'
-  | 'local'
-  | 'user'
-  | 'enterprise'
-  | 'agent'
-  | 'dynamic'
+  'project' | 'local' | 'user' | 'enterprise' | 'agent' | 'dynamic'
 
 type McpUiStatus =
   | 'connected'
@@ -461,12 +456,10 @@ export function McpServersScreen(props: { onDone(result?: string): void }) {
       const header = `${getScopeLabel(scope)} (${headerConfigLocationForScope(scope, items)})`
       options.push({
         header,
-        options: items.map(
-          (server): Option => ({
-            label: `${server.name} · ${formatServerStatusLabel(server.status)}`,
-            value: server.name,
-          }),
-        ),
+        options: items.map((server): Option => ({
+          label: `${server.name} · ${formatServerStatusLabel(server.status)}`,
+          value: server.name,
+        })),
       })
     }
 

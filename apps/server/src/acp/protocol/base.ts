@@ -156,11 +156,7 @@ export type LoadSessionResponse = {
 }
 
 export type StopReason =
-  | 'end_turn'
-  | 'max_tokens'
-  | 'max_turn_requests'
-  | 'refusal'
-  | 'cancelled'
+  'end_turn' | 'max_tokens' | 'max_turn_requests' | 'refusal' | 'cancelled'
 
 export type PromptResponse = {
   stopReason: StopReason

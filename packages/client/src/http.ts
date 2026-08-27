@@ -120,8 +120,7 @@ export class HttpClient implements KodeClient {
     const WebSocketImpl =
       this.options.webSocketImpl ??
       ((globalThis as unknown as { WebSocket?: unknown }).WebSocket as
-        | (new (url: string) => WebSocketLike)
-        | undefined)
+        (new (url: string) => WebSocketLike) | undefined)
     if (!WebSocketImpl) {
       throw new Error('WebSocket implementation not found')
     }

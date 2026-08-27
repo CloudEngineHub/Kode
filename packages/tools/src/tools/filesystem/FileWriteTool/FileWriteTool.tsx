@@ -1,4 +1,4 @@
-import type { Hunk } from 'diff'
+import type { StructuredPatchHunk as Hunk } from 'diff'
 import { mkdirSync, statSync } from 'fs'
 import { dirname, isAbsolute, relative, resolve } from 'path'
 import { z } from 'zod'

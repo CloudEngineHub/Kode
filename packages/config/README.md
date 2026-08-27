@@ -11,4 +11,4 @@
 入口与使用方：
 
 - 入口：`packages/config/src/index.ts`（对外导出）
-- 使用：`apps/kode/src/entrypoints/*` 在启动时 `enableConfigs()`，并在需要时做 repair/validation
+- 使用：`apps/cli/src/dispatch.ts` 和各 host 在启动时加载配置，并在需要时执行 repair/validation

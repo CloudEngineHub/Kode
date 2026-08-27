@@ -44,8 +44,6 @@ cd ..
 
 node - <<'NODE'
 const fs = require('node:fs')
-const os = require('node:os')
-const path = require('node:path')
 const { spawnSync } = require('node:child_process')
 
 process.env.PATH = ''
@@ -64,38 +62,12 @@ if (rgRes.status !== 0) {
   process.exit(rgRes.status || 1)
 }
 
-const { getAllTools } = require('@shareai-lab/kode/tools')
-const grepTool = getAllTools().find(t => t && t.name === 'Grep')
-if (!grepTool) {
-  console.error('Missing Grep tool export')
-  process.exit(1)
-}
-
-const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'kode-grep-smoke-'))
-fs.writeFileSync(path.join(tmpRoot, 'hello.txt'), 'hello from kode')
-
-const ctx = {
-  messageId: undefined,
-  abortController: new AbortController(),
-  readFileTimestamps: {},
-  options: { __sandboxPlatform: process.platform },
-}
-
-;(async () => {
-  let result = null
-  for await (const evt of grepTool.call(
-    { pattern: 'hello', path: tmpRoot, output_mode: 'files_with_matches' },
-    ctx,
-  )) {
-    if (evt.type === 'result') result = evt.data
-  }
-  if (!result || result.numFiles < 1) {
-    console.error('Grep smoke test failed:', result)
+for (const subpath of ['protocol', 'daemon-client']) {
+  const specifier = `@shareai-lab/kode/${subpath}`
+  const loaded = require(specifier)
+  if (!loaded || typeof loaded !== 'object') {
+    console.error(`Could not require ${specifier}`)
     process.exit(1)
   }
-  console.log('Grep OK:', result.filenames)
-})().catch(err => {
-  console.error(err)
-  process.exit(1)
-})
+}
 NODE

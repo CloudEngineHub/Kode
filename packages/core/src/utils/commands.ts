@@ -1,5 +1,5 @@
 import { memoize } from 'lodash-es'
-import { type ControlOperator, parse, ParseEntry } from 'shell-quote'
+import { parse, ParseEntry } from 'shell-quote'
 
 const SINGLE_QUOTE = '__SINGLE_QUOTE__'
 const DOUBLE_QUOTE = '__DOUBLE_QUOTE__'
@@ -217,7 +217,7 @@ export function splitCommand(command: string): string[] {
       continue
     }
 
-    if ((COMMAND_LIST_SEPARATORS as Set<string>).has(part)) {
+    if (COMMAND_LIST_SEPARATORS.has(part)) {
       const trimmed = current.trim()
       if (trimmed) out.push(trimmed)
       current = ''
@@ -337,7 +337,7 @@ const getCommandPrefix = memoize(
   command => command, // memoize by command only
 )
 
-const COMMAND_LIST_SEPARATORS = new Set<ControlOperator>([
+const COMMAND_LIST_SEPARATORS = new Set<string>([
   '&&',
   '||',
   ';',

@@ -61,9 +61,7 @@ type NormalizedUserMessage = {
 }
 
 export type NormalizedMessage =
-  | NormalizedUserMessage
-  | AssistantMessage
-  | ProgressMessage
+  NormalizedUserMessage | AssistantMessage | ProgressMessage
 
 export function normalizeMessages(messages: Message[]): NormalizedMessage[] {
   return messages.flatMap(message => {

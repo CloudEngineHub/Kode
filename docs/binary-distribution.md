@@ -45,7 +45,7 @@ Example:
 You must build on the target OS/arch (GitHub Actions does this via a matrix build).
 
 ```bash
-bun install
+bun install --frozen-lockfile
 # Optional but recommended: include WebUI + platform ripgrep in the binary payload
 bun run build
 bun run scripts/ensure-ripgrep.mjs --current-only
@@ -64,5 +64,4 @@ node scripts/prepare-kode-bin-packages.mjs
 
 ## Automated release pipeline
 
-- Dev prereleases: `.github/workflows/dev-release.yml`
-- Stable releases: `.github/workflows/npm-publish.yml`
+- Stable and prerelease tags: `.github/workflows/npm-publish.yml`

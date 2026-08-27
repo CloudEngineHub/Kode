@@ -19,11 +19,7 @@ import {
 } from './outputStyles/filesystem'
 
 export type OutputStyleSource =
-  | 'built-in'
-  | 'plugin'
-  | 'userSettings'
-  | 'projectSettings'
-  | 'policySettings'
+  'built-in' | 'plugin' | 'userSettings' | 'projectSettings' | 'policySettings'
 
 export type OutputStyleDefinition = {
   name: string

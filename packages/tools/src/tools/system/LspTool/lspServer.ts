@@ -15,11 +15,7 @@ const DEFAULT_STARTUP_TIMEOUT_MS = 15_000
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 5_000
 
 export type LspServerRunState =
-  | 'stopped'
-  | 'starting'
-  | 'running'
-  | 'stopping'
-  | 'error'
+  'stopped' | 'starting' | 'running' | 'stopping' | 'error'
 
 type NotificationHandler = (params: unknown) => void | Promise<void>
 type RequestHandler = (params: unknown) => unknown | Promise<unknown>

@@ -12,12 +12,7 @@ export interface LogEntry {
 export interface ErrorDiagnosis {
   errorType: string
   category:
-    | 'NETWORK'
-    | 'API'
-    | 'PERMISSION'
-    | 'CONFIG'
-    | 'SYSTEM'
-    | 'USER_INPUT'
+    'NETWORK' | 'API' | 'PERMISSION' | 'CONFIG' | 'SYSTEM' | 'USER_INPUT'
   severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
   description: string
   suggestions: string[]

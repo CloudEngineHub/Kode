@@ -3,15 +3,17 @@
 ## Development Setup
 
 1. **Install Bun**
+
    ```bash
    curl -fsSL https://bun.sh/install | bash
    ```
 
 2. **Clone and Install**
+
    ```bash
    git clone https://github.com/shareAI-lab/kode.git
    cd kode
-   bun install
+   bun install --frozen-lockfile
    ```
 
 3. **Run in Development**
@@ -26,10 +28,9 @@
 ├── apps/                  # Entrypoints (build to dist/)
 ├── packages/              # Internal workspace modules (core/protocol/tools/hosts/daemon/config/runtime)
 ├── scripts/               # Build and utility scripts
-├── docs/                  # Documentation
-├── new_plan/              # vNext architecture plan
+├── docs/                  # Curated user and developer documentation
 ├── examples/              # Integration examples / PoCs
-└── cli.js                 # Generated CLI wrapper (built)
+└── package.json           # Package boundary and development commands
 ```
 
 ## Building
@@ -38,7 +39,8 @@
 bun run build
 ```
 
-This runs `scripts/build.mjs` which creates:
+This runs `scripts/build.mjs` and creates ignored artifacts:
+
 - `cli.js` / `cli-acp.js` - runtime wrappers
 - `dist/**` - bundled runtime (Node) + assets
 
@@ -74,4 +76,4 @@ If you need to bypass hooks locally (not recommended), you can use:
 
 ## Publishing
 
-See [docs/PUBLISH.md](docs/PUBLISH.md) for publishing instructions.
+Publishing is CI-only. See [docs/develop/releasing.md](docs/develop/releasing.md).

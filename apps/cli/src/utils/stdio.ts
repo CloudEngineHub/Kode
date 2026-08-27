@@ -254,8 +254,7 @@ export function ensureTuiStdioPatched(): {
   process.stdout.write = (
     chunk: Uint8Array | string,
     encodingOrCb?:
-      | BufferEncoding
-      | ((err?: NodeJS.ErrnoException | null) => void),
+      BufferEncoding | ((err?: NodeJS.ErrnoException | null) => void),
     cb?: (err?: NodeJS.ErrnoException | null) => void,
   ) => {
     const encoding = typeof encodingOrCb === 'string' ? encodingOrCb : undefined
@@ -268,8 +267,7 @@ export function ensureTuiStdioPatched(): {
   process.stderr.write = (
     chunk: Uint8Array | string,
     encodingOrCb?:
-      | BufferEncoding
-      | ((err?: NodeJS.ErrnoException | null) => void),
+      BufferEncoding | ((err?: NodeJS.ErrnoException | null) => void),
     cb?: (err?: NodeJS.ErrnoException | null) => void,
   ) => {
     const encoding = typeof encodingOrCb === 'string' ? encodingOrCb : undefined

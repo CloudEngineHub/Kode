@@ -96,32 +96,6 @@ async function main() {
     format: 'esm',
   })
   await buildSdkEntry({
-    entrypoint: 'packages/core/src/index.ts',
-    outfile: join(OUT_DIR, 'sdk', 'core.js'),
-    format: 'esm',
-  })
-  await buildSdkEntry({
-    entrypoint: 'packages/runtime/src/index.ts',
-    outfile: join(OUT_DIR, 'sdk', 'runtime.js'),
-    format: 'esm',
-  })
-  await buildSdkEntry({
-    entrypoint: 'packages/runtime/src/node.ts',
-    outfile: join(OUT_DIR, 'sdk', 'runtime-node.js'),
-    format: 'esm',
-  })
-  await buildSdkEntry({
-    entrypoint: 'packages/client/src/index.ts',
-    outfile: join(OUT_DIR, 'sdk', 'client.js'),
-    format: 'esm',
-  })
-  await buildSdkEntry({
-    entrypoint: 'packages/tools/src/index.ts',
-    outfile: join(OUT_DIR, 'sdk', 'tools.js'),
-    format: 'esm',
-  })
-
-  await buildSdkEntry({
     entrypoint: 'packages/protocol/src/index.ts',
     outfile: join(OUT_DIR, 'sdk', 'protocol.cjs'),
     format: 'cjs',
@@ -131,62 +105,27 @@ async function main() {
     outfile: join(OUT_DIR, 'sdk', 'daemon-client.cjs'),
     format: 'cjs',
   })
-  await buildSdkEntry({
-    entrypoint: 'packages/core/src/index.ts',
-    outfile: join(OUT_DIR, 'sdk', 'core.cjs'),
-    format: 'cjs',
-  })
-  await buildSdkEntry({
-    entrypoint: 'packages/runtime/src/index.ts',
-    outfile: join(OUT_DIR, 'sdk', 'runtime.cjs'),
-    format: 'cjs',
-  })
-  await buildSdkEntry({
-    entrypoint: 'packages/runtime/src/node.ts',
-    outfile: join(OUT_DIR, 'sdk', 'runtime-node.cjs'),
-    format: 'cjs',
-  })
-  await buildSdkEntry({
-    entrypoint: 'packages/client/src/index.ts',
-    outfile: join(OUT_DIR, 'sdk', 'client.cjs'),
-    format: 'cjs',
-  })
-  await buildSdkEntry({
-    entrypoint: 'packages/tools/src/index.ts',
-    outfile: join(OUT_DIR, 'sdk', 'tools.cjs'),
-    format: 'cjs',
-  })
-
   // Build web UI (Vite) and copy to dist/webui
-  try {
-    if (existsSync(join('apps', 'web', 'vite.config.ts'))) {
-      runOrThrow([
-        'bun',
-        'x',
-        'vite',
-        'build',
-        '--config',
-        'apps/web/vite.config.ts',
-      ])
-      const srcWebDist = join('apps', 'web', 'dist')
-      if (existsSync(join(srcWebDist, 'index.html'))) {
-        cpSync(srcWebDist, join(OUT_DIR, 'webui'), { recursive: true })
-        const serverStaticDir = join('apps', 'server', 'static')
-        rmSync(serverStaticDir, { recursive: true, force: true })
-        mkdirSync(serverStaticDir, { recursive: true })
-        cpSync(srcWebDist, serverStaticDir, { recursive: true })
-      } else {
-        console.warn(
-          '⚠️  WebUI build completed but apps/web/dist/index.html was not found',
-        )
-      }
-    }
-  } catch (err) {
-    console.warn(
-      '⚠️  Could not build/copy WebUI:',
-      err instanceof Error ? err.message : String(err),
-    )
+  if (!existsSync(join('apps', 'web', 'vite.config.ts'))) {
+    throw new Error('Missing apps/web/vite.config.ts')
   }
+  runOrThrow([
+    'bun',
+    'x',
+    'vite',
+    'build',
+    '--config',
+    'apps/web/vite.config.ts',
+  ])
+  const srcWebDist = join('apps', 'web', 'dist')
+  if (!existsSync(join(srcWebDist, 'index.html'))) {
+    throw new Error('apps/web/dist/index.html not found after build')
+  }
+  cpSync(srcWebDist, join(OUT_DIR, 'webui'), { recursive: true })
+  const serverStaticDir = join('apps', 'server', 'static')
+  rmSync(serverStaticDir, { recursive: true, force: true })
+  mkdirSync(serverStaticDir, { recursive: true })
+  cpSync(srcWebDist, serverStaticDir, { recursive: true })
 
   // Mark dist as ESM for interoperability (some tooling still expects this)
   writeFileSync(
@@ -195,14 +134,7 @@ async function main() {
   )
 
   // Copy yoga.wasm alongside outputs (helps in environments where root assets are stripped)
-  try {
-    cpSync('yoga.wasm', join(OUT_DIR, 'yoga.wasm'))
-  } catch (err) {
-    console.warn(
-      '⚠️  Could not copy yoga.wasm:',
-      err instanceof Error ? err.message : String(err),
-    )
-  }
+  cpSync('yoga.wasm', join(OUT_DIR, 'yoga.wasm'))
 
   // Best-effort: build Linux seccomp assets for the current arch (Unix socket blocking).
   // CI release workflows assemble both x64+arm64 assets before publishing the main package.
@@ -287,13 +219,8 @@ async function main() {
   console.log('  - dist/entrypoints/daemon.js')
   console.log('  - dist/sdk/protocol.js (+ .cjs)')
   console.log('  - dist/sdk/daemon-client.js (+ .cjs)')
-  console.log('  - dist/sdk/core.js (+ .cjs)')
-  console.log('  - dist/sdk/runtime.js (+ .cjs)')
-  console.log('  - dist/sdk/runtime-node.js (+ .cjs)')
-  console.log('  - dist/sdk/client.js (+ .cjs)')
-  console.log('  - dist/sdk/tools.js (+ .cjs)')
-  console.log('  - dist/webui/* (if available)')
-  console.log('  - apps/server/static/* (if available)')
+  console.log('  - dist/webui/*')
+  console.log('  - apps/server/static/*')
   console.log('  - cli.js')
   console.log('  - cli-acp.js')
   console.log('  - mcp-cli.js')

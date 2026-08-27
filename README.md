@@ -1,5 +1,6 @@
 # Kode - AI Coding
-<img width="991" height="479" alt="image" src="https://github.com/user-attachments/assets/c1751e92-94dc-4e4a-9558-8cd2d058c1a1" />  <br> 
+
+<img width="991" height="479" alt="image" src="https://github.com/user-attachments/assets/c1751e92-94dc-4e4a-9558-8cd2d058c1a1" /> <br>
 [![npm version](https://badge.fury.io/js/@shareai-lab%2Fkode.svg)](https://www.npmjs.com/package/@shareai-lab/kode)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![AGENTS.md](https://img.shields.io/badge/AGENTS.md-Compatible-brightgreen)](https://agents.md)
@@ -12,14 +13,11 @@
 
 <img width="90%" alt="f266d316d90ddd0db5a3d640c1126930" src="https://github.com/user-attachments/assets/90ec7399-1349-4607-b689-96613b3dc3e2" />
 
-
 <img width="90%" alt="image" src="https://github.com/user-attachments/assets/b30696ce-5ab1-40a0-b741-c7ef3945dba0" />
-
 
 ## 📢 Update Log
 
 **2025-12-22**: npm + optionalDependencies distribution (all platforms). Kode prefers the per-platform native binary package (`@shareai-lab/kode-bin-*`) with Node.js as a fallback; standalone binaries are also published on GitHub Releases. See `docs/binary-distribution.md`.
-
 
 ## 🤝 AGENTS.md Standard Support
 
@@ -46,7 +44,7 @@ Use `# Your documentation request` to generate and maintain your AGENTS.md file 
 Kode is a powerful AI assistant that lives in your terminal. It can understand your codebase, edit files, run commands, and handle entire workflows for you.
 
 > **⚠️ Security Notice**: Kode runs in YOLO mode by default (equivalent to the `--dangerously-skip-permissions` flag), bypassing all permission checks for maximum productivity. YOLO mode is recommended only for trusted, secure environments when working on non-critical projects. If you're working with important files or using models of questionable capability, we strongly recommend using `kode --safe` to enable permission checks and manual approval for all operations.
-> 
+>
 > **📊 Model Performance**: For optimal performance, we recommend using newer, more capable models designed for autonomous task completion. Avoid older Q&A-focused models like GPT-4o or Gemini 2.5 Pro, which are optimized for answering questions rather than sustained independent task execution. Choose models specifically trained for agentic workflows and extended reasoning capabilities.
 
 ## Network & Privacy
@@ -63,6 +61,7 @@ Kode is a powerful AI assistant that lives in your terminal. It can understand y
 ## Features
 
 ### Core Capabilities
+
 - 🤖 **AI-Powered Assistance** - Uses advanced AI models to understand and respond to your requests
 - 🔄 **Multi-Model Collaboration** - Flexibly switch and combine multiple AI models to leverage their unique strengths
 - 🦜 **Expert Model Consultation** - Use `@ask-model-name` to consult specific AI models for specialized analysis
@@ -73,31 +72,37 @@ Kode is a powerful AI assistant that lives in your terminal. It can understand y
 - 🛠️ **Workflow Automation** - Handle complex development tasks with simple prompts
 
 ### Authoring Comfort
+
 - `Option+G` (Alt+G) opens your message in your preferred editor (respects `$EDITOR`/`$VISUAL`; falls back to code/nano/vim/notepad) and returns the text to the prompt when you close it.
 - `Option+Enter` inserts a newline inside the prompt without sending; plain Enter submits. `Option+M` cycles the active model.
 
 ### 🎯 Advanced Intelligent Completion System
+
 Our state-of-the-art completion system provides unparalleled coding assistance:
 
 #### Smart Fuzzy Matching
+
 - **Hyphen-Aware Matching** - Type `dao` to match `run-agent-dao-qi-harmony-designer`
 - **Abbreviation Support** - `dq` matches `dao-qi`, `nde` matches `node`
 - **Numeric Suffix Handling** - `py3` intelligently matches `python3`
 - **Multi-Algorithm Fusion** - Combines 7+ matching algorithms for best results
 
 #### Intelligent Context Detection
+
 - **No @ Required** - Type `gp5` directly to match `@ask-gpt-5`
 - **Auto-Prefix Addition** - Tab/Enter automatically adds `@` for agents and models
 - **Mixed Completion** - Seamlessly switch between commands, files, agents, and models
 - **Smart Prioritization** - Results ranked by relevance and usage frequency
 
 #### Unix Command Optimization
+
 - **500+ Common Commands** - Curated database of frequently used Unix/Linux commands
 - **System Intersection** - Only shows commands that actually exist on your system
 - **Priority Scoring** - Common commands appear first (git, npm, docker, etc.)
 - **Real-time Loading** - Dynamic command discovery from system PATH
 
 ### User Experience
+
 - 🎨 **Interactive UI** - Beautiful terminal interface with syntax highlighting
 - 🔌 **Tool System** - Extensible architecture with specialized tools for different tasks
 - 💾 **Context Management** - Smart context handling to maintain conversation continuity
@@ -110,6 +115,7 @@ npm install -g @shareai-lab/kode
 ```
 
 > **🇨🇳 For users in China**: If you encounter network issues, use a mirror registry:
+>
 > ```bash
 > npm install -g @shareai-lab/kode --registry=https://registry.npmmirror.com
 > ```
@@ -127,6 +133,7 @@ npm install -g @shareai-lab/kode@dev
 ```
 
 After installation, you can use any of these commands:
+
 - `kode` - Primary command
 - `kwa` - Kode With Agent (alternative)
 - `kd` - Ultra-short alias
@@ -148,7 +155,9 @@ See `docs/binary-distribution.md` for details (asset names, local build).
 ## Usage
 
 ### Interactive Mode
+
 Start an interactive session:
+
 ```bash
 kode
 # or
@@ -158,7 +167,9 @@ kd
 ```
 
 ### Non-Interactive Mode
+
 Get a quick response:
+
 ```bash
 kode -p "explain this function" path/to/file.js
 # or
@@ -188,6 +199,7 @@ More: `docs/acp.md`.
 Kode supports a powerful @ mention system for intelligent completions:
 
 #### 🦜 Expert Model Consultation
+
 ```bash
 # Consult specific AI models for expert opinions
 @ask-claude-sonnet-4 How should I optimize this React component for performance?
@@ -195,7 +207,8 @@ Kode supports a powerful @ mention system for intelligent completions:
 @ask-o1-preview Analyze the complexity of this algorithm
 ```
 
-#### 👤 Specialized Agent Delegation  
+#### 👤 Specialized Agent Delegation
+
 ```bash
 # Delegate tasks to specialized subagents
 @run-agent-simplicity-auditor Review this code for over-engineering
@@ -204,6 +217,7 @@ Kode supports a powerful @ mention system for intelligent completions:
 ```
 
 #### 📁 Smart File References
+
 ```bash
 # Reference files and directories with auto-completion
 @packages/core/src/query/index.ts
@@ -269,7 +283,7 @@ Use the `#` prefix to generate and maintain your AGENTS.md documentation:
 # Generate setup instructions
 # How do I set up the development environment?
 
-# Create testing documentation  
+# Create testing documentation
 # What are the testing procedures for this project?
 
 # Document deployment process
@@ -293,9 +307,9 @@ docker build --no-cache -t kode .
 # Run in your project directory
 cd your-project
 docker run -it --rm \
-  -v $(pwd):/workspace \
-  -v ~/.kode:/root/.kode \
-  -v ~/.kode.json:/root/.kode.json \
+  -v "$PWD:/workspace" \
+  -v "$HOME/.kode:/home/node/.kode" \
+  -v "$HOME/.kode.json:/home/node/.kode.json" \
   -w /workspace \
   kode
 ```
@@ -305,9 +319,9 @@ docker run -it --rm \
 The Docker setup includes:
 
 - **Volume Mounts**:
-  - `$(pwd):/workspace` - Mounts your current project directory
-  - `~/.kode:/root/.kode` - Preserves your kode configuration directory between runs
-  - `~/.kode.json:/root/.kode.json` - Preserves your kode global configuration file between runs
+  - `$PWD:/workspace` - Mounts your current project directory
+  - `$HOME/.kode:/home/node/.kode` - Preserves your Kode data between runs
+  - `$HOME/.kode.json:/home/node/.kode.json` - Preserves your global configuration
 
 - **Working Directory**: Set to `/workspace` inside the container
 
@@ -315,7 +329,8 @@ The Docker setup includes:
 
 - **Cleanup**: `--rm` flag removes the container after exit
 
-**Note**: Kode uses both `~/.kode` directory for additional data (like memory files) and `~/.kode.json` file for global configuration.
+**Note**: The image runs as the unprivileged `node` user. Create the two host
+configuration paths before mounting them if they do not already exist.
 
 The first time you run the Docker command, it will build the image. Subsequent runs will use the cached image for faster startup.
 
@@ -351,8 +366,8 @@ Minimal agent file example (`./.kode/agents/reviewer.md`):
 ```md
 ---
 name: reviewer
-description: "Review diffs for correctness, security, and simplicity"
-tools: ["Read", "Grep"]
+description: 'Review diffs for correctness, security, and simplicity'
+tools: ['Read', 'Grep']
 model: inherit
 ---
 
@@ -360,6 +375,7 @@ Be strict. Point out bugs and risky changes. Prefer small, targeted fixes.
 ```
 
 Model field notes:
+
 - Compatibility aliases: `inherit`, `opus`, `sonnet`, `haiku` (mapped to model pointers)
 - Kode selectors (via `/model`): pointers (`main|task|compact|quick`), profile name, modelName, or `provider:modelName` (e.g. `openai:o3`)
 
@@ -374,6 +390,7 @@ See `docs/agents-system.md`.
 ## Skills & Plugins
 
 Kode supports:
+
 - **Agent Skills** format (`SKILL.md`) for reusable skill packs
 - **Marketplace compatibility** (`.kode-plugin/marketplace.json`, legacy `.claude-plugin/marketplace.json`) for sharing/installing skill packs
 
@@ -423,10 +440,12 @@ allowed-tools: Read Bash(git:*) Bash(jq:*)
 ```
 
 Naming rules:
+
 - `name` must match the folder name
 - Lowercase letters/numbers/hyphens only, 1–64 chars
 
 Compatibility:
+
 - Kode also discovers `.claude/skills` and `.claude/commands` for legacy compatibility.
 
 ### Distribute skills
@@ -455,7 +474,9 @@ Unlike single-model CLIs, Kode implements **true multi-model collaboration**, al
 ### 🏗️ Core Technical Architecture
 
 #### 1. **ModelManager Multi-Model Manager**
+
 We designed a unified `ModelManager` system that supports:
+
 - **Model Profiles**: Each model has an independent configuration file containing API endpoints, authentication, context window size, cost parameters, etc.
 - **Model Pointers**: Users can configure default models for different purposes in the `/model` command:
   - `main`: Default model for main Agent
@@ -502,18 +523,23 @@ pointers:
 ```
 
 #### 2. **TaskTool Intelligent Task Distribution**
+
 Our specially designed `TaskTool` (Architect tool) implements:
+
 - **Subagent Mechanism**: Can launch multiple sub-agents to process tasks in parallel
 - **Model Parameter Passing**: Users can specify which model SubAgents should use in their requests
 - **Default Model Configuration**: SubAgents use the model configured by the `task` pointer by default
 
 #### 3. **AskExpertModel Expert Consultation Tool**
+
 We specially designed the `AskExpertModel` tool:
+
 - **Expert Model Invocation**: Allows temporarily calling specific expert models to solve difficult problems during conversations
 - **Model Isolation Execution**: Expert model responses are processed independently without affecting the main conversation flow
 - **Knowledge Integration**: Integrates expert model insights into the current task
 
 #### 🎯 Flexible Model Switching
+
 - **Option+M Quick Switch**: Press Option+M in the input box to cycle the main conversation model
 - **`/model` Command**: Use `/model` command to configure and manage multiple model profiles, set default models for different purposes
 - **User Control**: Users can specify specific models for task processing at any time
@@ -521,19 +547,23 @@ We specially designed the `AskExpertModel` tool:
 #### 🔄 Intelligent Work Allocation Strategy
 
 **Architecture Design Phase**
+
 - Use **o3 model** or **GPT-5 model** to explore system architecture and formulate sharp and clear technical solutions
 - These models excel in abstract thinking and system design
 
 **Solution Refinement Phase**
+
 - Use **gemini model** to deeply explore production environment design details
 - Leverage its deep accumulation in practical engineering and balanced reasoning capabilities
 
 **Code Implementation Phase**
+
 - Use **Qwen Coder model**, **Kimi k2 model**, **GLM-4.5 model**, or **Claude Sonnet 4 model** for specific code writing
 - These models have strong performance in code generation, file editing, and engineering implementation
 - Support parallel processing of multiple coding tasks through subagents
 
 **Problem Solving**
+
 - When encountering complex problems, consult expert models like **o3 model**, **Claude Opus 4.1 model**, or **Grok 4 model**
 - Obtain deep technical insights and innovative solutions
 
@@ -565,6 +595,7 @@ We specially designed the `AskExpertModel` tool:
 ### 🛠️ Key Implementation Mechanisms
 
 #### **Configuration System**
+
 ```typescript
 // Example of multi-model configuration support
 {
@@ -582,11 +613,13 @@ We specially designed the `AskExpertModel` tool:
 ```
 
 #### **Cost Tracking System**
+
 - **Usage Statistics**: Use `/cost` command to view token usage and costs for each model
 - **Multi-Model Cost Comparison**: Track usage costs of different models in real-time
 - **History Records**: Save cost data for each session
 
 #### **Context Manager**
+
 - **Context Inheritance**: Maintain conversation continuity when switching models
 - **Context Window Adaptation**: Automatically adjust based on different models' context window sizes
 - **Session State Preservation**: Ensure information consistency during multi-model collaboration
@@ -601,14 +634,14 @@ We specially designed the `AskExpertModel` tool:
 
 ### 📊 Comparison (Single-model CLI)
 
-| Feature | Kode | Single-model CLI |
-|---------|------|-----------------|
-| Number of Supported Models | Unlimited, configurable for any model | Only supports one model |
-| Model Switching | ✅ Option+M quick switch | ❌ Requires session restart |
-| Parallel Processing | ✅ Multiple SubAgents work in parallel | ❌ Single-threaded processing |
-| Cost Tracking | ✅ Separate statistics for multiple models | ❌ Single model cost |
-| Task Model Configuration | ✅ Different default models for different purposes | ❌ Same model for all tasks |
-| Expert Consultation | ✅ AskExpertModel tool | ❌ Not supported |
+| Feature                    | Kode                                               | Single-model CLI              |
+| -------------------------- | -------------------------------------------------- | ----------------------------- |
+| Number of Supported Models | Unlimited, configurable for any model              | Only supports one model       |
+| Model Switching            | ✅ Option+M quick switch                           | ❌ Requires session restart   |
+| Parallel Processing        | ✅ Multiple SubAgents work in parallel             | ❌ Single-threaded processing |
+| Cost Tracking              | ✅ Separate statistics for multiple models         | ❌ Single model cost          |
+| Task Model Configuration   | ✅ Different default models for different purposes | ❌ Same model for all tasks   |
+| Expert Consultation        | ✅ AskExpertModel tool                             | ❌ Not supported              |
 
 This multi-model collaboration capability makes Kode a true **AI Development Workbench**, not just a single AI assistant.
 
@@ -634,7 +667,7 @@ git clone https://github.com/shareAI-lab/kode.git
 cd kode
 
 # Install dependencies
-bun install
+bun install --frozen-lockfile
 
 # Run in development mode
 bun run dev
@@ -667,7 +700,7 @@ Apache 2.0 License - see [LICENSE](LICENSE) for details.
 ## Thanks
 
 - Some code from @dnakov's anonkode
-- Some UI learned from gemini-cli  
+- Some UI learned from gemini-cli
 - Some system design learned from upstream agent CLIs
 
 ## Support

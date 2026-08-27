@@ -1,4 +1,4 @@
-import { Hunk } from 'diff'
+import { type StructuredPatchHunk as Hunk } from 'diff'
 import { Box, Text } from 'ink'
 import * as React from 'react'
 import { intersperse } from '#core/utils/array'

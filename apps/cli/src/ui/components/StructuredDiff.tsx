@@ -1,6 +1,6 @@
 import { Box, Text } from 'ink'
 import * as React from 'react'
-import { Hunk } from 'diff'
+import { type StructuredPatchHunk as Hunk } from 'diff'
 import { getTheme, ThemeNames } from '#core/utils/theme'
 import { useMemo } from 'react'
 import { wrapLines } from '#ui-ink/primitives/text/wrapLines'

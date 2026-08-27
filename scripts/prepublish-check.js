@@ -25,18 +25,8 @@ const requiredFiles = [
   path.join('dist', 'entrypoints', 'daemon.js'),
   path.join('dist', 'sdk', 'protocol.js'),
   path.join('dist', 'sdk', 'protocol.cjs'),
-  path.join('dist', 'sdk', 'client.js'),
-  path.join('dist', 'sdk', 'client.cjs'),
   path.join('dist', 'sdk', 'daemon-client.js'),
   path.join('dist', 'sdk', 'daemon-client.cjs'),
-  path.join('dist', 'sdk', 'core.js'),
-  path.join('dist', 'sdk', 'core.cjs'),
-  path.join('dist', 'sdk', 'tools.js'),
-  path.join('dist', 'sdk', 'tools.cjs'),
-  path.join('dist', 'sdk', 'runtime.js'),
-  path.join('dist', 'sdk', 'runtime.cjs'),
-  path.join('dist', 'sdk', 'runtime-node.js'),
-  path.join('dist', 'sdk', 'runtime-node.cjs'),
   // Linux seccomp assets (used for Unix socket blocking).
   path.join('dist', 'vendor', 'seccomp', 'x64', 'apply-seccomp'),
   path.join('dist', 'vendor', 'seccomp', 'x64', 'unix-block.bpf'),
@@ -391,5 +381,4 @@ console.log(`   Name: ${pkg.name}`)
 console.log(`   Version: ${pkg.version}`)
 console.log(`   Main: ${pkg.main}`)
 console.log(`   Bin: kode -> ${pkg.bin.kode}`)
-console.log('\n🚀 Ready to publish!')
-console.log('   Run: npm publish')
+console.log('\n✅ Package boundary is ready for the tagged-release workflow.')

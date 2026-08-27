@@ -1,4 +1,4 @@
-import { type Hunk, structuredPatch } from 'diff'
+import { type StructuredPatchHunk as Hunk, structuredPatch } from 'diff'
 
 const CONTEXT_LINES = 3
 

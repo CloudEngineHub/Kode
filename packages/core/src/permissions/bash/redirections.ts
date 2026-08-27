@@ -115,7 +115,8 @@ function maybeConsumeRedirection(
   redirections: Redirection[],
   outputTokens: ParseEntry[],
 ): { skip: number } {
-  const isFd = (v: unknown) => typeof v === 'string' && /^\d+$/.test(v.trim())
+  const isFd = (v: unknown): v is string =>
+    typeof v === 'string' && /^\d+$/.test(v.trim())
 
   if (
     isOpToken(token, '&') &&

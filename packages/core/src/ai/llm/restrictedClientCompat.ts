@@ -88,11 +88,7 @@ const NETWORK_ERROR_HINTS = [
 ]
 
 type RequestFailureKind =
-  | 'restricted_client_only'
-  | 'auth'
-  | 'billing'
-  | 'network'
-  | 'other'
+  'restricted_client_only' | 'auth' | 'billing' | 'network' | 'other'
 
 function extractStatus(error: unknown): number | undefined {
   if (!error || typeof error !== 'object') return undefined

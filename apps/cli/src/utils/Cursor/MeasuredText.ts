@@ -57,7 +57,7 @@ export class MeasuredText {
       lineWidth = 0
     }
 
-    for (let i = 0; i < this.text.length; ) {
+    for (let i = 0; i < this.text.length;) {
       const codePoint = this.text.codePointAt(i)
       if (codePoint === undefined) break
       const char = String.fromCodePoint(codePoint)

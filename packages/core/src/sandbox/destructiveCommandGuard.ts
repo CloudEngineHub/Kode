@@ -19,11 +19,8 @@ function tokensToWords(tokens: ParseEntry[]): string[] {
       continue
     }
     if (token && typeof token === 'object') {
-      const record = token as Record<string, unknown>
-      const op = typeof record.op === 'string' ? record.op : String(record.op)
-      if (op !== 'glob') continue
-      const pattern =
-        typeof record.pattern === 'string' ? record.pattern.trim() : ''
+      if (!('op' in token) || token.op !== 'glob') continue
+      const pattern = token.pattern.trim()
       if (pattern) out.push(pattern)
     }
   }

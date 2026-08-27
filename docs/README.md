@@ -1,48 +1,30 @@
-# Documentation
+# Kode documentation
 
-This directory contains user and developer documentation for Kode.
+This directory contains maintained user and developer documentation. Historical
+investigation notes and completed implementation plans are intentionally kept out
+of the source repository because they drift from the implementation.
 
-## User Guides
+## Start here
 
-- Install & distribution: `docs/binary-distribution.md`
-- Configuration: `docs/develop/configuration.md`
-- ACP integration: `docs/acp.md`
-- MCP servers (extensions): `docs/mcp.md`
-- Skills & plugins: `docs/skills.md`
-- Output styles: `docs/output-styles.md`
-- Compatibility notes (legacy formats): `docs/compatibility.md`
-- System sandbox: `docs/system-sandbox.md`
+- [Architecture](architecture.md)
+- [Project structure](PROJECT_STRUCTURE.md)
+- [Configuration](develop/configuration.md)
+- [Security model](develop/security-model.md)
+- [Testing](develop/testing.md)
+- [Releasing](develop/releasing.md)
+- [Versioning policy](versioning.md)
 
-## Developer Docs
+## User and integration guides
 
-- Overview: `docs/develop/overview.md`
-- Architecture: `docs/develop/architecture.md`
-- Tools system: `docs/develop/tools-system.md`
-- Security model: `docs/develop/security-model.md`
-- Testing: `docs/develop/testing.md`
-- Releasing: `docs/develop/releasing.md`
-- SDK & integrations: `docs/sdk/README.md`
-- Deep dives: `docs/develop/modules/`
+- [Binary distribution](binary-distribution.md)
+- [ACP](acp.md)
+- [MCP](mcp.md)
+- [Skills and plugins](skills.md)
+- [Custom commands](custom-commands.md)
+- [Output styles](output-styles.md)
+- [Compatibility](compatibility.md)
+- [System sandbox](system-sandbox.md)
+- [Daemon integrations](integrations.md)
 
-## Reference / Notes
-
-- Intelligent completion: `docs/intelligent-completion.md`
-- Mention system: `docs/mention-system.md`
-- System design notes: `docs/system-design.md`
-- Agents system: `docs/agents-system.md`
-- Custom commands: `docs/custom-commands.md`
-- Publish notes: `docs/PUBLISH.md`
-- Project structure: `docs/PROJECT_STRUCTURE.md`
-
-## Archive
-
-- Historical/internal notes (may contain legacy paths): `docs/_archive/`
-
-## 中文文档（Develop）
-
-- `docs/develop-zh/README.md`
-- `docs/develop-zh/overview.md`
-- `docs/develop-zh/architecture.md`
-- `docs/develop-zh/tools-system.md`
-- `docs/develop-zh/security-model.md`
-- `docs/develop-zh/configuration.md`
+The Chinese product overview is maintained in the repository root as
+[`README.zh-CN.md`](../README.zh-CN.md).

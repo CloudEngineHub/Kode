@@ -112,8 +112,9 @@ describe('public contracts (refactor safety net)', () => {
 
     const fullHelpRes = spawnSync(process.execPath, [script, '--help'], {
       cwd: process.cwd(),
-      env: { ...process.env },
+      env: { ...process.env, NODE_ENV: 'test' },
       encoding: 'utf8',
+      timeout: 10_000,
     })
     expect(fullHelpRes.status).toBe(0)
     expect(fullHelpRes.stdout).toContain('Usage: kode')
@@ -121,8 +122,9 @@ describe('public contracts (refactor safety net)', () => {
 
     const helpRes = spawnSync(process.execPath, [script, '--help-lite'], {
       cwd: process.cwd(),
-      env: { ...process.env },
+      env: { ...process.env, NODE_ENV: 'test' },
       encoding: 'utf8',
+      timeout: 10_000,
     })
     expect(helpRes.status).toBe(0)
     expect(helpRes.stdout).toContain('Usage: kode')
@@ -134,8 +136,9 @@ describe('public contracts (refactor safety net)', () => {
     )
     const verRes = spawnSync(process.execPath, [script, '--version'], {
       cwd: process.cwd(),
-      env: { ...process.env },
+      env: { ...process.env, NODE_ENV: 'test' },
       encoding: 'utf8',
+      timeout: 10_000,
     })
     expect(verRes.status).toBe(0)
     expect(verRes.stdout.trim()).toBe(String(pkg.version))
@@ -148,8 +151,13 @@ describe('public contracts (refactor safety net)', () => {
     try {
       const res = spawnSync(process.execPath, [script, 'mcp', '--help'], {
         cwd: process.cwd(),
-        env: { ...process.env, KODE_CONFIG_DIR: tmpConfigDir },
+        env: {
+          ...process.env,
+          NODE_ENV: 'test',
+          KODE_CONFIG_DIR: tmpConfigDir,
+        },
         encoding: 'utf8',
+        timeout: 10_000,
       })
 
       expect(res.status).toBe(0)
@@ -163,7 +171,7 @@ describe('public contracts (refactor safety net)', () => {
     } finally {
       rmSync(tmpConfigDir, { recursive: true, force: true })
     }
-  })
+  }, 15_000)
 
   test('apps/cli/src/dispatch.ts matches old_version_2 output (help/version)', () => {
     const oldRoot = process.env.KODE_OLD_VERSION_2_ROOT

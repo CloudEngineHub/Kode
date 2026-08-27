@@ -1,10 +1,7 @@
 import type { Message as ConversationMessage } from '#core/query'
 
 export type BackgroundAgentStatus =
-  | 'running'
-  | 'completed'
-  | 'failed'
-  | 'killed'
+  'running' | 'completed' | 'failed' | 'killed'
 
 export type BackgroundAgentTask = {
   type: 'async_agent'

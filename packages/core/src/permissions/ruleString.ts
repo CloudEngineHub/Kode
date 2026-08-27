@@ -11,10 +11,7 @@ export type ToolPermissionRuleSource =
   | 'session'
 
 export type ToolPermissionMode =
-  | 'default'
-  | 'acceptEdits'
-  | 'bypassPermissions'
-  | 'dontAsk'
+  'default' | 'acceptEdits' | 'bypassPermissions' | 'dontAsk'
 
 export type ToolPermissionRuleValue = {
   toolName: string

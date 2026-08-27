@@ -5,7 +5,6 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import * as path from 'path'
 import which from 'which'
 import { logError } from './log'
-import { execFileNoThrow } from './execFileNoThrow'
 import { execFile } from 'child_process'
 import debug from 'debug'
 import { quote } from 'shell-quote'
@@ -47,17 +46,6 @@ function shouldUseBuiltinRipgrep(): boolean {
   const parsed = parseBooleanEnv(raw)
   if (parsed !== undefined) return parsed
   return true
-}
-
-function getVscodeRipgrepPathOrNull(): string | null {
-  try {
-    const req = createRequire(getCurrentModuleUrl())
-    const mod = req('@vscode/ripgrep') as { rgPath?: unknown }
-    if (typeof mod?.rgPath === 'string' && mod.rgPath.trim()) return mod.rgPath
-  } catch {
-    // @vscode/ripgrep is an optional fallback.
-  }
-  return null
 }
 
 function getKodeRipgrepPackageNames(): string[] {
@@ -177,10 +165,6 @@ export const getRipgrepPath = memoize((): string => {
   const system = resolveSystemRipgrepPathOrNull()
   if (system) return system
 
-  // Optional fallback: @vscode/ripgrep (may not be installed; may rely on postinstall downloads).
-  const vscodeRgPath = getVscodeRipgrepPathOrNull()
-  if (vscodeRgPath) return vscodeRgPath
-
   const useBuiltinRaw =
     process.env.KODE_USE_BUILTIN_RIPGREP ?? process.env.USE_BUILTIN_RIPGREP
   throw new Error(
@@ -198,9 +182,7 @@ export const getRipgrepPath = memoize((): string => {
 })
 
 export async function ensureRipgrepReady(): Promise<string> {
-  const rg = getRipgrepPath()
-  await codesignRipgrepIfNecessary(rg)
-  return rg
+  return getRipgrepPath()
 }
 
 export async function ripGrep(
@@ -210,7 +192,6 @@ export async function ripGrep(
   options?: { sandbox?: BunShellSandboxOptions },
 ): Promise<string[]> {
   const rg = getRipgrepPath()
-  await codesignRipgrepIfNecessary(rg)
   d('ripgrep called: %s %o', rg, target, args)
 
   // NB: When running interactively, ripgrep does not require a path as its last
@@ -274,81 +255,7 @@ export async function listAllContentFiles(
   }
 }
 
-let alreadyDoneSignCheck = false
-async function codesignRipgrepIfNecessary(rgPath: string) {
-  if (process.platform !== 'darwin' || alreadyDoneSignCheck) {
-    return
-  }
-
-  alreadyDoneSignCheck = true
-
-  // Only attempt to sign ripgrep binaries we "own" (downloaded via @vscode/ripgrep).
-  // System ripgrep (e.g. Homebrew) should not be modified.
-  if (
-    !rgPath.includes(
-      `${path.sep}node_modules${path.sep}.pnpm${path.sep}@vscode+ripgrep@`,
-    ) &&
-    !rgPath.includes(`${path.sep}node_modules${path.sep}@vscode${path.sep}`)
-  ) {
-    return
-  }
-
-  // First, check to see if ripgrep is already signed
-  d('checking if ripgrep is already signed')
-  const lines = (
-    await execFileNoThrow(
-      'codesign',
-      ['-vv', '-d', rgPath],
-      undefined,
-      undefined,
-      false,
-    )
-  ).stdout.split('\n')
-
-  const needsSigned = lines.find(line => line.includes('linker-signed'))
-  if (!needsSigned) {
-    d('seems to be already signed')
-    return
-  }
-
-  try {
-    d('signing ripgrep')
-    const signResult = await execFileNoThrow('codesign', [
-      '--sign',
-      '-',
-      '--force',
-      '--preserve-metadata=entitlements,requirements,flags,runtime',
-      rgPath,
-    ])
-
-    if (signResult.code !== 0) {
-      d('failed to sign ripgrep: %o', signResult)
-      logError(
-        `Failed to sign ripgrep: ${signResult.stdout} ${signResult.stderr}`,
-      )
-    }
-
-    d('removing quarantine')
-    const quarantineResult = await execFileNoThrow('xattr', [
-      '-d',
-      'com.apple.quarantine',
-      rgPath,
-    ])
-
-    if (quarantineResult.code !== 0) {
-      d('failed to remove quarantine: %o', quarantineResult)
-      logError(
-        `Failed to remove quarantine: ${quarantineResult.stdout} ${quarantineResult.stderr}`,
-      )
-    }
-  } catch (e) {
-    d('failed during sign: %o', e)
-    logError(e)
-  }
-}
-
 // Test helper: clear memoized path resolution and re-run any one-time checks.
 export function resetRipgrepPathCacheForTests(): void {
   clearMemoizeCache(getRipgrepPath)
-  alreadyDoneSignCheck = false
 }

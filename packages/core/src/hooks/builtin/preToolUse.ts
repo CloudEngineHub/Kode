@@ -125,7 +125,7 @@ function getGitBranchSwitchTargetCwd(
   if (tokens[i] !== 'git') return null
 
   let targetCwd = cwd
-  for (let opt = i + 1; tokens[opt] && tokens[opt].startsWith('-'); ) {
+  for (let opt = i + 1; tokens[opt] && tokens[opt].startsWith('-');) {
     const t = tokens[opt]
     if (t === '--') break
 

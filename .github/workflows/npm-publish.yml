@@ -1,126 +1,144 @@
-name: Stable Release (tags)
+name: Publish tagged release
 
 on:
   push:
     tags:
       - 'v*.*.*'
-    tags-ignore:
-      - 'v*.*.*-*'
-  workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
-  group: stable-release-${{ github.ref }}
+  group: npm-release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   verify:
-    if: github.event_name != 'push' || github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.ver.outputs.version }}
-      tag_name: ${{ steps.ver.outputs.tag_name }}
+      version: ${{ steps.version.outputs.version }}
+      dist_tag: ${{ steps.version.outputs.dist_tag }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          node-version: '20.18.1'
+          fetch-depth: 0
 
-      - name: Validate tag matches package.json version
-        id: ver
+      - name: Verify tag and package version
+        id: version
+        shell: bash
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          TAG="${GITHUB_REF_NAME}"
-          if [ "v${VERSION}" != "${TAG}" ]; then
-            echo "Tag '${TAG}' does not match package.json version '${VERSION}'"
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          tag="${GITHUB_REF_NAME}"
+          if [[ "${tag}" != "v${version}" ]]; then
+            echo "Tag ${tag} does not match package.json version ${version}" >&2
             exit 1
           fi
-          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
-          echo "tag_name=${TAG}" >> "${GITHUB_OUTPUT}"
+          if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid semantic version: ${version}" >&2
+            exit 1
+          fi
+          if [[ "${version}" == *-* ]]; then
+            echo "dist_tag=dev" >> "${GITHUB_OUTPUT}"
+            echo "prerelease=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "dist_tag=latest" >> "${GITHUB_OUTPUT}"
+            echo "prerelease=false" >> "${GITHUB_OUTPUT}"
+          fi
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Verify release commit belongs to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor HEAD refs/remotes/origin/main; then
+            echo "Release tag must point to a commit in origin/main history" >&2
+            exit 1
+          fi
 
   build-binaries:
     needs: verify
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-          - os: ubuntu-24.04-arm64
-          - os: macos-latest
-          - os: macos-13
-          - os: windows-latest
+        os:
+          - ubuntu-latest
+          - ubuntu-24.04-arm64
+          - macos-latest
+          - macos-13
+          - windows-latest
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: '20.18.1'
+          node-version: '22.14.0'
+          package-manager-cache: false
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          bun-version: latest
+          bun-version: 1.3.6
 
-      - name: Install
-        run: bun install
+      - name: Install locked dependencies
+        run: bun install --frozen-lockfile
 
-      - name: Build Linux seccomp assets (Unix socket blocking)
+      - name: Build Linux seccomp assets
         if: runner.os == 'Linux'
         run: node scripts/build-seccomp-assets.mjs --require --verbose
 
-      - name: Stage seccomp assets for publishing
+      - name: Stage Linux seccomp assets
         if: runner.os == 'Linux'
+        shell: bash
         run: |
           set -euo pipefail
-          ARCH="$(node -p 'process.arch')"
-          mkdir -p "seccomp-assets/linux-${ARCH}"
-          cp "vendor/seccomp/${ARCH}/apply-seccomp" "seccomp-assets/linux-${ARCH}/apply-seccomp"
-          cp "vendor/seccomp/${ARCH}/unix-block.bpf" "seccomp-assets/linux-${ARCH}/unix-block.bpf"
-          chmod 755 "seccomp-assets/linux-${ARCH}/apply-seccomp" || true
+          arch="$(node -p 'process.arch')"
+          mkdir -p "seccomp-assets/linux-${arch}"
+          cp "vendor/seccomp/${arch}/apply-seccomp" "seccomp-assets/linux-${arch}/apply-seccomp"
+          cp "vendor/seccomp/${arch}/unix-block.bpf" "seccomp-assets/linux-${arch}/unix-block.bpf"
+          chmod 755 "seccomp-assets/linux-${arch}/apply-seccomp"
 
-      - name: Upload seccomp assets artifact
+      - name: Upload Linux seccomp assets
         if: runner.os == 'Linux'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: seccomp-linux-${{ matrix.os }}
+          name: seccomp-${{ runner.os }}-${{ runner.arch }}
           path: seccomp-assets/**
           if-no-files-found: error
 
-      - name: Build (assets needed for standalone binary)
+      - name: Build runtime assets
         run: bun run build
 
-      - name: Ensure bundled ripgrep (current platform only)
+      - name: Bundle ripgrep for this platform
         run: bun run scripts/ensure-ripgrep.mjs --current-only
 
-      - name: Build binary
+      - name: Build native binary
         run: bun run build:binary
 
       - name: Prepare release asset
         id: asset
+        shell: bash
         run: |
           node - <<'NODE'
           const fs = require('node:fs')
           const path = require('node:path')
-          const platform = process.platform
-          const arch = process.arch
-          const ext = platform === 'win32' ? '.exe' : ''
-          const src = path.join('dist', 'bin', `${platform}-${arch}`, `kode${ext}`)
-          const dest = `kode-${platform}-${arch}${ext}`
-          fs.copyFileSync(src, dest)
-          if (platform !== 'win32') {
-            try { fs.chmodSync(dest, 0o755) } catch {}
-          }
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `asset=${dest}\n`)
-          console.log(`Prepared ${dest}`)
+          const ext = process.platform === 'win32' ? '.exe' : ''
+          const source = path.join('dist', 'bin', `${process.platform}-${process.arch}`, `kode${ext}`)
+          const asset = `kode-${process.platform}-${process.arch}${ext}`
+          fs.copyFileSync(source, asset)
+          if (process.platform !== 'win32') fs.chmodSync(asset, 0o755)
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `asset=${asset}\n`)
           NODE
 
-      - name: Upload binary artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload native binary
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ steps.asset.outputs.asset }}
           path: ${{ steps.asset.outputs.asset }}
@@ -129,109 +147,140 @@ jobs:
   publish-npm:
     needs: [verify, build-binaries]
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      NPM_CONFIG_PROVENANCE: 'true'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Node.js for npm trusted publishing
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: '20.18.1'
+          node-version: '22.14.0'
           registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false
+
+      - name: Use an OIDC-capable npm CLI
+        run: npm install --global npm@11.5.1
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          bun-version: latest
+          bun-version: 1.3.6
 
-      - name: Install
-        run: bun install
+      - name: Install locked dependencies
+        run: bun install --frozen-lockfile
 
-      - name: Sync workspace versions
+      - name: Sync platform-package versions
         run: node scripts/set-version.mjs "${{ needs.verify.outputs.version }}"
 
-      - name: Download binary artifacts
-        uses: actions/download-artifact@v4
+      - name: Download native artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: artifacts
           merge-multiple: true
 
-      - name: Ensure bundled ripgrep
-        run: bun run scripts/ensure-ripgrep.mjs
+      - name: Prepare generated platform assets
+        run: |
+          bun run scripts/ensure-ripgrep.mjs
+          node scripts/prepare-seccomp-assets.mjs --artifacts-dir artifacts --dest-root vendor/seccomp
+          node scripts/prepare-ripgrep-packages.mjs
+          node scripts/prepare-kode-bin-packages.mjs
 
-      - name: Prepare Linux seccomp assets (x64 + arm64) for publishing
-        run: node scripts/prepare-seccomp-assets.mjs --artifacts-dir artifacts --dest-root vendor/seccomp
+      - name: Verify source and package
+        run: |
+          bun run format:check
+          bun run architecture:check
+          bun run security:audit
+          bun run typecheck
+          bun test
+          bun run build
+          bun run scripts/prepublish-check.js
+          bash scripts/smoke-packaged-install.sh
 
-      - name: Prepare ripgrep platform packages
-        run: node scripts/prepare-ripgrep-packages.mjs
+      - name: Verify target version is unpublished
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs')
+          const { spawnSync } = require('node:child_process')
 
-      - name: Prepare Kode binary platform packages
-        run: node scripts/prepare-kode-bin-packages.mjs
+          const packageDirs = fs
+            .readdirSync('packages', { withFileTypes: true })
+            .filter(entry =>
+              entry.isDirectory() &&
+              (entry.name.startsWith('kode-bin-') ||
+                entry.name.startsWith('kode-ripgrep-')),
+            )
+            .map(entry => `packages/${entry.name}/package.json`)
 
-      - name: Typecheck
-        run: bun run typecheck
+          const packageNames = [
+            require('./package.json').name,
+            ...packageDirs.map(file => require(`./${file}`).name),
+          ]
 
-      - name: Test
-        run: bun test
+          for (const packageName of packageNames) {
+            const result = spawnSync(
+              'npm',
+              ['view', `${packageName}@${process.env.VERSION}`, 'version', '--json'],
+              { encoding: 'utf8' },
+            )
+            if (result.status === 0) {
+              console.error(`${packageName}@${process.env.VERSION} already exists`)
+              process.exit(1)
+            }
+            const output = `${result.stdout || ''}\n${result.stderr || ''}`
+            if (!output.includes('E404')) {
+              process.stderr.write(output)
+              process.exit(result.status || 1)
+            }
+          }
+          NODE
 
-      - name: Build (all-in-bun)
-        run: bun run build
-
-      - name: Prepublish check
-        run: bun run scripts/prepublish-check.js
-
-      - name: Smoke test packaged install (no scripts)
-        run: bash scripts/smoke-packaged-install.sh
-
-      - name: "Publish Kode binary platform packages (dist-tag: latest)"
+      - name: Publish platform packages
+        shell: bash
+        env:
+          DIST_TAG: ${{ needs.verify.outputs.dist_tag }}
         run: |
           set -euo pipefail
-          for dir in packages/kode-bin-*; do
-            echo "Publishing $dir"
-            (cd "$dir" && npm publish --access public --ignore-scripts)
+          for dir in packages/kode-bin-* packages/kode-ripgrep-*; do
+            (cd "${dir}" && npm publish --tag "${DIST_TAG}" --access public --ignore-scripts)
           done
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: "Publish ripgrep platform packages (dist-tag: latest)"
-        run: |
-          set -euo pipefail
-          for dir in packages/kode-ripgrep-*; do
-            echo "Publishing $dir"
-            (cd "$dir" && npm publish --access public --ignore-scripts)
-          done
+      - name: Publish main package last
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          DIST_TAG: ${{ needs.verify.outputs.dist_tag }}
+        run: npm publish --tag "${DIST_TAG}" --access public --ignore-scripts
 
-      - name: "Publish npm (dist-tag: latest)"
-        run: npm publish --access public --ignore-scripts
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-  release:
+  github-release:
     needs: [verify, build-binaries, publish-npm]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Download binary artifacts
-        uses: actions/download-artifact@v4
+      - name: Download native artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: artifacts
 
       - name: Create checksums
-        run: |
-          find artifacts -type f -maxdepth 2 -print0 | sort -z | xargs -0 shasum -a 256 > checksums-sha256.txt
-          echo "Checksums:"
-          head -n 20 checksums-sha256.txt
+        shell: bash
+        run: find artifacts -maxdepth 2 -type f -print0 | sort -z | xargs -0 shasum -a 256 > checksums-sha256.txt
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.verify.outputs.tag_name }}
-          name: ${{ needs.verify.outputs.tag_name }}
-          prerelease: false
-          generate_release_notes: true
-          files: |
-            artifacts/**/*
-            checksums-sha256.txt
+      - name: Create GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ needs.verify.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          mapfile -d '' assets < <(find artifacts -maxdepth 2 -type f -print0 | sort -z)
+          args=(--verify-tag --generate-notes --title "${GITHUB_REF_NAME}")
+          if [[ "${PRERELEASE}" == 'true' ]]; then args+=(--prerelease); fi
+          gh release create "${GITHUB_REF_NAME}" "${assets[@]}" checksums-sha256.txt "${args[@]}"

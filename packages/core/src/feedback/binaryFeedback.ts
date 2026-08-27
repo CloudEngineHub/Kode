@@ -9,10 +9,7 @@ import { isEqual, zip } from 'lodash-es'
 import { getGitState } from '#core/utils/git'
 
 export type BinaryFeedbackChoice =
-  | 'prefer-left'
-  | 'prefer-right'
-  | 'neither'
-  | 'no-preference'
+  'prefer-left' | 'prefer-right' | 'neither' | 'no-preference'
 
 export type BinaryFeedbackChoose = (choice: BinaryFeedbackChoice) => void
 

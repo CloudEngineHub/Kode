@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import matter from 'gray-matter'
+import { parseMarkdownFrontmatter } from '#core/utils/frontmatter'
 
 function asRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
@@ -13,7 +13,7 @@ export function readMarkdownFile(
   | { error: string } {
   try {
     const raw = readFileSync(filePath, 'utf8')
-    const parsed = matter(raw)
+    const parsed = parseMarkdownFrontmatter(raw)
     return {
       frontmatter: asRecord(parsed.data),
       content: String(parsed.content ?? ''),

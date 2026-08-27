@@ -100,8 +100,7 @@ export function toSelectableToolNames(
 }
 
 export function modelOptions(): (
-  | OptionSubtree
-  | { label: string; value: string }
+  OptionSubtree | { label: string; value: string }
 )[] {
   const profiles = (() => {
     try {

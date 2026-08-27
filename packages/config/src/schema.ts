@@ -128,10 +128,7 @@ export function defaultConfigForProject(projectPath: string): ProjectConfig {
 }
 
 export type AutoUpdaterStatus =
-  | 'disabled'
-  | 'enabled'
-  | 'no_permissions'
-  | 'not_configured'
+  'disabled' | 'enabled' | 'no_permissions' | 'not_configured'
 
 export function isAutoUpdaterStatus(value: string): value is AutoUpdaterStatus {
   return ['disabled', 'enabled', 'no_permissions', 'not_configured'].includes(
@@ -140,10 +137,7 @@ export function isAutoUpdaterStatus(value: string): value is AutoUpdaterStatus {
 }
 
 export type NotificationChannel =
-  | 'iterm2'
-  | 'terminal_bell'
-  | 'iterm2_with_bell'
-  | 'notifications_disabled'
+  'iterm2' | 'terminal_bell' | 'iterm2_with_bell' | 'notifications_disabled'
 
 export type ProviderType =
   | 'anthropic'

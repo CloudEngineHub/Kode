@@ -1,21 +1,11 @@
 export type RuntimePlatform = 'win32' | 'darwin' | 'linux' | string
 export type RuntimeArch =
-  | 'x64'
-  | 'arm64'
-  | 'arm'
-  | 'ia32'
-  | 'riscv64'
-  | 'ppc64'
-  | 's390x'
-  | string
+  'x64' | 'arm64' | 'arm' | 'ia32' | 'riscv64' | 'ppc64' | 's390x' | string
 
 export type Encoding = 'utf8'
 
 export type SpawnStdio =
-  | 'inherit'
-  | 'pipe'
-  | 'ignore'
-  | Array<'inherit' | 'pipe' | 'ignore'>
+  'inherit' | 'pipe' | 'ignore' | Array<'inherit' | 'pipe' | 'ignore'>
 
 export type SpawnSpec = {
   cmd: string[]

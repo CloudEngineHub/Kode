@@ -1,15 +1,9 @@
-# packages/daemon
+# Kode server
 
-本地 daemon（HTTP/WS）host：
+This app hosts the local HTTP/WebSocket daemon, ACP stdio transport, workspace
+operations, and the built Web UI. `src/index.ts` is the executable entry; server
+implementation lives under `src/server/**`.
 
-- Node-compatible：用 `node:http` + `ws` 提供 WebUI 静态托管与事件流（WS）
-- 复用 `#core/*` + `#protocol/*`，默认关闭（CLI `--web` opt-in）
-
-包含：
-
-- Server：`packages/daemon/src/server.ts`（`startKodeDaemon`）
-- Client：`packages/daemon/src/client.ts`（`createKodeDaemonClient`）
-
-对外复用：
-
-- 安装 `@shareai-lab/kode` 后可通过 `@shareai-lab/kode/daemon-client` 引用 client（由 `scripts/build.mjs` 生成到 `dist/sdk/` 并通过 `package.json exports` 暴露）。
+The daemon uses shared contracts from `packages/protocol` and orchestration from
+`packages/core`. Client-side helpers live in `packages/client` so the Web UI and
+external consumers do not import server implementation details.

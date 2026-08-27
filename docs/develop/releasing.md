@@ -1,42 +1,57 @@
-# Releasing Kode (GitHub Actions)
+# Releasing Kode
 
-Kode uses GitHub Actions to publish **npm packages** and **native binaries**.
+`.github/workflows/npm-publish.yml` is the only supported publishing path. It
+publishes the main package, all native-binary packages, all ripgrep packages,
+and the matching GitHub release from one source tag.
 
-## Required secrets
+## One-time repository configuration
 
-- `NPM_TOKEN`: npm access token with publish permissions for `@shareai-lab/kode`.
+1. Create a protected GitHub environment named `npm` and require release-owner
+   approval.
+2. In npm, configure `.github/workflows/npm-publish.yml` as the trusted GitHub
+   publisher for every `@shareai-lab/kode*` package.
+3. Protect `main` and `v*` tags. Require CI and reviewed pull requests.
+4. After one successful OIDC release, remove the legacy `NPM_TOKEN` secret and
+   revoke the corresponding npm automation token.
 
-## Dev channel (main)
+The workflow uses GitHub OIDC (`id-token: write`) and npm provenance. Publishing
+from a workstation is intentionally unsupported.
 
-- Workflow: `.github/workflows/dev-release.yml`
-- Trigger: every push to `main`
-- Publishes:
-  - npm dist-tag `dev`:
-    - `@shareai-lab/kode` (main)
-    - `@shareai-lab/kode-bin-<platform>-<arch>` (native CLI binary packages)
-    - `@shareai-lab/kode-ripgrep-<platform>-<arch>` (ripgrep packages)
-  - GitHub prereleases with matching tag `v<version>` and standalone binary assets `kode-<platform>-<arch>(.exe)`
+## Release procedure
 
-The standalone binary build job runs `bun run build` (to include WebUI assets) and `bun run scripts/ensure-ripgrep.mjs --current-only` (to embed ripgrep for that platform), then `bun run build:binary`.
+1. Update `package.json` and the platform-package manifests together:
 
-## Stable channel (tags)
+   ```bash
+   node scripts/set-version.mjs 2.3.0
+   ```
 
-- Workflow: `.github/workflows/npm-publish.yml`
-- Trigger: push a stable tag matching `v*.*.*` (example: `v2.0.0`, pre-release tags are ignored)
-- Validation: the tag must match `v<package.json version>` (workflow will fail otherwise)
-- Publishes:
-  - npm `latest`:
-    - `@shareai-lab/kode` (main)
-    - `@shareai-lab/kode-bin-<platform>-<arch>` (native CLI binary packages)
-    - `@shareai-lab/kode-ripgrep-<platform>-<arch>` (ripgrep packages)
-  - GitHub Release with standalone binary assets + `checksums-sha256.txt`
+2. Open and merge a version-only pull request after CI passes.
+3. From the exact merge commit, create and push an annotated tag:
 
-You can create tags via the manual workflow `.github/workflows/release.yml` (bumps version, syncs workspace versions, pushes commit+tag, and dispatches the stable release workflow).
+   ```bash
+   git tag -a v2.3.0 -m "Kode v2.3.0"
+   git push origin v2.3.0
+   ```
 
-## Prepublish checks
+4. Verify the workflow, npm provenance, dist-tags, packaged smoke test, GitHub
+   assets, and `checksums-sha256.txt`.
 
-Publishing runs `scripts/prepublish-check.js` (via `prepublishOnly`) to ensure:
+Stable tags such as `v2.3.0` publish under `latest`. SemVer prerelease tags such
+as `v2.3.0-dev.1` publish under `dev` and create a GitHub prerelease.
 
-- Required runtime assets exist (`dist/*`, `dist/webui/index.html`, shims like `cli.js`/`mcp-cli.js`, `yoga.wasm`).
-- `npm pack --dry-run` includes the expected files (guards against accidental `files` excludes).
-- Optional per-platform binary packages and ripgrep packages are prepared (version match + non-empty `bin/*`).
+## Release invariants
+
+- The tag must exactly equal `v${package.json.version}`.
+- Dependencies install from committed `bun.lock` with `--frozen-lockfile`.
+- Format, architecture boundaries, the high/critical dependency audit, types,
+  tests, build, packlist checks, and packaged-install smoke tests pass before
+  publication. Moderate advisories must still be reviewed and documented; they
+  are not silently ignored.
+- Platform packages publish before the main package.
+- Generated binaries, wrappers, Web UI output, and `dist/**` never enter Git.
+- GitHub Actions are pinned to immutable commit SHAs.
+
+Npm publication is not transactional across packages. If a platform package
+publish succeeds and a later step fails, do not reuse or overwrite that version;
+inspect npm state, finish only the missing packages when safe, and document the
+incident before moving a dist-tag.

@@ -8,10 +8,7 @@ type ExecResult = {
 }
 
 export type BunShellPromotableExecStatus =
-  | 'running'
-  | 'backgrounded'
-  | 'completed'
-  | 'killed'
+  'running' | 'backgrounded' | 'completed' | 'killed'
 
 export type BunShellPromotableExec = {
   get status(): BunShellPromotableExecStatus

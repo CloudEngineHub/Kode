@@ -1,5 +1,5 @@
-// Aggregates workspace tests so `bun test` from repo root doesn't accidentally
-// execute non-workspace script-style files (e.g. `kode-agent-sdk/tests/*.test.ts`).
+// Aggregates workspace tests so `bun test` from the repository root has one
+// explicit and deterministic discovery surface.
 
 import { resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'

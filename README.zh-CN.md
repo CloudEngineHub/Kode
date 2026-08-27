@@ -10,6 +10,7 @@
 **开发者社区的福音来了！** 为了推动 AI 智能体技术的民主化进程，构建充满活力的创新生态，我们激动地宣布：Kode 已正式从 AGPLv3 协议升级为 **Apache 2.0 开源协议**。
 
 ### 这对您意味着什么：
+
 - ✅ **完全自由**：在任何项目中使用 Kode - 无论是个人项目、商业产品还是企业方案
 - ✅ **无障碍创新**：构建专有解决方案，无需开源您的代码
 - ✅ **极简要求**：仅需保留版权声明和许可信息
@@ -35,7 +36,7 @@ Kode 支持 [AGENTS.md 标准](https://agents.md)：一个简单、开放的“�
 Kode 是一个强大的 AI 助手，运行在你的终端中。它能理解你的代码库、编辑文件、运行命令，并为你处理整个开发工作流。
 
 > **⚠️ 安全提示**：Kode 默认以 YOLO 模式运行（等同于 `--dangerously-skip-permissions` 标志），跳过所有权限检查以获得最大生产力。YOLO 模式仅建议在安全可信的环境中处理非重要项目时使用。如果您正在处理重要文件或使用能力存疑的模型，我们强烈建议使用 `kode --safe` 启用权限检查和手动审批所有操作。
-> 
+>
 > **📊 模型性能建议**：为获得最佳体验，建议使用专为自主任务完成设计的新一代强大模型。避免使用 GPT-4o、Gemini 2.5 Pro 等较老的问答型模型，它们主要针对回答问题进行优化，而非持续的独立任务执行。请选择专门训练用于智能体工作流和扩展推理能力的模型。
 
 ## 网络与隐私
@@ -60,6 +61,7 @@ Kode 是一个强大的 AI 助手，运行在你的终端中。它能理解你�
 - 💾 **上下文管理** - 智能的上下文处理，保持对话连续性
 
 ### 创作便捷
+
 - `Option+G`（Alt+G）将消息打开到外部编辑器（优先 `$EDITOR`/`$VISUAL`，回退 code/nano/vim/notepad），关闭后内容自动回填到终端输入框。
 - `Option+Enter` 在输入框内换行但不发送，普通 Enter 提交；`Option+M` 可快速切换模型。
 
@@ -70,6 +72,7 @@ npm install -g @shareai-lab/kode
 ```
 
 > **🇨🇳 中国用户提示**：如遇到网络问题，建议使用国内镜像源安装：
+>
 > ```bash
 > npm install -g @shareai-lab/kode --registry=https://registry.npmmirror.com
 > ```
@@ -87,6 +90,7 @@ npm install -g @shareai-lab/kode@dev
 ```
 
 安装后，你可以使用以下任一命令：
+
 - `kode` - 主命令
 - `kwa` - Kode With Agent（备选）
 - `kd` - 超短别名
@@ -108,7 +112,9 @@ npm install -g @shareai-lab/kode@dev
 ## 使用方法
 
 ### 交互模式
+
 启动交互式会话：
+
 ```bash
 kode
 # 或
@@ -118,7 +124,9 @@ kd
 ```
 
 ### 非交互模式
+
 获取快速响应：
+
 ```bash
 kode -p "解释这个函数" 路径/到/文件.js
 # 或
@@ -144,7 +152,7 @@ toad acp "kode-acp"
 更多说明：`docs/acp.md`。
 
 ### Docker 使用说明
- 
+
 ```bash
 # 克隆仓库
 git clone https://github.com/shareAI-lab/Kode.git
@@ -156,9 +164,9 @@ docker build --no-cache -t kode .
 # 在你的项目目录中运行
 cd your-project
 docker run -it --rm \
-  -v $(pwd):/workspace \
-  -v ~/.kode:/root/.kode \
-  -v ~/.kode.json:/root/.kode.json \
+  -v "$PWD:/workspace" \
+  -v "$HOME/.kode:/home/node/.kode" \
+  -v "$HOME/.kode.json:/home/node/.kode.json" \
   -w /workspace \
   kode
 ```
@@ -167,27 +175,24 @@ docker run -it --rm \
 
 该 Docker 配置包含以下内容：
 
-* **卷挂载（Volume Mounts）**：
+- **卷挂载（Volume Mounts）**：
+  - `$PWD:/workspace` - 挂载当前项目目录
+  - `$HOME/.kode:/home/node/.kode` - 在运行间保留 Kode 数据
+  - `$HOME/.kode.json:/home/node/.kode.json` - 在运行间保留全局配置
 
-  * `$(pwd):/workspace` - 挂载当前项目目录
-  * `~/.kode:/root/.kode` - 在运行间保留 kode 配置目录
-  * `~/.kode.json:/root/.kode.json` - 在运行间保留 kode 全局配置文件
+- **工作目录**：容器内工作目录设置为 `/workspace`
 
-* **工作目录**：容器内工作目录设置为 `/workspace`
+- **交互模式**：使用 `-it` 标志以交互式终端方式运行
 
-* **交互模式**：使用 `-it` 标志以交互式终端方式运行
+- **清理**：使用 `--rm` 在退出后自动删除容器
 
-* **清理**：使用 `--rm` 在退出后自动删除容器
-
-**注意**：
-Kode 同时使用 `~/.kode` 目录（存放额外数据，如内存文件）和 `~/.kode.json` 文件（全局配置）。
+**注意**：镜像以非特权 `node` 用户运行。如果宿主机上的两个配置路径尚不存在，请先创建它们再挂载。
 
 第一次运行 Docker 命令时会构建镜像，之后的运行会使用缓存镜像以加快启动速度。
 
 你可以通过引导流程（onboarding）来设置模型，或使用 `/model` 命令。
 如果在列表中没有你想要的模型，可以在 `/config` 中手动设置。
 只要你有一个 OpenAI 风格的 API 端点，就可以正常使用。
-
 
 ### 常用命令
 
@@ -217,8 +222,8 @@ Kode 支持 subagents（agent 模版），用于任务委派与编排。
 ```md
 ---
 name: reviewer
-description: "Review diffs for correctness, security, and simplicity"
-tools: ["Read", "Grep"]
+description: 'Review diffs for correctness, security, and simplicity'
+tools: ['Read', 'Grep']
 model: inherit
 ---
 
@@ -226,6 +231,7 @@ model: inherit
 ```
 
 `model` 字段说明：
+
 - 兼容别名：`inherit`、`opus`、`sonnet`、`haiku`（会映射到 model pointers）
 - Kode 选择器（通过 `/model` 配置）：指针（`main|task|compact|quick`）、profile 名称、modelName，或 `provider:modelName`（例如 `openai:o3`）
 
@@ -240,6 +246,7 @@ kode agents validate
 ## 技能与插件
 
 Kode 支持：
+
 - **Agent Skills** 格式（`SKILL.md`）用于分发可复用技能包
 - **Marketplace 兼容**（`.kode-plugin/marketplace.json`，legacy `.claude-plugin/marketplace.json`）用于分享/安装技能包
 
@@ -289,10 +296,12 @@ allowed-tools: Read Bash(git:*) Bash(jq:*)
 ```
 
 命名规则：
+
 - `name` 必须与文件夹名一致
 - 仅允许小写字母/数字/连字符，长度 1–64
 
 兼容性：
+
 - Kode 也会自动发现 `.claude/skills` 与 `.claude/commands`（legacy 兼容）。
 
 ### 分发技能
@@ -369,7 +378,9 @@ kode mcp remove <name>
 ### 🏗️ 核心技术架构
 
 #### 1. **ModelManager 多模型管理器**
+
 我们设计了统一的 `ModelManager` 系统，支持：
+
 - **模型配置文件（Model Profiles）**：每个模型都有独立的配置文件，包含 API 端点、认证信息、上下文窗口大小、成本等参数
 - **模型指针（Model Pointers）**：用户可以在 `/model` 命令中配置不同用途的默认模型：
   - `main`：主 Agent 的默认模型
@@ -416,18 +427,23 @@ pointers:
 ```
 
 #### 2. **TaskTool 智能任务分发工具**
+
 专门设计的 `TaskTool`（Architect 工具）实现了：
+
 - **Subagent 机制**：可以启动多个子代理并行处理任务
 - **模型参数传递**：用户可以在请求中指定 SubAgent 使用的模型
 - **默认模型配置**：SubAgent 默认使用 `task` 指针配置的模型
 
 #### 3. **AskExpertModel 专家咨询工具**
+
 我们专门设计了 `AskExpertModel` 工具：
+
 - **专家模型调用**：允许在对话中临时调用特定的专家模型解决疑难问题
 - **模型隔离执行**：专家模型的响应独立处理，不影响主对话流程
 - **知识整合**：将专家模型的见解整合到当前任务中
 
 #### 🎯 灵活的模型切换
+
 - **Option+M 快速切换**：在输入框按 Option+M 轮换主对话模型
 - **`/model` 命令**：使用 `/model` 命令配置和管理多个模型配置文件，设置不同用途的默认模型
 - **用户控制**：用户可以随时指定使用特定的模型进行任务处理
@@ -435,19 +451,23 @@ pointers:
 #### 🔄 智能的工作分配策略
 
 **架构设计阶段**
+
 - 使用 **o3 模型** 或 **GPT-5 模型** 探讨系统架构，制定犀利明确的技术方案
 - 这些模型在抽象思维和系统设计方面表现卓越
 
 **方案细化阶段**
+
 - 使用 **gemini 模型** 深入探讨生产环境的设计细节
 - 利用其在实际工程实践中的深厚积累和平衡的推理能力
 
 **代码实现阶段**
+
 - 使用 **Qwen Coder 模型**、**Kimi k2 模型** 、**GLM-4.5 模型** 或 **Claude Sonnet 4 模型** 进行具体的代码编写
 - 这些模型在代码生成、文件编辑和工程实现方面性能强劲
 - 支持通过 subagent 并行处理多个编码任务
 
 **疑难问题解决**
+
 - 遇到复杂问题时，可单独咨询 **o3 模型**、**Claude Opus 4.1 模型** 或 **Grok 4 模型** 等专家模型
 - 获得深度的技术见解和创新的解决方案
 
@@ -479,6 +499,7 @@ pointers:
 ### 🛠️ 关键实现机制
 
 #### **配置系统（Configuration System）**
+
 ```typescript
 // 支持多模型配置的示例
 {
@@ -496,11 +517,13 @@ pointers:
 ```
 
 #### **成本追踪系统（Cost Tracking）**
+
 - **使用统计**：`/cost` 命令查看各模型的 token 使用量和花费
 - **多模型成本对比**：实时追踪不同模型的使用成本
 - **历史记录**：保存每个会话的成本数据
 
 #### **上下文管理器（Context Manager）**
+
 - **上下文继承**：切换模型时保持对话连续性
 - **上下文窗口适配**：根据不同模型的上下文窗口大小自动调整
 - **会话状态保持**：确保多模型协作时的信息一致性
@@ -515,14 +538,14 @@ pointers:
 
 ### 📊 与单模型 CLI 的对比
 
-| 特性 | Kode | 单模型 CLI |
-|------|------|---------|
-| 支持模型数量 | 无限制，可配置任意模型 | 仅支持单一模型 |
-| 模型切换 | ✅ Option+M 快速切换 | ❌ 需要重启会话 |
-| 并行处理 | ✅ 多个 SubAgent 并行工作 | ❌ 单线程处理 |
-| 成本追踪 | ✅ 多模型成本分别统计 | ❌ 单一模型成本 |
+| 特性         | Kode                        | 单模型 CLI            |
+| ------------ | --------------------------- | --------------------- |
+| 支持模型数量 | 无限制，可配置任意模型      | 仅支持单一模型        |
+| 模型切换     | ✅ Option+M 快速切换        | ❌ 需要重启会话       |
+| 并行处理     | ✅ 多个 SubAgent 并行工作   | ❌ 单线程处理         |
+| 成本追踪     | ✅ 多模型成本分别统计       | ❌ 单一模型成本       |
 | 任务模型配置 | ✅ 不同用途配置不同默认模型 | ❌ 所有任务用同一模型 |
-| 专家咨询 | ✅ AskExpertModel 工具 | ❌ 不支持 |
+| 专家咨询     | ✅ AskExpertModel 工具      | ❌ 不支持             |
 
 这种多模型协同能力让 Kode 成为真正的 **AI 开发工作台**，而不仅仅是一个单一的 AI 助手。
 
@@ -548,7 +571,7 @@ git clone https://github.com/shareAI-lab/kode.git
 cd kode
 
 # 安装依赖
-bun install
+bun install --frozen-lockfile
 
 # 在开发模式下运行
 bun run dev

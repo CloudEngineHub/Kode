@@ -22,8 +22,7 @@ function inWindowsTerminalSession(): boolean {
 function writeControlSequence(sequence: string): void {
   try {
     const originalWrite = (globalThis as any).__KODE_ORIGINAL_STDOUT_WRITE__ as
-      | ((chunk: Uint8Array | string) => boolean)
-      | undefined
+      ((chunk: Uint8Array | string) => boolean) | undefined
     if (typeof originalWrite === 'function') {
       originalWrite(sequence)
       return

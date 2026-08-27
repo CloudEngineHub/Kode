@@ -8,7 +8,7 @@ export type ToolPermissionInputUpdate = Record<string, unknown>
  * KodeClient is the UI-facing SDK for driving a Kode session.
  *
  * Implementations:
- * - DirectClient: in-process (CLI/VSCode/Desktop main process)
+ * - DirectClient: in-process (CLI or another embedded host)
  * - HttpClient: remote (Web, or any client that talks to `apps/server`)
  */
 export interface KodeClient {

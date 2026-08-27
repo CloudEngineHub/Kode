@@ -14,7 +14,7 @@ function runOrThrow(cmd, args, options) {
 }
 
 console.log('🌐 Building Web UI…')
-runOrThrow('pnpm', ['--filter', '@kode/web', 'build'])
+runOrThrow('bun', ['run', '--filter', '@kode/web', 'build'])
 
 const srcWebDist = join('apps', 'web', 'dist')
 if (!existsSync(join(srcWebDist, 'index.html'))) {

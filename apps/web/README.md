@@ -1,4 +1,4 @@
-# ui/web
+# Kode Web UI
 
 Kode 的内置 WebUI（Vite/React）：
 

@@ -53,7 +53,21 @@ function main() {
   if (!shouldInstallHooks()) return
 
   try {
-    const current = run(['git', 'config', '--get', 'core.hooksPath'])
+    const currentResult = spawnSync(
+      'git',
+      ['config', '--get', 'core.hooksPath'],
+      { encoding: 'utf8' },
+    )
+    if (currentResult.error) throw currentResult.error
+    // `git config --get` exits 1 when the key is unset; that is the normal
+    // first-install state, not an installation failure.
+    if (currentResult.status !== 0 && currentResult.status !== 1) {
+      throw new Error(
+        (currentResult.stderr || '').trim() ||
+          `git config exited with ${currentResult.status}`,
+      )
+    }
+    const current = (currentResult.stdout || '').trim()
     if (current === '.husky') return
     run(['git', 'config', 'core.hooksPath', '.husky'])
     // Keep output minimal; devs can verify with: git config --get core.hooksPath

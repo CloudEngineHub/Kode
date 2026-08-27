@@ -9,7 +9,6 @@ console.log('🧠 Building CLI…')
 
 rmSync(OUT_DIR, { recursive: true, force: true })
 mkdirSync(join(OUT_DIR, 'entrypoints'), { recursive: true })
-mkdirSync(join(OUT_DIR, 'sdk'), { recursive: true })
 
 await esbuild.build({
   entryPoints: {

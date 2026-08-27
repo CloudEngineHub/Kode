@@ -42,8 +42,7 @@ type AnthropicLikeMessage = {
 export function convertAnthropicMessagesToOpenAIMessages(
   messages: AnthropicLikeMessage[],
 ): (
-  | OpenAI.ChatCompletionMessageParam
-  | OpenAI.ChatCompletionToolMessageParam
+  OpenAI.ChatCompletionMessageParam | OpenAI.ChatCompletionToolMessageParam
 )[] {
   const openaiMessages: OpenAI.ChatCompletionMessageParam[] = []
 

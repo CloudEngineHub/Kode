@@ -10,7 +10,7 @@ Core Engine + shared domain modules（内部包）。
 边界说明（重要）：
 
 - 引擎执行本身不要求 TTY；但仓库里仍有部分 CLI 交互相关实现（例如 `/commands` 的 Ink 视图）为了兼容与复用目前仍放在此包内。
-- 若你想在外部项目复用能力，推荐优先使用本地 daemon（`kode --web`）+ `@shareai-lab/kode/daemon-client`，避免直接依赖内部模块。
+- 若你想在外部项目复用能力，推荐优先使用本地 daemon（`kode --web`）+ `@shareai-lab/kode/daemon-client`，避免直接依赖内部模块；当前该 JavaScript 集成面仍是实验性接口。
 
 关键入口：
 

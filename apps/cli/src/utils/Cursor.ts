@@ -400,7 +400,7 @@ export function countWrappedLines(
     return lineCount >= limit
   }
 
-  for (let i = 0; i < text.length; ) {
+  for (let i = 0; i < text.length;) {
     const codePoint = text.codePointAt(i)
     if (codePoint === undefined) break
     const char = String.fromCodePoint(codePoint)

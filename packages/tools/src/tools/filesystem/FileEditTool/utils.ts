@@ -1,7 +1,7 @@
 import { isAbsolute, resolve } from 'path'
 import { getCwd } from '#core/utils/state'
 import { readFileBun } from '#runtime/file'
-import { type Hunk } from 'diff'
+import { type StructuredPatchHunk as Hunk } from 'diff'
 import { getPatch } from '#core/utils/diff'
 import { normalizeLineEndings } from '#core/utils/paste'
 

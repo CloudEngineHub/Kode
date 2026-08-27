@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { spawn } from 'node:child_process'
+import { once } from 'node:events'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -85,26 +86,51 @@ function createAcpHarness(options: { configDir: string }) {
         )
       }
       await new Promise<void>((resolve, reject) => {
+        const wake = () => {
+          cleanup()
+          resolve()
+        }
         const timer = setTimeout(() => {
           cleanup()
-          reject(new Error('timeout'))
+          reject(
+            new Error(
+              `ACP waitFor timeout after ${timeoutMs}ms\n\nstderr:\n${stderrChunks.join('')}\n\nstdout:\n${stdoutBuffer.join('')}`,
+            ),
+          )
         }, remaining)
         const cleanup = () => {
           clearTimeout(timer)
-          waiters = waiters.filter(w => w !== resolve)
+          waiters = waiters.filter(w => w !== wake)
         }
-        waiters.push(resolve)
+        waiters.push(wake)
       })
     }
   }
 
   const stop = async () => {
+    if (proc.exitCode !== null || proc.signalCode !== null) return
+
+    const exited = once(proc, 'exit')
     try {
       proc.stdin?.end()
     } catch {}
     try {
       proc.kill('SIGTERM')
     } catch {}
+
+    const didExit = await Promise.race([
+      exited.then(() => true),
+      new Promise<false>(resolve => setTimeout(() => resolve(false), 2_000)),
+    ])
+    if (didExit) return
+
+    try {
+      proc.kill('SIGKILL')
+    } catch {}
+    await Promise.race([
+      exited,
+      new Promise<void>(resolve => setTimeout(resolve, 1_000)),
+    ])
   }
 
   return { proc, send, waitFor, stop }

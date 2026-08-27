@@ -2,9 +2,9 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'fs'
 import type { Dirent } from 'fs'
 import { dirname, join, resolve } from 'path'
 import { homedir } from 'os'
-import matter from 'gray-matter'
 import { resolveDataRoots } from '#config/dataRoots'
 import { LEGACY_CONFIG_DIRNAME } from '#core/compat/legacyPaths'
+import { parseMarkdownFrontmatter } from '#core/utils/frontmatter'
 
 export function normalizeString(value: unknown): string | null {
   if (typeof value !== 'string') return null
@@ -172,7 +172,7 @@ export function readMarkdownFile(
 ): { frontmatter: Record<string, unknown>; content: string } | null {
   try {
     const raw = readFileSync(filePath, 'utf8')
-    const parsed = matter(raw)
+    const parsed = parseMarkdownFrontmatter(raw)
     return {
       frontmatter: asRecord(parsed.data),
       content: String(parsed.content ?? ''),

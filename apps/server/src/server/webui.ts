@@ -9,7 +9,7 @@ export function detectWebuiDir(moduleDir: string): string | null {
     resolve(moduleDir, '..', '..', 'webui'),
   ]
 
-  // Dev/workspace: find ui/web (and/or dist/webui) from common repo layouts.
+  // Dev/workspace: find apps/web (and/or dist/webui) from common repo layouts.
   for (let up = 0; up <= 6; up++) {
     const parents = Array(up).fill('..')
     candidates.push(resolve(moduleDir, ...parents, 'apps', 'server', 'static'))

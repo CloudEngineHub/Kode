@@ -143,9 +143,8 @@ function tokensToStrings(entries: ParseEntry[]): string[] {
     if (typeof entry === 'string') {
       result.push(entry)
     } else if (entry && typeof entry === 'object') {
-      const record = entry as Record<string, unknown>
-      if (record.op === 'glob' && typeof record.pattern === 'string') {
-        result.push(record.pattern)
+      if ('op' in entry && entry.op === 'glob') {
+        result.push(entry.pattern)
       }
     }
   }
@@ -158,8 +157,7 @@ function splitByOperators(entries: ParseEntry[]): ParseEntry[][] {
 
   for (const entry of entries) {
     if (typeof entry === 'object' && entry !== null) {
-      const record = entry as Record<string, unknown>
-      const op = record.op
+      const op = 'op' in entry ? entry.op : undefined
       if (op === ';' || op === '&&' || op === '||' || op === '|') {
         if (current.length > 0) {
           commands.push(current)
