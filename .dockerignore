@@ -11,6 +11,8 @@ cli-acp.js
 mcp-cli.js
 coverage
 artifacts
+seccomp-assets
+vendor
 *.tgz
 .env
 .env.*.local

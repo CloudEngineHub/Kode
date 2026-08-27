@@ -9,8 +9,6 @@ of the source repository because they drift from the implementation.
 - [Architecture](architecture.md)
 - [Project structure](PROJECT_STRUCTURE.md)
 - [Configuration](develop/configuration.md)
-- [Security model](develop/security-model.md)
-- [Testing](develop/testing.md)
 - [Releasing](develop/releasing.md)
 - [Versioning policy](versioning.md)
 
@@ -19,12 +17,16 @@ of the source repository because they drift from the implementation.
 - [Binary distribution](binary-distribution.md)
 - [ACP](acp.md)
 - [MCP](mcp.md)
+- [Agents and subagents](agents-system.md)
 - [Skills and plugins](skills.md)
 - [Custom commands](custom-commands.md)
 - [Output styles](output-styles.md)
 - [Compatibility](compatibility.md)
+- [Model compatibility](model-compatibility.md)
+- [Language servers](lsp.md)
 - [System sandbox](system-sandbox.md)
 - [Daemon integrations](integrations.md)
+- [TUI architecture](tui/README.md)
 
 The Chinese product overview is maintained in the repository root as
 [`README.zh-CN.md`](../README.zh-CN.md).

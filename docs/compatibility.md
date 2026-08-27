@@ -57,4 +57,4 @@ Kode stays **Kode-first** by default and only uses these compatibility profiles:
 - when the provider returns a clear “restricted client” signal for a Claude model, or
 - when you explicitly choose a request strategy during model setup.
 
-See `docs/claude-model-compatibility.md` for details.
+See [Model compatibility](model-compatibility.md) for details.

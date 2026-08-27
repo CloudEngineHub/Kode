@@ -1,8 +1,8 @@
 # Kode repository guide
 
 This file is the stable, always-on contract for contributors and coding agents.
-Use [AGENT_CONTEXT/README.md](AGENT_CONTEXT/README.md) for deeper background and
-`.kode/skills/kode-repo-maintain/` for task-specific maintenance procedures.
+Keep durable repository rules here; implementation details belong beside the
+code they describe or in maintained documents under `docs/**`.
 
 ## Product direction
 

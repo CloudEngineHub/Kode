@@ -20,10 +20,10 @@
 ### 1.2 两条“启用 sandbox”的路径（System vs Settings）
 
 - **System sandbox（环境变量 / safe-mode）**：`packages/core/src/sandbox/systemSandbox.ts`
-  - 入口：`packages/tools/src/tools/system/BashTool/call.ts`（`decideSystemSandboxForBashTool`）
+  - 入口：`packages/tools/src/tools/system/BashTool/call.tsx`（`decideSystemSandboxForBashTool`）
   - 特点：主要用于 agent_call 的“额外保护层”；是否允许继承网络由 `KODE_SYSTEM_SANDBOX_NETWORK=inherit|none` 控制。
 - **Settings sandbox（.kode/.claude settings）**：`packages/core/src/sandbox/bunShellSandboxPlan.ts`
-  - 入口：`packages/tools/src/tools/system/BashTool/call.ts`（`getBunShellSandboxPlan`）
+  - 入口：`packages/tools/src/tools/system/BashTool/call.tsx`（`getBunShellSandboxPlan`）
   - 特点：面向“日常使用”的可配置 sandbox（enabled/excludedCommands/allowUnsandboxedCommands/autoAllowBashIfSandboxed 等）。
 
 ## 2) Linux（bubblewrap）行为细节
@@ -63,5 +63,7 @@
 
 ## 5) 已知缺口与下一步
 
-- Linux seccomp（Unix socket blocking）：Kode 已支持 **可选启用**（当分发物包含 `apply-seccomp` + `unix-block.bpf` 时自动启用）；若资产缺失则会降级为 allowAllUnixSockets effective（见 `docs/research/claude-code/12_kode_vs_claude_full_parity_audit.md` 的 DP-015/DP-054）。
+- Linux seccomp（Unix socket blocking）：Kode 支持可选启用；当分发物包含
+  `apply-seccomp` 与 `unix-block.bpf` 时自动接入。资产缺失时会显式降级，
+  具体决策逻辑见 `packages/runtime/src/shell/linuxSandbox.ts`。
 - Windows：当前不提供等价系统 sandbox；建议走“Execution Kernel 外置”（WSL2/VM worker/MCP）路径实现一致的强隔离与可控网络。

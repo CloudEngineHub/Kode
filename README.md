@@ -76,37 +76,19 @@ Kode is a powerful AI assistant that lives in your terminal. It can understand y
 - `Option+G` (Alt+G) opens your message in your preferred editor (respects `$EDITOR`/`$VISUAL`; falls back to code/nano/vim/notepad) and returns the text to the prompt when you close it.
 - `Option+Enter` inserts a newline inside the prompt without sending; plain Enter submits. `Option+M` cycles the active model.
 
-### 🎯 Advanced Intelligent Completion System
+### Interactive Completion
 
-Our state-of-the-art completion system provides unparalleled coding assistance:
-
-#### Smart Fuzzy Matching
-
-- **Hyphen-Aware Matching** - Type `dao` to match `run-agent-dao-qi-harmony-designer`
-- **Abbreviation Support** - `dq` matches `dao-qi`, `nde` matches `node`
-- **Numeric Suffix Handling** - `py3` intelligently matches `python3`
-- **Multi-Algorithm Fusion** - Combines 7+ matching algorithms for best results
-
-#### Intelligent Context Detection
-
-- **No @ Required** - Type `gp5` directly to match `@ask-gpt-5`
-- **Auto-Prefix Addition** - Tab/Enter automatically adds `@` for agents and models
-- **Mixed Completion** - Seamlessly switch between commands, files, agents, and models
-- **Smart Prioritization** - Results ranked by relevance and usage frequency
-
-#### Unix Command Optimization
-
-- **500+ Common Commands** - Curated database of frequently used Unix/Linux commands
-- **System Intersection** - Only shows commands that actually exist on your system
-- **Priority Scoring** - Common commands appear first (git, npm, docker, etc.)
-- **Real-time Loading** - Dynamic command discovery from system PATH
+The prompt completes slash commands, file paths, agents, configured models, and
+available shell commands. Fuzzy and abbreviation matching help surface relevant
+entries without requiring an exact prefix; accepting an agent or model result
+adds the required `@` prefix.
 
 ### User Experience
 
 - 🎨 **Interactive UI** - Beautiful terminal interface with syntax highlighting
 - 🔌 **Tool System** - Extensible architecture with specialized tools for different tasks
 - 💾 **Context Management** - Smart context handling to maintain conversation continuity
-- 📋 **AGENTS.md Integration** - Use `# documentation requests` to auto-generate and maintain project documentation
+- 📋 **Repository Instructions** - Reads `AGENTS.md` and compatible instruction files when present
 
 ## Installation
 

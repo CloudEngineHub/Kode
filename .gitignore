@@ -11,6 +11,7 @@
 /apps/server/static/
 /vendor/
 /artifacts/
+/seccomp-assets/
 /*.tgz
 /packages/kode-bin-*/bin/kode
 /packages/kode-bin-*/bin/kode.exe
@@ -35,8 +36,8 @@
 .env
 .env.*.local
 .npmrc
-.kode/settings.local.json
-.claude/settings.local.json
+/.kode/
+/.claude/
 
 # Editors and local scratch space
 /.idea/

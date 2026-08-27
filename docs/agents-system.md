@@ -150,13 +150,3 @@ kode agents validate --json
 kode models list
 kode models list --json
 ```
-
-## Future Enhancements
-
-Planned improvements:
-
-- Agent templates and inheritance
-- Performance metrics per agent
-- Agent composition (agents using other agents)
-- Cloud-based agent sharing
-- Agent versioning and rollback

@@ -6,18 +6,25 @@ labels: ''
 assignees: ''
 ---
 
-## Bug Description
+## Bug description
 
-<!-- NOTE: from v0.0.18, you can submit a bug from the app by typing /bug, it'll open a window to github issue create, with the model info pre-filled -->
+<!-- Describe what happened and what you expected. -->
 
-## App and Environment Info
+## Reproduction
 
-Kode Version: <!-- kode --version -->
-OS: <!-- macos/win -->
+<!-- Provide the smallest reliable sequence of commands or interactions. Remove secrets from logs and configuration. -->
 
-## Models <!-- get from /config or from ~/.kode.json -->
+## Environment
 
-baseURL:
-name:
-maxTokens:
-reasoning effort:
+Kode version: <!-- kode --version -->
+OS and version:
+Terminal:
+Installation method:
+
+## Model configuration
+
+Provider type:
+Model name:
+Endpoint type (official/proxy/local):
+
+<!-- Do not include API keys, tokens, credentials, or an unredacted ~/.kode.json. -->

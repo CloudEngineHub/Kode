@@ -41,7 +41,9 @@ const missingFiles = requiredFiles.filter(file => !fs.existsSync(file))
 
 if (missingFiles.length > 0) {
   console.error('❌ Missing required files:', missingFiles.join(', '))
-  console.error('   Run "bun run build" first')
+  console.error(
+    '   Run the release preparation pipeline before this check; Linux seccomp assets are generated and staged by the publish workflow.',
+  )
   process.exit(1)
 }
 

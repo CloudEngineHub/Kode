@@ -26,10 +26,10 @@
 ```
 .
 ├── apps/                  # Entrypoints (build to dist/)
-├── packages/              # Internal workspace modules (core/protocol/tools/hosts/daemon/config/runtime)
+├── packages/              # Internal workspace modules and shipped assets
 ├── scripts/               # Build and utility scripts
-├── docs/                  # Curated user and developer documentation
-├── examples/              # Integration examples / PoCs
+├── docs/                  # Maintained user and developer documentation
+├── examples/              # Copyable configuration examples
 └── package.json           # Package boundary and development commands
 ```
 
@@ -67,12 +67,14 @@ bun test
 This repo uses Husky to keep changes consistent:
 
 - Pre-commit runs `bun run format:check` and `bun run typecheck`.
-- CI runs `bun run format:check`, `bun run typecheck`, `bun test`, and `bun run build` on macOS/Linux/Windows.
+- CI also enforces architecture boundaries, audits high-severity dependency
+  vulnerabilities, runs tests, and builds on macOS, Linux, and Windows.
 
-If you need to bypass hooks locally (not recommended), you can use:
+Run the complete local gate before opening a release change:
 
-- `git commit --no-verify`
-- or `HUSKY=0 git commit ...`
+```bash
+bun run check
+```
 
 ## Publishing
 
