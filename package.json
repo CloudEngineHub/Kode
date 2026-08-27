@@ -121,6 +121,7 @@
     "node-html-parser": "^7.0.1",
     "openai": "^4.104.0",
     "react": "19.2.3",
+    "react-reconciler": "0.33.0",
     "semver": "^7.7.2",
     "shell-quote": "^1.10.0",
     "spawn-rx": "^5.1.2",
