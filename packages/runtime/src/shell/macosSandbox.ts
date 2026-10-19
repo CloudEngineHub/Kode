@@ -7,6 +7,20 @@ import type {
   BunShellSandboxWriteConfig,
 } from './types'
 
+// 将值安全地嵌入 `export KEY=VALUE`：路径中可能包含空格（如 /Users/John Doe/...），
+// 不加引号会被 shell 按空白切分，导致变量写入错误的值。
+function quoteForShellExport(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`
+}
+
+function envAssignmentToShellExport(entry: string): string {
+  const idx = entry.indexOf('=')
+  if (idx === -1) return entry
+  const key = entry.slice(0, idx)
+  const value = entry.slice(idx + 1)
+  return `${key}=${quoteForShellExport(value)}`
+}
+
 function escapeRegexForSandboxGlobPattern(pattern: string): string {
   return (
     '^' +
@@ -263,7 +277,7 @@ export function buildMacosSandboxExecCommand(options: {
     platform: 'darwin',
   })
   const envPrefix = envAssignments.length
-    ? `export ${envAssignments.join(' ')} && `
+    ? `export ${envAssignments.map(envAssignmentToShellExport).join(' ')} && `
     : ''
 
   return [
