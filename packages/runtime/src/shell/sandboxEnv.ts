@@ -40,7 +40,7 @@ export function resolveSandboxTmpDir(options?: {
       process.env.TEMP ??
       process.env.TMP ??
       process.env.USERPROFILE ??
-      'C:\\\\Windows\\\\Temp'
+      'C:\\Windows\\Temp'
     return path.join(base, 'kode')
   }
 
