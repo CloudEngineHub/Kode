@@ -3,29 +3,17 @@ import type { OptionSubtree } from '#ui-ink/components/CustomSelect/select'
 import { getModelManager } from '#core/utils/model'
 import type { AgentSourceFilter } from './types'
 import { DEFAULT_AGENT_MODEL } from './types'
+import { getOpenTargetCmdForPlatform } from '#runtime/shell/shellCmd'
 
 export function openInEditor(filePath: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const platform = process.platform
-    let command: string
-    let args: string[]
-
-    switch (platform) {
-      case 'darwin':
-        command = 'open'
-        args = [filePath]
-        break
-      case 'win32':
-        command = 'cmd'
-        args = ['/c', 'start', '', filePath]
-        break
-      default:
-        command = 'xdg-open'
-        args = [filePath]
-        break
-    }
-
-    const child = spawn(command, args, { detached: true, stdio: 'ignore' })
+    const spec = getOpenTargetCmdForPlatform(process.platform, filePath)
+    const child = spawn(spec.cmd[0], spec.cmd.slice(1), {
+      detached: true,
+      stdio: 'ignore',
+      env: spec.env,
+      windowsVerbatimArguments: spec.windowsVerbatimArguments,
+    })
     child.unref()
     child.on('error', err => reject(err))
     child.on('exit', code =>

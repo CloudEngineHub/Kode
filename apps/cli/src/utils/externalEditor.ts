@@ -10,6 +10,7 @@ import {
 import { writeToStdout } from '#cli-utils/stdio'
 import { getInkInstanceForStdout } from '#ui-ink/utils/inkInstanceStore'
 import { terminalCapabilityManager } from '#ui-ink/utils/terminalCapabilityManager'
+import { getShellCmdWithArgsForPlatform } from '#runtime/shell/shellCmd'
 
 type EditorCommand = {
   command: string
@@ -144,6 +145,22 @@ function normalizeNewlines(text: string): string {
   return text.replace(/\r\n/g, '\n')
 }
 
+function spawnEditor(editor: EditorCommand, filePath: string) {
+  const args = [...editor.args, filePath]
+  if (!editor.shell) return spawn(editor.command, args, { stdio: 'inherit' })
+
+  const spec = getShellCmdWithArgsForPlatform(
+    process.platform,
+    editor.command,
+    args,
+  )
+  return spawn(spec.cmd[0], spec.cmd.slice(1), {
+    stdio: 'inherit',
+    env: spec.env,
+    windowsVerbatimArguments: spec.windowsVerbatimArguments,
+  })
+}
+
 export type ExternalEditorResult =
   | { text: string; editorLabel: string }
   | { text: null; editorLabel?: string; error: Error }
@@ -176,14 +193,7 @@ export async function launchExternalEditor(
   try {
     await withSuspendedInk(async () => {
       await new Promise<void>((resolve, reject) => {
-        const child = spawn(
-          editorCommand.command,
-          [...editorCommand.args, filePath],
-          {
-            stdio: 'inherit',
-            shell: editorCommand.shell ?? false,
-          },
-        )
+        const child = spawnEditor(editorCommand, filePath)
 
         child.on('error', reject)
         child.on('exit', (code, signal) => {
@@ -253,14 +263,7 @@ export async function launchExternalEditorForFilePath(
   try {
     await withSuspendedInk(async () => {
       await new Promise<void>((resolve, reject) => {
-        const child = spawn(
-          editorCommand.command,
-          [...editorCommand.args, filePath],
-          {
-            stdio: 'inherit',
-            shell: editorCommand.shell ?? false,
-          },
-        )
+        const child = spawnEditor(editorCommand, filePath)
 
         child.on('error', reject)
         child.on('exit', (code, signal) => {

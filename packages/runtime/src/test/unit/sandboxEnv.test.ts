@@ -110,7 +110,7 @@ describe('sandbox env (TMPDIR)', () => {
     process.env.USERPROFILE = 'C:\\Users\\tester'
     try {
       expect(resolveSandboxTmpDir({ platform: 'win32' })).toBe(
-        path.join('D:\\temp', 'kode'),
+        path.win32.join('D:\\temp', 'kode'),
       )
     } finally {
       for (const [key, value] of Object.entries(prev)) {
@@ -137,7 +137,7 @@ describe('sandbox env (TMPDIR)', () => {
     delete process.env.USERPROFILE
     try {
       expect(resolveSandboxTmpDir({ platform: 'win32' })).toBe(
-        path.join('C:\\Windows\\Temp', 'kode'),
+        path.win32.join('C:\\Windows\\Temp', 'kode'),
       )
     } finally {
       for (const [key, value] of Object.entries(prev)) {

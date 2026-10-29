@@ -1,18 +1,29 @@
 import path from 'node:path'
 import { LEGACY_ENV } from '#config/compat/legacyEnv'
 
-function normalizeTmpDir(raw: string): string {
-  return raw.trim().replace(/[\\/]+$/, '')
+function normalizeTmpDir(raw: string, platform: NodeJS.Platform): string {
+  const paths = platform === 'win32' ? path.win32 : path.posix
+  const value = raw.trim()
+  const root = paths.parse(value).root
+  const normalized = value.replace(
+    platform === 'win32' ? /[\\/]+$/ : /\/+$/,
+    '',
+  )
+  return normalized.length < root.length ? root : normalized
 }
 
-function mapLegacyTmpDirToKodeDir(raw: string): string {
-  const normalized = normalizeTmpDir(raw)
+function mapLegacyTmpDirToKodeDir(
+  raw: string,
+  platform: NodeJS.Platform,
+): string {
+  const paths = platform === 'win32' ? path.win32 : path.posix
+  const normalized = normalizeTmpDir(raw, platform)
   if (!normalized) return normalized
 
-  const base = path.basename(normalized)
-  if (base === 'claude') return path.join(path.dirname(normalized), 'kode')
+  const base = paths.basename(normalized)
+  if (base === 'claude') return paths.join(paths.dirname(normalized), 'kode')
   if (base === 'kode') return normalized
-  return path.join(normalized, 'kode')
+  return paths.join(normalized, 'kode')
 }
 
 export function resolveSandboxTmpDir(options?: {
@@ -22,31 +33,32 @@ export function resolveSandboxTmpDir(options?: {
 
   const explicitKodeTmpDir = process.env.KODE_TMPDIR
   if (typeof explicitKodeTmpDir === 'string' && explicitKodeTmpDir.trim()) {
-    return normalizeTmpDir(explicitKodeTmpDir)
+    return normalizeTmpDir(explicitKodeTmpDir, platform)
   }
 
   const legacyTmpDir = process.env[LEGACY_ENV.tmpDir]
   if (typeof legacyTmpDir === 'string' && legacyTmpDir.trim()) {
-    return mapLegacyTmpDirToKodeDir(legacyTmpDir)
+    return mapLegacyTmpDirToKodeDir(legacyTmpDir, platform)
   }
 
   const legacyTmpBase = process.env[LEGACY_ENV.codeTmpDir]
   if (typeof legacyTmpBase === 'string' && legacyTmpBase.trim()) {
-    return mapLegacyTmpDirToKodeDir(legacyTmpBase)
+    return mapLegacyTmpDirToKodeDir(legacyTmpBase, platform)
   }
 
   if (platform === 'win32') {
     const base =
-      process.env.TEMP ??
-      process.env.TMP ??
-      process.env.USERPROFILE ??
-      'C:\\Windows\\Temp'
-    return path.join(base, 'kode')
+      [process.env.TEMP, process.env.TMP, process.env.USERPROFILE].find(
+        value => typeof value === 'string' && value.trim(),
+      ) ?? 'C:\\Windows\\Temp'
+    return path.win32.join(base, 'kode')
   }
 
   return '/tmp/kode'
 }
 
+// Return raw KEY=value entries. Each caller must encode values for its own
+// boundary: macOS exports through a POSIX shell; Linux passes bwrap argv.
 export function buildSandboxEnvAssignments(options?: {
   httpProxyPort?: number
   socksProxyPort?: number
@@ -88,7 +100,7 @@ export function buildSandboxEnvAssignments(options?: {
     env.push(`all_proxy=socks5h://localhost:${socksProxyPort}`)
     if (platform === 'darwin') {
       env.push(
-        `GIT_SSH_COMMAND="ssh -o ProxyCommand='nc -X 5 -x localhost:${socksProxyPort} %h %p'"`,
+        `GIT_SSH_COMMAND=ssh -o ProxyCommand='nc -X 5 -x localhost:${socksProxyPort} %h %p'`,
       )
     }
     env.push(`FTP_PROXY=socks5h://localhost:${socksProxyPort}`)

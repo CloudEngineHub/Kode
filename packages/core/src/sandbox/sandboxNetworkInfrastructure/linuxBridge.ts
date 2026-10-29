@@ -4,6 +4,7 @@ import { existsSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { ChildProcess } from 'node:child_process'
+import { escapeSocatPath } from '#runtime/shell/socat'
 
 export type LinuxSandboxBridge = {
   httpSocketPath: string
@@ -47,7 +48,7 @@ export async function startLinuxSandboxBridge(args: {
   safeUnlink(socksSocketPath)
 
   const httpArgs = [
-    `UNIX-LISTEN:${httpSocketPath},fork,reuseaddr`,
+    `UNIX-LISTEN:${escapeSocatPath(httpSocketPath)},fork,reuseaddr`,
     `TCP:localhost:${args.hostHttpProxyPort},keepalive,keepidle=10,keepintvl=5,keepcnt=3`,
   ]
   const httpBridgeProcess = spawn('socat', httpArgs, { stdio: 'ignore' })
@@ -56,7 +57,7 @@ export async function startLinuxSandboxBridge(args: {
   }
 
   const socksArgs = [
-    `UNIX-LISTEN:${socksSocketPath},fork,reuseaddr`,
+    `UNIX-LISTEN:${escapeSocatPath(socksSocketPath)},fork,reuseaddr`,
     `TCP:localhost:${args.hostSocksProxyPort},keepalive,keepidle=10,keepintvl=5,keepcnt=3`,
   ]
   const socksBridgeProcess = spawn('socat', socksArgs, { stdio: 'ignore' })

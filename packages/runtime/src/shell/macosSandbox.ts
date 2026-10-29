@@ -2,23 +2,18 @@ import { existsSync } from 'fs'
 import { dirname } from 'path'
 import { hasGlobPattern, normalizeLinuxSandboxPath } from './linuxSandbox'
 import { buildSandboxEnvAssignments } from './sandboxEnv'
+import { quotePosixShellArg } from './shellCmd'
 import type {
   BunShellSandboxReadConfig,
   BunShellSandboxWriteConfig,
 } from './types'
-
-// 将值安全地嵌入 `export KEY=VALUE`：路径中可能包含空格（如 /Users/John Doe/...），
-// 不加引号会被 shell 按空白切分，导致变量写入错误的值。
-function quoteForShellExport(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`
-}
 
 function envAssignmentToShellExport(entry: string): string {
   const idx = entry.indexOf('=')
   if (idx === -1) return entry
   const key = entry.slice(0, idx)
   const value = entry.slice(idx + 1)
-  return `${key}=${quoteForShellExport(value)}`
+  return `${key}=${quotePosixShellArg(value)}`
 }
 
 function escapeRegexForSandboxGlobPattern(pattern: string): string {
