@@ -122,6 +122,11 @@ describe('plan mode required (startup parity)', () => {
       update: { type: 'setMode', mode: 'acceptEdits', destination: 'session' },
     })
 
+    // The tool state must agree even before a UI provider mounts again.
+    expect(
+      isPlanModeEnabled({ options: { messageLogName, forkNumber: 0 } } as any),
+    ).toBe(false)
+
     const out2 = await renderToText(
       <PermissionProvider
         conversationKey={conversationKey}
