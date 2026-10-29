@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from 'node:fs'
@@ -68,19 +69,20 @@ describe('sandbox command boundaries', () => {
       expect(resolveSandboxTmpDir({ platform: 'win32' })).toBe('D:\\tmp\\kode')
     })
 
-    test('Linux binds the same custom temp directory that it exports', () => {
+    test('Linux binds the canonical configured temp directory', () => {
       const custom = join(root, 'custom temp')
       mkdirSync(custom)
       process.env.KODE_TMPDIR = custom
       const argv = buildLinuxBwrapFilesystemArgs({
         writeConfig: { allowOnly: [] },
       })
-      expect(argv).toContain(custom)
-      const index = argv.indexOf(custom)
+      const canonical = realpathSync(custom)
+      expect(argv).toContain(canonical)
+      const index = argv.indexOf(canonical)
       expect(argv.slice(index - 1, index + 2)).toEqual([
         '--bind',
-        custom,
-        custom,
+        canonical,
+        canonical,
       ])
     })
   })
