@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import {
@@ -31,6 +31,7 @@ const makeContext = (): ToolUseContext => ({
 })
 
 describe('plan files directory setting', () => {
+  let previousConfigDir: string | undefined
   let configDir: string
   let projectDir: string
   let runnerCwd: string
@@ -41,6 +42,7 @@ describe('plan files directory setting', () => {
     runnerOriginalCwd = getOriginalCwd()
     configDir = mkdtempSync(join(tmpdir(), 'kode-config-'))
     projectDir = mkdtempSync(join(tmpdir(), 'kode-project-'))
+    previousConfigDir = process.env.KODE_CONFIG_DIR
     process.env.KODE_CONFIG_DIR = configDir
     await setCwd(projectDir)
     setOriginalCwd(projectDir)
@@ -50,12 +52,14 @@ describe('plan files directory setting', () => {
   afterEach(async () => {
     await setCwd(runnerCwd)
     setOriginalCwd(runnerOriginalCwd)
-    delete process.env.KODE_CONFIG_DIR
+    if (previousConfigDir === undefined) delete process.env.KODE_CONFIG_DIR
+    else process.env.KODE_CONFIG_DIR = previousConfigDir
     rmSync(configDir, { recursive: true, force: true })
     rmSync(projectDir, { recursive: true, force: true })
   })
 
   test('respects plansDirectory from project settings', () => {
+    mkdirSync(join(projectDir, '.kode'), { recursive: true })
     writeFileSync(
       join(projectDir, '.kode', 'settings.json'),
       JSON.stringify({ plansDirectory: '.plans' }, null, 2) + '\n',

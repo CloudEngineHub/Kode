@@ -93,11 +93,23 @@ describe('repo structure contract', () => {
     const gitignorePath = join(repoRoot, '.gitignore')
     expect(existsSync(gitignorePath)).toBe(true)
 
-    const content = readFileSync(gitignorePath, 'utf8')
-    expect(content).toContain('\n.tmp/\n')
-    expect(content).toContain('\nvendor/\n')
-    expect(content).toContain('\n.kode/settings.local.json\n')
-    expect(content).toContain('\n.claude/settings.local.json\n')
+    const paths = [
+      '.tmp/example',
+      'vendor/example',
+      '.kode/settings.local.json',
+      '.claude/settings.local.json',
+    ]
+    const ignored = execFileSync(
+      'git',
+      ['check-ignore', '--no-index', '--', ...paths],
+      {
+        cwd: repoRoot,
+        encoding: 'utf8',
+      },
+    )
+      .trim()
+      .split('\n')
+    expect(ignored).toEqual(paths)
   })
 
   it('examples do not reference the removed root src/ layout', () => {

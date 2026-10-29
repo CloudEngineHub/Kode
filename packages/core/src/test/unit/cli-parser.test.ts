@@ -19,7 +19,7 @@ describe('cli parser (commander)', () => {
 
     program.exitOverride()
     try {
-      program.parse(['node', 'kode', '--help'], { from: 'user' })
+      program.parse(['--help'], { from: 'user' })
       throw new Error('expected commander to exit')
     } catch (err: any) {
       expect(err.code).toBe('commander.helpDisplayed')
@@ -28,7 +28,7 @@ describe('cli parser (commander)', () => {
 
     expect(out).toContain('Usage: kode')
     expect(out).toContain('--print')
-    expect(out).toContain('--web')
+    expect(out).toContain('--permission-mode')
   })
 
   test('--version prints package version and exits (no UI started)', () => {
@@ -49,7 +49,7 @@ describe('cli parser (commander)', () => {
 
     program.exitOverride()
     try {
-      program.parse(['node', 'kode', '--version'], { from: 'user' })
+      program.parse(['--version'], { from: 'user' })
       throw new Error('expected commander to exit')
     } catch (err: any) {
       expect(err.code).toBe('commander.version')

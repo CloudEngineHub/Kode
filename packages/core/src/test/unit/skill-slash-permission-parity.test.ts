@@ -23,6 +23,7 @@ function makeContext(overrides?: Partial<ToolUseContext>): ToolUseContext {
       tools: [],
       verbose: false,
       safeMode: false,
+      permissionMode: 'cautious',
       forkNumber: 0,
       messageLogName: 'test',
       maxThinkingTokens: 0,

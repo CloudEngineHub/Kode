@@ -8,6 +8,7 @@ import { getMcprcServerStatus, listMCPServers } from '#core/mcp/client'
 import { __resetMcpListChangedForTests } from '#core/mcp/client/listChanged'
 
 describe('MCP legacy .claude.json compatibility', () => {
+  let previousNodeEnv: string | undefined
   let previousHome: string | undefined
   let previousKodeConfigDir: string | undefined
   let runnerCwd: string
@@ -17,6 +18,9 @@ describe('MCP legacy .claude.json compatibility', () => {
   let projectDir: string
 
   beforeEach(async () => {
+    previousNodeEnv = process.env.NODE_ENV
+    // This integration fixture exercises disk discovery, disabled in test mode.
+    process.env.NODE_ENV = 'development'
     previousHome = process.env.HOME
     previousKodeConfigDir = process.env.KODE_CONFIG_DIR
     runnerCwd = getCwd()
@@ -80,6 +84,8 @@ describe('MCP legacy .claude.json compatibility', () => {
 
   afterEach(async () => {
     await setCwd(runnerCwd)
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV
+    else process.env.NODE_ENV = previousNodeEnv
 
     if (previousHome === undefined) delete process.env.HOME
     else process.env.HOME = previousHome

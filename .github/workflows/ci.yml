@@ -34,15 +34,23 @@ jobs:
           bun-version: 1.3.6
 
       - name: Install locked dependencies
+        id: install
         run: bun install --frozen-lockfile
 
+      - name: Install Linux sandbox test dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap socat
+
       - name: Format
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && runner.os == 'Linux' }}
         run: bun run format:check
 
       - name: Architecture boundaries
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && runner.os == 'Linux' }}
         run: bun run architecture:check
 
       - name: Focused runtime and CLI regressions
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && runner.os != 'Linux' }}
         run: >-
           bun test
           ./packages/runtime/src/test/unit/sandboxEnv.test.ts
@@ -55,15 +63,24 @@ jobs:
           ./packages/core/src/test/unit/cli-context-help.test.ts
           ./packages/core/src/test/unit/cli-mcp-help.test.ts
 
-      - name: Security audit
-        # This gate remains required; focused tests run independently of it.
-        run: bun run security:audit
-
       - name: Typecheck
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && runner.os == 'Linux' }}
         run: bun run typecheck
 
-      - name: Test
+      - name: Isolated full test suite
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && runner.os == 'Linux' }}
+        env:
+          KODE_REQUIRE_SANDBOX_TESTS: '1'
         run: bun test
 
       - name: Build
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: bun run build
+
+      - name: Dependency security regressions
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && runner.os == 'Linux' }}
+        env:
+          CI_AUDIT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || github.sha }}
+        run: |
+          git fetch --no-tags --depth=1 origin "$CI_AUDIT_BASE_SHA"
+          bun scripts/audit-regressions.mjs

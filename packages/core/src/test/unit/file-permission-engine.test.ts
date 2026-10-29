@@ -4,7 +4,7 @@ import { FileReadTool } from '#tools/tools/filesystem/FileReadTool/FileReadTool'
 import { FileWriteTool } from '#tools/tools/filesystem/FileWriteTool/FileWriteTool'
 import {
   applyToolPermissionContextUpdates,
-  createDefaultToolPermissionContext,
+  createDefaultToolPermissionContext as createInitialToolPermissionContext,
   type ToolPermissionContextUpdate,
 } from '#core/types/toolPermissionContext'
 import type { ToolUseContext } from '#core/tooling/Tool'
@@ -22,8 +22,18 @@ import {
   setKodeAgentSessionId,
 } from '#protocol/utils/kodeAgentSessionId'
 
+// These cases exercise prompting and scope expansion in cautious mode.
+function createCautiousToolPermissionContext(
+  options?: Parameters<typeof createInitialToolPermissionContext>[0],
+): ReturnType<typeof createInitialToolPermissionContext> {
+  return {
+    ...createInitialToolPermissionContext(options),
+    mode: 'cautious' as const,
+  }
+}
+
 function makeContext(args?: {
-  toolPermissionContext?: ReturnType<typeof createDefaultToolPermissionContext>
+  toolPermissionContext?: ReturnType<typeof createInitialToolPermissionContext>
   messageLogName?: string
   forkNumber?: number
 }): ToolUseContext {
@@ -51,7 +61,7 @@ describe('Compatibility: filesystem permission engine', () => {
   })
 
   test('allows reading inside working directory by default', async () => {
-    const toolPermissionContext = createDefaultToolPermissionContext({
+    const toolPermissionContext = createCautiousToolPermissionContext({
       isBypassPermissionsModeAvailable: true,
     })
     const ctx = makeContext({ toolPermissionContext })
@@ -72,7 +82,7 @@ describe('Compatibility: filesystem permission engine', () => {
     writeFileSync(filePath, 'hello', 'utf8')
 
     try {
-      const toolPermissionContext = createDefaultToolPermissionContext({
+      const toolPermissionContext = createCautiousToolPermissionContext({
         isBypassPermissionsModeAvailable: true,
       })
       const ctx = makeContext({ toolPermissionContext })
@@ -104,7 +114,7 @@ describe('Compatibility: filesystem permission engine', () => {
     writeFileSync(filePath, 'hello', 'utf8')
 
     try {
-      const base = createDefaultToolPermissionContext({
+      const base = createCautiousToolPermissionContext({
         isBypassPermissionsModeAvailable: true,
       })
       const ctx = makeContext({ toolPermissionContext: base })
@@ -142,7 +152,7 @@ describe('Compatibility: filesystem permission engine', () => {
     const filePath = path.join(tmp, 'b.txt')
 
     try {
-      const base = createDefaultToolPermissionContext({
+      const base = createCautiousToolPermissionContext({
         isBypassPermissionsModeAvailable: true,
       })
       const ctx = makeContext({ toolPermissionContext: base })
@@ -185,7 +195,7 @@ describe('Compatibility: filesystem permission engine', () => {
     process.env.KODE_CONFIG_DIR = tmpConfig
 
     try {
-      const toolPermissionContext = createDefaultToolPermissionContext({
+      const toolPermissionContext = createCautiousToolPermissionContext({
         isBypassPermissionsModeAvailable: true,
       })
       const ctx = makeContext({
@@ -227,7 +237,7 @@ describe('Compatibility: filesystem permission engine', () => {
     setKodeAgentSessionId('session-perm-test')
 
     try {
-      const toolPermissionContext = createDefaultToolPermissionContext({
+      const toolPermissionContext = createCautiousToolPermissionContext({
         isBypassPermissionsModeAvailable: true,
       })
       const ctx = makeContext({ toolPermissionContext })
@@ -300,7 +310,7 @@ describe('Compatibility: filesystem permission engine', () => {
     setKodeAgentSessionId('session-scratchpad-test')
 
     try {
-      const toolPermissionContext = createDefaultToolPermissionContext({
+      const toolPermissionContext = createCautiousToolPermissionContext({
         isBypassPermissionsModeAvailable: true,
       })
       const ctx = makeContext({ toolPermissionContext })
@@ -342,7 +352,7 @@ describe('Compatibility: filesystem permission engine', () => {
     process.env.CLAUDE_CODE_TMPDIR = tmpScratchBase
 
     try {
-      const toolPermissionContext = createDefaultToolPermissionContext({
+      const toolPermissionContext = createCautiousToolPermissionContext({
         isBypassPermissionsModeAvailable: true,
       })
       const ctx = makeContext({ toolPermissionContext })
@@ -374,7 +384,7 @@ describe('Compatibility: filesystem permission engine', () => {
   })
 
   test('asks for UNC paths and does not provide suggestions', async () => {
-    const toolPermissionContext = createDefaultToolPermissionContext({
+    const toolPermissionContext = createCautiousToolPermissionContext({
       isBypassPermissionsModeAvailable: true,
     })
     const ctx = makeContext({ toolPermissionContext })
@@ -398,7 +408,7 @@ describe('Compatibility: filesystem permission engine', () => {
   })
 
   test('asks for suspicious Windows path patterns and does not provide suggestions', async () => {
-    const toolPermissionContext = createDefaultToolPermissionContext({
+    const toolPermissionContext = createCautiousToolPermissionContext({
       isBypassPermissionsModeAvailable: true,
     })
     const ctx = makeContext({ toolPermissionContext })
@@ -431,7 +441,7 @@ describe('Compatibility: filesystem permission engine', () => {
     symlinkSync(outsideFile, linkPath)
 
     try {
-      const base = createDefaultToolPermissionContext({
+      const base = createCautiousToolPermissionContext({
         isBypassPermissionsModeAvailable: true,
       })
       const withInside = applyToolPermissionContextUpdates(base, [

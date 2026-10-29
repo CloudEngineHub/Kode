@@ -6,7 +6,8 @@ import stripAnsi from 'strip-ansi'
 import { KeypressProvider } from '#ui-ink/contexts/KeypressContext'
 import { PermissionProvider } from '#ui-ink/contexts/PermissionContext'
 import { ExitPlanModePermissionRequest } from '#ui-ink/components/permissions/PlanModePermissionRequest/ExitPlanModePermissionRequest'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { getPlanFilePath } from '#core/utils/planMode'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -49,12 +50,17 @@ async function renderToText(element: React.ReactElement): Promise<string> {
 }
 
 describe('Exit plan mode permission UI microcopy (Esc is exit)', () => {
-  test('ExitPlanModePermissionRequest uses "Enter to confirm · Esc to exit" and shows the auto-accept shortcut hint', async () => {
+  test('ExitPlanModePermissionRequest uses "Enter to confirm · Esc to exit" and shows the quick-select shortcut hint', async () => {
     const previousConfigDir = process.env.KODE_CONFIG_DIR
     const configDir = mkdtempSync(join(tmpdir(), 'kode-plan-perm-'))
     process.env.KODE_CONFIG_DIR = configDir
 
     try {
+      // The editor/quick-select UI requires an actual saved plan.
+      writeFileSync(
+        getPlanFilePath(undefined, 'plan:1'),
+        '# Plan\nDo the thing.\n',
+      )
       const out = await renderToText(
         <KeypressProvider>
           <PermissionProvider
@@ -87,7 +93,7 @@ describe('Exit plan mode permission UI microcopy (Esc is exit)', () => {
       )
 
       expect(out).toContain('Enter to confirm · Esc to exit')
-      expect(out).toMatch(/(shift\+tab|alt\+m) auto-accept edits/)
+      expect(out).toMatch(/(shift\+tab|alt\+m) quick select/)
     } finally {
       if (previousConfigDir === undefined) delete process.env.KODE_CONFIG_DIR
       else process.env.KODE_CONFIG_DIR = previousConfigDir
