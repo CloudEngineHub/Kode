@@ -71,6 +71,9 @@ export function createInkTestHarness(
     stdin: stdin as unknown as NodeJS.ReadStream,
     stdout: stdout as unknown as NodeJS.WriteStream,
     exitOnCtrlC: false,
+    // Ink normally buffers CI output until unmount. These interaction tests
+    // need every intermediate frame, including while running on CI.
+    debug: true,
   })
 
   return {
