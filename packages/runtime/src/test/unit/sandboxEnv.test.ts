@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import path from 'node:path'
 import {
   buildSandboxEnvAssignments,
   resolveSandboxTmpDir,
@@ -89,6 +90,60 @@ describe('sandbox env (TMPDIR)', () => {
       else process.env.CLAUDE_TMPDIR = prevClaudeTmp
       if (prevClaude === undefined) delete process.env.CLAUDE_CODE_TMPDIR
       else process.env.CLAUDE_CODE_TMPDIR = prevClaude
+    }
+  })
+
+  test('win32: prefers TEMP over TMP and USERPROFILE', () => {
+    const prev = {
+      KODE_TMPDIR: process.env.KODE_TMPDIR,
+      CLAUDE_TMPDIR: process.env.CLAUDE_TMPDIR,
+      CLAUDE_CODE_TMPDIR: process.env.CLAUDE_CODE_TMPDIR,
+      TEMP: process.env.TEMP,
+      TMP: process.env.TMP,
+      USERPROFILE: process.env.USERPROFILE,
+    }
+    delete process.env.KODE_TMPDIR
+    delete process.env.CLAUDE_TMPDIR
+    delete process.env.CLAUDE_CODE_TMPDIR
+    process.env.TEMP = 'D:\\temp'
+    process.env.TMP = 'E:\\tmp'
+    process.env.USERPROFILE = 'C:\\Users\\tester'
+    try {
+      expect(resolveSandboxTmpDir({ platform: 'win32' })).toBe(
+        path.win32.join('D:\\temp', 'kode'),
+      )
+    } finally {
+      for (const [key, value] of Object.entries(prev)) {
+        if (value === undefined) delete process.env[key]
+        else process.env[key] = value
+      }
+    }
+  })
+
+  test('win32: falls back to C:\\Windows\\Temp when no env base is set', () => {
+    const prev = {
+      KODE_TMPDIR: process.env.KODE_TMPDIR,
+      CLAUDE_TMPDIR: process.env.CLAUDE_TMPDIR,
+      CLAUDE_CODE_TMPDIR: process.env.CLAUDE_CODE_TMPDIR,
+      TEMP: process.env.TEMP,
+      TMP: process.env.TMP,
+      USERPROFILE: process.env.USERPROFILE,
+    }
+    delete process.env.KODE_TMPDIR
+    delete process.env.CLAUDE_TMPDIR
+    delete process.env.CLAUDE_CODE_TMPDIR
+    delete process.env.TEMP
+    delete process.env.TMP
+    delete process.env.USERPROFILE
+    try {
+      expect(resolveSandboxTmpDir({ platform: 'win32' })).toBe(
+        path.win32.join('C:\\Windows\\Temp', 'kode'),
+      )
+    } finally {
+      for (const [key, value] of Object.entries(prev)) {
+        if (value === undefined) delete process.env[key]
+        else process.env[key] = value
+      }
     }
   })
 })

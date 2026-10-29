@@ -3,6 +3,10 @@ import type {
   ToolPermissionContextUpdate,
 } from '#core/types/toolPermissionContext'
 import { applyToolPermissionContextUpdate } from '#core/types/toolPermissionContext'
+import {
+  enterPlanModeForConversationKey,
+  exitPlanModeForConversationKey,
+} from '#core/utils/planMode'
 import { loadToolPermissionContextFromDisk } from '#core/utils/permissions/toolPermissionSettings'
 
 const toolPermissionContextByConversationKey = new Map<
@@ -89,10 +93,20 @@ export function setToolPermissionContextForConversationKey(options: {
   conversationKey: string
   context: ToolPermissionContext
 }): void {
+  const previous = toolPermissionContextByConversationKey.get(
+    options.conversationKey,
+  )
   toolPermissionContextByConversationKey.set(
     options.conversationKey,
     options.context,
   )
+  // Mode changes also arrive from tools while the UI provider is unmounted.
+  if (previous?.mode !== options.context.mode) {
+    if (options.context.mode === 'plan')
+      enterPlanModeForConversationKey(options.conversationKey)
+    else if (previous?.mode === 'plan')
+      exitPlanModeForConversationKey(options.conversationKey)
+  }
   notifyToolPermissionContextListeners({
     conversationKey: options.conversationKey,
     context: options.context,
@@ -109,8 +123,7 @@ export function applyToolPermissionContextUpdateForConversationKey(options: {
     isBypassPermissionsModeAvailable: options.isBypassPermissionsModeAvailable,
   })
   const next = applyToolPermissionContextUpdate(prev, options.update)
-  toolPermissionContextByConversationKey.set(options.conversationKey, next)
-  notifyToolPermissionContextListeners({
+  setToolPermissionContextForConversationKey({
     conversationKey: options.conversationKey,
     context: next,
   })

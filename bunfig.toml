@@ -1,4 +1,4 @@
 [test]
-# Limit test discovery to the Bun-workspace test aggregator under `./test`.
+# Limit test discovery to the Bun-workspace isolated workspace test runner under `./test`.
 # This avoids accidentally running unrelated script-style files from the root.
 root = "./test"

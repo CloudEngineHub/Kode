@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import http from 'node:http'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import net from 'node:net'
 import type { AddressInfo } from 'node:net'
 import {
@@ -30,7 +33,28 @@ async function canListenOnLoopback(): Promise<boolean> {
   })
 }
 
-const CAN_LISTEN_ON_LOOPBACK = await canListenOnLoopback()
+async function canUseLinuxBridge(): Promise<boolean> {
+  if (process.platform !== 'linux') return true
+  if (!Bun.which('socat')) return false
+  const dir = mkdtempSync(join(tmpdir(), 'kode-net-probe-'))
+  try {
+    return await new Promise<boolean>(resolve => {
+      const server = net.createServer()
+      server.once('error', () => resolve(false))
+      server.listen(join(dir, 's'), () => server.close(() => resolve(true)))
+    })
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+const CAN_RUN_NETWORK_TESTS =
+  (await canListenOnLoopback()) && (await canUseLinuxBridge())
+if (!CAN_RUN_NETWORK_TESTS && process.env.KODE_REQUIRE_SANDBOX_TESTS === '1') {
+  throw new Error(
+    'Sandbox integration tests require loopback, Unix sockets and socat on Linux',
+  )
+}
 
 function createRuntimeConfig(
   overrides?: Partial<SandboxRuntimeConfig>,
@@ -93,10 +117,8 @@ describe('sandbox network infrastructure (compatibility)', () => {
     expect(matchesSandboxDomainPattern('Example.Com', 'example.com')).toBe(true)
   })
 
-  if (!CAN_LISTEN_ON_LOOPBACK) {
-    test('network-dependent tests skipped (loopback listen not permitted)', () => {
-      expect(true).toBe(true)
-    })
+  if (!CAN_RUN_NETWORK_TESTS) {
+    test.skip('network integration requires loopback and, on Linux, socat plus Unix sockets', () => {})
     return
   }
 

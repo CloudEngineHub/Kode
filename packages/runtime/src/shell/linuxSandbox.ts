@@ -5,7 +5,9 @@ import type {
   BunShellSandboxReadConfig,
   BunShellSandboxWriteConfig,
 } from './types'
-import { buildSandboxEnvAssignments } from './sandboxEnv'
+import { buildSandboxEnvAssignments, resolveSandboxTmpDir } from './sandboxEnv'
+import { quotePosixShellArg } from './shellCmd'
+import { escapeSocatPath } from './socat'
 
 export function hasGlobPattern(value: string): boolean {
   return (
@@ -75,9 +77,13 @@ export function buildLinuxBwrapFilesystemArgs(options: {
 
     // Dedicated temp directory for sandboxed runs.
     // Bind it explicitly so tools can create temp files even when '/' is ro-bound.
-    if (existsSync('/tmp/kode')) {
-      args.push('--bind', '/tmp/kode', '/tmp/kode')
-      allowedRoots.push('/tmp/kode')
+    const tmpDir = normalizeLinuxSandboxPath(
+      resolveSandboxTmpDir({ platform: 'linux' }),
+      { cwd, homeDir },
+    )
+    if (existsSync(tmpDir)) {
+      args.push('--bind', tmpDir, tmpDir)
+      allowedRoots.push(tmpDir)
     }
     for (const raw of writeConfig.allowOnly ?? []) {
       const resolved = normalizeLinuxSandboxPath(raw, { cwd, homeDir })
@@ -140,23 +146,20 @@ export function buildLinuxBwrapCommand(options: {
   const bridge =
     options.needsNetworkRestriction === true ? options.linuxBridge : undefined
 
-  const shQuote = (value: string): string =>
-    `'${value.replace(/'/g, `'\"'\"'`)}'`
-
   const seccompCommand = options.linuxSeccomp
     ? [
-        shQuote(options.linuxSeccomp.applySeccompPath),
-        shQuote(options.linuxSeccomp.bpfPath),
-        shQuote(options.binShellPath),
+        quotePosixShellArg(options.linuxSeccomp.applySeccompPath),
+        quotePosixShellArg(options.linuxSeccomp.bpfPath),
+        quotePosixShellArg(options.binShellPath),
         '-c',
-        shQuote(options.command),
+        quotePosixShellArg(options.command),
       ].join(' ')
     : options.command
 
   const command = bridge
     ? [
-        `socat TCP-LISTEN:${options.httpProxyPort ?? 3128},fork,reuseaddr UNIX-CONNECT:${bridge.httpSocketPath} >/dev/null 2>&1 &`,
-        `socat TCP-LISTEN:${options.socksProxyPort ?? 1080},fork,reuseaddr UNIX-CONNECT:${bridge.socksSocketPath} >/dev/null 2>&1 &`,
+        `socat TCP-LISTEN:${options.httpProxyPort ?? 3128},fork,reuseaddr ${quotePosixShellArg(`UNIX-CONNECT:${escapeSocatPath(bridge.httpSocketPath)}`)} >/dev/null 2>&1 &`,
+        `socat TCP-LISTEN:${options.socksProxyPort ?? 1080},fork,reuseaddr ${quotePosixShellArg(`UNIX-CONNECT:${escapeSocatPath(bridge.socksSocketPath)}`)} >/dev/null 2>&1 &`,
         'trap "kill %1 %2 2>/dev/null; exit" EXIT',
         seccompCommand,
       ].join('\n')

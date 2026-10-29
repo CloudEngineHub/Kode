@@ -2,10 +2,19 @@ import { existsSync } from 'fs'
 import { dirname } from 'path'
 import { hasGlobPattern, normalizeLinuxSandboxPath } from './linuxSandbox'
 import { buildSandboxEnvAssignments } from './sandboxEnv'
+import { quotePosixShellArg } from './shellCmd'
 import type {
   BunShellSandboxReadConfig,
   BunShellSandboxWriteConfig,
 } from './types'
+
+function envAssignmentToShellExport(entry: string): string {
+  const idx = entry.indexOf('=')
+  if (idx === -1) return entry
+  const key = entry.slice(0, idx)
+  const value = entry.slice(idx + 1)
+  return `${key}=${quotePosixShellArg(value)}`
+}
 
 function escapeRegexForSandboxGlobPattern(pattern: string): string {
   return (
@@ -263,7 +272,7 @@ export function buildMacosSandboxExecCommand(options: {
     platform: 'darwin',
   })
   const envPrefix = envAssignments.length
-    ? `export ${envAssignments.join(' ')} && `
+    ? `export ${envAssignments.map(envAssignmentToShellExport).join(' ')} && `
     : ''
 
   return [

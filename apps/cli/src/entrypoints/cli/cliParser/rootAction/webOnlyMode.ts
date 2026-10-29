@@ -2,26 +2,23 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { exec } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { LEGACY_ENV } from '#core/compat/legacyEnv'
+import { getOpenTargetCmdForPlatform } from '#runtime/shell/shellCmd'
 
 function openBrowser(url: string): void {
-  const platform = process.platform
-  let cmd: string
-
-  if (platform === 'darwin') {
-    cmd = `open "${url}"`
-  } else if (platform === 'win32') {
-    cmd = `start "" "${url}"`
-  } else {
-    cmd = `xdg-open "${url}"`
-  }
-
-  exec(cmd, err => {
-    if (err) {
-      // Silent fail - user can still click the link
-    }
-  })
+  try {
+    const spec = getOpenTargetCmdForPlatform(process.platform, url)
+    const child = spawn(spec.cmd[0], spec.cmd.slice(1), {
+      stdio: 'ignore',
+      detached: true,
+      env: spec.env,
+      windowsVerbatimArguments: spec.windowsVerbatimArguments,
+    })
+    // Browser opening is best effort; the URL is also printed in the terminal.
+    child.once('error', () => {})
+    child.unref()
+  } catch {}
 }
 
 function getKodeConfigDir(): string {

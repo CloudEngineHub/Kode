@@ -4,6 +4,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 
 import { setCwd, setOriginalCwd } from '#core/utils/state'
+import { getTaskOutputStoreFilePath } from '#runtime/taskOutputStore'
 import { FileReadTool } from '#tools/tools/filesystem/FileReadTool/FileReadTool'
 
 function sanitizeProjectKey(cwd: string): string {
@@ -67,8 +68,7 @@ describe('FileReadTool userFacingName parity', () => {
   })
 
   test('shows Read agent output for Kode tasks/*.output paths', () => {
-    const projectKey = sanitizeProjectKey(projectDir)
-    const outputPath = join(configDir, projectKey, 'tasks', 'task_1.output')
+    const outputPath = getTaskOutputStoreFilePath('task_1')
     expect(
       FileReadTool.userFacingName?.({ file_path: outputPath } as any),
     ).toBe('Read agent output')

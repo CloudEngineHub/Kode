@@ -1,5 +1,9 @@
 import {
   chmodSync,
+  existsSync,
+  readFileSync,
+  realpathSync,
+  statSync,
   mkdtempSync,
   mkdirSync,
   rmSync,
@@ -106,10 +110,13 @@ test('prefers bundled ripgrep when available (default)', () => {
 })
 
 test('prefers packaged ripgrep optionalDependency when present (default)', () => {
-  const root = mkdtempSync(join(tmpdir(), 'kode-rg-packaged-first-'))
   const scopeDir = join(process.cwd(), 'node_modules', '@shareai-lab')
   const pkgName = `kode-ripgrep-${process.platform}-${process.arch}`
   const pkgDir = join(scopeDir, pkgName)
+  const existed = existsSync(pkgDir)
+  const binPath = join(pkgDir, 'bin', getPlatformExecutableName())
+  const originalBinary = existsSync(binPath) ? readFileSync(binPath) : null
+  const originalMode = originalBinary ? statSync(binPath).mode : undefined
 
   try {
     const binName = getPlatformExecutableName()
@@ -126,17 +133,20 @@ test('prefers packaged ripgrep optionalDependency when present (default)', () =>
       '}',
       '',
     ].join('\n')
-    writeFileSync(join(pkgDir, 'index.js'), indexJs)
+    if (!existed) writeFileSync(join(pkgDir, 'index.js'), indexJs)
 
     setEnv({
       KODE_USE_BUILTIN_RIPGREP: '1',
       PATH: '',
     })
 
-    expect(getRipgrepPath()).toBe(binPath)
+    expect(getRipgrepPath()).toBe(realpathSync(binPath))
   } finally {
-    rmSync(pkgDir, { recursive: true, force: true })
-    rmSync(root, { recursive: true, force: true })
+    if (!existed) rmSync(pkgDir, { recursive: true, force: true })
+    else if (originalBinary) {
+      writeFileSync(binPath, originalBinary)
+      chmodSync(binPath, originalMode!)
+    } else rmSync(binPath, { force: true })
   }
 })
 
