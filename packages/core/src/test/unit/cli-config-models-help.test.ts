@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import type { CommandUnknownOpts } from '@commander-js/extra-typings'
 
 import { createCliProgram } from '#host-cli/entrypoints/cli/cliParser'
 
@@ -10,16 +11,22 @@ function runHelp(argv: string[]): string {
   const program = createCliProgram('', undefined)
   let out = ''
 
-  program.configureOutput({
-    writeOut: str => {
-      out += str
-    },
-    writeErr: str => {
-      out += str
-    },
-  })
+  // Existing subcommands do not inherit overrides installed on the root later.
+  const commands: CommandUnknownOpts[] = [program]
+  while (commands.length > 0) {
+    const command = commands.pop()!
+    command.configureOutput({
+      writeOut: str => {
+        out += str
+      },
+      writeErr: str => {
+        out += str
+      },
+    })
 
-  program.exitOverride()
+    command.exitOverride()
+    commands.push(...command.commands)
+  }
   try {
     program.parse(argv, { from: 'user' })
     throw new Error('expected commander to exit')

@@ -42,7 +42,21 @@ jobs:
       - name: Architecture boundaries
         run: bun run architecture:check
 
+      - name: Focused runtime and CLI regressions
+        run: >-
+          bun test
+          ./packages/runtime/src/test/unit/sandboxEnv.test.ts
+          ./packages/runtime/src/test/unit/sandboxBoundaries.test.ts
+          ./packages/runtime/src/test/unit/shellCommandArgs.test.ts
+          ./packages/runtime/src/test/unit/socatPaths.test.ts
+          ./apps/cli/src/utils/externalEditor.test.ts
+          ./packages/core/src/test/unit/git-hooks.test.ts
+          ./packages/core/src/test/unit/cli-config-models-help.test.ts
+          ./packages/core/src/test/unit/cli-context-help.test.ts
+          ./packages/core/src/test/unit/cli-mcp-help.test.ts
+
       - name: Security audit
+        # This gate remains required; focused tests run independently of it.
         run: bun run security:audit
 
       - name: Typecheck
